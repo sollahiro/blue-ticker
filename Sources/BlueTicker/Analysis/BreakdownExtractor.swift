@@ -20,6 +20,20 @@ enum BreakdownUnitCaptionOrigin: Equatable {
     case preceding
 }
 
+/// `BreakdownTable.period` の由来。公開 payload / LLM prompt には出さない（`toDictionary` 非掲載）。
+enum BreakdownPeriodBasis: String, Equatable {
+    /// 専用地域・製品 TextBlock の Prior/Current `contextRef`。
+    case contextRef
+    /// 表の直前キャプション・見出し（同一 TextBlock 内、直前表より後）。
+    case caption
+    /// グリッド先頭行の期間語・日付。
+    case header
+    /// 同一レイアウトの隣接2表（先が前期、後が当期）。
+    case pair
+    /// 手がかりなしの数値表。単独表は当期（前期にはしない）。
+    case fallback
+}
+
 struct BreakdownTable: Equatable {
     var heading: String
     var markdown: String
@@ -29,6 +43,8 @@ struct BreakdownTable: Equatable {
     var unitCaption: String? = nil
     /// スケール時に sibling / preceding 借りかを分ける。辞書往復では落とす。
     var unitCaptionOrigin: BreakdownUnitCaptionOrigin? = nil
+    /// 期間ラベルの根拠。辞書往復では落とす（公開 REST/MCP の形は変えない）。
+    var periodBasis: BreakdownPeriodBasis? = nil
 }
 
 struct BreakdownFact: Equatable {
@@ -112,8 +128,19 @@ enum BusinessBreakdownNotApplicableReason: String, Equatable {
 
 enum BreakdownExtractor {
 
-    private static let currentPeriodKeywords = ["当連結会計年度", "当期"]
-    private static let priorPeriodKeywords = ["前連結会計年度", "前期"]
+    /// 長い語を先に見る（「当年度」が「当連結会計年度」に誤って乗らないよう、contains は語ごとに独立）。
+    private static let currentPeriodKeywords = ["当連結会計年度", "当事業年度", "当年度", "当期"]
+    private static let priorPeriodKeywords = ["前連結会計年度", "前事業年度", "前年度", "前期"]
+    private static let periodCaptionMaxLength = 160
+    private static let currentYearEndDatePattern = try! NSRegularExpression(
+        pattern: #"id\s*=\s*[\"']CurrentYearDuration[\"'][\s\S]{0,2500}?<xbrli:endDate>([0-9]{4}-[0-9]{2}-[0-9]{2})</xbrli:endDate>"#
+    )
+    private static let japaneseDateRangePattern = try! NSRegularExpression(
+        pattern: #"自\s*([0-9]{4})年([0-9]{1,2})月([0-9]{1,2})日\s*至\s*([0-9]{4})年([0-9]{1,2})月([0-9]{1,2})日"#
+    )
+    private static let fiscalYearLabelOnlyPattern = try! NSRegularExpression(
+        pattern: #"(?<![0-9])([0-9]{4})年度"#
+    )
 
     // MARK: - 公開 API
 
@@ -1007,16 +1034,41 @@ enum BreakdownExtractor {
     // MARK: - 当期/前期判定
 
     /// グリッド先頭3行のテキストから当期/前期を判定する。
-    static func detectPeriodFromGrid(_ grid: [[String]]) -> String? {
+    /// 期間語（前/当連結会計年度・事業年度・年度・期）に加え、`fiscalYearEnd` があれば
+    /// （自…至…）と「YYYY年度」も照合する。
+    static func detectPeriodFromGrid(_ grid: [[String]], fiscalYearEnd: String? = nil) -> String? {
         for row in grid.prefix(3) {
-            let joined = row.joined()
-            let hasCurrent = currentPeriodKeywords.contains(where: joined.contains)
-            let hasPrior = priorPeriodKeywords.contains(where: joined.contains)
-            if hasCurrent && hasPrior { return "比較" }
-            if hasCurrent { return "当期" }
-            if hasPrior { return "前期" }
+            if let period = parsePeriodCue(
+                row.joined(), fiscalYearEnd: fiscalYearEnd, allowBareComparison: true)
+            {
+                return period
+            }
         }
         return nil
+    }
+
+    /// キャプション・見出し・ヘッダー行から 当期/前期/比較 を取る。LLM は使わない。
+    /// `allowBareComparison`: グリッド列見出しのように「前…当…」だけが並ぶときは比較。
+    /// 導入文（「前連結会計年度及び当連結会計年度は以下のとおり」）は期間にしない。
+    static func parsePeriodCue(
+        _ text: String, fiscalYearEnd: String? = nil, allowBareComparison: Bool = false
+    ) -> String? {
+        let compact = asciiDigits(text)
+            .replacingOccurrences(of: "\u{00a0}", with: "")
+            .replacingOccurrences(of: "\u{3000}", with: " ")
+        guard !compact.isEmpty else { return nil }
+        let hasCurrent = currentPeriodKeywords.contains(where: compact.contains)
+        let hasPrior = priorPeriodKeywords.contains(where: compact.contains)
+        if hasCurrent && hasPrior {
+            if allowBareComparison || isBareComparisonPeriodLabel(compact) { return "比較" }
+            return nil
+        }
+        if hasCurrent { return "当期" }
+        if hasPrior { return "前期" }
+        if let fromDates = periodFromJapaneseDateRanges(compact, fiscalYearEnd: fiscalYearEnd) {
+            return fromDates
+        }
+        return periodFromFiscalYearLabels(compact, fiscalYearEnd: fiscalYearEnd)
     }
 
     /// XBRL TextBlock の contextRef から当期/前期を判定する。
@@ -1039,30 +1091,178 @@ enum BreakdownExtractor {
         return nil
     }
 
-    /// テーブル前の兄弟要素（短いもの）から当期/前期を判定する。
-    /// 同じ親の下に複数テーブルが並ぶ場合、テーブルに最も近い（最後に見つかった）
-    /// 見出しを採用する（先頭の見出しに固定されるとテーブルが増えるほど誤判定が広がるため）。
-    private static func detectPeriodFromPreceding(_ table: Element) -> String? {
-        guard let parent = table.parent() else { return nil }
-        var result: String?
-        for node in parent.getChildNodes() {
-            guard node.siblingIndex < table.siblingIndex else { break }
-            let text: String
-            if let el = node as? Element {
-                text = bs4Text(el, strip: true)
-            } else if let tn = node as? TextNode {
-                text = tn.getWholeText().trimmingCharacters(in: .whitespacesAndNewlines)
-            } else {
-                continue
+    /// 同一 TextBlock 内で、表から直前へ遡って期間キャプションを取る。
+    /// 直前の短い兄弟だけだと、単位行やラッパー div で期間見出しを取りこぼす
+    /// （FY2026 有報の収益認識・セグメントで 前/当連結会計年度（自…至…）が表の一段上にある型）。
+    /// 直前の `<table>`（または table を含む要素）より前、および `【…】` の別注記見出しは見ない。
+    private static func detectPeriodFromPreceding(
+        _ table: Element, fiscalYearEnd: String?
+    ) -> String? {
+        var current: Element? = table
+        while let node = current {
+            guard let parent = node.parent() else { break }
+            var texts: [String] = []
+            var sawPrecedingTable = false
+            var sawMajorSection = false
+            for child in parent.getChildNodes() {
+                guard child.siblingIndex < node.siblingIndex else { break }
+                if let el = child as? Element, elementIsOrContainsTable(el) {
+                    sawPrecedingTable = true
+                    texts = []
+                    sawMajorSection = false
+                    continue
+                }
+                let text = precedingNodeText(child)
+                if text.isEmpty { continue }
+                if isMajorNoteSectionHeading(text) {
+                    sawMajorSection = true
+                    texts = []
+                    continue
+                }
+                if text.unicodeScalars.count > periodCaptionMaxLength { continue }
+                texts.append(text)
             }
-            if text.isEmpty || text.unicodeScalars.count > Xbrl.noteShortCaptionMaxLength { continue }
-            if currentPeriodKeywords.contains(where: text.contains) {
-                result = "当期"
-            } else if priorPeriodKeywords.contains(where: text.contains) {
-                result = "前期"
+            for text in texts.reversed() {
+                if let period = parsePeriodCue(text, fiscalYearEnd: fiscalYearEnd) {
+                    return period
+                }
+            }
+            if sawPrecedingTable || sawMajorSection { return nil }
+            current = parent
+            if parent.tagName() == "body" || parent.tagName() == "html" { break }
+        }
+        return nil
+    }
+
+    private static func precedingNodeText(_ node: Node) -> String {
+        if let el = node as? Element {
+            return bs4Text(el, strip: true)
+        }
+        if let tn = node as? TextNode {
+            return tn.getWholeText().trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        return ""
+    }
+
+    /// `【セグメント情報】` のような別注記の開始。期間語だけの見出しは対象外。
+    private static func isMajorNoteSectionHeading(_ text: String) -> Bool {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.hasPrefix("【"), trimmed.contains("】") else { return false }
+        return parsePeriodCue(trimmed) == nil
+    }
+
+    private static func detectPeriod(
+        table: Element, grid: [[String]], fiscalYearEnd: String?
+    ) -> (String, BreakdownPeriodBasis)? {
+        if let period = detectPeriodFromPreceding(table, fiscalYearEnd: fiscalYearEnd) {
+            return (period, .caption)
+        }
+        if let period = detectPeriodFromGrid(grid, fiscalYearEnd: fiscalYearEnd) {
+            return (period, .header)
+        }
+        return nil
+    }
+
+    /// 「前事業年度 当事業年度」のように期間語以外が残らないラベルは比較表の見出し。
+    private static func isBareComparisonPeriodLabel(_ text: String) -> Bool {
+        var remainder = text
+        for word in (currentPeriodKeywords + priorPeriodKeywords).sorted(by: { $0.count > $1.count }) {
+            remainder = remainder.replacingOccurrences(of: word, with: "")
+        }
+        let stripped = remainder.filter { !$0.isWhitespace && !$0.isPunctuation && $0 != "・" }
+        return stripped.isEmpty
+    }
+
+    private static func asciiDigits(_ text: String) -> String {
+        String(text.unicodeScalars.map { scalar in
+            if (0xFF10...0xFF19).contains(scalar.value) {
+                return Character(UnicodeScalar(scalar.value - 0xFF10 + 48)!)
+            }
+            return Character(scalar)
+        })
+    }
+
+    /// （自 YYYY年M月D日 至 YYYY年M月D日）を書類の FY 期末と照合する。
+    private static func periodFromJapaneseDateRanges(_ text: String, fiscalYearEnd: String?) -> String? {
+        guard let fiscalYearEnd, let fyDate = parseDateString(fiscalYearEnd) else { return nil }
+        let ns = text as NSString
+        let range = NSRange(location: 0, length: ns.length)
+        let matches = japaneseDateRangePattern.matches(in: text, options: [], range: range)
+        guard !matches.isEmpty else { return nil }
+        var sawCurrent = false
+        var sawPrior = false
+        for match in matches {
+            guard match.numberOfRanges >= 7,
+                  let end = isoDate(
+                    year: ns.substring(with: match.range(at: 4)),
+                    month: ns.substring(with: match.range(at: 5)),
+                    day: ns.substring(with: match.range(at: 6)))
+            else { continue }
+            if end == fyDate {
+                sawCurrent = true
+            } else if isPriorFiscalYearEnd(end, currentEnd: fyDate) {
+                sawPrior = true
             }
         }
-        return result
+        if sawCurrent && sawPrior { return "比較" }
+        if sawCurrent { return "当期" }
+        if sawPrior { return "前期" }
+        return nil
+    }
+
+    /// 「2024年度」「2025年度」を `calculateFiscalYear(fyEnd)` と照合する。
+    private static func periodFromFiscalYearLabels(_ text: String, fiscalYearEnd: String?) -> String? {
+        guard let fy = calculateFiscalYear(fyEnd: fiscalYearEnd) else { return nil }
+        let ns = text as NSString
+        let range = NSRange(location: 0, length: ns.length)
+        let years = fiscalYearLabelOnlyPattern.matches(in: text, options: [], range: range)
+            .compactMap { match -> Int? in
+                guard match.numberOfRanges > 1 else { return nil }
+                return Int(ns.substring(with: match.range(at: 1)))
+            }
+        guard !years.isEmpty else { return nil }
+        let sawCurrent = years.contains(fy)
+        let sawPrior = years.contains(fy - 1)
+        if sawCurrent && sawPrior { return "比較" }
+        if sawCurrent { return "当期" }
+        if sawPrior { return "前期" }
+        return nil
+    }
+
+    private static func isoDate(year: String, month: String, day: String) -> Date? {
+        let mm = month.count == 1 ? "0\(month)" : month
+        let dd = day.count == 1 ? "0\(day)" : day
+        return parseDateString("\(year)-\(mm)-\(dd)")
+    }
+
+    /// 前期末: 当期期末の約1年前（うるう年は 2/28↔2/29 を許容）。
+    private static func isPriorFiscalYearEnd(_ candidate: Date, currentEnd: Date) -> Bool {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(secondsFromGMT: 0)!
+        guard let shifted = cal.date(byAdding: .year, value: -1, to: currentEnd) else { return false }
+        if candidate == shifted { return true }
+        let c = cal.dateComponents([.year, .month, .day], from: candidate)
+        let s = cal.dateComponents([.year, .month, .day], from: shifted)
+        return c.year == s.year && c.month == s.month
+            && abs((c.day ?? 0) - (s.day ?? 0)) <= 1
+    }
+
+    /// 提出 XBRL の連結 `CurrentYearDuration` 期末。キャプション日付照合用。
+    static func currentFiscalYearEnd(fromXbrlDir xbrlDir: URL) -> String? {
+        for file in XBRLUtils.findXbrlFiles(in: xbrlDir) {
+            guard let xml = try? String(contentsOf: file, encoding: .utf8) else { continue }
+            if let end = currentFiscalYearEnd(in: xml) { return end }
+        }
+        return nil
+    }
+
+    static func currentFiscalYearEnd(in xml: String) -> String? {
+        let ns = xml as NSString
+        let range = NSRange(location: 0, length: ns.length)
+        guard let match = currentYearEndDatePattern.firstMatch(in: xml, options: [], range: range),
+              match.numberOfRanges > 1
+        else { return nil }
+        return ns.substring(with: match.range(at: 1))
     }
 
     /// 表の直前にある「（単位：千円）」等を拾う。
@@ -1205,7 +1405,10 @@ enum BreakdownExtractor {
     /// 列見出しとして使う期間行（「前年度／当年度」「前連結会計年度」等）。単位行だけの
     /// 1行目一致では別開示まで結合してしまうため、期間行があればそちらを優先する。
     private static func periodHeaderRow(_ grid: [[String]]) -> [String]? {
-        let markers = ["前年度", "当年度", "前連結会計年度", "当連結会計年度", "前期", "当期"]
+        let markers = [
+            "前年度", "当年度", "前連結会計年度", "当連結会計年度",
+            "前事業年度", "当事業年度", "前期", "当期",
+        ]
         return grid.prefix(4).first { row in
             let joined = row.joined()
             return markers.contains(where: joined.contains)
@@ -1281,7 +1484,10 @@ enum BreakdownExtractor {
     private static func isRepeatedContinuationHeaderRow(_ row: [String]) -> Bool {
         let joined = row.joined()
         if joined.contains("単位") { return true }
-        let periodMarkers = ["前年度", "当年度", "前連結会計年度", "当連結会計年度"]
+        let periodMarkers = [
+            "前年度", "当年度", "前連結会計年度", "当連結会計年度",
+            "前事業年度", "当事業年度",
+        ]
         if periodMarkers.contains(where: joined.contains) { return true }
         return row.allSatisfy(\.isEmpty)
     }
@@ -1370,15 +1576,78 @@ enum BreakdownExtractor {
         return abs(lhs - rhs) <= max(1.0, scale * Xbrl.noteHorizontalContinuationRelativeTolerance)
     }
 
-    /// 当期/前期が未ラベルの**数値**テーブルに順序ルール（前期→当期の繰り返し）を適用する。
-    /// 定性の対応表は period 候補にしない（単位スタブと同じく交互ラベルをずらさない）。
+    /// 未ラベルの数値表に期間を付ける。優先は呼び出し側で済ませた contextRef / キャプション /
+    /// ヘッダーのあと: 同一レイアウトの隣接2表 → 先が前期・後が当期。残り（単独表を含む）は
+    /// 当期。交互の「偶数=前期」は単独の当期表を落とすので使わない。
     static func applyPeriodOrdering(_ tables: inout [BreakdownTable]) {
-        var i = 0
+        applyIdenticalPairPeriodLabels(&tables)
         for idx in tables.indices where tables[idx].period == nil {
             guard markdownHasNumericValue(tables[idx].markdown) else { continue }
-            tables[idx].period = i % 2 == 0 ? "前期" : "当期"
+            tables[idx].period = "当期"
+            tables[idx].periodBasis = .fallback
+        }
+    }
+
+    /// 隣接する数値表がヘッダー＋行ラベル（数値無視）で同じなら、先=前期・後=当期。
+    /// 片方にだけ手がかりがあるときは、矛盾しないときだけ空いている側を埋める
+    /// （先が前期キャプション・後が未ラベルなら後を当期。先が当期なら先を前期にしない）。
+    static func applyIdenticalPairPeriodLabels(_ tables: inout [BreakdownTable]) {
+        var i = 0
+        while i + 1 < tables.count {
+            let a = tables[i]
+            let b = tables[i + 1]
+            if markdownHasNumericValue(a.markdown),
+               markdownHasNumericValue(b.markdown),
+               tablesHaveIdenticalLayout(a, b)
+            {
+                switch (a.period, b.period) {
+                case (nil, nil):
+                    tables[i].period = "前期"
+                    tables[i].periodBasis = .pair
+                    tables[i + 1].period = "当期"
+                    tables[i + 1].periodBasis = .pair
+                    i += 2
+                    continue
+                case ("前期", nil):
+                    tables[i + 1].period = "当期"
+                    tables[i + 1].periodBasis = .pair
+                    i += 2
+                    continue
+                case (nil, "当期"):
+                    tables[i].period = "前期"
+                    tables[i].periodBasis = .pair
+                    i += 2
+                    continue
+                default:
+                    break
+                }
+            }
             i += 1
         }
+    }
+
+    /// ヘッダーと行ラベルが同じ（数値・ハイフン・西暦年度ラベルは無視）。
+    static func tablesHaveIdenticalLayout(_ a: BreakdownTable, _ b: BreakdownTable) -> Bool {
+        let ga = markdownToGrid(a.markdown)
+        let gb = markdownToGrid(b.markdown)
+        guard ga.count == gb.count, !ga.isEmpty else { return false }
+        for (ra, rb) in zip(ga, gb) {
+            guard ra.count == rb.count else { return false }
+            for (ca, cb) in zip(ra, rb) {
+                if isIgnorablePeriodLayoutAmount(ca) && isIgnorablePeriodLayoutAmount(cb) {
+                    continue
+                }
+                if stripFiscalYearLabel(ca) != stripFiscalYearLabel(cb) { return false }
+            }
+        }
+        return true
+    }
+
+    private static func isIgnorablePeriodLayoutAmount(_ cell: String) -> Bool {
+        let trimmed = cell.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty { return true }
+        if XBRLUtils.parseHtmlNumber(trimmed) != nil { return true }
+        return decorativeStubCells.contains(trimmed)
     }
 
     // MARK: - TextBlock → テーブル抽出
@@ -1429,11 +1698,13 @@ enum BreakdownExtractor {
     /// 事業別経路では呼ばない（うち輸出高を消さない）。
     /// `defaultPeriod`: TextBlock の contextRef 由来の期間。HTML 側で判定できないときのフォールバック
     /// （dedicated 地域売上・製品サービスの Prior/Current 分離 TextBlock 用。mixed 見出し経路では渡さない）。
+    /// `fiscalYearEnd`: キャプションの（自…至…）/「YYYY年度」を当期期末と照合する。
     static func allTablesFromHtml(
         _ html: String, defaultHeading: String, includeFootnotes: Bool = false,
         skipGeographyAssetMetricTables: Bool = false,
         defaultPeriod: String? = nil,
-        dropOfWhichRegionColumns: Bool = false
+        dropOfWhichRegionColumns: Bool = false,
+        fiscalYearEnd: String? = nil
     ) -> [BreakdownTable] {
         guard let soup = try? SwiftSoup.parse(html),
               let tableEls = try? soup.select("table") else { return [] }
@@ -1441,6 +1712,7 @@ enum BreakdownExtractor {
         var pendingElement: Element?
         var pendingGrid: [[String]]?
         var pendingPeriod: String?
+        var pendingPeriodBasis: BreakdownPeriodBasis?
         // 単位専用表は候補にしないが、キャプションは同じ HTML 内の後続データ表へ残す。
         var pendingUnitCaption: String?
 
@@ -1455,12 +1727,14 @@ enum BreakdownExtractor {
                     markdown: gridToMarkdown(grid),
                     period: pendingPeriod,
                     unitCaption: caption,
-                    unitCaptionOrigin: origin
+                    unitCaptionOrigin: origin,
+                    periodBasis: pendingPeriodBasis
                 ))
             }
             pendingElement = nil
             pendingGrid = nil
             pendingPeriod = nil
+            pendingPeriodBasis = nil
         }
 
         for table in tableEls {
@@ -1491,7 +1765,9 @@ enum BreakdownExtractor {
             if mdExclusionKeywords.contains(where: md.contains) {
                 continue
             }
-            let period = detectPeriodFromPreceding(table) ?? detectPeriodFromGrid(grid)
+            let detected = detectPeriod(table: table, grid: grid, fiscalYearEnd: fiscalYearEnd)
+            let period = detected?.0
+            let periodBasis = detected?.1
             if let prevEl = pendingElement, let prevGrid = pendingGrid,
                let chained = findImmediatelyChainedTable(after: prevEl),
                ObjectIdentifier(chained) == ObjectIdentifier(table),
@@ -1507,18 +1783,20 @@ enum BreakdownExtractor {
             pendingElement = table
             pendingGrid = grid
             pendingPeriod = period
+            pendingPeriodBasis = periodBasis
         }
         flushPending()
         // contextRef フォールバックは「このブロック内の未ラベル表がちょうど1つ」のときだけ。
         // Prior/Current に分かれた専用地域売上 TextBlock（表1枚ずつ）を救いつつ、
         // 単一 CurrentYearDuration 配下に前期・当期表が同居する会社（味の素・クボタ）では
-        // 両方を当期で上書きせず applyPeriodOrdering に委ねる。
+        // 両方を当期で上書きせず identical-pair / fallback に委ねる。
         if let defaultPeriod {
             let nilIndices = tables.indices.filter {
                 tables[$0].period == nil && markdownHasNumericValue(tables[$0].markdown)
             }
             if nilIndices.count == 1 {
                 tables[nilIndices[0]].period = defaultPeriod
+                tables[nilIndices[0]].periodBasis = .contextRef
             }
         }
         applyPeriodOrdering(&tables)
@@ -1625,7 +1903,8 @@ enum BreakdownExtractor {
         keywords: [String],
         headingExclusionKeywords: [String] = [],
         headingLikeOnly: Bool = false,
-        dropOfWhichRegionColumns: Bool = false
+        dropOfWhichRegionColumns: Bool = false,
+        fiscalYearEnd: String? = nil
     ) -> [BreakdownTable] {
         guard let soup = try? SwiftSoup.parse(html) else { return [] }
         guard let elems = try? soup.select("*") else { return [] }
@@ -1673,10 +1952,12 @@ enum BreakdownExtractor {
                         candidate = findNextTable(after: table)
                         continue
                     }
-                    let period = detectPeriodFromPreceding(table) ?? detectPeriodFromGrid(grid)
+                    let detected = detectPeriod(
+                        table: table, grid: grid, fiscalYearEnd: fiscalYearEnd)
                     var workingGrid = grid
                     var workingTable = table
-                    let workingPeriod = period
+                    let workingPeriod = detected?.0
+                    let workingBasis = detected?.1
                     // 改ページで割れた同一表は markdown を結合して1候補にする
                     // （縦: 武田製品別売上 / 横: 三菱商事の事業グループ別収益）。
                     // 小松・オリックスは mergedContinuationGrid が nil のため従来どおり
@@ -1685,8 +1966,9 @@ enum BreakdownExtractor {
                           !seen.contains(ObjectIdentifier(chained))
                     {
                         let chainedGrid = expandTable(chained)
-                        let chainedPeriod =
-                            detectPeriodFromPreceding(chained) ?? detectPeriodFromGrid(chainedGrid)
+                        let chainedDetected = detectPeriod(
+                            table: chained, grid: chainedGrid, fiscalYearEnd: fiscalYearEnd)
+                        let chainedPeriod = chainedDetected?.0
                         guard let merged = mergedContinuationGrid(
                             leading: workingGrid, trailing: chainedGrid,
                             leadingPeriod: workingPeriod, trailingPeriod: chainedPeriod)
@@ -1712,7 +1994,8 @@ enum BreakdownExtractor {
                         markdown: gridToMarkdown(published),
                         period: workingPeriod,
                         unitCaption: caption,
-                        unitCaptionOrigin: origin
+                        unitCaptionOrigin: origin,
+                        periodBasis: workingBasis
                     ))
 
                     // 定性の対応表のあとに本表が続く場合は打ち切らず次の表を見る。
@@ -1767,6 +2050,7 @@ enum BreakdownExtractor {
     ) -> [BreakdownTable] {
         var tables: [BreakdownTable] = []
         let targets = dedicatedTags.union(mixedTags)
+        let fiscalYearEnd = currentFiscalYearEnd(fromXbrlDir: xbrlDir)
         for file in XBRLUtils.findXbrlFiles(in: xbrlDir) {
             guard let data = try? Data(contentsOf: file) else { continue }
             let collector = TextBlockSAXCollector(targetTags: targets)
@@ -1791,7 +2075,8 @@ enum BreakdownExtractor {
                         includeFootnotes: includeFootnotes,
                         skipGeographyAssetMetricTables: skipGeographyAssetMetricTables,
                         defaultPeriod: contextPeriod,
-                        dropOfWhichRegionColumns: dropOfWhichRegionColumns
+                        dropOfWhichRegionColumns: dropOfWhichRegionColumns,
+                        fiscalYearEnd: fiscalYearEnd
                     ))
                 } else if mixedTags.contains(block.tag) {
                     // mixed は1つの contextRef 配下に前期・当期 HTML が同居しうるため
@@ -1803,7 +2088,8 @@ enum BreakdownExtractor {
                             + (skipGeographyAssetMetricTables
                                 ? Xbrl.geographyAssetMetricCaptionKeywords : []),
                         headingLikeOnly: mixedHeadingLikeOnly,
-                        dropOfWhichRegionColumns: dropOfWhichRegionColumns
+                        dropOfWhichRegionColumns: dropOfWhichRegionColumns,
+                        fiscalYearEnd: fiscalYearEnd
                     ))
                 }
             }
