@@ -22,6 +22,28 @@ enum BreakdownLLMAmountScale {
         var headerLlmMismatch: Bool
         /// `parseUnitCaption` が返した語（百万円 / 千円 / 円 等）。無ければ nil。
         var headerToken: String?
+        /// ヘッダー語が対象表自身ではなく兄弟表または `detectUnitFromPreceding` 由来。
+        /// 食い違い時の `needs_review` ゲート（#447 公開面が needs_review 行を隠すため）。
+        var headerBorrowed: Bool
+    }
+
+    /// 対象表自身（キャプション行・markdown・見出し・スタブ引き継ぎ）から読んだ単位語。
+    static func ownHeaderUnitToken(from table: BreakdownTable) -> String? {
+        if table.unitCaptionOrigin != .preceding,
+            let caption = table.unitCaption,
+            let token = BreakdownExtractor.parseUnitCaption(caption)
+        {
+            return token
+        }
+        if let token = BreakdownExtractor.parseUnitCaption(table.markdown) {
+            return token
+        }
+        return BreakdownExtractor.parseUnitCaption(table.heading)
+    }
+
+    struct HeaderUnitLookup: Equatable {
+        var token: String?
+        var borrowed: Bool
     }
 
     /// 申告 unit と行金額・連結売上（円）から、円へ直す倍率を決める。
@@ -47,7 +69,8 @@ enum BreakdownLLMAmountScale {
         headerToken: String?,
         declaredUnit: String,
         rawAmounts: [Double],
-        consolidatedSales: Double?
+        consolidatedSales: Double?,
+        headerBorrowed: Bool = false
     ) -> Resolution {
         let declared = declaredScale(
             declaredUnit: declaredUnit,
@@ -65,7 +88,8 @@ enum BreakdownLLMAmountScale {
                     multiplier: applied,
                     unresolved: false,
                     headerLlmMismatch: mismatch,
-                    headerToken: headerToken
+                    headerToken: headerToken,
+                    headerBorrowed: headerBorrowed
                 )
             }
             // ヘッダー語はあるが円倍率に落ちない（百万ユーロ等）。LLM の百万円推定へ逃げない。
@@ -73,7 +97,8 @@ enum BreakdownLLMAmountScale {
                 multiplier: 1,
                 unresolved: true,
                 headerLlmMismatch: declared.nominal != nil,
-                headerToken: headerToken
+                headerToken: headerToken,
+                headerBorrowed: headerBorrowed
             )
         }
         if declared.known {
@@ -85,32 +110,50 @@ enum BreakdownLLMAmountScale {
                 ),
                 unresolved: false,
                 headerLlmMismatch: false,
-                headerToken: nil
+                headerToken: nil,
+                headerBorrowed: false
             )
         }
         return Resolution(
             multiplier: 1,
             unresolved: true,
             headerLlmMismatch: false,
-            headerToken: nil
+            headerToken: nil,
+            headerBorrowed: false
         )
     }
 
     /// `source_table_index` の表を優先し、キャプション → markdown → 見出しの順で単位語を拾う。
     /// 対象表に単位が無く、候補表の単位語がすべて同じときだけ兄弟表から借りる。
     /// 兄弟が食い違うときは借りない（LLM フォールバック／fail closed へ）。
+    static func headerUnitLookup(
+        tables: [BreakdownTable],
+        sourceTableIndex: Int?
+    ) -> HeaderUnitLookup {
+        if let index = sourceTableIndex, tables.indices.contains(index) {
+            let table = tables[index]
+            if let own = ownHeaderUnitToken(from: table) {
+                return HeaderUnitLookup(token: own, borrowed: false)
+            }
+            if table.unitCaptionOrigin == .preceding,
+                let caption = table.unitCaption,
+                let token = BreakdownExtractor.parseUnitCaption(caption)
+            {
+                return HeaderUnitLookup(token: token, borrowed: true)
+            }
+        }
+        let tokens = tables.compactMap { headerUnitToken(from: $0) }
+        if Set(tokens).count == 1 {
+            return HeaderUnitLookup(token: tokens.first, borrowed: true)
+        }
+        return HeaderUnitLookup(token: nil, borrowed: false)
+    }
+
     static func headerUnitToken(
         tables: [BreakdownTable],
         sourceTableIndex: Int?
     ) -> String? {
-        if let index = sourceTableIndex, tables.indices.contains(index),
-            let token = headerUnitToken(from: tables[index])
-        {
-            return token
-        }
-        let tokens = tables.compactMap { headerUnitToken(from: $0) }
-        if Set(tokens).count == 1 { return tokens.first }
-        return nil
+        headerUnitLookup(tables: tables, sourceTableIndex: sourceTableIndex).token
     }
 
     static func headerUnitToken(from table: BreakdownTable) -> String? {
@@ -141,12 +184,33 @@ enum BreakdownLLMAmountScale {
         rawAmounts: [Double],
         consolidatedSales: Double?
     ) -> Resolution {
-        resolve(
-            headerToken: headerUnitToken(tables: tables, sourceTableIndex: sourceTableIndex),
+        let lookup = headerUnitLookup(tables: tables, sourceTableIndex: sourceTableIndex)
+        return resolve(
+            headerToken: lookup.token,
             declaredUnit: declaredUnit,
             rawAmounts: rawAmounts,
-            consolidatedSales: consolidatedSales
+            consolidatedSales: consolidatedSales,
+            headerBorrowed: lookup.borrowed
         )
+    }
+
+    /// 公開面（#447）が隠す条件に合わせて flags を積む。対象表自身のヘッダー食い違いは
+    /// `unit_header_llm_mismatch` 警告だけ（正しくスケールした行を needs_review で隠さない）。
+    static func applyPublicFlags(
+        _ scale: Resolution,
+        needsReview: inout Bool,
+        warnings: inout [String]
+    ) {
+        if scale.unresolved {
+            needsReview = true
+            warnings.append("llm_unit_unresolved")
+        }
+        if scale.headerLlmMismatch {
+            warnings.append(headerLlmMismatchWarning)
+            if scale.headerBorrowed {
+                needsReview = true
+            }
+        }
     }
 
     /// 旧ルール（LLM 申告のみ）の倍率。再 ingest スキャンの old vs new 比に使う。

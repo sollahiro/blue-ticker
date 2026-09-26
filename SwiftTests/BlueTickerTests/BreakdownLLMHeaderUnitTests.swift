@@ -44,9 +44,16 @@ import Testing
     @Test func senYenStubCaptionsCarryOntoDataTables() {
         let tables = Self.tables(from: Self.senYenStubHtml, heading: "収益認識関係")
         #expect(tables.count >= 1)
-        #expect(tables.contains { $0.unitCaption == "千円" })
+        #expect(tables.contains { $0.unitCaption == "千円" && $0.unitCaptionOrigin == .table })
         #expect(!tables.contains { $0.markdown.contains("単位") })
         #expect(tables.contains { $0.markdown.contains("5,120,400") || $0.markdown.contains("5120400") })
+    }
+
+    private static func publiclyServable(
+        _ snapshot: BreakdownSnapshot, source: String
+    ) -> Bool {
+        isPubliclyServableBreakdown(
+            source: source, needsReview: snapshot.needsReview, warnings: snapshot.warnings)
     }
 
     @Test func revenueRecognitionSenYenHeaderScalesThousandNotMillion() async throws {
@@ -81,9 +88,11 @@ import Testing
         let mvne = try #require(snapshot.rows.first { $0.labelRaw == "MVNEサービス" })
         #expect(mvne.amount == 5_120_400 * BreakdownLLMAmountScale.thousandYen)
         #expect(mvne.amount != 5_120_400 * Financial.millionYen)
-        #expect(snapshot.needsReview == true)
+        #expect(snapshot.needsReview == false)
         #expect(snapshot.warnings.contains(BreakdownLLMAmountScale.headerLlmMismatchWarning))
         #expect(!snapshot.warnings.contains("llm_unit_unresolved"))
+        #expect(
+            Self.publiclyServable(snapshot, source: breakdownSourceRevenueRecognitionLLM) == true)
     }
 
     @Test func revenueRecognitionSenYenHeaderScalesWhenLLMSaysOther() async throws {
@@ -112,8 +121,12 @@ import Testing
         let snapshot = try #require(snapshotOrNil)
         let productA = try #require(snapshot.rows.first { $0.labelRaw == "製品A" })
         #expect(productA.amount == 12_345 * BreakdownLLMAmountScale.thousandYen)
+        #expect(snapshot.needsReview == false)
         #expect(!snapshot.warnings.contains("llm_unit_unresolved"))
+        #expect(!snapshot.warnings.contains(BreakdownLLMAmountScale.headerLlmMismatchWarning))
         #expect(snapshot.sourceKind == "revenue_recognition")
+        #expect(
+            Self.publiclyServable(snapshot, source: breakdownSourceRevenueRecognitionLLM) == true)
     }
 
     @Test func millionYenHeaderKeepsMillionScaleWithoutMismatch() async throws {
@@ -245,5 +258,81 @@ import Testing
         #expect(snapshot.rows[0].amount == 100)
         #expect(snapshot.needsReview == true)
         #expect(snapshot.warnings.contains("llm_unit_unresolved"))
+        #expect(
+            Self.publiclyServable(snapshot, source: breakdownSourceRevenueRecognitionLLM) == false)
+    }
+
+    @Test func borrowedSiblingHeaderMismatchStaysUnservable() async throws {
+        let extracted = ExtractedBreakdown(
+            method: "html_table",
+            tables: [
+                BreakdownTable(
+                    heading: "契約資産", markdown: "| a | 1 |", period: "当期", unitCaption: "千円"),
+                BreakdownTable(
+                    heading: "収益分解",
+                    markdown: "| MVNEサービス | 5,120,400 |\n| 合計 | 5,120,400 |\n",
+                    period: "当期"),
+            ],
+            facts: []
+        )
+        let sales = 5_120_400 * BreakdownLLMAmountScale.thousandYen
+        let response: [String: Any] = [
+            "applicable": true,
+            "unit": "million_yen",
+            "source_table_index": 1,
+            "period_column": "当期",
+            "profit_disclosed": false,
+            "rows": [
+                ["label": "MVNEサービス", "amount": 5_120_400, "profit": NSNull(), "row_kind": "segment"],
+                ["label": "合計", "amount": 5_120_400, "profit": NSNull(), "row_kind": "subtotal"],
+            ],
+            "notes": "兄弟表から千円を借りた mismatch",
+        ]
+        let (snapshotOrNil, _) = await RevenueRecognitionLLMNormalizer.normalize(
+            extracted, consolidatedSales: sales, client: MockChat(response)
+        )
+        let snapshot = try #require(snapshotOrNil)
+        #expect(snapshot.rows[0].amount == sales)
+        #expect(snapshot.needsReview == true)
+        #expect(snapshot.warnings.contains(BreakdownLLMAmountScale.headerLlmMismatchWarning))
+        #expect(
+            Self.publiclyServable(snapshot, source: breakdownSourceRevenueRecognitionLLM) == false)
+    }
+
+    @Test func precedingHeaderMismatchStaysUnservable() async throws {
+        let extracted = ExtractedBreakdown(
+            method: "html_table",
+            tables: [
+                BreakdownTable(
+                    heading: "収益分解",
+                    markdown: "| MVNEサービス | 5,120,400 |\n| 合計 | 5,120,400 |\n",
+                    period: "当期",
+                    unitCaption: "千円",
+                    unitCaptionOrigin: .preceding),
+            ],
+            facts: []
+        )
+        let sales = 5_120_400 * BreakdownLLMAmountScale.thousandYen
+        let response: [String: Any] = [
+            "applicable": true,
+            "unit": "million_yen",
+            "source_table_index": 0,
+            "period_column": "当期",
+            "profit_disclosed": false,
+            "rows": [
+                ["label": "MVNEサービス", "amount": 5_120_400, "profit": NSNull(), "row_kind": "segment"],
+                ["label": "合計", "amount": 5_120_400, "profit": NSNull(), "row_kind": "subtotal"],
+            ],
+            "notes": "detectUnitFromPreceding mismatch",
+        ]
+        let (snapshotOrNil, _) = await RevenueRecognitionLLMNormalizer.normalize(
+            extracted, consolidatedSales: sales, client: MockChat(response)
+        )
+        let snapshot = try #require(snapshotOrNil)
+        #expect(snapshot.rows[0].amount == sales)
+        #expect(snapshot.needsReview == true)
+        #expect(snapshot.warnings.contains(BreakdownLLMAmountScale.headerLlmMismatchWarning))
+        #expect(
+            Self.publiclyServable(snapshot, source: breakdownSourceRevenueRecognitionLLM) == false)
     }
 }

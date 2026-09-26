@@ -178,14 +178,8 @@ enum RevenueRecognitionLLMNormalizer {
             rawAmounts: parsed.map(\.rawAmount),
             consolidatedSales: consolidatedSales
         )
-        if scale.unresolved {
-            needsReview = true
-            warnings.append("llm_unit_unresolved")
-        }
-        if scale.headerLlmMismatch {
-            needsReview = true
-            warnings.append(BreakdownLLMAmountScale.headerLlmMismatchWarning)
-        }
+        BreakdownLLMAmountScale.applyPublicFlags(
+            scale, needsReview: &needsReview, warnings: &warnings)
         let unitMultiplier = scale.multiplier
 
         var rows: [BreakdownRow] = []

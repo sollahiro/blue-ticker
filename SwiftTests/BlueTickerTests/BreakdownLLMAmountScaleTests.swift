@@ -200,6 +200,7 @@ import Testing
         #expect(resolved.headerToken == "千円")
         #expect(resolved.multiplier == BreakdownLLMAmountScale.thousandYen)
         #expect(resolved.headerLlmMismatch == true)
+        #expect(resolved.headerBorrowed == false)
     }
 
     @Test func uniqueSiblingHeaderUnitFillsMissingSourceTable() {
@@ -209,7 +210,64 @@ import Testing
             BreakdownTable(
                 heading: "収益分解", markdown: "| MVNEサービス | 5,120,400 |", period: "当期"),
         ]
+        let lookup = BreakdownLLMAmountScale.headerUnitLookup(tables: tables, sourceTableIndex: 1)
+        #expect(lookup.token == "千円")
+        #expect(lookup.borrowed == true)
         #expect(BreakdownLLMAmountScale.headerUnitToken(tables: tables, sourceTableIndex: 1) == "千円")
+    }
+
+    @Test func precedingCaptionOnSourceTableIsBorrowed() {
+        let tables = [
+            BreakdownTable(
+                heading: "収益分解", markdown: "| MVNEサービス | 5,120,400 |", period: "当期",
+                unitCaption: "千円", unitCaptionOrigin: .preceding),
+        ]
+        let lookup = BreakdownLLMAmountScale.headerUnitLookup(tables: tables, sourceTableIndex: 0)
+        #expect(lookup.token == "千円")
+        #expect(lookup.borrowed == true)
+        let resolved = BreakdownLLMAmountScale.scaling(
+            declaredUnit: "million_yen",
+            tables: tables,
+            sourceTableIndex: 0,
+            rawAmounts: [5_120_400],
+            consolidatedSales: 5_120_400_000
+        )
+        #expect(resolved.headerBorrowed == true)
+        #expect(resolved.headerLlmMismatch == true)
+        var needsReview = false
+        var warnings: [String] = []
+        BreakdownLLMAmountScale.applyPublicFlags(
+            resolved, needsReview: &needsReview, warnings: &warnings)
+        #expect(needsReview == true)
+        #expect(warnings.contains(BreakdownLLMAmountScale.headerLlmMismatchWarning))
+    }
+
+    @Test func ownTableMismatchDoesNotSetNeedsReview() {
+        let tables = [
+            BreakdownTable(
+                heading: "当期", markdown: "| MVNEサービス | 5,120,400 |", period: "当期",
+                unitCaption: "千円", unitCaptionOrigin: .table),
+        ]
+        let resolved = BreakdownLLMAmountScale.scaling(
+            declaredUnit: "million_yen",
+            tables: tables,
+            sourceTableIndex: 0,
+            rawAmounts: [5_120_400],
+            consolidatedSales: 5_120_400_000
+        )
+        #expect(resolved.headerBorrowed == false)
+        #expect(resolved.headerLlmMismatch == true)
+        var needsReview = false
+        var warnings: [String] = []
+        BreakdownLLMAmountScale.applyPublicFlags(
+            resolved, needsReview: &needsReview, warnings: &warnings)
+        #expect(needsReview == false)
+        #expect(warnings.contains(BreakdownLLMAmountScale.headerLlmMismatchWarning))
+        #expect(
+            isPubliclyServableBreakdown(
+                source: breakdownSourceRevenueRecognitionLLM,
+                needsReview: needsReview,
+                warnings: warnings) == true)
     }
 
     @Test func mixedSiblingHeaderUnitsDoNotStealFirstTable() {

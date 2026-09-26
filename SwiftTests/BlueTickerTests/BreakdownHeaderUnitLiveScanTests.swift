@@ -59,9 +59,12 @@ struct BreakdownUnitScanRow: Codable {
         var changed: [[String: Any]] = []
         var scanned: [[String: Any]] = []
         var missingXbrl: [String] = []
+        var deterministicChanged: [[String: Any]] = []
         var seen = Set<String>()
         var xbrlDirs: [String: URL] = [:]
+        var codeByDoc: [String: String] = [:]
         for row in rows {
+            codeByDoc[row.docID] = row.code
             if xbrlDirs[row.docID] != nil { continue }
             if seen.contains(row.docID) { continue }
             seen.insert(row.docID)
@@ -77,8 +80,9 @@ struct BreakdownUnitScanRow: Codable {
                 let xbrlDir = xbrlDirs[row.docID],
                 let extracted = BreakdownExtractor.extractSpecialSection(section, xbrlDir: xbrlDir)
             else { continue }
-            let header = BreakdownLLMAmountScale.headerUnitToken(
+            let lookup = BreakdownLLMAmountScale.headerUnitLookup(
                 tables: extracted.tables, sourceTableIndex: row.sourceTableIndex)
+            let header = lookup.token
             let table: BreakdownTable?
             if let index = row.sourceTableIndex, extracted.tables.indices.contains(index) {
                 table = extracted.tables[index]
@@ -92,15 +96,28 @@ struct BreakdownUnitScanRow: Codable {
                 declaredUnit: row.llmUnit, rawAmounts: rawAmounts, consolidatedSales: row.denominator)
             let new = BreakdownLLMAmountScale.resolve(
                 headerToken: header, declaredUnit: row.llmUnit, rawAmounts: rawAmounts,
-                consolidatedSales: row.denominator)
+                consolidatedSales: row.denominator, headerBorrowed: lookup.borrowed)
             let rawRef = rawAmounts.map { abs($0) }.max() ?? 0
             let newAmount = rawRef * new.multiplier
             let stored = row.maxAmount ?? (rawRef * old.multiplier)
             let ratio = stored == 0 ? 0 : newAmount / stored
             let captions = extracted.tables.map { $0.unitCaption ?? "" }
+            let origins = extracted.tables.map { table -> String in
+                switch table.unitCaptionOrigin {
+                case .table: return "table"
+                case .preceding: return "preceding"
+                case nil: return ""
+                }
+            }
             let snippets = extracted.tables.prefix(4).map { table in
                 String(table.markdown.prefix(160)).replacingOccurrences(of: "\n", with: " | ")
             }
+            var needsReview = false
+            var warnings: [String] = []
+            BreakdownLLMAmountScale.applyPublicFlags(
+                new, needsReview: &needsReview, warnings: &warnings)
+            let servable = isPubliclyServableBreakdown(
+                source: row.source, needsReview: needsReview, warnings: warnings)
             let record: [String: Any] = [
                 "code": row.code,
                 "doc_id": row.docID,
@@ -109,8 +126,10 @@ struct BreakdownUnitScanRow: Codable {
                 "row_count": row.rowCount,
                 "llm_unit": row.llmUnit,
                 "header_unit": header ?? NSNull(),
+                "header_borrowed": lookup.borrowed,
                 "table_count": extracted.tables.count,
                 "table_captions": captions,
+                "table_caption_origins": origins,
                 "table_snippets": snippets,
                 "source_table_index": row.sourceTableIndex ?? NSNull(),
                 "old_multiplier": old.multiplier,
@@ -118,10 +137,40 @@ struct BreakdownUnitScanRow: Codable {
                 "amount_ratio_new_over_old": ratio,
                 "header_llm_mismatch": new.headerLlmMismatch,
                 "unresolved": new.unresolved,
+                "would_needs_review": needsReview,
+                "publicly_servable": servable,
             ]
             scanned.append(record)
             if abs(ratio - 1) <= 1e-9 { continue }
             changed.append(record)
+        }
+
+        for (docID, xbrlDir) in xbrlDirs {
+            guard let extracted = BreakdownExtractor.extractSpecialSection(
+                "revenue_recognition", xbrlDir: xbrlDir)
+            else { continue }
+            let newYen = BreakdownExtractor.customerContractConsolidatedYen(tables: extracted.tables)
+            let oldYen = BreakdownExtractor.customerContractConsolidatedYen(
+                tables: BreakdownExtractor.strippingPrecedingUnitCaptions(extracted.tables))
+            let precedingCaptions = extracted.tables.compactMap { table -> String? in
+                guard table.unitCaptionOrigin == .preceding else { return nil }
+                return table.unitCaption
+            }
+            let changedYen: Bool
+            switch (oldYen, newYen) {
+            case (nil, nil): changedYen = false
+            case (let a?, let b?): changedYen = abs(a - b) > 1e-6
+            default: changedYen = true
+            }
+            guard changedYen else { continue }
+            deterministicChanged.append([
+                "code": codeByDoc[docID] ?? "",
+                "doc_id": docID,
+                "section": "revenue_recognition",
+                "old_customer_contract_yen": oldYen ?? NSNull(),
+                "new_customer_contract_yen": newYen ?? NSNull(),
+                "preceding_captions": precedingCaptions,
+            ])
         }
 
         let codes = Array(Set(changed.compactMap { $0["code"] as? String })).sorted()
@@ -139,12 +188,14 @@ struct BreakdownUnitScanRow: Codable {
                 "llm_row_count": rows.count,
                 "scanned_count": scanned.count,
                 "changed_count": changed.count,
+                "deterministic_changed_count": deterministicChanged.count,
                 "missing_xbrl": missingXbrl,
                 "codes": codes,
                 "by_source_kind": byKind,
                 "by_ratio": byRatio,
             ],
             "changed": changed,
+            "deterministic_changed": deterministicChanged,
             "scanned": scanned,
         ]
         let outData = try JSONSerialization.data(
@@ -153,7 +204,9 @@ struct BreakdownUnitScanRow: Codable {
             at: URL(fileURLWithPath: outPath).deletingLastPathComponent(),
             withIntermediateDirectories: true)
         try outData.write(to: URL(fileURLWithPath: outPath))
-        print("header-unit scan changed=\(changed.count) codes=\(codes.joined(separator: ","))")
+        print(
+            "header-unit scan changed=\(changed.count) codes=\(codes.joined(separator: ",")) "
+                + "deterministic_changed=\(deterministicChanged.count)")
         #expect(missingXbrl.count < rows.count || rows.isEmpty)
     }
 
