@@ -18,11 +18,10 @@
 // **smoke固定11社のうちSMFG(8316)は本note_typeでは除外（10社のみ）**: 三井住友FGの2025年3月期
 // 有価証券報告書には提出履歴上、原本S100W0S7（2025-06-20、構造化タグ13/70件のみで不完全）と
 // 全文XBRL訂正S100WRZH（2025-09-30、70/70件）と、同じ親の通常訂正S100X7DX（2025-11-28、
-// 13/70件に後退）がある。ingest は identity を S100W0S7 のまま、ZIP だけ適格な全文 XBRL 訂正
-// （パッケージ内に「XBRLデータのみ」「記載内容に訂正はありません」があるもの。複数なら最新）を使う。
-// そのため本番再 ingest の期待は S100WRZH の 70 件。smoke 床は `SmokeTests` と同じ原本
-// S100W0S7 を渡す経路なので、不完全パッケージの抽出結果を床にしない（対象外のまま）。
-// 選定ロジック自体の回帰は `XbrlAmendmentSourceTests`。
+// 13/70件に後退）がある。ingest は identity を S100W0S7 のまま、訂正 130 を提出順に
+// fact overlay する（行メンバー表は訂正がその表を含めば行ごと置換。後勝ち）。
+// smoke 床は `SmokeTests` と同じ原本 S100W0S7 を渡す経路なので、不完全パッケージの
+// 抽出結果を床にしない（対象外のまま）。選定・overlay の回帰は `XbrlAmendmentSourceTests`。
 
 import Foundation
 import Testing

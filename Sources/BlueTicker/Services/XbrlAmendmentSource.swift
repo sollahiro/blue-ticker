@@ -1,7 +1,10 @@
 import Foundation
 
-/// 有報(120)の同一性と、訂正(130)の XBRL 置換候補を表す。公開 payload の `doc_id` には使わず、
-/// 取得する ZIP の選定だけに使う。
+/// 展開ディレクトリに置く訂正 overlay のマニフェスト（1行1パス、提出が古い順）。
+let xbrlOverlayManifestFileName = ".blt-xbrl-overlays"
+
+/// 有報(120)の同一性と、訂正(130)の XBRL overlay 候補を表す。公開 payload の `doc_id` には使わず、
+/// 取得する ZIP / fact overlay の選定だけに使う。
 public struct XbrlSourceDocument: Equatable, Sendable {
     public var docID: String
     public var docTypeCode: String?
@@ -32,13 +35,6 @@ public struct XbrlSourceDocument: Equatable, Sendable {
         self.docDescription = docDescription
     }
 }
-
-/// XBRL のみの全文置換（「記載内容に訂正はありません」）を示す提出パッケージ内の文言。
-/// 数値・科目を差し替える通常の訂正有報には現れない。
-public let fullXbrlReplacementPhrases = [
-    "XBRLデータのみ",
-    "記載内容に訂正はありません",
-]
 
 /// 同一会社・同一期間・同一親有報に紐づく訂正(130)を提出日時の新しい順で返す。
 /// `parentDocID` があるときは親一致を必須にし、期間が取れる場合は親の期末と一致するものだけ残す。
@@ -71,21 +67,26 @@ public func preferredCorrectionDocIDsByOriginal(
     return result
 }
 
-/// 訂正 ZIP を新しい順に試し、全文 XBRL 置換かつパースできるものがあればその展開ディレクトリを返す。
-/// どれも失敗したら原本を取得する（原本のパース成否は呼び出し側に委ねる）。
+/// 原本 ZIP を土台に、パースできる訂正を提出が古い順へ overlay した展開ディレクトリを返す。
+/// 訂正の取得失敗・パース失敗はその件だけ飛ばす。適格な訂正が無ければ原本。
+/// `correctionDocIDs` は新しい順（`matchingXbrlCorrections` と同じ）。
 public func resolveAnnualXbrlDirectory(
     originalDocID: String,
     correctionDocIDs: [String],
     download: @Sendable (String) async -> URL?,
     parses: @Sendable (URL) -> Bool = { xbrlPackageParses($0) },
-    isFullReplacement: @Sendable (URL) -> Bool = { xbrlPackageIsFullReplacement($0) }
+    materialize: (@Sendable (URL, [URL]) -> URL?)? = nil
 ) async -> URL? {
-    for docID in correctionDocIDs {
-        guard let dir = await download(docID) else { continue }
-        guard isFullReplacement(dir), parses(dir) else { continue }
-        return dir
+    guard let originalDir = await download(originalDocID) else { return nil }
+    var overlayDirs: [URL] = []
+    for docID in correctionDocIDs.reversed() {
+        guard let dir = await download(docID), parses(dir) else { continue }
+        overlayDirs.append(dir)
     }
-    return await download(originalDocID)
+    if overlayDirs.isEmpty { return originalDir }
+    let merged = (materialize ?? { materializeOverlaidXbrlDirectory(original: $0, overlayDirs: $1) })(
+        originalDir, overlayDirs)
+    return merged ?? originalDir
 }
 
 /// 展開済み XBRL に数値 fact が1件でもあればパース成功とみなす。
@@ -93,24 +94,75 @@ public func xbrlPackageParses(_ dir: URL) -> Bool {
     !XBRLUtils.collectAllNumericElements(in: dir, nilAsZero: false).isEmpty
 }
 
-/// 提出パッケージが XBRL のみの全文置換かを本文から判定する。
-public func xbrlPackageIsFullReplacement(_ dir: URL) -> Bool {
-    let fm = FileManager.default
-    guard let enumerator = fm.enumerator(at: dir, includingPropertiesForKeys: nil) else {
-        return false
+/// 原本をコピーし、訂正ディレクトリへのマニフェストを書く。収集側が fact / TextBlock を overlay する。
+func materializeOverlaidXbrlDirectory(original: URL, overlayDirs: [URL]) -> URL? {
+    guard !overlayDirs.isEmpty else { return original }
+    let merged = FileManager.default.temporaryDirectory
+        .appendingPathComponent("blt-xbrl-overlay-\(UUID().uuidString)", isDirectory: true)
+    do {
+        try FileManager.default.copyItem(at: original, to: merged)
+        let body = overlayDirs.map(\.path).joined(separator: "\n") + "\n"
+        try body.write(
+            to: merged.appendingPathComponent(xbrlOverlayManifestFileName),
+            atomically: true, encoding: .utf8)
+        return merged
+    } catch {
+        return original
     }
-    while let url = enumerator.nextObject() as? URL {
-        let ext = url.pathExtension.lowercased()
-        guard ["htm", "html", "xbrl", "xml"].contains(ext) else { continue }
-        guard let data = try? Data(contentsOf: url) else { continue }
-        let text = String(data: data, encoding: .utf8)
-            ?? String(data: data, encoding: .shiftJIS)
-            ?? ""
-        if fullXbrlReplacementPhrases.contains(where: { text.contains($0) }) {
-            return true
+}
+
+/// マニフェストに書かれた訂正展開ディレクトリ（提出が古い順）。無ければ空。
+func overlayDirectories(in dir: URL) -> [URL] {
+    let marker = dir.appendingPathComponent(xbrlOverlayManifestFileName)
+    guard let text = try? String(contentsOf: marker, encoding: .utf8) else { return [] }
+    return text.split(whereSeparator: \.isNewline).compactMap { line in
+        let path = line.trimmingCharacters(in: .whitespaces)
+        return path.isEmpty ? nil : URL(fileURLWithPath: path)
+    }
+}
+
+/// 原本ディレクトリに続き、訂正 overlay を提出が古い順で返す。
+func xbrlSearchRoots(in dir: URL) -> [URL] {
+    [dir] + overlayDirectories(in: dir)
+}
+
+/// `contextRef` が行メンバー表（`Row{N}Member`）か。政策保有株式・配当決議など。
+public func isRowMemberContext(_ contextRef: String) -> Bool {
+    contextRef.range(of: #"Row[0-9]+Member"#, options: .regularExpression) != nil
+}
+
+/// 訂正 fact を原本へ重ねる。キーは tag + contextRef。
+/// `Row{N}Member` を持つタグは、訂正にその表があれば行ごと置換（セル混在しない）。
+public func overlayKeyedFacts<Value>(
+    base: [String: [String: Value]],
+    overlay: [String: [String: Value]]
+) -> [String: [String: Value]] {
+    var result = base
+    let overlayTableTags = Set(
+        overlay.compactMap { tag, ctxMap -> String? in
+            ctxMap.keys.contains(where: isRowMemberContext) ? tag : nil
+        })
+    for tag in overlayTableTags {
+        var ctxMap = result[tag] ?? [:]
+        ctxMap = ctxMap.filter { !isRowMemberContext($0.key) }
+        if let overlayCtx = overlay[tag] {
+            for (ctx, value) in overlayCtx where isRowMemberContext(ctx) {
+                ctxMap[ctx] = value
+            }
+        }
+        result[tag] = ctxMap
+    }
+    for (tag, ctxMap) in overlay {
+        for (ctx, value) in ctxMap {
+            if overlayTableTags.contains(tag), isRowMemberContext(ctx) { continue }
+            result[tag, default: [:]][ctx] = value
         }
     }
-    return false
+    return result
+}
+
+func overlayXbrlFactIndex(base: XbrlFactIndex, overlay: XbrlFactIndex) -> XbrlFactIndex {
+    overlayKeyedFacts(base: base, overlay: overlay)
 }
 
 /// EDINET 日次一覧 / 年次インデックスの dict から選定用の書類メタを作る。

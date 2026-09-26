@@ -106,6 +106,31 @@ private let keys = "business_risks,mda,segments"
         }
     }
 
+    @Test func ingestRestrictsToExplicitDocIDsWithoutPurgingOtherYears() async throws {
+        try await withMigratedApp { app in
+            try await seedDoc("S-OLD", secCode: "72030", submit: "2020-06-20 09:00", db: app.db)
+            try await seedDoc("S-FY", secCode: "72030", submit: "2025-06-20 09:00", db: app.db)
+            try await seedDoc("S-OTHER", secCode: "67580", db: app.db)
+
+            let sets = FilingSectionCandidateSets(
+                keep: [
+                    FilingDocCandidate(
+                        docID: "S-FY", code: "7203", submitDateTime: "2025-06-20 09:00", yearRank: 0)
+                ],
+                purge: [])
+            let summary = try await runFilingSectionsIngest(
+                db: app.db, listedCodes: ["7203", "6758"], years: 1, sectionKeys: keys, limit: nil,
+                candidateSets: sets, forceDocIDs: ["S-FY"]
+            ) { _ in fakePayload() }
+
+            #expect(summary.attempted == 1)
+            #expect(summary.purged == 0)
+            #expect(try await CompanyFilingSections.find("S-FY", on: app.db) != nil)
+            #expect(try await CompanyFilingSections.find("S-OLD", on: app.db) == nil)
+            #expect(try await CompanyFilingSections.find("S-OTHER", on: app.db) == nil)
+        }
+    }
+
     @Test func ingestExcludesNonAnnualDocTypes() async throws {
         try await withMigratedApp { app in
             try await seedDoc("S1", secCode: "72030", db: app.db)  // 有報120

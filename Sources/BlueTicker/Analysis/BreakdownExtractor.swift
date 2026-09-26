@@ -384,7 +384,8 @@ enum BreakdownExtractor {
     /// 表を持たず・マーカー＋集中度語を含み・同一セグメント定型句を含まない場合のみ採用する。
     static func detectSingleSegmentDisclosure(xbrlDir: URL) -> String? {
         let targetTags = singleSegmentDisclosureTags.union(Xbrl.productOrServiceTextBlockTags)
-        for file in XBRLUtils.findXbrlFiles(in: xbrlDir) {
+        for root in XBRLUtils.xbrlSearchRoots(in: xbrlDir) {
+            for file in XBRLUtils.findXbrlFiles(in: root) {
             guard let data = try? Data(contentsOf: file) else { continue }
             let collector = TextBlockSAXCollector(targetTags: targetTags)
             let parser = XMLParser(data: data)
@@ -405,6 +406,7 @@ enum BreakdownExtractor {
                     singleSegmentConcentrationMarkers.contains(where: trimmed.contains)
                 else { continue }
                 return trimmed
+            }
             }
         }
         return nil
@@ -518,20 +520,23 @@ enum BreakdownExtractor {
         Xbrl.geographyTextBlockTags.subtracting(Xbrl.geographyMixedTextBlockTags)
 
     private static func hasDedicatedGeographyTextBlock(xbrlDir: URL) -> Bool {
-        for file in XBRLUtils.findXbrlFiles(in: xbrlDir) {
+        for root in XBRLUtils.xbrlSearchRoots(in: xbrlDir) {
+            for file in XBRLUtils.findXbrlFiles(in: root) {
             guard let data = try? Data(contentsOf: file) else { continue }
             let collector = TextBlockSAXCollector(targetTags: dedicatedGeographyTextBlockTags)
             let parser = XMLParser(data: data)
             parser.delegate = collector
             parser.parse()
             if !collector.blocks.isEmpty { return true }
+            }
         }
         return false
     }
 
     /// 地域専用 TextBlock 本文に売上省略マーカー（日本精工型）があるか。
     private static func hasGeographyRevenueOmissionMarker(xbrlDir: URL) -> Bool {
-        for file in XBRLUtils.findXbrlFiles(in: xbrlDir) {
+        for root in XBRLUtils.xbrlSearchRoots(in: xbrlDir) {
+            for file in XBRLUtils.findXbrlFiles(in: root) {
             guard let data = try? Data(contentsOf: file) else { continue }
             let collector = TextBlockSAXCollector(targetTags: dedicatedGeographyTextBlockTags)
             let parser = XMLParser(data: data)
@@ -539,6 +544,7 @@ enum BreakdownExtractor {
             parser.parse()
             for block in collector.blocks where geographyRevenueOmissionMarker(in: block.content) {
                 return true
+            }
             }
         }
         return false
@@ -1767,13 +1773,27 @@ enum BreakdownExtractor {
     ) -> [BreakdownTable] {
         var tables: [BreakdownTable] = []
         let targets = dedicatedTags.union(mixedTags)
-        for file in XBRLUtils.findXbrlFiles(in: xbrlDir) {
-            guard let data = try? Data(contentsOf: file) else { continue }
-            let collector = TextBlockSAXCollector(targetTags: targets)
-            let parser = XMLParser(data: data)
-            parser.delegate = collector
-            parser.parse()
-            for block in collector.blocks {
+        var blocksByTag: [String: [(tag: String, content: String, contextRef: String?)]] = [:]
+        var tagOrder: [String] = []
+        for root in XBRLUtils.xbrlSearchRoots(in: xbrlDir) {
+            var layer: [String: [(tag: String, content: String, contextRef: String?)]] = [:]
+            for file in XBRLUtils.findXbrlFiles(in: root) {
+                guard let data = try? Data(contentsOf: file) else { continue }
+                let collector = TextBlockSAXCollector(targetTags: targets)
+                let parser = XMLParser(data: data)
+                parser.delegate = collector
+                parser.parse()
+                for block in collector.blocks {
+                    layer[block.tag, default: []].append(block)
+                }
+            }
+            for (tag, blocks) in layer {
+                if blocksByTag[tag] == nil { tagOrder.append(tag) }
+                blocksByTag[tag] = blocks
+            }
+        }
+        for tag in tagOrder {
+            for block in blocksByTag[tag] ?? [] {
                 guard !block.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
                       block.content.lowercased().contains("<table") else { continue }
                 if dedicatedTags.contains(block.tag) {
@@ -1832,7 +1852,8 @@ enum BreakdownExtractor {
     /// contextRef → {dimension局所名: member局所名} のマップを作る。
     static func loadDimensionContextMap(xbrlDir: URL) -> [String: [String: String]] {
         var contextMap: [String: [String: String]] = [:]
-        for file in XBRLUtils.findXbrlFiles(in: xbrlDir) {
+        for root in XBRLUtils.xbrlSearchRoots(in: xbrlDir) {
+            for file in XBRLUtils.findXbrlFiles(in: root) {
             guard let data = try? Data(contentsOf: file) else { continue }
             let collector = ContextDimensionSAXCollector()
             let parser = XMLParser(data: data)
@@ -1840,6 +1861,7 @@ enum BreakdownExtractor {
             parser.delegate = collector
             parser.parse()
             contextMap.merge(collector.contextMap) { _, new in new }
+            }
         }
         return contextMap
     }

@@ -67,7 +67,7 @@ struct IndividualAnalyzer {
 
         // 訂正(130)は索引・high-water 用。年次行は 120 のみ（有報年数が analysisYears 未満だと
         // prefix が末尾の訂正を拾い、同一 fy_end が二重になる。くふう 4376 / 2022-09）。
-        // ZIP だけ、同一会社・同一期間・同一親有報の全文 XBRL 訂正があれば差し替える。
+        // 同一会社・同一期間・同一親有報の訂正は、パースできるものを提出順に fact overlay する。
         let targetDocs = financialsAnnualDocuments(docs)
         let originals = targetDocs.compactMap(xbrlSourceDocument(fromEdinetFields:))
         let corrections = docs.compactMap(xbrlSourceDocument(fromEdinetFields:))

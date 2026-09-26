@@ -1,5 +1,5 @@
 // 有報(120)に対する訂正(130) XBRL 候補の引き当て。
-// 公開行の doc_id は原本のまま。ZIP だけ最新の全文 XBRL 置換へ寄せる。
+// 公開行の doc_id は原本のまま。パースできる訂正の fact / TextBlock を提出順に overlay する。
 
 import BlueTickerCore
 import Fluent

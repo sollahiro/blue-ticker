@@ -125,6 +125,11 @@ enum XBRLUtils {
             ?? findHtmlByPrefix(in: xbrlDir, prefix: "0104010")
     }
 
+    /// 原本ディレクトリに続き、訂正 overlay を提出が古い順で返す。
+    static func xbrlSearchRoots(in dir: URL) -> [URL] {
+        overlayDirectories(in: dir).isEmpty ? [dir] : [dir] + overlayDirectories(in: dir)
+    }
+
     /// XBRL ディレクトリからインスタンス文書（.xml / .xbrl）を返す。
     /// ラベル・プレゼンテーション・計算・定義リンクベースは除外する。
     static func findXbrlFiles(in dir: URL) -> [URL] {

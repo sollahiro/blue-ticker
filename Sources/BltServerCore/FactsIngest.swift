@@ -175,6 +175,9 @@ let unpublishedBreakdownIngestLimit = 30
 /// 例えば有報セクション取り込みだけを先に流したいとき、重い financials の全件 drain を挟まずに済む。
 /// 数値 fact 取り込みは `targets` に含めない。
 /// `codes` は financials/filing-sections/breakdowns の対象を明示的な証券コード集合に絞る（CLI: `--codes 7203,6758`）。
+/// `docIDs` は会社-FY（原本 120 の doc_id）単位の再 ingest（CLI: `--doc-ids S100W0S7`）。
+/// 指定時は該当書類だけを keep し、skip を外して再計算する。financials は会社1行のため
+/// その doc の発行体だけ再計算する（他 FY は原本 120 を再読。overlay は訂正がある FY だけ）。
 /// バグ修正確認後などに特定銘柄だけを手動・単発で先に再計算したいケース向け（定期 launchd drain には
 /// 使わない）。指定時は `limit` を無視して該当コードを全件処理する（対象自体が小さいため）。
 /// 数値 fact 取り込みは `codes` の対象外（doc 単位のため、コードへの紐付けは別スコープ）。
@@ -185,6 +188,7 @@ public func runFactsIngestCommand(
     limit: Int?, includeFacts: Bool = false,
     targets: Set<IngestTarget> = Set(IngestTarget.allCases),
     codes: Set<String>? = nil,
+    docIDs: Set<String>? = nil,
     noteTypes: Set<String>? = nil
 ) async throws {
     guard let context = await makeBltServerContext() else {
@@ -213,11 +217,16 @@ public func runFactsIngestCommand(
         }
         // `--codes` 指定時は financials/filing-sections の対象をその集合へ絞り、`limit` は無視して全件処理する
         // （手動・単発の対象は小さい前提。数値 fact 取り込みは doc 単位のためスコープ外）。
-        let stageLimit = codes == nil ? limit : nil
+        let stageLimit = (codes == nil && docIDs == nil) ? limit : nil
         if let codes {
             app.logger.notice(
                 "Explicit ingest codes specified",
                 metadata: ["event": "explicit_codes_loaded", "count": "\(codes.count)"])
+        }
+        if let docIDs {
+            app.logger.notice(
+                "Explicit ingest doc IDs specified",
+                metadata: ["event": "explicit_doc_ids_loaded", "count": "\(docIDs.count)"])
         }
         let cachedDocIDs = await context.cachedXbrlDocIDs()
         let publicBreakdownListed = codes ?? listed
@@ -241,7 +250,7 @@ public func runFactsIngestCommand(
             }
             return await filingSectionCandidates(
                 docs: annualDocs ?? [], listedCodes: listedCodes, explicitCodes: codes,
-                years: filingSectionsIngestYears)
+                years: filingSectionsIngestYears, explicitDocIDs: docIDs)
         }
 
         let listedFilingSets: FilingSectionCandidateSets
@@ -275,12 +284,29 @@ public func runFactsIngestCommand(
             deterministicMetricsFilingSets = FilingSectionCandidateSets(keep: [], purge: [])
         }
 
+        let correctionIDsByOriginal = try await loadAnnualXbrlCorrectionIDsByOriginal(
+            db: app.db, logger: app.logger)
+        let forceDocIDs = docIDs ?? []
+        let financialsExplicitCodes: Set<String>?
+        if let docIDs {
+            var fromDocs = Set(listedFilingSets.keep.map(\.code))
+            fromDocs.formUnion(publicBreakdownSets.keep.map(\.code))
+            fromDocs.formUnion(deterministicMetricsFilingSets.keep.map(\.code))
+            if fromDocs.isEmpty {
+                fromDocs = Set(try await loadCandidateSets(codes ?? listed).keep.map(\.code))
+            }
+            financialsExplicitCodes = codes.map { $0.intersection(fromDocs) } ?? fromDocs
+        } else {
+            financialsExplicitCodes = codes
+        }
+
         if includeFacts {
             let s3 = try await runFactsIngest(
                 db: app.db, limit: limit, cachedDocIDs: cachedDocIDs,
                 logger: app.logger
             ) { docID in
-                await context.parseXbrlFactIndex(docID: docID)
+                await context.parseXbrlFactIndex(
+                    docID: docID, correctionDocIDs: correctionIDsByOriginal[docID] ?? [])
             }
             logIngestSummary(
                 app.logger, target: "facts", attempted: s3.attempted, stored: s3.stored,
@@ -293,7 +319,9 @@ public func runFactsIngestCommand(
         if targets.contains(.financials) {
             let s4 = try await runFinancialsIngest(
                 db: app.db, years: financialsIngestYears, limit: stageLimit, listedCodes: listed,
-                explicitCodes: codes, priorityCodes: priority, logger: app.logger
+                explicitCodes: financialsExplicitCodes, priorityCodes: priority,
+                forceCodes: docIDs == nil ? [] : (financialsExplicitCodes ?? []),
+                logger: app.logger
             ) { code in
                 await context.computeFinancials(code: code, years: financialsIngestYears)
             }
@@ -313,9 +341,11 @@ public func runFactsIngestCommand(
                 sectionKeys: currentFilingSectionKeys(), limit: stageLimit, explicitCodes: codes,
                 priorityCodes: priority, cachedDocIDs: cachedDocIDs,
                 candidateSets: listedFilingSets,
+                forceDocIDs: forceDocIDs,
                 logger: app.logger
             ) { docID in
-                await context.extractFilingSections(docID: docID)
+                await context.extractFilingSections(
+                    docID: docID, correctionDocIDs: correctionIDsByOriginal[docID] ?? [])
             }
             let coverage = try? await withDbRetry(logger: app.logger, context: "company_filing_sections 集計") {
                 try await countServableFilingSections(db: app.db)
@@ -339,7 +369,7 @@ public func runFactsIngestCommand(
                     "内訳取り込み listed codes empty (listed universe empty and no --codes); skipping deterministic metric axes",
                     metadata: ["event": "ingest_skipped", "target": "breakdowns", "reason": "empty_listed_codes"])
             }
-            let unpublishedLimit = codes == nil ? unpublishedBreakdownIngestLimit : nil
+            let unpublishedLimit = (codes == nil && docIDs == nil) ? unpublishedBreakdownIngestLimit : nil
             let unpublishedSets =
                 deterministicMetricsListed == publicBreakdownListed
                 ? publicBreakdownSets : deterministicMetricsFilingSets
@@ -359,90 +389,103 @@ public func runFactsIngestCommand(
                     listedCodes: publicBreakdownListed, limit: stageLimit,
                     candidateSets: publicBreakdownSets
                 ) { docID in
-                    await context.resolveBusinessBreakdown(docID: docID)
+                    await context.resolveBusinessBreakdown(
+                        docID: docID, correctionDocIDs: correctionIDsByOriginal[docID] ?? [])
                 },
                 BreakdownStage(
                     axis: breakdownAxisGeography, target: "breakdowns-geography",
                     listedCodes: publicBreakdownListed, limit: stageLimit,
                     candidateSets: publicBreakdownSets
                 ) { docID in
-                    await context.resolveGeographyBreakdown(docID: docID)
+                    await context.resolveGeographyBreakdown(
+                        docID: docID, correctionDocIDs: correctionIDsByOriginal[docID] ?? [])
                 },
                 BreakdownStage(
                     axis: breakdownAxisEmployees, target: "breakdowns-employees",
                     listedCodes: deterministicMetricsListed, limit: unpublishedLimit,
                     candidateSets: unpublishedSets
                 ) { docID in
-                    await context.resolveEmployeesBreakdown(docID: docID)
+                    await context.resolveEmployeesBreakdown(
+                        docID: docID, correctionDocIDs: correctionIDsByOriginal[docID] ?? [])
                 },
                 BreakdownStage(
                     axis: breakdownAxisResearchAndDevelopment, target: "breakdowns-rd",
                     listedCodes: deterministicMetricsListed, limit: unpublishedLimit,
                     candidateSets: unpublishedSets
                 ) { docID in
-                    await context.resolveResearchAndDevelopmentBreakdown(docID: docID)
+                    await context.resolveResearchAndDevelopmentBreakdown(
+                        docID: docID, correctionDocIDs: correctionIDsByOriginal[docID] ?? [])
                 },
                 BreakdownStage(
                     axis: breakdownAxisGoodwill, target: "breakdowns-goodwill",
                     listedCodes: deterministicMetricsListed, limit: unpublishedLimit,
                     candidateSets: unpublishedSets
                 ) { docID in
-                    await context.resolveGoodwillBreakdown(docID: docID)
+                    await context.resolveGoodwillBreakdown(
+                        docID: docID, correctionDocIDs: correctionIDsByOriginal[docID] ?? [])
                 },
                 BreakdownStage(
                     axis: breakdownAxisSegmentAssets, target: "breakdowns-\(breakdownAxisSegmentAssets)",
                     listedCodes: deterministicMetricsListed, limit: unpublishedLimit, candidateSets: unpublishedSets
                 ) { docID in
-                    await context.resolveSegmentAssetsBreakdown(docID: docID)
+                    await context.resolveSegmentAssetsBreakdown(
+                        docID: docID, correctionDocIDs: correctionIDsByOriginal[docID] ?? [])
                 },
                 BreakdownStage(
                     axis: breakdownAxisDepreciationAndAmortization,
                     target: "breakdowns-\(breakdownAxisDepreciationAndAmortization)",
                     listedCodes: deterministicMetricsListed, limit: unpublishedLimit, candidateSets: unpublishedSets
                 ) { docID in
-                    await context.resolveDepreciationAndAmortizationBreakdown(docID: docID)
+                    await context.resolveDepreciationAndAmortizationBreakdown(
+                        docID: docID, correctionDocIDs: correctionIDsByOriginal[docID] ?? [])
                 },
                 BreakdownStage(
                     axis: breakdownAxisGoodwillAmortization,
                     target: "breakdowns-\(breakdownAxisGoodwillAmortization)",
                     listedCodes: deterministicMetricsListed, limit: unpublishedLimit, candidateSets: unpublishedSets
                 ) { docID in
-                    await context.resolveGoodwillAmortizationBreakdown(docID: docID)
+                    await context.resolveGoodwillAmortizationBreakdown(
+                        docID: docID, correctionDocIDs: correctionIDsByOriginal[docID] ?? [])
                 },
                 BreakdownStage(
                     axis: breakdownAxisImpairmentLoss,
                     target: "breakdowns-\(breakdownAxisImpairmentLoss)",
                     listedCodes: deterministicMetricsListed, limit: unpublishedLimit, candidateSets: unpublishedSets
                 ) { docID in
-                    await context.resolveImpairmentLossBreakdown(docID: docID)
+                    await context.resolveImpairmentLossBreakdown(
+                        docID: docID, correctionDocIDs: correctionIDsByOriginal[docID] ?? [])
                 },
                 BreakdownStage(
                     axis: breakdownAxisEquityMethodInvestments,
                     target: "breakdowns-\(breakdownAxisEquityMethodInvestments)",
                     listedCodes: deterministicMetricsListed, limit: unpublishedLimit, candidateSets: unpublishedSets
                 ) { docID in
-                    await context.resolveEquityMethodInvestmentsBreakdown(docID: docID)
+                    await context.resolveEquityMethodInvestmentsBreakdown(
+                        docID: docID, correctionDocIDs: correctionIDsByOriginal[docID] ?? [])
                 },
                 BreakdownStage(
                     axis: breakdownAxisCapitalExpenditures,
                     target: "breakdowns-\(breakdownAxisCapitalExpenditures)",
                     listedCodes: deterministicMetricsListed, limit: unpublishedLimit, candidateSets: unpublishedSets
                 ) { docID in
-                    await context.resolveCapitalExpendituresBreakdown(docID: docID)
+                    await context.resolveCapitalExpendituresBreakdown(
+                        docID: docID, correctionDocIDs: correctionIDsByOriginal[docID] ?? [])
                 },
                 BreakdownStage(
                     axis: breakdownAxisCapitalExpendituresOverview,
                     target: "breakdowns-\(breakdownAxisCapitalExpendituresOverview)",
                     listedCodes: deterministicMetricsListed, limit: unpublishedLimit, candidateSets: unpublishedSets
                 ) { docID in
-                    await context.resolveCapitalExpendituresOverviewBreakdown(docID: docID)
+                    await context.resolveCapitalExpendituresOverviewBreakdown(
+                        docID: docID, correctionDocIDs: correctionIDsByOriginal[docID] ?? [])
                 },
                 BreakdownStage(
                     axis: breakdownAxisNoncurrentAssetAdditions,
                     target: "breakdowns-\(breakdownAxisNoncurrentAssetAdditions)",
                     listedCodes: deterministicMetricsListed, limit: unpublishedLimit, candidateSets: unpublishedSets
                 ) { docID in
-                    await context.resolveNoncurrentAssetAdditionsBreakdown(docID: docID)
+                    await context.resolveNoncurrentAssetAdditionsBreakdown(
+                        docID: docID, correctionDocIDs: correctionIDsByOriginal[docID] ?? [])
                 },
             ]
             var summaries: [(stage: BreakdownStage, summary: BreakdownIngestSummary)] = []
@@ -451,6 +494,7 @@ public func runFactsIngestCommand(
                     db: app.db, listedCodes: stage.listedCodes, years: filingSectionsIngestYears,
                     limit: stage.limit, explicitCodes: codes, priorityCodes: priority,
                     cachedDocIDs: cachedDocIDs, axis: stage.axis, candidateSets: stage.candidateSets,
+                    forceDocIDs: forceDocIDs,
                     logger: app.logger, resolve: stage.resolve)
                 summaries.append((stage, summary))
             }
@@ -485,9 +529,11 @@ public func runFactsIngestCommand(
                 db: app.db, listedCodes: statementListed, years: filingSectionsIngestYears, limit: stageLimit,
                 explicitCodes: codes, priorityCodes: priority, cachedDocIDs: cachedDocIDs,
                 candidateSets: listedFilingSets,
+                forceDocIDs: forceDocIDs,
                 logger: app.logger
             ) { docID in
-                await context.extractStatement(docID: docID)
+                await context.extractStatement(
+                    docID: docID, correctionDocIDs: correctionIDsByOriginal[docID] ?? [])
             }
             let coverage = try? await withDbRetry(logger: app.logger, context: "company_statements 集計") {
                 try await countServableStatements(db: app.db)
@@ -510,8 +556,6 @@ public func runFactsIngestCommand(
                     "財務諸表注記取り込み listed codes empty (listed universe empty and no --codes); skipping",
                     metadata: ["event": "ingest_skipped", "target": "statement-notes", "reason": "empty_listed_codes"])
             }
-            let correctionIDsByOriginal = try await loadAnnualXbrlCorrectionIDsByOriginal(
-                db: app.db, logger: app.logger)
             let statementNoteTypes:
                 [(noteType: String, resolve: StatementNoteResolveFn)] = [
                     (
@@ -581,6 +625,7 @@ public func runFactsIngestCommand(
                     cachedDocIDs: cachedDocIDs,
                     noteType: entry.noteType,
                     candidateSets: deterministicMetricsFilingSets,
+                    forceDocIDs: forceDocIDs,
                     logger: app.logger, resolve: entry.resolve)
                 notesSummaries.append((noteType: entry.noteType, summary: s8))
             }
@@ -608,7 +653,9 @@ public func runFactsIngestCommand(
                     priorityCodes: priority, cachedDocIDs: cachedDocIDs,
                     logger: app.logger
                 ) { docID, code in
-                    await context.extractAndUploadCompanyIcon(docID: docID, code: code, r2Config: r2Config)
+                    await context.extractAndUploadCompanyIcon(
+                        docID: docID, code: code, r2Config: r2Config,
+                        correctionDocIDs: correctionIDsByOriginal[docID] ?? [])
                 }
                 logIngestSummary(
                     app.logger, target: "icons", attempted: s9.attempted, stored: s9.stored,
@@ -635,9 +682,12 @@ public func runFactsIngestCommand(
                 let s10 = try await runOverviewIngest(
                     db: app.db, listedCodes: listed, limit: stageLimit, explicitCodes: codes,
                     priorityCodes: priority, cachedDocIDs: cachedDocIDs,
+                    forceDocIDs: forceDocIDs,
                     logger: app.logger
                 ) { docID, code in
-                    await context.generateCompanyOverview(docID: docID, code: code)
+                    await context.generateCompanyOverview(
+                        docID: docID, code: code,
+                        correctionDocIDs: correctionIDsByOriginal[docID] ?? [])
                 }
                 logIngestSummary(
                     app.logger, target: "overviews", attempted: s10.attempted, stored: s10.stored,

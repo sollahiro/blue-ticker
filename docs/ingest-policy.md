@@ -115,10 +115,12 @@ overviews                … 銘柄の短い会社説明（LLM。最新有報1�
 
 ```bash
 DATABASE_URL="$BLT_NEON_WRITE_DATABASE_URL" ./.build/release/blt-server ingest \
-  --codes 7203 --stages financials,statement-notes --note-types per_share_information
+  --codes 7203 --doc-ids S100W0S7 \
+  --stages financials,statements,statement-notes,breakdowns,filing-sections \
+  --note-types policy_holding_securities
 ```
 
-`--codes` は `--limit` を無視して全件。定期ジョブでは使わない。
+`--codes` / `--doc-ids` は `--limit` を無視して全件。`--doc-ids` は原本有報(120)の会社-FY 単位（他 FY は purge しない。financials は会社1行なので当該発行体を再計算し、overlay は訂正がある FY だけ）。定期ジョブでは使わない。
 
 Screen 索引の列定義が変わったあと（`sales_cagr_3y` / screen-v3 指標の追加、screen-v4 の配当性向 3 年平均など）は `fin-vN` を上げない。次回の financials ingest は公開床（servable）の `company_financials` から screen_index を投影する（現行 fin-vN 一致・skip は問わない）。手動で急ぐときだけ WRITE で一発再生成する:
 

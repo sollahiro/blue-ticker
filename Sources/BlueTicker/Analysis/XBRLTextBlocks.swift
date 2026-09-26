@@ -31,7 +31,18 @@ extension XBRLUtils {
     }
 
     /// 指定タグの TextBlock 要素内のHTML（エンティティ復号済み）を最初に一致したファイルから返す。
+    /// 訂正 overlay に同じタグがあれば、提出が新しい訂正の本文で置き換える。
     static func extractTextblockHtml(in dir: URL, textblockTag: String) -> String? {
+        var found = extractTextblockHtmlUnlayered(in: dir, textblockTag: textblockTag)
+        for overlayDir in overlayDirectories(in: dir) {
+            if let html = extractTextblockHtmlUnlayered(in: overlayDir, textblockTag: textblockTag) {
+                found = html
+            }
+        }
+        return found
+    }
+
+    private static func extractTextblockHtmlUnlayered(in dir: URL, textblockTag: String) -> String? {
         guard let pattern = textblockHtmlPattern(for: textblockTag) else { return nil }
         for xbrlFile in findXbrlFiles(in: dir) {
             guard let raw = try? String(contentsOf: xbrlFile, encoding: .utf8) else { continue }

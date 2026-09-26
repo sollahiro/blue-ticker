@@ -55,6 +55,7 @@ func runStatementNotesIngest(
     cachedDocIDs: Set<String> = [],
     noteType: String,
     candidateSets: FilingSectionCandidateSets? = nil,
+    forceDocIDs: Set<String> = [],
     logger: Logger? = nil, resolve: StatementNoteResolveFn
 ) async throws -> StatementNotesIngestSummary {
     let currentCacheVersion = statementNoteCacheVersion(forType: noteType)
@@ -87,6 +88,10 @@ func runStatementNotesIngest(
     let classifyIndex = ingestIndexByID(classifyRows) { $0.id }
 
     for cand in baseCandidates {
+        if forceDocIDs.contains(cand.docID) {
+            missing.append(cand)
+            continue
+        }
         let key = CompanyStatementNote.compositeID(docID: cand.docID, noteType: noteType)
         guard let existing = classifyIndex[key] else {
             missing.append(cand)
