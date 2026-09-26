@@ -69,13 +69,13 @@ struct TickerView: View {
                     Button {
                         showsCompanyCard = true
                     } label: {
-                        // タイトル枠の提案幅は空きより狭い。maxWidth だけだと
-                        // 1行の社名が空きがあるのに「…」になる。内容幅まで広げ、上限で止める。
+                        // 内容幅まで縮める。上限は中央タイトルが戻る・右ボタンに被らない幅。
                         CompanyPillLabel(company: company)
-                            .frame(maxWidth: titlePillMaxWidth, alignment: .leading)
                     }
                     .buttonStyle(.plain)
                     .fixedSize(horizontal: true, vertical: true)
+                    .frame(maxWidth: titlePillMaxWidth)
+                    .clipped()
                     .glassEffect()
                     .onGeometryChange(for: CGRect.self) { proxy in
                         proxy.frame(in: .global)
@@ -171,12 +171,11 @@ struct TickerView: View {
         )
     }
 
-    /// 社名ピルの上限。戻る・右上2ボタン・左右余白を引いた分だけにし、
-    /// それ以上に広がると編集・星のカプセルの下に潜る。
+    /// 中央のタイトルは左右へ均等に伸びる。広い側（右の2ボタン）の2倍を空ける。
     private var titlePillMaxWidth: CGFloat {
-        let reserved: CGFloat = 180
+        let side: CGFloat = 122
         guard contentWidth > 0 else { return .infinity }
-        return max(contentWidth - reserved, 120)
+        return max(contentWidth - side * 2, 120)
     }
 
     private func hydrateSector() async {
@@ -582,7 +581,10 @@ private struct CompanyGlassPresenter: UIViewRepresentable {
             let measured = model.pillRect
             let pill = fittedPill(measured, bar: nav.navigationBar)
             model.pillRect = pill
-            if pill.width > measured.width + 1 {
+            if abs(pill.width - measured.width) > 1
+                || abs(pill.minX - measured.minX) > 1
+                || abs(pill.height - measured.height) > 1
+            {
                 DispatchQueue.main.async {
                     onFittedPill(pill)
                 }
@@ -635,8 +637,8 @@ private struct CompanyGlassPresenter: UIViewRepresentable {
             rect.width > 80 && rect.height > 28 && rect.height < 90 && rect.minY > 40 && rect.minX > 16
         }
 
-        /// 計測が「…」の幅で止まっていても、1行で入る社名は右のボタンの手前まで広げる。
-        /// 右端はバー上のボタン左端から測る。固定の余白ではボタンに被さる。
+        /// 1行で入る社名は空きまで広げる。長い社名は戻ると右ボタンのあいだに収め、2行にする。
+        /// 計測幅より狭くすることもある。広い計測のままにするとボタンに被さる。
         private func fittedPill(_ measured: CGRect, bar: UINavigationBar) -> CGRect {
             guard measured.width > 1, measured.height > 1 else { return measured }
             let display = Format.displayName(model.company.name, fallback: model.company.code)
@@ -644,30 +646,85 @@ private struct CompanyGlassPresenter: UIViewRepresentable {
             let font = UIFont.systemFont(ofSize: headline, weight: .bold)
             let textWidth = ceil((display as NSString).size(withAttributes: [.font: font]).width)
             let natural = textWidth + Theme.headerPillHorizontalPadding * 2 + Theme.headerIconSize + 8
-            let limit = trailingLeadingEdge(in: bar, pill: measured)
-            let maxWidth = max(measured.width, limit - measured.minX - 8)
-            let width = min(max(measured.width, natural), maxWidth)
-            return CGRect(x: measured.minX, y: measured.minY, width: width, height: measured.height)
+            let chrome = navigationChrome(in: bar)
+            let gap: CGFloat = 10
+            let barInWindow = bar.convert(bar.bounds, to: nil)
+            var left = chrome.leadingMaxX + gap
+            var right = chrome.trailingMinX - gap
+            if chrome.leadingMaxX <= barInWindow.minX + 1 {
+                left = barInWindow.minX + 52 + gap
+            }
+            if chrome.trailingMinX >= barInWindow.maxX - 1 {
+                right = barInWindow.maxX - 122 - gap
+            }
+            let available = right - left
+            let width: CGFloat
+            var minX = measured.minX
+            if available > 0 {
+                width = min(natural, available)
+                minX = min(max(minX, left), right - width)
+            } else {
+                width = min(measured.width, natural)
+            }
+            let lock = CompanyNameLock.measure(
+                name: model.company.name,
+                code: model.company.code,
+                pillWidth: width
+            )
+            let height: CGFloat
+            let minY: CGFloat
+            if lock.usesTwoLines {
+                height = CompanyNameLock.twoLinePillHeight
+                minY = (chrome.controlMidY > 1 ? chrome.controlMidY : measured.midY) - height / 2
+            } else if chrome.controlHeight > 28 {
+                height = chrome.controlHeight
+                minY = chrome.controlMidY - height / 2
+            } else {
+                height = measured.height
+                minY = measured.minY
+            }
+            return CGRect(x: minX, y: minY, width: width, height: height)
         }
 
-        /// ピルの右にあるバーボタンの左端（ウィンドウ座標）。無ければ計測の右端で止める。
-        private func trailingLeadingEdge(in bar: UINavigationBar, pill: CGRect) -> CGFloat {
-            let pillInBar = bar.convert(pill, from: nil)
-            var best: CGFloat?
+        /// 戻るの右端・右ボタンの左端・カプセル高さをバーから取る。タイトルは中央なので除く。
+        private func navigationChrome(in bar: UINavigationBar) -> (
+            leadingMaxX: CGFloat, trailingMinX: CGFloat, controlHeight: CGFloat, controlMidY: CGFloat
+        ) {
+            let barInWindow = bar.convert(bar.bounds, to: nil)
+            var leading = barInWindow.minX
+            var trailing = barInWindow.maxX
+            var height: CGFloat = 0
+            var midY = barInWindow.midY
+            let midX = bar.bounds.midX
             func consider(_ view: UIView) {
                 let frame = view.convert(view.bounds, to: bar)
-                let band = abs(frame.midY - pillInBar.midY) < 40
-                let control = frame.width >= 30 && frame.width <= 140
-                    && frame.height >= 28 && frame.height <= 72
-                let toTheRight = frame.minX > pillInBar.minX + 48
-                if band, control, toTheRight {
-                    best = min(best ?? frame.minX, frame.minX)
+                let plausible = frame.width >= 28 && frame.width <= bar.bounds.width * 0.48
+                    && frame.height >= 28 && frame.height <= 56
+                if plausible, frame.minX < midX, frame.maxX > midX {
+                    view.subviews.forEach(consider)
+                    return
+                }
+                if plausible, frame.maxX <= midX + 8 {
+                    let maxX = bar.convert(CGPoint(x: frame.maxX, y: 0), to: nil).x
+                    if maxX > leading {
+                        leading = maxX
+                        height = frame.height
+                        midY = bar.convert(CGPoint(x: 0, y: frame.midY), to: nil).y
+                    }
+                } else if plausible, frame.minX >= midX - 8 {
+                    let minX = bar.convert(CGPoint(x: frame.minX, y: 0), to: nil).x
+                    if minX < trailing {
+                        trailing = minX
+                        if height < 1 {
+                            height = frame.height
+                            midY = bar.convert(CGPoint(x: 0, y: frame.midY), to: nil).y
+                        }
+                    }
                 }
                 view.subviews.forEach(consider)
             }
             consider(bar)
-            guard let best else { return pill.maxX }
-            return bar.convert(CGPoint(x: best, y: 0), to: nil).x
+            return (leading, trailing, height, midY)
         }
 
         /// SwiftUI のボタン内では UIKit アニメーションが止まっている。
@@ -733,8 +790,12 @@ private struct CompanyGlassPresenter: UIViewRepresentable {
                 // 途中で別のアニメーションに割り込まれても、見た目は終端の枠に揃える。
                 // 中間幅のまま字を固定解除すると、社名がアイコンだけに欠ける。
                 self.model.expansion = expanded ? 1 : 0
-                self.model.freezesGlyphs = false
                 self.model.visibleWidth = end.width
+                var transaction = Transaction()
+                transaction.disablesAnimations = true
+                withTransaction(transaction) {
+                    self.model.freezesGlyphs = false
+                }
                 UIView.performWithoutAnimation {
                     container.frame = end
                     container.layer.cornerRadius = radius
@@ -944,7 +1005,7 @@ private final class CompanyGlassModel {
     var expansion: CGFloat = 0
     /// ガラスの中身を組む幅。枠のアニメーションでは変えない。
     var cardWidth: CGFloat = 0
-    /// いま見えている枠の幅。閉じるボタンの位置だけに使い、社名の組み幅には使わない。
+    /// いま見えている枠の幅。閉じるボタンの位置だけに使う。
     var visibleWidth: CGFloat = 0
     /// 開閉中は社名の字間を組み直さない。はみ出しは枠が隠す。
     var freezesGlyphs = false
@@ -962,7 +1023,7 @@ private final class CompanyGlassModel {
 
     func setExpanded(_ value: Bool) {
         guard expanded != value else { return }
-        // フラグを切るより先に字を固定する。閉じ始めの幅で「…」にしない。
+        // 1行目の字間は先に固定する。閉じ終わりの「…」はアニメーションさせない。
         freezesGlyphs = true
         expanded = value
         if value {
@@ -1050,7 +1111,11 @@ private struct CompanyMorphStack: View {
                     nameLock: model.nameLock,
                     freezeGlyphs: model.freezesGlyphs
                 )
-                .frame(width: showsWideName ? nil : collapsedNameWidth, alignment: .leading)
+                .frame(
+                    width: showsWideName ? nil : collapsedNameWidth,
+                    height: showsWideName ? nil : collapsedNameHeight,
+                    alignment: .leading
+                )
                     .overlay(alignment: .trailing) {
                         Button {
                             model.setExpanded(false)
@@ -1095,13 +1160,18 @@ private struct CompanyMorphStack: View {
         model.company.sector.isEmpty ? model.company.code : "\(model.company.code) · \(model.company.sector)"
     }
 
-    /// 開いているあいだ、および閉じ切るまではカード幅で組む。途中の枠幅では組み直さない。
+    /// 開閉中はカード幅のまま字を置く。枠だけが伸び縮みする。
     private var showsWideName: Bool {
         model.freezesGlyphs || model.expanded
     }
 
     private var collapsedNameWidth: CGFloat? {
         model.pillRect.width > 1 ? model.pillRect.width : nil
+    }
+
+    private var collapsedNameHeight: CGFloat? {
+        if model.nameLock.usesTwoLines { return nil }
+        return model.pillRect.height > 1 ? model.pillRect.height : nil
     }
 }
 
@@ -1131,6 +1201,18 @@ private enum CompanyNameLock: Equatable {
     /// 15pt の1行。大きな字ではピル幅に入らない。
     case compactLine
     case twoLine(first: String, rest: String)
+
+    var usesTwoLines: Bool {
+        if case .twoLine = self { return true }
+        return false
+    }
+
+    /// 15pt 2行とアイコン、上下余白。戻る円より高くなる。
+    static var twoLinePillHeight: CGFloat {
+        let line = UIFont.systemFont(ofSize: 15, weight: .semibold).lineHeight
+        let text = line * 2 - 2
+        return ceil(max(Theme.headerIconSize, text) + Theme.headerPillVerticalPadding * 2)
+    }
 
     static func measure(name: String, code: String, pillWidth: CGFloat) -> CompanyNameLock {
         let display = Format.displayName(name, fallback: code)
@@ -1225,8 +1307,7 @@ private struct CompanyPillLabel: View {
                     .font(compactNameFont)
                     .lineLimit(1)
                     .truncationMode(.tail)
-                    .fixedSize(horizontal: freezeGlyphs, vertical: true)
-                    .frame(maxWidth: freezeGlyphs ? nil : .infinity, alignment: .leading)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
         case .automatic:
             ViewThatFits(in: .horizontal) {
@@ -1238,6 +1319,7 @@ private struct CompanyPillLabel: View {
                     .font(compactNameFont)
                     .lineLimit(2)
                     .lineSpacing(-2)
+                    .truncationMode(.tail)
                     .multilineTextAlignment(.leading)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -1250,7 +1332,7 @@ private struct CompanyPillLabel: View {
         return .system(size: size, weight: .bold)
     }
 
-    /// 2行表示のときの社名。ステータスバーの時計と同じくらいの大きさ。
+    /// 2行のときの社名。ステータスバーの時計と同じくらいの大きさ。
     private var compactNameFont: Font {
         .system(size: 15, weight: .semibold)
     }

@@ -116,10 +116,20 @@ enum Format {
     }
 
     /// 検索結果・銘柄ヘッダ用。法人格の「株式会社」は出さない。
+    /// 「ホールディングス」で言い切るときだけ HD。直前の「・」は残さない。
+    /// 途中の「ホールディングス・アンド…」は触らない。
     static func displayName(_ name: String, fallback: String = "") -> String {
-        let stripped = name
+        var stripped = name
             .replacingOccurrences(of: "株式会社", with: "")
             .trimmingCharacters(in: .whitespacesAndNewlines)
+        if stripped.hasSuffix("・ホールディングス") || stripped.hasSuffix("･ホールディングス") {
+            stripped.removeLast("・ホールディングス".count)
+            stripped += "HD"
+        } else if stripped.hasSuffix("ホールディングス") {
+            stripped.removeLast("ホールディングス".count)
+            stripped = stripped.trimmingCharacters(in: .whitespacesAndNewlines)
+            stripped += "HD"
+        }
         if stripped.isEmpty {
             return fallback.isEmpty ? name : fallback
         }
