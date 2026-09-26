@@ -924,7 +924,7 @@ private struct CompanyGlassPresenter: UIViewRepresentable {
         /// 概要が止まった位置へ、下からフェードインする。横には動かさない。
         private func revealHost() {
             concealGeneration += 1
-            guard let wrapper, let container else { return }
+            guard let wrapper, let container = cardContainer else { return }
             let alreadyIn = revealed && wrapper.alpha > 0.99 && container.transform == .identity
             revealed = true
             guard !alreadyIn else { return }
