@@ -183,6 +183,14 @@ enum GeographyBreakdownLLMNormalizer {
         // 親地域（北米等）と内数（米国等）が両方 segment だと分母合計が 1 を超える。
         rows = dropOfWhichSubsetSegments(rows)
 
+        // 表内の 合計 / 海外計 が、構成行の和と食い違うときは LLM の桁コピー誤り
+        // （7734 S100YIB1: その他 376,049 を 3,760,490）。分母比 0.90...1.10 だけでは
+        // 抜けないので、抽出済み subtotal があるときだけ構成和を要求する。
+        if extractedSubtotalsMismatch(rows) {
+            needsReview = true
+            warnings.append(subtotalMismatchWarning)
+        }
+
         // ラベル妥当性チェック（決定的、追加ガード）。分母一致だけでは表の取り違えを検知できないため
         // （例: 誤って選ばれた事業別表の合計が、地域別表の合計とたまたま一致するケース）。
         // 「その他」はキーワードに含めない — 事業別表にも「その他及び全社」等の形でほぼ必ず
@@ -239,6 +247,47 @@ enum GeographyBreakdownLLMNormalizer {
             warnings: warnings
         )
         return (snapshot, audit)
+    }
+
+    /// 抽出済み subtotal が segment / reconciling の一部の和と一致しないときの警告。
+    /// 公開面は `needs_review` で隠す。
+    static let subtotalMismatchWarning = "subtotal_mismatch"
+
+    /// 相対 0.5%。百万円表の行丸めは通すが、1 桁のコピー誤り（約 1.4% 以上）は落とす。
+    private static let subtotalRelativeTolerance = 0.005
+
+    /// 抽出された subtotal 行それぞれについて、構成行の部分集合和が
+    /// 丸め許容内で一致しなければ true。subtotal が無ければ検査しない。
+    static func extractedSubtotalsMismatch(_ rows: [BreakdownRow]) -> Bool {
+        let components = rows.compactMap { row -> Double? in
+            (row.rowKind == "segment" || row.rowKind == "reconciling") ? row.amount : nil
+        }
+        let subtotals = rows.compactMap { row -> Double? in
+            row.rowKind == "subtotal" && row.amount != 0 ? row.amount : nil
+        }
+        guard !subtotals.isEmpty, !components.isEmpty else { return false }
+        guard components.count <= 20 else { return false }
+        for target in subtotals {
+            if !subsetSums(to: target, among: components) {
+                return true
+            }
+        }
+        return false
+    }
+
+    private static func subsetSums(to target: Double, among amounts: [Double]) -> Bool {
+        let tol = abs(target) * subtotalRelativeTolerance
+        let n = amounts.count
+        var found = false
+        func dfs(_ i: Int, _ acc: Double, _ used: Bool) {
+            if found { return }
+            if used, abs(acc - target) <= tol { found = true; return }
+            guard i < n else { return }
+            dfs(i + 1, acc + amounts[i], true)
+            dfs(i + 1, acc, used)
+        }
+        dfs(0, 0, false)
+        return found
     }
 
     /// 親地域の内数（「うち」）として重複計上されている segment 行を除く。

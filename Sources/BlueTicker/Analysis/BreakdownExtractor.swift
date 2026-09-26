@@ -1114,7 +1114,8 @@ enum BreakdownExtractor {
     }
 
     /// グリッド自身 → 単位スタブの引き継ぎ → 直前表より後の preceding。由来を残す。
-    private static func resolvedUnitCaption(
+    /// 発行済株式注記の表単位（キャプションが表外のとき）からも使う。
+    static func resolvedUnitCaption(
         grid: [[String]], pending: String?, table: Element?
     ) -> (String?, BreakdownUnitCaptionOrigin?) {
         if let own = unitCaption(from: grid) {

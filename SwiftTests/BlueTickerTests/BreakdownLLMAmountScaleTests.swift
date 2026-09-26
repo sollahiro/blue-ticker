@@ -117,6 +117,53 @@ import Testing
         #expect(resolved.multiplier == Financial.millionYen)
     }
 
+    /// ヘッダーは千円だが LLM が既に百万円へ換算して million_yen と申告したとき
+    /// （7567 S100R2JY 等）。ヘッダー ×1000 を再適用すると 1000 倍小さい。分母一致する百万円を選ぶ。
+    @Test func senYenHeaderButLLMAlreadyConvertedToMillionYenUsesMillionScale() {
+        let sales = 5_120.0 * Financial.millionYen
+        let raw = [4_000.0, 1_120.0, 5_120.0]
+        let resolved = BreakdownLLMAmountScale.resolve(
+            headerToken: "千円",
+            declaredUnit: "million_yen",
+            rawAmounts: raw,
+            consolidatedSales: sales
+        )
+        #expect(resolved.unresolved == false)
+        #expect(resolved.headerLlmMismatch == true)
+        #expect(resolved.multiplier == Financial.millionYen)
+        #expect(5_120 * resolved.multiplier == sales)
+    }
+
+    /// 分母が無い食い違いはヘッダー単位のまま（候補を推測しない）。
+    @Test func mismatchWithoutDenominatorKeepsHeaderScale() {
+        let resolved = BreakdownLLMAmountScale.resolve(
+            headerToken: "千円",
+            declaredUnit: "million_yen",
+            rawAmounts: [4_000, 1_120, 5_120],
+            consolidatedSales: nil
+        )
+        #expect(resolved.headerLlmMismatch == true)
+        #expect(resolved.multiplier == BreakdownLLMAmountScale.thousandYen)
+        #expect(resolved.unresolved == false)
+    }
+
+    /// ヘッダー・LLM・×1 のどれも分母比 0.90...1.10 に入らないときはヘッダー単位。
+    @Test func mismatchWhenNoCandidateInBandKeepsHeaderScale() {
+        let resolved = BreakdownLLMAmountScale.resolve(
+            headerToken: "千円",
+            declaredUnit: "million_yen",
+            rawAmounts: [5_120],
+            consolidatedSales: 50_000_000_000
+        )
+        #expect(resolved.headerLlmMismatch == true)
+        #expect(resolved.multiplier == BreakdownLLMAmountScale.thousandYen)
+        #expect(resolved.unresolved == false)
+        let headerRatio = 5_120 * BreakdownLLMAmountScale.thousandYen / 50_000_000_000
+        let llmRatio = 5_120 * Financial.millionYen / 50_000_000_000
+        #expect(!BreakdownLLMAmountScale.denominatorRatioTolerance.contains(headerRatio))
+        #expect(!BreakdownLLMAmountScale.denominatorRatioTolerance.contains(llmRatio))
+    }
+
     @Test func senYenHeaderScalesEvenWhenLLMSaysOther() {
         let resolved = BreakdownLLMAmountScale.resolve(
             headerToken: "千円",

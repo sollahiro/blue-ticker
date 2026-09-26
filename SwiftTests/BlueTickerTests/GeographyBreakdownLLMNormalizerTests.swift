@@ -232,4 +232,66 @@ struct GeographyBreakdownLLMNormalizerTests {
         #expect(a.notes.contains("欧州他（注）3→欧州他"))
         #expect(a.notes.contains("帝人型"))
     }
+
+    /// 7734 S100YIB1: その他の地域を 376,049 ではなく 3,760,490 とコピー。
+    /// セグメント合計 / 連結売上は 1.061 で 0.90...1.10 に入るが、海外計・連結合計とは合わない。
+    @Test("海外計と構成行が食い違うときは subtotal_mismatch で needs_review")
+    func subtotalMismatchOnCopiedDigitMarksNeedsReview() async throws {
+        let sales = 55_212_234.0 * Financial.millionYen
+        let tables = [
+            BreakdownTable(
+                heading: "地域ごとの情報",
+                markdown: "| 日本 | アジア | 北米 | 欧州 | その他 | 海外合計 | 連結売上高 |\n",
+                period: "当期")
+        ]
+        let geography = ExtractedBreakdown(method: "html_table", tables: tables, facts: [])
+        let response: [String: Any] = [
+            "applicable": true,
+            "unit": "million_yen",
+            "source_table_index": 0,
+            "period_column": "当期",
+            "rows": [
+                ["label": "日本", "amount": 29_122_646, "row_kind": "segment"],
+                ["label": "アジア", "amount": 13_442_307, "row_kind": "segment"],
+                ["label": "北米", "amount": 10_127_597, "row_kind": "segment"],
+                ["label": "欧州", "amount": 2_143_634, "row_kind": "segment"],
+                ["label": "その他の地域", "amount": 3_760_490, "row_kind": "segment"],
+                ["label": "海外合計", "amount": 26_089_588, "row_kind": "subtotal"],
+                ["label": "連結売上高", "amount": 55_212_234, "row_kind": "subtotal"],
+            ],
+            "notes": "7734 S100YIB1 copied digit",
+        ]
+        let (snapshot, _) = await GeographyBreakdownLLMNormalizer.normalize(
+            geography, consolidatedSales: sales, client: MockChat(response))
+        let snap = try #require(snapshot)
+        let segmentSum = snap.rows.filter { $0.rowKind == "segment" }.reduce(0.0) { $0 + $1.amount }
+        #expect(segmentSum / sales > 0.90 && segmentSum / sales < 1.10)
+        #expect(snap.needsReview == true)
+        #expect(snap.warnings.contains(GeographyBreakdownLLMNormalizer.subtotalMismatchWarning))
+        #expect(
+            isPubliclyServableBreakdown(
+                source: breakdownSourceGeographyLLM,
+                needsReview: snap.needsReview,
+                warnings: snap.warnings) == false)
+        let other = try #require(snap.rows.first { $0.labelRaw.contains("その他") })
+        #expect(other.amount == 3_760_490 * Financial.millionYen)
+    }
+
+    @Test("海外計と構成行が一致するときは subtotal_mismatch を立てない")
+    func matchingOverseasSubtotalDoesNotFlag() {
+        let rows: [BreakdownRow] = [
+            .init(labelRaw: "日本", amount: 29_122_646, share: nil, profit: nil, rowKind: "segment"),
+            .init(labelRaw: "アジア", amount: 13_442_307, share: nil, profit: nil, rowKind: "segment"),
+            .init(labelRaw: "北米", amount: 10_127_597, share: nil, profit: nil, rowKind: "segment"),
+            .init(labelRaw: "欧州", amount: 2_143_634, share: nil, profit: nil, rowKind: "segment"),
+            .init(labelRaw: "その他の地域", amount: 376_049, share: nil, profit: nil, rowKind: "segment"),
+            .init(labelRaw: "海外合計", amount: 26_089_588, share: nil, profit: nil, rowKind: "subtotal"),
+            .init(labelRaw: "連結売上高", amount: 55_212_234, share: nil, profit: nil, rowKind: "subtotal"),
+        ]
+        #expect(GeographyBreakdownLLMNormalizer.extractedSubtotalsMismatch(rows) == false)
+        var wrong = rows
+        wrong[4] = .init(
+            labelRaw: "その他の地域", amount: 3_760_490, share: nil, profit: nil, rowKind: "segment")
+        #expect(GeographyBreakdownLLMNormalizer.extractedSubtotalsMismatch(wrong) == true)
+    }
 }
