@@ -329,37 +329,57 @@ public extension BltServerContext {
     /// 財務諸表注記取り込み: 書類1件分の `borrowings_schedule` note_type を解決する。ロジックは
     /// `StatementNotesResolver.resolveBorrowingsSchedule`（＝`BorrowingsSchedule.extractRows`、
     /// `IBDExtractor` が使う `extract` と表探索ロジックを共有）に委譲する。
-    func resolveBorrowingsScheduleNote(docID: String) async -> StatementNoteResolveResult {
-        guard let xbrlDir = await edinetClient.downloadDocument(docID) else { return .failed }
+    func resolveBorrowingsScheduleNote(docID: String, correctionDocIDs: [String] = [])
+        async -> StatementNoteResolveResult
+    {
+        guard let xbrlDir = await downloadAnnualFilingXbrl(
+            docID: docID, correctionDocIDs: correctionDocIDs
+        ) else { return .failed }
         return StatementNotesResolver.resolveBorrowingsSchedule(xbrlDir: xbrlDir)
     }
 
     /// 財務諸表注記取り込み: 書類1件分の `property_plant_equipment_schedule` note_type を解決する
     /// （IFRS 注記 role → BS 区分タグ当期値で `available_via_statement` → それ以外。
     /// J-GAAP 附属明細表 TextBlock は未対応。`StatementNotesResolver` のドキュメント参照）。
-    func resolvePropertyPlantEquipmentScheduleNote(docID: String) async -> StatementNoteResolveResult {
-        guard let xbrlDir = await edinetClient.downloadDocument(docID) else { return .failed }
+    func resolvePropertyPlantEquipmentScheduleNote(docID: String, correctionDocIDs: [String] = [])
+        async -> StatementNoteResolveResult
+    {
+        guard let xbrlDir = await downloadAnnualFilingXbrl(
+            docID: docID, correctionDocIDs: correctionDocIDs
+        ) else { return .failed }
         return StatementNotesResolver.resolvePropertyPlantEquipmentSchedule(xbrlDir: xbrlDir)
     }
 
     /// 財務諸表注記取り込み: 書類1件分の `goodwill_and_intangibles` note_type を解決する（IFRS連結企業限定、
     /// J-GAAP単体には対応する法定附属明細表が無い）。
-    func resolveGoodwillAndIntangiblesNote(docID: String) async -> StatementNoteResolveResult {
-        guard let xbrlDir = await edinetClient.downloadDocument(docID) else { return .failed }
+    func resolveGoodwillAndIntangiblesNote(docID: String, correctionDocIDs: [String] = [])
+        async -> StatementNoteResolveResult
+    {
+        guard let xbrlDir = await downloadAnnualFilingXbrl(
+            docID: docID, correctionDocIDs: correctionDocIDs
+        ) else { return .failed }
         return StatementNotesResolver.resolveGoodwillAndIntangibles(xbrlDir: xbrlDir)
     }
 
     /// 財務諸表注記取り込み: 書類1件分の `lease_liabilities` note_type を解決する。
     /// 連結 BS タグまたは IFRS リース注記 TextBlock（`IFRSLease`）から決定論で抽出する。
-    func resolveLeaseLiabilitiesNote(docID: String) async -> StatementNoteResolveResult {
-        guard let xbrlDir = await edinetClient.downloadDocument(docID) else { return .failed }
+    func resolveLeaseLiabilitiesNote(docID: String, correctionDocIDs: [String] = [])
+        async -> StatementNoteResolveResult
+    {
+        guard let xbrlDir = await downloadAnnualFilingXbrl(
+            docID: docID, correctionDocIDs: correctionDocIDs
+        ) else { return .failed }
         return StatementNotesResolver.resolveLeaseLiabilities(xbrlDir: xbrlDir)
     }
 
     /// 財務諸表注記取り込み: 書類1件分の `sga_expense_breakdown` note_type を解決する。
     /// 連結損益計算書関係注記の構造化 `*SGA` / IFRS 販管費費目タグから決定論で抽出する。
-    func resolveSgaExpenseBreakdownNote(docID: String) async -> StatementNoteResolveResult {
-        guard let xbrlDir = await edinetClient.downloadDocument(docID) else { return .failed }
+    func resolveSgaExpenseBreakdownNote(docID: String, correctionDocIDs: [String] = [])
+        async -> StatementNoteResolveResult
+    {
+        guard let xbrlDir = await downloadAnnualFilingXbrl(
+            docID: docID, correctionDocIDs: correctionDocIDs
+        ) else { return .failed }
         return StatementNotesResolver.resolveSgaExpenseBreakdown(xbrlDir: xbrlDir)
     }
 
@@ -367,8 +387,12 @@ public extension BltServerContext {
     /// `StatementNotesResolver.resolvePerShareInformation` に委譲する（「業績等の概要」の
     /// 離散数値タグから決定論で抽出、LLM 不要）。財務取り込み の単一値（EPSのみ）passthrough を
     /// 置き換える（実データレビューでBPS・潜在株式調整後EPSも取得可能と判明、2026-08-02）。
-    func resolvePerShareInformationNote(docID: String) async -> StatementNoteResolveResult {
-        guard let xbrlDir = await edinetClient.downloadDocument(docID) else { return .failed }
+    func resolvePerShareInformationNote(docID: String, correctionDocIDs: [String] = [])
+        async -> StatementNoteResolveResult
+    {
+        guard let xbrlDir = await downloadAnnualFilingXbrl(
+            docID: docID, correctionDocIDs: correctionDocIDs
+        ) else { return .failed }
         return StatementNotesResolver.resolvePerShareInformation(xbrlDir: xbrlDir)
     }
 
@@ -376,25 +400,46 @@ public extension BltServerContext {
     /// `StatementNotesResolver.resolveDividends` に委譲する（EDINET標準タクソノミの決議単位
     /// 構造化タグから決定論で抽出、LLM 不要）。財務取り込み の単一集計値 passthrough を置き換える
     /// （実データレビューで決議単位のテーブル構造が判明したため、2026-08-02）。
-    func resolveDividendsNote(docID: String) async -> StatementNoteResolveResult {
-        guard let xbrlDir = await edinetClient.downloadDocument(docID) else { return .failed }
+    func resolveDividendsNote(docID: String, correctionDocIDs: [String] = [])
+        async -> StatementNoteResolveResult
+    {
+        guard let xbrlDir = await downloadAnnualFilingXbrl(
+            docID: docID, correctionDocIDs: correctionDocIDs
+        ) else { return .failed }
         return StatementNotesResolver.resolveDividends(xbrlDir: xbrlDir)
     }
 
     /// 財務諸表注記取り込み: 書類1件分の `issued_shares_and_capital` note_type を解決する。ロジックは
     /// `StatementNotesResolver.resolveIssuedSharesAndCapital` に委譲する。期末スナップショット（離散タグ:
     /// 発行済・資本金・資本準備金）と textblock 表のイベント列を併記（LLM不要）。
-    func resolveIssuedSharesAndCapitalNote(docID: String) async -> StatementNoteResolveResult {
-        guard let xbrlDir = await edinetClient.downloadDocument(docID) else { return .failed }
+    func resolveIssuedSharesAndCapitalNote(docID: String, correctionDocIDs: [String] = [])
+        async -> StatementNoteResolveResult
+    {
+        guard let xbrlDir = await downloadAnnualFilingXbrl(
+            docID: docID, correctionDocIDs: correctionDocIDs
+        ) else { return .failed }
         return StatementNotesResolver.resolveIssuedSharesAndCapital(xbrlDir: xbrlDir)
     }
 
     /// 財務諸表注記取り込み: 書類1件分の `policy_holding_securities` note_type を解決する。ロジックは
     /// `StatementNotesResolver.resolvePolicyHoldingSecurities` に委譲する（EDINET標準タクソノミの
     /// 銘柄別構造化タグから決定論で抽出、LLM 不要）。
-    func resolvePolicyHoldingSecuritiesNote(docID: String) async -> StatementNoteResolveResult {
-        guard let xbrlDir = await edinetClient.downloadDocument(docID) else { return .failed }
+    /// `correctionDocIDs` は同一 FY の全文 XBRL 訂正(130)。ZIP だけ差し替え、格納 `doc_id` は原本。
+    func resolvePolicyHoldingSecuritiesNote(docID: String, correctionDocIDs: [String] = [])
+        async -> StatementNoteResolveResult
+    {
+        guard let xbrlDir = await downloadAnnualFilingXbrl(
+            docID: docID, correctionDocIDs: correctionDocIDs
+        ) else { return .failed }
         return StatementNotesResolver.resolvePolicyHoldingSecurities(xbrlDir: xbrlDir)
+    }
+
+    /// 有報(120)の XBRL。同一 FY の全文 XBRL 訂正(130)があれば、パースできる最新のものを優先する。
+    func downloadAnnualFilingXbrl(docID: String, correctionDocIDs: [String] = []) async -> URL? {
+        await resolveAnnualXbrlDirectory(
+            originalDocID: docID,
+            correctionDocIDs: correctionDocIDs,
+            download: { await edinetClient.downloadDocument($0) })
     }
 }
 
@@ -840,7 +885,8 @@ func mapEdinetDocumentRecords(
             periodStart: normalizeDateFormat(doc["periodStart"] as? String),
             periodEnd: normalizeDateFormat(doc["periodEnd"] as? String),
             submitDateTime: nonEmptyString(doc["submitDateTime"]) ?? "",
-            docDescription: nonEmptyString(doc["docDescription"])
+            docDescription: nonEmptyString(doc["docDescription"]),
+            parentDocID: nonEmptyString(doc["parentDocID"])
         ))
     }
     return records
@@ -871,9 +917,9 @@ private func nonEmptyString(_ value: Any?) -> String? {
 /// 簡易セマンティクス（ライブ探索との意図的な差分・確定事項）:
 /// 各書類の `fy_end` は自身の period_end をそのまま使う（自己完結ビュー）。主要 doc type の
 /// 有報(120)・半期報告書(160) は period_end が通期期末のためライブ経路と完全一致する。
-/// 一方、旧四半期(140) は period_end が 2Q 末、訂正(130) は親有報リンクを `edinet_documents` が
-/// 保持しない（parentDocID 列なし）ため、ライブ経路の「親 FY 末への正規化／親リンク書類のみ採用」は
-/// 再現せず、自身の period_end・窓内全件で返す。schema 変更を避ける判断（docs/blt-server-roadmap.md）。
+/// 一方、旧四半期(140) は period_end が 2Q 末。訂正(130) の `parent_doc_id` は ingest の
+/// XBRL 選定用で、filings の `fy_end` は引き続き各行の period_end（空なら空）を返す。
+/// ライブ経路の「親 FY 末への正規化」は filings 公開形では再現しない。
 func filingsList(from records: [EdinetDocumentRecord], maxYears: Int) -> [[String: Any]] {
     let sorted = records.sorted { $0.submitDateTime > $1.submitDateTime }
     let cutoffYear = sorted.compactMap { extractYearMonth($0.periodEnd ?? "").0 }.max()

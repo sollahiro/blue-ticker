@@ -339,7 +339,8 @@ extension EdinetDocument {
             periodStart: periodStart,
             periodEnd: periodEnd,
             submitDateTime: submitDateTime,
-            docDescription: docDescription)
+            docDescription: docDescription,
+            parentDocID: parentDocID)
     }
 
     /// 正規化済みレコードの値を自身へ写す（id は呼び出し側で設定済み）。
@@ -354,6 +355,7 @@ extension EdinetDocument {
         periodEnd = record.periodEnd
         submitDateTime = record.submitDateTime
         docDescription = record.docDescription
+        parentDocID = record.parentDocID
     }
 }
 

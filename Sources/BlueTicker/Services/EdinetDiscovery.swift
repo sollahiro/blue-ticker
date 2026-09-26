@@ -90,7 +90,7 @@ enum EdinetDiscovery {
 
         // ⑤ 訂正書類: parentDocID が選択済み有報に対応するものを付与。
         // 通期 financials の年次行には使わない（`financialsAnnualDocuments`）。high-water と
-        // filings 表示のための索引エントリ。
+        // filings 表示、および同一 FY の全文 XBRL 訂正 ZIP 選定のための索引エントリ。
         let fyMetaByID: [String: (fyEnd: String, fiscalYear: Int?)] = Dictionary(
             uniqueKeysWithValues: docs.compactMap { doc -> (String, (String, Int?))? in
                 guard let id = doc["docID"] as? String else { return nil }

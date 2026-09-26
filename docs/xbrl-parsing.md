@@ -91,7 +91,7 @@ smoke/
 | 注記(borrowings_schedule)外出しオラクル | `SwiftTests/BlueTickerTests/Spec/Oracle/StatementNotesOracleFormatTests.swift` | `smoke/statement_notes_borrowings_schedule_expected.json`（試作3docID + smoke固定11社。US-GAAP 2社は巨大注記 HTML から内訳。smoke 分は `SmokeCacheSupport` / `tmp_cache/edinet`） |
 | 注記(per_share_information)外出しオラクル | `SwiftTests/BlueTickerTests/Spec/Oracle/PerShareInformationOracleFormatTests.swift` | `smoke/statement_notes_per_share_information_expected.json`（試作2docID + smoke固定11社。US-GAAP BPS含む。smoke 分は `SmokeCacheSupport` / `tmp_cache/edinet`） |
 | 注記(issued_shares_and_capital)外出しオラクル | `SwiftTests/BlueTickerTests/Spec/Oracle/IssuedSharesAndCapitalOracleFormatTests.swift` | `smoke/statement_notes_issued_shares_and_capital_expected.json`（smoke固定11社。`as_of_period_end`＝離散タグ＋`issued_shares_events`＝textblock表。smoke 分は `SmokeCacheSupport` / `tmp_cache/edinet`） |
-| 注記(policy_holding_securities)外出しオラクル | `SwiftTests/BlueTickerTests/Spec/Oracle/PolicyHoldingSecuritiesOracleFormatTests.swift` | `smoke/statement_notes_policy_holding_securities_expected.json`（トヨタ + smoke固定10社。SMFG(8316)は複数docID間でXBRLタグ付けが不完全なため対象外。smoke 分は `SmokeCacheSupport` / `tmp_cache/edinet`） |
+| 注記(policy_holding_securities)外出しオラクル | `SwiftTests/BlueTickerTests/Spec/Oracle/PolicyHoldingSecuritiesOracleFormatTests.swift` | `smoke/statement_notes_policy_holding_securities_expected.json`（トヨタ + smoke固定10社。SMFG(8316) の smoke 有報 `S100W0S7` は提出パッケージのタグ付けが不完全なため対象外。ingest は同一 FY の全文 XBRL 訂正 `S100WRZH` を ZIP として使い、格納 `doc_id` は `S100W0S7` のまま。smoke 分は `SmokeCacheSupport` / `tmp_cache/edinet`） |
 | 注記(dividends)外出しオラクル | `SwiftTests/BlueTickerTests/Spec/Oracle/DividendsOracleFormatTests.swift` | `smoke/statement_notes_dividends_expected.json`（試作2docID + smoke固定11社。決議単位の1株配当・総額。smoke 分は `SmokeCacheSupport` / `tmp_cache/edinet`） |
 | 注記(goodwill_and_intangibles)外出しオラクル | `SwiftTests/BlueTickerTests/Spec/Oracle/GoodwillAndIntangiblesOracleFormatTests.swift` | `smoke/statement_notes_goodwill_and_intangibles_expected.json`（トヨタ + smoke固定11社。IFRS連結2社は種類別正味帳簿価額、スズキと非IFRS8社は `not_found`。smoke 分は `SmokeCacheSupport` / `tmp_cache/edinet`） |
 | 注記(property_plant_equipment_schedule)外出しオラクル | `SwiftTests/BlueTickerTests/Spec/Oracle/PropertyPlantEquipmentScheduleOracleFormatTests.swift` | `smoke/statement_notes_property_plant_equipment_schedule_expected.json`（smoke固定11社。IFRS連結3社は種類別正味帳簿価額、J-GAAP6社は BS 区分タグ当期値ありで `available_via_statement`、US-GAAP2社は `us_gaap_unsupported`。smoke 分は `SmokeCacheSupport` / `tmp_cache/edinet`） |
@@ -104,7 +104,7 @@ smoke/
 
 **golden回帰とsmokeの役割の違い**: 2つは同じ「実データ回帰」でも軸が異なる。
 
-- **smoke（年次スモーク）**: 会計基準（J-GAAP/IFRS/US-GAAP）・決算期の移行境界・連結有無など、抽出ロジックが分岐する「次元」を意図して選んだ固定企業セット（§3.2）で、既存ロジック全体の最低品質を継続的に守る**床**。対象は基本財務諸表抽出器（BS/PL/CF/GP/IBD）と **`per_share_information`・`issued_shares_and_capital`・`policy_holding_securities`・`dividends`・`borrowings_schedule`・`goodwill_and_intangibles`・`property_plant_equipment_schedule`・`lease_liabilities` note_type**（公開）、および実装済み・未公開の **`sga_expense_breakdown`**、さらに **breakdown の `business` / `geography` 軸**（各 `*OracleFormatTests` + 外出しJSON。`policy_holding_securities` のみ SMFG(8316) を対象外とした固定10社。breakdown の LLM 経路は渡す前の tables を突合し、正規化後金額は床に含めない）。公開 note_type はいずれも床に載済み。`statement`（Statement 本体）は `SmokeTests.swift` 自体は通らないが、同固定セットの golden を `RealXbrlStatementTests.swift` に持つ（BS/PL/CF/SS）
+- **smoke（年次スモーク）**: 会計基準（J-GAAP/IFRS/US-GAAP）・決算期の移行境界・連結有無など、抽出ロジックが分岐する「次元」を意図して選んだ固定企業セット（§3.2）で、既存ロジック全体の最低品質を継続的に守る**床**。対象は基本財務諸表抽出器（BS/PL/CF/GP/IBD）と **`per_share_information`・`issued_shares_and_capital`・`policy_holding_securities`・`dividends`・`borrowings_schedule`・`goodwill_and_intangibles`・`property_plant_equipment_schedule`・`lease_liabilities` note_type**（公開）、および実装済み・未公開の **`sga_expense_breakdown`**、さらに **breakdown の `business` / `geography` 軸**（各 `*OracleFormatTests` + 外出しJSON。`policy_holding_securities` のみ SMFG(8316) の原本 `S100W0S7` を対象外とした固定10社。ingest はその FY の全文 XBRL 訂正 `S100WRZH` を使い、格納 identity は原本。breakdown の LLM 経路は渡す前の tables を突合し、正規化後金額は床に含めない）。公開 note_type はいずれも床に載済み。`statement`（Statement 本体）は `SmokeTests.swift` 自体は通らないが、同固定セットの golden を `RealXbrlStatementTests.swift` に持つ（BS/PL/CF/SS）
 - **golden回帰**（年次スモーク以外）: 個別ロジックの実装・改善時に見つけたエッジケースを持つ企業をその都度追加する**深さ**方向の蓄積型で、対象企業の選定基準は「そのロジック分岐を踏む」ことのみ（次元の網羅性は保証しない）
 
 原則としては note_type の決定論ロジックもこの床でカバーされるべきだが、公開 note_type はいずれも固定11社の外出しオラクル床に載済み。golden側でエッジケースは踏んでいても、smokeが意図的にカバーする次元（銀行・US-GAAP・小規模企業など）での確認を後追いで足す余地は、新規 note_type 追加時に残る。
@@ -134,5 +134,9 @@ CI では `swift-macos` / `swift-linux` ジョブの `Test` ステップに repo
 | `3490` | アズ企画設計 | 連結作成開始境界 | 期末 `2024-02-29` 以降から連結作成。`has_nonconsolidated_contexts` が境界前後で変わることを見る |
 
 スモークで必ず確認する抽出器は損益計算書・貸借対照表・売上総利益・有利子負債です。金融会社だけ GP・IBD の未検出を許容します。
+
+### 3.3 訂正有報(130) の XBRL 差替
+
+有報の行 identity（`company_statement_notes.doc_id`、financials の年度帰属、公開 `doc_id`）は**原本 120** のままにする。ZIP だけ、同一会社・同一期間・同一 `parentDocID` の訂正 130 のうち、提出パッケージが全文 XBRL 置換（「XBRLデータのみの訂正」「記載内容に訂正はありません」）である最新のものを使う。パースできない 130 は飛ばし、適格が無ければ原本。記載内容の通常訂正はこの例外に入れない。選定の回帰は `XbrlAmendmentSourceTests`。`cache_version` はバンプしない（データ源の refinement。対象行は `--codes` で消し再 ingest）。
 
 ---

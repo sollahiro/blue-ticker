@@ -15,6 +15,8 @@ public struct EdinetDocumentRecord: Sendable, Codable, Equatable {
     public let periodEnd: String?
     public let submitDateTime: String
     public let docDescription: String?
+    /// EDINET `parentDocID`（訂正対象）。有報(120)では nil。ingest の XBRL 置換に使う内部列。
+    public let parentDocID: String?
 
     public init(
         docID: String,
@@ -27,7 +29,8 @@ public struct EdinetDocumentRecord: Sendable, Codable, Equatable {
         periodStart: String?,
         periodEnd: String?,
         submitDateTime: String,
-        docDescription: String?
+        docDescription: String?,
+        parentDocID: String? = nil
     ) {
         self.docID = docID
         self.edinetCode = edinetCode
@@ -40,6 +43,20 @@ public struct EdinetDocumentRecord: Sendable, Codable, Equatable {
         self.periodEnd = periodEnd
         self.submitDateTime = submitDateTime
         self.docDescription = docDescription
+        self.parentDocID = parentDocID
+    }
+
+    /// ingest が XBRL ZIP を選ぶときの書類メタ。
+    public var xbrlSourceDocument: XbrlSourceDocument {
+        XbrlSourceDocument(
+            docID: docID,
+            docTypeCode: docTypeCode,
+            parentDocID: parentDocID,
+            edinetCode: edinetCode,
+            periodStart: periodStart,
+            periodEnd: periodEnd,
+            submitDateTime: submitDateTime,
+            docDescription: docDescription)
     }
 }
 

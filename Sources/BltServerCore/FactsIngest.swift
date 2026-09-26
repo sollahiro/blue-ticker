@@ -510,39 +510,65 @@ public func runFactsIngestCommand(
                     "財務諸表注記取り込み listed codes empty (listed universe empty and no --codes); skipping",
                     metadata: ["event": "ingest_skipped", "target": "statement-notes", "reason": "empty_listed_codes"])
             }
+            let correctionIDsByOriginal = try await loadAnnualXbrlCorrectionIDsByOriginal(
+                db: app.db, logger: app.logger)
             let statementNoteTypes:
                 [(noteType: String, resolve: StatementNoteResolveFn)] = [
                     (
                         statementNoteTypePerShareInformation,
-                        { docID, _ in await context.resolvePerShareInformationNote(docID: docID) }
+                        { docID, _ in
+                            await context.resolvePerShareInformationNote(
+                                docID: docID, correctionDocIDs: correctionIDsByOriginal[docID] ?? [])
+                        }
                     ),
                     (
                         statementNoteTypeIssuedSharesAndCapital,
-                        { docID, _ in await context.resolveIssuedSharesAndCapitalNote(docID: docID) }
+                        { docID, _ in
+                            await context.resolveIssuedSharesAndCapitalNote(
+                                docID: docID, correctionDocIDs: correctionIDsByOriginal[docID] ?? [])
+                        }
                     ),
                     (
                         statementNoteTypeDividends,
-                        { docID, _ in await context.resolveDividendsNote(docID: docID) }
+                        { docID, _ in
+                            await context.resolveDividendsNote(
+                                docID: docID, correctionDocIDs: correctionIDsByOriginal[docID] ?? [])
+                        }
                     ),
                     (
                         statementNoteTypeBorrowingsSchedule,
-                        { docID, _ in await context.resolveBorrowingsScheduleNote(docID: docID) }
+                        { docID, _ in
+                            await context.resolveBorrowingsScheduleNote(
+                                docID: docID, correctionDocIDs: correctionIDsByOriginal[docID] ?? [])
+                        }
                     ),
                     (
                         statementNoteTypePropertyPlantEquipmentSchedule,
-                        { docID, _ in await context.resolvePropertyPlantEquipmentScheduleNote(docID: docID) }
+                        { docID, _ in
+                            await context.resolvePropertyPlantEquipmentScheduleNote(
+                                docID: docID, correctionDocIDs: correctionIDsByOriginal[docID] ?? [])
+                        }
                     ),
                     (
                         statementNoteTypeGoodwillAndIntangibles,
-                        { docID, _ in await context.resolveGoodwillAndIntangiblesNote(docID: docID) }
+                        { docID, _ in
+                            await context.resolveGoodwillAndIntangiblesNote(
+                                docID: docID, correctionDocIDs: correctionIDsByOriginal[docID] ?? [])
+                        }
                     ),
                     (
                         statementNoteTypeLeaseLiabilities,
-                        { docID, _ in await context.resolveLeaseLiabilitiesNote(docID: docID) }
+                        { docID, _ in
+                            await context.resolveLeaseLiabilitiesNote(
+                                docID: docID, correctionDocIDs: correctionIDsByOriginal[docID] ?? [])
+                        }
                     ),
                     (
                         statementNoteTypePolicyHoldingSecurities,
-                        { docID, _ in await context.resolvePolicyHoldingSecuritiesNote(docID: docID) }
+                        { docID, _ in
+                            await context.resolvePolicyHoldingSecuritiesNote(
+                                docID: docID, correctionDocIDs: correctionIDsByOriginal[docID] ?? [])
+                        }
                     ),
                 ]
             let noteTypeFilter = noteTypes

@@ -575,11 +575,12 @@ enum StatementNotesResolver {
     /// resolver（`resolveIFRSCategorySchedule` 等）も同じ理由で値取得には
     /// `nilAsZero: false` を使っており、本関数もそれに揃える。
     ///
-    /// **既知の限界**: ごく稀に提出会社側のXBRLタグ付け自体が開示本文（HTMLテーブル）に対して
-    /// 大幅に不完全な書類が存在する（実データ検証2026-08-11: 三井住友FGの2025年3月期有価証券報告書
-    /// 原本S100W0S7は本文70銘柄のうち構造化タグは13銘柄のみ。同社の訂正報告書S100WRZHでは70銘柄
-    /// 全件が正しくタグ付けされており、前後の期（2024年3月期・2026年3月期）の原本も問題なし。
-    /// 本関数はXBRLの構造化タグのみを読むため、この種の提出者側タグ付け不備は検出できない）。
+    /// **既知の限界（提出パッケージ側）**: ごく稀に提出会社側のXBRLタグ付け自体が開示本文（HTMLテーブル）
+    /// に対して大幅に不完全な書類がある（三井住友FG 2025年3月期原本 `S100W0S7` は本文70銘柄のうち
+    /// 構造化タグ13銘柄のみ）。同一 FY の全文 XBRL 訂正（`S100WRZH`、
+    /// 「XBRLデータのみの訂正…記載内容に訂正はありません」）があれば ingest は ZIP だけそちらを使い、
+    /// 格納 `doc_id` は原本のままにする。後続の通常訂正（同社 `S100X7DX`）は全文置換ではないので使わない。
+    /// 本関数は渡された展開ディレクトリの構造化タグだけを読む。
     static func resolvePolicyHoldingSecurities(xbrlDir: URL) -> StatementNoteResolveResult {
         let numericElements = XBRLUtils.collectAllNumericElements(in: xbrlDir, nilAsZero: false)
         let textFacts = collectPolicyHoldingTextFacts(in: xbrlDir)
