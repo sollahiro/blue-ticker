@@ -77,19 +77,26 @@ struct GetOnlyXbrlStore: XbrlObjectStoring {
 enum PocJevLabels {
     static func englishLabels(in dir: URL) -> [String: String] {
         var labels: [String: String] = [:]
-        guard let enumerator = FileManager.default.enumerator(at: dir, includingPropertiesForKeys: nil) else {
-            return labels
+        var roots = [dir]
+        let taxonomy = URL(fileURLWithPath: "/tmp/edinet-taxonomy")
+        if FileManager.default.fileExists(atPath: taxonomy.path) {
+            roots.append(taxonomy)
         }
-        for case let url as URL in enumerator {
-            let name = url.lastPathComponent.lowercased()
-            guard name.contains("lab") && name.contains("-en") && name.hasSuffix(".xml") else { continue }
-            guard let data = try? Data(contentsOf: url) else { continue }
-            let parser = EnglishLabelParser()
-            let xml = XMLParser(data: data)
-            xml.delegate = parser
-            xml.parse()
-            for (tag, text) in parser.labelsByTag where labels[tag] == nil {
-                labels[tag] = text
+        for root in roots {
+            guard let enumerator = FileManager.default.enumerator(at: root, includingPropertiesForKeys: nil) else {
+                continue
+            }
+            for case let url as URL in enumerator {
+                let name = url.lastPathComponent.lowercased()
+                guard name.contains("lab") && name.contains("-en") && name.hasSuffix(".xml") else { continue }
+                guard let data = try? Data(contentsOf: url) else { continue }
+                let parser = EnglishLabelParser()
+                let xml = XMLParser(data: data)
+                xml.delegate = parser
+                xml.parse()
+                for (tag, text) in parser.labelsByTag where labels[tag] == nil {
+                    labels[tag] = text
+                }
             }
         }
         return labels

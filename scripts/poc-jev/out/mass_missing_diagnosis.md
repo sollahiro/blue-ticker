@@ -1,0 +1,311 @@
+# Mass-missing latest-FY diagnosis (facts only, no fix)
+
+Canonical raw fields only. Derived `roe` / `net_de` / `*_effect` empties are called out when equity ≤ 0.
+
+| code | doc | newly empty vs prior (canonical) | net_assets | current contexts | what the facts show |
+|---|---|---|---|---|---|
+| 5367 | S100Y9NY | cash, ppe, AR, AP, interest_expense, buyback, CF treasury, dividends, eps, bps, employees (14) | +14137 | cons=28, pure_nc=209 | **Non-consolidated-only BS/PL.** Cash/PPE/AR/AP/EPS/employees exist on `CurrentYear* _NonConsolidatedMember`. The 28 consolidated facts are leftover (mostly CF). FieldSet will not NC-fallback because cons+NC coexist (`hasNonConsolidatedContexts`). Statement overlay fills sales/OP/NP/totals; detail tags that are not overlayed statement lines stay empty. Prior year S100VWYM had those fields filled. |
+| 4381 | S100YDPE | *(none canonical)* | −447 | cons=146, nc=95 | Empty count is derived ROE/ROIC/leverage. PPE current fact is **0** (prior 10.181). Not a context bug. |
+| 3681 | S100Y1NL | dividend_paid_cf | −1108 | cons=203, nc=118 | Negative equity → ROE/`net_de` null. Inventory mapped tag exists only on NC instant. |
+| 6085 | S100Y7A6 | ppe_total | −223 | cons=167, nc=95 | Negative equity → ROE/`net_de` null. **No current-period PPE fact** (only `Prior1YearInstant` = 21.623). |
+| 9250 | S100XNEI | buyback, cf_treasury_stock | −96 | cons=154, nc=103 | Negative equity → ROE/`net_de` null. Sales/cash/ppe/AR/AP/EPS facts are present on consolidated current. |
+
+Do not treat 4381/3681/6085/9250 “10–21 empty fields” as a period/consolidation mapping failure. Most of those keys are derived from `net_assets ≤ 0`.
+
+---
+
+## 3681 S100Y1NL fy_end=2025-12-31
+- Neon latest empty canonical: inventory, buyback, cf_treasury_stock, dividend_ss, dividend_paid_cf
+- Neon prior (2024-12-31) empty canonical: inventory, buyback, cf_treasury_stock, dividend_ss
+- Newly empty vs prior: dividend_paid_cf
+- net_assets latest = -1107.682 (non-positive)
+- XBRL current context census: consolidated=203 pure_nc=118 other=684
+- sales facts:
+  - NetSales ctx=CurrentYearDuration kind=cons_current value=9859467000.0
+  - NetSales ctx=CurrentYearDuration_NonConsolidatedMember kind=nc_current value=8421921000.0
+  - NetSales ctx=CurrentYearDuration_ReportableSegmentsMember kind=other value=9859467000.0
+  - NetSales ctx=CurrentYearDuration_jpcrp030000-asr_E30114-000EnterpriseDXSegmentReportableSegmentsMember kind=other value=3499442000.0
+  - NetSales ctx=CurrentYearDuration_jpcrp030000-asr_E30114-000EventDXSegmentReportableSegmentsMember kind=other value=3519496000.0
+  - NetSales ctx=CurrentYearDuration_jpcrp030000-asr_E30114-000ThirdplaceDXSegmentReportableSegmentsMember kind=other value=2840528000.0
+  - NetSales ctx=Prior1YearDuration kind=other value=10463846000.0
+  - NetSales ctx=Prior1YearDuration_NonConsolidatedMember kind=other value=8850657000.0
+- cash_equivalents facts:
+  - CashAndCashEquivalents ctx=CurrentYearInstant kind=cons_current value=2002098000.0
+  - CashAndCashEquivalents ctx=Prior1YearInstant kind=other value=1006735000.0
+  - CashAndCashEquivalents ctx=Prior2YearInstant kind=other value=1389327000.0
+  - CashAndCashEquivalentsSummaryOfBusinessResults ctx=CurrentYearInstant kind=cons_current value=2002098000.0
+  - CashAndCashEquivalentsSummaryOfBusinessResults ctx=Prior1YearInstant kind=other value=1006735000.0
+  - CashAndCashEquivalentsSummaryOfBusinessResults ctx=Prior2YearInstant kind=other value=1389327000.0
+  - CashAndCashEquivalentsSummaryOfBusinessResults ctx=Prior3YearInstant kind=other value=1699697000.0
+  - CashAndCashEquivalentsSummaryOfBusinessResults ctx=Prior4YearInstant kind=other value=1823797000.0
+- ppe_total facts:
+  - PropertyPlantAndEquipment ctx=CurrentYearInstant kind=cons_current value=1803937000.0
+  - PropertyPlantAndEquipment ctx=CurrentYearInstant_NonConsolidatedMember kind=nc_current value=1664685000.0
+  - PropertyPlantAndEquipment ctx=Prior1YearInstant kind=other value=1983552000.0
+  - PropertyPlantAndEquipment ctx=Prior1YearInstant_NonConsolidatedMember kind=other value=1864517000.0
+- accounts_receivable facts:
+  - NotesAndAccountsReceivableTrade ctx=CurrentYearInstant kind=cons_current value=1523656000.0
+  - NotesAndAccountsReceivableTrade ctx=Prior1YearInstant kind=other value=1580520000.0
+  - AccountsReceivableTrade ctx=CurrentYearInstant kind=cons_current value=1482765000.0
+  - AccountsReceivableTrade ctx=CurrentYearInstant_NonConsolidatedMember kind=nc_current value=1224855000.0
+  - AccountsReceivableTrade ctx=Prior1YearInstant kind=other value=1545649000.0
+  - AccountsReceivableTrade ctx=Prior1YearInstant_NonConsolidatedMember kind=other value=1276376000.0
+- accounts_payable facts:
+  - AccountsPayableTrade ctx=CurrentYearInstant kind=cons_current value=424858000.0
+  - AccountsPayableTrade ctx=CurrentYearInstant_NonConsolidatedMember kind=nc_current value=1033247000.0
+  - AccountsPayableTrade ctx=Prior1YearInstant kind=other value=419225000.0
+  - AccountsPayableTrade ctx=Prior1YearInstant_NonConsolidatedMember kind=other value=937452000.0
+- inventory facts:
+  - Inventories ctx=CurrentYearInstant_NonConsolidatedMember kind=nc_current value=13695000.0
+  - Inventories ctx=Prior1YearInstant_NonConsolidatedMember kind=other value=14802000.0
+- eps facts:
+  - BasicEarningsLossPerShareSummaryOfBusinessResults ctx=CurrentYearDuration kind=cons_current value=-142.85
+  - BasicEarningsLossPerShareSummaryOfBusinessResults ctx=CurrentYearDuration_NonConsolidatedMember kind=nc_current value=-82.31
+  - BasicEarningsLossPerShareSummaryOfBusinessResults ctx=Prior1YearDuration kind=other value=-55.73
+  - BasicEarningsLossPerShareSummaryOfBusinessResults ctx=Prior1YearDuration_NonConsolidatedMember kind=other value=-39.6
+  - BasicEarningsLossPerShareSummaryOfBusinessResults ctx=Prior2YearDuration kind=other value=-231.68
+  - BasicEarningsLossPerShareSummaryOfBusinessResults ctx=Prior2YearDuration_NonConsolidatedMember kind=other value=-175.73
+  - BasicEarningsLossPerShareSummaryOfBusinessResults ctx=Prior3YearDuration kind=other value=3.49
+  - BasicEarningsLossPerShareSummaryOfBusinessResults ctx=Prior3YearDuration_NonConsolidatedMember kind=other value=20.01
+- employees facts:
+  - NumberOfEmployees ctx=CurrentYearInstant kind=cons_current value=344.0
+  - NumberOfEmployees ctx=CurrentYearInstant_CorporateSharedMember kind=other value=259.0
+  - NumberOfEmployees ctx=CurrentYearInstant_NonConsolidatedMember kind=nc_current value=259.0
+  - NumberOfEmployees ctx=CurrentYearInstant_jpcrp030000-asr_E30114-000EnterpriseDXSegmentReportableSegmentsMember kind=other value=49.0
+  - NumberOfEmployees ctx=CurrentYearInstant_jpcrp030000-asr_E30114-000EventDXSegmentReportableSegmentsMember kind=other value=27.0
+  - NumberOfEmployees ctx=CurrentYearInstant_jpcrp030000-asr_E30114-000ThirdplaceDXSegmentReportableSegmentsMember kind=other value=9.0
+  - NumberOfEmployees ctx=Prior1YearInstant kind=other value=372.0
+  - NumberOfEmployees ctx=Prior1YearInstant_NonConsolidatedMember kind=other value=275.0
+- Note: IndividualAnalyzer leaves `roe` / `net_de` (and ROE waterfall effects) null when equity ≤ 0. That is a derived-field rule, not a missing XBRL fact.
+- Note: this filing has both consolidated current and pure non-consolidated current contexts. FieldSet builders do not merge NC when any cons+NC pair exists (`hasNonConsolidatedContexts`). Statement overlay then copies non-zero statement lines; tags that are not statement lines stay empty if they live only on NC contexts.
+
+## 4381 S100YDPE fy_end=2026-03-31
+- Neon latest empty canonical: buyback, rd, cf_treasury_stock, dividend_ss, dividend_paid_cf
+- Neon prior (2025-03-31) empty canonical: buyback, rd, cf_treasury_stock, dividend_ss, dividend_paid_cf
+- Newly empty vs prior: 
+- net_assets latest = -447.251 (non-positive)
+- XBRL current context census: consolidated=146 pure_nc=95 other=477
+- sales facts:
+  - NetSales ctx=CurrentYearDuration kind=cons_current value=727157000.0
+  - NetSales ctx=CurrentYearDuration_NonConsolidatedMember kind=nc_current value=724127000.0
+  - NetSales ctx=Prior1YearDuration kind=other value=706256000.0
+  - NetSales ctx=Prior1YearDuration_NonConsolidatedMember kind=other value=703019000.0
+  - NetSalesSummaryOfBusinessResults ctx=CurrentYearDuration kind=cons_current value=727157000.0
+  - NetSalesSummaryOfBusinessResults ctx=CurrentYearDuration_NonConsolidatedMember kind=nc_current value=724127000.0
+  - NetSalesSummaryOfBusinessResults ctx=Prior1YearDuration kind=other value=706256000.0
+  - NetSalesSummaryOfBusinessResults ctx=Prior1YearDuration_NonConsolidatedMember kind=other value=703019000.0
+- cash_equivalents facts:
+  - CashAndCashEquivalents ctx=CurrentYearInstant kind=cons_current value=291602000.0
+  - CashAndCashEquivalents ctx=Prior1YearInstant kind=other value=68058000.0
+  - CashAndCashEquivalents ctx=Prior2YearInstant kind=other value=232212000.0
+  - CashAndCashEquivalentsSummaryOfBusinessResults ctx=CurrentYearInstant kind=cons_current value=291602000.0
+  - CashAndCashEquivalentsSummaryOfBusinessResults ctx=Prior1YearInstant kind=other value=68058000.0
+  - CashAndCashEquivalentsSummaryOfBusinessResults ctx=Prior2YearInstant kind=other value=232212000.0
+  - CashAndCashEquivalentsSummaryOfBusinessResults ctx=Prior3YearInstant kind=other value=350060000.0
+  - CashAndCashEquivalentsSummaryOfBusinessResults ctx=Prior4YearInstant kind=other value=246112000.0
+- ppe_total facts:
+  - PropertyPlantAndEquipment ctx=CurrentYearInstant kind=cons_current value=0.0
+  - PropertyPlantAndEquipment ctx=CurrentYearInstant_NonConsolidatedMember kind=nc_current value=0.0
+  - PropertyPlantAndEquipment ctx=Prior1YearInstant kind=other value=10181000.0
+  - PropertyPlantAndEquipment ctx=Prior1YearInstant_NonConsolidatedMember kind=other value=10181000.0
+- accounts_receivable facts:
+  - AccountsReceivableTrade ctx=CurrentYearInstant kind=cons_current value=97187000.0
+  - AccountsReceivableTrade ctx=CurrentYearInstant_NonConsolidatedMember kind=nc_current value=96912000.0
+  - AccountsReceivableTrade ctx=Prior1YearInstant kind=other value=94607000.0
+  - AccountsReceivableTrade ctx=Prior1YearInstant_NonConsolidatedMember kind=other value=94324000.0
+- accounts_payable facts:
+  - AccountsPayableTrade ctx=CurrentYearInstant kind=cons_current value=9927000.0
+  - AccountsPayableTrade ctx=CurrentYearInstant_NonConsolidatedMember kind=nc_current value=9927000.0
+  - AccountsPayableTrade ctx=Prior1YearInstant kind=other value=10080000.0
+  - AccountsPayableTrade ctx=Prior1YearInstant_NonConsolidatedMember kind=other value=10080000.0
+- inventory: no mapped tags in this instance
+- eps facts:
+  - BasicEarningsLossPerShareSummaryOfBusinessResults ctx=CurrentYearDuration kind=cons_current value=-361.82
+  - BasicEarningsLossPerShareSummaryOfBusinessResults ctx=CurrentYearDuration_NonConsolidatedMember kind=nc_current value=-362.33
+  - BasicEarningsLossPerShareSummaryOfBusinessResults ctx=Prior1YearDuration kind=other value=-121.41
+  - BasicEarningsLossPerShareSummaryOfBusinessResults ctx=Prior1YearDuration_NonConsolidatedMember kind=other value=-122.17
+  - BasicEarningsLossPerShareSummaryOfBusinessResults ctx=Prior2YearDuration kind=other value=-40.57
+  - BasicEarningsLossPerShareSummaryOfBusinessResults ctx=Prior2YearDuration_NonConsolidatedMember kind=other value=-42.54
+  - BasicEarningsLossPerShareSummaryOfBusinessResults ctx=Prior3YearDuration kind=other value=76.55
+  - BasicEarningsLossPerShareSummaryOfBusinessResults ctx=Prior3YearDuration_NonConsolidatedMember kind=other value=76.62
+- employees facts:
+  - NumberOfEmployees ctx=CurrentYearInstant kind=cons_current value=43.0
+  - NumberOfEmployees ctx=CurrentYearInstant_CorporateSharedMember kind=other value=9.0
+  - NumberOfEmployees ctx=CurrentYearInstant_NonConsolidatedMember kind=nc_current value=43.0
+  - NumberOfEmployees ctx=CurrentYearInstant_NonConsolidatedMember_CorporateSharedMember kind=other value=9.0
+  - NumberOfEmployees ctx=Prior1YearInstant kind=other value=51.0
+  - NumberOfEmployees ctx=Prior1YearInstant_NonConsolidatedMember kind=other value=51.0
+  - NumberOfEmployees ctx=Prior2YearInstant kind=other value=66.0
+  - NumberOfEmployees ctx=Prior2YearInstant_NonConsolidatedMember kind=other value=66.0
+- Note: IndividualAnalyzer leaves `roe` / `net_de` (and ROE waterfall effects) null when equity ≤ 0. That is a derived-field rule, not a missing XBRL fact.
+- Note: this filing has both consolidated current and pure non-consolidated current contexts. FieldSet builders do not merge NC when any cons+NC pair exists (`hasNonConsolidatedContexts`). Statement overlay then copies non-zero statement lines; tags that are not statement lines stay empty if they live only on NC contexts.
+
+## 5367 S100Y9NY fy_end=2026-03-31
+- Neon latest empty canonical: interest_expense, ppe_total, accounts_receivable, inventory, accounts_payable, cash_equivalents, buyback, rd, cf_treasury_stock, dividend_ss, dividend_paid_cf, eps, bps, employees
+- Neon prior (2025-03-31) empty canonical: rd
+- Newly empty vs prior: interest_expense, ppe_total, accounts_receivable, inventory, accounts_payable, cash_equivalents, buyback, cf_treasury_stock, dividend_ss, dividend_paid_cf, eps, bps, employees
+- net_assets latest = 14136.95 (positive)
+- XBRL current context census: consolidated=28 pure_nc=209 other=510
+- sales facts:
+  - NetSales ctx=CurrentYearDuration_NonConsolidatedMember kind=nc_current value=11340906000.0
+  - NetSales ctx=CurrentYearDuration_NonConsolidatedMember_ReportableSegmentsMember kind=other value=11340906000.0
+  - NetSales ctx=CurrentYearDuration_NonConsolidatedMember_jpcrp030000-asr_E01188-000CeramicsReportableSegmentsMember kind=other value=8215444000.0
+  - NetSales ctx=CurrentYearDuration_NonConsolidatedMember_jpcrp030000-asr_E01188-000EngineeringReportableSegmentsMember kind=other value=3125461000.0
+  - NetSales ctx=Prior1YearDuration_NonConsolidatedMember kind=other value=10076578000.0
+  - NetSales ctx=Prior1YearDuration_NonConsolidatedMember_ReportableSegmentsMember kind=other value=10076578000.0
+  - NetSales ctx=Prior1YearDuration_NonConsolidatedMember_jpcrp030000-asr_E01188-000CeramicsReportableSegmentsMember kind=other value=7405514000.0
+  - NetSales ctx=Prior1YearDuration_NonConsolidatedMember_jpcrp030000-asr_E01188-000EngineeringReportableSegmentsMember kind=other value=2671063000.0
+- cash_equivalents facts:
+  - CashAndCashEquivalents ctx=CurrentYearInstant_NonConsolidatedMember kind=nc_current value=4137970000.0
+  - CashAndCashEquivalents ctx=Prior1YearInstant_NonConsolidatedMember kind=other value=3642551000.0
+  - CashAndCashEquivalents ctx=Prior2YearInstant_NonConsolidatedMember kind=other value=3384604000.0
+  - CashAndCashEquivalentsSummaryOfBusinessResults ctx=CurrentYearInstant_NonConsolidatedMember kind=nc_current value=4137970000.0
+  - CashAndCashEquivalentsSummaryOfBusinessResults ctx=Prior1YearInstant_NonConsolidatedMember kind=other value=3642551000.0
+  - CashAndCashEquivalentsSummaryOfBusinessResults ctx=Prior2YearInstant_NonConsolidatedMember kind=other value=3384604000.0
+  - CashAndCashEquivalentsSummaryOfBusinessResults ctx=Prior3YearInstant_NonConsolidatedMember kind=other value=3508317000.0
+  - CashAndCashEquivalentsSummaryOfBusinessResults ctx=Prior4YearInstant_NonConsolidatedMember kind=other value=3357885000.0
+- ppe_total facts:
+  - PropertyPlantAndEquipment ctx=CurrentYearInstant_NonConsolidatedMember kind=nc_current value=4799951000.0
+  - PropertyPlantAndEquipment ctx=Prior1YearInstant_NonConsolidatedMember kind=other value=4854889000.0
+- accounts_receivable facts:
+  - AccountsReceivableTrade ctx=CurrentYearInstant_NonConsolidatedMember kind=nc_current value=2817086000.0
+  - AccountsReceivableTrade ctx=Prior1YearInstant_NonConsolidatedMember kind=other value=2364099000.0
+- accounts_payable facts:
+  - AccountsPayableTrade ctx=CurrentYearInstant_NonConsolidatedMember kind=nc_current value=1768257000.0
+  - AccountsPayableTrade ctx=Prior1YearInstant_NonConsolidatedMember kind=other value=1561690000.0
+- inventory: no mapped tags in this instance
+- eps facts:
+  - BasicEarningsLossPerShareSummaryOfBusinessResults ctx=CurrentYearDuration_NonConsolidatedMember kind=nc_current value=64.9
+  - BasicEarningsLossPerShareSummaryOfBusinessResults ctx=Prior1YearDuration_NonConsolidatedMember kind=other value=42.16
+  - BasicEarningsLossPerShareSummaryOfBusinessResults ctx=Prior2YearDuration_NonConsolidatedMember kind=other value=58.81
+  - BasicEarningsLossPerShareSummaryOfBusinessResults ctx=Prior3YearDuration_NonConsolidatedMember kind=other value=69.99
+  - BasicEarningsLossPerShareSummaryOfBusinessResults ctx=Prior4YearDuration_NonConsolidatedMember kind=other value=56.29
+- employees facts:
+  - NumberOfEmployees ctx=CurrentYearInstant_NonConsolidatedMember kind=nc_current value=279.0
+  - NumberOfEmployees ctx=CurrentYearInstant_NonConsolidatedMember_CorporateSharedMember kind=other value=25.0
+  - NumberOfEmployees ctx=CurrentYearInstant_NonConsolidatedMember_jpcrp030000-asr_E01188-000CeramicsReportableSegmentsMember kind=other value=235.0
+  - NumberOfEmployees ctx=CurrentYearInstant_NonConsolidatedMember_jpcrp030000-asr_E01188-000EngineeringReportableSegmentsMember kind=other value=19.0
+  - NumberOfEmployees ctx=Prior1YearInstant_NonConsolidatedMember kind=other value=288.0
+  - NumberOfEmployees ctx=Prior2YearInstant_NonConsolidatedMember kind=other value=286.0
+  - NumberOfEmployees ctx=Prior3YearInstant_NonConsolidatedMember kind=other value=288.0
+  - NumberOfEmployees ctx=Prior4YearInstant_NonConsolidatedMember kind=other value=295.0
+- Note: this filing has both consolidated current and pure non-consolidated current contexts. FieldSet builders do not merge NC when any cons+NC pair exists (`hasNonConsolidatedContexts`). Statement overlay then copies non-zero statement lines; tags that are not statement lines stay empty if they live only on NC contexts.
+
+## 6085 S100Y7A6 fy_end=2026-02-28
+- Neon latest empty canonical: ppe_total, rd, dividend_ss, dividend_paid_cf
+- Neon prior (2025-03-31) empty canonical: buyback, rd, cf_treasury_stock, dividend_ss, dividend_paid_cf
+- Newly empty vs prior: ppe_total
+- net_assets latest = -223.181 (non-positive)
+- XBRL current context census: consolidated=167 pure_nc=95 other=566
+- sales facts:
+  - NetSales ctx=CurrentYearDuration kind=cons_current value=658989000.0
+  - NetSales ctx=CurrentYearDuration_NonConsolidatedMember kind=nc_current value=388612000.0
+  - NetSales ctx=CurrentYearDuration_ReportableSegmentsMember kind=other value=658989000.0
+  - NetSales ctx=CurrentYearDuration_jpcrp030000-asr_E30119-000HousingRelatedBusinessReportableSegmentMember kind=other value=220511000.0
+  - NetSales ctx=CurrentYearDuration_jpcrp030000-asr_E30119-000InvestmentRelatedBusinessReportableSegmentMember kind=other value=3189000.0
+  - NetSales ctx=CurrentYearDuration_jpcrp030000-asr_E30119-000LifestyleRelatedBusinessReportableSegmentMember kind=other value=435288000.0
+  - NetSales ctx=Prior1YearDuration kind=other value=897496000.0
+  - NetSales ctx=Prior1YearDuration_NonConsolidatedMember kind=other value=888802000.0
+- cash_equivalents facts:
+  - CashAndCashEquivalents ctx=CurrentYearInstant kind=cons_current value=89552000.0
+  - CashAndCashEquivalents ctx=Prior1YearInstant kind=other value=211375000.0
+  - CashAndCashEquivalents ctx=Prior2YearInstant kind=other value=263120000.0
+  - CashAndCashEquivalentsSummaryOfBusinessResults ctx=CurrentYearInstant kind=cons_current value=89552000.0
+  - CashAndCashEquivalentsSummaryOfBusinessResults ctx=Prior1YearInstant kind=other value=211375000.0
+  - CashAndCashEquivalentsSummaryOfBusinessResults ctx=Prior2YearInstant kind=other value=263120000.0
+  - CashAndCashEquivalentsSummaryOfBusinessResults ctx=Prior3YearInstant kind=other value=313044000.0
+  - CashAndCashEquivalentsSummaryOfBusinessResults ctx=Prior4YearInstant kind=other value=697174000.0
+- ppe_total facts:
+  - PropertyPlantAndEquipment ctx=Prior1YearInstant kind=other value=21623000.0
+- accounts_receivable facts:
+  - AccountsReceivableTrade ctx=CurrentYearInstant kind=cons_current value=92088000.0
+  - AccountsReceivableTrade ctx=CurrentYearInstant_NonConsolidatedMember kind=nc_current value=92088000.0
+  - AccountsReceivableTrade ctx=Prior1YearInstant kind=other value=174057000.0
+  - AccountsReceivableTrade ctx=Prior1YearInstant_NonConsolidatedMember kind=other value=145774000.0
+- accounts_payable facts:
+  - AccountsPayableTrade ctx=CurrentYearInstant kind=cons_current value=5788000.0
+  - AccountsPayableTrade ctx=CurrentYearInstant_NonConsolidatedMember kind=nc_current value=5788000.0
+  - AccountsPayableTrade ctx=Prior1YearInstant kind=other value=24938000.0
+  - AccountsPayableTrade ctx=Prior1YearInstant_NonConsolidatedMember kind=other value=12764000.0
+- inventory: no mapped tags in this instance
+- eps facts:
+  - BasicEarningsLossPerShareSummaryOfBusinessResults ctx=CurrentYearDuration kind=cons_current value=-5.32
+  - BasicEarningsLossPerShareSummaryOfBusinessResults ctx=CurrentYearDuration_NonConsolidatedMember kind=nc_current value=-4.33
+  - BasicEarningsLossPerShareSummaryOfBusinessResults ctx=Prior1YearDuration kind=other value=-0.88
+  - BasicEarningsLossPerShareSummaryOfBusinessResults ctx=Prior1YearDuration_NonConsolidatedMember kind=other value=-1.95
+  - BasicEarningsLossPerShareSummaryOfBusinessResults ctx=Prior2YearDuration kind=other value=-4.9
+  - BasicEarningsLossPerShareSummaryOfBusinessResults ctx=Prior2YearDuration_NonConsolidatedMember kind=other value=-5.34
+  - BasicEarningsLossPerShareSummaryOfBusinessResults ctx=Prior3YearDuration kind=other value=-5.82
+  - BasicEarningsLossPerShareSummaryOfBusinessResults ctx=Prior3YearDuration_NonConsolidatedMember kind=other value=-5.43
+- employees facts:
+  - NumberOfEmployees ctx=CurrentYearInstant kind=cons_current value=34.0
+  - NumberOfEmployees ctx=CurrentYearInstant_CorporateSharedMember kind=other value=34.0
+  - NumberOfEmployees ctx=CurrentYearInstant_NonConsolidatedMember kind=nc_current value=34.0
+  - NumberOfEmployees ctx=CurrentYearInstant_jpcrp030000-asr_E30119-000LifestyleRelatedBusinessReportableSegmentMember kind=other value=34.0
+  - NumberOfEmployees ctx=Prior1YearInstant kind=other value=48.0
+  - NumberOfEmployees ctx=Prior1YearInstant_NonConsolidatedMember kind=other value=38.0
+  - NumberOfEmployees ctx=Prior2YearInstant kind=other value=39.0
+  - NumberOfEmployees ctx=Prior2YearInstant_NonConsolidatedMember kind=other value=39.0
+- Note: IndividualAnalyzer leaves `roe` / `net_de` (and ROE waterfall effects) null when equity ≤ 0. That is a derived-field rule, not a missing XBRL fact.
+- Note: this filing has both consolidated current and pure non-consolidated current contexts. FieldSet builders do not merge NC when any cons+NC pair exists (`hasNonConsolidatedContexts`). Statement overlay then copies non-zero statement lines; tags that are not statement lines stay empty if they live only on NC contexts.
+
+## 9250 S100XNEI fy_end=2025-11-30
+- Neon latest empty canonical: buyback, rd, cf_treasury_stock, dividend_ss, dividend_paid_cf
+- Neon prior (2024-11-30) empty canonical: rd, dividend_ss, dividend_paid_cf
+- Newly empty vs prior: buyback, cf_treasury_stock
+- net_assets latest = -95.937 (non-positive)
+- XBRL current context census: consolidated=154 pure_nc=103 other=494
+- sales facts:
+  - NetSales ctx=CurrentYearDuration kind=cons_current value=3333680000.0
+  - NetSales ctx=CurrentYearDuration_NonConsolidatedMember kind=nc_current value=3144827000.0
+  - NetSales ctx=Prior1YearDuration kind=other value=3288826000.0
+  - NetSales ctx=Prior1YearDuration_NonConsolidatedMember kind=other value=2948676000.0
+  - NetSalesSummaryOfBusinessResults ctx=CurrentYearDuration kind=cons_current value=3333680000.0
+  - NetSalesSummaryOfBusinessResults ctx=CurrentYearDuration_NonConsolidatedMember kind=nc_current value=3144827000.0
+  - NetSalesSummaryOfBusinessResults ctx=Prior1YearDuration kind=other value=3288826000.0
+  - NetSalesSummaryOfBusinessResults ctx=Prior1YearDuration_NonConsolidatedMember kind=other value=2948676000.0
+- cash_equivalents facts:
+  - CashAndCashEquivalents ctx=CurrentYearInstant kind=cons_current value=530760000.0
+  - CashAndCashEquivalents ctx=Prior1YearInstant kind=other value=740032000.0
+  - CashAndCashEquivalents ctx=Prior2YearInstant kind=other value=611459000.0
+  - CashAndCashEquivalentsSummaryOfBusinessResults ctx=CurrentYearInstant kind=cons_current value=530760000.0
+  - CashAndCashEquivalentsSummaryOfBusinessResults ctx=Prior1YearInstant kind=other value=740032000.0
+  - CashAndCashEquivalentsSummaryOfBusinessResults ctx=Prior2YearInstant kind=other value=611459000.0
+  - CashAndCashEquivalentsSummaryOfBusinessResults ctx=Prior3YearInstant kind=other value=847454000.0
+  - CashAndCashEquivalentsSummaryOfBusinessResults ctx=Prior4YearInstant_NonConsolidatedMember kind=other value=875250000.0
+- ppe_total facts:
+  - PropertyPlantAndEquipment ctx=CurrentYearInstant kind=cons_current value=56040000.0
+  - PropertyPlantAndEquipment ctx=CurrentYearInstant_NonConsolidatedMember kind=nc_current value=56040000.0
+  - PropertyPlantAndEquipment ctx=Prior1YearInstant kind=other value=61345000.0
+  - PropertyPlantAndEquipment ctx=Prior1YearInstant_NonConsolidatedMember kind=other value=61209000.0
+- accounts_receivable facts:
+  - AccountsReceivableTradeAndContractAssetsCA ctx=CurrentYearInstant kind=cons_current value=426018000.0
+  - AccountsReceivableTradeAndContractAssetsCA ctx=CurrentYearInstant_NonConsolidatedMember kind=nc_current value=409486000.0
+  - AccountsReceivableTradeAndContractAssetsCA ctx=Prior1YearInstant kind=other value=491070000.0
+  - AccountsReceivableTradeAndContractAssetsCA ctx=Prior1YearInstant_NonConsolidatedMember kind=other value=447058000.0
+- accounts_payable facts:
+  - AccountsPayableTrade ctx=CurrentYearInstant kind=cons_current value=114381000.0
+  - AccountsPayableTrade ctx=CurrentYearInstant_NonConsolidatedMember kind=nc_current value=102095000.0
+  - AccountsPayableTrade ctx=Prior1YearInstant kind=other value=130500000.0
+  - AccountsPayableTrade ctx=Prior1YearInstant_NonConsolidatedMember kind=other value=100709000.0
+- inventory: no mapped tags in this instance
+- eps facts:
+  - BasicEarningsLossPerShareSummaryOfBusinessResults ctx=CurrentYearDuration kind=cons_current value=-390.94
+  - BasicEarningsLossPerShareSummaryOfBusinessResults ctx=CurrentYearDuration_NonConsolidatedMember kind=nc_current value=-410.17
+  - BasicEarningsLossPerShareSummaryOfBusinessResults ctx=Prior1YearDuration kind=other value=85.05
+  - BasicEarningsLossPerShareSummaryOfBusinessResults ctx=Prior1YearDuration_NonConsolidatedMember kind=other value=108.09
+  - BasicEarningsLossPerShareSummaryOfBusinessResults ctx=Prior2YearDuration kind=other value=-218.52
+  - BasicEarningsLossPerShareSummaryOfBusinessResults ctx=Prior2YearDuration_NonConsolidatedMember kind=other value=-233.5
+  - BasicEarningsLossPerShareSummaryOfBusinessResults ctx=Prior3YearDuration kind=other value=-160.6
+  - BasicEarningsLossPerShareSummaryOfBusinessResults ctx=Prior3YearDuration_NonConsolidatedMember kind=other value=-159.75
+- employees facts:
+  - NumberOfEmployees ctx=CurrentYearInstant kind=cons_current value=213.0
+  - NumberOfEmployees ctx=CurrentYearInstant_NonConsolidatedMember kind=nc_current value=213.0
+  - NumberOfEmployees ctx=Prior1YearInstant kind=other value=213.0
+  - NumberOfEmployees ctx=Prior1YearInstant_NonConsolidatedMember kind=other value=209.0
+  - NumberOfEmployees ctx=Prior2YearInstant kind=other value=202.0
+  - NumberOfEmployees ctx=Prior2YearInstant_NonConsolidatedMember kind=other value=185.0
+  - NumberOfEmployees ctx=Prior3YearInstant kind=other value=175.0
+  - NumberOfEmployees ctx=Prior3YearInstant_NonConsolidatedMember kind=other value=157.0
+- Note: IndividualAnalyzer leaves `roe` / `net_de` (and ROE waterfall effects) null when equity ≤ 0. That is a derived-field rule, not a missing XBRL fact.
+- Note: this filing has both consolidated current and pure non-consolidated current contexts. FieldSet builders do not merge NC when any cons+NC pair exists (`hasNonConsolidatedContexts`). Statement overlay then copies non-zero statement lines; tags that are not statement lines stay empty if they live only on NC contexts.
