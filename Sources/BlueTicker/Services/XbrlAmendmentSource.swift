@@ -92,6 +92,7 @@ public func resolveAnnualXbrlDirectory(
         overlayDocIDs.append(docID)
         layers.append((correctionDocID: docID, facts: factsOf(dir)))
     }
+    let overlayIDsForManifest = overlayDocIDs
     let skippedRegressions = applyGuardedXbrlOverlays(
         base: factsOf(originalDir), layers: layers, originalDocID: originalDocID
     ).skipped
@@ -99,7 +100,7 @@ public func resolveAnnualXbrlDirectory(
     let merged = (materialize ?? {
         materializeOverlaidXbrlDirectory(
             original: $0, overlayDirs: $1, originalDocID: originalDocID,
-            regressions: skippedRegressions, overlayDocIDs: overlayDocIDs)
+            regressions: skippedRegressions, overlayDocIDs: overlayIDsForManifest)
     })(originalDir, overlayDirs)
     if let merged {
         writeOverlayRegressions(skippedRegressions, originalDocID: originalDocID, to: merged)
