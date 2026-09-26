@@ -97,7 +97,9 @@ func runOverviewIngest(
         ) {
             try await CompanyOverview.find(cand.code, on: db)
         }
-        if let row = existing, row.docID == cand.docID, !row.needsReview {
+        if !forceDocIDs.contains(cand.docID), let row = existing, row.docID == cand.docID,
+            !row.needsReview
+        {
             let staleNotApplicable =
                 row.source == companyOverviewSourceNotApplicable
                 && row.cacheVersion != companyOverviewCacheVersion

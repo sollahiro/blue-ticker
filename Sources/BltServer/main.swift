@@ -19,6 +19,7 @@
 //                                                            --codes で対象を証券コード集合に絞り、--limit を無視して全件処理する。
 //                                                            --doc-ids は原本有報(120)の doc_id 単位（会社-FY）。
 //                                                            該当書類だけ再計算し、他 FY は purge しない。
+//                                                            cache_version / needs_review でも skip しない。
 //                                                            statements/statement-notes では --codes を対象母集団にも使う
 //                                                            （nikkei225.csv 未配置でも手動再ingest可能）。
 //                                                            --note-types は statement-notes ステージで ingest する

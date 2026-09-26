@@ -112,7 +112,9 @@ func runStatementIngest(
         ) {
             try await CompanyStatement.find(cand.docID, on: db)
         }
-        if let row = existing, row.cacheVersion == statementCacheVersion {
+        if !forceDocIDs.contains(cand.docID), let row = existing,
+            row.cacheVersion == statementCacheVersion
+        {
             skipped += 1
             continue
         }

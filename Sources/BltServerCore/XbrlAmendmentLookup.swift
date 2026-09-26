@@ -37,20 +37,14 @@ func loadAnnualXbrlCorrectionIDsByOriginal(
     }
     if originalRows.isEmpty { return [:] }
 
-    let parentIDs = originalRows.compactMap(\.id)
-    let edinetCodes = Array(Set(originalRows.map(\.edinetCode)))
+    let edinetCodes = Array(Set(originalRows.map(\.edinetCode).filter { !$0.isEmpty }))
+    // 照合は edinet_code + 期末だけ。parent_doc_id では絞らない（ほぼ null。全件 130 も読まない）。
+    if edinetCodes.isEmpty { return [:] }
     let correctionRows = try await withDbRetry(logger: logger, context: "訂正有報 XBRL 候補") {
         try await EdinetDocument.query(on: db)
             .filter(\.$ordinanceCode == Api.ordinanceCompanyDisclosure)
             .filter(\.$docTypeCode == Api.docTypeAmendment)
-            .group(.or) { group in
-                if !parentIDs.isEmpty {
-                    group.filter(\.$parentDocID ~~ parentIDs)
-                }
-                if !edinetCodes.isEmpty {
-                    group.filter(\.$edinetCode ~~ edinetCodes)
-                }
-            }
+            .filter(\.$edinetCode ~~ edinetCodes)
             .all()
     }
     return preferredCorrectionDocIDsByOriginal(

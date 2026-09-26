@@ -133,7 +133,8 @@ func runStatementNotesIngest(
         ) {
             try await CompanyStatementNote.find(key, on: db)
         }
-        if let row = existing, row.needsReview == false,
+        if !forceDocIDs.contains(cand.docID), let row = existing, row.needsReview == false,
+            // `--doc-ids` は現行版・needs_review=false でも書き直す（艦隊の skip は変えない）。
             !isVersionGatedStatementNoteSource(row.source) || row.cacheVersion == currentCacheVersion
         {
             skipped += 1

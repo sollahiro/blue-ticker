@@ -224,6 +224,35 @@ private func fixedResolvedResolve(value: Double = 123.45) -> StatementNoteResolv
         }
     }
 
+    @Test func ingestForceDocIDsRewritesCurrentVersionNotes() async throws {
+        try await withMigratedApp { app in
+            try await seedDoc("S1", secCode: "72030", db: app.db)
+            let pre = CompanyStatementNote(docID: "S1", noteType: statementNoteTypePerShareInformation)
+            pre.code = "7203"
+            pre.submitDateTime = "2025-06-20 09:00"
+            pre.payload = StatementNotePayload(value: 100, unit: "yen_per_share")
+            pre.needsReview = false
+            pre.source = statementNoteSourceXbrlFacts
+            pre.contentHash = "100.0"
+            pre.cacheVersion = statementNoteCacheVersion(forType: statementNoteTypePerShareInformation)
+            try await pre.create(on: app.db)
+
+            let summary = try await runStatementNotesIngest(
+                db: app.db, listedCodes: ["7203"], years: 3, limit: nil,
+                noteType: statementNoteTypePerShareInformation,
+                forceDocIDs: ["S1"],
+                resolve: fixedResolvedResolve(value: 200.0))
+
+            #expect(summary.attempted == 1)
+            #expect(summary.stored == 1)
+            #expect(summary.skipped == 0)
+            let key = CompanyStatementNote.compositeID(
+                docID: "S1", noteType: statementNoteTypePerShareInformation)
+            let row = try #require(try await CompanyStatementNote.find(key, on: app.db))
+            #expect(row.payload.value == 200.0)
+        }
+    }
+
     @Test func ingestReattemptsXbrlFactsRowWhenVersionStale() async throws {
         try await withMigratedApp { app in
             try await seedDoc("S1", secCode: "72030", db: app.db)
