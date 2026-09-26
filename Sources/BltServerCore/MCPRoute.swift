@@ -308,6 +308,7 @@ private func dispatchMcpTool(
         let code = args["code"]?.stringValue ?? ""
         let docId = args["doc_id"]?.stringValue
         let axis = args["axis"]?.stringValue ?? breakdownAxisBusiness
+        // REST と同じ serveStoredBreakdown。needs_review / llm_unit_unresolved の LLM 行は出さない。
         return mapReasonedResult(
             await serveStoredBreakdown(code: code, docId: docId, axis: axis, db: db, logger: logger),
             notFoundMessage: breakdownNotFoundMessage(axis: axis))

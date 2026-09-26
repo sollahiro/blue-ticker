@@ -345,7 +345,10 @@ enum BreakdownLoadResult {
 /// doc_id 指定時はその書類（当該 code のもの）、省略時は当該 code の最新会社有報
 /// （提出日時降順のうち read 可能・会社開示府令の先頭）。特定有価証券府令(030)は選ばない。
 /// read 可否は `isServableBreakdown`（決定論・LLM とも cache_version の床でゲート）。
-/// 無い・read 不可・府令対象外なら `.absent`（呼び出し側は 404。ライブ解決へはフォールバックしない）。
+/// 公開面はさらに `isPubliclyServableBreakdown`：`needs_review` / `llm_unit_unresolved` の
+/// LLM 行は出さない（千円表の 1000 倍誤り stopgap。fail closed）。残行が 0 なら `.absent`
+/// （未算出と同じ 404。payload 形は変えない。最新を落としても前年へはフォールバックしない）。
+/// 無い・read 不可・府令対象外・公開除外なら `.absent`（呼び出し側は 404。ライブ解決へはフォールバックしない）。
 func loadStoredBreakdown(
     code: String, docId: String?, axis: String, db: Database
 ) async throws -> BreakdownLoadResult {
@@ -375,6 +378,12 @@ func loadStoredBreakdown(
 
     guard let row, isServableBreakdown(source: row.source, cacheVersion: row.cacheVersion, axis: axis),
         let docID = row.id?.components(separatedBy: "#").first
+    else { return .absent }
+
+    guard isPubliclyServableBreakdown(
+        source: row.source,
+        needsReview: row.needsReview || row.payload.needsReview,
+        warnings: row.payload.warnings)
     else { return .absent }
 
     if let reason = row.notApplicableReason {
