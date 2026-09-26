@@ -189,6 +189,7 @@ func registerRoutes(
     // DB（内訳取り込み company_breakdowns）の格納済み内訳のみを返す。
     // axis は business / geography / 決定論指標軸（省略時 business）。
     // 内訳取り込み: 全軸とも上場全体（日経225は処理順の先頭寄せのみ。docs/breakdown.md）。
+    // 公開面は needs_review / llm_unit_unresolved の LLM 行を出さない（同 docs）。
     v1.get("companies", ":code", "breakdown") { req async -> Response in
         let code = req.parameters.get("code") ?? ""
         recordFeedTrend(req.application, surface: "rest", tool: "get_breakdown", code: code)

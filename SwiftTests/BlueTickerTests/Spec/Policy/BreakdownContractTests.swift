@@ -17,4 +17,44 @@ import Testing
         #expect(goodwillBreakdownCacheVersion == "breakdown-goodwill-v1")
         #expect(segmentAssetsBreakdownCacheVersion == "breakdown-segment-assets-v3")
     }
+
+    @Test func publicServingHidesNeedsReviewAndUnresolvedUnitLLMRows() {
+        #expect(
+            isPubliclyServableBreakdown(
+                source: breakdownSourceRevenueRecognitionLLM, needsReview: true, warnings: [])
+                == false)
+        #expect(
+            isPubliclyServableBreakdown(
+                source: breakdownSourceSegmentInfoLLM, needsReview: false,
+                warnings: [breakdownWarningLLMUnitUnresolved]) == false)
+        #expect(
+            isPubliclyServableBreakdown(
+                source: breakdownSourceGeographyLLM, needsReview: false, warnings: []) == true)
+    }
+
+    @Test func publicServingLeavesXbrlAndNoneRowsUntouched() {
+        #expect(
+            isPubliclyServableBreakdown(
+                source: breakdownSourceXbrlFacts, needsReview: true, warnings: []) == true)
+        #expect(
+            isPubliclyServableBreakdown(
+                source: breakdownSourceStackedSegmentPnL, needsReview: true,
+                warnings: [breakdownWarningLLMUnitUnresolved]) == true)
+        #expect(
+            isPubliclyServableBreakdown(
+                source: breakdownSourceNotApplicable, needsReview: true, warnings: []) == true)
+    }
+
+    @Test func publicServingFailsClosedForUnknownSources() {
+        #expect(
+            isPubliclyServableBreakdown(source: "unknown_llm", needsReview: true, warnings: [])
+                == false)
+        #expect(
+            isPubliclyServableBreakdown(
+                source: "unknown_llm", needsReview: false,
+                warnings: [breakdownWarningLLMUnitUnresolved]) == false)
+        #expect(
+            isPubliclyServableBreakdown(source: "unknown_llm", needsReview: false, warnings: [])
+                == true)
+    }
 }
