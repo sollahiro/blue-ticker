@@ -749,8 +749,8 @@ extension BreakdownLoadResult {
                 source: breakdownSourceRevenueRecognitionLLM, needsReview: true)
             try await seedRow(
                 "S_UNIT", code: "7096", submit: "2026-06-20 09:00", db: app.db,
-                source: breakdownSourceGeographyLLM, cacheVersion: geographyBreakdownCacheVersion,
-                axis: breakdownAxisGeography, needsReview: false,
+                axis: breakdownAxisGeography, source: breakdownSourceGeographyLLM,
+                cacheVersion: geographyBreakdownCacheVersion, needsReview: false,
                 warnings: [breakdownWarningLLMUnitUnresolved])
             try await seedRow(
                 "S_OK", code: "7203", submit: "2026-06-20 09:00", db: app.db,
