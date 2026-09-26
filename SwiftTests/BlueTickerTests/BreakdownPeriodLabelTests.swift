@@ -257,4 +257,90 @@ import Foundation
             BreakdownExtractor.parsePeriodCue("2024年度 2025年度", fiscalYearEnd: "2026-03-31")
                 == "比較")
     }
+
+    // MARK: - compound words and ancestor prose must not stamp 前期
+
+    @Test func parsePeriodCueIgnoresCompoundWords() {
+        #expect(BreakdownExtractor.parsePeriodCue("当期純利益") == nil)
+        #expect(BreakdownExtractor.parsePeriodCue("当期純損失") == nil)
+        #expect(BreakdownExtractor.parsePeriodCue("当期利益") == nil)
+        #expect(BreakdownExtractor.parsePeriodCue("当期損失") == nil)
+        #expect(BreakdownExtractor.parsePeriodCue("前期比") == nil)
+        #expect(BreakdownExtractor.parsePeriodCue("前年度比") == nil)
+        #expect(BreakdownExtractor.parsePeriodCue("前年同期比") == nil)
+        #expect(BreakdownExtractor.parsePeriodCue("前期末比") == nil)
+        #expect(BreakdownExtractor.parsePeriodCue("前期末") == "前期")
+        #expect(BreakdownExtractor.parsePeriodCue("当期末") == "当期")
+    }
+
+    @Test func captionLikeRejectsIntroProseButKeepsPeriodHeadings() {
+        #expect(
+            BreakdownExtractor.isCaptionLikePeriodText(
+                "当連結会計年度において、当社グループの売上高は増加しました。") == false)
+        #expect(
+            BreakdownExtractor.isCaptionLikePeriodText(
+                "前連結会計年度（自 2024年4月1日 至 2025年3月31日）") == true)
+        #expect(BreakdownExtractor.isCaptionLikePeriodText("前期末") == true)
+        #expect(BreakdownExtractor.isCaptionLikePeriodText("前期比増減") == false)
+        #expect(BreakdownExtractor.isCaptionLikePeriodText("当期純利益") == false)
+    }
+
+    @Test func tableUnderPriorYearChangeCaptionStaysCurrent() {
+        let html = """
+            <div>
+              <p>前期比増減</p>
+              <div>
+                <p>（単位：百万円）</p>
+                \(numericPairTable("120", "60", "180"))
+              </div>
+            </div>
+            """
+        let tables = BreakdownExtractor.allTablesFromHtml(html, defaultHeading: "セグメント情報")
+        #expect(tables.count == 1)
+        #expect(tables[0].period == "当期")
+        #expect(tables[0].periodBasis == .fallback)
+    }
+
+    @Test func tableUnderNetIncomeCaptionStaysCurrent() {
+        let html = """
+            <div>
+              <p>当期純利益</p>
+              <div>
+                \(numericPairTable("120", "60", "180"))
+              </div>
+            </div>
+            """
+        let tables = BreakdownExtractor.allTablesFromHtml(html, defaultHeading: "セグメント情報")
+        #expect(tables.count == 1)
+        #expect(tables[0].period == "当期")
+        #expect(tables[0].periodBasis == .fallback)
+    }
+
+    @Test func ancestorIntroSentenceDoesNotLabelTable() {
+        let html = """
+            <div>
+              <p>当連結会計年度において、当社グループは報告セグメントの区分を変更しております。</p>
+              <div>
+                <p>（単位：百万円）</p>
+                \(numericPairTable("120", "60", "180"))
+              </div>
+            </div>
+            """
+        let tables = BreakdownExtractor.allTablesFromHtml(html, defaultHeading: "セグメント情報")
+        #expect(tables.count == 1)
+        #expect(tables[0].period == "当期")
+        #expect(tables[0].periodBasis == .fallback)
+    }
+
+    @Test func barePeriodEndCaptionsStillLabel() {
+        let html = """
+            <p>前期末</p>
+            \(numericPairTable("100", "50", "150"))
+            <p>当期末</p>
+            \(numericPairTable("120", "60", "180"))
+            """
+        let tables = BreakdownExtractor.allTablesFromHtml(html, defaultHeading: "セグメント情報")
+        #expect(tables.map(\.period) == ["前期", "当期"])
+        #expect(tables.map(\.periodBasis) == [.caption, .caption])
+    }
 }

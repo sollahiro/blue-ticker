@@ -928,8 +928,8 @@ enum BreakdownExtractor {
     private static func columnLooksLikeCurrentPeriod(_ headers: [[String]], column: Int) -> Bool {
         for row in headers {
             let cell = column < row.count ? row[column] : ""
-            if priorPeriodKeywords.contains(where: cell.contains) { return false }
-            if currentPeriodKeywords.contains(where: cell.contains) { return true }
+            if textHasStandalonePeriodKeyword(cell, keywords: priorPeriodKeywords) { return false }
+            if textHasStandalonePeriodKeyword(cell, keywords: currentPeriodKeywords) { return true }
         }
         return false
     }
@@ -1050,6 +1050,7 @@ enum BreakdownExtractor {
     /// キャプション・見出し・ヘッダー行から 当期/前期/比較 を取る。LLM は使わない。
     /// `allowBareComparison`: グリッド列見出しのように「前…当…」だけが並ぶときは比較。
     /// 導入文（「前連結会計年度及び当連結会計年度は以下のとおり」）は期間にしない。
+    /// 当期純利益・前期比などの複合語は期間にしない。裸の 前期末/当期末 は期間として残す。
     static func parsePeriodCue(
         _ text: String, fiscalYearEnd: String? = nil, allowBareComparison: Bool = false
     ) -> String? {
@@ -1057,8 +1058,8 @@ enum BreakdownExtractor {
             .replacingOccurrences(of: "\u{00a0}", with: "")
             .replacingOccurrences(of: "\u{3000}", with: " ")
         guard !compact.isEmpty else { return nil }
-        let hasCurrent = currentPeriodKeywords.contains(where: compact.contains)
-        let hasPrior = priorPeriodKeywords.contains(where: compact.contains)
+        let hasCurrent = textHasStandalonePeriodKeyword(compact, keywords: currentPeriodKeywords)
+        let hasPrior = textHasStandalonePeriodKeyword(compact, keywords: priorPeriodKeywords)
         if hasCurrent && hasPrior {
             if allowBareComparison || isBareComparisonPeriodLabel(compact) { return "比較" }
             return nil
@@ -1069,6 +1070,28 @@ enum BreakdownExtractor {
             return fromDates
         }
         return periodFromFiscalYearLabels(compact, fiscalYearEnd: fiscalYearEnd)
+    }
+
+    /// 期間語が複合語の一部なら無視する（当期純利益、前期比、前期末比、前年同期比 等）。
+    /// 直後が「末」だけの 前期末/当期末 は残高日付キャプションとして残す。
+    private static func textHasStandalonePeriodKeyword(_ text: String, keywords: [String]) -> Bool {
+        for keyword in keywords {
+            var searchStart = text.startIndex
+            while let range = text.range(of: keyword, range: searchStart..<text.endIndex) {
+                if !isNonPeriodCompoundContinuation(text[range.upperBound...]) {
+                    return true
+                }
+                searchStart = range.upperBound
+            }
+        }
+        return false
+    }
+
+    private static func isNonPeriodCompoundContinuation(_ after: Substring) -> Bool {
+        if after.hasPrefix("比") || after.hasPrefix("末比") { return true }
+        if after.hasPrefix("純利益") || after.hasPrefix("純損失") { return true }
+        if after.hasPrefix("利益") || after.hasPrefix("損失") { return true }
+        return false
     }
 
     /// XBRL TextBlock の contextRef から当期/前期を判定する。
@@ -1095,10 +1118,12 @@ enum BreakdownExtractor {
     /// 直前の短い兄弟だけだと、単位行やラッパー div で期間見出しを取りこぼす
     /// （FY2026 有報の収益認識・セグメントで 前/当連結会計年度（自…至…）が表の一段上にある型）。
     /// 直前の `<table>`（または table を含む要素）より前、および `【…】` の別注記見出しは見ない。
+    /// 祖先側はキャプション形（期間語で始まる、または 自…至…）だけ採用し、導入文は見ない。
     private static func detectPeriodFromPreceding(
         _ table: Element, fiscalYearEnd: String?
     ) -> String? {
         var current: Element? = table
+        var isAncestorLevel = false
         while let node = current {
             guard let parent = node.parent() else { break }
             var texts: [String] = []
@@ -1123,13 +1148,60 @@ enum BreakdownExtractor {
                 texts.append(text)
             }
             for text in texts.reversed() {
+                if isAncestorLevel, !isCaptionLikePeriodText(text) { continue }
                 if let period = parsePeriodCue(text, fiscalYearEnd: fiscalYearEnd) {
                     return period
                 }
             }
             if sawPrecedingTable || sawMajorSection { return nil }
+            isAncestorLevel = true
             current = parent
             if parent.tagName() == "body" || parent.tagName() == "html" { break }
+        }
+        return nil
+    }
+
+    /// 祖先から拾う期間テキストは、期間語で始まる短い見出しか（自…至…）だけ。
+    /// 「当連結会計年度において…」のような導入文は期間にしない。
+    static func isCaptionLikePeriodText(_ text: String) -> Bool {
+        let compact = asciiDigits(text)
+            .replacingOccurrences(of: "\u{00a0}", with: "")
+            .replacingOccurrences(of: "\u{3000}", with: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !compact.isEmpty else { return false }
+        if isPeriodCueProse(compact) { return false }
+        if textContainsJapaneseDateRange(compact) { return true }
+        return leadingStandalonePeriodKeyword(compact) != nil
+    }
+
+    private static func isPeriodCueProse(_ text: String) -> Bool {
+        if text.contains("。") { return true }
+        if text.contains("において") { return true }
+        if text.contains("以下のとおり") || text.contains("次のとおり")
+            || text.contains("下記のとおり")
+        {
+            return true
+        }
+        return text.contains("であります")
+    }
+
+    private static func textContainsJapaneseDateRange(_ text: String) -> Bool {
+        let ns = text as NSString
+        let range = NSRange(location: 0, length: ns.length)
+        return japaneseDateRangePattern.firstMatch(in: text, options: [], range: range) != nil
+    }
+
+    private static func leadingStandalonePeriodKeyword(_ text: String) -> String? {
+        var t = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        while let first = t.first, "（(「『【".contains(first) {
+            t.removeFirst()
+            t = t.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        let keywords = (currentPeriodKeywords + priorPeriodKeywords)
+            .sorted { $0.count > $1.count }
+        for keyword in keywords where t.hasPrefix(keyword) {
+            let after = t.dropFirst(keyword.count)
+            if !isNonPeriodCompoundContinuation(after) { return keyword }
         }
         return nil
     }

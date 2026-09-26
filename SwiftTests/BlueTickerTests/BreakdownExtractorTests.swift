@@ -89,6 +89,17 @@ import Foundation
         #expect(BreakdownExtractor.detectPeriodFromGrid([]) == nil)
     }
 
+    @Test func detectPeriodIgnoresCompoundWordsInGrid() {
+        #expect(
+            BreakdownExtractor.detectPeriodFromGrid(
+                [["科目", "当期純利益"], ["事業A", "500"]]
+            ) == nil)
+        #expect(
+            BreakdownExtractor.detectPeriodFromGrid(
+                [["前期比", "増減"], ["事業A", "10"]]
+            ) == nil)
+    }
+
     // MARK: - applyPeriodOrdering
 
     @Test func periodOrderingUnlabeledGetsAlternatingLabels() {
