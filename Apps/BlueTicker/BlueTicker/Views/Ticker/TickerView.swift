@@ -19,10 +19,11 @@ struct TickerView: View {
     @State private var resolvedSector = ""
     @State private var showsHoldings = false
     @State private var showsCompanyCard = false
-    /// プッシュ遷移のあと、社名ピルの見た目をバーの外のガラスへ渡したか。
-    /// 渡したあとはツールバー側を消し、同じガラスがカードへ広がる。
+    /// 概要が表示されたあと、社名ピルの見た目を窓上のガラスへ渡したか。
+    /// 渡したあとはタイトル用ガラスを出さず、同じガラスがカードへ広がる。
+    /// 戻ると右上はナビのまま。社名ピルだけナビのタイトル遷移から外す。
     @State private var pillHandedOff = false
-    /// ツールバー上の社名ピルのウィンドウ座標。広がる始点に使う。
+    /// タイトル位置の社名ピルのウィンドウ座標。広がる始点に使う。
     @State private var pillRect: CGRect = .zero
     @State private var contentWidth: CGFloat = 0
 
@@ -53,10 +54,9 @@ struct TickerView: View {
             // タイトル領域に置くと、戻ると右上グループの残りをシステムが割り当てる。
             // 右上の幅を固定予約すると機種によって足りず、「…」へ折りたたまれる。
             ToolbarItem(placement: .title) {
-                // 見た目を窓上の一つのガラスへ渡したあとは、バーにアイコンも
-                // カプセルも残さない。opacity ではガラスが残ってカードに映る。
+                // 場所はタイトル位置のまま。見た目のガラスは窓上へ出す。
+                // ここに glassEffect を付けると、ナビのタイトルとして横スライドする。
                 if pillHandedOff {
-                    // 見た目は窓上のガラス。読み上げの位置はタイトルのままにする。
                     Color.clear
                         .frame(width: max(pillRect.width, 1), height: max(pillRect.height, 1))
                         .accessibilityElement(children: .ignore)
@@ -76,7 +76,7 @@ struct TickerView: View {
                     .fixedSize(horizontal: true, vertical: true)
                     .frame(maxWidth: titlePillMaxWidth)
                     .clipped()
-                    .glassEffect()
+                    .opacity(0)
                     .onGeometryChange(for: CGRect.self) { proxy in
                         proxy.frame(in: .global)
                     } action: { pillRect = $0 }
@@ -383,6 +383,13 @@ private struct PagerSnapper: UIViewRepresentable {
     }
 }
 
+/// 社名ピルの出現。ナビのタイトルスライドとは別で、概要の上に浮かべる。
+private enum CompanyPillReveal {
+    static var rise: CGFloat { UIAccessibility.isReduceMotionEnabled ? 0 : 10 }
+    static var showDuration: TimeInterval { UIAccessibility.isReduceMotionEnabled ? 0.12 : 0.34 }
+    static var hideDuration: TimeInterval { UIAccessibility.isReduceMotionEnabled ? 0.08 : 0.22 }
+}
+
 /// 社名ピルと詳細カードを、ナビゲーションバーより上の一つの Liquid Glass として出す。
 /// ビュー内オーバーレイはバーの下に合成されるため、バーの親へ載せる。
 private struct CompanyGlassPresenter: UIViewRepresentable {
@@ -442,6 +449,10 @@ private struct CompanyGlassPresenter: UIViewRepresentable {
         private var morphing = false
         /// 銘柄面が見えていないあいだは、窓上のガラスを付け直さない。
         private var tickerVisible = true
+        /// 窓上ピルをフェードインし終えたか。毎フレームの更新で重ねない。
+        private var revealed = false
+        /// フェードアウト完了前に appear が来たら、外す処理を無効化する。
+        private var concealGeneration = 0
 
         func update(
             handedOff: Bool,
@@ -455,18 +466,25 @@ private struct CompanyGlassPresenter: UIViewRepresentable {
         ) {
             model.company = company
             model.onExpanded = onExpanded
-            // バー側を消したあとの計測は縮む。開閉の始点は、載せたときのピル矩形。
-            // それより狭い計測では上書きしない。空きがある社名を「…」の幅で固定しない。
-            if host == nil, Self.plausiblePill(pillRect) {
+            guard let nav = anchor.nearestNavigationController(),
+                  let ticker = anchor.nearestViewController() else { return }
+            installHook(on: ticker, setHandedOff: setHandedOff)
+            // タイトル用ガラスは push の最初から出さない。ナビに乗ると横スライドする。
+            titleHider.bar = nav.navigationBar
+            if pillRect.width > 1 {
+                titleHider.pill = pillRect
+            }
+            titleHider.start()
+            guard tickerVisible else { return }
+            // スライド中の座標は使わない。概要が止まった位置だけを始点にする。
+            let sliding = nav.transitionCoordinator?.isAnimated == true
+            if host == nil, !sliding, Self.plausiblePill(pillRect) {
                 let unset = model.pillRect.width < 1
                 let sameBand = abs(pillRect.minY - model.pillRect.minY) < 24
                 if unset || (sameBand && pillRect.width + 1 >= model.pillRect.width) {
                     model.pillRect = pillRect
                 }
             }
-            guard let nav = anchor.nearestNavigationController(),
-                  let ticker = anchor.nearestViewController() else { return }
-            installHook(on: ticker, setHandedOff: setHandedOff)
             guard handedOff, pillRect.width > 1, pillRect.height > 1 else {
                 if !handedOff, pillRect.width > 1 {
                     scheduleHandoff(from: nav, setHandedOff: setHandedOff)
@@ -494,6 +512,9 @@ private struct CompanyGlassPresenter: UIViewRepresentable {
                 self?.growIfNeeded()
             }
             updateModalAccessibility()
+            if created {
+                revealHost()
+            }
             // ホストを載せた最初のフレームは必ずピルの形から始める。
             // 挿入と同じトランザクションで広げると中間フレームが出ない。
             if created && expanded {
@@ -526,7 +547,8 @@ private struct CompanyGlassPresenter: UIViewRepresentable {
                     if context.isCancelled || !self.tickerVisible {
                         self.handoffScheduled = false
                     } else {
-                        fire()
+                        // 概要が止まってからピルを出す。レイアウト確定を1フレーム待つ。
+                        DispatchQueue.main.async(execute: fire)
                     }
                 }
             } else {
@@ -543,23 +565,19 @@ private struct CompanyGlassPresenter: UIViewRepresentable {
             ticker.addChild(hook)
             ticker.view.addSubview(hook.view)
             hook.didMove(toParent: ticker)
-            hook.onWillDisappear = { [weak self] in
-                guard let self else { return }
-                // 戻る・タブ切替・別画面への push。窓に載っているので、見えなくなったら外す。
-                self.tickerVisible = false
-                self.didDisappear = true
-                self.model.expanded = false
-                self.model.onExpanded(false)
-                self.removeHost()
-                setHandedOff(false)
-                self.handoffScheduled = false
+            hook.onWillDisappear = { [weak self] coordinator in
+                self?.concealHost(alongside: coordinator, setHandedOff: setHandedOff)
             }
             hook.onWillAppear = { [weak self] in
                 guard let self else { return }
                 self.tickerVisible = true
                 guard self.didDisappear else { return }
                 self.didDisappear = false
-                setHandedOff(true)
+                if self.host != nil {
+                    self.revealHost()
+                } else {
+                    setHandedOff(true)
+                }
             }
             disappearHook = hook
         }
@@ -623,6 +641,8 @@ private struct CompanyGlassPresenter: UIViewRepresentable {
             wrapper.addGestureRecognizer(background)
             // 親 VC を付けずにウィンドウへ載せる。ナビの子にするとスタックと
             // ビュー階層が食い違う。バーより上に描くためのホストだけ。
+            wrapper.alpha = 0
+            container.transform = CGAffineTransform(translationX: 0, y: CompanyPillReveal.rise)
             window.addSubview(wrapper)
             self.wrapper = wrapper
             self.cardContainer = container
@@ -630,6 +650,7 @@ private struct CompanyGlassPresenter: UIViewRepresentable {
             titleHider.bar = nav.navigationBar
             titleHider.pill = model.pillRect
             titleHider.start()
+            revealed = false
             return true
         }
 
@@ -888,6 +909,7 @@ private struct CompanyGlassPresenter: UIViewRepresentable {
 
         func removeHost() {
             morphing = false
+            revealed = false
             model.freezesGlyphs = false
             stopMorphTracking()
             titleHider.stop()
@@ -898,10 +920,82 @@ private struct CompanyGlassPresenter: UIViewRepresentable {
             wrapper = nil
             cardContainer = nil
         }
+
+        /// 概要が止まった位置へ、下からフェードインする。横には動かさない。
+        private func revealHost() {
+            concealGeneration += 1
+            guard let wrapper, let container else { return }
+            let alreadyIn = revealed && wrapper.alpha > 0.99 && container.transform == .identity
+            revealed = true
+            guard !alreadyIn else { return }
+            UIView.animate(
+                withDuration: CompanyPillReveal.showDuration,
+                delay: 0,
+                options: [.curveEaseOut, .beginFromCurrentState, .allowUserInteraction]
+            ) {
+                wrapper.alpha = 1
+                container.transform = .identity
+            }
+        }
+
+        /// 戻る・タブ・別画面へ行くときはフェードアウト。ナビのタイトルとしてはスライドさせない。
+        private func concealHost(
+            alongside transition: UIViewControllerTransitionCoordinator?,
+            setHandedOff: @escaping (Bool) -> Void
+        ) {
+            tickerVisible = false
+            didDisappear = true
+            model.expanded = false
+            model.onExpanded(false)
+            concealGeneration += 1
+            let generation = concealGeneration
+            revealed = false
+            let animations = { [weak self] in
+                self?.wrapper?.alpha = 0
+                self?.cardContainer?.transform = CGAffineTransform(
+                    translationX: 0,
+                    y: CompanyPillReveal.rise
+                )
+            }
+            let finish = { [weak self] in
+                guard let self, self.concealGeneration == generation else { return }
+                self.removeHost()
+                setHandedOff(false)
+                self.handoffScheduled = false
+            }
+            guard wrapper != nil else {
+                finish()
+                return
+            }
+            if let transition, transition.isAnimated {
+                transition.animate(alongsideTransition: { _ in
+                    animations()
+                }, completion: { [weak self] context in
+                    if context.isCancelled {
+                        self?.tickerVisible = true
+                        self?.didDisappear = false
+                        self?.revealHost()
+                    } else {
+                        finish()
+                    }
+                })
+            } else {
+                UIView.animate(
+                    withDuration: CompanyPillReveal.hideDuration,
+                    delay: 0,
+                    options: [.curveEaseIn, .beginFromCurrentState]
+                ) {
+                    animations()
+                } completion: { _ in
+                    finish()
+                }
+            }
+        }
     }
 }
 
-/// バーが描き直しても、社名ピルの UIView を毎フレーム隠す。
+/// バーが描き直しても、タイトル位置の社名ガラスを毎フレーム隠す。
+/// ナビのタイトルとして出すと横スライドするので、見た目は窓上のピルだけにする。
 /// SwiftUI の opacity ではガラスの実体が残る。
 private final class ToolbarTitleHider: NSObject {
     weak var bar: UINavigationBar?
@@ -927,17 +1021,35 @@ private final class ToolbarTitleHider: NSObject {
     }
 
     @objc private func tick() {
-        guard let bar, pill.width > 1 else { return }
-        let target = bar.convert(pill, from: nil)
+        guard let bar else { return }
         var next: [WeakView] = []
+        if let titleView = bar.topItem?.titleView {
+            titleView.alpha = 0
+            next.append(WeakView(titleView))
+        }
+        let target = pill.width > 1 ? bar.convert(pill, from: nil) : nil
+        let barMid = bar.bounds.midX
         func walk(_ view: UIView) {
             let frame = view.convert(view.bounds, to: bar)
-            let matches = abs(frame.midX - target.midX) < 36
-                && abs(frame.width - target.width) < 48
-                && frame.height > 20
-                && frame.height < 80
-                && frame.width > 60
-            if matches, view !== bar {
+            let titleShaped = frame.height > 20 && frame.height < 90
+                && frame.width > 50
+                && frame.minY >= -12
+                && frame.maxY <= bar.bounds.maxY + 12
+            let isFullBleed = frame.width > bar.bounds.width * 0.55
+            let isLeadingChip = frame.maxX <= 72 && frame.width <= 56
+            let isTrailingChip = frame.minX >= bar.bounds.maxX - 140 && frame.width <= 56
+            let isTrailingCluster = frame.minX >= barMid + 24
+                && frame.maxX > bar.bounds.maxX - 16
+                && frame.width <= 140
+            let matchesPill: Bool = {
+                guard let target else { return false }
+                return abs(frame.midX - target.midX) < 80
+                    && abs(frame.width - target.width) < 80
+                    && frame.height > 20 && frame.height < 90 && frame.width > 50
+            }()
+            let looksLikeTitle = titleShaped && !isFullBleed && !isLeadingChip
+                && !isTrailingChip && !isTrailingCluster
+            if view !== bar, matchesPill || looksLikeTitle {
                 view.alpha = 0
                 next.append(WeakView(view))
             }
@@ -981,14 +1093,14 @@ private final class GlassPassThroughView: UIView {
     }
 }
 
-/// 銘柄面が pop される直前に、バー上のピルを戻して窓上のガラスを外す。
+/// 銘柄面が消える直前に、窓上のガラスをフェードアウトして外す。
 private final class GlassDisappearHook: UIViewController {
-    var onWillDisappear: (() -> Void)?
+    var onWillDisappear: ((UIViewControllerTransitionCoordinator?) -> Void)?
     var onWillAppear: (() -> Void)?
 
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
-        onWillDisappear?()
+        onWillDisappear?(transitionCoordinator)
     }
 
     override func viewWillAppear(_ animated: Bool) {
