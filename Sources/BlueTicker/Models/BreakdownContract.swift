@@ -237,9 +237,33 @@ public func isLLMBreakdownSource(_ source: String) -> Bool {
         || source == breakdownSourceGeographyLLM
 }
 
+/// LLM 正規化が表の単位（百万円 / 千円）を確定できなかったときの `warnings` フラグ。
+/// 千円表が 1000 倍誤って公開される実害の印。抽出側の文字列と一致させる。
+public let breakdownWarningLLMUnitUnresolved = "llm_unit_unresolved"
+
+/// 公開 REST / MCP（iOS Breakdown の backing）が当該格納行を出してよいか。
+/// `needs_review` または `llm_unit_unresolved` の行は出さない（千円単位の 1000 倍誤りの stopgap。
+/// fail closed）。XBRL（`xbrl_facts` / `stacked_segment_pnl`）と `not_applicable`（'none'）は
+/// フラグがあってもそのまま出す。ingest / status-report の `isServableBreakdown` とは独立
+/// （格納行は消さない・書き換えない。`cache_version` も上げない）。
+public func isPubliclyServableBreakdown(
+    source: String, needsReview: Bool, warnings: [String]
+) -> Bool {
+    if source == breakdownSourceXbrlFacts
+        || source == breakdownSourceStackedSegmentPnL
+        || source == breakdownSourceNotApplicable
+    {
+        return true
+    }
+    if needsReview { return false }
+    if warnings.contains(breakdownWarningLLMUnitUnresolved) { return false }
+    return true
+}
+
 /// 格納行が read 可能か。version-gated な source は cache_version が当該軸の床以上のときのみ。
 /// パース不能な cache_version は非 servable（誤った clean LLM 行を古い版のまま出し続けない）。
-/// `axis` 省略時は business（現行 REST/MCP 公開軸）。
+/// `axis` 省略時は business（現行 REST/MCP 公開軸）。公開面の `needs_review` /
+/// `llm_unit_unresolved` 除外は `isPubliclyServableBreakdown`（この関数は ingest 床専用）。
 public func isServableBreakdown(source: String, cacheVersion: String, axis: String = "business") -> Bool {
     guard isVersionGatedBreakdownSource(source) else { return true }
     guard let n = breakdownCacheVersionNumber(cacheVersion) else { return false }

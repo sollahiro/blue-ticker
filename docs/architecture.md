@@ -122,7 +122,7 @@ flowchart LR
 | `GET /v1/companies/{code}/financials` | Summary（床未満・未格納 404）。`?fields=` で `years[]` の公開キーを射影（不明キー 400） |
 | `GET /v1/companies/{code}/waterfall` | Waterfall |
 | `GET /v1/companies/{code}/filing-content` | セクション本文 |
-| `GET /v1/companies/{code}/breakdown?axis=` | breakdowns（上場・格納済み） |
+| `GET /v1/companies/{code}/breakdown?axis=` | breakdowns（上場・格納済み。LLM の `needs_review` / `llm_unit_unresolved` は出さない。`docs/breakdown.md`） |
 | `GET /v1/companies/{code}/statement` · `/statement/notes` | Statement / Notes（上場。日経225は処理順の優先のみ） |
 | `GET /v1/feed/updates` | Feed Update（直近 N 日の提出書類。既定 90 日・10 件。同日過多は安定サンプル。`total.day` / `total.week`） |
 | `GET /v1/feed/trend` | Feed Trend（匿名の検索・ツールヒット件数。書類件数ではない。カウンター未設定は 503） |

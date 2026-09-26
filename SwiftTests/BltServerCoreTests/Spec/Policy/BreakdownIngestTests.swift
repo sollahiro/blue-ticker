@@ -6,7 +6,8 @@
 // staleness: 決定論（xbrl_facts / stacked_segment_pnl / not_applicable）も LLM 経由
 // （segment_info_llm 等）も cache_version 不一致で再試行する。決定論の needs_review=true
 // だけでは現行版は再試行しない。LLM の needs_review=true は現行版でも再試行する。
-// read の servable 判定も同じ version gate を共有する。
+// read の servable 判定も同じ version gate を共有する。公開 serving はさらに
+// needs_review / llm_unit_unresolved の LLM 行を除外する（isPubliclyServableBreakdown）。
 
 import Fluent
 import FluentSQLiteDriver
@@ -58,7 +59,7 @@ private func seedDoc(
 }
 
 private func fakePayload(
-    axis: String = "business", needsReview: Bool = false
+    axis: String = "business", needsReview: Bool = false, warnings: [String]? = nil
 ) -> BreakdownSnapshotPayload {
     BreakdownSnapshotPayload(
         axis: axis, denominator: 1_000_000, denominatorTag: "income_statement.sales",
@@ -66,7 +67,8 @@ private func fakePayload(
             BreakdownRowPayload(
                 labelRaw: "セグメントA", label: "セグメントA", amount: 500_000, profit: nil, rowKind: "segment")
         ],
-        sourceKind: "test", needsReview: needsReview, warnings: needsReview ? ["test_flag"] : [])
+        sourceKind: "test", needsReview: needsReview,
+        warnings: warnings ?? (needsReview ? ["test_flag"] : []))
 }
 
 private func seedRow(
@@ -74,12 +76,12 @@ private func seedRow(
     axis: String = breakdownAxisBusiness,
     source: String = breakdownSourceXbrlFacts, cacheVersion: String = businessBreakdownCacheVersion,
     needsReview: Bool = false, contentHash: String = "h0", llmAudit: LLMBreakdownAuditPayload? = nil,
-    notApplicableReason: String? = nil
+    notApplicableReason: String? = nil, warnings: [String]? = nil
 ) async throws {
     let row = CompanyBreakdown(docID: docID, axis: axis)
     row.code = code
     row.submitDateTime = submit
-    row.payload = fakePayload(axis: axis, needsReview: needsReview)
+    row.payload = fakePayload(axis: axis, needsReview: needsReview, warnings: warnings)
     row.needsReview = needsReview
     row.source = source
     row.contentHash = contentHash
@@ -735,6 +737,69 @@ extension BreakdownLoadResult {
             #expect(json["axis"] as? String == breakdownAxisGeography)
             let breakdown = try #require(json["breakdown"] as? [String: Any])
             #expect(breakdown["axis"] as? String == breakdownAxisGeography)
+        }
+    }
+
+    /// 公開 serving stopgap: LLM の needs_review / llm_unit_unresolved は出さず、clean 行は出す。
+    /// 残行 0 は未算出と同じ absent。XBRL の needs_review は触らない。
+    @Test func loadHidesNeedsReviewAndUnresolvedUnitLLMRows() async throws {
+        try await withMigratedApp { app in
+            try await seedRow(
+                "S_REVIEW", code: "332A", submit: "2026-06-20 09:00", db: app.db,
+                source: breakdownSourceRevenueRecognitionLLM, needsReview: true)
+            try await seedRow(
+                "S_UNIT", code: "7096", submit: "2026-06-20 09:00", db: app.db,
+                source: breakdownSourceGeographyLLM, cacheVersion: geographyBreakdownCacheVersion,
+                axis: breakdownAxisGeography, needsReview: false,
+                warnings: [breakdownWarningLLMUnitUnresolved])
+            try await seedRow(
+                "S_OK", code: "7203", submit: "2026-06-20 09:00", db: app.db,
+                source: breakdownSourceSegmentInfoLLM, needsReview: false)
+            try await seedRow(
+                "S_XBRL", code: "6758", submit: "2026-06-20 09:00", db: app.db,
+                source: breakdownSourceXbrlFacts, needsReview: true)
+
+            let hiddenReview = try await loadStoredBreakdown(
+                code: "332A", docId: nil, axis: breakdownAxisBusiness, db: app.db)
+            #expect(hiddenReview.isAbsent)
+
+            let hiddenUnit = try await loadStoredBreakdown(
+                code: "7096", docId: nil, axis: breakdownAxisGeography, db: app.db)
+            #expect(hiddenUnit.isAbsent)
+
+            let served = try await loadStoredBreakdown(
+                code: "7203", docId: nil, axis: breakdownAxisBusiness, db: app.db)
+            let json = try #require(served.foundJSON)
+            #expect(json["doc_id"] as? String == "S_OK")
+            let breakdown = try #require(json["breakdown"] as? [String: Any])
+            #expect(breakdown["needs_review"] as? Bool == false)
+            let rows = try #require(breakdown["rows"] as? [[String: Any]])
+            #expect(rows.count == 1)
+
+            let xbrl = try await loadStoredBreakdown(
+                code: "6758", docId: nil, axis: breakdownAxisBusiness, db: app.db)
+            let xbrlJSON = try #require(xbrl.foundJSON)
+            #expect(xbrlJSON["doc_id"] as? String == "S_XBRL")
+        }
+    }
+
+    /// 公開除外の最新 LLM 行があっても前年の clean 行へは落とさない（未算出と同じ absent）。
+    @Test func loadDoesNotFallBackToOlderCleanWhenLatestLLMRowIsHidden() async throws {
+        try await withMigratedApp { app in
+            try await seedRow(
+                "S24", code: "332A", submit: "2025-06-20 09:00", db: app.db,
+                source: breakdownSourceRevenueRecognitionLLM, needsReview: false)
+            try await seedRow(
+                "S25", code: "332A", submit: "2026-06-20 09:00", db: app.db,
+                source: breakdownSourceRevenueRecognitionLLM, needsReview: true)
+
+            let result = try await loadStoredBreakdown(
+                code: "332A", docId: nil, axis: breakdownAxisBusiness, db: app.db)
+            #expect(result.isAbsent)
+
+            let older = try await loadStoredBreakdown(
+                code: "332A", docId: "S24", axis: breakdownAxisBusiness, db: app.db)
+            #expect(older.foundJSON?["doc_id"] as? String == "S24")
         }
     }
 

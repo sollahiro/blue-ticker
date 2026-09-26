@@ -381,6 +381,70 @@ private func send(
         }
     }
 
+    /// LLM の needs_review / llm_unit_unresolved は公開 REST（iOS Breakdown の backing）に出さない。
+    /// 残行 0 は未算出と同じ 404。payload 形は変えない。clean 行は 200。
+    @Test func breakdownHidesNeedsReviewAndUnresolvedUnitLLMRows() async throws {
+        try await withApp(databases: true) { app in
+            func insert(
+                docID: String, code: String, axis: String, source: String, cacheVersion: String,
+                needsReview: Bool, warnings: [String]
+            ) async throws {
+                let row = CompanyBreakdown(docID: docID, axis: axis)
+                row.code = code
+                row.submitDateTime = "2026-06-20 09:00"
+                row.payload = BreakdownSnapshotPayload(
+                    axis: axis, denominator: 1_000_000,
+                    denominatorTag: "income_statement.sales",
+                    rows: [
+                        BreakdownRowPayload(
+                            labelRaw: "日本", label: "日本", amount: 600_000, profit: nil,
+                            rowKind: "segment")
+                    ],
+                    sourceKind: source, needsReview: needsReview, warnings: warnings)
+                row.needsReview = needsReview
+                row.source = source
+                row.contentHash = ""
+                row.cacheVersion = cacheVersion
+                try await row.create(on: app.db)
+            }
+
+            try await insert(
+                docID: "S_REVIEW", code: "7203", axis: breakdownAxisBusiness,
+                source: breakdownSourceRevenueRecognitionLLM,
+                cacheVersion: businessBreakdownCacheVersion, needsReview: true,
+                warnings: ["llm_row_sum_mismatch"])
+            try await insert(
+                docID: "S_UNIT", code: "6758", axis: breakdownAxisGeography,
+                source: breakdownSourceGeographyLLM,
+                cacheVersion: geographyBreakdownCacheVersion, needsReview: false,
+                warnings: [breakdownWarningLLMUnitUnresolved])
+            try await insert(
+                docID: "S_OK", code: "9984", axis: breakdownAxisBusiness,
+                source: breakdownSourceSegmentInfoLLM,
+                cacheVersion: businessBreakdownCacheVersion, needsReview: false, warnings: [])
+
+            let (hiddenReviewStatus, hiddenReview) = try await send(
+                app, "/v1/companies/7203/breakdown")
+            #expect(hiddenReviewStatus == .notFound)
+            #expect(hiddenReview?["error"] as? String == "事業別内訳は未算出です")
+            #expect(hiddenReview?["reason"] == nil)
+
+            let (hiddenUnitStatus, hiddenUnit) = try await send(
+                app, "/v1/companies/6758/breakdown?axis=geography")
+            #expect(hiddenUnitStatus == .notFound)
+            #expect(hiddenUnit?["error"] as? String == "地域別内訳は未算出です")
+            #expect(hiddenUnit?["reason"] == nil)
+
+            let (okStatus, okJSON) = try await send(app, "/v1/companies/9984/breakdown")
+            #expect(okStatus == .ok)
+            #expect(okJSON?["doc_id"] as? String == "S_OK")
+            let breakdown = try #require(okJSON?["breakdown"] as? [String: Any])
+            #expect(breakdown["needs_review"] as? Bool == false)
+            let rows = try #require(breakdown["rows"] as? [[String: Any]])
+            #expect(rows.count == 1)
+        }
+    }
+
     @Test func financialsWithInvalidYearsReturns404() async throws {
         // years <= 0 は無効要求として 404（空 years の 200 を返さない）
         try await withApp(databases: true) { app in
