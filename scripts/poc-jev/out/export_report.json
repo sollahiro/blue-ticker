@@ -1,0 +1,22 @@
+{
+  "cell_select_docs" : 70,
+  "cell_select_lines" : 359,
+  "download_failures" : [
+
+  ],
+  "paths" : [
+    "/workspace/scripts/poc-jev/out/tag_classify.jsonl",
+    "/workspace/scripts/poc-jev/out/table_select.jsonl",
+    "/workspace/scripts/poc-jev/out/cell_select.jsonl"
+  ],
+  "skipped_tables" : [
+
+  ],
+  "skipped_tags" : [
+
+  ],
+  "table_select_docs" : 70,
+  "table_select_lines" : 198,
+  "tag_classify_docs" : 24,
+  "tag_classify_lines" : 960
+}

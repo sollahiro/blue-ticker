@@ -120,5 +120,21 @@ let package = Package(
             ],
             path: "SwiftTests/BltMcpServerCoreTests"
         ),
+        // Throwaway TypeSafe/Jev candidate-export PoC. Not a product target.
+        // @testable import is required to call internal XBRL parsers without
+        // changing production visibility. CI default tests only validate
+        // committed JSONL; live export is env-gated (BLT_POC_JEV_RUN=1).
+        .testTarget(
+            name: "PocJevExport",
+            dependencies: [
+                "BlueTickerCore",
+            ],
+            path: "scripts/poc-jev",
+            exclude: [
+                "README.md",
+                "snapshots",
+                "out",
+            ]
+        ),
     ]
 )
