@@ -470,7 +470,9 @@ private struct CompanyGlassPresenter: UIViewRepresentable {
                   let ticker = anchor.nearestViewController() else { return }
             installHook(on: ticker, setHandedOff: setHandedOff)
             // タイトル用ガラスは push の最初から出さない。ナビに乗ると横スライドする。
+            // 戻る・右上は触らない。対象は銘柄面のタイトルだけ。
             titleHider.bar = nav.navigationBar
+            titleHider.item = ticker.navigationItem
             if pillRect.width > 1 {
                 titleHider.pill = pillRect
             }
@@ -648,6 +650,7 @@ private struct CompanyGlassPresenter: UIViewRepresentable {
             self.cardContainer = container
             self.host = host
             titleHider.bar = nav.navigationBar
+            titleHider.item = nav.topViewController?.navigationItem
             titleHider.pill = model.pillRect
             titleHider.start()
             revealed = false
@@ -994,11 +997,13 @@ private struct CompanyGlassPresenter: UIViewRepresentable {
     }
 }
 
-/// バーが描き直しても、タイトル位置の社名ガラスを毎フレーム隠す。
+/// バーが描き直しても、銘柄のタイトル用ガラスだけを毎フレーム隠す。
 /// ナビのタイトルとして出すと横スライドするので、見た目は窓上のピルだけにする。
-/// SwiftUI の opacity ではガラスの実体が残る。
+/// SwiftUI の opacity ではガラスの実体が残る。戻る・右上はサイズ推測で消さない。
 private final class ToolbarTitleHider: NSObject {
     weak var bar: UINavigationBar?
+    /// 銘柄面の navigation item。topItem だと pop 中に元画面のタイトルまで消える。
+    weak var item: UINavigationItem?
     var pill: CGRect = .zero
     private var link: CADisplayLink?
     private var hidden: [WeakView] = []
@@ -1023,33 +1028,23 @@ private final class ToolbarTitleHider: NSObject {
     @objc private func tick() {
         guard let bar else { return }
         var next: [WeakView] = []
-        if let titleView = bar.topItem?.titleView {
+        if let titleView = item?.titleView {
             titleView.alpha = 0
             next.append(WeakView(titleView))
         }
-        let target = pill.width > 1 ? bar.convert(pill, from: nil) : nil
-        let barMid = bar.bounds.midX
+        guard pill.width > 1 else {
+            hidden = next
+            return
+        }
+        let target = bar.convert(pill, from: nil)
         func walk(_ view: UIView) {
             let frame = view.convert(view.bounds, to: bar)
-            let titleShaped = frame.height > 20 && frame.height < 90
-                && frame.width > 50
-                && frame.minY >= -12
-                && frame.maxY <= bar.bounds.maxY + 12
-            let isFullBleed = frame.width > bar.bounds.width * 0.55
-            let isLeadingChip = frame.maxX <= 72 && frame.width <= 56
-            let isTrailingChip = frame.minX >= bar.bounds.maxX - 140 && frame.width <= 56
-            let isTrailingCluster = frame.minX >= barMid + 24
-                && frame.maxX > bar.bounds.maxX - 16
-                && frame.width <= 140
-            let matchesPill: Bool = {
-                guard let target else { return false }
-                return abs(frame.midX - target.midX) < 80
-                    && abs(frame.width - target.width) < 80
-                    && frame.height > 20 && frame.height < 90 && frame.width > 50
-            }()
-            let looksLikeTitle = titleShaped && !isFullBleed && !isLeadingChip
-                && !isTrailingChip && !isTrailingCluster
-            if view !== bar, matchesPill || looksLikeTitle {
+            let matches = abs(frame.midX - target.midX) < 36
+                && abs(frame.width - target.width) < 48
+                && frame.height > 20
+                && frame.height < 80
+                && frame.width > 60
+            if matches, view !== bar {
                 view.alpha = 0
                 next.append(WeakView(view))
             }
