@@ -22,23 +22,16 @@ enum BreakdownLLMAmountScale {
         var headerLlmMismatch: Bool
         /// `parseUnitCaption` が返した語（百万円 / 千円 / 円 等）。無ければ nil。
         var headerToken: String?
-        /// ヘッダー語が対象表自身ではなく兄弟表または `detectUnitFromPreceding` 由来。
+        /// ヘッダー語が対象表自身ではなく、候補表からの一意の兄弟借り。
         /// 食い違い時の `needs_review` ゲート（#447 公開面が needs_review 行を隠すため）。
+        /// 直前表より後の `detectUnitFromPreceding` は対象表自身として扱う。
         var headerBorrowed: Bool
     }
 
-    /// 対象表自身（キャプション行・markdown・見出し・スタブ引き継ぎ）から読んだ単位語。
+    /// 対象表自身の単位語（キャプション行・markdown・見出し・スタブ引き継ぎ・
+    /// 直前表より後に付いた preceding caption）。
     static func ownHeaderUnitToken(from table: BreakdownTable) -> String? {
-        if table.unitCaptionOrigin != .preceding,
-            let caption = table.unitCaption,
-            let token = BreakdownExtractor.parseUnitCaption(caption)
-        {
-            return token
-        }
-        if let token = BreakdownExtractor.parseUnitCaption(table.markdown) {
-            return token
-        }
-        return BreakdownExtractor.parseUnitCaption(table.heading)
+        headerUnitToken(from: table)
     }
 
     struct HeaderUnitLookup: Equatable {
@@ -124,23 +117,17 @@ enum BreakdownLLMAmountScale {
     }
 
     /// `source_table_index` の表を優先し、キャプション → markdown → 見出しの順で単位語を拾う。
-    /// 対象表に単位が無く、候補表の単位語がすべて同じときだけ兄弟表から借りる。
-    /// 兄弟が食い違うときは借りない（LLM フォールバック／fail closed へ）。
+    /// 対象表に単位が無く、候補表の単位語がすべて同じときだけ兄弟表から借りる（そのときだけ
+    /// `borrowed`）。兄弟が食い違うときは借りない（LLM フォールバック／fail closed へ）。
+    /// 直前表より後の preceding caption は対象表自身。
     static func headerUnitLookup(
         tables: [BreakdownTable],
         sourceTableIndex: Int?
     ) -> HeaderUnitLookup {
-        if let index = sourceTableIndex, tables.indices.contains(index) {
-            let table = tables[index]
-            if let own = ownHeaderUnitToken(from: table) {
-                return HeaderUnitLookup(token: own, borrowed: false)
-            }
-            if table.unitCaptionOrigin == .preceding,
-                let caption = table.unitCaption,
-                let token = BreakdownExtractor.parseUnitCaption(caption)
-            {
-                return HeaderUnitLookup(token: token, borrowed: true)
-            }
+        if let index = sourceTableIndex, tables.indices.contains(index),
+            let own = ownHeaderUnitToken(from: tables[index])
+        {
+            return HeaderUnitLookup(token: own, borrowed: false)
         }
         let tokens = tables.compactMap { headerUnitToken(from: $0) }
         if Set(tokens).count == 1 {
@@ -194,8 +181,9 @@ enum BreakdownLLMAmountScale {
         )
     }
 
-    /// 公開面（#447）が隠す条件に合わせて flags を積む。対象表自身のヘッダー食い違いは
-    /// `unit_header_llm_mismatch` 警告だけ（正しくスケールした行を needs_review で隠さない）。
+    /// 公開面（#447）が隠す条件に合わせて flags を積む。対象表自身（直前表より後の
+    /// preceding caption を含む）のヘッダー食い違いは `unit_header_llm_mismatch` 警告だけ。
+    /// 兄弟表から借りたトークンの食い違いと unresolved だけ `needs_review`。
     static func applyPublicFlags(
         _ scale: Resolution,
         needsReview: inout Bool,

@@ -299,40 +299,60 @@ import Testing
             Self.publiclyServable(snapshot, source: breakdownSourceRevenueRecognitionLLM) == false)
     }
 
-    @Test func precedingHeaderMismatchStaysUnservable() async throws {
+    @Test func wrapperDivPrecedingHeaderMismatchIsServable() async throws {
+        let html = """
+            <p>１．顧客との契約から生じる収益を分解した情報</p>
+            <p>当社グループは、生鮮流通プラットフォーム事業の単一セグメントであり、以下のとおりであります。</p>
+            <p style="text-align: right">（単位：千円）</p>
+            <div style="margin-left: 80px">
+            <table>
+              <tr><td>サービス別</td><td>前連結会計年度</td><td>当連結会計年度</td></tr>
+              <tr><td>BtoBコマースサービス</td><td>5,471,053</td><td>6,348,109</td></tr>
+              <tr><td>顧客との契約から生じる収益</td><td>6,866,324</td><td>7,820,013</td></tr>
+            </table>
+            </div>
+            """
         let extracted = ExtractedBreakdown(
             method: "html_table",
-            tables: [
-                BreakdownTable(
-                    heading: "収益分解",
-                    markdown: "| MVNEサービス | 5,120,400 |\n| 合計 | 5,120,400 |\n",
-                    period: "当期",
-                    unitCaption: "千円",
-                    unitCaptionOrigin: .preceding),
-            ],
+            tables: Self.tables(from: html, heading: "収益認識関係"),
             facts: []
         )
-        let sales = 5_120_400 * BreakdownLLMAmountScale.thousandYen
+        #expect(extracted.tables.contains { $0.unitCaption == "千円" && $0.unitCaptionOrigin == .preceding })
+        let current = extracted.tables.last { $0.period == "当期" } ?? extracted.tables.last!
+        let tableIndex = extracted.tables.firstIndex(of: current) ?? 0
+        let sales = 7_820_013 * BreakdownLLMAmountScale.thousandYen
         let response: [String: Any] = [
             "applicable": true,
             "unit": "million_yen",
-            "source_table_index": 0,
-            "period_column": "当期",
+            "source_table_index": tableIndex,
+            "period_column": "当連結会計年度",
             "profit_disclosed": false,
             "rows": [
-                ["label": "MVNEサービス", "amount": 5_120_400, "profit": NSNull(), "row_kind": "segment"],
-                ["label": "合計", "amount": 5_120_400, "profit": NSNull(), "row_kind": "subtotal"],
+                [
+                    "label": "BtoBコマースサービス", "amount": 6_348_109, "profit": NSNull(),
+                    "row_kind": "segment",
+                ],
+                [
+                    "label": "その他", "amount": 1_471_904, "profit": NSNull(),
+                    "row_kind": "segment",
+                ],
+                [
+                    "label": "顧客との契約から生じる収益", "amount": 7_820_013, "profit": NSNull(),
+                    "row_kind": "subtotal",
+                ],
             ],
-            "notes": "detectUnitFromPreceding mismatch",
+            "notes": "7114 / 7416 型: 単位は wrapper div の兄 p",
         ]
         let (snapshotOrNil, _) = await RevenueRecognitionLLMNormalizer.normalize(
             extracted, consolidatedSales: sales, client: MockChat(response)
         )
         let snapshot = try #require(snapshotOrNil)
-        #expect(snapshot.rows[0].amount == sales)
-        #expect(snapshot.needsReview == true)
+        let btob = try #require(snapshot.rows.first { $0.labelRaw == "BtoBコマースサービス" })
+        #expect(btob.amount == 6_348_109 * BreakdownLLMAmountScale.thousandYen)
+        #expect(snapshot.needsReview == false)
         #expect(snapshot.warnings.contains(BreakdownLLMAmountScale.headerLlmMismatchWarning))
+        #expect(!snapshot.warnings.contains("llm_unit_unresolved"))
         #expect(
-            Self.publiclyServable(snapshot, source: breakdownSourceRevenueRecognitionLLM) == false)
+            Self.publiclyServable(snapshot, source: breakdownSourceRevenueRecognitionLLM) == true)
     }
 }

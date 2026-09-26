@@ -1069,7 +1069,7 @@ enum BreakdownExtractor {
     /// 親を遡った先行兄弟も含める（実データ: 7114 S100YJIB / 7416 S100YLJD は
     /// `<p>（単位：千円）</p><div><table>…` で、表の直接の親 div には単位が無い）。
     /// 直前の `<table>`（または table を含む要素）より前のノードは見ない。
-    /// 遠い兄表のキャプションを後続表の決定論倍率に流し込まない。
+    /// その窓の中の単位は対象表自身として扱い、兄弟表からの借りとはしない。
     private static func detectUnitFromPreceding(_ table: Element) -> String? {
         var current: Element? = table
         while let node = current {

@@ -216,7 +216,7 @@ import Testing
         #expect(BreakdownLLMAmountScale.headerUnitToken(tables: tables, sourceTableIndex: 1) == "千円")
     }
 
-    @Test func precedingCaptionOnSourceTableIsBorrowed() {
+    @Test func precedingCaptionOnSourceTableIsOwn() {
         let tables = [
             BreakdownTable(
                 heading: "収益分解", markdown: "| MVNEサービス | 5,120,400 |", period: "当期",
@@ -224,7 +224,7 @@ import Testing
         ]
         let lookup = BreakdownLLMAmountScale.headerUnitLookup(tables: tables, sourceTableIndex: 0)
         #expect(lookup.token == "千円")
-        #expect(lookup.borrowed == true)
+        #expect(lookup.borrowed == false)
         let resolved = BreakdownLLMAmountScale.scaling(
             declaredUnit: "million_yen",
             tables: tables,
@@ -232,14 +232,19 @@ import Testing
             rawAmounts: [5_120_400],
             consolidatedSales: 5_120_400_000
         )
-        #expect(resolved.headerBorrowed == true)
+        #expect(resolved.headerBorrowed == false)
         #expect(resolved.headerLlmMismatch == true)
         var needsReview = false
         var warnings: [String] = []
         BreakdownLLMAmountScale.applyPublicFlags(
             resolved, needsReview: &needsReview, warnings: &warnings)
-        #expect(needsReview == true)
+        #expect(needsReview == false)
         #expect(warnings.contains(BreakdownLLMAmountScale.headerLlmMismatchWarning))
+        #expect(
+            isPubliclyServableBreakdown(
+                source: breakdownSourceRevenueRecognitionLLM,
+                needsReview: needsReview,
+                warnings: warnings) == true)
     }
 
     @Test func ownTableMismatchDoesNotSetNeedsReview() {
