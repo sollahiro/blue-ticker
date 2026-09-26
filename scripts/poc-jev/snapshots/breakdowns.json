@@ -1,0 +1,3215 @@
+[
+  {
+    "code": "1807",
+    "doc_id": "S100YJEE",
+    "stored_unit": "other",
+    "stored_table_index": "1",
+    "stored_period_column": "当期",
+    "rows": [
+      {
+        "label": "工事部門",
+        "amount": 28631445000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "工事部門"
+      },
+      {
+        "label": "製品等販売部門",
+        "amount": 5073315000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "製品等販売部門"
+      },
+      {
+        "label": "外部顧客への売上高",
+        "amount": 33704761000,
+        "profit": null,
+        "row_kind": "subtotal",
+        "label_raw": "外部顧客への売上高"
+      }
+    ],
+    "fy_end": "2026-03-31"
+  },
+  {
+    "code": "2139",
+    "doc_id": "S100YHNL",
+    "stored_unit": "million_yen",
+    "stored_table_index": "0",
+    "stored_period_column": "当連結会計年度",
+    "rows": [
+      {
+        "label": "自社メディア広告",
+        "amount": 6693644000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "自社メディア広告"
+      },
+      {
+        "label": "セールスプロモーション等",
+        "amount": 5280268000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "セールスプロモーション等"
+      },
+      {
+        "label": "その他",
+        "amount": 179516000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "その他"
+      },
+      {
+        "label": "顧客との契約から生じる収益",
+        "amount": 12153429000000,
+        "profit": null,
+        "row_kind": "subtotal",
+        "label_raw": "顧客との契約から生じる収益"
+      },
+      {
+        "label": "外部顧客への売上高",
+        "amount": 12153429000000,
+        "profit": null,
+        "row_kind": "subtotal",
+        "label_raw": "外部顧客への売上高"
+      }
+    ],
+    "fy_end": "2026-03-31"
+  },
+  {
+    "code": "2224",
+    "doc_id": "S100YICN",
+    "stored_unit": "other",
+    "stored_table_index": "1",
+    "stored_period_column": "当期",
+    "rows": [
+      {
+        "label": "生活協同組合",
+        "amount": 2471069,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "生活協同組合"
+      },
+      {
+        "label": "自動販売機オペレーター",
+        "amount": 1844578,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "自動販売機オペレーター"
+      },
+      {
+        "label": "量販店",
+        "amount": 980838,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "量販店"
+      },
+      {
+        "label": "卸問屋",
+        "amount": 648023,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "卸問屋"
+      },
+      {
+        "label": "その他",
+        "amount": 1379243,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "その他"
+      },
+      {
+        "label": "顧客との契約から生じる収益",
+        "amount": 7323754,
+        "profit": null,
+        "row_kind": "subtotal",
+        "label_raw": "顧客との契約から生じる収益"
+      },
+      {
+        "label": "外部顧客への売上高",
+        "amount": 7323754,
+        "profit": null,
+        "row_kind": "subtotal",
+        "label_raw": "外部顧客への売上高"
+      }
+    ],
+    "fy_end": "2026-03-31"
+  },
+  {
+    "code": "2378",
+    "doc_id": "S100YK5N",
+    "stored_unit": "other",
+    "stored_table_index": "1",
+    "stored_period_column": "当期",
+    "rows": [
+      {
+        "label": "フィットネス部門",
+        "amount": 28960533,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "フィットネス部門"
+      },
+      {
+        "label": "スイミングスクール",
+        "amount": 13683568,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "スイミングスクール"
+      },
+      {
+        "label": "テニススクール",
+        "amount": 4499216,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "テニススクール"
+      },
+      {
+        "label": "その他スクール",
+        "amount": 1781042,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "その他スクール"
+      },
+      {
+        "label": "プロショップ部門",
+        "amount": 819778,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "プロショップ部門"
+      },
+      {
+        "label": "その他の収入(注)",
+        "amount": 5161664,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "その他の収入(注)"
+      },
+      {
+        "label": "地域・企業等の健康づくり",
+        "amount": 3382478,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "地域・企業等の健康づくり"
+      },
+      {
+        "label": "介護リハビリ",
+        "amount": 2467443,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "介護リハビリ"
+      },
+      {
+        "label": "ホームフィットネス",
+        "amount": 3938247,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "ホームフィットネス"
+      },
+      {
+        "label": "顧客との契約から生じる収益",
+        "amount": 64693974,
+        "profit": null,
+        "row_kind": "subtotal",
+        "label_raw": "顧客との契約から生じる収益"
+      },
+      {
+        "label": "その他の収益",
+        "amount": 239718,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "その他の収益"
+      },
+      {
+        "label": "外部顧客への売上高",
+        "amount": 64933693,
+        "profit": null,
+        "row_kind": "subtotal",
+        "label_raw": "外部顧客への売上高"
+      }
+    ],
+    "fy_end": "2026-03-31"
+  },
+  {
+    "code": "2393",
+    "doc_id": "S100YK97",
+    "stored_unit": "million_yen",
+    "stored_table_index": "1",
+    "stored_period_column": "当期",
+    "rows": [
+      {
+        "label": "福祉用具サービス",
+        "amount": 30113531000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "福祉用具サービス"
+      },
+      {
+        "label": "高齢者生活支援サービス",
+        "amount": 4816352000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "高齢者生活支援サービス"
+      },
+      {
+        "label": "顧客との契約から生じる収益",
+        "amount": 34929883000000,
+        "profit": null,
+        "row_kind": "subtotal",
+        "label_raw": "顧客との契約から生じる収益"
+      },
+      {
+        "label": "外部顧客への売上高",
+        "amount": 34929883000000,
+        "profit": null,
+        "row_kind": "subtotal",
+        "label_raw": "外部顧客への売上高"
+      }
+    ],
+    "fy_end": "2026-03-31"
+  },
+  {
+    "code": "2467",
+    "doc_id": "S100YMA4",
+    "stored_unit": "million_yen",
+    "stored_table_index": "0",
+    "stored_period_column": "当連結会計年度",
+    "rows": [
+      {
+        "label": "サイバートレーニングソリューション",
+        "amount": 389248000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "サイバートレーニングソリューション"
+      },
+      {
+        "label": "セキュリティ診断・調査ソリューション",
+        "amount": 438605000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "セキュリティ診断・調査ソリューション"
+      },
+      {
+        "label": "セキュリティコンサルティングソリューション",
+        "amount": 537970000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "セキュリティコンサルティングソリューション"
+      },
+      {
+        "label": "その他",
+        "amount": 0,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "その他"
+      },
+      {
+        "label": "顧客との契約から生じる収益",
+        "amount": 1365823000000,
+        "profit": null,
+        "row_kind": "subtotal",
+        "label_raw": "顧客との契約から生じる収益"
+      },
+      {
+        "label": "外部顧客への売上高",
+        "amount": 1365823000000,
+        "profit": null,
+        "row_kind": "subtotal",
+        "label_raw": "外部顧客への売上高"
+      }
+    ],
+    "fy_end": "2026-03-31"
+  },
+  {
+    "code": "2480",
+    "doc_id": "S100YGTA",
+    "stored_unit": "million_yen",
+    "stored_table_index": "1",
+    "stored_period_column": "当期",
+    "rows": [
+      {
+        "label": "ＣＡ",
+        "amount": 494274000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "ＣＡ"
+      },
+      {
+        "label": "Ｄｏｃｔｏｒシスろけっと",
+        "amount": 267827000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "Ｄｏｃｔｏｒシスろけっと"
+      },
+      {
+        "label": "車種データベース",
+        "amount": 290352000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "車種データベース"
+      },
+      {
+        "label": "ＲＶドクター",
+        "amount": 158466000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "ＲＶドクター"
+      },
+      {
+        "label": "中古車在庫管理システム",
+        "amount": 140928000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "中古車在庫管理システム"
+      },
+      {
+        "label": "その他",
+        "amount": 381622000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "その他"
+      }
+    ],
+    "fy_end": "2026-03-31"
+  },
+  {
+    "code": "263A",
+    "doc_id": "S100YN30",
+    "stored_unit": "million_yen",
+    "stored_table_index": "0",
+    "stored_period_column": "当連結会計年度（自　2025年4月1日至　2026年3月31日）",
+    "rows": [
+      {
+        "label": "ホスティングサービス",
+        "amount": 206981000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "ホスティングサービス"
+      },
+      {
+        "label": "Webサイトの制作・保守サービス",
+        "amount": 244493000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "Webサイトの制作・保守サービス"
+      },
+      {
+        "label": "クラウドインテグレーションサービス",
+        "amount": 95712000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "クラウドインテグレーションサービス"
+      },
+      {
+        "label": "ディベロップメントサービス",
+        "amount": 93966000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "ディベロップメントサービス"
+      },
+      {
+        "label": "顧客との契約から生じる収益合計",
+        "amount": 641154000000,
+        "profit": null,
+        "row_kind": "subtotal",
+        "label_raw": "顧客との契約から生じる収益合計"
+      }
+    ],
+    "fy_end": "2026-03-31"
+  },
+  {
+    "code": "272A",
+    "doc_id": "S100YSCR",
+    "stored_unit": "million_yen",
+    "stored_table_index": "1",
+    "stored_period_column": "当期",
+    "rows": [
+      {
+        "label": "工事",
+        "amount": 1698931000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "工事"
+      },
+      {
+        "label": "表示板・標識",
+        "amount": 1027294000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "表示板・標識"
+      },
+      {
+        "label": "仮設防護柵",
+        "amount": 454956000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "仮設防護柵"
+      },
+      {
+        "label": "保安灯・警告灯",
+        "amount": 2743990000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "保安灯・警告灯"
+      },
+      {
+        "label": "防災用品・環境整備用品",
+        "amount": 7040477000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "防災用品・環境整備用品"
+      },
+      {
+        "label": "その他商品サインメディア",
+        "amount": 8960225000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "その他商品サインメディア"
+      },
+      {
+        "label": "その他の収益",
+        "amount": 7931360000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "その他の収益"
+      }
+    ],
+    "fy_end": "2026-04-30"
+  },
+  {
+    "code": "3276",
+    "doc_id": "S100XTQS",
+    "stored_unit": "million_yen",
+    "stored_table_index": "0",
+    "stored_period_column": "当連結会計年度（自　2025年１月１日至　2025年12月31日）",
+    "rows": [
+      {
+        "label": "プロパティマネジメント収入（リース取引除く）",
+        "amount": 4666190000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "プロパティマネジメント収入（リース取引除く）"
+      },
+      {
+        "label": "PM付帯事業収入（保険事業除く）",
+        "amount": 1059816000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "PM付帯事業収入（保険事業除く）"
+      },
+      {
+        "label": "その他の収入（ローン事業除く）",
+        "amount": 1712698000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "その他の収入（ローン事業除く）"
+      },
+      {
+        "label": "プロパティマネジメント収入（リース取引）",
+        "amount": 49338481000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "プロパティマネジメント収入（リース取引）"
+      },
+      {
+        "label": "PM付帯事業収入（保険事業）",
+        "amount": 1667553000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "PM付帯事業収入（保険事業）"
+      },
+      {
+        "label": "その他の収入（ローン事業）",
+        "amount": 53357000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "その他の収入（ローン事業）"
+      },
+      {
+        "label": "顧客との契約から生じる収益",
+        "amount": 7438705000000,
+        "profit": null,
+        "row_kind": "subtotal",
+        "label_raw": "顧客との契約から生じる収益"
+      },
+      {
+        "label": "その他の収益",
+        "amount": 51059391000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "その他の収益"
+      },
+      {
+        "label": "外部顧客への売上高",
+        "amount": 58498097000000,
+        "profit": null,
+        "row_kind": "subtotal",
+        "label_raw": "外部顧客への売上高"
+      }
+    ],
+    "fy_end": "2025-12-31"
+  },
+  {
+    "code": "330A",
+    "doc_id": "S100YGDN",
+    "stored_unit": "million_yen",
+    "stored_table_index": "0",
+    "stored_period_column": "当連結会計年度（自2025年４月１日至2026年３月31日）",
+    "rows": [
+      {
+        "label": "ストック売上",
+        "amount": 1599559000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "ストック売上"
+      },
+      {
+        "label": "フロー売上",
+        "amount": 151893000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "フロー売上"
+      },
+      {
+        "label": "顧客との契約から生じる収益",
+        "amount": 1751453000000,
+        "profit": null,
+        "row_kind": "subtotal",
+        "label_raw": "顧客との契約から生じる収益"
+      },
+      {
+        "label": "外部顧客への売上高",
+        "amount": 1751453000000,
+        "profit": null,
+        "row_kind": "subtotal",
+        "label_raw": "外部顧客への売上高"
+      }
+    ],
+    "fy_end": "2026-03-31"
+  },
+  {
+    "code": "332A",
+    "doc_id": "S100YKM2",
+    "stored_unit": "million_yen",
+    "stored_table_index": "1",
+    "stored_period_column": "当連結会計年度",
+    "rows": [
+      {
+        "label": "IoT/DXプラットフォームサービス",
+        "amount": 2030053000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "IoT/DXプラットフォームサービス"
+      },
+      {
+        "label": "MVNEサービス",
+        "amount": 5120400000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "MVNEサービス"
+      },
+      {
+        "label": "顧客との契約から生じる収益",
+        "amount": 7150453000000,
+        "profit": null,
+        "row_kind": "subtotal",
+        "label_raw": "顧客との契約から生じる収益"
+      },
+      {
+        "label": "外部顧客への売上高",
+        "amount": 7150453000000,
+        "profit": null,
+        "row_kind": "subtotal",
+        "label_raw": "外部顧客への売上高"
+      }
+    ],
+    "fy_end": "2026-03-31"
+  },
+  {
+    "code": "3372",
+    "doc_id": "S100YGBF",
+    "stored_unit": "million_yen",
+    "stored_table_index": "1",
+    "stored_period_column": "当期",
+    "rows": [
+      {
+        "label": "直営店舗事業",
+        "amount": 4105968000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "直営店舗事業"
+      },
+      {
+        "label": "フランチャイズ事業",
+        "amount": 328860000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "フランチャイズ事業"
+      },
+      {
+        "label": "その他事業",
+        "amount": 837358000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "その他事業"
+      },
+      {
+        "label": "顧客との契約から生じる収益",
+        "amount": 5272187000000,
+        "profit": null,
+        "row_kind": "subtotal",
+        "label_raw": "顧客との契約から生じる収益"
+      },
+      {
+        "label": "外部顧客への売上高",
+        "amount": 5272187000000,
+        "profit": null,
+        "row_kind": "subtotal",
+        "label_raw": "外部顧客への売上高"
+      }
+    ],
+    "fy_end": "2026-03-31"
+  },
+  {
+    "code": "3442",
+    "doc_id": "S100YGQT",
+    "stored_unit": "other",
+    "stored_table_index": "1",
+    "stored_period_column": "当期",
+    "rows": [
+      {
+        "label": "溶接継手",
+        "amount": 4523946000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "溶接継手"
+      },
+      {
+        "label": "フランジ",
+        "amount": 1491075000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "フランジ"
+      },
+      {
+        "label": "その他（注）",
+        "amount": 1124954000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "その他（注）"
+      },
+      {
+        "label": "合計",
+        "amount": 7139977000,
+        "profit": null,
+        "row_kind": "subtotal",
+        "label_raw": "合計"
+      }
+    ],
+    "fy_end": "2026-03-31"
+  },
+  {
+    "code": "3444",
+    "doc_id": "S100YROC",
+    "stored_unit": "million_yen",
+    "stored_table_index": "0",
+    "stored_period_column": "当連結会計年度(自2025年５月１日至2026年４月30日)",
+    "rows": [
+      {
+        "label": "試作・金型製品",
+        "amount": 3202180000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "試作・金型製品"
+      },
+      {
+        "label": "量産製品",
+        "amount": 1617157000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "量産製品"
+      },
+      {
+        "label": "ロボット・装置等",
+        "amount": 1256086000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "ロボット・装置等"
+      },
+      {
+        "label": "その他・ガンマカメラ等",
+        "amount": 18290000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "その他・ガンマカメラ等"
+      },
+      {
+        "label": "顧客との契約から生じる収益",
+        "amount": 6093715000000,
+        "profit": null,
+        "row_kind": "subtotal",
+        "label_raw": "顧客との契約から生じる収益"
+      },
+      {
+        "label": "外部顧客への売上高",
+        "amount": 6093715000000,
+        "profit": null,
+        "row_kind": "subtotal",
+        "label_raw": "外部顧客への売上高"
+      }
+    ],
+    "fy_end": "2026-04-30"
+  },
+  {
+    "code": "3929",
+    "doc_id": "S100YF9R",
+    "stored_unit": "million_yen",
+    "stored_table_index": "1",
+    "stored_period_column": "当期",
+    "rows": [
+      {
+        "label": "リリース配信",
+        "amount": 941664000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "リリース配信"
+      },
+      {
+        "label": "クリッピング",
+        "amount": 605830000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "クリッピング"
+      },
+      {
+        "label": "リスクチェック",
+        "amount": 485110000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "リスクチェック"
+      },
+      {
+        "label": "インフルエンサーPR",
+        "amount": 1480581000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "インフルエンサーPR"
+      },
+      {
+        "label": "顧客との契約から生じる収益",
+        "amount": 3513186000000,
+        "profit": null,
+        "row_kind": "subtotal",
+        "label_raw": "顧客との契約から生じる収益"
+      },
+      {
+        "label": "外部顧客への売上高",
+        "amount": 3513186000000,
+        "profit": null,
+        "row_kind": "subtotal",
+        "label_raw": "外部顧客への売上高"
+      }
+    ],
+    "fy_end": "2026-03-31"
+  },
+  {
+    "code": "3968",
+    "doc_id": "S100XTVB",
+    "stored_unit": "million_yen",
+    "stored_table_index": "0",
+    "stored_period_column": "当連結会計年度（自2025年１月１日至2025年12月31日）",
+    "rows": [
+      {
+        "label": "ソリューションプロダクト事業",
+        "amount": 16633166000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "ソリューションプロダクト事業"
+      },
+      {
+        "label": "ソリューションサービス事業",
+        "amount": 8441316000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "ソリューションサービス事業"
+      },
+      {
+        "label": "合計",
+        "amount": 25074483000000,
+        "profit": null,
+        "row_kind": "subtotal",
+        "label_raw": "合計"
+      }
+    ],
+    "fy_end": "2025-12-31"
+  },
+  {
+    "code": "4074",
+    "doc_id": "S100XUN1",
+    "stored_unit": "million_yen",
+    "stored_table_index": "1",
+    "stored_period_column": "当期",
+    "rows": [
+      {
+        "label": "プロダクトサービス",
+        "amount": 4809561000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "プロダクトサービス"
+      },
+      {
+        "label": "プロフェッショナルサービス",
+        "amount": 2918802000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "プロフェッショナルサービス"
+      },
+      {
+        "label": "合計",
+        "amount": 7728364000000,
+        "profit": null,
+        "row_kind": "subtotal",
+        "label_raw": "合計"
+      }
+    ],
+    "fy_end": "2025-12-31"
+  },
+  {
+    "code": "4167",
+    "doc_id": "S100YKE7",
+    "stored_unit": "other",
+    "stored_table_index": "1",
+    "stored_period_column": "当期",
+    "rows": [
+      {
+        "label": "Big Advance",
+        "amount": 1433504,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "Big Advance"
+      },
+      {
+        "label": "その他のサービス(注)１",
+        "amount": 324833,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "その他のサービス(注)１"
+      },
+      {
+        "label": "合計",
+        "amount": 1758338,
+        "profit": null,
+        "row_kind": "subtotal",
+        "label_raw": "合計"
+      }
+    ],
+    "fy_end": "2026-03-31"
+  },
+  {
+    "code": "4231",
+    "doc_id": "S100YK4M",
+    "stored_unit": "other",
+    "stored_table_index": "1",
+    "stored_period_column": "当期・合計",
+    "rows": [
+      {
+        "label": "ホース",
+        "amount": 14090271,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "ホース"
+      },
+      {
+        "label": "ゴムシート",
+        "amount": 5474252,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "ゴムシート"
+      },
+      {
+        "label": "成形品",
+        "amount": 29011532,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "成形品"
+      },
+      {
+        "label": "その他",
+        "amount": 1556857,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "その他"
+      },
+      {
+        "label": "顧客との契約から生じる収益",
+        "amount": 50132914,
+        "profit": null,
+        "row_kind": "subtotal",
+        "label_raw": "顧客との契約から生じる収益"
+      },
+      {
+        "label": "外部顧客への売上高",
+        "amount": 50132914,
+        "profit": null,
+        "row_kind": "subtotal",
+        "label_raw": "外部顧客への売上高"
+      }
+    ],
+    "fy_end": "2026-03-31"
+  },
+  {
+    "code": "4389",
+    "doc_id": "S100YHXO",
+    "stored_unit": "million_yen",
+    "stored_table_index": "1",
+    "stored_period_column": "当期",
+    "rows": [
+      {
+        "label": "クラウドサービス",
+        "amount": 1958131000000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "クラウドサービス"
+      },
+      {
+        "label": "ソリューションサービス",
+        "amount": 1249504000000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "ソリューションサービス"
+      },
+      {
+        "label": "その他（注）",
+        "amount": 513579000000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "その他（注）"
+      },
+      {
+        "label": "合計",
+        "amount": 3721215000000000,
+        "profit": null,
+        "row_kind": "subtotal",
+        "label_raw": "合計"
+      }
+    ],
+    "fy_end": "2026-03-31"
+  },
+  {
+    "code": "4417",
+    "doc_id": "S100YFEX",
+    "stored_unit": "million_yen",
+    "stored_table_index": "1",
+    "stored_period_column": "当期",
+    "rows": [
+      {
+        "label": "サイバーセキュリティ事業",
+        "amount": 7178982000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "サイバーセキュリティ事業"
+      },
+      {
+        "label": "セキュリティ教育事業",
+        "amount": 1495652000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "セキュリティ教育事業"
+      },
+      {
+        "label": "セキュリティ人材事業",
+        "amount": 2347445000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "セキュリティ人材事業"
+      },
+      {
+        "label": "顧客との契約から生じる収益",
+        "amount": 11022080000000,
+        "profit": null,
+        "row_kind": "subtotal",
+        "label_raw": "顧客との契約から生じる収益"
+      },
+      {
+        "label": "外部顧客への売上高",
+        "amount": 11022080000000,
+        "profit": null,
+        "row_kind": "subtotal",
+        "label_raw": "外部顧客への売上高"
+      }
+    ],
+    "fy_end": "2026-03-31"
+  },
+  {
+    "code": "4425",
+    "doc_id": "S100YIKS",
+    "stored_unit": "million_yen",
+    "stored_table_index": "1",
+    "stored_period_column": "当期",
+    "rows": [
+      {
+        "label": "ソフトウェアライセンス",
+        "amount": 44181000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "ソフトウェアライセンス"
+      },
+      {
+        "label": "開発受託",
+        "amount": 275948000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "開発受託"
+      },
+      {
+        "label": "ハードウェア販売",
+        "amount": 846293000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "ハードウェア販売"
+      },
+      {
+        "label": "保守・サポート契約",
+        "amount": 29999000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "保守・サポート契約"
+      },
+      {
+        "label": "その他",
+        "amount": 550000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "その他"
+      },
+      {
+        "label": "顧客との契約から生じる収益",
+        "amount": 1196972000000,
+        "profit": null,
+        "row_kind": "subtotal",
+        "label_raw": "顧客との契約から生じる収益"
+      },
+      {
+        "label": "外部顧客への売上高",
+        "amount": 1196972000000,
+        "profit": null,
+        "row_kind": "subtotal",
+        "label_raw": "外部顧客への売上高"
+      }
+    ],
+    "fy_end": "2026-03-31"
+  },
+  {
+    "code": "4481",
+    "doc_id": "S100XUKI",
+    "stored_unit": "million_yen",
+    "stored_table_index": "1",
+    "stored_period_column": "当期",
+    "rows": [
+      {
+        "label": "ソフトウェア受託開発",
+        "amount": 21787441000000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "ソフトウェア受託開発"
+      },
+      {
+        "label": "顧客との契約から生じる収益",
+        "amount": 21787441000000000,
+        "profit": null,
+        "row_kind": "subtotal",
+        "label_raw": "顧客との契約から生じる収益"
+      },
+      {
+        "label": "外部顧客への売上高",
+        "amount": 21787441000000000,
+        "profit": null,
+        "row_kind": "subtotal",
+        "label_raw": "外部顧客への売上高"
+      }
+    ],
+    "fy_end": "2025-12-31"
+  },
+  {
+    "code": "4825",
+    "doc_id": "S100YXMM",
+    "stored_unit": "million_yen",
+    "stored_table_index": "1",
+    "stored_period_column": "当期",
+    "rows": [
+      {
+        "label": "Sea Domain",
+        "amount": 6368936000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "Sea Domain"
+      },
+      {
+        "label": "Sky Domain",
+        "amount": 1633033000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "Sky Domain"
+      },
+      {
+        "label": "LandDomain",
+        "amount": 7846005000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "LandDomain"
+      },
+      {
+        "label": "Internet Domain",
+        "amount": 8631293000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "Internet Domain"
+      },
+      {
+        "label": "合計",
+        "amount": 24479267000000,
+        "profit": null,
+        "row_kind": "subtotal",
+        "label_raw": "合計"
+      }
+    ],
+    "fy_end": "2026-05-31"
+  },
+  {
+    "code": "5237",
+    "doc_id": "S100YK4Z",
+    "stored_unit": "million_yen",
+    "stored_table_index": "1",
+    "stored_period_column": "当連結会計年度（自　2025年４月１日至　2026年３月31日）",
+    "rows": [
+      {
+        "label": "押出成形セメント製品",
+        "amount": 17492688000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "押出成形セメント製品"
+      },
+      {
+        "label": "関連スレート",
+        "amount": 988795000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "関連スレート"
+      },
+      {
+        "label": "関連耐火被覆",
+        "amount": 1029738000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "関連耐火被覆"
+      },
+      {
+        "label": "その他",
+        "amount": 2759906000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "その他"
+      },
+      {
+        "label": "顧客との契約から生じる収益",
+        "amount": 22271129000000,
+        "profit": null,
+        "row_kind": "subtotal",
+        "label_raw": "顧客との契約から生じる収益"
+      },
+      {
+        "label": "その他の収益",
+        "amount": 41749000000,
+        "profit": null,
+        "row_kind": "reconciling",
+        "label_raw": "その他の収益"
+      },
+      {
+        "label": "外部顧客への売上高",
+        "amount": 22312878000000,
+        "profit": null,
+        "row_kind": "subtotal",
+        "label_raw": "外部顧客への売上高"
+      }
+    ],
+    "fy_end": "2026-03-31"
+  },
+  {
+    "code": "5621",
+    "doc_id": "S100YL5B",
+    "stored_unit": "million_yen",
+    "stored_table_index": "1",
+    "stored_period_column": "当期",
+    "rows": [
+      {
+        "label": "KOT SaaSサービスその他",
+        "amount": 6708986787336000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "KOT SaaSサービスその他"
+      },
+      {
+        "label": "顧客との契約から生じる収益",
+        "amount": 7496323000000,
+        "profit": null,
+        "row_kind": "subtotal",
+        "label_raw": "顧客との契約から生じる収益"
+      },
+      {
+        "label": "外部顧客への売上高",
+        "amount": 7496323000000,
+        "profit": null,
+        "row_kind": "subtotal",
+        "label_raw": "外部顧客への売上高"
+      }
+    ],
+    "fy_end": "2026-03-31"
+  },
+  {
+    "code": "5697",
+    "doc_id": "S100YGAZ",
+    "stored_unit": "million_yen",
+    "stored_table_index": "1",
+    "stored_period_column": "当期",
+    "rows": [
+      {
+        "label": "みがき棒鋼部門",
+        "amount": 16463550000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "みがき棒鋼部門"
+      },
+      {
+        "label": "冷間圧造用鋼線部門",
+        "amount": 9108688000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "冷間圧造用鋼線部門"
+      },
+      {
+        "label": "顧客との契約から生じる収益",
+        "amount": 25572238000000,
+        "profit": null,
+        "row_kind": "subtotal",
+        "label_raw": "顧客との契約から生じる収益"
+      },
+      {
+        "label": "外部顧客への売上高",
+        "amount": 25572238000000,
+        "profit": null,
+        "row_kind": "subtotal",
+        "label_raw": "外部顧客への売上高"
+      }
+    ],
+    "fy_end": "2026-03-31"
+  },
+  {
+    "code": "5858",
+    "doc_id": "S100YL7C",
+    "stored_unit": "other",
+    "stored_table_index": "1",
+    "stored_period_column": "当期",
+    "rows": [
+      {
+        "label": "金属部品鋳造及び加工事業",
+        "amount": 6815920000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "金属部品鋳造及び加工事業"
+      },
+      {
+        "label": "顧客との契約から生じる収益",
+        "amount": 6815920000,
+        "profit": null,
+        "row_kind": "subtotal",
+        "label_raw": "顧客との契約から生じる収益"
+      },
+      {
+        "label": "外部顧客への売上高",
+        "amount": 6815920000,
+        "profit": null,
+        "row_kind": "subtotal",
+        "label_raw": "外部顧客への売上高"
+      }
+    ],
+    "fy_end": "2026-03-31"
+  },
+  {
+    "code": "5936",
+    "doc_id": "S100YKHR",
+    "stored_unit": "million_yen",
+    "stored_table_index": "1",
+    "stored_period_column": "当期",
+    "rows": [
+      {
+        "label": "軽量シャッター",
+        "amount": 2602615000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "軽量シャッター"
+      },
+      {
+        "label": "重量シャッター",
+        "amount": 6343747000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "重量シャッター"
+      },
+      {
+        "label": "シャッター関連",
+        "amount": 2554087000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "シャッター関連"
+      },
+      {
+        "label": "スチールドア",
+        "amount": 3929644000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "スチールドア"
+      },
+      {
+        "label": "建材他",
+        "amount": 658372000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "建材他"
+      },
+      {
+        "label": "修理・点検",
+        "amount": 5366776000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "修理・点検"
+      },
+      {
+        "label": "顧客との契約から生じる収益",
+        "amount": 21455242000000,
+        "profit": null,
+        "row_kind": "subtotal",
+        "label_raw": "顧客との契約から生じる収益"
+      },
+      {
+        "label": "外部顧客への売上高",
+        "amount": 21455242000000,
+        "profit": null,
+        "row_kind": "subtotal",
+        "label_raw": "外部顧客への売上高"
+      }
+    ],
+    "fy_end": "2026-03-31"
+  },
+  {
+    "code": "5945",
+    "doc_id": "S100YJDZ",
+    "stored_unit": "other",
+    "stored_table_index": "1",
+    "stored_period_column": "当期",
+    "rows": [
+      {
+        "label": "鋸・刃物類",
+        "amount": 13004226000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "鋸・刃物類"
+      },
+      {
+        "label": "その他",
+        "amount": 456394000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "その他"
+      },
+      {
+        "label": "その他の収益",
+        "amount": 14558000,
+        "profit": null,
+        "row_kind": "subtotal",
+        "label_raw": "その他の収益"
+      },
+      {
+        "label": "外部顧客への売上高",
+        "amount": 13475179000,
+        "profit": null,
+        "row_kind": "subtotal",
+        "label_raw": "外部顧客への売上高"
+      }
+    ],
+    "fy_end": "2026-03-31"
+  },
+  {
+    "code": "5971",
+    "doc_id": "S100YR73",
+    "stored_unit": "million_yen",
+    "stored_table_index": "0",
+    "stored_period_column": "当連結会計年度（自　2025年５月１日至　2026年４月30日）",
+    "rows": [
+      {
+        "label": "建設機械",
+        "amount": 10373188000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "建設機械"
+      },
+      {
+        "label": "自動車関連",
+        "amount": 102102000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "自動車関連"
+      },
+      {
+        "label": "産業機械",
+        "amount": 103555000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "産業機械"
+      },
+      {
+        "label": "その他",
+        "amount": 250148000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "その他"
+      },
+      {
+        "label": "合計",
+        "amount": 10828994000000,
+        "profit": null,
+        "row_kind": "subtotal",
+        "label_raw": "合計"
+      }
+    ],
+    "fy_end": "2026-04-30"
+  },
+  {
+    "code": "5998",
+    "doc_id": "S100YFF6",
+    "stored_unit": "million_yen",
+    "stored_table_index": "1",
+    "stored_period_column": "当期",
+    "rows": [
+      {
+        "label": "精密ばね製品",
+        "amount": 27523785000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "精密ばね製品"
+      },
+      {
+        "label": "インサート成形品",
+        "amount": 2104956000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "インサート成形品"
+      },
+      {
+        "label": "その他",
+        "amount": 51254000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "その他"
+      },
+      {
+        "label": "合計",
+        "amount": 29679996000000,
+        "profit": null,
+        "row_kind": "subtotal",
+        "label_raw": "合計"
+      },
+      {
+        "label": "顧客との契約から生じる収益",
+        "amount": 29679996000000,
+        "profit": null,
+        "row_kind": "subtotal",
+        "label_raw": "顧客との契約から生じる収益"
+      }
+    ],
+    "fy_end": "2026-03-31"
+  },
+  {
+    "code": "6039",
+    "doc_id": "S100YGKM",
+    "stored_unit": "other",
+    "stored_table_index": "0",
+    "stored_period_column": "当連結会計年度（自　2025年４月１日至　2026年３月31日）売上高（千円）",
+    "rows": [
+      {
+        "label": "二次診療サービス",
+        "amount": 4514672,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "二次診療サービス"
+      },
+      {
+        "label": "画像診断サービス",
+        "amount": 647923,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "画像診断サービス"
+      },
+      {
+        "label": "動物用医療機器・健康管理機器（在宅ケア）のレンタル・販売サービス",
+        "amount": 1017827,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "動物用医療機器・健康管理機器（在宅ケア）のレンタル・販売サービス"
+      },
+      {
+        "label": "その他",
+        "amount": 12044,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "その他"
+      },
+      {
+        "label": "顧客との契約から生じる収益",
+        "amount": 6192468,
+        "profit": null,
+        "row_kind": "subtotal",
+        "label_raw": "顧客との契約から生じる収益"
+      },
+      {
+        "label": "外部顧客への売上高",
+        "amount": 6192468,
+        "profit": null,
+        "row_kind": "subtotal",
+        "label_raw": "外部顧客への売上高"
+      }
+    ],
+    "fy_end": "2026-03-31"
+  },
+  {
+    "code": "6138",
+    "doc_id": "S100YHNC",
+    "stored_unit": "million_yen",
+    "stored_table_index": "0",
+    "stored_period_column": "当連結会計年度（自2025年４月１日至2026年３月31日）",
+    "rows": [
+      {
+        "label": "焼肌",
+        "amount": 559772000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "焼肌"
+      },
+      {
+        "label": "チップ",
+        "amount": 7658000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "チップ"
+      },
+      {
+        "label": "切削工具",
+        "amount": 932000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "切削工具"
+      },
+      {
+        "label": "耐摩耗工具",
+        "amount": 858000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "耐摩耗工具"
+      },
+      {
+        "label": "その他",
+        "amount": 214000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "その他"
+      },
+      {
+        "label": "顧客との契約から生じる収益",
+        "amount": 9292071000000,
+        "profit": null,
+        "row_kind": "subtotal",
+        "label_raw": "顧客との契約から生じる収益"
+      },
+      {
+        "label": "その他の収益",
+        "amount": 0,
+        "profit": null,
+        "row_kind": "reconciling",
+        "label_raw": "その他の収益"
+      },
+      {
+        "label": "外部顧客への売上高",
+        "amount": 9292071000000,
+        "profit": null,
+        "row_kind": "subtotal",
+        "label_raw": "外部顧客への売上高"
+      }
+    ],
+    "fy_end": "2026-03-31"
+  },
+  {
+    "code": "6185",
+    "doc_id": "S100YIYU",
+    "stored_unit": "million_yen",
+    "stored_table_index": "1",
+    "stored_period_column": "当期",
+    "rows": [
+      {
+        "label": "アドテクノロジー",
+        "amount": 11093278000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "アドテクノロジー"
+      },
+      {
+        "label": "マーケティングソリューション",
+        "amount": 211692000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "マーケティングソリューション"
+      },
+      {
+        "label": "デジタルソリューション",
+        "amount": 928571000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "デジタルソリューション"
+      },
+      {
+        "label": "その他",
+        "amount": 114885000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "その他"
+      },
+      {
+        "label": "合計",
+        "amount": 12348427000000,
+        "profit": null,
+        "row_kind": "subtotal",
+        "label_raw": "合計"
+      }
+    ],
+    "fy_end": "2026-03-31"
+  },
+  {
+    "code": "6190",
+    "doc_id": "S100YKSV",
+    "stored_unit": "million_yen",
+    "stored_table_index": "1",
+    "stored_period_column": "当期",
+    "rows": [
+      {
+        "label": "薬効薬理分野",
+        "amount": 66409000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "薬効薬理分野"
+      },
+      {
+        "label": "安全性等分野",
+        "amount": 1499123000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "安全性等分野"
+      },
+      {
+        "label": "合計",
+        "amount": 1565532000000,
+        "profit": null,
+        "row_kind": "subtotal",
+        "label_raw": "合計"
+      }
+    ],
+    "fy_end": "2026-03-31"
+  },
+  {
+    "code": "6229",
+    "doc_id": "S100YHR0",
+    "stored_unit": "million_yen",
+    "stored_table_index": "1",
+    "stored_period_column": "当期",
+    "rows": [
+      {
+        "label": "陸用",
+        "amount": 4691233000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "陸用"
+      },
+      {
+        "label": "舶用",
+        "amount": 6423045000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "舶用"
+      },
+      {
+        "label": "顧客との契約から生じる収益",
+        "amount": 11114278000000,
+        "profit": null,
+        "row_kind": "subtotal",
+        "label_raw": "顧客との契約から生じる収益"
+      },
+      {
+        "label": "外部顧客への売上高",
+        "amount": 11114278000000,
+        "profit": null,
+        "row_kind": "subtotal",
+        "label_raw": "外部顧客への売上高"
+      }
+    ],
+    "fy_end": "2026-03-31"
+  },
+  {
+    "code": "6424",
+    "doc_id": "S100YEQL",
+    "stored_unit": "other",
+    "stored_table_index": "1",
+    "stored_period_column": "当期",
+    "rows": [
+      {
+        "label": "交通システム機器",
+        "amount": 7625001,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "交通システム機器"
+      },
+      {
+        "label": "メカトロ機器",
+        "amount": 1675980,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "メカトロ機器"
+      },
+      {
+        "label": "特機システム機器",
+        "amount": 3596968,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "特機システム機器"
+      },
+      {
+        "label": "合計",
+        "amount": 12897950,
+        "profit": null,
+        "row_kind": "subtotal",
+        "label_raw": "合計"
+      }
+    ],
+    "fy_end": "2026-03-31"
+  },
+  {
+    "code": "6472",
+    "doc_id": "S100OBZE",
+    "stored_unit": "million_yen",
+    "stored_table_index": "0",
+    "stored_period_column": "合計",
+    "rows": [
+      {
+        "label": "合計",
+        "amount": 642023000000,
+        "profit": null,
+        "row_kind": "subtotal",
+        "label_raw": "合計"
+      }
+    ],
+    "fy_end": "2022-03-31"
+  },
+  {
+    "code": "6472",
+    "doc_id": "S100R2L5",
+    "stored_unit": "million_yen",
+    "stored_table_index": "1",
+    "stored_period_column": "当期",
+    "rows": [
+      {
+        "label": "補修産業機械自動車",
+        "amount": 500421000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "補修産業機械自動車"
+      },
+      {
+        "label": "合計",
+        "amount": 773960000000,
+        "profit": null,
+        "row_kind": "subtotal",
+        "label_raw": "合計"
+      }
+    ],
+    "fy_end": "2023-03-31"
+  },
+  {
+    "code": "6482",
+    "doc_id": "S100YJC5",
+    "stored_unit": "million_yen",
+    "stored_table_index": "1",
+    "stored_period_column": "当期",
+    "rows": [
+      {
+        "label": "顧客との契約から生じる収益",
+        "amount": 23101373000000,
+        "profit": null,
+        "row_kind": "subtotal",
+        "label_raw": "顧客との契約から生じる収益"
+      },
+      {
+        "label": "外部顧客への売上高",
+        "amount": 23101373000000,
+        "profit": null,
+        "row_kind": "subtotal",
+        "label_raw": "外部顧客への売上高"
+      }
+    ],
+    "fy_end": "2026-03-31"
+  },
+  {
+    "code": "6867",
+    "doc_id": "S100YK63",
+    "stored_unit": "million_yen",
+    "stored_table_index": "1",
+    "stored_period_column": "当期",
+    "rows": [
+      {
+        "label": "ビデオ関連",
+        "amount": 3575503000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "ビデオ関連"
+      },
+      {
+        "label": "電波関連",
+        "amount": 479039000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "電波関連"
+      },
+      {
+        "label": "その他",
+        "amount": 193019000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "その他"
+      },
+      {
+        "label": "顧客との契約から生じる収益",
+        "amount": 4247561000000,
+        "profit": null,
+        "row_kind": "subtotal",
+        "label_raw": "顧客との契約から生じる収益"
+      },
+      {
+        "label": "外部顧客への売上高",
+        "amount": 4247561000000,
+        "profit": null,
+        "row_kind": "subtotal",
+        "label_raw": "外部顧客への売上高"
+      }
+    ],
+    "fy_end": "2026-03-31"
+  },
+  {
+    "code": "6904",
+    "doc_id": "S100YJHN",
+    "stored_unit": "million_yen",
+    "stored_table_index": "1",
+    "stored_period_column": "当期",
+    "rows": [
+      {
+        "label": "製品",
+        "amount": 18508119000000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "製品"
+      },
+      {
+        "label": "その他",
+        "amount": 29116000000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "その他"
+      },
+      {
+        "label": "顧客との契約から生じる収益",
+        "amount": 42192309000000000,
+        "profit": null,
+        "row_kind": "subtotal",
+        "label_raw": "顧客との契約から生じる収益"
+      },
+      {
+        "label": "外部顧客に対する売上高",
+        "amount": 42192309000000000,
+        "profit": null,
+        "row_kind": "subtotal",
+        "label_raw": "外部顧客に対する売上高"
+      }
+    ],
+    "fy_end": "2026-03-31"
+  },
+  {
+    "code": "6905",
+    "doc_id": "S100YUI9",
+    "stored_unit": "million_yen",
+    "stored_table_index": "1",
+    "stored_period_column": "当期",
+    "rows": [
+      {
+        "label": "日本生産販売事業",
+        "amount": 14000000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "日本生産販売事業"
+      },
+      {
+        "label": "北米販売事業",
+        "amount": 1896000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "北米販売事業"
+      },
+      {
+        "label": "ヨーロッパ生産販売事業",
+        "amount": 6408000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "ヨーロッパ生産販売事業"
+      },
+      {
+        "label": "アジア販売事業",
+        "amount": 2740000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "アジア販売事業"
+      }
+    ],
+    "fy_end": "2026-05-20"
+  },
+  {
+    "code": "6919",
+    "doc_id": "S100YJK1",
+    "stored_unit": "million_yen",
+    "stored_table_index": "1",
+    "stored_period_column": "当期",
+    "rows": [
+      {
+        "label": "工業機器市場",
+        "amount": 4251837000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "工業機器市場"
+      },
+      {
+        "label": "医療機器市場",
+        "amount": 1539104000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "医療機器市場"
+      },
+      {
+        "label": "画像機器市場",
+        "amount": 1446965000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "画像機器市場"
+      },
+      {
+        "label": "車載機器市場",
+        "amount": 3015221000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "車載機器市場"
+      },
+      {
+        "label": "遊技機器市場",
+        "amount": 1307217000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "遊技機器市場"
+      },
+      {
+        "label": "その他の市場",
+        "amount": 1297221000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "その他の市場"
+      },
+      {
+        "label": "顧客との契約から生じる収益",
+        "amount": 12857567000000,
+        "profit": null,
+        "row_kind": "subtotal",
+        "label_raw": "顧客との契約から生じる収益"
+      },
+      {
+        "label": "外部顧客への売上高",
+        "amount": 12857567000000,
+        "profit": null,
+        "row_kind": "subtotal",
+        "label_raw": "外部顧客への売上高"
+      }
+    ],
+    "fy_end": "2026-03-31"
+  },
+  {
+    "code": "6964",
+    "doc_id": "S100YJUI",
+    "stored_unit": "million_yen",
+    "stored_table_index": "1",
+    "stored_period_column": "当期・合計",
+    "rows": [
+      {
+        "label": "自動車関連製品",
+        "amount": 13622100000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "自動車関連製品"
+      },
+      {
+        "label": "住宅設備関連製品",
+        "amount": 1594292000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "住宅設備関連製品"
+      },
+      {
+        "label": "デジタル家電関連製品",
+        "amount": 2212358000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "デジタル家電関連製品"
+      },
+      {
+        "label": "事務機関連製品",
+        "amount": 279664000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "事務機関連製品"
+      },
+      {
+        "label": "その他",
+        "amount": 580953000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "その他"
+      },
+      {
+        "label": "合計",
+        "amount": 18289369000000,
+        "profit": null,
+        "row_kind": "subtotal",
+        "label_raw": "合計"
+      }
+    ],
+    "fy_end": "2026-03-31"
+  },
+  {
+    "code": "7050",
+    "doc_id": "S100YSV9",
+    "stored_unit": "million_yen",
+    "stored_table_index": "1",
+    "stored_period_column": "当期",
+    "rows": [
+      {
+        "label": "プロモーション事業",
+        "amount": 29948603000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "プロモーション事業"
+      },
+      {
+        "label": "顧客との契約から生じる収益",
+        "amount": 29948603000000,
+        "profit": null,
+        "row_kind": "subtotal",
+        "label_raw": "顧客との契約から生じる収益"
+      },
+      {
+        "label": "外部顧客への売上高",
+        "amount": 29948603000000,
+        "profit": null,
+        "row_kind": "subtotal",
+        "label_raw": "外部顧客への売上高"
+      }
+    ],
+    "fy_end": "2026-04-30"
+  },
+  {
+    "code": "7073",
+    "doc_id": "S100Y1BL",
+    "stored_unit": "million_yen",
+    "stored_table_index": "1",
+    "stored_period_column": "当連結会計年度",
+    "rows": [
+      {
+        "label": "New Career Business",
+        "amount": 1586616000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "New Career Business"
+      },
+      {
+        "label": "First Career Business",
+        "amount": 1770266000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "First Career Business"
+      },
+      {
+        "label": "Human Growth Businessその他",
+        "amount": 1118918000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "Human Growth Businessその他"
+      },
+      {
+        "label": "顧客との契約から生じる収益",
+        "amount": 4475801000000,
+        "profit": null,
+        "row_kind": "subtotal",
+        "label_raw": "顧客との契約から生じる収益"
+      },
+      {
+        "label": "外部顧客への売上高",
+        "amount": 4475801000000,
+        "profit": null,
+        "row_kind": "subtotal",
+        "label_raw": "外部顧客への売上高"
+      }
+    ],
+    "fy_end": "2026-01-31"
+  },
+  {
+    "code": "7091",
+    "doc_id": "S100YKPS",
+    "stored_unit": "million_yen",
+    "stored_table_index": "1",
+    "stored_period_column": "当連結会計年度（当期）",
+    "rows": [
+      {
+        "label": "介護事業",
+        "amount": 17939850000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "介護事業"
+      },
+      {
+        "label": "障がい者支援事業",
+        "amount": 1923821000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "障がい者支援事業"
+      },
+      {
+        "label": "保育事業",
+        "amount": 2046232000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "保育事業"
+      },
+      {
+        "label": "その他",
+        "amount": 97307000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "その他"
+      },
+      {
+        "label": "顧客との契約から生じる収益",
+        "amount": 22007211000000,
+        "profit": null,
+        "row_kind": "subtotal",
+        "label_raw": "顧客との契約から生じる収益"
+      },
+      {
+        "label": "その他の収益",
+        "amount": 50332000000,
+        "profit": null,
+        "row_kind": "reconciling",
+        "label_raw": "その他の収益"
+      },
+      {
+        "label": "外部顧客への売上高",
+        "amount": 22057544000000,
+        "profit": null,
+        "row_kind": "subtotal",
+        "label_raw": "外部顧客への売上高"
+      }
+    ],
+    "fy_end": "2026-03-31"
+  },
+  {
+    "code": "7096",
+    "doc_id": "S100YI32",
+    "stored_unit": "other",
+    "stored_table_index": "0",
+    "stored_period_column": "前期",
+    "rows": [
+      {
+        "label": "細胞バンク事業",
+        "amount": 2811344,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "細胞バンク事業"
+      },
+      {
+        "label": "合計",
+        "amount": 2811344,
+        "profit": null,
+        "row_kind": "subtotal",
+        "label_raw": "合計"
+      }
+    ],
+    "fy_end": "2026-03-31"
+  },
+  {
+    "code": "7114",
+    "doc_id": "S100YJIB",
+    "stored_unit": "million_yen",
+    "stored_table_index": "0",
+    "stored_period_column": "当連結会計年度（自 2025年４月１日至 2026年３月31日）",
+    "rows": [
+      {
+        "label": "BtoBコマースサービス",
+        "amount": 6348109000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "BtoBコマースサービス"
+      },
+      {
+        "label": "BtoCコマースサービス",
+        "amount": 1135527000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "BtoCコマースサービス"
+      },
+      {
+        "label": "HRサービス",
+        "amount": 336376000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "HRサービス"
+      },
+      {
+        "label": "顧客との契約から生じる収益",
+        "amount": 7820013000000,
+        "profit": null,
+        "row_kind": "subtotal",
+        "label_raw": "顧客との契約から生じる収益"
+      },
+      {
+        "label": "その他の収益",
+        "amount": 0,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "その他の収益"
+      },
+      {
+        "label": "外部顧客への収益",
+        "amount": 7820013000000,
+        "profit": null,
+        "row_kind": "subtotal",
+        "label_raw": "外部顧客への収益"
+      }
+    ],
+    "fy_end": "2026-03-31"
+  },
+  {
+    "code": "7345",
+    "doc_id": "S100YHKS",
+    "stored_unit": "million_yen",
+    "stored_table_index": "0",
+    "stored_period_column": "当連結会計年度",
+    "rows": [
+      {
+        "label": "金融商品仲介業",
+        "amount": 4071291000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "金融商品仲介業"
+      },
+      {
+        "label": "システム使用料",
+        "amount": 235152000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "システム使用料"
+      },
+      {
+        "label": "保険代理店その他",
+        "amount": 278426000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "保険代理店その他"
+      },
+      {
+        "label": "顧客との契約から生じる収益",
+        "amount": 4584869000000,
+        "profit": null,
+        "row_kind": "subtotal",
+        "label_raw": "顧客との契約から生じる収益"
+      },
+      {
+        "label": "外部顧客への売上高",
+        "amount": 4584869000000,
+        "profit": null,
+        "row_kind": "subtotal",
+        "label_raw": "外部顧客への売上高"
+      }
+    ],
+    "fy_end": "2026-03-31"
+  },
+  {
+    "code": "7413",
+    "doc_id": "S100YKKP",
+    "stored_unit": "other",
+    "stored_table_index": "1",
+    "stored_period_column": "当期",
+    "rows": [
+      {
+        "label": "油脂・乳製品調味料嗜好品・飲料乾物・雑穀副食品栄養補助食品その他",
+        "amount": 410483,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "油脂・乳製品調味料嗜好品・飲料乾物・雑穀副食品栄養補助食品その他"
+      },
+      {
+        "label": "顧客との契約から生じる収益",
+        "amount": 4751616,
+        "profit": null,
+        "row_kind": "subtotal",
+        "label_raw": "顧客との契約から生じる収益"
+      },
+      {
+        "label": "外部顧客への売上高",
+        "amount": 4751616,
+        "profit": null,
+        "row_kind": "subtotal",
+        "label_raw": "外部顧客への売上高"
+      }
+    ],
+    "fy_end": "2026-03-31"
+  },
+  {
+    "code": "7416",
+    "doc_id": "S100YLJD",
+    "stored_unit": "million_yen",
+    "stored_table_index": "1",
+    "stored_period_column": "当期",
+    "rows": [
+      {
+        "label": "重衣料",
+        "amount": 15047573000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "重衣料"
+      },
+      {
+        "label": "中衣料",
+        "amount": 3453633000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "中衣料"
+      },
+      {
+        "label": "軽衣料",
+        "amount": 15795876000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "軽衣料"
+      },
+      {
+        "label": "補修加工賃収入",
+        "amount": 915569000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "補修加工賃収入"
+      },
+      {
+        "label": "合計",
+        "amount": 35212653000000,
+        "profit": null,
+        "row_kind": "subtotal",
+        "label_raw": "合計"
+      }
+    ],
+    "fy_end": "2026-03-31"
+  },
+  {
+    "code": "7444",
+    "doc_id": "S100YK4R",
+    "stored_unit": "million_yen",
+    "stored_table_index": "0",
+    "stored_period_column": "当連結会計年度（自2025年４月１日至2026年３月31日）",
+    "rows": [
+      {
+        "label": "物品販売売上",
+        "amount": 49856196000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "物品販売売上"
+      },
+      {
+        "label": "物流受託売上",
+        "amount": 9873335000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "物流受託売上"
+      },
+      {
+        "label": "その他",
+        "amount": 113660000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "その他"
+      },
+      {
+        "label": "顧客との契約から生じる収益",
+        "amount": 59843192000000,
+        "profit": null,
+        "row_kind": "subtotal",
+        "label_raw": "顧客との契約から生じる収益"
+      }
+    ],
+    "fy_end": "2026-03-31"
+  },
+  {
+    "code": "7464",
+    "doc_id": "S100YJG0",
+    "stored_unit": "other",
+    "stored_table_index": "1",
+    "stored_period_column": "当連結会計年度（自　2025年４月１日至　2026年３月31日）",
+    "rows": [
+      {
+        "label": "標識・標示板",
+        "amount": 1377658,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "標識・標示板"
+      },
+      {
+        "label": "安全機材",
+        "amount": 578768,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "安全機材"
+      },
+      {
+        "label": "保安警告サイン",
+        "amount": 643259,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "保安警告サイン"
+      },
+      {
+        "label": "安全防災用品",
+        "amount": 832457,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "安全防災用品"
+      },
+      {
+        "label": "その他",
+        "amount": 1073255,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "その他"
+      },
+      {
+        "label": "小　　計",
+        "amount": 4505400,
+        "profit": null,
+        "row_kind": "subtotal",
+        "label_raw": "小　　計"
+      },
+      {
+        "label": "その他の源泉から生じる収益",
+        "amount": 5605648,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "その他の源泉から生じる収益"
+      },
+      {
+        "label": "合　　計",
+        "amount": 10111048,
+        "profit": null,
+        "row_kind": "subtotal",
+        "label_raw": "合　　計"
+      }
+    ],
+    "fy_end": "2026-03-31"
+  },
+  {
+    "code": "7567",
+    "doc_id": "S100YJKR",
+    "stored_unit": "other",
+    "stored_table_index": "1",
+    "stored_period_column": "当期",
+    "rows": [
+      {
+        "label": "一般電子部品",
+        "amount": 4472871,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "一般電子部品"
+      },
+      {
+        "label": "電源",
+        "amount": 1344390,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "電源"
+      },
+      {
+        "label": "電子デバイス",
+        "amount": 215566,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "電子デバイス"
+      },
+      {
+        "label": "ＩｏＴ機器",
+        "amount": 289977,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "ＩｏＴ機器"
+      },
+      {
+        "label": "センサー",
+        "amount": 83142,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "センサー"
+      },
+      {
+        "label": "その他",
+        "amount": 924413,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "その他"
+      },
+      {
+        "label": "顧客との契約から生じる収益",
+        "amount": 7330361,
+        "profit": null,
+        "row_kind": "subtotal",
+        "label_raw": "顧客との契約から生じる収益"
+      },
+      {
+        "label": "外部顧客への売上高",
+        "amount": 7330361,
+        "profit": null,
+        "row_kind": "subtotal",
+        "label_raw": "外部顧客への売上高"
+      }
+    ],
+    "fy_end": "2026-03-31"
+  },
+  {
+    "code": "7734",
+    "doc_id": "S100YIB1",
+    "stored_unit": "other",
+    "stored_table_index": "1",
+    "stored_period_column": "当連結会計年度(自　2025年４月１日至　2026年３月31日)",
+    "rows": [
+      {
+        "label": "定置型ガス検知警報機器",
+        "amount": 33616884,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "定置型ガス検知警報機器"
+      },
+      {
+        "label": "可搬型ガス検知警報機器",
+        "amount": 20238762,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "可搬型ガス検知警報機器"
+      },
+      {
+        "label": "その他測定機器",
+        "amount": 1356587,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "その他測定機器"
+      },
+      {
+        "label": "顧客との契約から生じる収益",
+        "amount": 55212234,
+        "profit": null,
+        "row_kind": "subtotal",
+        "label_raw": "顧客との契約から生じる収益"
+      },
+      {
+        "label": "外部顧客への売上高",
+        "amount": 55212234,
+        "profit": null,
+        "row_kind": "subtotal",
+        "label_raw": "外部顧客への売上高"
+      }
+    ],
+    "fy_end": "2026-03-31"
+  },
+  {
+    "code": "7749",
+    "doc_id": "S100YI2W",
+    "stored_unit": "other",
+    "stored_table_index": "1",
+    "stored_period_column": "当期",
+    "rows": [
+      {
+        "label": "人工透析類",
+        "amount": 7815602,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "人工透析類"
+      },
+      {
+        "label": "静脈留置針類",
+        "amount": 8441456,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "静脈留置針類"
+      },
+      {
+        "label": "インターベンション類",
+        "amount": 7495906,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "インターベンション類"
+      },
+      {
+        "label": "その他",
+        "amount": 28491,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "その他"
+      },
+      {
+        "label": "顧客との契約から生じる収益",
+        "amount": 23781456,
+        "profit": null,
+        "row_kind": "subtotal",
+        "label_raw": "顧客との契約から生じる収益"
+      },
+      {
+        "label": "外部顧客への売上高",
+        "amount": 23781456,
+        "profit": null,
+        "row_kind": "subtotal",
+        "label_raw": "外部顧客への売上高"
+      }
+    ],
+    "fy_end": "2026-03-31"
+  },
+  {
+    "code": "7794",
+    "doc_id": "S100YJVF",
+    "stored_unit": "other",
+    "stored_table_index": "1",
+    "stored_period_column": "当期",
+    "rows": [
+      {
+        "label": "種結晶",
+        "amount": 117197000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "種結晶"
+      },
+      {
+        "label": "基板及びウエハ",
+        "amount": 349489000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "基板及びウエハ"
+      },
+      {
+        "label": "光学部品及びヒートシンク",
+        "amount": 17333000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "光学部品及びヒートシンク"
+      },
+      {
+        "label": "工具素材",
+        "amount": 10088000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "工具素材"
+      },
+      {
+        "label": "原石",
+        "amount": 367000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "原石"
+      },
+      {
+        "label": "宝石",
+        "amount": 22075000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "宝石"
+      },
+      {
+        "label": "外部顧客への売上高",
+        "amount": 516552000,
+        "profit": null,
+        "row_kind": "subtotal",
+        "label_raw": "外部顧客への売上高"
+      }
+    ],
+    "fy_end": "2026-03-31"
+  },
+  {
+    "code": "8023",
+    "doc_id": "S100YIXP",
+    "stored_unit": "million_yen",
+    "stored_table_index": "3",
+    "stored_period_column": "当期",
+    "rows": [
+      {
+        "label": "プロダクトソリューション",
+        "amount": 17457628000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "プロダクトソリューション"
+      },
+      {
+        "label": "ソフトウェアソリューション",
+        "amount": 22191399000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "ソフトウェアソリューション"
+      },
+      {
+        "label": "ネットワークソリューション",
+        "amount": 2851512000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "ネットワークソリューション"
+      },
+      {
+        "label": "合計",
+        "amount": 42500540000000,
+        "profit": null,
+        "row_kind": "subtotal",
+        "label_raw": "合計"
+      }
+    ],
+    "fy_end": "2026-03-31"
+  },
+  {
+    "code": "8147",
+    "doc_id": "S100YJEU",
+    "stored_unit": "other",
+    "stored_table_index": "1",
+    "stored_period_column": "当期",
+    "rows": [
+      {
+        "label": "機械",
+        "amount": 10978672,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "機械"
+      },
+      {
+        "label": "工具等",
+        "amount": 11956440,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "工具等"
+      },
+      {
+        "label": "顧客との契約から生じる収益",
+        "amount": 22935113,
+        "profit": null,
+        "row_kind": "subtotal",
+        "label_raw": "顧客との契約から生じる収益"
+      },
+      {
+        "label": "外部顧客への売上高",
+        "amount": 22935113,
+        "profit": null,
+        "row_kind": "subtotal",
+        "label_raw": "外部顧客への売上高"
+      }
+    ],
+    "fy_end": "2026-03-31"
+  },
+  {
+    "code": "8747",
+    "doc_id": "S100YJ8P",
+    "stored_unit": "million_yen",
+    "stored_table_index": "1",
+    "stored_period_column": "当期",
+    "rows": [
+      {
+        "label": "商品デリバティブ取引",
+        "amount": 11151712000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "商品デリバティブ取引"
+      },
+      {
+        "label": "金融商品取引",
+        "amount": 1556057000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "金融商品取引"
+      },
+      {
+        "label": "その他",
+        "amount": 283813000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "その他"
+      },
+      {
+        "label": "合計",
+        "amount": 12991583000000,
+        "profit": null,
+        "row_kind": "subtotal",
+        "label_raw": "合計"
+      }
+    ],
+    "fy_end": "2026-03-31"
+  },
+  {
+    "code": "9348",
+    "doc_id": "S100YL5W",
+    "stored_unit": "million_yen",
+    "stored_table_index": "1",
+    "stored_period_column": "当期",
+    "rows": [
+      {
+        "label": "ペイロードサービス",
+        "amount": 2333202000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "ペイロードサービス"
+      },
+      {
+        "label": "パートナーシップサービス",
+        "amount": 374066000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "パートナーシップサービス"
+      },
+      {
+        "label": "その他",
+        "amount": 599823000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "その他"
+      },
+      {
+        "label": "合計",
+        "amount": 3307092000000,
+        "profit": null,
+        "row_kind": "subtotal",
+        "label_raw": "合計"
+      }
+    ],
+    "fy_end": "2026-03-31"
+  },
+  {
+    "code": "9644",
+    "doc_id": "S100YJ07",
+    "stored_unit": "million_yen",
+    "stored_table_index": "0",
+    "stored_period_column": "当連結会計年度（自　2025年４月１日至　2026年３月31日）",
+    "rows": [
+      {
+        "label": "ストラテジー＆ドメイン",
+        "amount": 3151009000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "ストラテジー＆ドメイン"
+      },
+      {
+        "label": "デジタル・ＤＸ",
+        "amount": 3582547000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "デジタル・ＤＸ"
+      },
+      {
+        "label": "ＨＲ",
+        "amount": 3384016000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "ＨＲ"
+      },
+      {
+        "label": "ファイナンス・Ｍ＆Ａ",
+        "amount": 2447287000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "ファイナンス・Ｍ＆Ａ"
+      },
+      {
+        "label": "ブランド＆ＰＲ",
+        "amount": 3019308000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "ブランド＆ＰＲ"
+      },
+      {
+        "label": "その他",
+        "amount": 698395000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "その他"
+      },
+      {
+        "label": "顧客との契約から生じる収益",
+        "amount": 16282565000000,
+        "profit": null,
+        "row_kind": "subtotal",
+        "label_raw": "顧客との契約から生じる収益"
+      },
+      {
+        "label": "外部顧客への売上高",
+        "amount": 16282565000000,
+        "profit": null,
+        "row_kind": "subtotal",
+        "label_raw": "外部顧客への売上高"
+      }
+    ],
+    "fy_end": "2026-03-31"
+  },
+  {
+    "code": "9765",
+    "doc_id": "S100YY0T",
+    "stored_unit": "million_yen",
+    "stored_table_index": "1",
+    "stored_period_column": "当期",
+    "rows": [
+      {
+        "label": "建設コンサルタント業務",
+        "amount": 16081722000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "建設コンサルタント業務"
+      },
+      {
+        "label": "地理空間情報業務",
+        "amount": 3535078000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "地理空間情報業務"
+      },
+      {
+        "label": "環境業務",
+        "amount": 833308000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "環境業務"
+      },
+      {
+        "label": "まちづくり業務",
+        "amount": 7624321000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "まちづくり業務"
+      },
+      {
+        "label": "設計業務",
+        "amount": 4089013000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "設計業務"
+      },
+      {
+        "label": "事業ソリューション業務",
+        "amount": 834044000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "事業ソリューション業務"
+      },
+      {
+        "label": "顧客との契約から生じる収益",
+        "amount": 16915767000000,
+        "profit": null,
+        "row_kind": "subtotal",
+        "label_raw": "顧客との契約から生じる収益"
+      },
+      {
+        "label": "その他の収益（注）",
+        "amount": 95466000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "その他の収益（注）"
+      },
+      {
+        "label": "外部顧客への売上高",
+        "amount": 17011233000000,
+        "profit": null,
+        "row_kind": "subtotal",
+        "label_raw": "外部顧客への売上高"
+      }
+    ],
+    "fy_end": "2026-05-31"
+  },
+  {
+    "code": "9780",
+    "doc_id": "S100Y7GN",
+    "stored_unit": "other",
+    "stored_table_index": "1",
+    "stored_period_column": "当期",
+    "rows": [
+      {
+        "label": "清掃業務",
+        "amount": 11246623,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "清掃業務"
+      },
+      {
+        "label": "設備保守管理業務",
+        "amount": 3138822,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "設備保守管理業務"
+      },
+      {
+        "label": "警備業務",
+        "amount": 2413341,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "警備業務"
+      },
+      {
+        "label": "工営業務",
+        "amount": 7099797,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "工営業務"
+      },
+      {
+        "label": "その他",
+        "amount": 7046202,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "その他"
+      },
+      {
+        "label": "合計",
+        "amount": 30944787,
+        "profit": null,
+        "row_kind": "subtotal",
+        "label_raw": "合計"
+      }
+    ],
+    "fy_end": "2026-03-31"
+  },
+  {
+    "code": "9853",
+    "doc_id": "S100YJPB",
+    "stored_unit": "other",
+    "stored_table_index": "0",
+    "stored_period_column": "当連結会計年度自2025年４月１日至2026年３月31日",
+    "rows": [
+      {
+        "label": "飲料・食品",
+        "amount": 8312839,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "飲料・食品"
+      },
+      {
+        "label": "雑貨",
+        "amount": 32803,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "雑貨"
+      },
+      {
+        "label": "その他",
+        "amount": 1777,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "その他"
+      },
+      {
+        "label": "顧客との契約から生じる収益",
+        "amount": 8347421,
+        "profit": null,
+        "row_kind": "subtotal",
+        "label_raw": "顧客との契約から生じる収益"
+      },
+      {
+        "label": "その他の収益",
+        "amount": 0,
+        "profit": null,
+        "row_kind": "subtotal",
+        "label_raw": "その他の収益"
+      },
+      {
+        "label": "外部顧客への売上高",
+        "amount": 8347421,
+        "profit": null,
+        "row_kind": "subtotal",
+        "label_raw": "外部顧客への売上高"
+      }
+    ],
+    "fy_end": "2026-03-31"
+  },
+  {
+    "code": "9900",
+    "doc_id": "S100YGZJ",
+    "stored_unit": "million_yen",
+    "stored_table_index": "0",
+    "stored_period_column": "当連結会計年度(自2025年４月１日至2026年３月31日)",
+    "rows": [
+      {
+        "label": "和食麺処サガミ部門",
+        "amount": 28409097000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "和食麺処サガミ部門"
+      },
+      {
+        "label": "味の民芸部門",
+        "amount": 7778728000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "味の民芸部門"
+      },
+      {
+        "label": "どんどん庵部門",
+        "amount": 1024470000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "どんどん庵部門"
+      },
+      {
+        "label": "その他の部門",
+        "amount": 2067653000000,
+        "profit": null,
+        "row_kind": "segment",
+        "label_raw": "その他の部門"
+      },
+      {
+        "label": "顧客との契約から生じる収益",
+        "amount": 39279949000000,
+        "profit": null,
+        "row_kind": "subtotal",
+        "label_raw": "顧客との契約から生じる収益"
+      },
+      {
+        "label": "その他の収益",
+        "amount": 79987000000,
+        "profit": null,
+        "row_kind": "reconciling",
+        "label_raw": "その他の収益"
+      },
+      {
+        "label": "外部顧客への売上高",
+        "amount": 39359936000000,
+        "profit": null,
+        "row_kind": "subtotal",
+        "label_raw": "外部顧客への売上高"
+      }
+    ],
+    "fy_end": "2026-03-31"
+  }
+]
