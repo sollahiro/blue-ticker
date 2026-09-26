@@ -100,12 +100,14 @@ public func resolveAnnualXbrlDirectory(
         }
     }
     if overlayDirs.isEmpty, regressions.isEmpty { return originalDir }
+    let skippedRegressions = regressions
     let merged = (materialize ?? {
         materializeOverlaidXbrlDirectory(
-            original: $0, overlayDirs: $1, originalDocID: originalDocID, regressions: regressions)
+            original: $0, overlayDirs: $1, originalDocID: originalDocID,
+            regressions: skippedRegressions)
     })(originalDir, overlayDirs)
     if let merged {
-        writeOverlayRegressions(regressions, originalDocID: originalDocID, to: merged)
+        writeOverlayRegressions(skippedRegressions, originalDocID: originalDocID, to: merged)
     }
     return merged ?? originalDir
 }

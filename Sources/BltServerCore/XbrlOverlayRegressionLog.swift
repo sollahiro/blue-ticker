@@ -21,10 +21,9 @@ func logXbrlOverlayRegressionIfNeeded(
             "correction_doc_id": .string(parsed.correctionDocID),
             "reason": .string(parsed.kind),
         ]
-        logger.warning(
-            xbrlOverlayRegressionLogMessage(
-                code: code, fy: fy, originalDocID: original,
-                correctionDocID: parsed.correctionDocID, reason: parsed.kind),
-            metadata: metadata)
+        let message = xbrlOverlayRegressionLogMessage(
+            code: code, fy: fy, originalDocID: original,
+            correctionDocID: parsed.correctionDocID, reason: parsed.kind)
+        logger.warning("\(message)", metadata: metadata)
     }
 }
