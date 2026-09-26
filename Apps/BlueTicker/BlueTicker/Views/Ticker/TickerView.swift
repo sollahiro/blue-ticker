@@ -41,7 +41,8 @@ struct TickerView: View {
                 expanded: showsCompanyCard,
                 pillRect: pillRect,
                 company: displayCompany,
-                onExpanded: { showsCompanyCard = $0 }
+                onExpanded: { showsCompanyCard = $0 },
+                onFittedPill: { pillRect = $0 }
             )
         }
         .navigationTitle("")
@@ -391,6 +392,7 @@ private struct CompanyGlassPresenter: UIViewRepresentable {
     var pillRect: CGRect
     var company: CompanyRef
     var onExpanded: (Bool) -> Void
+    var onFittedPill: (CGRect) -> Void
 
     func makeUIView(context: Context) -> UIView {
         let view = UIView()
@@ -407,6 +409,7 @@ private struct CompanyGlassPresenter: UIViewRepresentable {
             pillRect: pillRect,
             company: company,
             onExpanded: onExpanded,
+            onFittedPill: onFittedPill,
             anchor: uiView
         )
     }
@@ -448,6 +451,7 @@ private struct CompanyGlassPresenter: UIViewRepresentable {
             pillRect: CGRect,
             company: CompanyRef,
             onExpanded: @escaping (Bool) -> Void,
+            onFittedPill: @escaping (CGRect) -> Void,
             anchor: UIView
         ) {
             model.company = company
@@ -470,7 +474,7 @@ private struct CompanyGlassPresenter: UIViewRepresentable {
                 }
                 return
             }
-            let created = ensureHost(in: nav)
+            let created = ensureHost(in: nav, onFittedPill: onFittedPill)
             if let cardContainer {
                 wrapper?.cardFrame = cardContainer.frame
             }
@@ -562,7 +566,9 @@ private struct CompanyGlassPresenter: UIViewRepresentable {
         }
 
         @discardableResult
-        private func ensureHost(in nav: UINavigationController) -> Bool {
+        private func ensureHost(
+            in nav: UINavigationController, onFittedPill: (CGRect) -> Void
+        ) -> Bool {
             if host != nil { return false }
             guard let window = nav.view.window else { return false }
             let wrapper = GlassPassThroughView()
@@ -573,8 +579,14 @@ private struct CompanyGlassPresenter: UIViewRepresentable {
             container.backgroundColor = .clear
             container.clipsToBounds = true
             container.layer.cornerCurve = .continuous
-            let pill = fittedPill(model.pillRect, window: window)
+            let measured = model.pillRect
+            let pill = fittedPill(measured, bar: nav.navigationBar)
             model.pillRect = pill
+            if pill.width > measured.width + 1 {
+                DispatchQueue.main.async {
+                    onFittedPill(pill)
+                }
+            }
             container.frame = pill
             container.layer.cornerRadius = pill.height / 2
             let expandedWidth = window.bounds.width - 16
@@ -623,17 +635,39 @@ private struct CompanyGlassPresenter: UIViewRepresentable {
             rect.width > 80 && rect.height > 28 && rect.height < 90 && rect.minY > 40 && rect.minX > 16
         }
 
-        /// 計測が「…」の幅で止まっていても、1行で入る社名は右のボタンに被せない範囲まで広げる。
-        private func fittedPill(_ measured: CGRect, window: UIWindow) -> CGRect {
+        /// 計測が「…」の幅で止まっていても、1行で入る社名は右のボタンの手前まで広げる。
+        /// 右端はバー上のボタン左端から測る。固定の余白ではボタンに被さる。
+        private func fittedPill(_ measured: CGRect, bar: UINavigationBar) -> CGRect {
             guard measured.width > 1, measured.height > 1 else { return measured }
             let display = Format.displayName(model.company.name, fallback: model.company.code)
             let headline = UIFont.preferredFont(forTextStyle: .headline).pointSize + 2
             let font = UIFont.systemFont(ofSize: headline, weight: .bold)
             let textWidth = ceil((display as NSString).size(withAttributes: [.font: font]).width)
             let natural = textWidth + Theme.headerPillHorizontalPadding * 2 + Theme.headerIconSize + 8
-            let maxWidth = max(measured.width, window.bounds.width - measured.minX - 108)
+            let limit = trailingLeadingEdge(in: bar, pill: measured)
+            let maxWidth = max(measured.width, limit - measured.minX - 8)
             let width = min(max(measured.width, natural), maxWidth)
             return CGRect(x: measured.minX, y: measured.minY, width: width, height: measured.height)
+        }
+
+        /// ピルの右にあるバーボタンの左端（ウィンドウ座標）。無ければ計測の右端で止める。
+        private func trailingLeadingEdge(in bar: UINavigationBar, pill: CGRect) -> CGFloat {
+            let pillInBar = bar.convert(pill, from: nil)
+            var best: CGFloat?
+            func consider(_ view: UIView) {
+                let frame = view.convert(view.bounds, to: bar)
+                let band = abs(frame.midY - pillInBar.midY) < 40
+                let control = frame.width >= 30 && frame.width <= 140
+                    && frame.height >= 28 && frame.height <= 72
+                let toTheRight = frame.minX > pillInBar.minX + 48
+                if band, control, toTheRight {
+                    best = min(best ?? frame.minX, frame.minX)
+                }
+                view.subviews.forEach(consider)
+            }
+            consider(bar)
+            guard let best else { return pill.maxX }
+            return bar.convert(CGPoint(x: best, y: 0), to: nil).x
         }
 
         /// SwiftUI のボタン内では UIKit アニメーションが止まっている。
@@ -696,10 +730,17 @@ private struct CompanyGlassPresenter: UIViewRepresentable {
             } completion: { _ in
                 guard self.model.expanded == expanded else { return }
                 self.stopMorphTracking()
+                // 途中で別のアニメーションに割り込まれても、見た目は終端の枠に揃える。
+                // 中間幅のまま字を固定解除すると、社名がアイコンだけに欠ける。
                 self.model.expansion = expanded ? 1 : 0
                 self.model.freezesGlyphs = false
-                self.model.visibleWidth = container.frame.width
-                self.wrapper?.cardFrame = container.frame
+                self.model.visibleWidth = end.width
+                UIView.performWithoutAnimation {
+                    container.frame = end
+                    container.layer.cornerRadius = radius
+                    self.host?.view.frame = CGRect(origin: .zero, size: end.size)
+                }
+                self.wrapper?.cardFrame = end
                 self.openTap?.isEnabled = !expanded
                 self.updateModalAccessibility()
                 if expanded {
@@ -952,7 +993,12 @@ private struct CompanyGlassMorph: View {
             Theme.cardCornerRadius,
             pillRadius + (Theme.cardCornerRadius - pillRadius) * model.expansion
         )
-        let width = model.cardWidth > 1 ? model.cardWidth : nil
+        // 開閉中はカード幅のまま字を組む。閉じ切ったらピル幅に戻す。
+        // カード幅のまま小さい枠に置くと中央合わせになり、社名が右へ欠ける。
+        let wide = model.freezesGlyphs || model.expanded
+        let width = wide
+            ? (model.cardWidth > 1 ? model.cardWidth : nil)
+            : (model.pillRect.width > 1 ? model.pillRect.width : nil)
         // 閉じているあいだも下段は高さを持つ。ガラスの中央ではなく上端に社名を置く。
         Color.clear
             .frame(maxWidth: .infinity, maxHeight: .infinity)
