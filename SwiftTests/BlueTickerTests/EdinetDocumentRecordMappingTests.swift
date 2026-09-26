@@ -93,4 +93,18 @@ import Testing
         let record = try #require(mapEdinetDocumentRecords(docs).first)
         #expect(record.secCode == nil)
     }
+
+    @Test func storesParentDocIDForAmendments() throws {
+        var d = doc("S100WRZH", docType: "130")
+        d["parentDocID"] = "S100W0S7"
+        d["docDescription"] = "訂正有価証券報告書－第23期(2024/04/01－2025/03/31)"
+        let record = try #require(mapEdinetDocumentRecords([d]).first)
+        #expect(record.parentDocID == "S100W0S7")
+        #expect(record.docTypeCode == "130")
+    }
+
+    @Test func annualReportParentDocIDIsNilWhenAbsent() throws {
+        let record = try #require(mapEdinetDocumentRecords([doc("S1", docType: "120")]).first)
+        #expect(record.parentDocID == nil)
+    }
 }

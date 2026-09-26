@@ -30,6 +30,7 @@ import Vapor
             let config = try SQLPostgresConfiguration(url: Self.postgresURL!)
             app.databases.use(.postgres(configuration: config), as: .psql)
             app.migrations.add(CreateEdinetDocument())
+            app.migrations.add(AddParentDocIDToEdinetDocuments())
             app.migrations.add(CreateEdinetSyncState())
             app.migrations.add(CreateEdinetXbrlFacts())
             app.migrations.add(AddFeedQueryIndexesToEdinetDocuments())

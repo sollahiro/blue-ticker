@@ -41,6 +41,7 @@ private func withApp(
         if databases {
             app.databases.use(.sqlite(.memory), as: .sqlite)
             app.migrations.add(CreateEdinetDocument())
+            app.migrations.add(AddParentDocIDToEdinetDocuments())
             app.migrations.add(CreateCompanyFinancials())
             app.migrations.add(CreateCompanyHalfFinancials())
             app.migrations.add(AddHighWaterToCompanyFinancials())

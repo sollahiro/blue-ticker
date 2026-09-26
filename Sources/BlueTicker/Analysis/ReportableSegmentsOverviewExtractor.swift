@@ -14,6 +14,13 @@ enum ReportableSegmentsOverviewExtractor {
 
     /// 展開済み XBRL ディレクトリから本文を返す。無ければ空文字。
     static func extract(in xbrlDir: URL) -> String {
+        if !overlayDirectories(in: xbrlDir).isEmpty,
+            let inner = XBRLUtils.extractTextblockHtml(
+                in: xbrlDir, textblockTag: Xbrl.descriptionOfReportableSegmentsTextblockTag)
+        {
+            let text = DescriptionOfBusinessExtractor.htmlToText(inner)
+            if !text.isEmpty { return text }
+        }
         for htmlFile in htmlFiles(in: xbrlDir) {
             guard let raw = try? String(contentsOf: htmlFile, encoding: .utf8) else { continue }
             let text = extract(html: raw)

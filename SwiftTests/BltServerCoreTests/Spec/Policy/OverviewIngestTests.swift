@@ -16,6 +16,7 @@ private func withMigratedApp(_ body: (Application) async throws -> Void) async t
     do {
         app.databases.use(.sqlite(.memory), as: .sqlite)
         app.migrations.add(CreateEdinetDocument())
+        app.migrations.add(AddParentDocIDToEdinetDocuments())
         app.migrations.add(CreateCompanyOverviews())
         try await app.autoMigrate()
         try await body(app)

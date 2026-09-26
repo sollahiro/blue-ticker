@@ -35,6 +35,7 @@ public typealias CompanyOverviewGenerating =
 func runOverviewIngest(
     db: Database, listedCodes: Set<String>, limit: Int?, explicitCodes: Set<String>? = nil,
     priorityCodes: Set<String> = [], cachedDocIDs: Set<String> = [],
+    forceDocIDs: Set<String> = [],
     logger: Logger? = nil, generate: CompanyOverviewGenerating
 ) async throws -> OverviewIngestSummary {
     let baseCandidates = try await latestAnnualReportPerCompany(
@@ -59,6 +60,10 @@ func runOverviewIngest(
     let classifyIndex = ingestIndexByID(classifyRows) { $0.id }
 
     for cand in baseCandidates {
+        if forceDocIDs.contains(cand.docID) {
+            missing.append(cand)
+            continue
+        }
         guard let existing = classifyIndex[cand.code] else {
             missing.append(cand)
             continue

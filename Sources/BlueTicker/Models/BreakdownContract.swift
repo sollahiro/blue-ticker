@@ -244,11 +244,13 @@ public let breakdownWarningLLMUnitUnresolved = "llm_unit_unresolved"
 /// 公開 REST / MCP（iOS Breakdown の backing）が当該格納行を出してよいか。
 /// `needs_review` または `llm_unit_unresolved` の行は出さない（千円単位の 1000 倍誤りの stopgap。
 /// fail closed）。XBRL（`xbrl_facts` / `stacked_segment_pnl`）と `not_applicable`（'none'）は
-/// フラグがあってもそのまま出す。ingest / status-report の `isServableBreakdown` とは独立
-/// （格納行は消さない・書き換えない。`cache_version` も上げない）。
+/// フラグがあってもそのまま出す。ただし訂正 overlay 回帰（`overlay_regression`）は XBRL 行も隠す。
+/// ingest / status-report の `isServableBreakdown` とは独立（格納行は消さない・書き換えない。
+/// `cache_version` も上げない）。
 public func isPubliclyServableBreakdown(
     source: String, needsReview: Bool, warnings: [String]
 ) -> Bool {
+    if hasOverlayRegressionWarning(warnings) { return false }
     if source == breakdownSourceXbrlFacts
         || source == breakdownSourceStackedSegmentPnL
         || source == breakdownSourceNotApplicable

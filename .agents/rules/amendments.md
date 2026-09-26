@@ -1,7 +1,12 @@
 # 訂正有報（130）
 
-- 訂正有報は自動マージしない。数値差し替え・タグ欠損・科目削除を原本（120）と人が比較して正本を判断する。
-- sync は 130 を別行で取り込み、通常 ingest の正本は 120 とする。財務 high-water に 130 を含めても読む ZIP は原本のままにする。
-- `edinet_documents.doc_type_code = '130'` を手動確認し、確認済み docID は原本準拠の場合も Git に残す。
-- 訂正を正本にした場合だけ、同じ期末の原本 docID も記録して次回 ingest が 120 に戻るのを防ぐ。
+- sync は 130 を別行で取り込む。`parent_doc_id` に EDINET `parentDocID`（訂正対象）を保持する。
+- 通常 ingest の**行の identity**（`company_statement_notes.doc_id` / financials の年度帰属 / 公開 `doc_id`）は原本 120 のまま。
+- **overlay**: 同一会社・同一期間・同一親有報の 130 を、提出が古い順に原本の XBRL へ重ねる。キーは element + context（期間/member/dimension）。訂正に無い項目は原本の値を残す。複数あれば後勝ち。パースできない 130 は飛ばす。
+- **行メンバー表**（`Row{N}Member`、政策保有株式など）: 訂正がその表の fact を含めば行ごと置換する（セル混在しない）。
+- **回帰ガード**: overlay 後を直前状態と比べ、行メンバー表の大幅減（≥30% かつ ≥5 行）、直前まで一致していた合計の崩壊、主要数値のおよそ 10 倍跳びがあれば、その 130 は捨てて直前の値を残す。会社-FY は `needs_review`（公開面は隠す）。`cache_version` は上げない。
+- **TextBlock**: 訂正に同じ要素があればその本文で置き換える。無ければ原本。HTML 見出し抽出（filing-sections の honbun、US-GAAP 0105010 本表）は原本 HTML を読む。
+- 財務 high-water に 130 を含める（再計算トリガ）。読む ZIP は原本＋ overlay。
 - 150 / 170 は対象外。専用キューや自動統合経路は作らない。
+- 対象会社-FY の再 ingest は `--doc-ids <原本120>`（`--codes` と併用可）。保持窓外でも指定 doc は残し、他 FY は purge しない。
+- ingest の訂正引き当ては in-flight の原本 `doc_id`（keep / `--doc-ids`）または証券コード（`--codes` / 会社単位ステージ）に限定する。全件 120/130 は読まない。

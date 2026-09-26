@@ -50,6 +50,7 @@ func runStatementIngest(
     limit: Int?, explicitCodes: Set<String>? = nil, priorityCodes: Set<String> = [],
     cachedDocIDs: Set<String> = [],
     candidateSets: FilingSectionCandidateSets? = nil,
+    forceDocIDs: Set<String> = [],
     logger: Logger? = nil, extract: StatementExtractor
 ) async throws -> StatementIngestSummary {
     let sets: FilingSectionCandidateSets
@@ -78,6 +79,10 @@ func runStatementIngest(
     let classifyIndex = ingestIndexByID(classifyRows) { $0.id }
 
     for cand in baseCandidates {
+        if forceDocIDs.contains(cand.docID) {
+            missing.append(cand)
+            continue
+        }
         guard let existing = classifyIndex[cand.docID] else {
             missing.append(cand)
             continue

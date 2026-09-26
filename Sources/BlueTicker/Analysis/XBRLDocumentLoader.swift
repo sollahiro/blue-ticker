@@ -510,6 +510,10 @@ extension XBRLUtils {
                 }
             }
         }
+        for overlayDir in overlayDirectories(in: dir) {
+            allFacts = overlayXbrlFactIndex(
+                base: allFacts, overlay: collectAllNumericFacts(in: overlayDir, nilAsZero: nilAsZero))
+        }
         _cacheLock.lock()
         _numericFactCache.insert(allFacts, forKey: key)
         _cacheLock.unlock()

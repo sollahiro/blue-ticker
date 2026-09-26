@@ -4,7 +4,7 @@
 //   blt-server sync [--from YYYY-MM-DD] [--to YYYY-MM-DD]    EDINET 書類一覧を DB へ同期
 //   blt-server ingest [--limit N] [--with-facts] [--stages financials,
 //                     filing-sections,breakdowns,statements,statement-notes,icons,overviews]
-//                     [--codes 7203,6758]
+//                     [--codes 7203,6758] [--doc-ids S100W0S7]
 //                     [--note-types per_share_information,borrowings_schedule,...]
 //                                                            対象を DB へ取り込み（--stages で選択、既定は全て）。
 //                                                            breakdowns: business/geography は上場全体（--limit 適用）、
@@ -17,6 +17,8 @@
 //                                                            スキップされる。上場全体・最新有報1件（日経225は処理順）。
 //                                                            --with-facts は残存（数値 facts 永続は閉じた）。
 //                                                            --codes で対象を証券コード集合に絞り、--limit を無視して全件処理する。
+//                                                            --doc-ids は原本有報(120)の doc_id 単位（会社-FY）。
+//                                                            該当書類だけ再計算し、他 FY は purge しない。
 //                                                            statements/statement-notes では --codes を対象母集団にも使う
 //                                                            （nikkei225.csv 未配置でも手動再ingest可能）。
 //                                                            --note-types は statement-notes ステージで ingest する
@@ -93,6 +95,12 @@ do {
             printError("blt-server error: --codes は証券コードのカンマ区切りで指定してください\n")
             exit(1)
         }
+        let docIDsPresent = argv.contains("--doc-ids")
+        let docIDs = parseIngestDocIDs(optionValue("--doc-ids", in: argv))
+        if docIDsPresent, docIDs?.isEmpty ?? true {
+            printError("blt-server error: --doc-ids は原本有報 doc_id のカンマ区切りで指定してください\n")
+            exit(1)
+        }
         let noteTypesPresent = argv.contains("--note-types")
         let noteTypes = parseStatementNoteTypes(optionValue("--note-types", in: argv))
         if noteTypesPresent, noteTypes?.isEmpty ?? true {
@@ -105,6 +113,7 @@ do {
             includeFacts: argv.contains("--with-facts"),
             targets: targets,
             codes: codes,
+            docIDs: docIDs,
             noteTypes: noteTypes
         )
     } else if argv.count > 1, argv[1] == "master-data-upload" {
