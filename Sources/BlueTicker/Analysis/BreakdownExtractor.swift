@@ -1037,21 +1037,12 @@ enum BreakdownExtractor {
         return result
     }
 
-    /// 表の直前にある「（単位：千円）」等を拾う。期間見出しと同じ親要素の先行兄弟を見る。
+    /// 表の直前にある「（単位：千円）」等を拾う。
+    /// 親を遡った先行兄弟も含める（実データ: 7114 S100YJIB / 7416 S100YLJD は
+    /// `<p>（単位：千円）</p><div><table>…` で、表の直接の親 div には単位が無い）。
     private static func detectUnitFromPreceding(_ table: Element) -> String? {
-        guard let parent = table.parent() else { return nil }
         var result: String?
-        for node in parent.getChildNodes() {
-            guard node.siblingIndex < table.siblingIndex else { break }
-            let text: String
-            if let el = node as? Element {
-                text = bs4Text(el, strip: true)
-            } else if let tn = node as? TextNode {
-                text = tn.getWholeText().trimmingCharacters(in: .whitespacesAndNewlines)
-            } else {
-                continue
-            }
-            if text.isEmpty || text.unicodeScalars.count > Xbrl.noteShortCaptionMaxLength { continue }
+        for text in precedingShortCaptions(before: table) {
             if let token = parseUnitCaption(text) {
                 result = token
             }

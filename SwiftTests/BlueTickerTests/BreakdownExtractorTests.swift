@@ -639,6 +639,29 @@ import Foundation
         #expect(keyword.contains { $0.unitCaption == "千円" })
     }
 
+    /// 7114 S100YJIB / 7416 S100YLJD: 単位は表の兄ではなく、包む div の兄 `<p>`.
+    @Test func unitCaptionOnWrapperDivSiblingAttachesToDataTable() {
+        let html = """
+            <p>１．顧客との契約から生じる収益を分解した情報</p>
+            <p>当社グループは、生鮮流通プラットフォーム事業の単一セグメントであり、以下のとおりであります。</p>
+            <p style="text-align: right">（単位：千円）</p>
+            <div style="margin-left: 80px">
+            <table>
+              <tr><td>サービス別</td><td>前連結会計年度</td><td>当連結会計年度</td></tr>
+              <tr><td>BtoBコマースサービス</td><td>5,471,053</td><td>6,348,109</td></tr>
+              <tr><td>顧客との契約から生じる収益</td><td>6,866,324</td><td>7,820,013</td></tr>
+            </table>
+            </div>
+            """
+        let tables = BreakdownExtractor.allTablesFromHtml(html, defaultHeading: "収益認識関係")
+        #expect(tables.count == 1)
+        #expect(tables[0].unitCaption == "千円")
+        #expect(tables[0].markdown.contains("7,820,013"))
+        let keyword = BreakdownExtractor.keywordTablesFromHtml(
+            html, keywords: ["顧客との契約から生じる収益を分解した情報"])
+        #expect(keyword.contains { $0.unitCaption == "千円" })
+    }
+
     @Test func periodLabelFromContextRefMapsPriorAndCurrent() {
         #expect(BreakdownExtractor.periodLabel(fromContextRef: "Prior1YearDuration") == "前期")
         #expect(BreakdownExtractor.periodLabel(fromContextRef: "CurrentYearDuration") == "当期")

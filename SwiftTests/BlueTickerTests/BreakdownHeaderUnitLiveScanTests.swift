@@ -85,7 +85,8 @@ struct BreakdownUnitScanRow: Codable {
             } else {
                 table = extracted.tables.first
             }
-            let rawAmounts = rawAmounts(from: table?.markdown ?? "")
+            let markdownRaw = rawAmounts(from: table?.markdown ?? "")
+            let rawAmounts = inferredLLMRawAmounts(row: row, markdownRaw: markdownRaw)
             guard !rawAmounts.isEmpty else { continue }
             let old = BreakdownLLMAmountScale.legacyYenMultiplier(
                 declaredUnit: row.llmUnit, rawAmounts: rawAmounts, consolidatedSales: row.denominator)
@@ -159,5 +160,25 @@ struct BreakdownUnitScanRow: Codable {
                 XBRLUtils.parseHtmlNumber(String($0).trimmingCharacters(in: .whitespaces))
             }
         }
+    }
+
+    /// 格納済み金額は既に旧倍率済み。表 markdown の全数値を raw にすると
+    /// already-yen が誤爆する。格納 max / 分母から LLM 生値を復元する。
+    private func inferredLLMRawAmounts(row: BreakdownUnitScanRow, markdownRaw: [Double]) -> [Double] {
+        guard let stored = row.maxAmount else { return markdownRaw }
+        let sales = row.denominator
+        if row.llmUnit == "million_yen" {
+            if let sales, sales != 0 {
+                let rel = abs(stored / sales)
+                if rel > 10 {
+                    return [stored / Financial.millionYen]
+                }
+                if rel < 0.1 {
+                    return [stored]
+                }
+            }
+            return [stored / Financial.millionYen]
+        }
+        return [stored]
     }
 }
