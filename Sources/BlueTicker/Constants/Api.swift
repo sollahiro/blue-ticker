@@ -168,7 +168,7 @@ public enum Api {
     // 書類種別
     // 有報セクション取り込み（BltServerCore）が有報のみを対象にするため public。
     public static let docTypeAnnualReport = "120"
-    static let docTypeAmendment = "130"           // 訂正有価証券報告書
+    public static let docTypeAmendment = "130"    // 訂正有価証券報告書
     static let docTypeQuarterlyReport = "140"
     static let docTypeAmendedQuarterlyReport = "150"
     static let docTypeHalfYearReport = "160"

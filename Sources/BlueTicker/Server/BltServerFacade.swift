@@ -232,8 +232,10 @@ public extension BltServerContext {
     /// 格納用 payload を返す。重い SwiftSoup 抽出を含むため **ingest 専用**（大企業の有報で 1GB OOM を
     /// 実測。serving のライブ抽出は撤去し、read は Neon 格納済みを返す）。ダウンロード失敗は nil（戻り値パターン）。
     /// texts は xbrlSections 全 key を格納（未検出は ""）、specials は segments/geography。
-    func extractFilingSections(docID: String) async -> FilingSectionsPayload? {
-        guard let xbrlDir = await edinetClient.downloadDocument(docID) else { return nil }
+    func extractFilingSections(docID: String, correctionDocIDs: [String] = []) async -> FilingSectionsPayload? {
+        guard let xbrlDir = await downloadAnnualFilingXbrl(
+            docID: docID, correctionDocIDs: correctionDocIDs
+        ) else { return nil }
 
         // honbun HTML 系は1回パースでまとめて抽出（セクション数ぶん再パースしない＝メモリ節約）。
         let parser = XBRLParser()
@@ -279,10 +281,12 @@ public extension BltServerContext {
     /// 行わない。US-GAAP は `.notApplicable`（連結に数値 fact が無く正規化不可。notes と同方針）。
     /// ダウンロード失敗は `.failed`。
     func extractStatement(
-        docID: String, statementTypes: Set<StatementSectionType> = Set(StatementSectionType.allCases)
+        docID: String, statementTypes: Set<StatementSectionType> = Set(StatementSectionType.allCases),
+        correctionDocIDs: [String] = []
     ) async -> StatementDocResolveResult {
         let analyzer = StatementAnalyzer(edinetClient: edinetClient)
-        return await analyzer.extract(docID: docID, statementTypes: statementTypes)
+        return await analyzer.extract(
+            docID: docID, statementTypes: statementTypes, correctionDocIDs: correctionDocIDs)
     }
 
     /// 会社アイコン取り込み: 手動 origin / 公式画像があれば XBRL を使わず取得する。それ以外は
@@ -290,14 +294,18 @@ public extension BltServerContext {
     /// URL抽出（`CorporateWebsiteExtractor`）・favicon取得（`FaviconFetcher`）・R2アップロード
     /// （`R2Client`）のいずれかが失敗すれば `.failure`（戻り値パターン。段名をログ用に返す）。
     /// `r2Config` は呼び出し側（BltServerCore ingest）が環境変数から解決して渡す。
-    func extractAndUploadCompanyIcon(docID: String, code: String, r2Config: R2Config) async
+    func extractAndUploadCompanyIcon(
+        docID: String, code: String, r2Config: R2Config, correctionDocIDs: [String] = []
+    ) async
         -> Swift.Result<CompanyIconExtractResult, CompanyIconExtractFailure>
     {
         if let manual = CompanyIconOriginOverride.manualSource(for: code) {
             return await fetchAndUploadManualCompanyIcon(
                 source: manual, code: code, r2Config: r2Config)
         }
-        guard let xbrlDir = await edinetClient.downloadDocument(docID) else {
+        guard let xbrlDir = await downloadAnnualFilingXbrl(
+            docID: docID, correctionDocIDs: correctionDocIDs
+        ) else {
             return .failure(.downloadFailed)
         }
         let extracted = CorporateWebsiteExtractor.extract(xbrlDir: xbrlDir)
@@ -329,72 +337,127 @@ public extension BltServerContext {
     /// 財務諸表注記取り込み: 書類1件分の `borrowings_schedule` note_type を解決する。ロジックは
     /// `StatementNotesResolver.resolveBorrowingsSchedule`（＝`BorrowingsSchedule.extractRows`、
     /// `IBDExtractor` が使う `extract` と表探索ロジックを共有）に委譲する。
-    func resolveBorrowingsScheduleNote(docID: String) async -> StatementNoteResolveResult {
-        guard let xbrlDir = await edinetClient.downloadDocument(docID) else { return .failed }
-        return StatementNotesResolver.resolveBorrowingsSchedule(xbrlDir: xbrlDir)
+    func resolveBorrowingsScheduleNote(docID: String, correctionDocIDs: [String] = [])
+        async -> StatementNoteResolveResult
+    {
+        guard let xbrlDir = await downloadAnnualFilingXbrl(
+            docID: docID, correctionDocIDs: correctionDocIDs
+        ) else { return .failed }
+        return statementNoteByRecordingOverlayRegressions(
+            StatementNotesResolver.resolveBorrowingsSchedule(xbrlDir: xbrlDir), xbrlDir: xbrlDir)
     }
 
     /// 財務諸表注記取り込み: 書類1件分の `property_plant_equipment_schedule` note_type を解決する
     /// （IFRS 注記 role → BS 区分タグ当期値で `available_via_statement` → それ以外。
     /// J-GAAP 附属明細表 TextBlock は未対応。`StatementNotesResolver` のドキュメント参照）。
-    func resolvePropertyPlantEquipmentScheduleNote(docID: String) async -> StatementNoteResolveResult {
-        guard let xbrlDir = await edinetClient.downloadDocument(docID) else { return .failed }
-        return StatementNotesResolver.resolvePropertyPlantEquipmentSchedule(xbrlDir: xbrlDir)
+    func resolvePropertyPlantEquipmentScheduleNote(docID: String, correctionDocIDs: [String] = [])
+        async -> StatementNoteResolveResult
+    {
+        guard let xbrlDir = await downloadAnnualFilingXbrl(
+            docID: docID, correctionDocIDs: correctionDocIDs
+        ) else { return .failed }
+        return statementNoteByRecordingOverlayRegressions(
+            StatementNotesResolver.resolvePropertyPlantEquipmentSchedule(xbrlDir: xbrlDir),
+            xbrlDir: xbrlDir)
     }
 
     /// 財務諸表注記取り込み: 書類1件分の `goodwill_and_intangibles` note_type を解決する（IFRS連結企業限定、
     /// J-GAAP単体には対応する法定附属明細表が無い）。
-    func resolveGoodwillAndIntangiblesNote(docID: String) async -> StatementNoteResolveResult {
-        guard let xbrlDir = await edinetClient.downloadDocument(docID) else { return .failed }
-        return StatementNotesResolver.resolveGoodwillAndIntangibles(xbrlDir: xbrlDir)
+    func resolveGoodwillAndIntangiblesNote(docID: String, correctionDocIDs: [String] = [])
+        async -> StatementNoteResolveResult
+    {
+        guard let xbrlDir = await downloadAnnualFilingXbrl(
+            docID: docID, correctionDocIDs: correctionDocIDs
+        ) else { return .failed }
+        return statementNoteByRecordingOverlayRegressions(
+            StatementNotesResolver.resolveGoodwillAndIntangibles(xbrlDir: xbrlDir), xbrlDir: xbrlDir)
     }
 
     /// 財務諸表注記取り込み: 書類1件分の `lease_liabilities` note_type を解決する。
     /// 連結 BS タグまたは IFRS リース注記 TextBlock（`IFRSLease`）から決定論で抽出する。
-    func resolveLeaseLiabilitiesNote(docID: String) async -> StatementNoteResolveResult {
-        guard let xbrlDir = await edinetClient.downloadDocument(docID) else { return .failed }
-        return StatementNotesResolver.resolveLeaseLiabilities(xbrlDir: xbrlDir)
+    func resolveLeaseLiabilitiesNote(docID: String, correctionDocIDs: [String] = [])
+        async -> StatementNoteResolveResult
+    {
+        guard let xbrlDir = await downloadAnnualFilingXbrl(
+            docID: docID, correctionDocIDs: correctionDocIDs
+        ) else { return .failed }
+        return statementNoteByRecordingOverlayRegressions(
+            StatementNotesResolver.resolveLeaseLiabilities(xbrlDir: xbrlDir), xbrlDir: xbrlDir)
     }
 
     /// 財務諸表注記取り込み: 書類1件分の `sga_expense_breakdown` note_type を解決する。
     /// 連結損益計算書関係注記の構造化 `*SGA` / IFRS 販管費費目タグから決定論で抽出する。
-    func resolveSgaExpenseBreakdownNote(docID: String) async -> StatementNoteResolveResult {
-        guard let xbrlDir = await edinetClient.downloadDocument(docID) else { return .failed }
-        return StatementNotesResolver.resolveSgaExpenseBreakdown(xbrlDir: xbrlDir)
+    func resolveSgaExpenseBreakdownNote(docID: String, correctionDocIDs: [String] = [])
+        async -> StatementNoteResolveResult
+    {
+        guard let xbrlDir = await downloadAnnualFilingXbrl(
+            docID: docID, correctionDocIDs: correctionDocIDs
+        ) else { return .failed }
+        return statementNoteByRecordingOverlayRegressions(
+            StatementNotesResolver.resolveSgaExpenseBreakdown(xbrlDir: xbrlDir), xbrlDir: xbrlDir)
     }
 
     /// 財務諸表注記取り込み: 書類1件分の `per_share_information` note_type を解決する。ロジックは
     /// `StatementNotesResolver.resolvePerShareInformation` に委譲する（「業績等の概要」の
     /// 離散数値タグから決定論で抽出、LLM 不要）。財務取り込み の単一値（EPSのみ）passthrough を
     /// 置き換える（実データレビューでBPS・潜在株式調整後EPSも取得可能と判明、2026-08-02）。
-    func resolvePerShareInformationNote(docID: String) async -> StatementNoteResolveResult {
-        guard let xbrlDir = await edinetClient.downloadDocument(docID) else { return .failed }
-        return StatementNotesResolver.resolvePerShareInformation(xbrlDir: xbrlDir)
+    func resolvePerShareInformationNote(docID: String, correctionDocIDs: [String] = [])
+        async -> StatementNoteResolveResult
+    {
+        guard let xbrlDir = await downloadAnnualFilingXbrl(
+            docID: docID, correctionDocIDs: correctionDocIDs
+        ) else { return .failed }
+        return statementNoteByRecordingOverlayRegressions(
+            StatementNotesResolver.resolvePerShareInformation(xbrlDir: xbrlDir), xbrlDir: xbrlDir)
     }
 
     /// 財務諸表注記取り込み: 書類1件分の `dividends` note_type を解決する。ロジックは
     /// `StatementNotesResolver.resolveDividends` に委譲する（EDINET標準タクソノミの決議単位
     /// 構造化タグから決定論で抽出、LLM 不要）。財務取り込み の単一集計値 passthrough を置き換える
     /// （実データレビューで決議単位のテーブル構造が判明したため、2026-08-02）。
-    func resolveDividendsNote(docID: String) async -> StatementNoteResolveResult {
-        guard let xbrlDir = await edinetClient.downloadDocument(docID) else { return .failed }
-        return StatementNotesResolver.resolveDividends(xbrlDir: xbrlDir)
+    func resolveDividendsNote(docID: String, correctionDocIDs: [String] = [])
+        async -> StatementNoteResolveResult
+    {
+        guard let xbrlDir = await downloadAnnualFilingXbrl(
+            docID: docID, correctionDocIDs: correctionDocIDs
+        ) else { return .failed }
+        return statementNoteByRecordingOverlayRegressions(
+            StatementNotesResolver.resolveDividends(xbrlDir: xbrlDir), xbrlDir: xbrlDir)
     }
 
     /// 財務諸表注記取り込み: 書類1件分の `issued_shares_and_capital` note_type を解決する。ロジックは
     /// `StatementNotesResolver.resolveIssuedSharesAndCapital` に委譲する。期末スナップショット（離散タグ:
     /// 発行済・資本金・資本準備金）と textblock 表のイベント列を併記（LLM不要）。
-    func resolveIssuedSharesAndCapitalNote(docID: String) async -> StatementNoteResolveResult {
-        guard let xbrlDir = await edinetClient.downloadDocument(docID) else { return .failed }
-        return StatementNotesResolver.resolveIssuedSharesAndCapital(xbrlDir: xbrlDir)
+    func resolveIssuedSharesAndCapitalNote(docID: String, correctionDocIDs: [String] = [])
+        async -> StatementNoteResolveResult
+    {
+        guard let xbrlDir = await downloadAnnualFilingXbrl(
+            docID: docID, correctionDocIDs: correctionDocIDs
+        ) else { return .failed }
+        return statementNoteByRecordingOverlayRegressions(
+            StatementNotesResolver.resolveIssuedSharesAndCapital(xbrlDir: xbrlDir), xbrlDir: xbrlDir)
     }
 
     /// 財務諸表注記取り込み: 書類1件分の `policy_holding_securities` note_type を解決する。ロジックは
     /// `StatementNotesResolver.resolvePolicyHoldingSecurities` に委譲する（EDINET標準タクソノミの
     /// 銘柄別構造化タグから決定論で抽出、LLM 不要）。
-    func resolvePolicyHoldingSecuritiesNote(docID: String) async -> StatementNoteResolveResult {
-        guard let xbrlDir = await edinetClient.downloadDocument(docID) else { return .failed }
-        return StatementNotesResolver.resolvePolicyHoldingSecurities(xbrlDir: xbrlDir)
+    /// `correctionDocIDs` は同一 FY の訂正(130)。fact / TextBlock overlay。格納 `doc_id` は原本。
+    func resolvePolicyHoldingSecuritiesNote(docID: String, correctionDocIDs: [String] = [])
+        async -> StatementNoteResolveResult
+    {
+        guard let xbrlDir = await downloadAnnualFilingXbrl(
+            docID: docID, correctionDocIDs: correctionDocIDs
+        ) else { return .failed }
+        return statementNoteByRecordingOverlayRegressions(
+            StatementNotesResolver.resolvePolicyHoldingSecurities(xbrlDir: xbrlDir), xbrlDir: xbrlDir)
+    }
+
+    /// 有報(120)の XBRL。同一 FY の訂正(130)があれば、パースできるものを提出順に overlay する。
+    func downloadAnnualFilingXbrl(docID: String, correctionDocIDs: [String] = []) async -> URL? {
+        await resolveAnnualXbrlDirectory(
+            originalDocID: docID,
+            correctionDocIDs: correctionDocIDs,
+            download: { await edinetClient.downloadDocument($0) })
     }
 }
 
@@ -430,17 +493,23 @@ public extension BltServerContext {
     /// Overview 生成（ingest 用）。Filing `texts` には足さない。格納先は `company_overviews`
     /// （会社1社=1行。stage は `overviews`。公開 REST は `GET /v1/companies/{code}/overview`）。
     /// 社名・業種はマスタから引く（プロンプト用。本文からの補完には使わない）。
-    func generateCompanyOverview(docID: String, code: String) async -> CompanyOverviewResolveResult {
+    func generateCompanyOverview(
+        docID: String, code: String, correctionDocIDs: [String] = []
+    ) async -> CompanyOverviewResolveResult {
         let stock = await masterDataManager.getByCode(code)
         return await generateCompanyOverview(
-            docID: docID, code: code, name: stock?.coName ?? "", sector: stock?.s33nm ?? "")
+            docID: docID, code: code, name: stock?.coName ?? "", sector: stock?.s33nm ?? "",
+            correctionDocIDs: correctionDocIDs)
     }
 
     /// Overview 生成（ingest 用）。社名・業種を呼び出し側が渡す。
-    func generateCompanyOverview(docID: String, code: String, name: String, sector: String)
+    func generateCompanyOverview(docID: String, code: String, name: String, sector: String,
+        correctionDocIDs: [String] = [])
         async -> CompanyOverviewResolveResult
     {
-        guard let xbrlDir = await edinetClient.downloadDocument(docID) else { return .failed }
+        guard let xbrlDir = await downloadAnnualFilingXbrl(
+            docID: docID, correctionDocIDs: correctionDocIDs
+        ) else { return .failed }
         let businessText = DescriptionOfBusinessExtractor.extract(in: xbrlDir)
         var sourceText = businessText
         var input = CompanyOverviewInput(
@@ -474,8 +543,10 @@ public extension BltServerContext {
     /// 収益認識表へ寄せた会社は顧客契約の連結金額、無ければ本表外タグへフォールバックする
     /// （三菱商事）。由来タグは実タグ / `llm_table_subtotal` で、偽の `income_statement.sales` は出さない。
     /// 保険等で売上欠測でも xbrl_facts 決定論（第一生命型）が使える場合は解決を試す。
-    func resolveBusinessBreakdown(docID: String) async -> BreakdownResolveResult {
-        guard let xbrlDir = await edinetClient.downloadDocument(docID) else { return .failed }
+    func resolveBusinessBreakdown(docID: String, correctionDocIDs: [String] = []) async -> BreakdownResolveResult {
+        guard let xbrlDir = await downloadAnnualFilingXbrl(
+            docID: docID, correctionDocIDs: correctionDocIDs
+        ) else { return .failed }
         guard let segments = BreakdownExtractor.extractSpecialSection("segments", xbrlDir: xbrlDir)
         else { return .notApplicable(reason: breakdownNotApplicableUnknown) }
 
@@ -493,17 +564,21 @@ public extension BltServerContext {
                 llmHint: result.audit?.notApplicableReason)
             return .notApplicable(reason: reason.rawValue)
         }
-        return .resolved(
-            payload: breakdownSnapshotPayload(from: snapshot), source: result.source.rawValue,
-            contentHash: hash, audit: result.audit.map(llmBreakdownAuditPayload(from:)))
+        return breakdownByRecordingOverlayRegressions(
+            .resolved(
+                payload: breakdownSnapshotPayload(from: snapshot), source: result.source.rawValue,
+                contentHash: hash, audit: result.audit.map(llmBreakdownAuditPayload(from:))),
+            xbrlDir: xbrlDir)
     }
 
     /// 内訳取り込み: 書類1件分の geography 軸内訳を解決する。`GeographyBreakdownResolver` が
     /// xbrl_facts / geography_llm へ振り分ける。正当欠測（地域注記なし、または LLM が
     /// applicable=false）は `not_applicable` / `not_found`、正規化・LLM 呼び出し失敗は
     /// `unknown`（要再試行）。売上分母は同一 XBRL パスで直接解決する（#9 / #10b）。
-    func resolveGeographyBreakdown(docID: String) async -> BreakdownResolveResult {
-        guard let xbrlDir = await edinetClient.downloadDocument(docID) else { return .failed }
+    func resolveGeographyBreakdown(docID: String, correctionDocIDs: [String] = []) async -> BreakdownResolveResult {
+        guard let xbrlDir = await downloadAnnualFilingXbrl(
+            docID: docID, correctionDocIDs: correctionDocIDs
+        ) else { return .failed }
         let consolidatedSales = BreakdownFinancialsResolver.financialsCanonicalSales(xbrlDir: xbrlDir)
         if consolidatedSales == nil || consolidatedSales == 0 {
             return .notApplicable(reason: breakdownNotApplicableNotFound)
@@ -530,9 +605,11 @@ public extension BltServerContext {
             }
             return .notApplicable(reason: breakdownNotApplicableUnknown)
         }
-        return .resolved(
-            payload: breakdownSnapshotPayload(from: snapshot), source: result.source.rawValue,
-            contentHash: hash, audit: result.audit.map(llmBreakdownAuditPayload(from:)))
+        return breakdownByRecordingOverlayRegressions(
+            .resolved(
+                payload: breakdownSnapshotPayload(from: snapshot), source: result.source.rawValue,
+                contentHash: hash, audit: result.audit.map(llmBreakdownAuditPayload(from:))),
+            xbrlDir: xbrlDir)
     }
 }
 
@@ -541,8 +618,10 @@ public extension BltServerContext {
     /// `NumberOfGroupEmployees` のセグメント dimension 付き fact のみを対象にした決定論経路
     /// （LLM フォールバックなし）。全社合計は同一 XBRL パスで `BreakdownFinancialsResolver` が
     /// 直接解決する（#9 / #10b）。
-    func resolveEmployeesBreakdown(docID: String) async -> BreakdownResolveResult {
-        guard let xbrlDir = await edinetClient.downloadDocument(docID) else { return .failed }
+    func resolveEmployeesBreakdown(docID: String, correctionDocIDs: [String] = []) async -> BreakdownResolveResult {
+        guard let xbrlDir = await downloadAnnualFilingXbrl(
+            docID: docID, correctionDocIDs: correctionDocIDs
+        ) else { return .failed }
         let total = BreakdownFinancialsResolver.financialsCanonicalEmployees(xbrlDir: xbrlDir)
         let cached = await businessSegmentDimensionCache.load(docID: docID, xbrlDir: xbrlDir)
         let memberParents = XBRLUtils.operatingSegmentMemberParents(in: xbrlDir)
@@ -555,17 +634,21 @@ public extension BltServerContext {
         }
         let extracted = ExtractedBreakdown(method: "xbrl_facts", tables: [], facts: cached.facts)
         let hash = breakdownContentHash(extracted: extracted, consolidatedSales: nil)
-        return .resolved(
-            payload: breakdownSnapshotPayload(from: snapshot), source: breakdownSourceXbrlFacts,
-            contentHash: hash, audit: nil)
+        return breakdownByRecordingOverlayRegressions(
+            .resolved(
+                payload: breakdownSnapshotPayload(from: snapshot), source: breakdownSourceXbrlFacts,
+                contentHash: hash, audit: nil),
+            xbrlDir: xbrlDir)
     }
 
     /// 内訳取り込み: 書類1件分の research_and_development 軸を解決する（2026-08-01追加）。
     /// 決定論のみ、LLM なし。全社 R&D 分母は同一 XBRL パスで `BreakdownFinancialsResolver` /
     /// `financialsCanonicalRd` が直接解決する（#9 / #10b）。セグメント dimension が無くても
     /// total があれば denominator のみの resolved になる（合計の正本を本軸に寄せる）。
-    func resolveResearchAndDevelopmentBreakdown(docID: String) async -> BreakdownResolveResult {
-        guard let xbrlDir = await edinetClient.downloadDocument(docID) else { return .failed }
+    func resolveResearchAndDevelopmentBreakdown(docID: String, correctionDocIDs: [String] = []) async -> BreakdownResolveResult {
+        guard let xbrlDir = await downloadAnnualFilingXbrl(
+            docID: docID, correctionDocIDs: correctionDocIDs
+        ) else { return .failed }
         let rd = BreakdownFinancialsResolver.financialsCanonicalRdItem(xbrlDir: xbrlDir)
         let cached = await businessSegmentDimensionCache.load(docID: docID, xbrlDir: xbrlDir)
         guard
@@ -577,16 +660,20 @@ public extension BltServerContext {
         }
         let extracted = ExtractedBreakdown(method: "xbrl_facts", tables: [], facts: cached.facts)
         let hash = breakdownContentHash(extracted: extracted, consolidatedSales: rd.value)
-        return .resolved(
-            payload: breakdownSnapshotPayload(from: snapshot), source: breakdownSourceXbrlFacts,
-            contentHash: hash, audit: nil)
+        return breakdownByRecordingOverlayRegressions(
+            .resolved(
+                payload: breakdownSnapshotPayload(from: snapshot), source: breakdownSourceXbrlFacts,
+                contentHash: hash, audit: nil),
+            xbrlDir: xbrlDir)
     }
 
     /// 内訳取り込み: 書類1件分の goodwill 軸内訳を解決する（2026-08-12追加）。決定論のみ、LLMなし。
     ///
     /// `Xbrl.goodwillSegmentTags` の無dimension fact から本関数が独立に解決する（`resolveItem`）。
-    func resolveGoodwillBreakdown(docID: String) async -> BreakdownResolveResult {
-        guard let xbrlDir = await edinetClient.downloadDocument(docID) else { return .failed }
+    func resolveGoodwillBreakdown(docID: String, correctionDocIDs: [String] = []) async -> BreakdownResolveResult {
+        guard let xbrlDir = await downloadAnnualFilingXbrl(
+            docID: docID, correctionDocIDs: correctionDocIDs
+        ) else { return .failed }
         let cached = await businessSegmentDimensionCache.load(docID: docID, xbrlDir: xbrlDir)
         let goodwill = BreakdownFinancialsResolver.financialsCanonicalGoodwillItem(xbrlDir: xbrlDir)
         guard
@@ -598,17 +685,21 @@ public extension BltServerContext {
         }
         let extracted = ExtractedBreakdown(method: "xbrl_facts", tables: [], facts: cached.facts)
         let hash = breakdownContentHash(extracted: extracted, consolidatedSales: goodwill.value)
-        return .resolved(
-            payload: breakdownSnapshotPayload(from: snapshot), source: breakdownSourceXbrlFacts,
-            contentHash: hash, audit: nil)
+        return breakdownByRecordingOverlayRegressions(
+            .resolved(
+                payload: breakdownSnapshotPayload(from: snapshot), source: breakdownSourceXbrlFacts,
+                contentHash: hash, audit: nil),
+            xbrlDir: xbrlDir)
     }
 }
 
 private extension BltServerContext {
     /// 報告セグメント別の決定論指標を共通の XBRL fact 経路で解決する。
     /// `segment_assets` は連結資産の内訳（segment + 非分類 reconciling、分母=連結 EntityTotal）。
-    func resolveSegmentMetricBreakdown(docID: String, axis: String) async -> BreakdownResolveResult {
-        guard let xbrlDir = await edinetClient.downloadDocument(docID) else { return .failed }
+    func resolveSegmentMetricBreakdown(docID: String, axis: String, correctionDocIDs: [String] = []) async -> BreakdownResolveResult {
+        guard let xbrlDir = await downloadAnnualFilingXbrl(
+            docID: docID, correctionDocIDs: correctionDocIDs
+        ) else { return .failed }
         let cached = await businessSegmentDimensionCache.load(docID: docID, xbrlDir: xbrlDir)
         let snapshot: BreakdownSnapshot?
         switch axis {
@@ -667,54 +758,64 @@ private extension BltServerContext {
             ]
         }
         let hash = breakdownContentHash(extracted: extracted, consolidatedSales: snapshot.denominator)
-        return .resolved(
-            payload: breakdownSnapshotPayload(from: snapshot), source: breakdownSourceXbrlFacts,
-            contentHash: hash, audit: nil)
+        return breakdownByRecordingOverlayRegressions(
+            .resolved(
+                payload: breakdownSnapshotPayload(from: snapshot), source: breakdownSourceXbrlFacts,
+                contentHash: hash, audit: nil),
+            xbrlDir: xbrlDir)
     }
 }
 
 public extension BltServerContext {
     /// 報告セグメント別のセグメント資産を解決する。
-    func resolveSegmentAssetsBreakdown(docID: String) async -> BreakdownResolveResult {
-        await resolveSegmentMetricBreakdown(docID: docID, axis: breakdownAxisSegmentAssets)
+    func resolveSegmentAssetsBreakdown(docID: String, correctionDocIDs: [String] = []) async -> BreakdownResolveResult {
+        await resolveSegmentMetricBreakdown(
+            docID: docID, axis: breakdownAxisSegmentAssets, correctionDocIDs: correctionDocIDs)
     }
 
     /// 報告セグメント別の減価償却費及び償却費を解決する。
-    func resolveDepreciationAndAmortizationBreakdown(docID: String) async -> BreakdownResolveResult {
+    func resolveDepreciationAndAmortizationBreakdown(docID: String, correctionDocIDs: [String] = []) async -> BreakdownResolveResult {
         await resolveSegmentMetricBreakdown(
-            docID: docID, axis: breakdownAxisDepreciationAndAmortization)
+            docID: docID, axis: breakdownAxisDepreciationAndAmortization,
+            correctionDocIDs: correctionDocIDs)
     }
 
     /// 報告セグメント別ののれんの償却額を解決する。
-    func resolveGoodwillAmortizationBreakdown(docID: String) async -> BreakdownResolveResult {
-        await resolveSegmentMetricBreakdown(docID: docID, axis: breakdownAxisGoodwillAmortization)
+    func resolveGoodwillAmortizationBreakdown(docID: String, correctionDocIDs: [String] = []) async -> BreakdownResolveResult {
+        await resolveSegmentMetricBreakdown(
+            docID: docID, axis: breakdownAxisGoodwillAmortization, correctionDocIDs: correctionDocIDs)
     }
 
     /// 報告セグメント別の減損損失を解決する。
-    func resolveImpairmentLossBreakdown(docID: String) async -> BreakdownResolveResult {
-        await resolveSegmentMetricBreakdown(docID: docID, axis: breakdownAxisImpairmentLoss)
+    func resolveImpairmentLossBreakdown(docID: String, correctionDocIDs: [String] = []) async -> BreakdownResolveResult {
+        await resolveSegmentMetricBreakdown(
+            docID: docID, axis: breakdownAxisImpairmentLoss, correctionDocIDs: correctionDocIDs)
     }
 
     /// 報告セグメント別の持分法会計処理される投資を解決する。
-    func resolveEquityMethodInvestmentsBreakdown(docID: String) async -> BreakdownResolveResult {
-        await resolveSegmentMetricBreakdown(docID: docID, axis: breakdownAxisEquityMethodInvestments)
+    func resolveEquityMethodInvestmentsBreakdown(docID: String, correctionDocIDs: [String] = []) async -> BreakdownResolveResult {
+        await resolveSegmentMetricBreakdown(
+            docID: docID, axis: breakdownAxisEquityMethodInvestments, correctionDocIDs: correctionDocIDs)
     }
 
     /// 報告セグメント別の資本的支出を解決する。
-    func resolveCapitalExpendituresBreakdown(docID: String) async -> BreakdownResolveResult {
-        await resolveSegmentMetricBreakdown(docID: docID, axis: breakdownAxisCapitalExpenditures)
+    func resolveCapitalExpendituresBreakdown(docID: String, correctionDocIDs: [String] = []) async -> BreakdownResolveResult {
+        await resolveSegmentMetricBreakdown(
+            docID: docID, axis: breakdownAxisCapitalExpenditures, correctionDocIDs: correctionDocIDs)
     }
 
     /// notes「設備投資等の概要」のCapexをbreakdown軸として解決する。
-    func resolveCapitalExpendituresOverviewBreakdown(docID: String) async -> BreakdownResolveResult {
+    func resolveCapitalExpendituresOverviewBreakdown(docID: String, correctionDocIDs: [String] = []) async -> BreakdownResolveResult {
         await resolveSegmentMetricBreakdown(
-            docID: docID, axis: breakdownAxisCapitalExpendituresOverview)
+            docID: docID, axis: breakdownAxisCapitalExpendituresOverview,
+            correctionDocIDs: correctionDocIDs)
     }
 
     /// 報告セグメント別の非流動性資産への追加額を解決する。
-    func resolveNoncurrentAssetAdditionsBreakdown(docID: String) async -> BreakdownResolveResult {
+    func resolveNoncurrentAssetAdditionsBreakdown(docID: String, correctionDocIDs: [String] = []) async -> BreakdownResolveResult {
         await resolveSegmentMetricBreakdown(
-            docID: docID, axis: breakdownAxisNoncurrentAssetAdditions)
+            docID: docID, axis: breakdownAxisNoncurrentAssetAdditions,
+            correctionDocIDs: correctionDocIDs)
     }
 }
 
@@ -840,7 +941,8 @@ func mapEdinetDocumentRecords(
             periodStart: normalizeDateFormat(doc["periodStart"] as? String),
             periodEnd: normalizeDateFormat(doc["periodEnd"] as? String),
             submitDateTime: nonEmptyString(doc["submitDateTime"]) ?? "",
-            docDescription: nonEmptyString(doc["docDescription"])
+            docDescription: nonEmptyString(doc["docDescription"]),
+            parentDocID: nonEmptyString(doc["parentDocID"])
         ))
     }
     return records
@@ -871,9 +973,9 @@ private func nonEmptyString(_ value: Any?) -> String? {
 /// 簡易セマンティクス（ライブ探索との意図的な差分・確定事項）:
 /// 各書類の `fy_end` は自身の period_end をそのまま使う（自己完結ビュー）。主要 doc type の
 /// 有報(120)・半期報告書(160) は period_end が通期期末のためライブ経路と完全一致する。
-/// 一方、旧四半期(140) は period_end が 2Q 末、訂正(130) は親有報リンクを `edinet_documents` が
-/// 保持しない（parentDocID 列なし）ため、ライブ経路の「親 FY 末への正規化／親リンク書類のみ採用」は
-/// 再現せず、自身の period_end・窓内全件で返す。schema 変更を避ける判断（docs/blt-server-roadmap.md）。
+/// 一方、旧四半期(140) は period_end が 2Q 末。訂正(130) の `parent_doc_id` は ingest の
+/// XBRL 選定用で、filings の `fy_end` は引き続き各行の period_end（空なら空）を返す。
+/// ライブ経路の「親 FY 末への正規化」は filings 公開形では再現しない。
 func filingsList(from records: [EdinetDocumentRecord], maxYears: Int) -> [[String: Any]] {
     let sorted = records.sorted { $0.submitDateTime > $1.submitDateTime }
     let cutoffYear = sorted.compactMap { extractYearMonth($0.periodEnd ?? "").0 }.max()
@@ -932,8 +1034,10 @@ public extension BltServerContext {
     /// 数値 fact インデックス（公開 Codable `XbrlFactIndexPayload`）を返す。
     /// IndividualAnalyzer と同じ `nilAsZero: false` で収集し、財務取り込み が消費する値と一致させる。
     /// ダウンロード失敗・fact 0 件は nil（戻り値パターン）。生 XBRL はローカルキャッシュに保持する。
-    func parseXbrlFactIndex(docID: String) async -> XbrlFactIndexPayload? {
-        guard let xbrlDir = await edinetClient.downloadDocument(docID) else { return nil }
+    func parseXbrlFactIndex(docID: String, correctionDocIDs: [String] = []) async -> XbrlFactIndexPayload? {
+        guard let xbrlDir = await downloadAnnualFilingXbrl(
+            docID: docID, correctionDocIDs: correctionDocIDs
+        ) else { return nil }
         let facts = XBRLUtils.collectAllNumericFacts(in: xbrlDir, nilAsZero: false)
         guard !facts.isEmpty else { return nil }
         return facts.mapValues { ctxMap in ctxMap.mapValues(xbrlFactRecord(from:)) }

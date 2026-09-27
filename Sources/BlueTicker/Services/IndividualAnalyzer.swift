@@ -67,7 +67,13 @@ struct IndividualAnalyzer {
 
         // 訂正(130)は索引・high-water 用。年次行は 120 のみ（有報年数が analysisYears 未満だと
         // prefix が末尾の訂正を拾い、同一 fy_end が二重になる。くふう 4376 / 2022-09）。
+        // 同一会社・同一期間・同一親有報の訂正は、パースできるものを提出順に fact overlay する。
         let targetDocs = financialsAnnualDocuments(docs)
+        let originals = targetDocs.compactMap(xbrlSourceDocument(fromEdinetFields:))
+        let corrections = docs.compactMap(xbrlSourceDocument(fromEdinetFields:))
+            .filter { $0.docTypeCode == Api.docTypeAmendment }
+        let correctionIDsByOriginal = preferredCorrectionDocIDsByOriginal(
+            originals: originals, corrections: corrections)
 
         // [String: Any] は Sendable 非準拠のため @unchecked Sendable ラッパーで渡す
         struct SendableDoc: @unchecked Sendable { let value: [String: Any] }
@@ -75,7 +81,9 @@ struct IndividualAnalyzer {
             items: targetDocs.map { SendableDoc(value: $0) },
             limit: Api.xbrlProcessConcurrency
         ) { d in
-            await self.processDocument(d.value)
+            let docID = d.value["docID"] as? String ?? ""
+            return await self.processDocument(
+                d.value, correctionDocIDs: correctionIDsByOriginal[docID] ?? [])
         }
 
         guard !yearEntries.isEmpty else { return .failed }
@@ -99,11 +107,15 @@ struct IndividualAnalyzer {
 
     // MARK: - Document Processing
 
-    func processDocument(_ doc: [String: Any]) async -> YearEntry? {
+    func processDocument(_ doc: [String: Any], correctionDocIDs: [String] = []) async -> YearEntry? {
         guard let docID = doc["docID"] as? String,
               let fyEnd = doc["edinet_fy_end"] as? String else { return nil }
 
-        guard let xbrlDir = await edinetClient.downloadDocument(docID) else { return nil }
+        guard let xbrlDir = await resolveAnnualXbrlDirectory(
+            originalDocID: docID,
+            correctionDocIDs: correctionDocIDs,
+            download: { await edinetClient.downloadDocument($0) }
+        ) else { return nil }
 
         let allTagElements = XBRLUtils.collectAllNumericElements(in: xbrlDir, nilAsZero: false)
         guard !allTagElements.isEmpty else { return nil }
@@ -277,7 +289,7 @@ struct IndividualAnalyzer {
 
 // MARK: - Testable helpers
 
-/// 通期 financials の年次計算対象。訂正(130)は索引・high-water 用で、年次行にしない。
+/// 通期 financials の年次計算対象。訂正(130)は索引・high-water・XBRL 差替用で、年次行にしない。
 func financialsAnnualDocuments(_ docs: [[String: Any]]) -> [[String: Any]] {
     docs.filter { ($0["_is_amendment"] as? Bool) != true }
 }

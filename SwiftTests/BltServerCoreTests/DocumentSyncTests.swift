@@ -14,6 +14,7 @@ private func withMigratedApp(_ body: (Application) async throws -> Void) async t
     do {
         app.databases.use(.sqlite(.memory), as: .sqlite)
         app.migrations.add(CreateEdinetDocument())
+        app.migrations.add(AddParentDocIDToEdinetDocuments())
         app.migrations.add(CreateEdinetSyncState())
         try await app.autoMigrate()
         try await body(app)
@@ -63,6 +64,22 @@ private func record(
             #expect(total == 1)
             let row = try #require(try await EdinetDocument.find("S1", on: app.db))
             #expect(row.filerName == "新名")
+        }
+    }
+
+    @Test func applyDocumentsStoresParentDocID() async throws {
+        try await withMigratedApp { app in
+            let amendment = EdinetDocumentRecord(
+                docID: "S100WRZH", edinetCode: "E03614", secCode: "83160",
+                filerName: "テスト株式会社", docTypeCode: "130", ordinanceCode: "010",
+                formCode: "030001", periodStart: nil, periodEnd: nil,
+                submitDateTime: "2025-09-30 15:38",
+                docDescription: "訂正有価証券報告書－第23期(2024/04/01－2025/03/31)",
+                parentDocID: "S100W0S7")
+            _ = try await applyDocuments([amendment], db: app.db)
+            let row = try #require(try await EdinetDocument.find("S100WRZH", on: app.db))
+            #expect(row.parentDocID == "S100W0S7")
+            #expect(row.toRecord().parentDocID == "S100W0S7")
         }
     }
 

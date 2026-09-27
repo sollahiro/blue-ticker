@@ -43,6 +43,12 @@ import Testing
         #expect(
             isPubliclyServableBreakdown(
                 source: breakdownSourceNotApplicable, needsReview: true, warnings: []) == true)
+        #expect(
+            isPubliclyServableBreakdown(
+                source: breakdownSourceXbrlFacts, needsReview: true,
+                warnings: [
+                    "overlay_regression:row_loss:S100X7DX:orig=S100W0S7:tag=Holding:before=70:after=13"
+                ]) == false)
     }
 
     @Test func publicServingFailsClosedForUnknownSources() {
