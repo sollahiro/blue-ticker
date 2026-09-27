@@ -178,14 +178,13 @@ git 管理する日本語 `_lab.xml` だけを置く（フルタクソノミ ZIP
 assets/taxonomy/labels/
   SOURCE.md
   jpcrp_2025-11-01_lab.xml      # 開示府令 jpcrp_cor（報告セグメント member）
-  jpcrp_dep_2025-11-01_lab.xml
   jppfs_2025-11-01_lab.xml      # 財務諸表本表 jppfs_cor
-  jppfs_dep_2025-11-01_lab.xml
   jpigp_2025-11-01_lab.xml      # IFRS jpigp_cor
-  jpigp_dep_2025-11-01_lab.xml
 ```
 
-出典は **2026年版 EDINETタクソノミ**（タクソノミ日付 **2025-11-01**。金融庁 2025-11-11 公表の本体 ZIP）。手順は `assets/taxonomy/labels/SOURCE.md`。手元に `assets/taxonomy/{GAAP,IFRS}/*.zip` がある場合は shipped に無いタグの補完だけ使う。
+廃止タクソノミの `_dep_lab.xml` は同梱しない。そこには標準ロールが無く `deprecatedLabel` / `deprecatedDateLabel`（「2019年版更新」や日付）だけがあり、収束ラベルに漏れる。ingest は標準ロール `http://www.xbrl.org/2003/role/label` だけを表示ラベルにし、deprecated ロールは捨てる。`verboseLabel` / `terseLabel` / `totalLabel` / 期首期末ロールは Statement の `preferredLabel` 用に残す。
+
+出典は **2026年版 EDINETタクソノミ**（タクソノミ日付 **2025-11-01**。金融庁 2025-11-11 公表の本体 ZIP）。手順は `assets/taxonomy/labels/SOURCE.md`。手元に `assets/taxonomy/{GAAP,IFRS}/*.zip` がある場合は shipped に無いタグの補完だけ使う（ZIP 内の `deprecated/` と `_dep` lab も読まない）。
 
 `EntityTotal` はタクソノミ member ではなく合成キーのため、どの `_lab.xml` にも無い。ingest 時に jpcrp `EntityTotalMember` と同じ「連結合計又は会社合計」をコード側で足す。
 
@@ -198,6 +197,6 @@ assets/taxonomy/labels/
 | 本番 ingest（手元 Mac、launchd → `scripts/jp/edinet/*.local.sh`） | repo で `swift build -c release --product blt-server` | git の `assets/taxonomy/labels/`。`ingest-common.sh` が `BLUE_TICKER_ASSETS_PATH=$REPO/assets` を既定セット |
 | CI `swift test` | テストプロセス | checkout された `assets/taxonomy/labels/`（CWD = パッケージ根） |
 
-`resolveAssetFileURL("taxonomy")` が `BLUE_TICKER_ASSETS_PATH` → CWD `assets/` → 実行ファイル隣接 `assets/` の順で探す。launchd ラッパーは repo 根でビルド・実行する（雛形 `ingest-run-cycle.local.example.sh`）。
+`resolveAssetFileURL("taxonomy")` が `BLUE_TICKER_ASSETS_PATH` → CWD `assets/` → 実行ファイル隣接 `assets/` の順で探す。launchd ラッパーは repo 根でビルド・実行する（雛形 `ingest-run-cycle.local.example.sh`）。`assets/taxonomy/labels` が見つからないか読めないときは ingest プロセスあたり 1 回、そのパスと `BLUE_TICKER_ASSETS_PATH` を stderr に警告する（黙ってコード側 sentinel だけに落とさない）。
 
 ---

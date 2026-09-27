@@ -72,7 +72,13 @@ private let _cacheLock = NSLock()
 nonisolated(unsafe) private var _standardTaxonomyLabelsCache: (
     collapsed: [String: String], variants: [String: [String: String]]
 )?
+nonisolated(unsafe) private var _didWarnMissingStandardTaxonomyLabels = false
 private let _standardTaxonomyLock = NSLock()
+private let xbrlStandardLabelRole = "http://www.xbrl.org/2003/role/label"
+
+private func isDeprecatedXbrlLabelRole(_ role: String) -> Bool {
+    role.contains("deprecated")
+}
 
 extension XBRLUtils {
     private static func linkbaseXmlFiles(in dir: URL, suffix: String) -> [URL] {
@@ -201,7 +207,8 @@ extension XBRLUtils {
     /// 第一入力は git 管理の `assets/taxonomy/labels/*_lab.xml`（jpcrp / jppfs / jpigp の日本語）。
     /// 任意の `assets/taxonomy/{GAAP,IFRS}/*.zip`（git 管理外）は欠測タグだけ埋める。
     /// 提出パッケージ側のラベルは `loadLabelsByTag` が常に優先する。
-    /// `assets/taxonomy` が無いときはコード側 sentinel（`EntityTotal`）だけ残る。プロセス内でメモ化する。
+    /// `assets/taxonomy/labels` が無いときはコード側 sentinel（`EntityTotal`）だけ残し、
+    /// パスを stderr に 1 回警告する。プロセス内でメモ化する。
     static func loadStandardTaxonomyLabels() -> [String: String] {
         standardTaxonomyLabels().collapsed
     }
@@ -249,9 +256,11 @@ extension XBRLUtils {
 
         if let taxonomyDir = resolveAssetFileURL(filename: "taxonomy") {
             let labelsDir = taxonomyDir.appendingPathComponent("labels", isDirectory: true)
-            if FileManager.default.fileExists(atPath: labelsDir.path) {
+            if isReadableDirectory(labelsDir) {
                 let parsed = parseTaxonomyLabels(in: labelsDir)
                 merge(parsed.collapsed, parsed.variants)
+            } else {
+                warnMissingStandardTaxonomyLabelsOnce(path: labelsDir.path)
             }
             // 手元に置いたフル ZIP は shipped に無いタグだけ埋める（会社提出ラベルはここでは見ない）。
             for subdir in ["GAAP", "IFRS"] {
@@ -263,6 +272,8 @@ extension XBRLUtils {
                 let parsed = parseTaxonomyLabels(in: extracted)
                 merge(parsed.collapsed, parsed.variants)
             }
+        } else {
+            warnMissingStandardTaxonomyLabelsOnce(path: expectedStandardTaxonomyLabelsDirPath())
         }
 
         applyCodeSideStandardMemberLabels(collapsed: &collapsed, variants: &variants)
@@ -275,7 +286,7 @@ extension XBRLUtils {
         collapsed: inout [String: String],
         variants: inout [String: [String: String]]
     ) {
-        let roleLabel = "http://www.xbrl.org/2003/role/label"
+        let roleLabel = xbrlStandardLabelRole
         for (tag, text) in Xbrl.codeSideStandardMemberLabels {
             if collapsed[tag] == nil {
                 collapsed[tag] = text
@@ -305,9 +316,13 @@ extension XBRLUtils {
         return dest
     }
 
-    /// 展開済みタクソノミディレクトリ配下の全 `*_lab.xml`（英語版 `-en` は除く）を走査する。
-    /// 現行版・廃止済み版（`deprecated/`）双方のラベルリンクベースが対象。
-    private static func parseTaxonomyLabels(
+    /// 展開済みタクソノミディレクトリ配下の現行 `*_lab.xml`（英語版 `-en`、廃止 `_dep` /
+    /// `deprecated/` は除く）を走査する。収束ラベルは標準ロール
+    /// `http://www.xbrl.org/2003/role/label` のみ。`deprecatedLabel` /
+    /// `deprecatedDateLabel` は捨てる（「2019年版更新」等が表示に漏れるため）。
+    /// `verboseLabel` / `terseLabel` / `totalLabel` / 期首期末ロールは Statement の
+    /// `preferredLabel` 用に variants へ残す。
+    static func parseTaxonomyLabels(
         in dir: URL
     ) -> (collapsed: [String: String], variants: [String: [String: String]]) {
         var collapsed: [String: String] = [:]
@@ -318,21 +333,54 @@ extension XBRLUtils {
         for case let fileURL as URL in enumerator {
             let name = fileURL.lastPathComponent
             guard name.hasSuffix("_lab.xml"), !name.contains("-en") else { continue }
+            if name.contains("_dep_") || fileURL.pathComponents.contains("deprecated") { continue }
             guard let data = try? Data(contentsOf: fileURL) else { continue }
             let parser = LabelLinkbaseParser()
             let xmlParser = XMLParser(data: data)
             xmlParser.delegate = parser
             xmlParser.parse()
-            for (tag, text) in parser.labelsByTag where collapsed[tag] == nil {
-                collapsed[tag] = text
-            }
             for (tag, roleMap) in parser.labelsByTagAndRole {
-                for (role, text) in roleMap where variants[tag]?[role] == nil {
-                    variants[tag, default: [:]][role] = text
+                if collapsed[tag] == nil, let text = roleMap[xbrlStandardLabelRole] {
+                    collapsed[tag] = text
+                }
+                for (role, text) in roleMap where !isDeprecatedXbrlLabelRole(role) {
+                    if variants[tag]?[role] == nil {
+                        variants[tag, default: [:]][role] = text
+                    }
                 }
             }
         }
         return (collapsed, variants)
+    }
+
+    private static func isReadableDirectory(_ url: URL) -> Bool {
+        var isDir: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir), isDir.boolValue
+        else { return false }
+        return (try? FileManager.default.contentsOfDirectory(
+            at: url, includingPropertiesForKeys: nil)) != nil
+    }
+
+    private static func expectedStandardTaxonomyLabelsDirPath() -> String {
+        if let dir = ProcessInfo.processInfo.environment[assetsPathEnv], !dir.isEmpty {
+            return URL(fileURLWithPath: dir).appendingPathComponent("taxonomy/labels").path
+        }
+        return URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+            .appendingPathComponent("assets/taxonomy/labels").path
+    }
+
+    private static func warnMissingStandardTaxonomyLabelsOnce(path: String) {
+        _standardTaxonomyLock.lock()
+        let already = _didWarnMissingStandardTaxonomyLabels
+        if !already { _didWarnMissingStandardTaxonomyLabels = true }
+        _standardTaxonomyLock.unlock()
+        guard !already else { return }
+        let envNote =
+            ProcessInfo.processInfo.environment[assetsPathEnv].flatMap { $0.isEmpty ? nil : $0 }
+            ?? "unset"
+        printError(
+            "[blue-ticker] Warning: 標準タクソノミ日本語ラベルディレクトリが見つからないか読めません: \(path)（BLUE_TICKER_ASSETS_PATH=\(envNote)）。\n"
+        )
     }
 
     /// プレゼンテーションリンクベースから {local_tag: roleURI list} を作る。同一ディレクトリはキャッシュを返す。
@@ -576,7 +624,7 @@ private final class LabelLinkbaseParser: NSObject, XMLParserDelegate {
     private var currentRole = ""
     private var currentText = ""
 
-    private let roleLabel = "http://www.xbrl.org/2003/role/label"
+    private let roleLabel = xbrlStandardLabelRole
 
     func parser(
         _ parser: XMLParser,
@@ -630,7 +678,9 @@ private final class LabelLinkbaseParser: NSObject, XMLParserDelegate {
     func parserDidEndDocument(_ parser: XMLParser) {
         for (from, to) in arcs {
             guard let tag = locByLabel[from], let pair = labelTextByResource[to] else { continue }
-            if pair.role == roleLabel || labelsByTag[tag] == nil {
+            if pair.role == roleLabel {
+                labelsByTag[tag] = pair.text
+            } else if labelsByTag[tag] == nil && !isDeprecatedXbrlLabelRole(pair.role) {
                 labelsByTag[tag] = pair.text
             }
             if labelsByTagAndRole[tag]?[pair.role] == nil {

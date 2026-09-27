@@ -19,6 +19,36 @@ import Testing
         """
     }
 
+    private static func mixedRoleMemberLinkbase(tag: String, japanese: String) -> String {
+        """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <link:linkbase xmlns:link="http://www.xbrl.org/2003/linkbase" xmlns:xlink="http://www.w3.org/1999/xlink">
+          <link:labelLink xlink:type="extended" xlink:role="http://www.xbrl.org/2003/role/link">
+            <link:loc xlink:type="locator" xlink:href="jpcrp_cor.xsd#jpcrp_cor_\(tag)" xlink:label="loc_\(tag)"/>
+            <link:label xlink:type="resource" xlink:label="label_\(tag)_dep" xlink:role="http://www.xbrl.org/2009/role/deprecatedLabel" xml:lang="ja">2019年版更新</link:label>
+            <link:labelArc xlink:type="arc" xlink:arcrole="http://www.xbrl.org/2003/arcrole/concept-label" xlink:from="loc_\(tag)" xlink:to="label_\(tag)_dep"/>
+            <link:label xlink:type="resource" xlink:label="label_\(tag)" xlink:role="http://www.xbrl.org/2003/role/label" xml:lang="ja">\(japanese)</link:label>
+            <link:labelArc xlink:type="arc" xlink:arcrole="http://www.xbrl.org/2003/arcrole/concept-label" xlink:from="loc_\(tag)" xlink:to="label_\(tag)"/>
+          </link:labelLink>
+        </link:linkbase>
+        """
+    }
+
+    private static func deprecatedOnlyMemberLinkbase(tag: String) -> String {
+        """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <link:linkbase xmlns:link="http://www.xbrl.org/2003/linkbase" xmlns:xlink="http://www.w3.org/1999/xlink">
+          <link:labelLink xlink:type="extended" xlink:role="http://www.xbrl.org/2003/role/link">
+            <link:loc xlink:type="locator" xlink:href="jpcrp_cor.xsd#jpcrp_cor_\(tag)" xlink:label="loc_\(tag)"/>
+            <link:label xlink:type="resource" xlink:label="label_\(tag)" xlink:role="http://www.xbrl.org/2009/role/deprecatedLabel" xml:lang="ja">2019年版更新</link:label>
+            <link:labelArc xlink:type="arc" xlink:arcrole="http://www.xbrl.org/2003/arcrole/concept-label" xlink:from="loc_\(tag)" xlink:to="label_\(tag)"/>
+            <link:label xlink:type="resource" xlink:label="label_\(tag)_date" xlink:role="http://www.xbrl.org/2009/role/deprecatedDateLabel" xml:lang="ja">2019-02-28</link:label>
+            <link:labelArc xlink:type="arc" xlink:arcrole="http://www.xbrl.org/2003/arcrole/concept-label" xlink:from="loc_\(tag)" xlink:to="label_\(tag)_date"/>
+          </link:labelLink>
+        </link:linkbase>
+        """
+    }
+
     private static let coveredStandardMembers: [String] = [
         "OtherReportableSegmentsMember",
         "ReportableSegmentsMember",
@@ -75,5 +105,43 @@ import Testing
         #expect(standard["NetSales"] == "売上高")
         #expect(standard["CashAndDeposits"] == "現金及び預金")
         #expect(standard["OperatingProfitLossIFRS"] == "営業利益（△損失）")
+        #expect(standard["OtherOperatingSegmentsMember"] == nil)
+        for (tag, label) in standard {
+            #expect(!label.contains("年版更新"), "\(tag) leaked deprecated label \(label)")
+            #expect(label != "2019-02-28", "\(tag) leaked deprecated date")
+        }
+    }
+
+    @Test func deprecatedOnlyMemberDoesNotTakeDeprecatedOrDateLabel() throws {
+        try XBRLTestSupport.withXbrlDir(
+            nil,
+            extraFiles: [
+                "only_deprecated_lab.xml": Self.deprecatedOnlyMemberLinkbase(
+                    tag: "OtherOperatingSegmentsMember"),
+                "jpcrp_dep_fake_lab.xml": Self.deprecatedOnlyMemberLinkbase(
+                    tag: "ShouldIgnoreDepFileMember"),
+                "mixed_roles_lab.xml": Self.mixedRoleMemberLinkbase(
+                    tag: "MixedRoleMember", japanese: "混在ロールの標準"),
+            ]
+        ) { dir in
+            let parsed = XBRLUtils.parseTaxonomyLabels(in: dir)
+            #expect(parsed.collapsed["OtherOperatingSegmentsMember"] == nil)
+            #expect(parsed.variants["OtherOperatingSegmentsMember"] == nil)
+            #expect(parsed.collapsed["ShouldIgnoreDepFileMember"] == nil)
+            #expect(parsed.variants["ShouldIgnoreDepFileMember"] == nil)
+            #expect(parsed.collapsed["MixedRoleMember"] == "混在ロールの標準")
+            #expect(parsed.variants["MixedRoleMember"]?["http://www.xbrl.org/2009/role/deprecatedLabel"] == nil)
+            #expect(
+                parsed.variants["MixedRoleMember"]?["http://www.xbrl.org/2003/role/label"]
+                    == "混在ロールの標準")
+
+            let labels = XBRLUtils.loadLabelsByTag(in: dir)
+            let leaked = labels["OtherOperatingSegmentsMember"]
+            #expect(leaked != "2019年版更新")
+            #expect(leaked != "2019-02-28")
+            if let leaked {
+                #expect(!leaked.contains("年版更新"))
+            }
+        }
     }
 }
