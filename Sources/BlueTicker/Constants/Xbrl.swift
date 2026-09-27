@@ -52,7 +52,8 @@ enum Xbrl {
         "OperatingRevenueSPF",  // 貸金・割賦の営業収益合計（アコム 8572 S100YBXA）
         "OperatingRevenueCMD",  // 商品先物等の営業収益合計（日産証券G 8705 S100YB7U）
         "OperatingRevenueIVT",  // 投資顧問の営業収益計（スパークス 8739 S100Y7MV）
-        "OperatingRevenueOILTelecommunications",  // 沖縄セルラー 9436
+        "OperatingRevenueOILTelecommunications",  // 電気通信事業営業収益（9436）。合計ではない
+        "OperatingRevenueIncidentalELC",  // 附帯事業営業収益（9436）
     ]
 
     static let ordinaryRevenueTags: [String] = [
@@ -99,7 +100,7 @@ enum Xbrl {
         "OperatingRevenue2",  // 営業収入（東宝 9602 S100Y5O3、アミューズ 4301）
         "ShippingBusinessRevenueAndOtherOperatingRevenueWAT",  // 川崎汽船 9107 S100YC6B
         "ShippingBusinessRevenueWAT",
-        "OperatingRevenueOILTelecommunications",
+        "OperatingRevenueOILTelecommunications",  // 電気通信事業の内訳。合計より後、合算フォールバック用
         "OperatingRevenueIFRS",
         "OperatingRevenueRevenueIFRS",
         "ContractsCompletedRevOA",  // 完成業務高（E・J HD 2153 S100YYLT）
@@ -138,11 +139,22 @@ enum Xbrl {
         "OperatingRevenuesIFRSSummaryOfBusinessResults",
         "OperatingRevenueContinuingOperationsIFRS",
         "OperatingRevenueOILTelecommunications",
+        "OperatingRevenueIncidentalELC",
         "OperatingRevenueRevenueIFRS",
         "GrossOperatingRevenue",
         "ShippingBusinessRevenueAndOtherOperatingRevenueWAT",
         "ShippingBusinessRevenueWAT",
     ]
+
+    /// 営業収益の事業別内訳（電気通信事業・附帯事業・電気事業の電気/その他/海外 等）。
+    /// Summary 売上は合計タグを優先し、合計が無いときだけこれらの当期連結を合算する。
+    static func isOperatingRevenueBusinessComponent(_ tag: String) -> Bool {
+        if tag.contains("OperatingRevenue") && tag.contains("Incidental") { return true }
+        if tag == "OperatingRevenueOILTelecommunications" { return true }
+        if tag.hasPrefix("ElectricUtilityOperatingRevenue") { return true }
+        if tag.contains("BusinessOperatingRevenue") { return true }
+        return false
+    }
 
     /// 保険売上（J-GAAP 経常収益 / IFRS 保険収益）。業種名では切らず、FieldSet に
     /// これらのタグがある filing を保険とみなす。

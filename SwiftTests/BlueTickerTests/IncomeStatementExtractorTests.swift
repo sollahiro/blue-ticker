@@ -321,4 +321,61 @@ import Foundation
         #expect(result.sales == 91_788_000_000.0)
         #expect(result.salesLabel == "営業総収入")
     }
+
+    /// 9436 沖縄セルラー: 連結営業収益合計タグがあれば電気通信/附帯の内訳より優先する。
+    @Test func testOperatingRevenueTotalBeatsTelecomBusinessComponents() {
+        let fs = makeFieldSet(
+            ("OperatingRevenue1SummaryOfBusinessResults", 86_348_000_000.0, 84_314_000_000.0),
+            ("OperatingRevenueOILTelecommunications", 52_291_000_000.0, 50_695_000_000.0),
+            ("OperatingRevenueIncidentalELC", 34_057_000_000.0, 33_619_000_000.0)
+        )
+        let result = IncomeStatementExtractor.extract(fieldSet: fs, accountingStandard: "J-GAAP")
+        #expect(result.sales == 86_348_000_000.0)
+        #expect(result.salesPrior == 84_314_000_000.0)
+        #expect(result.salesLabel == "営業収益")
+    }
+
+    /// 本表に合計が無く、電気通信事業＋附帯事業だけがあるときは当期連結の合算。
+    @Test func testTelecomBusinessComponentsSumWhenNoTotal() {
+        let fs = makeFieldSet(
+            ("OperatingRevenueOILTelecommunications", 52_291_000_000.0, 50_695_000_000.0),
+            ("OperatingRevenueIncidentalELC", 34_057_000_000.0, 33_619_000_000.0)
+        )
+        let result = IncomeStatementExtractor.extract(fieldSet: fs, accountingStandard: "J-GAAP")
+        #expect(result.sales == 86_348_000_000.0)
+        #expect(result.salesPrior == 84_314_000_000.0)
+        #expect(result.salesLabel == "営業収益")
+    }
+
+    /// 通常の売上高企業は事業別営業収益の合算ルールに触れない。
+    @Test func testNetSalesUnchangedWhenNoOperatingRevenueComponents() {
+        let fs = makeFieldSet(("NetSales", 1_000_000.0, 900_000.0))
+        let result = IncomeStatementExtractor.extract(fieldSet: fs, accountingStandard: "J-GAAP")
+        #expect(result.sales == 1_000_000.0)
+        #expect(result.salesPrior == 900_000.0)
+        #expect(result.salesLabel == "売上高")
+    }
+
+    /// 電力: 営業収益合計 `OperatingRevenueELE` が電気事業/その他事業の内訳より勝つ。
+    @Test func testOperatingRevenueELEBeatsElectricUtilityComponents() {
+        let fs = makeFieldSet(
+            ("OperatingRevenueELE", 6_328_574_000_000.0, nil),
+            ("ElectricUtilityOperatingRevenueELE", 5_735_316_000_000.0, nil),
+            ("OtherBusinessOperatingRevenueELE", 593_258_000_000.0, nil)
+        )
+        let result = IncomeStatementExtractor.extract(fieldSet: fs, accountingStandard: "J-GAAP")
+        #expect(result.sales == 6_328_574_000_000.0)
+        #expect(result.salesLabel == "営業収益")
+    }
+
+    /// 内訳のどれかが当期連結を欠くときは合算しない。
+    @Test func testDoesNotSumComponentsWhenAnyLacksCurrent() {
+        let fs = makeFieldSet(
+            ("OperatingRevenueOILTelecommunications", 52_291_000_000.0, 50_695_000_000.0),
+            ("OperatingRevenueIncidentalELC", nil, 33_619_000_000.0)
+        )
+        let result = IncomeStatementExtractor.extract(fieldSet: fs, accountingStandard: "J-GAAP")
+        #expect(result.sales == nil)
+        #expect(result.salesPrior == nil)
+    }
 }

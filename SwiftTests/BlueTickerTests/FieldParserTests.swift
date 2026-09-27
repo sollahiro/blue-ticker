@@ -74,6 +74,38 @@ import Foundation
         #expect(result.tag == nil)
     }
 
+    // MARK: - resolveNetSales
+
+    @Test func testResolveNetSalesPrefersTotalOverComponents() {
+        let fs = makeFieldSet(
+            ("OperatingRevenue1SummaryOfBusinessResults", 86_348.0, nil),
+            ("OperatingRevenueOILTelecommunications", 52_291.0, nil),
+            ("OperatingRevenueIncidentalELC", 34_057.0, nil)
+        )
+        let result = resolveNetSales(fs)
+        #expect(result.tag == "OperatingRevenue1SummaryOfBusinessResults")
+        #expect(result.current == 86_348.0)
+    }
+
+    @Test func testResolveNetSalesSumsComponentsWhenNoTotal() {
+        let fs = makeFieldSet(
+            ("OperatingRevenueOILTelecommunications", 52_291.0, 50_695.0),
+            ("OperatingRevenueIncidentalELC", 34_057.0, 33_619.0)
+        )
+        let result = resolveNetSales(fs)
+        #expect(result.tag == "OperatingRevenueIncidentalELC+OperatingRevenueOILTelecommunications")
+        #expect(result.current == 86_348.0)
+        #expect(result.prior == 84_314.0)
+    }
+
+    @Test func testResolveNetSalesLeavesNetSalesUnchanged() {
+        let fs = makeFieldSet(("NetSales", 1_000.0, 900.0))
+        let result = resolveNetSales(fs)
+        #expect(result.tag == "NetSales")
+        #expect(result.current == 1_000.0)
+        #expect(result.prior == 900.0)
+    }
+
     // MARK: - resolveAggregate
 
     @Test func testAggregateSumsAllComponents() {

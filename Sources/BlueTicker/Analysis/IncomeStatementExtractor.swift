@@ -16,7 +16,7 @@ struct IncomeStatementResult {
 enum IncomeStatementExtractor {
 
     static func extract(fieldSet: FieldSet, accountingStandard: String) -> IncomeStatementResult {
-        let salesItem = resolveItemPreferCurrent(fieldSet, tags: Xbrl.netSalesTags)
+        let salesItem = resolveNetSales(fieldSet)
         // 保険は営業利益概念が無く、経常利益フォールバックも使わない（全年 null）。
         var opItem = ResolvedItem(tag: nil, current: nil, prior: nil)
         if !Xbrl.isInsuranceFiling(fieldSet) {
@@ -49,8 +49,17 @@ enum IncomeStatementExtractor {
 
     private static func salesLabelForTag(_ tag: String?) -> String {
         guard let tag = tag else { return "売上高" }
+        if tag.contains("+") {
+            let parts = tag.split(separator: "+").map(String.init)
+            if parts.allSatisfy({
+                Xbrl.operatingRevenueTags.contains($0) || Xbrl.isOperatingRevenueBusinessComponent($0)
+            }) {
+                return "営業収益"
+            }
+        }
         if Xbrl.ordinaryRevenueTags.contains(tag) { return "経常収益" }
         if Xbrl.operatingRevenueTags.contains(tag) { return "営業収益" }
+        if Xbrl.isOperatingRevenueBusinessComponent(tag) { return "営業収益" }
         if Xbrl.businessRevenueTags.contains(tag) { return "事業収益" }
         switch tag {
         case "NetSalesIFRS", "TotalNetRevenuesIFRS", "RevenueIFRS",

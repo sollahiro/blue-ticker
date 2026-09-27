@@ -310,6 +310,43 @@ func resolveItemPreferCurrent(_ fieldSet: FieldSet, tags: [String]) -> ResolvedI
     return fallback ?? ResolvedItem(tag: nil, current: nil, prior: nil)
 }
 
+/// Summary 売上。合計タグ（NetSales / OperatingRevenueELE 等）を事業別内訳より優先し、
+/// 合計が無く内訳だけがあるときは当期連結が揃った内訳を合算する（9436 沖縄セルラー）。
+func resolveNetSales(_ fieldSet: FieldSet) -> ResolvedItem {
+    let preferredTags = Xbrl.netSalesTags.filter { !Xbrl.isOperatingRevenueBusinessComponent($0) }
+    let preferred = resolveItemPreferCurrent(fieldSet, tags: preferredTags)
+    if preferred.current != nil {
+        return preferred
+    }
+    let summed = sumOperatingRevenueBusinessComponents(fieldSet)
+    if summed.current != nil {
+        return summed
+    }
+    if preferred.prior != nil {
+        return preferred
+    }
+    return summed
+}
+
+/// 事業別営業収益の当期連結を合算する。1つでも当期が無い内訳があれば合算しない。
+func sumOperatingRevenueBusinessComponents(_ fieldSet: FieldSet) -> ResolvedItem {
+    let tags = fieldSet.keys.filter(Xbrl.isOperatingRevenueBusinessComponent).sorted()
+    guard !tags.isEmpty else {
+        return ResolvedItem(tag: nil, current: nil, prior: nil)
+    }
+    guard tags.allSatisfy({ fieldSet[$0]?.current != nil }) else {
+        return ResolvedItem(tag: nil, current: nil, prior: nil)
+    }
+    let current = tags.reduce(0.0) { $0 + (fieldSet[$1]?.current ?? 0) }
+    let prior: Double?
+    if tags.allSatisfy({ fieldSet[$0]?.prior != nil }) {
+        prior = tags.reduce(0.0) { $0 + (fieldSet[$1]?.prior ?? 0) }
+    } else {
+        prior = nil
+    }
+    return ResolvedItem(tag: tags.joined(separator: "+"), current: current, prior: prior)
+}
+
 /// 複数コンポーネントを積み上げ合算する。
 /// componentTagLists: [[候補タグ]] - 各要素が1コンポーネント
 func resolveAggregate(_ fieldSet: FieldSet, componentTagLists: [[String]]) -> ResolvedItem {

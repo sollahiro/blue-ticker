@@ -126,4 +126,35 @@ import Testing
         #expect(result.operatingProfit == 1_071_164_000)
         #expect(result.netProfit == 775_702_000)
     }
+
+    /// 9436 沖縄セルラー / S100Y9T5。本表は電気通信事業 52,291 と附帯事業 34,057 に分かれ、
+    /// 連結営業収益合計は 86,348。内訳タグを売上にしない。
+    @Test func okinawaCellularS100Y9T5SummarySalesIsConsolidatedOperatingRevenueTotal() async throws {
+        let docID = "S100Y9T5"
+        guard let xbrlDir = await ensureCached(docID) else { return }
+
+        guard case .resolved(let year) = StatementAnalyzer.resolveFromXBRL(
+            xbrlDir: xbrlDir,
+            docID: docID,
+            statementTypes: [.incomeStatement]
+        ) else {
+            Issue.record("resolveFromXBRL failed for \(docID)")
+            return
+        }
+
+        #expect(
+            year.incomeStatement.contains {
+                $0.tag == "OperatingRevenueOILTelecommunications" && $0.value == 52_291_000_000
+            })
+        #expect(
+            year.incomeStatement.contains {
+                $0.tag == "OperatingRevenueIncidentalELC" && $0.value == 34_057_000_000
+            })
+
+        let values = try #require(StatementFinancialsResolver.resolve(xbrlDir: xbrlDir))
+        #expect(values.sales == 86_348_000_000)
+        #expect(values.salesLabel == "営業収益")
+        #expect(values.operatingProfit == 18_693_000_000)
+        #expect(values.netProfit == 13_217_000_000)
+    }
 }
