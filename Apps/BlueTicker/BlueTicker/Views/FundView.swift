@@ -37,8 +37,10 @@ struct FundView: View {
                     NavigationLink("サーバー / Access / HAPIS") {
                         SettingsView()
                     }
-                    NavigationLink(value: Self.debugTicker) {
-                        Text("銘柄面（7203）")
+                    ForEach(Self.debugTickers) { company in
+                        NavigationLink(value: company) {
+                            Text(Format.displayName(company.name, fallback: company.code))
+                        }
                     }
                 }
             #endif
@@ -140,7 +142,13 @@ struct FundView: View {
 
     #if DEBUG
         /// 通信なしで銘柄面 → 保有情報まで行く。リストやフィードには入れない。
-        static let debugTicker = CompanyRef(
-            code: "7203", name: "トヨタ自動車", sector: "輸送用機器")
+        /// 社名の長さだけ変えて、ピルの1行・2行を見る。
+        static let debugTickers: [CompanyRef] = [
+            CompanyRef(code: "7751", name: "キヤノン", sector: "電気機器"),
+            CompanyRef(code: "7203", name: "トヨタ自動車", sector: "輸送用機器"),
+            CompanyRef(code: "9076", name: "守谷輸送機工業", sector: "倉庫・運輸関連"),
+            CompanyRef(code: "9983", name: "ファーストリテイリング", sector: "小売業"),
+            CompanyRef(code: "6544", name: "ジャパンエレベーターサービスホールディングス", sector: "サービス業"),
+        ]
     #endif
 }
