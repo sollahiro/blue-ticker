@@ -66,8 +66,9 @@ nonisolated(unsafe) private var _numericFactCache = BoundedFIFOCache<NumericFact
     capacity: _labelRoleCacheCapacity)
 private let _cacheLock = NSLock()
 
-// 標準タクソノミ（GAAP/IFRS）のラベルは `assets/taxonomy` 配下の zip 群という単一の入力から
-// プロセス生涯不変で決まるため、doc 単位キャッシュとは別に一度だけ計算しメモ化する。
+// 標準タクソノミ日本語ラベルは `assets/taxonomy/labels/*_lab.xml`（git 管理。jpcrp / jppfs /
+// jpigp）からプロセス生涯不変で決まる。任意の GAAP/IFRS zip は欠測タグの補完だけ。
+// doc 単位キャッシュとは別に一度だけ計算しメモ化する。
 nonisolated(unsafe) private var _standardTaxonomyLabelsCache: (
     collapsed: [String: String], variants: [String: [String: String]]
 )?
@@ -196,13 +197,11 @@ extension XBRLUtils {
         return variants
     }
 
-    /// 標準タクソノミ（EDINET が公開する GAAP/IFRS）のラベルリンクベースから {tag: 日本語標準ラベル} を作る。
-    /// `assets/taxonomy/{GAAP,IFRS}/*.zip`（ユーザーが EDINET から取得し配置する。git 管理外・
-    /// `.gitignore` 参照）の最新版（ファイル名の日付が最大のもの）のみを使う。各 zip には現行版と
-    /// 廃止済み要素の両方のラベルリンクベースが含まれるため、最新版1本で実データ上ほぼ全タグを
-    /// カバーできる（実データ検証: トヨタ・デンソー・任天堂で拡張タグ以外の未解決ゼロ）。
-    /// `assets/taxonomy` が存在しない環境（CI・本番等）では空辞書を返し、既存の「ラベル未解決」表示に
-    /// フォールバックする（クラッシュしない）。プロセス内でメモ化する。
+    /// 標準タクソノミのラベルリンクベースから {tag: 日本語標準ラベル} を作る。
+    /// 第一入力は git 管理の `assets/taxonomy/labels/*_lab.xml`（jpcrp / jppfs / jpigp の日本語）。
+    /// 任意の `assets/taxonomy/{GAAP,IFRS}/*.zip`（git 管理外）は欠測タグだけ埋める。
+    /// 提出パッケージ側のラベルは `loadLabelsByTag` が常に優先する。
+    /// `assets/taxonomy` が無いときはコード側 sentinel（`EntityTotal`）だけ残る。プロセス内でメモ化する。
     static func loadStandardTaxonomyLabels() -> [String: String] {
         standardTaxonomyLabels().collapsed
     }
@@ -231,17 +230,13 @@ extension XBRLUtils {
     private static func buildStandardTaxonomyLabels() -> (
         collapsed: [String: String], variants: [String: [String: String]]
     ) {
-        guard let taxonomyDir = resolveAssetFileURL(filename: "taxonomy") else { return ([:], [:]) }
-
         var collapsed: [String: String] = [:]
         var variants: [String: [String: String]] = [:]
-        for subdir in ["GAAP", "IFRS"] {
-            guard let zipURL = latestTaxonomyZip(
-                in: taxonomyDir.appendingPathComponent(subdir, isDirectory: true))
-            else { continue }
-            guard let extracted = try? extractTaxonomyZip(zipURL) else { continue }
-            defer { try? FileManager.default.removeItem(at: extracted) }
-            let (fileCollapsed, fileVariants) = parseTaxonomyLabels(in: extracted)
+
+        func merge(
+            _ fileCollapsed: [String: String],
+            _ fileVariants: [String: [String: String]]
+        ) {
             for (tag, label) in fileCollapsed where collapsed[tag] == nil {
                 collapsed[tag] = label
             }
@@ -251,7 +246,44 @@ extension XBRLUtils {
                 }
             }
         }
+
+        if let taxonomyDir = resolveAssetFileURL(filename: "taxonomy") {
+            let labelsDir = taxonomyDir.appendingPathComponent("labels", isDirectory: true)
+            if FileManager.default.fileExists(atPath: labelsDir.path) {
+                let parsed = parseTaxonomyLabels(in: labelsDir)
+                merge(parsed.collapsed, parsed.variants)
+            }
+            // 手元に置いたフル ZIP は shipped に無いタグだけ埋める（会社提出ラベルはここでは見ない）。
+            for subdir in ["GAAP", "IFRS"] {
+                guard let zipURL = latestTaxonomyZip(
+                    in: taxonomyDir.appendingPathComponent(subdir, isDirectory: true))
+                else { continue }
+                guard let extracted = try? extractTaxonomyZip(zipURL) else { continue }
+                defer { try? FileManager.default.removeItem(at: extracted) }
+                let parsed = parseTaxonomyLabels(in: extracted)
+                merge(parsed.collapsed, parsed.variants)
+            }
+        }
+
+        applyCodeSideStandardMemberLabels(collapsed: &collapsed, variants: &variants)
         return (collapsed, variants)
+    }
+
+    /// `EntityTotal` など、どの `_lab.xml` にも無い合成 member へ ingest 時の日本語を足す。
+    /// 既にラベルがあるキーは上書きしない（会社提出・標準タクソノミが勝つ）。
+    private static func applyCodeSideStandardMemberLabels(
+        collapsed: inout [String: String],
+        variants: inout [String: [String: String]]
+    ) {
+        let roleLabel = "http://www.xbrl.org/2003/role/label"
+        for (tag, text) in Xbrl.codeSideStandardMemberLabels {
+            if collapsed[tag] == nil {
+                collapsed[tag] = text
+            }
+            if variants[tag]?[roleLabel] == nil {
+                variants[tag, default: [:]][roleLabel] = text
+            }
+        }
     }
 
     /// ファイル名末尾の日付（例: `JPPFS_20251101.zip`）が最大の zip を選ぶ。文字列比較で十分

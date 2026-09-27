@@ -65,12 +65,11 @@ import Foundation
         #expect(segmentSum == snapshot.denominator)
 
         // ラベルリンクベースの日本語ラベルが解決されること（提出書類の label linkbase 実データ確認）。
-        // CorporateSharedMember は提出書類側の拡張ラベルが無く未解決（label == nil、公開層で
-        // labelRaw へフォールバック）。
+        // CorporateSharedMember は提出書類側の拡張ラベルが無く、jpcrp 標準ラベルで埋める。
         let components = try #require(
             snapshot.rows.first { $0.labelRaw == "ComponentsReportableSegmentsMember" })
         #expect(components.label == "コンポーネント")
-        #expect(corporateShared.label == nil)
+        #expect(corporateShared.label == "全社（共通）")
     }
 
     @Test func kyoceraResearchAndDevelopmentResolvesWithoutWarning() async throws {
@@ -729,12 +728,12 @@ import Foundation
         try await Self.expectEmployees(
             docID: "S100VXJA", total: 34_860,
             rows: [
-                ("CorporateSharedMember", nil, 780, "reconciling"),
+                ("CorporateSharedMember", "全社（共通）", 780, "reconciling"),
                 ("FrozenFoodsReportableSegmentMember", "冷凍食品", 5_478, "segment"),
                 ("HealthcareAndOthersReportableSegmentMember", "ヘルスケア等", 5_321, "segment"),
                 (
                     "OperatingSegmentsNotIncludedInReportableSegmentsAndOtherRevenueGeneratingBusinessActivitiesMember",
-                    nil, 1_185, "segment"),
+                    "その他", 1_185, "segment"),
                 ("SeasoningsAndFoodsReportableSegmentMember", "調味料・食品", 22_096, "segment"),
             ])
     }
@@ -743,13 +742,13 @@ import Foundation
         try await Self.expectEmployees(
             docID: "S100VYA0", total: 16_626,
             rows: [
-                ("CorporateSharedMember", nil, 229, "reconciling"),
+                ("CorporateSharedMember", "全社（共通）", 229, "reconciling"),
                 ("LogisticsReportableSegmentsMember", "低温物流", 4_926, "segment"),
                 ("MarineProductsReportableSegmentsMember", "水産", 744, "segment"),
                 ("MeatAndPoultryProductsReportableSegmentsMember", "畜産", 397, "segment"),
                 (
                     "OperatingSegmentsNotIncludedInReportableSegmentsAndOtherRevenueGeneratingBusinessActivitiesMember",
-                    nil, 190, "segment"),
+                    "その他", 190, "segment"),
                 ("ProcessedFoodsReportableSegmentsMember", "加工食品", 10_125, "segment"),
                 ("RealEstateReportableSegmentsMember", "不動産", 15, "segment"),
             ])
@@ -759,7 +758,7 @@ import Foundation
         try await Self.expectEmployees(
             docID: "S100VU4O", total: 63,
             rows: [
-                ("CorporateSharedMember", nil, 15, "reconciling"),
+                ("CorporateSharedMember", "全社（共通）", 15, "reconciling"),
                 ("RealEstateLeasingReportableSegmentMember", "不動産賃貸事業", 4, "segment"),
                 ("RealEstateManagementReportableSegmentMember", "不動産管理事業", 5, "segment"),
                 ("RealEstateSalesReportableSegmentMember", "不動産販売事業", 39, "segment"),
@@ -771,7 +770,7 @@ import Foundation
             docID: "S100W3XJ", total: 72_593,
             rows: [
                 ("BusinessInnovationReportableSegmentsMember", "ビジネスイノベーション", 34_173, "segment"),
-                ("CorporateSharedMember", nil, 4_129, "reconciling"),
+                ("CorporateSharedMember", "全社（共通）", 4_129, "reconciling"),
                 ("ElectronicsReportableSegmentsMember", "エレクトロニクス", 6_472, "segment"),
                 ("HealthcareReportableSegmentsMember", "ヘルスケア", 21_369, "segment"),
                 ("ImagingReportableSegmentsMember", "イメージング", 6_450, "segment"),
@@ -793,11 +792,11 @@ import Foundation
         try await Self.expectEmployees(
             docID: "S100XR0M", total: 52_503,
             rows: [
-                ("CorporateSharedMember", nil, 1_403, "reconciling"),
+                ("CorporateSharedMember", "全社（共通）", 1_403, "reconciling"),
                 ("MachineryReportableSegmentMember", "機械", 41_342, "segment"),
                 (
                     "OperatingSegmentsNotIncludedInReportableSegmentsAndOtherRevenueGeneratingBusinessActivitiesMember",
-                    nil, 1_379, "segment"),
+                    "その他", 1_379, "segment"),
                 ("WaterAndEnvironmentReportableSegmentMember", "水・環境", 8_379, "segment"),
             ])
     }
@@ -807,7 +806,7 @@ import Foundation
             docID: "S100W4MT", total: 74_077,
             rows: [
                 ("AutomobileBusinessReportableSegmentMember", "四輪事業", 64_149, "segment"),
-                ("CorporateSharedMember", nil, 996, "reconciling"),
+                ("CorporateSharedMember", "全社（共通）", 996, "reconciling"),
                 ("MarineBusinessReportableSegmentMember", "マリン事業", 1_460, "segment"),
                 ("MotorcycleBusinessReportableSegmentMember", "二輪事業", 7_121, "segment"),
                 ("OtherBusinessReportableSegmentMember", "その他事業", 351, "segment"),

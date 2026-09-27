@@ -165,3 +165,38 @@ CI では `swift-macos` / `swift-linux` ジョブの `Test` ステップに repo
 - 回帰は `XbrlAmendmentSourceTests` / `XbrlOverlayRegressionTests`。`cache_version` はバンプしない（データ源の refinement。対象会社-FY は `--doc-ids` で再 ingest）。
 
 ---
+
+## 4. 標準タクソノミ日本語ラベル（ingest）
+
+提出パッケージの `_lab.xml` には企業拡張タグ分しか無いことが多い。EDINET 標準 member（`OtherReportableSegmentsMember`、報告セグメント小計、調整項目、`EntityTotal` など）の日本語は **ingest 時のラベル解決**で埋める。配信時の書き換えや固定文言置換はしない。会社提出ラベルが常に勝つ。
+
+### 4.1 配置
+
+git 管理する日本語 `_lab.xml` だけを置く（フルタクソノミ ZIP 約 105MB は置かない）。
+
+```
+assets/taxonomy/labels/
+  SOURCE.md
+  jpcrp_2025-11-01_lab.xml      # 開示府令 jpcrp_cor（報告セグメント member）
+  jpcrp_dep_2025-11-01_lab.xml
+  jppfs_2025-11-01_lab.xml      # 財務諸表本表 jppfs_cor
+  jppfs_dep_2025-11-01_lab.xml
+  jpigp_2025-11-01_lab.xml      # IFRS jpigp_cor
+  jpigp_dep_2025-11-01_lab.xml
+```
+
+出典と更新手順は `assets/taxonomy/labels/SOURCE.md`。手元に `assets/taxonomy/{GAAP,IFRS}/*.zip` がある場合は shipped に無いタグの補完だけ使う。
+
+`EntityTotal` はタクソノミ member ではなく合成キーのため、どの `_lab.xml` にも無い。ingest 時に jpcrp `EntityTotalMember` と同じ「連結合計又は会社合計」をコード側で足す。
+
+### 4.2 ingest ホストがファイルを得る経路
+
+| 実行場所 | バイナリ | ラベルファイル |
+|---|---|---|
+| 本番 ingest（Sorahiro 手元 Mac、launchd → `scripts/jp/edinet/*.local.sh`） | repo で `swift build -c release --product blt-server` | git の `assets/taxonomy/labels/`。`ingest-common.sh` が `BLUE_TICKER_ASSETS_PATH=$REPO/assets` を既定セット |
+| Fly / Docker イメージ | `Dockerfile` の `blt-server` | ランタイムへ `COPY assets/taxonomy/labels`。フル ZIP は `.dockerignore` で除外 |
+| CI `swift test` | テストプロセス | checkout された `assets/taxonomy/labels/`（CWD = パッケージ根） |
+
+`resolveAssetFileURL("taxonomy")` が `BLUE_TICKER_ASSETS_PATH` → CWD `assets/` → 実行ファイル隣接 `assets/` の順で探す。launchd ラッパーは repo 根でビルド・実行する（雛形 `ingest-run-cycle.local.example.sh`）。
+
+---

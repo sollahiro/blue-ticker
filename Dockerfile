@@ -26,10 +26,11 @@ FROM swift:6.1-slim
 
 WORKDIR /app
 
-# サーバーバイナリと EDINET コード CSV のみコピーする。
-# assets/taxonomy（約 105MB）はソース未参照のため含めない。
+# サーバーバイナリと、実行時に必要な assets だけコピーする。
+# フルタクソノミ ZIP（約 105MB）は入れない。日本語 _lab.xml は ingest 時の標準ラベル補完に必要。
 COPY --from=build /build/.build/release/blt-server ./blt-server
 COPY assets/EdinetcodeDlInfo.csv ./assets/EdinetcodeDlInfo.csv
+COPY assets/taxonomy/labels ./assets/taxonomy/labels
 
 # cloudflared サイドカー（Cloudflare Access 方式A・エッジ信頼。.agents/skills/deploy/SKILL.md 参照）。
 # CLOUDFLARE_TUNNEL_TOKEN 未設定時は entrypoint.sh が起動をスキップするため self-host 互換は保たれる。

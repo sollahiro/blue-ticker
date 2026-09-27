@@ -43,3 +43,5 @@ chmod +x scripts/jp/edinet/ingest-run-cycle.local.sh
 # limit 等は ingest.local.env を編集するだけ
 ./scripts/jp/edinet/ingest-run-cycle.local.sh
 ```
+
+`ingest-common.sh` は `BLUE_TICKER_ASSETS_PATH` 未設定なら `$REPO/assets` を使う（`assets/taxonomy/labels/` の日本語 `_lab.xml`。`docs/xbrl-parsing.md` §4）。
