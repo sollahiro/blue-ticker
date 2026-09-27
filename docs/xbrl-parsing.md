@@ -144,7 +144,7 @@ CI では `swift-macos` / `swift-linux` ジョブの `Test` ステップに repo
 - **TextBlock**: 訂正に同じ要素があればその本文。無ければ原本。breakdown の html_table は TextBlock 由来なので overlay 後の本文を使う。
 - **HTML 見出し経路**: filing-sections の honbun 抽出と US-GAAP 0105010 本表は原本 HTML。Overview は overlay があるとき TextBlock を先に見る。
 - パースできない 130 はその件だけ飛ばす。会社または期間が違う訂正は選ばない。複数なら後勝ち。
-- **回帰ガード**: 各 130 を重ねた直後に、直前状態（原本 120 または直前の overlay）と比べる。次のいずれかなら**その fact（`row_loss` は当該タグの Row{N}Member 表）だけ直前値へ戻し**、レイヤの残りは採用する。差し戻した fact から作った notes / breakdowns だけ `needs_review`（公開 REST / MCP では既存の `needs_review` 除外と同じく隠す）。会社-FY 全体は立てない。
+- **回帰ガード**: 各 130 を重ねた直後に、直前状態（原本 120 または直前の overlay）と比べる。次のいずれかなら**そのレイヤ全体を捨て**、直前の良い状態を残す。捨てたレイヤから作った notes / breakdowns だけ `needs_review`（公開 REST / MCP では既存の `needs_review` 除外と同じく隠す）。会社-FY 全体は立てない。
   - `Row{N}Member` 表（政策保有など）が直前より **30% 以上かつ 5 行以上**減る（8316 の後続訂正が ~13 行で ~70 行表を置換する形）
   - 直前まで内訳と一致していた合計・小計が一致しなくなる
   - 行メンバー以外の主要数値がだいたい 10 倍動く（単位・スケール跳び）。**130 インスタンスにその tag+context がある明示置換は許す**（8316 WRZH の設備投資 100 倍など）。同じタグの関連コンテキストが 130 にあり片方だけ跳ぶとき、または継承 fact が動いたときだけ回帰。

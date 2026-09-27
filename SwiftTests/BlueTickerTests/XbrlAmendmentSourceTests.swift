@@ -244,7 +244,7 @@ import Testing
         #expect(!isRowMemberContext("CurrentYearDuration_ReportableSegmentMember"))
     }
 
-    @Test func resolveAnnualXbrlDirectoryAppliesRegressingLayerButRevertsRowLossTable() async {
+    @Test func resolveAnnualXbrlDirectorySkipsRegressingLayerFromOverlayDirs() async {
         let originalURL = URL(fileURLWithPath: "/tmp/orig-8316")
         let wrzh = URL(fileURLWithPath: "/tmp/wrzh-8316")
         let x7dx = URL(fileURLWithPath: "/tmp/x7dx-8316")
@@ -280,7 +280,7 @@ import Testing
             },
             numericFacts: { facts[$0.path] ?? [:] })
         #expect(chosen == merged)
-        #expect(box.overlays == [wrzh, x7dx])
+        #expect(box.overlays == [wrzh])
     }
 }
 

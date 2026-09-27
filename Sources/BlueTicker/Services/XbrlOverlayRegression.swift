@@ -19,7 +19,7 @@ public let xbrlOverlayRegressionKindRowLoss = "row_loss"
 public let xbrlOverlayRegressionKindReconcile = "reconcile"
 public let xbrlOverlayRegressionKindScaleJump = "scale_jump"
 
-/// 1 件の訂正レイヤで差し戻した fact の理由。公開面の `needs_review` とログに使う。
+/// 1 件の訂正レイヤを捨てた理由。公開面の `needs_review` とログに使う。
 public struct XbrlOverlayRegression: Equatable, Sendable, Codable {
     public var originalDocID: String
     public var correctionDocID: String
@@ -82,7 +82,7 @@ struct XbrlOverlayRegressionManifest: Codable {
     var skipped: [XbrlOverlayRegression]
 }
 
-/// 1 レイヤ分の overlay 結果を直前状態と比べ、差し戻す fact があれば理由を返す。
+/// 1 レイヤ分の overlay 結果を直前状態と比べ、回帰があれば理由を返す。
 /// `overlay` は当該 130 インスタンスの fact（継承分を含まない）。省略時は `after` を明示置換とみなす。
 public func xbrlOverlayRegressions(
     before: [String: [String: Double]],
@@ -108,7 +108,9 @@ public func xbrlOverlayRegressions(
     return found
 }
 
-/// 提出が古い順の訂正を重ねる。回帰した fact だけ直前値へ戻し、レイヤの残りは採用する。
+/// 提出が古い順の訂正を重ねる。いずれかの回帰理由（`row_loss` / `reconcile` / `scale_jump`）が
+/// あればそのレイヤ全体を捨て、直前の fact を残す。明示的で内部一貫した 130 のスケール変更は
+/// 回帰にしない（`scaleJumpRegressions`）。
 /// `base` / 各 `layers[].facts` はこの原本 `originalDocID` のパッケージ。他 doc は見ない。
 public func applyGuardedXbrlOverlays(
     base: [String: [String: Double]],
@@ -122,38 +124,13 @@ public func applyGuardedXbrlOverlays(
         let found = xbrlOverlayRegressions(
             before: current, after: candidate, originalDocID: originalDocID,
             correctionDocID: layer.correctionDocID, overlay: layer.facts)
-        let filtered = excludingRevertedFacts(layer.facts, reverts: found)
-        current = overlayKeyedFacts(base: current, overlay: filtered)
-        skipped.append(contentsOf: found)
+        if found.isEmpty {
+            current = candidate
+        } else {
+            skipped.append(contentsOf: found)
+        }
     }
     return (current, skipped)
-}
-
-/// 回帰した tag/context（`row_loss` / `reconcile` は当該タグの Row{N}Member 表）を overlay から除く。
-func excludingRevertedFacts<Value>(
-    _ overlay: [String: [String: Value]],
-    reverts: [XbrlOverlayRegression]
-) -> [String: [String: Value]] {
-    guard !reverts.isEmpty else { return overlay }
-    var result = overlay
-    for revert in reverts {
-        guard var ctxMap = result[revert.tag] else { continue }
-        switch revert.kind {
-        case xbrlOverlayRegressionKindRowLoss:
-            ctxMap = ctxMap.filter { !isRowMemberContext($0.key) }
-        case xbrlOverlayRegressionKindReconcile:
-            ctxMap = ctxMap.filter { !isRowMemberContext($0.key) }
-            if let stem = revert.contextRef {
-                ctxMap.removeValue(forKey: stem)
-            }
-        default:
-            if let ctx = revert.contextRef {
-                ctxMap.removeValue(forKey: ctx)
-            }
-        }
-        result[revert.tag] = ctxMap
-    }
-    return result
 }
 
 func overlayFactValues(_ index: XbrlFactIndex) -> [String: [String: Double]] {
