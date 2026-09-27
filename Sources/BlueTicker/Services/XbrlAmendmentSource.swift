@@ -70,7 +70,7 @@ public func preferredCorrectionDocIDsByOriginal(
 /// 原本 ZIP を土台に、パースできる訂正を提出が古い順へ overlay した展開ディレクトリを返す。
 /// 訂正の取得失敗・パース失敗はその件だけ飛ばす。適格な訂正が無ければ原本。
 /// `correctionDocIDs` は新しい順（`matchingXbrlCorrections` と同じ）。
-/// 回帰ガードはレイヤ全体を捨てず、該当 fact だけ直前値へ戻す。
+/// 回帰したレイヤは overlay に載せない（直前の良い状態を残す）。
 public func resolveAnnualXbrlDirectory(
     originalDocID: String,
     correctionDocIDs: [String],
@@ -92,16 +92,19 @@ public func resolveAnnualXbrlDirectory(
         overlayDocIDs.append(docID)
         layers.append((correctionDocID: docID, facts: factsOf(dir)))
     }
-    let overlayIDsForManifest = overlayDocIDs
     let skippedRegressions = applyGuardedXbrlOverlays(
         base: factsOf(originalDir), layers: layers, originalDocID: originalDocID
     ).skipped
-    if overlayDirs.isEmpty, skippedRegressions.isEmpty { return originalDir }
+    let skippedIDs = Set(skippedRegressions.map(\.correctionDocID))
+    let applied = zip(overlayDocIDs, overlayDirs).filter { !skippedIDs.contains($0.0) }
+    let appliedDocIDs = applied.map(\.0)
+    let appliedDirs = applied.map(\.1)
+    if appliedDirs.isEmpty, skippedRegressions.isEmpty { return originalDir }
     let merged = (materialize ?? {
         materializeOverlaidXbrlDirectory(
             original: $0, overlayDirs: $1, originalDocID: originalDocID,
-            regressions: skippedRegressions, overlayDocIDs: overlayIDsForManifest)
-    })(originalDir, overlayDirs)
+            regressions: skippedRegressions, overlayDocIDs: appliedDocIDs)
+    })(originalDir, appliedDirs)
     if let merged {
         writeOverlayRegressions(skippedRegressions, originalDocID: originalDocID, to: merged)
     }
@@ -171,24 +174,6 @@ func overlayDirectoryEntries(in dir: URL) -> [XbrlOverlayDirectoryEntry] {
 /// マニフェストに書かれた訂正展開ディレクトリ（提出が古い順）。無ければ空。
 func overlayDirectories(in dir: URL) -> [URL] {
     overlayDirectoryEntries(in: dir).map(\.url)
-}
-
-/// 訂正 overlay を回帰マスク付きで重ねる。差し戻しは当該 `correctionDocID` の fact だけ。
-/// 直前値は呼び出し側が渡す `base`（この原本パッケージの直前 overlay 状態）。DB は読まない。
-func overlayFactsApplyingLayerReverts<Value>(
-    base: [String: [String: Value]],
-    correctionDocID: String?,
-    overlay: [String: [String: Value]],
-    reverts: [XbrlOverlayRegression]
-) -> [String: [String: Value]] {
-    let layerReverts: [XbrlOverlayRegression]
-    if let correctionDocID {
-        layerReverts = reverts.filter { $0.correctionDocID == correctionDocID }
-    } else {
-        layerReverts = []
-    }
-    return overlayKeyedFacts(
-        base: base, overlay: excludingRevertedFacts(overlay, reverts: layerReverts))
 }
 
 /// 原本ディレクトリに続き、訂正 overlay を提出が古い順で返す。

@@ -3,7 +3,7 @@ import Fluent
 import Foundation
 import Logging
 
-/// 訂正 overlay で差し戻した fact を 1 行ログする。`warnings` に `overlay_regression` が無いときは何もしない。
+/// 訂正 overlay で捨てたレイヤを 1 行ログする。`warnings` に `overlay_regression` が無いときは何もしない。
 func logXbrlOverlayRegressionIfNeeded(
     warnings: [String], code: String, docID: String, db: Database, logger: Logger?
 ) async {
