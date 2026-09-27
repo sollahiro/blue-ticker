@@ -58,7 +58,7 @@
       },
       {
         "amount" : 16758000000,
-        "label" : null,
+        "label" : "その他",
         "label_raw" : "OperatingSegmentsNotIncludedInReportableSegmentsAndOtherRevenueGeneratingBusinessActivitiesMember",
         "profit" : 5468000000,
         "row_kind" : "segment"
@@ -106,7 +106,7 @@
       },
       {
         "amount" : 5601000000,
-        "label" : null,
+        "label" : "その他",
         "label_raw" : "OperatingSegmentsNotIncludedInReportableSegmentsAndOtherRevenueGeneratingBusinessActivitiesMember",
         "profit" : 1089000000,
         "row_kind" : "segment"
@@ -334,7 +334,7 @@
       },
       {
         "amount" : 15921000000,
-        "label" : null,
+        "label" : "その他",
         "label_raw" : "OtherReportableSegmentsMember",
         "profit" : 824000000,
         "row_kind" : "segment"
