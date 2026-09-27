@@ -4,8 +4,6 @@
 .git/
 .github/
 docs/
-# フルタクソノミ ZIP（約 105MB）はイメージに入れない。
-# 日本語 _lab.xml（assets/taxonomy/labels/）は ingest 時ラベル補完に必要なので残す。
-assets/taxonomy/GAAP/
-assets/taxonomy/IFRS/
+# taxonomy（約 105MB）はサーバー未使用。CSV だけ残す。
+assets/taxonomy/
 **/.DS_Store

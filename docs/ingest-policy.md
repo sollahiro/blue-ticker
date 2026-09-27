@@ -100,7 +100,7 @@ overviews                … 銘柄の短い会社説明（LLM。最新有報1�
 
 コード変更後は `swift build -c release --product blt-server` を先に実行（旧バイナリは新 stage を黙って飛ばす）。
 
-標準タクソノミ日本語ラベルは git の `assets/taxonomy/labels/`（jpcrp / jppfs / jpigp の `_lab.xml`）。`ingest-common.sh` は `BLUE_TICKER_ASSETS_PATH` 未設定なら `$REPO/assets` を使う。Docker イメージは同ディレクトリを COPY する（フル ZIP は入れない）。詳細は `docs/xbrl-parsing.md` §4。
+標準タクソノミ日本語ラベルは git の `assets/taxonomy/labels/`（2026年版 EDINET、タクソノミ日付 2025-11-01。jpcrp / jppfs / jpigp の `_lab.xml`）。本番 ingest は手元 Mac の repo checkout から読む。`ingest-common.sh` は `BLUE_TICKER_ASSETS_PATH` 未設定なら `$REPO/assets` を使う。詳細は `docs/xbrl-parsing.md` §4。
 
 ## 事後処理
 

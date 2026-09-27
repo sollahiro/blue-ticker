@@ -185,16 +185,17 @@ assets/taxonomy/labels/
   jpigp_dep_2025-11-01_lab.xml
 ```
 
-出典と更新手順は `assets/taxonomy/labels/SOURCE.md`。手元に `assets/taxonomy/{GAAP,IFRS}/*.zip` がある場合は shipped に無いタグの補完だけ使う。
+出典は **2026年版 EDINETタクソノミ**（タクソノミ日付 **2025-11-01**。金融庁 2025-11-11 公表の本体 ZIP）。手順は `assets/taxonomy/labels/SOURCE.md`。手元に `assets/taxonomy/{GAAP,IFRS}/*.zip` がある場合は shipped に無いタグの補完だけ使う。
 
 `EntityTotal` はタクソノミ member ではなく合成キーのため、どの `_lab.xml` にも無い。ingest 時に jpcrp `EntityTotalMember` と同じ「連結合計又は会社合計」をコード側で足す。
 
 ### 4.2 ingest ホストがファイルを得る経路
 
+本番 ingest は Sorahiro 手元 Mac のみ（launchd が repo checkout から `blt-server` をビルド）。Docker / Fly では ingest しない。ラベルファイルは repo の `assets/taxonomy/labels/` に置き、実行時は checkout から読む。
+
 | 実行場所 | バイナリ | ラベルファイル |
 |---|---|---|
-| 本番 ingest（Sorahiro 手元 Mac、launchd → `scripts/jp/edinet/*.local.sh`） | repo で `swift build -c release --product blt-server` | git の `assets/taxonomy/labels/`。`ingest-common.sh` が `BLUE_TICKER_ASSETS_PATH=$REPO/assets` を既定セット |
-| Fly / Docker イメージ | `Dockerfile` の `blt-server` | ランタイムへ `COPY assets/taxonomy/labels`。フル ZIP は `.dockerignore` で除外 |
+| 本番 ingest（手元 Mac、launchd → `scripts/jp/edinet/*.local.sh`） | repo で `swift build -c release --product blt-server` | git の `assets/taxonomy/labels/`。`ingest-common.sh` が `BLUE_TICKER_ASSETS_PATH=$REPO/assets` を既定セット |
 | CI `swift test` | テストプロセス | checkout された `assets/taxonomy/labels/`（CWD = パッケージ根） |
 
 `resolveAssetFileURL("taxonomy")` が `BLUE_TICKER_ASSETS_PATH` → CWD `assets/` → 実行ファイル隣接 `assets/` の順で探す。launchd ラッパーは repo 根でビルド・実行する（雛形 `ingest-run-cycle.local.example.sh`）。

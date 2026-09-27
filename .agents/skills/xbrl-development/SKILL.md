@@ -320,7 +320,7 @@ US-GAAP 企業では `ix:nonFraction` が存在しないため、連結損益計
 
 `assets/taxonomy/` に格納されている EDINETタクソノミを使うと、標準タグの日本語ラベルや定義を一次資料として確認できます。新しい抽出フィールドの追加やタグ候補の調査時に参照してください。
 
-ingest が読む日本語ラベルは git 管理の `assets/taxonomy/labels/*_lab.xml`（jpcrp / jppfs / jpigp。フル ZIP は不要）。配置とホスト経路は `docs/xbrl-parsing.md` §4。調査用のフル ZIP は従来どおり手元の `GAAP/` `IFRS/` に置いてよい（git 管理外）。
+ingest が読む日本語ラベルは git 管理の `assets/taxonomy/labels/*_lab.xml`（**2026年版 EDINET**、タクソノミ日付 2025-11-01。jpcrp / jppfs / jpigp。フル ZIP は不要）。配置とホスト経路は `docs/xbrl-parsing.md` §4。調査用のフル ZIP は従来どおり手元の `GAAP/` `IFRS/` に置いてよい（git 管理外）。
 
 ### 7.1 格納内容と構造
 
