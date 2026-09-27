@@ -1344,9 +1344,22 @@ enum StatementNotesResolver {
         in xbrlDir: URL, isRelevantTag: @escaping (String) -> Bool
     ) -> [String: [String: String]] {
         var result: [String: [String: String]] = [:]
-        for root in XBRLUtils.xbrlSearchRoots(in: xbrlDir) {
+        for file in XBRLUtils.findXbrlFiles(in: xbrlDir) {
+            guard let data = try? Data(contentsOf: file) else { continue }
+            let delegate = StatementNoteTextFactParser(isRelevantTag: isRelevantTag)
+            let parser = XMLParser(data: data)
+            parser.delegate = delegate
+            parser.parse()
+            for (tag, ctxMap) in delegate.results {
+                for (ctx, text) in ctxMap {
+                    result[tag, default: [:]][ctx] = text
+                }
+            }
+        }
+        let reverts = readOverlayRegressions(in: xbrlDir)
+        for overlay in overlayDirectoryEntries(in: xbrlDir) {
             var layer: [String: [String: String]] = [:]
-            for file in XBRLUtils.findXbrlFiles(in: root) {
+            for file in XBRLUtils.findXbrlFiles(in: overlay.url) {
                 guard let data = try? Data(contentsOf: file) else { continue }
                 let delegate = StatementNoteTextFactParser(isRelevantTag: isRelevantTag)
                 let parser = XMLParser(data: data)
@@ -1358,11 +1371,9 @@ enum StatementNotesResolver {
                     }
                 }
             }
-            if root == xbrlDir {
-                result = layer
-            } else {
-                result = overlayKeyedFacts(base: result, overlay: layer)
-            }
+            result = overlayFactsApplyingLayerReverts(
+                base: result, correctionDocID: overlay.correctionDocID, overlay: layer,
+                reverts: reverts)
         }
         return result
     }

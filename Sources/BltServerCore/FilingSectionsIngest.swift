@@ -118,8 +118,8 @@ func runFilingSectionsIngest(
         ) {
             try await CompanyFilingSections.find(cand.docID, on: db)
         }
-        if let row = existing, row.cacheVersion == filingSectionsCacheVersion,
-            row.sectionKeys == sectionKeys
+        if !forceDocIDs.contains(cand.docID), let row = existing,
+            row.cacheVersion == filingSectionsCacheVersion, row.sectionKeys == sectionKeys
         {
             skipped += 1
             continue

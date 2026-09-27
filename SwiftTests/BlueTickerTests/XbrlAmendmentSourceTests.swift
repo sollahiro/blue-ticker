@@ -50,7 +50,7 @@ import Testing
         #expect(ids == ["S100X7DX", "S100WRZH"])
     }
 
-    @Test func mismatchedPeriodIsRejectedEvenWithParent() {
+    @Test func mismatchedPeriodIsRejectedRegardlessOfParent() {
         let otherYear = correction(
             docID: "S100X7DT", parent: "S100W0S7", periodEnd: "2023-03-31",
             submit: "2025-11-28 14:35",
@@ -59,18 +59,26 @@ import Testing
             matchingXbrlCorrections(original: original(), corrections: [otherYear]).isEmpty)
     }
 
-    @Test func differentParentIsRejectedEvenWithSamePeriodText() {
-        let otherParent = correction(
-            docID: "S100X7DV", parent: "S100TPKY", submit: "2025-11-28 14:45",
-            desc: "訂正有価証券報告書－第22期(2023/04/01－2024/03/31)")
-        #expect(
-            matchingXbrlCorrections(original: original(), corrections: [otherParent]).isEmpty)
+    @Test func differentParentSamePeriodStillMatches() {
+        let previousCorrectionAsParent = correction(
+            docID: "S100X7DV", parent: "S100WRZH", submit: "2025-11-28 14:45")
+        let ids = matchingXbrlCorrections(
+            original: original(), corrections: [previousCorrectionAsParent]
+        ).map(\.docID)
+        #expect(ids == ["S100X7DV"])
     }
 
     @Test func descriptionPeriodMatchesWhenParentIsMissing() {
         let wrzh = correction(docID: "S100WRZH", parent: nil, submit: "2025-09-30 15:38")
         let ids = matchingXbrlCorrections(original: original(), corrections: [wrzh]).map(\.docID)
         #expect(ids == ["S100WRZH"])
+    }
+
+    @Test func missingPeriodOnEitherSideIsRejected() {
+        let noPeriod = correction(
+            docID: "S100NONE", parent: nil, periodEnd: nil, submit: "2025-09-30 15:38",
+            desc: "訂正有価証券報告書")
+        #expect(matchingXbrlCorrections(original: original(), corrections: [noPeriod]).isEmpty)
     }
 
     @Test func otherCompanyIsRejected() {
@@ -236,15 +244,22 @@ import Testing
         #expect(!isRowMemberContext("CurrentYearDuration_ReportableSegmentMember"))
     }
 
-    @Test func resolveAnnualXbrlDirectorySkipsRegressingRowLossCorrection() async {
+    @Test func resolveAnnualXbrlDirectoryAppliesRegressingLayerButRevertsRowLossTable() async {
         let originalURL = URL(fileURLWithPath: "/tmp/orig-8316")
         let wrzh = URL(fileURLWithPath: "/tmp/wrzh-8316")
         let x7dx = URL(fileURLWithPath: "/tmp/x7dx-8316")
         let merged = URL(fileURLWithPath: "/tmp/merged-8316")
         let tag = "HoldingShares"
+        let capex = "CapitalExpendituresOverviewOfCapitalExpendituresEtc"
         let facts: [String: [String: [String: Double]]] = [
-            originalURL.path: [tag: overlayTestRowMembers(13)],
-            wrzh.path: [tag: overlayTestRowMembers(70)],
+            originalURL.path: [
+                tag: overlayTestRowMembers(13),
+                capex: ["CurrentYearDuration": 3_705_000_000],
+            ],
+            wrzh.path: [
+                tag: overlayTestRowMembers(70),
+                capex: ["CurrentYearDuration": 370_500_000_000],
+            ],
             x7dx.path: [tag: overlayTestRowMembers(13)],
         ]
         let box = OverlayCapture()
@@ -265,7 +280,7 @@ import Testing
             },
             numericFacts: { facts[$0.path] ?? [:] })
         #expect(chosen == merged)
-        #expect(box.overlays == [wrzh])
+        #expect(box.overlays == [wrzh, x7dx])
     }
 }
 
