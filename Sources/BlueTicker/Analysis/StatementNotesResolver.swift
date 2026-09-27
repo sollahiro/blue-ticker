@@ -1356,7 +1356,6 @@ enum StatementNotesResolver {
                 }
             }
         }
-        let reverts = readOverlayRegressions(in: xbrlDir)
         for overlay in overlayDirectoryEntries(in: xbrlDir) {
             var layer: [String: [String: String]] = [:]
             for file in XBRLUtils.findXbrlFiles(in: overlay.url) {
@@ -1371,9 +1370,7 @@ enum StatementNotesResolver {
                     }
                 }
             }
-            result = overlayFactsApplyingLayerReverts(
-                base: result, correctionDocID: overlay.correctionDocID, overlay: layer,
-                reverts: reverts)
+            result = overlayKeyedFacts(base: result, overlay: layer)
         }
         return result
     }

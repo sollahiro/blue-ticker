@@ -14,7 +14,7 @@ import Testing
         })
     }
 
-    /// 8316: 後の訂正が ~13 行で ~70 行表を置換しようとすると表だけ戻し、70 を残す。
+    /// 8316: 後の訂正が ~13 行で ~70 行表を置換しようとするとレイヤ全体を捨て、70 を残す。
     @Test func smfgShapeKeepsSeventyRowsWhenLaterCorrectionHasThirteen() throws {
         let original: [String: [String: Double]] = [holdingTag: rowMembers(13)]
         let wrzh: [String: [String: Double]] = [holdingTag: rowMembers(70)]
@@ -36,7 +36,8 @@ import Testing
         #expect(loss.originalDocID == originalDocID)
     }
 
-    /// 8316 WRZH: 100 倍の設備投資訂正と 70 行表が同じレイヤなら両方採用する。
+    /// 8316 WRZH: 明示的な設備投資スケール変更と 70 行表は採用。X7DX は row_loss でレイヤごと捨て、
+    /// 付随 fact（NetSales）も載せない。
     @Test func smfgShapeAppliesCapexScaleChangeAndSeventyRowTable() throws {
         let capex = "CapitalExpendituresOverviewOfCapitalExpendituresEtc"
         let original: [String: [String: Double]] = [
@@ -49,6 +50,7 @@ import Testing
         ]
         let x7dx: [String: [String: Double]] = [
             holdingTag: rowMembers(13),
+            capex: ["CurrentYearDuration": 3_705_000_000],
             "NetSales": ["CurrentYearDuration": 99],
         ]
         let (facts, skipped) = applyGuardedXbrlOverlays(
@@ -60,7 +62,7 @@ import Testing
             originalDocID: originalDocID)
         #expect(facts[holdingTag]?.filter({ isRowMemberContext($0.key) }).count == 70)
         #expect(facts[capex]?["CurrentYearDuration"] == 370_500_000_000)
-        #expect(facts["NetSales"]?["CurrentYearDuration"] == 99)
+        #expect(facts["NetSales"]?["CurrentYearDuration"] == nil)
         #expect(skipped.contains { $0.kind == xbrlOverlayRegressionKindRowLoss })
         #expect(skipped.contains { $0.correctionDocID == "S100X7DX" })
         #expect(
@@ -68,6 +70,25 @@ import Testing
                 $0.kind != xbrlOverlayRegressionKindScaleJump
             })
         #expect(skipped.allSatisfy { $0.correctionDocID != "S100WRZH" })
+    }
+
+    /// FY2023 / FY2024 型: 良い 130 が 1 枚だけのときは行拡充も明示スケール変更も採用する。
+    @Test func fyStyleSingleGoodCorrectionAppliesFully() {
+        let capex = "CapitalExpendituresOverviewOfCapitalExpendituresEtc"
+        let original: [String: [String: Double]] = [
+            holdingTag: rowMembers(13),
+            capex: ["CurrentYearDuration": 3_705_000_000],
+        ]
+        let correction: [String: [String: Double]] = [
+            holdingTag: rowMembers(70),
+            capex: ["CurrentYearDuration": 370_500_000_000],
+        ]
+        let (facts, skipped) = applyGuardedXbrlOverlays(
+            base: original, layers: [(correctionDocID: "S100WRZH", facts: correction)],
+            originalDocID: originalDocID)
+        #expect(facts[holdingTag]?.filter({ isRowMemberContext($0.key) }).count == 70)
+        #expect(facts[capex]?["CurrentYearDuration"] == 370_500_000_000)
+        #expect(skipped.isEmpty)
     }
 
     @Test func smallRowLossStillApplies() {
@@ -97,7 +118,7 @@ import Testing
         #expect(skipped.isEmpty)
     }
 
-    @Test func scaleJumpInconsistentRelatedContextsRevertsOnlyThatFact() {
+    @Test func scaleJumpRegressionSkipsWholeLayer() {
         let before: [String: [String: Double]] = [
             "NetSales": ["CurrentYearDuration": 100, "Prior1YearDuration": 90],
             "OperatingIncome": ["CurrentYearDuration": 20],
@@ -111,12 +132,13 @@ import Testing
             originalDocID: originalDocID)
         #expect(facts["NetSales"]?["CurrentYearDuration"] == 100)
         #expect(facts["NetSales"]?["Prior1YearDuration"] == 90)
-        #expect(facts["OperatingIncome"]?["CurrentYearDuration"] == 21)
+        #expect(facts["OperatingIncome"]?["CurrentYearDuration"] == 20)
         #expect(skipped.contains { $0.kind == xbrlOverlayRegressionKindScaleJump })
         #expect(skipped.contains { $0.tag == "NetSales" && $0.contextRef == "CurrentYearDuration" })
+        #expect(skipped.contains { $0.correctionDocID == "S100X7DX" })
     }
 
-    @Test func brokenReconcileRevertsTableAndKeepsOtherFacts() {
+    @Test func brokenReconcileSkipsWholeLayer() {
         let stem = "CurrentYearInstant"
         let before: [String: [String: Double]] = [
             holdingTag: [
@@ -140,7 +162,7 @@ import Testing
             base: before, layers: [(correctionDocID: "S100X7DX", facts: after)],
             originalDocID: originalDocID)
         #expect(facts[holdingTag]?["\(stem)_Row3Member"] == 30)
-        #expect(facts["NetSales"]?["CurrentYearDuration"] == 105)
+        #expect(facts["NetSales"]?["CurrentYearDuration"] == 100)
         #expect(skipped.contains { $0.kind == xbrlOverlayRegressionKindReconcile })
     }
 
@@ -244,5 +266,40 @@ import Testing
         }
         #expect(!other.needsReview)
         #expect(!hasOverlayRegressionWarning(other.warnings))
+    }
+
+    /// 8316 FY2025 実パッケージ: 120 + WRZH + X7DX。X7DX はレイヤごと捨て、WRZH の 70 銘柄と
+    /// 設備投資 370,500 百万円を残し、needs_review と X7DX の warning を付ける。
+    @Test func smfgRealPackagesSkipX7DXKeepSeventySecuritiesAndCapex() async throws {
+        let original = "S100W0S7"
+        let wrzh = "S100WRZH"
+        let x7dx = "S100X7DX"
+        await SmokeCacheSupport.ensureCached([original, wrzh, x7dx])
+        for docID in [original, wrzh, x7dx] {
+            guard StatementNotesOracleSupport.smokeCacheAvailable(docID) else { return }
+        }
+        let merged = try #require(
+            await resolveAnnualXbrlDirectory(
+                originalDocID: original,
+                correctionDocIDs: [x7dx, wrzh],
+                download: { StatementNotesOracleSupport.smokeXbrlDir($0) }))
+        #expect(
+            overlayDirectoryEntries(in: merged).compactMap(\.correctionDocID) == [wrzh])
+        let stamped = statementNoteByRecordingOverlayRegressions(
+            StatementNotesResolver.resolvePolicyHoldingSecurities(xbrlDir: merged),
+            xbrlDir: merged)
+        guard case .resolved(let payload, _, _) = stamped else {
+            Issue.record("expected resolved policy holdings")
+            return
+        }
+        #expect(payload.securities?.count == 70)
+        #expect(payload.needsReview)
+        #expect(hasOverlayRegressionWarning(payload.warnings))
+        #expect(payload.warnings.contains { $0.contains(x7dx) })
+        let capexFacts = XBRLUtils.collectAllNumericFacts(in: merged, nilAsZero: false)
+        #expect(
+            capexFacts["CapitalExpendituresOverviewOfCapitalExpendituresEtc"]?[
+                "CurrentYearDuration"
+            ]?.value == 370_500_000_000)
     }
 }
