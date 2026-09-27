@@ -15,7 +15,7 @@ public struct EdinetDocumentRecord: Sendable, Codable, Equatable {
     public let periodEnd: String?
     public let submitDateTime: String
     public let docDescription: String?
-    /// EDINET `parentDocID`（訂正対象）。有報(120)では nil。ingest の XBRL 置換に使う内部列。
+    /// EDINET `parentDocID`（訂正対象）。有報(120)では nil。同期メタ。XBRL overlay の引き当ては使わない。
     public let parentDocID: String?
 
     public init(

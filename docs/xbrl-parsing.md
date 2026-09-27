@@ -63,6 +63,18 @@ XBRL の `contextRef` 属性は財務諸表の種別・期間・連結区分を�
 
 `_NonConsolidated` が含まれるコンテキストは個別財務諸表の値です。
 
+### 2.3 注記 HTML 表の当期 / 前期（`BreakdownTable.period`）
+
+セグメント・地域・収益認識の TextBlock HTML 表は、公開値が `当期` / `前期` / `比較`。根拠は内部の `periodBasis` のみ（REST / MCP の形は変えない）。LLM は使わない。優先順:
+
+1. **contextRef** — 専用の地域売上・製品サービス別 TextBlock が `Prior1YearDuration` / `CurrentYearDuration` に分かれているとき。HTML に期間見出しが無い。同じ `CurrentYearDuration` に前期・当期表が同居する mixed / 事業セグメントは使わない。
+2. **caption** — 同一 TextBlock 内で表から直前へ遡る。単位行やラッパー `div` は飛ばし、直前表の専有キャプションは次表へ引き継がない。語: 前/当連結会計年度、前/当事業年度、前/当年度、前期/当期。複合語（当期純利益・前期比・前期末比・前年同期比等）は期間にしない。裸の 前期末/当期末 は残す。`移行日(YYYY年M月D日)` は当期期首より前なら前期。期間見出しの下に「２．地域」「３．主要な顧客」など細目があるときは、次の期間見出しまでその期間を共有する。祖先側は期間語で始まる見出しか `（自…至…）` だけ採用し、導入文は見ない。`（自 YYYY年M月D日 至 YYYY年M月D日）` と「YYYY年度」は書類の `CurrentYearDuration` 期末と照合する。
+3. **header** — グリッド先頭 3 行。列に前・当が並ぶと比較。
+4. **pair** — 隣接 2 表のヘッダー＋行ラベルが同じ（数値無視）で、手がかりが矛盾しなければ先=前期・後=当期。
+5. **fallback** — 残った数値表は当期。単独表を交互ルールで前期にしない（当期表が落ちるため）。
+
+細粒度の訂正なので `cache_version` はバンプしない。対象コードは `--codes` で再 ingest する。
+
 ---
 
 ## 3. スモークテスト
@@ -137,18 +149,19 @@ CI では `swift-macos` / `swift-linux` ジョブの `Test` ステップに repo
 
 ### 3.3 訂正有報(130) の XBRL overlay
 
-有報の行 identity（`company_statement_notes.doc_id`、statements / breakdowns / filing-sections の `doc_id`、financials の年度帰属、公開 `doc_id`）は**原本 120** のままにする。同一会社・同一期間・同一 `parentDocID` の訂正 130 を、提出が古い順に原本 XBRL へ重ねる。overlay パッケージから作る通期成果物は financials（Summary / `screen_index` の入力）、statements、statement-notes（`per_share_information` を含む）、breakdowns（business / geography / 収益認識ほか全軸）、filing-sections、overviews、icons。
+有報の行 identity（`company_statement_notes.doc_id`、statements / breakdowns / filing-sections の `doc_id`、financials の年度帰属、公開 `doc_id`）は**原本 120** のままにする。同一会社・同一期間（`edinetCode` + 期末。期末は `periodEnd`、無ければ概要文の西暦）の訂正 130 を、提出が古い順に原本 XBRL へ重ねる。`parentDocID` / `parent_doc_id` は同期メタであり照合には使わない。overlay パッケージから作る通期成果物は financials（Summary / `screen_index` の入力）、statements、statement-notes（`per_share_information` を含む）、breakdowns（business / geography / 収益認識ほか全軸）、filing-sections、overviews、icons。
 
 - **数値 fact**: キーは element + contextRef。訂正に無い項目は原本の値。
 - **行メンバー表**（`Row{N}Member`）: 訂正がその表を含めば行ごと置換（セル混在しない）。
 - **TextBlock**: 訂正に同じ要素があればその本文。無ければ原本。breakdown の html_table は TextBlock 由来なので overlay 後の本文を使う。
 - **HTML 見出し経路**: filing-sections の honbun 抽出と US-GAAP 0105010 本表は原本 HTML。Overview は overlay があるとき TextBlock を先に見る。
-- パースできない 130 はその件だけ飛ばす。期間が違う・親が違う訂正は選ばない。複数なら後勝ち。
-- **回帰ガード**: 各 130 を重ねた直後に、直前状態（原本 120 または直前の overlay）と比べる。次のいずれかなら**そのレイヤは公開しない**（直前の値を残す）。会社-FY は `needs_review` にし、公開 REST / MCP では既存の `needs_review` 除外と同じく隠す。
+- パースできない 130 はその件だけ飛ばす。会社または期間が違う訂正は選ばない。複数なら後勝ち。
+- **回帰ガード**: 各 130 を重ねた直後に、直前状態（原本 120 または直前の overlay）と比べる。次のいずれかなら**そのレイヤ全体を捨て**、直前の良い状態を残す。捨てたレイヤから作った notes / breakdowns だけ `needs_review`（公開 REST / MCP では既存の `needs_review` 除外と同じく隠す）。会社-FY 全体は立てない。
   - `Row{N}Member` 表（政策保有など）が直前より **30% 以上かつ 5 行以上**減る（8316 の後続訂正が ~13 行で ~70 行表を置換する形）
   - 直前まで内訳と一致していた合計・小計が一致しなくなる
-  - 行メンバー以外の主要数値がだいたい 10 倍動く（単位・スケール跳び）
-  - ログは `code`・FY・原本 `doc_id`・訂正 `doc_id`・理由。再試行は決定論のためしない（`--doc-ids` は別）。
+  - 行メンバー以外の主要数値がだいたい 10 倍動く（単位・スケール跳び）。**130 インスタンスにその tag+context がある明示置換は許す**（8316 WRZH の設備投資 100 倍など）。同じタグの関連コンテキストが 130 にあり片方だけ跳ぶとき、または継承 fact が動いたときだけ回帰。
+  - ログは `code`・FY・原本 `doc_id`・訂正 `doc_id`・理由・tag・before/after。再試行は決定論のためしない（`--doc-ids` は別）。
+- `--doc-ids` は指定原本 120 の各 stage を cache_version / needs_review に関係なく書き直す。艦隊の skip は変えない。
 - 回帰は `XbrlAmendmentSourceTests` / `XbrlOverlayRegressionTests`。`cache_version` はバンプしない（データ源の refinement。対象会社-FY は `--doc-ids` で再 ingest）。
 
 ---
