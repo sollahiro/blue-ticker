@@ -140,6 +140,24 @@ import Foundation
                 == nil)
     }
 
+    @Test func nendoDateRangeColumnHeadersAreComparison() {
+        // クボタ S100XR0M 地域ごと: 列が 前年度(自…至…) | 当年度(自…至…)。
+        // 旧語彙は 前連結会計年度 のみで、lone-table fallback が 当期 にしていた。
+        let html = """
+            <table>
+              <tr><td></td><td>前年度(自　2024年１月１日至　2024年12月31日)</td><td>当年度(自　2025年１月１日至　2025年12月31日)</td></tr>
+              <tr><td>日本</td><td>632,476</td><td>685,184</td></tr>
+              <tr><td>北米</td><td>1,272,503</td><td>1,218,454</td></tr>
+              <tr><td>計</td><td>3,016,281</td><td>3,018,891</td></tr>
+            </table>
+            """
+        let tables = BreakdownExtractor.allTablesFromHtml(
+            html, defaultHeading: "地域ごとの情報", fiscalYearEnd: "2025-12-31")
+        #expect(tables.count == 1)
+        #expect(tables[0].period == "比較")
+        #expect(tables[0].periodBasis == .header)
+    }
+
     // MARK: - (d) lone current table must not become 前期
 
     @Test func loneUnlabeledNumericTableIsCurrentNotPrior() {
