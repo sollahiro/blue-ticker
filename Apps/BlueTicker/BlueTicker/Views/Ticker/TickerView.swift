@@ -395,6 +395,8 @@ private struct NavigationChrome {
     var foundTrailing = false
     /// 左右の円ボタンが、バーの端に実際にあるときだけ真。
     var isPlausible = false
+    /// 編集と星の組の幅と、バーの余白から置いた。滑っている枠ではない。
+    var stable = false
     var foundControl: Bool { isPlausible }
 }
 
@@ -484,10 +486,14 @@ private struct CompanyGlassPresenter: UIViewRepresentable {
         private var chromeLayoutPending = false
         private var watchedTransition = false
         private var fittingChrome = false
-        /// フェード中は枠を動かさない。終わったときの差し替えが、右への移動と縦の伸びになる。
+        /// フェード中。枠のアニメーションには乗せない。差し替えると終端の矩形へ戻る。
         private var revealAnimating = false
-        /// ボタンのあいだに一度置いた枠。文字数の測り直しでは動かさない。
+        /// ボタンのあいだに一度置いた枠。滑っている測り直しでは動かさない。
         private var pillFrameCommitted = false
+        /// 編集と星の組の幅で置けたか、push が終わったか。それまでは着地後の寸法へ合わせ直す。
+        private var chromeSettled = false
+        /// 直前の測りが、組の幅と余白から置けている。
+        private var chromeStable = false
 
         func update(
             handedOff: Bool,
@@ -639,7 +645,7 @@ private struct CompanyGlassPresenter: UIViewRepresentable {
             container.frame = pill
             container.layer.cornerRadius = pill.height / 2
             container.transform = .identity
-            pillFrameCommitted = true
+            pillFrameCommitted = chromeStable
             let expandedWidth = window.bounds.width - 16
             model.cardWidth = expandedWidth
             model.visibleWidth = pill.width
@@ -719,6 +725,8 @@ private struct CompanyGlassPresenter: UIViewRepresentable {
             watchedTransition = true
             coordinator.animate(alongsideTransition: nil) { [weak self] _ in
                 guard let self, self.tickerVisible else { return }
+                self.chromeSettled = true
+                self.pillFrameCommitted = false
                 self.fitWhenReady(in: nav, onFittedPill: onFittedPill)
             }
         }
@@ -745,7 +753,7 @@ private struct CompanyGlassPresenter: UIViewRepresentable {
             in nav: UINavigationController, onFittedPill: @escaping (CGRect) -> Void
         ) {
             guard let container = cardContainer, !morphing, !model.expanded, model.expansion < 0.02 else { return }
-            guard !revealAnimating, !pillFrameCommitted else { return }
+            guard !pillFrameCommitted else { return }
             var pill = fittedPill(model.pillRect, bar: nav.navigationBar)
             let previous = container.frame
             guard abs(pill.width - previous.width) > 1
@@ -753,7 +761,7 @@ private struct CompanyGlassPresenter: UIViewRepresentable {
                 || abs(pill.minX - previous.minX) > 1
                 || abs(pill.minY - previous.minY) > 1
             else {
-                pillFrameCommitted = previous.width > 1
+                if chromeStable { pillFrameCommitted = previous.width > 1 }
                 return
             }
             model.pillRect = pill
@@ -766,7 +774,7 @@ private struct CompanyGlassPresenter: UIViewRepresentable {
             }
             wrapper?.cardFrame = pill
             titleHider.pill = pill
-            pillFrameCommitted = true
+            pillFrameCommitted = chromeStable
             DispatchQueue.main.async {
                 onFittedPill(pill)
             }
@@ -787,6 +795,7 @@ private struct CompanyGlassPresenter: UIViewRepresentable {
         /// 左右の隙間は同じ。長い社名は同じ枠の中で2行。バー自体の高さは使わない。
         private func fittedPill(_ measured: CGRect, bar: UINavigationBar) -> CGRect {
             let chrome = navigationChrome(in: bar)
+            chromeStable = chrome.stable || chromeSettled
             let gap = chrome.gap
             guard chrome.isPlausible else { return measured }
             let left = chrome.leadingMaxX + gap
@@ -808,14 +817,36 @@ private struct CompanyGlassPresenter: UIViewRepresentable {
             var left: [CGRect] = []
             var right: [CGRect] = []
             var trailingClusters: [CGRect] = []
-            var groupWidths: [CGFloat] = []
+            var circleHeights: [CGFloat] = []
+            var circleMidYs: [CGFloat] = []
+            var capsuleWidths: [CGFloat] = []
+            var capsuleHeights: [CGFloat] = []
             func consider(_ view: UIView) {
                 // 遷移中は円の親がまだ透明なことがある。そこで打ち切ると、着地後もピルが出ない。
                 view.subviews.forEach(consider)
                 if view.isHidden { return }
-                // バー内の着地位置を優先する。画面上の重なりで数えると、リストの編集ボタンと
-                // 銘柄面の編集ボタンが分かれるまでフェードが遅れる。着地位置がバーに無いときは、見えている枠を使う。
                 let visual = view.convert(view.bounds, to: nil)
+                let bounds = view.bounds
+                let nearBar = visual.midY >= barInWindow.minY - 12 && visual.midY <= barInWindow.maxY + 12
+                let offTrailing = visual.minX >= barInWindow.maxX - 12
+                if nearBar || offTrailing {
+                    if bounds.height >= 36, bounds.height <= 72, abs(bounds.width - bounds.height) <= 4,
+                       visual.midX < leftCut || visual.midX > rightCut || offTrailing
+                    {
+                        circleHeights.append(bounds.height)
+                        if nearBar { circleMidYs.append(visual.midY) }
+                    }
+                    let onRight = visual.midX > barInWindow.midX || offTrailing
+                    if onRight, bounds.height >= 36, bounds.height <= 72 {
+                        let ratio = bounds.height > 1 ? bounds.width / bounds.height : 0
+                        // 編集と星の組。遷移元の履歴・編集ボタン（円1つ）はここには入らない。
+                        if ratio >= 2.0 && ratio <= 2.7 {
+                            capsuleWidths.append(bounds.width)
+                            capsuleHeights.append(bounds.height)
+                        }
+                    }
+                }
+                // バー内の着地位置を優先する。着地位置がバーに無いときは、見えている枠を使う。
                 let frame = Self.landingFrame(of: view, in: bar).flatMap { landed in
                     Self.hitsBar(landed, barInWindow: barInWindow) ? landed : nil
                 } ?? visual
@@ -826,13 +857,6 @@ private struct CompanyGlassPresenter: UIViewRepresentable {
                 let onScreen = frame.maxX > barInWindow.minX + 4 && frame.minX < barInWindow.maxX - 4
                 let button = h >= 36 && h <= 72 && w >= 28 && w <= h * 1.35 && w / h >= 0.8
                 let cluster = h >= 36 && h <= 72 && w > h * 1.35 && w <= h * 3.2 && frame.midX > rightCut
-                let bounds = view.bounds
-                let onRight = visual.midX > barInWindow.midX || visual.minX >= barInWindow.maxX - 8
-                if inBar, onRight, bounds.height >= 36, bounds.height <= 72,
-                   bounds.width > bounds.height * 1.6, bounds.width <= bounds.height * 3.2
-                {
-                    groupWidths.append(bounds.width)
-                }
                 if inBar, onScreen, button, frame.midX < leftCut {
                     left.append(frame)
                 } else if inBar, onScreen, button, frame.midX > rightCut {
@@ -844,32 +868,45 @@ private struct CompanyGlassPresenter: UIViewRepresentable {
             consider(root)
             let leftButtons = Self.visibleDiscs(left)
             let rightSettled = Self.visibleDiscs(right)
-            // 着地済みの円。リストの編集ボタンがこれにあたる。ピルの高さはこれに揃える。
             let settledDiameter = (leftButtons + rightSettled).map(\.height).min()
-            // 銘柄面の編集と星。枠がまだ大きくても、同じ高さの2円が並んだ時点で右端に使う。
             let trailing = Self.trailingPair(right)
-            let diameter = settledDiameter ?? trailing.map(\.height).min()
-            if let diameter, trailing.count >= 2,
+            // 組の高さ（ガラスの円）。内側の 36pt 枠の最小値にはしない。
+            let diameter = Self.dominantHeight(capsuleHeights)
+                ?? Self.dominantHeight(circleHeights)
+                ?? settledDiameter
+                ?? trailing.map(\.height).min()
+            let midY = circleMidYs.isEmpty
+                ? barInWindow.midY
+                : circleMidYs.reduce(0, +) / CGFloat(circleMidYs.count)
+            let trailingCircleInset = Self.edgeInset(
+                maxX: rightSettled.map(\.maxX).max(),
+                barMaxX: barInWindow.maxX
+            )
+            if let diameter,
+               let width = Self.capsuleWidth(capsuleWidths, heights: capsuleHeights, diameter: diameter)
+            {
+                let landedInset = Self.landedInset(
+                    lead: leftButtons.max(by: { $0.maxX < $1.maxX }),
+                    diameter: diameter,
+                    barInWindow: barInWindow
+                )
+                if let inset = Self.contentInset(bar: bar, landed: landedInset ?? trailingCircleInset) {
+                    chrome.foundTrailing = true
+                    // 余白を実測の円から取れたときだけ確定する。マージンだけの予測は遷移の終わりに直す。
+                    chrome.stable = landedInset != nil || trailingCircleInset != nil
+                    chrome.trailingMinX = barInWindow.maxX - inset - width
+                    chrome.controlHeight = diameter
+                    chrome.controlMidY = midY
+                }
+            }
+            // 組の幅がまだ無いときだけ、見えている2円の中心から右端を置く。
+            if !chrome.foundTrailing, let diameter, trailing.count >= 2,
                let trail = trailing.min(by: { $0.midX < $1.midX })
             {
                 chrome.foundTrailing = true
                 chrome.trailingMinX = trail.midX - diameter / 2
                 chrome.controlHeight = diameter
                 chrome.controlMidY = trail.midY
-            }
-            // リストの編集ボタンは右端に着地している。銘柄面の編集・星の組が
-            // まだ重なっていても、その組の幅だけ左へ戻せば右端が決まる。
-            if !chrome.foundTrailing,
-               let pencil = rightSettled.max(by: { $0.maxX < $1.maxX })
-            {
-                let height = settledDiameter ?? pencil.height
-                let widths = groupWidths + trailingClusters.map(\.width)
-                if let width = widths.filter({ $0 >= height * 1.6 && $0 <= height * 3.2 }).max() {
-                    chrome.foundTrailing = true
-                    chrome.trailingMinX = pencil.maxX - width
-                    chrome.controlHeight = height
-                    chrome.controlMidY = pencil.midY
-                }
             }
             if let diameter, let lead = leftButtons.max(by: { $0.maxX < $1.maxX }) {
                 let edge = lead.midX + diameter / 2
@@ -878,36 +915,27 @@ private struct CompanyGlassPresenter: UIViewRepresentable {
                 if span >= diameter * 0.7 && span <= diameter * 2.4 {
                     chrome.foundLeading = true
                     chrome.leadingMaxX = edge
-                    if chrome.controlMidY == 0 {
-                        chrome.controlMidY = lead.midY
-                    } else {
-                        chrome.controlMidY = (chrome.controlMidY + lead.midY) / 2
-                    }
+                    chrome.controlMidY = chrome.controlMidY == 0
+                        ? lead.midY
+                        : (chrome.controlMidY + lead.midY) / 2
                 }
             }
-            // 戻る円がまだ着地していないとき、右の円と同じ余白で着地位置を置く。
+            // 戻る円がまだ着地していないとき、右端と同じ余白で着地位置を置く。
             if !chrome.foundLeading, chrome.foundTrailing,
-               let diameter = diameter ?? (chrome.controlHeight > 1 ? chrome.controlHeight : nil),
-               let sample = trailing.max(by: { $0.midX < $1.midX })
-                   ?? rightSettled.max(by: { $0.maxX < $1.maxX })
+               let diameter = diameter ?? (chrome.controlHeight > 1 ? chrome.controlHeight : nil)
             {
                 let buttonHeight = chrome.controlHeight > 1 ? chrome.controlHeight : diameter
-                let sampleMaxX = sample.midX + buttonHeight / 2
-                chrome.foundLeading = true
-                chrome.leadingMaxX = Self.predictedLeadingMaxX(
-                    bar: bar,
-                    barInWindow: barInWindow,
-                    trailingSample: CGRect(
-                        x: sampleMaxX - buttonHeight,
-                        y: sample.midY - buttonHeight / 2,
-                        width: buttonHeight,
-                        height: buttonHeight
-                    ),
-                    buttonHeight: buttonHeight
+                let landed = Self.landedInset(
+                    lead: leftButtons.max(by: { $0.maxX < $1.maxX }),
+                    diameter: buttonHeight,
+                    barInWindow: barInWindow
                 )
-                if chrome.controlHeight < 1 {
-                    chrome.controlHeight = buttonHeight
-                    chrome.controlMidY = sample.midY
+                if let inset = Self.contentInset(bar: bar, landed: landed ?? trailingCircleInset) {
+                    chrome.foundLeading = true
+                    chrome.leadingMaxX = barInWindow.minX + inset + buttonHeight
+                    if chrome.controlMidY == 0 {
+                        chrome.controlMidY = midY
+                    }
                 }
             }
             if !chrome.foundTrailing, chrome.foundLeading,
@@ -927,8 +955,68 @@ private struct CompanyGlassPresenter: UIViewRepresentable {
             if !chrome.isPlausible {
                 chrome.foundLeading = false
                 chrome.foundTrailing = false
+                chrome.stable = false
             }
             return chrome
+        }
+
+        /// いちばん多い高さ。同数なら大きいほう（ガラスの円。内側の小さい枠は使わない）。
+        private static func dominantHeight(_ heights: [CGFloat]) -> CGFloat? {
+            var buckets: [Int: Int] = [:]
+            for height in heights {
+                let key = Int(height.rounded())
+                buckets[key, default: 0] += 1
+            }
+            guard let best = buckets.max(by: { lhs, rhs in
+                if lhs.value != rhs.value { return lhs.value < rhs.value }
+                return lhs.key < rhs.key
+            }) else { return nil }
+            return CGFloat(best.key)
+        }
+
+        /// 編集と星の組。円の直径に対して、2つの円とあいだの隙間に収まる幅だけ。
+        private static func capsuleWidth(
+            _ widths: [CGFloat], heights: [CGFloat], diameter: CGFloat
+        ) -> CGFloat? {
+            let fitting = zip(widths, heights).compactMap { width, height -> CGFloat? in
+                guard abs(height - diameter) <= 2 || height <= diameter + 2 else { return nil }
+                guard width >= diameter * 2.0, width <= diameter * 2.7 else { return nil }
+                return width
+            }
+            return fitting.max()
+        }
+
+        /// 着地した戻る円の、画面端からの余白。滑っている円は nil。
+        private static func landedInset(
+            lead: CGRect?, diameter: CGFloat, barInWindow: CGRect
+        ) -> CGFloat? {
+            guard let lead else { return nil }
+            let edge = lead.midX + diameter / 2
+            let span = edge - barInWindow.minX
+            guard span >= diameter * 0.7, span <= diameter * 2.4 else { return nil }
+            let inset = span - diameter
+            guard inset >= 8, inset <= 32 else { return nil }
+            return inset
+        }
+
+        /// 右端の円から画面端までの余白。内枠で左に寄った maxX は使わない。
+        private static func edgeInset(maxX: CGFloat?, barMaxX: CGFloat) -> CGFloat? {
+            guard let maxX else { return nil }
+            let inset = barMaxX - maxX
+            guard inset >= 8, inset <= 32 else { return nil }
+            return inset
+        }
+
+        /// 実測の余白が無いとき、バー自身のレイアウト余白。
+        private static func contentInset(bar: UINavigationBar, landed: CGFloat?) -> CGFloat? {
+            if let landed { return landed }
+            let values = [
+                bar.directionalLayoutMargins.trailing,
+                bar.directionalLayoutMargins.leading,
+                bar.layoutMargins.right,
+                bar.layoutMargins.left,
+            ]
+            return values.first { $0 >= 8 && $0 <= 32 }
         }
 
         /// ほぼ正方形のボタン枠。高さでは絞らない。
@@ -987,20 +1075,6 @@ private struct CompanyGlassPresenter: UIViewRepresentable {
                 kept.append(frame)
             }
             return kept
-        }
-
-        /// 右端の円から、戻る円の右端を予測する。余白はそのバーが今使っている値。
-        private static func predictedLeadingMaxX(
-            bar: UINavigationBar,
-            barInWindow: CGRect,
-            trailingSample: CGRect,
-            buttonHeight: CGFloat
-        ) -> CGFloat {
-            let measuredInset = barInWindow.maxX - trailingSample.maxX
-            let inset = (measuredInset >= 4 && measuredInset <= buttonHeight)
-                ? measuredInset
-                : bar.directionalLayoutMargins.leading
-            return barInWindow.minX + inset + buttonHeight
         }
 
         /// 円の中の印や、円より高い戻る枠ではなく、見える円だけを残す。
@@ -1185,6 +1259,8 @@ private struct CompanyGlassPresenter: UIViewRepresentable {
             chromeLayoutPending = false
             revealAnimating = false
             pillFrameCommitted = false
+            chromeSettled = false
+            chromeStable = false
             chromeProbe?.removeFromSuperview()
             chromeProbe = nil
             model.freezesGlyphs = false
@@ -1217,7 +1293,7 @@ private struct CompanyGlassPresenter: UIViewRepresentable {
             revealAnimating = true
             DispatchQueue.main.async { [weak self] in
                 guard let self, self.concealGeneration == generation, self.revealed,
-                      let wrapper = self.wrapper, let container = self.cardContainer else { return }
+                      let wrapper = self.wrapper else { return }
                 let enabled = UIView.areAnimationsEnabled
                 UIView.setAnimationsEnabled(true)
                 UIView.animate(
@@ -1226,7 +1302,6 @@ private struct CompanyGlassPresenter: UIViewRepresentable {
                     options: [.curveEaseInOut, .allowUserInteraction]
                 ) {
                     wrapper.alpha = 1
-                    container.frame = resting
                 } completion: { [weak self] _ in
                     guard let self, self.concealGeneration == generation else { return }
                     self.revealAnimating = false
