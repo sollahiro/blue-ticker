@@ -151,7 +151,7 @@ func runBreakdownIngest(
         ) {
             try await CompanyBreakdown.find(key, on: db)
         }
-        if let row = existing {
+        if !forceDocIDs.contains(cand.docID), let row = existing {
             let versionGated = isVersionGatedBreakdownSource(row.source)
             if versionGated, row.cacheVersion == currentCacheVersion {
                 // 現行版の決定論は skip。LLM の needs_review は再試行する。

@@ -510,9 +510,12 @@ extension XBRLUtils {
                 }
             }
         }
-        for overlayDir in overlayDirectories(in: dir) {
-            allFacts = overlayXbrlFactIndex(
-                base: allFacts, overlay: collectAllNumericFacts(in: overlayDir, nilAsZero: nilAsZero))
+        let overlayReverts = readOverlayRegressions(in: dir)
+        for overlay in overlayDirectoryEntries(in: dir) {
+            allFacts = overlayFactsApplyingLayerReverts(
+                base: allFacts, correctionDocID: overlay.correctionDocID,
+                overlay: collectAllNumericFacts(in: overlay.url, nilAsZero: nilAsZero),
+                reverts: overlayReverts)
         }
         _cacheLock.lock()
         _numericFactCache.insert(allFacts, forKey: key)

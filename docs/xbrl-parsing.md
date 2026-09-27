@@ -137,18 +137,19 @@ CI では `swift-macos` / `swift-linux` ジョブの `Test` ステップに repo
 
 ### 3.3 訂正有報(130) の XBRL overlay
 
-有報の行 identity（`company_statement_notes.doc_id`、statements / breakdowns / filing-sections の `doc_id`、financials の年度帰属、公開 `doc_id`）は**原本 120** のままにする。同一会社・同一期間・同一 `parentDocID` の訂正 130 を、提出が古い順に原本 XBRL へ重ねる。overlay パッケージから作る通期成果物は financials（Summary / `screen_index` の入力）、statements、statement-notes（`per_share_information` を含む）、breakdowns（business / geography / 収益認識ほか全軸）、filing-sections、overviews、icons。
+有報の行 identity（`company_statement_notes.doc_id`、statements / breakdowns / filing-sections の `doc_id`、financials の年度帰属、公開 `doc_id`）は**原本 120** のままにする。同一会社・同一期間（`edinetCode` + 期末。期末は `periodEnd`、無ければ概要文の西暦）の訂正 130 を、提出が古い順に原本 XBRL へ重ねる。`parentDocID` / `parent_doc_id` は同期メタであり照合には使わない。overlay パッケージから作る通期成果物は financials（Summary / `screen_index` の入力）、statements、statement-notes（`per_share_information` を含む）、breakdowns（business / geography / 収益認識ほか全軸）、filing-sections、overviews、icons。
 
 - **数値 fact**: キーは element + contextRef。訂正に無い項目は原本の値。
 - **行メンバー表**（`Row{N}Member`）: 訂正がその表を含めば行ごと置換（セル混在しない）。
 - **TextBlock**: 訂正に同じ要素があればその本文。無ければ原本。breakdown の html_table は TextBlock 由来なので overlay 後の本文を使う。
 - **HTML 見出し経路**: filing-sections の honbun 抽出と US-GAAP 0105010 本表は原本 HTML。Overview は overlay があるとき TextBlock を先に見る。
-- パースできない 130 はその件だけ飛ばす。期間が違う・親が違う訂正は選ばない。複数なら後勝ち。
-- **回帰ガード**: 各 130 を重ねた直後に、直前状態（原本 120 または直前の overlay）と比べる。次のいずれかなら**そのレイヤは公開しない**（直前の値を残す）。会社-FY は `needs_review` にし、公開 REST / MCP では既存の `needs_review` 除外と同じく隠す。
+- パースできない 130 はその件だけ飛ばす。会社または期間が違う訂正は選ばない。複数なら後勝ち。
+- **回帰ガード**: 各 130 を重ねた直後に、直前状態（原本 120 または直前の overlay）と比べる。次のいずれかなら**その fact（`row_loss` は当該タグの Row{N}Member 表）だけ直前値へ戻し**、レイヤの残りは採用する。差し戻した fact から作った notes / breakdowns だけ `needs_review`（公開 REST / MCP では既存の `needs_review` 除外と同じく隠す）。会社-FY 全体は立てない。
   - `Row{N}Member` 表（政策保有など）が直前より **30% 以上かつ 5 行以上**減る（8316 の後続訂正が ~13 行で ~70 行表を置換する形）
   - 直前まで内訳と一致していた合計・小計が一致しなくなる
-  - 行メンバー以外の主要数値がだいたい 10 倍動く（単位・スケール跳び）
-  - ログは `code`・FY・原本 `doc_id`・訂正 `doc_id`・理由。再試行は決定論のためしない（`--doc-ids` は別）。
+  - 行メンバー以外の主要数値がだいたい 10 倍動く（単位・スケール跳び）。**130 インスタンスにその tag+context がある明示置換は許す**（8316 WRZH の設備投資 100 倍など）。同じタグの関連コンテキストが 130 にあり片方だけ跳ぶとき、または継承 fact が動いたときだけ回帰。
+  - ログは `code`・FY・原本 `doc_id`・訂正 `doc_id`・理由・tag・before/after。再試行は決定論のためしない（`--doc-ids` は別）。
+- `--doc-ids` は指定原本 120 の各 stage を cache_version / needs_review に関係なく書き直す。艦隊の skip は変えない。
 - 回帰は `XbrlAmendmentSourceTests` / `XbrlOverlayRegressionTests`。`cache_version` はバンプしない（データ源の refinement。対象会社-FY は `--doc-ids` で再 ingest）。
 
 ---
