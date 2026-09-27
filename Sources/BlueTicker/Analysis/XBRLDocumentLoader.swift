@@ -194,10 +194,10 @@ extension XBRLUtils {
                 }
             }
         }
-        for (tag, roleMap) in loadStandardTaxonomyLabelRoleVariants()
-            where variants[tag] == nil && shouldFillFromStandardTaxonomy(tag)
-        {
-            variants[tag] = roleMap
+        for (tag, roleMap) in loadStandardTaxonomyLabelRoleVariants() {
+            for (role, text) in roleMap where variants[tag]?[role] == nil {
+                variants[tag, default: [:]][role] = text
+            }
         }
 
         _cacheLock.lock()
@@ -215,7 +215,8 @@ extension XBRLUtils {
     /// 標準タクソノミのラベルリンクベースから {tag: 日本語標準ラベル} を作る。
     /// 第一入力は git 管理の `assets/taxonomy/labels/*_lab.xml`（jpcrp / jppfs / jpigp の日本語）。
     /// 任意の `assets/taxonomy/{GAAP,IFRS}/*.zip`（git 管理外）は欠測タグだけ埋める。
-    /// `loadLabelsByTag` へ載せるのは次元 member / `EntityTotal` のみ（勘定科目は提出パッケージ優先）。
+    /// `loadLabelsByTag` へ載せるのは次元 member / `EntityTotal` のみ。Statement の
+    /// `preferredLabel` 用 variants は欠測ロールだけ標準タクソノミで埋める（提出側ロール優先）。
     /// `assets/taxonomy/labels` が無いときはコード側 sentinel（`EntityTotal`）だけ残し、
     /// パスを stderr に 1 回警告する。プロセス内でメモ化する。
     static func loadStandardTaxonomyLabels() -> [String: String] {

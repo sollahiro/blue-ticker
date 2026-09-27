@@ -116,8 +116,6 @@ import Testing
             #expect(labels["CompensationsSalariesAndAllowancesSGA"] == nil)
             #expect(labels["FreightageAndPackingExpensesSGA"] == nil)
             #expect(labels["TravelingAndCommunicationExpensesSGA"] == nil)
-            let variants = XBRLUtils.loadLabelRoleVariants(in: dir)
-            #expect(variants["SellingGeneralAndAdministrativeExpenses"] == nil)
         }
     }
 
@@ -137,9 +135,6 @@ import Testing
                 variants["SellingGeneralAndAdministrativeExpenses"]?[
                     "http://www.xbrl.org/2003/role/totalLabel"]
                     == "販売費及び一般管理費合計")
-            #expect(
-                variants["SellingGeneralAndAdministrativeExpenses"]?[
-                    "http://www.xbrl.org/2003/role/label"] == nil)
         }
     }
 
