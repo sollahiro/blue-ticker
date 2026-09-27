@@ -168,7 +168,7 @@ CI では `swift-macos` / `swift-linux` ジョブの `Test` ステップに repo
 
 ## 4. 標準タクソノミ日本語ラベル（ingest）
 
-提出パッケージの `_lab.xml` には企業拡張タグ分しか無いことが多い。EDINET 標準 member（`OtherReportableSegmentsMember`、報告セグメント小計、調整項目、`EntityTotal` など）の日本語は **ingest 時のラベル解決**で埋める。配信時の書き換えや固定文言置換はしない。会社提出ラベルが常に勝つ。
+提出パッケージの `_lab.xml` には企業拡張タグ分しか無いことが多い。EDINET 標準 member（`OtherReportableSegmentsMember`、報告セグメント小計、調整項目、`EntityTotal` など）の日本語は **ingest 時のラベル解決**で埋める。勘定科目（販管費・有形固定資産・のれん等）は提出パッケージと HTML に任せ、標準タクソノミでは埋めない（本表・注記の `preferredLabel` / 会社文言を変えない）。配信時の書き換えや固定文言置換はしない。会社提出ラベルが常に勝つ。
 
 ### 4.1 配置
 

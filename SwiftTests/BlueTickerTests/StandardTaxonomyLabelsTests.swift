@@ -34,6 +34,21 @@ import Testing
         """
     }
 
+    private static func totalLabelOnlyLinkbase(tag: String, japanese: String, prefix: String = "jppfs_cor")
+        -> String
+    {
+        """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <link:linkbase xmlns:link="http://www.xbrl.org/2003/linkbase" xmlns:xlink="http://www.w3.org/1999/xlink">
+          <link:labelLink xlink:type="extended" xlink:role="http://www.xbrl.org/2003/role/link">
+            <link:loc xlink:type="locator" xlink:href="\(prefix).xsd#\(prefix)_\(tag)" xlink:label="loc_\(tag)"/>
+            <link:label xlink:type="resource" xlink:label="label_\(tag)" xlink:role="http://www.xbrl.org/2003/role/totalLabel" xml:lang="ja">\(japanese)</link:label>
+            <link:labelArc xlink:type="arc" xlink:arcrole="http://www.xbrl.org/2003/arcrole/concept-label" xlink:from="loc_\(tag)" xlink:to="label_\(tag)"/>
+          </link:labelLink>
+        </link:linkbase>
+        """
+    }
+
     private static func deprecatedOnlyMemberLinkbase(tag: String) -> String {
         """
         <?xml version="1.0" encoding="UTF-8"?>
@@ -89,6 +104,42 @@ import Testing
             #expect(labels["ReportableSegmentsMember"] == "報告セグメント")
             #expect(labels["CorporateSharedMember"] == "全社（共通）")
             #expect(labels["NetSales"] == "売上高")
+            #expect(labels["SellingGeneralAndAdministrativeExpenses"] == nil)
+        }
+    }
+
+    @Test func standardAccountLabelsDoNotFillWhenCompanyOmitsThem() throws {
+        try XBRLTestSupport.withXbrlDir(nil, extraFiles: [:]) { dir in
+            let labels = XBRLUtils.loadLabelsByTag(in: dir)
+            #expect(labels["OtherReportableSegmentsMember"] == "その他")
+            #expect(labels["SellingGeneralAndAdministrativeExpenses"] == nil)
+            #expect(labels["CompensationsSalariesAndAllowancesSGA"] == nil)
+            #expect(labels["FreightageAndPackingExpensesSGA"] == nil)
+            #expect(labels["TravelingAndCommunicationExpensesSGA"] == nil)
+            let variants = XBRLUtils.loadLabelRoleVariants(in: dir)
+            #expect(variants["SellingGeneralAndAdministrativeExpenses"] == nil)
+        }
+    }
+
+    @Test func companyTotalLabelIsNotReplacedByStandardPlainLabel() throws {
+        try XBRLTestSupport.withXbrlDir(
+            nil,
+            extraFiles: [
+                "company_lab.xml": Self.totalLabelOnlyLinkbase(
+                    tag: "SellingGeneralAndAdministrativeExpenses",
+                    japanese: "販売費及び一般管理費合計")
+            ]
+        ) { dir in
+            let labels = XBRLUtils.loadLabelsByTag(in: dir)
+            #expect(labels["SellingGeneralAndAdministrativeExpenses"] == "販売費及び一般管理費合計")
+            let variants = XBRLUtils.loadLabelRoleVariants(in: dir)
+            #expect(
+                variants["SellingGeneralAndAdministrativeExpenses"]?[
+                    "http://www.xbrl.org/2003/role/totalLabel"]
+                    == "販売費及び一般管理費合計")
+            #expect(
+                variants["SellingGeneralAndAdministrativeExpenses"]?[
+                    "http://www.xbrl.org/2003/role/label"] == nil)
         }
     }
 

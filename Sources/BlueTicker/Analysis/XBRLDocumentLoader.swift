@@ -114,9 +114,12 @@ extension XBRLUtils {
             }
         }
         // 提出書類自身のラベルリンクベースには拡張タグの分しか同梱されない（標準タクソノミ側は
-        // 外部参照のみでファイル自体は含まれない）。標準タグは `loadStandardTaxonomyLabels()` で
-        // 補完する（提出書類側のラベルを優先し、無い場合のみ埋める）。
-        for (tag, label) in loadStandardTaxonomyLabels() where labelsByTag[tag] == nil {
+        // 外部参照のみでファイル自体は含まれない）。欠測の次元 member / `EntityTotal` だけ
+        // 標準タクソノミで埋める。勘定科目（販管費・有形固定資産・のれん等）は提出パッケージと
+        // HTML に任せ、本表・注記の preferredLabel / 会社文言を変えない。
+        for (tag, label) in loadStandardTaxonomyLabels()
+            where labelsByTag[tag] == nil && shouldFillFromStandardTaxonomy(tag)
+        {
             labelsByTag[tag] = label
         }
 
@@ -191,10 +194,10 @@ extension XBRLUtils {
                 }
             }
         }
-        for (tag, roleMap) in loadStandardTaxonomyLabelRoleVariants() {
-            for (role, text) in roleMap where variants[tag]?[role] == nil {
-                variants[tag, default: [:]][role] = text
-            }
+        for (tag, roleMap) in loadStandardTaxonomyLabelRoleVariants()
+            where variants[tag] == nil && shouldFillFromStandardTaxonomy(tag)
+        {
+            variants[tag] = roleMap
         }
 
         _cacheLock.lock()
@@ -203,10 +206,16 @@ extension XBRLUtils {
         return variants
     }
 
+    /// 標準タクソノミで埋めてよいタグか。内訳の raw `*Member` / `EntityTotal` 漏れだけを対象にし、
+    /// 提出パッケージが既にどれかロールを持っている勘定科目は触らない。
+    static func shouldFillFromStandardTaxonomy(_ tag: String) -> Bool {
+        tag == Xbrl.entityTotalMemberName || tag.hasSuffix("Member")
+    }
+
     /// 標準タクソノミのラベルリンクベースから {tag: 日本語標準ラベル} を作る。
     /// 第一入力は git 管理の `assets/taxonomy/labels/*_lab.xml`（jpcrp / jppfs / jpigp の日本語）。
     /// 任意の `assets/taxonomy/{GAAP,IFRS}/*.zip`（git 管理外）は欠測タグだけ埋める。
-    /// 提出パッケージ側のラベルは `loadLabelsByTag` が常に優先する。
+    /// `loadLabelsByTag` へ載せるのは次元 member / `EntityTotal` のみ（勘定科目は提出パッケージ優先）。
     /// `assets/taxonomy/labels` が無いときはコード側 sentinel（`EntityTotal`）だけ残し、
     /// パスを stderr に 1 回警告する。プロセス内でメモ化する。
     static func loadStandardTaxonomyLabels() -> [String: String] {
