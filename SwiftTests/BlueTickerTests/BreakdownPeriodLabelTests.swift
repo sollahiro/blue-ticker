@@ -158,6 +158,77 @@ import Foundation
         #expect(tables[0].periodBasis == .header)
     }
 
+    @Test func ikoubiDateCaptionIsPrior() {
+        #expect(
+            BreakdownExtractor.parsePeriodCue("移行日(2023年４月１日)", fiscalYearEnd: "2025-03-31")
+                == "前期")
+        let html = """
+            <p>移行日(2023年４月１日)</p>
+            \(numericPairTable("100", "50", "150"))
+            <p>前連結会計年度（自 2023年4月1日 至 2024年3月31日）</p>
+            \(numericPairTable("110", "55", "165"))
+            <p>当連結会計年度（自 2024年4月1日 至 2025年3月31日）</p>
+            \(numericPairTable("120", "60", "180"))
+            """
+        let tables = BreakdownExtractor.allTablesFromHtml(
+            html, defaultHeading: "セグメント情報", fiscalYearEnd: "2025-03-31")
+        #expect(tables.map(\.period) == ["前期", "前期", "当期"])
+        #expect(tables.map(\.periodBasis) == [.caption, .caption, .caption])
+    }
+
+    @Test func relatedInfoSectionHeadingCoversGeographyAndCustomers() {
+        // ニチレイ型: 【関連情報】の 前連結会計年度 が見出しで、地域・有形・顧客表が続く。
+        let html = """
+            <div>
+              <p>【関連情報】</p>
+              <p>前連結会計年度（自 2023年4月1日 至 2024年3月31日）</p>
+              <p>２．地域ごとの情報</p>
+              <p>(1)売上高</p>
+              <table>
+                <tr><td>日本</td><td>海外</td><td>合計</td></tr>
+                <tr><td>535,076</td><td>145,014</td><td>680,091</td></tr>
+              </table>
+              <p>(2)有形固定資産</p>
+              <table>
+                <tr><td>日本</td><td>海外</td><td>合計</td></tr>
+                <tr><td>163,227</td><td>43,857</td><td>207,084</td></tr>
+              </table>
+              <p>３．主要な顧客ごとの情報</p>
+              <table>
+                <tr><td>顧客の名称又は氏名</td><td>売上高</td></tr>
+                <tr><td>三菱食品株式会社</td><td>77,181</td></tr>
+              </table>
+              <p>当連結会計年度（自 2024年4月1日 至 2025年3月31日）</p>
+              <p>２．地域ごとの情報</p>
+              <p>(1)売上高</p>
+              <table>
+                <tr><td>日本</td><td>海外</td><td>合計</td></tr>
+                <tr><td>536,293</td><td>165,787</td><td>702,080</td></tr>
+              </table>
+            </div>
+            """
+        let tables = BreakdownExtractor.allTablesFromHtml(
+            html, defaultHeading: "セグメント情報", fiscalYearEnd: "2025-03-31")
+        #expect(tables.map(\.period) == ["前期", "前期", "前期", "当期"])
+        #expect(tables.map(\.periodBasis) == [.caption, .caption, .caption, .caption])
+    }
+
+    @Test func comparisonHeaderAfterCurrentCaptionStaysComparison() {
+        let html = """
+            <p>当連結会計年度（自 2024年4月1日 至 2025年3月31日）</p>
+            \(numericPairTable("120", "60", "180"))
+            <p>(4) 地域別に関する情報</p>
+            <table>
+              <tr><td></td><td>前連結会計年度</td><td>当連結会計年度</td></tr>
+              <tr><td>日本</td><td>100</td><td>120</td></tr>
+            </table>
+            """
+        let tables = BreakdownExtractor.allTablesFromHtml(
+            html, defaultHeading: "セグメント情報", fiscalYearEnd: "2025-03-31")
+        #expect(tables.map(\.period) == ["当期", "比較"])
+        #expect(tables[1].periodBasis == .header)
+    }
+
     // MARK: - (d) lone current table must not become 前期
 
     @Test func loneUnlabeledNumericTableIsCurrentNotPrior() {

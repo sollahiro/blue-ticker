@@ -141,6 +141,14 @@ enum BreakdownExtractor {
     private static let fiscalYearLabelOnlyPattern = try! NSRegularExpression(
         pattern: #"(?<![0-9])([0-9]{4})年度"#
     )
+    /// IFRS 初度適用の「移行日(2023年４月１日)」。
+    private static let ikoubiDatePattern = try! NSRegularExpression(
+        pattern: #"移行日\s*[（(]?\s*([0-9]{4})年([0-9]{1,2})月([0-9]{1,2})日"#
+    )
+    /// 「２．地域ごとの情報」「(1)売上高」「３　主要な顧客」など期間見出し下の細目。
+    private static let subsectionMarkerPattern = try! NSRegularExpression(
+        pattern: #"^(?:[\(（][0-9]+[\)）]|[0-9]+[\.．、)）\s])"#
+    )
 
     // MARK: - 公開 API
 
@@ -1072,6 +1080,9 @@ enum BreakdownExtractor {
         }
         if hasCurrent { return "当期" }
         if hasPrior { return "前期" }
+        if let ikou = periodFromIkoubiDate(compact, fiscalYearEnd: fiscalYearEnd) {
+            return ikou
+        }
         if let fromDates = periodFromJapaneseDateRanges(compact, fiscalYearEnd: fiscalYearEnd) {
             return fromDates
         }
@@ -1123,8 +1134,9 @@ enum BreakdownExtractor {
     /// 同一 TextBlock 内で、表から直前へ遡って期間キャプションを取る。
     /// 直前の短い兄弟だけだと、単位行やラッパー div で期間見出しを取りこぼす
     /// （FY2026 有報の収益認識・セグメントで 前/当連結会計年度（自…至…）が表の一段上にある型）。
-    /// 直前の `<table>`（または table を含む要素）より前、および `【…】` の別注記見出しは見ない。
-    /// 祖先側はキャプション形（期間語で始まる、または 自…至…）だけ採用し、導入文は見ない。
+    /// 直前表の専有キャプションは次表へ引き継がない（隣接対は pair に委ねる）。
+    /// 「２．地域」「３．主要な顧客」など細目が挟まる期間見出しは、次の期間見出しまで共有する。
+    /// `【…】` の別注記見出しは見ない。祖先側はキャプション形だけ採用し、導入文は見ない。
     private static func detectPeriodFromPreceding(
         _ table: Element, fiscalYearEnd: String?
     ) -> String? {
@@ -1132,39 +1144,70 @@ enum BreakdownExtractor {
         var isAncestorLevel = false
         while let node = current {
             guard let parent = node.parent() else { break }
-            var texts: [String] = []
-            var sawPrecedingTable = false
+            var textsAfterLastTable: [String] = []
+            var sectionPeriodText: String?
+            var sectionOwnedByPrecedingTable = false
+            var sawSubsectionAfterSectionCue = false
             var sawMajorSection = false
             for child in parent.getChildNodes() {
                 guard child.siblingIndex < node.siblingIndex else { break }
                 if let el = child as? Element, elementIsOrContainsTable(el) {
-                    sawPrecedingTable = true
-                    texts = []
-                    sawMajorSection = false
+                    if sectionPeriodText != nil, !sawSubsectionAfterSectionCue {
+                        sectionOwnedByPrecedingTable = true
+                    }
+                    textsAfterLastTable = []
                     continue
                 }
                 let text = precedingNodeText(child)
                 if text.isEmpty { continue }
                 if isMajorNoteSectionHeading(text) {
                     sawMajorSection = true
-                    texts = []
+                    textsAfterLastTable = []
                     continue
                 }
                 if text.unicodeScalars.count > periodCaptionMaxLength { continue }
-                texts.append(text)
+                if isUsablePeriodSectionCue(text, fiscalYearEnd: fiscalYearEnd) {
+                    sectionPeriodText = text
+                    sectionOwnedByPrecedingTable = false
+                    sawSubsectionAfterSectionCue = false
+                    textsAfterLastTable.append(text)
+                    continue
+                }
+                if isSubsectionMarker(text) {
+                    if sectionPeriodText != nil, !sectionOwnedByPrecedingTable {
+                        sawSubsectionAfterSectionCue = true
+                    }
+                    textsAfterLastTable.append(text)
+                    continue
+                }
+                textsAfterLastTable.append(text)
             }
-            for text in texts.reversed() {
+            for text in textsAfterLastTable.reversed() {
                 if isAncestorLevel, !isCaptionLikePeriodText(text) { continue }
                 if let period = parsePeriodCue(text, fiscalYearEnd: fiscalYearEnd) {
                     return period
                 }
             }
-            if sawPrecedingTable || sawMajorSection { return nil }
+            if let cue = sectionPeriodText, !sectionOwnedByPrecedingTable,
+               let period = parsePeriodCue(cue, fiscalYearEnd: fiscalYearEnd)
+            {
+                return period
+            }
+            if sawMajorSection { return nil }
             isAncestorLevel = true
             current = parent
             if parent.tagName() == "body" || parent.tagName() == "html" { break }
         }
         return nil
+    }
+
+    private static func isUsablePeriodSectionCue(_ text: String, fiscalYearEnd: String?) -> Bool {
+        let compact = asciiDigits(text)
+            .replacingOccurrences(of: "\u{00a0}", with: "")
+            .replacingOccurrences(of: "\u{3000}", with: " ")
+        if isPeriodCueProse(compact) { return false }
+        return isCaptionLikePeriodText(text)
+            || parsePeriodCue(text, fiscalYearEnd: fiscalYearEnd) != nil
     }
 
     /// 祖先から拾う期間テキストは、期間語で始まる短い見出しか（自…至…）だけ。
@@ -1176,8 +1219,21 @@ enum BreakdownExtractor {
             .trimmingCharacters(in: .whitespacesAndNewlines)
         guard !compact.isEmpty else { return false }
         if isPeriodCueProse(compact) { return false }
+        if compact.contains("移行日") { return true }
         if textContainsJapaneseDateRange(compact) { return true }
         return leadingStandalonePeriodKeyword(compact) != nil
+    }
+
+    /// 「２．地域ごとの情報」「(2)有形固定資産」「３　主要な顧客」など。
+    static func isSubsectionMarker(_ text: String) -> Bool {
+        let compact = asciiDigits(text)
+            .replacingOccurrences(of: "\u{00a0}", with: "")
+            .replacingOccurrences(of: "\u{3000}", with: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !compact.isEmpty else { return false }
+        let ns = compact as NSString
+        let range = NSRange(location: 0, length: ns.length)
+        return subsectionMarkerPattern.firstMatch(in: compact, options: [], range: range) != nil
     }
 
     private static func isPeriodCueProse(_ text: String) -> Bool {
@@ -1286,6 +1342,27 @@ enum BreakdownExtractor {
         if sawCurrent { return "当期" }
         if sawPrior { return "前期" }
         return nil
+    }
+
+    /// 「移行日(2023年４月１日)」は当期期首より前なら前期（IFRS 比較開始残高）。
+    private static func periodFromIkoubiDate(_ text: String, fiscalYearEnd: String?) -> String? {
+        guard text.contains("移行日") else { return nil }
+        let ns = text as NSString
+        let range = NSRange(location: 0, length: ns.length)
+        guard let match = ikoubiDatePattern.firstMatch(in: text, options: [], range: range),
+              match.numberOfRanges >= 4,
+              let date = isoDate(
+                year: ns.substring(with: match.range(at: 1)),
+                month: ns.substring(with: match.range(at: 2)),
+                day: ns.substring(with: match.range(at: 3)))
+        else { return "前期" }
+        guard let fyEnd = fiscalYearEnd.flatMap(parseDateString) else { return "前期" }
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(secondsFromGMT: 0)!
+        guard let fyStart = cal.date(byAdding: .year, value: -1, to: fyEnd).flatMap({
+            cal.date(byAdding: .day, value: 1, to: $0)
+        }) else { return "前期" }
+        return date >= fyStart ? "当期" : "前期"
     }
 
     /// 「2024年度」「2025年度」を `calculateFiscalYear(fyEnd)` と照合する。
