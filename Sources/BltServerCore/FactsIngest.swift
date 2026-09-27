@@ -300,7 +300,20 @@ public func runFactsIngestCommand(
         let correctionIDsByOriginal = try await loadAnnualXbrlCorrectionIDsByOriginal(
             db: app.db, originalDocIDs: inFlightOriginalIDs, listedCodes: inFlightListedCodes,
             logger: app.logger)
-        let forceDocIDs = docIDs ?? []
+        let activeOverrides = try await loadActiveManualXbrlOverrides(on: app.db)
+        let overrideForce = try await manualXbrlOverrideForceTargets(
+            overrides: activeOverrides, on: app.db)
+        let policyHoldingOverrideByDocID = try await policyHoldingOverridesByOriginalDocID(
+            overrides: activeOverrides, on: app.db)
+        if !activeOverrides.isEmpty {
+            app.logger.notice(
+                "Active manual XBRL overrides loaded",
+                metadata: [
+                    "event": "manual_xbrl_overrides_loaded",
+                    "count": "\(activeOverrides.count)",
+                ])
+        }
+        let forceDocIDs = (docIDs ?? []).union(overrideForce.docIDs)
         let financialsExplicitCodes: Set<String>?
         if let docIDs {
             var fromDocs = Set(listedFilingSets.keep.map(\.code))
@@ -334,10 +347,17 @@ public func runFactsIngestCommand(
             let s4 = try await runFinancialsIngest(
                 db: app.db, years: financialsIngestYears, limit: stageLimit, listedCodes: listed,
                 explicitCodes: financialsExplicitCodes, priorityCodes: priority,
-                forceCodes: docIDs == nil ? [] : (financialsExplicitCodes ?? []),
+                forceCodes: (docIDs == nil ? [] : (financialsExplicitCodes ?? [])).union(
+                    overrideForce.codes),
                 logger: app.logger
             ) { code in
-                await context.computeFinancials(code: code, years: financialsIngestYears)
+                let computed = await context.computeFinancials(
+                    code: code, years: financialsIngestYears)
+                let edinet = await context.edinetCode(forListedCode: code) ?? ""
+                let matched = activeOverrides.filter {
+                    $0.edinetCode == edinet && $0.item == .capex
+                }
+                return applyingManualCapexOverrides(to: computed, overrides: matched)
             }
             let coverage = try? await withDbRetry(logger: app.logger, context: "company_financials 集計") {
                 try await countServableCompanyFinancials(db: app.db)
@@ -624,8 +644,13 @@ public func runFactsIngestCommand(
                     (
                         statementNoteTypePolicyHoldingSecurities,
                         { docID, _ in
-                            await context.resolvePolicyHoldingSecuritiesNote(
+                            let resolved = await context.resolvePolicyHoldingSecuritiesNote(
                                 docID: docID, correctionDocIDs: correctionIDsByOriginal[docID] ?? [])
+                            guard let override = policyHoldingOverrideByDocID[docID] else {
+                                return resolved
+                            }
+                            return applyManualPolicyHoldingOverride(
+                                to: resolved, override: override)
                         }
                     ),
                 ]

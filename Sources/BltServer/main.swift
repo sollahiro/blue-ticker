@@ -37,6 +37,16 @@
 //                                                            status.html 生成用
 //                                                            （scripts/generate-status-page.sh が呼ぶ。
 //                                                            パスは BLT_STATUS_HTML）。
+//   blt-server overrides add --file <path.json> [--created-by NAME] [--dry-run]
+//                                                            手動 XBRL 上書きを追加する。書き込みは
+//                                                            BLT_NEON_WRITE_DATABASE_URL 必須。
+//                                                            --dry-run は検証と現行値との diff のみ。
+//   blt-server overrides list [--edinet-code E03614] [--item capex]
+//                             [--include-revoked]
+//                                                            上書きの一覧（read。DATABASE_URL）。
+//   blt-server overrides revoke --id UUID
+//   blt-server overrides revoke --edinet-code E --period-end YYYY-MM-DD --item capex
+//                                                            有効行を revoke。WRITE URL 必須。
 //
 // bind アドレスの解決順位: CLI 引数 > 環境変数（BLT_HOST / BLT_PORT）> デフォルト。
 // クラウド（Fly.io 等）では env で 0.0.0.0 / 注入ポートをバインドできるようにする。
@@ -132,6 +142,24 @@ do {
         try await runScreenRebuildCommand(limit: limit)
     } else if argv.count > 1, argv[1] == "status-report" {
         try await runStatusReportCommand()
+    } else if argv.count > 1, argv[1] == "overrides" {
+        guard argv.count > 2 else {
+            printError("blt-server error: overrides のサブコマンドは add / list / revoke です\n")
+            exit(1)
+        }
+        try await runManualXbrlOverrideCommand(
+            ManualXbrlOverrideCLIArgs(
+                subcommand: argv[2],
+                file: optionValue("--file", in: argv),
+                createdBy: optionValue("--created-by", in: argv),
+                dryRun: argv.contains("--dry-run"),
+                edinetCode: optionValue("--edinet-code", in: argv),
+                item: optionValue("--item", in: argv),
+                includeRevoked: argv.contains("--include-revoked"),
+                id: optionValue("--id", in: argv),
+                periodEnd: optionValue("--period-end", in: argv)
+            )
+        )
     } else {
         let args = ServerArgs.parse(argv)
         try await runBltServer(host: args.host, port: args.port)
