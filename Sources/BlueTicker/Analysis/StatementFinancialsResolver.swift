@@ -43,6 +43,8 @@ enum StatementFinancialsResolver {
     /// US-GAAP は HTML Statement 行のラベルから仮想タグ FieldSet を組み立て、既存 Extractor へ渡す。
     /// J-GAAP / IFRS は Statement が採用したタグだけを許可した FieldSet で Extractor を回す
     /// （SummaryOfBusinessResults 等の本表外タグは混ぜない。コンテキストは元 fact を保持）。
+    /// 例外: 本表が事業別に分割され合計行が無い会社（9436 S100Y9T5）は、
+    /// `statementSalesSummaryTotalTags` だけを売上 FieldSet へ載せる。
     static func resolve(xbrlDir: URL) -> StatementFinancialsValues? {
         let tagElements = XBRLUtils.collectAllNumericElements(in: xbrlDir, nilAsZero: false)
         guard !tagElements.isEmpty else { return nil }
@@ -96,8 +98,13 @@ enum StatementFinancialsResolver {
         overlayStatementLineCurrents(&instantFS, lines: year.balanceSheet)
         overlayStatementLineCurrents(&equityDurationFS, lines: year.changesInEquity)
 
+        // 売上だけ、本表に合計行が無いときの連結営業収益合計（主要な経営指標等）を載せる。
+        // OP/GP など他 Extractor の durationFS には混ぜない。
+        var salesFS = durationFS
+        overlayStatementSalesSummaryTotals(&salesFS, tagElements: tagElements)
+
         let is_ = IncomeStatementExtractor.extract(
-            fieldSet: durationFS, accountingStandard: accountingStandard)
+            fieldSet: salesFS, accountingStandard: accountingStandard)
         let op = OperatingProfitExtractor.extract(
             fieldSet: durationFS, accountingStandard: accountingStandard)
         let bs = BalanceSheetExtractor.extract(
@@ -496,6 +503,37 @@ enum StatementFinancialsResolver {
             var fv = fieldSet[item.tag] ?? FieldValue(current: nil, prior: nil)
             fv.current = item.value
             fieldSet[item.tag] = fv
+        }
+    }
+
+    /// 本表に連結営業収益合計行が無いときの明示合計（`statementSalesSummaryTotalTags`）。
+    /// 本表が既に NetSales / RWY / ELE 等の合計を採っている会社には載せない。
+    /// 連結 CurrentYearDuration を売上 FieldSet へ載せる。合算はしない。
+    static func overlayStatementSalesSummaryTotals(
+        _ fieldSet: inout FieldSet, tagElements: XbrlTagElements
+    ) {
+        let extra = tagElements.filter { Xbrl.statementSalesSummaryTotalTags.contains($0.key) }
+        guard !extra.isEmpty else { return }
+        let extraFS = fieldSetFromDuration(extra)
+        var overlay: FieldSet = [:]
+        for tag in Xbrl.statementSalesSummaryTotalTags {
+            guard let fv = extraFS[tag], fv.current != nil || fv.prior != nil else { continue }
+            overlay[tag] = fv
+        }
+        guard !overlay.isEmpty else { return }
+
+        let current = resolveItemPreferCurrent(fieldSet, tags: Xbrl.netSalesTags)
+        let needsTotal: Bool
+        if current.current == nil && current.prior == nil {
+            needsTotal = true
+        } else if let tag = current.tag, Xbrl.operatingRevenueSplitComponentTags.contains(tag) {
+            needsTotal = true
+        } else {
+            needsTotal = false
+        }
+        guard needsTotal else { return }
+        for (tag, fv) in overlay {
+            fieldSet[tag] = fv
         }
     }
 

@@ -126,4 +126,85 @@ import Testing
         #expect(result.operatingProfit == 1_071_164_000)
         #expect(result.netProfit == 775_702_000)
     }
+
+    /// 9436 沖縄セルラー / S100Y9T5。本表は電気通信事業 52,291 と附帯事業 34,057 に分かれ、
+    /// 連結営業収益合計は `OperatingRevenue1SummaryOfBusinessResults` = 86,348。
+    /// 内訳タグを売上にしない。合算フォールバックは使わない。
+    @Test func okinawaCellularS100Y9T5SummarySalesIsConsolidatedOperatingRevenueTotal() async throws {
+        let docID = "S100Y9T5"
+        guard let xbrlDir = await ensureCached(docID) else { return }
+
+        guard case .resolved(let year) = StatementAnalyzer.resolveFromXBRL(
+            xbrlDir: xbrlDir,
+            docID: docID,
+            statementTypes: [.incomeStatement]
+        ) else {
+            Issue.record("resolveFromXBRL failed for \(docID)")
+            return
+        }
+
+        #expect(
+            year.incomeStatement.contains {
+                $0.tag == "OperatingRevenueOILTelecommunications" && $0.value == 52_291_000_000
+            })
+        #expect(
+            year.incomeStatement.contains {
+                $0.tag == "OperatingRevenueIncidentalELC" && $0.value == 34_057_000_000
+            })
+
+        let values = try #require(StatementFinancialsResolver.resolve(xbrlDir: xbrlDir))
+        #expect(values.sales == 86_348_000_000)
+        #expect(values.salesLabel == "営業収益")
+        #expect(values.operatingProfit == 18_693_000_000)
+        #expect(values.netProfit == 13_217_000_000)
+    }
+
+    /// 本表が事業別内訳のときだけ Summary 合計を載せる。RWY 合計がある会社には載せない。
+    @Test func overlayStatementSalesSummaryTotalsOnlyWhenComponentWouldWin() {
+        let tagElements: XbrlTagElements = [
+            "OperatingRevenue1SummaryOfBusinessResults": [
+                "CurrentYearDuration": 86_348_000_000,
+                "Prior1YearDuration": 84_314_000_000,
+            ]
+        ]
+
+        var componentFS = makeFieldSet(
+            ("OperatingRevenueOILTelecommunications", 52_291_000_000.0, 50_695_000_000.0)
+        )
+        StatementFinancialsResolver.overlayStatementSalesSummaryTotals(
+            &componentFS, tagElements: tagElements)
+        let afterComponent = resolveNetSales(componentFS)
+        #expect(afterComponent.tag == "OperatingRevenue1SummaryOfBusinessResults")
+        #expect(afterComponent.current == 86_348_000_000)
+
+        var rwyFS = makeFieldSet(
+            ("OperatingRevenueRWY", 1_086_179_000_000.0, nil)
+        )
+        StatementFinancialsResolver.overlayStatementSalesSummaryTotals(
+            &rwyFS, tagElements: tagElements)
+        let afterRWY = resolveNetSales(rwyFS)
+        #expect(afterRWY.tag == "OperatingRevenueRWY")
+        #expect(afterRWY.current == 1_086_179_000_000.0)
+        #expect(rwyFS["OperatingRevenue1SummaryOfBusinessResults"] == nil)
+    }
+
+    /// 東急 S100YE63: `OperatingRevenueRWY` は会社全体合計。Summary 合計を載せても売上は変わらない。
+    @Test func tokyuS100YE63SummarySalesStaysOperatingRevenueRWY() async throws {
+        let docID = "S100YE63"
+        guard let xbrlDir = await ensureCached(docID) else { return }
+        let values = try #require(StatementFinancialsResolver.resolve(xbrlDir: xbrlDir))
+        #expect(values.sales == 1_086_179_000_000)
+        #expect(values.salesLabel == "営業収益")
+        #expect(values.operatingProfit == 103_193_000_000)
+    }
+
+    /// 東電HD S100YIHR: `OperatingRevenueELE` は会社全体合計（電気+その他）。内訳にしない。
+    @Test func tepcoS100YIHRSummarySalesStaysOperatingRevenueELE() async throws {
+        let docID = "S100YIHR"
+        guard let xbrlDir = await ensureCached(docID) else { return }
+        let values = try #require(StatementFinancialsResolver.resolve(xbrlDir: xbrlDir))
+        #expect(values.sales == 6_328_574_000_000)
+        #expect(values.salesLabel == "営業収益")
+        #expect(values.operatingProfit == 337_689_000_000)
+    }
 }
