@@ -293,7 +293,7 @@ struct HAPISConsumerClientTests {
         #expect(try store.load(issuer: issuer)?.token == "proto-token")
     }
 
-    @Test func loopbackAndAccessHostsDoNotUseConsumerAuth() {
+    @Test func loopbackAndNonGatewayHostsDoNotUseConsumerAuth() {
         let gateway = URL(string: "https://hapis-blue-ticker-production.sollahiro.workers.dev")!
         #expect(
             HAPISConsumerAuth.applies(

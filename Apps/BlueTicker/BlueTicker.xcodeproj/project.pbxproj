@@ -27,8 +27,6 @@
 		AA0000000000000000000018 /* BreakdownView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000018 /* BreakdownView.swift */; };
 		AA0000000000000000000019 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000019 /* Assets.xcassets */; };
 		AA0000000000000000000021 /* BrandMark.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000021 /* BrandMark.swift */; };
-		AA0000000000000000000022 /* AccessSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000022 /* AccessSession.swift */; };
-		AA0000000000000000000023 /* AccessLoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000023 /* AccessLoginView.swift */; };
 		AA0000000000000000000024 /* ResponseCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000024 /* ResponseCache.swift */; };
 		AA0000000000000000000025 /* HAPISConsumerModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000025 /* HAPISConsumerModels.swift */; };
 		AA0000000000000000000026 /* HAPISAttestation.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000026 /* HAPISAttestation.swift */; };
@@ -65,8 +63,6 @@
 		BB0000000000000000000019 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		BB0000000000000000000020 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		BB0000000000000000000021 /* BrandMark.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrandMark.swift; sourceTree = "<group>"; };
-		BB0000000000000000000022 /* AccessSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccessSession.swift; sourceTree = "<group>"; };
-		BB0000000000000000000023 /* AccessLoginView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccessLoginView.swift; sourceTree = "<group>"; };
 		BB0000000000000000000024 /* ResponseCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResponseCache.swift; sourceTree = "<group>"; };
 		BB0000000000000000000025 /* HAPISConsumerModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HAPISConsumerModels.swift; sourceTree = "<group>"; };
 		BB0000000000000000000026 /* HAPISAttestation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HAPISAttestation.swift; sourceTree = "<group>"; };
@@ -136,7 +132,6 @@
 			isa = PBXGroup;
 			children = (
 				BB0000000000000000000004 /* APIConfiguration.swift */,
-				BB0000000000000000000022 /* AccessSession.swift */,
 				BB0000000000000000000005 /* DTOs.swift */,
 				BB0000000000000000000006 /* APIClient.swift */,
 				BB0000000000000000000024 /* ResponseCache.swift */,
@@ -161,7 +156,6 @@
 				BB0000000000000000000034 /* FundView.swift */,
 				BB0000000000000000000035 /* FundPositionEditView.swift */,
 				BB0000000000000000000010 /* SettingsView.swift */,
-				BB0000000000000000000023 /* AccessLoginView.swift */,
 				DD0000000000000000000007 /* Explore */,
 				DD0000000000000000000008 /* Ticker */,
 			);
@@ -299,13 +293,11 @@
 				AA0000000000000000000005 /* DTOs.swift in Sources */,
 				AA0000000000000000000006 /* APIClient.swift in Sources */,
 				AA0000000000000000000024 /* ResponseCache.swift in Sources */,
-				AA0000000000000000000022 /* AccessSession.swift in Sources */,
 				AA0000000000000000000025 /* HAPISConsumerModels.swift in Sources */,
 				AA0000000000000000000026 /* HAPISAttestation.swift in Sources */,
 				AA0000000000000000000027 /* HAPISTokenStore.swift in Sources */,
 				AA0000000000000000000028 /* HAPISConsumerClient.swift in Sources */,
 				AA0000000000000000000031 /* HAPISOriginGate.swift in Sources */,
-				AA0000000000000000000023 /* AccessLoginView.swift in Sources */,
 				AA0000000000000000000007 /* WatchedCompany.swift in Sources */,
 				AA0000000000000000000008 /* CompanyRef.swift in Sources */,
 				4CCED69B305EDAFE003CAB8E /* HistoryView.swift in Sources */,

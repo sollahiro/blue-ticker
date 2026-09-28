@@ -34,7 +34,7 @@ struct FundView: View {
 
             #if DEBUG
                 Section("開発ラボ") {
-                    NavigationLink("サーバー / Access / HAPIS") {
+                    NavigationLink("サーバー / HAPIS") {
                         SettingsView()
                     }
                     ForEach(Self.debugTickers) { company in

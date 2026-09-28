@@ -19,7 +19,7 @@
 |---|---|---|
 | 公開扉 | Cloudflare Access（`api.*`） | HAPIS。上流 BLT は非公開 |
 | programmatic | Access Service Token | 機械 / エンドポイント直叩きは x402 |
-| iOS | プレビューだけ Access 短命 JWT（`CF_Authorization`） | HAPIS 短命匿名トークン + 本番 App Attest。任意 Bearer は有料 / ウォッチ同期が要るときだけ |
+| iOS | アプリは Access JWT を使わない。Simulator は loopback stub。Release は右列 | HAPIS 短命匿名トークン + 本番 App Attest。Simulator はローカル stub。開発 / agents の REST は Service Token（アプリには埋め込まない）。任意 Bearer は有料 / ウォッチ同期が要るときだけ |
 | origin APIキー | 持たない | 持たない |
 | origin | 方式A・エッジのみ検証。blt-server は見ない | ゲートウェイ信頼。blt-server は見ない（API 認証・Attest・短命トークン・レート制限・課金アカウントは持たない） |
 | 旧 `BLT_AUTH_TOKEN` | **復活させない** | **復活させない** |
@@ -35,7 +35,7 @@
 | MCP（開発用） | `mcp.*` | Managed OAuth |
 | ローカル | `127.0.0.1` / LAN `http` | loopback は無認証。LAN 向けに `0.0.0.0` 等へ bind するときは `BLT_ALLOW_UNAUTHENTICATED=1` |
 | 第三者 REST | `api.*` | 段階 B / HAPIS + x402（`public-api.md`） |
-| iOS | loopback / `api.sollahiro.com` | 開発は loopback / http 無認証。実機プレビューで `https://api.sollahiro.com` を叩くときだけ Access SSO の短命 JWT（`CF_Authorization`）。Service Token は埋め込まない |
+| iOS | HAPIS ゲートウェイ（Release）/ loopback（Simulator） | Release = HAPIS + App Attest。Simulator = ローカル stub。開発 / agents の REST 直叩きは Service Token（アプリには埋め込まない）。Access SSO / OTP は使わない |
 
 面分離: REST 機械入口＝Service Token。MCP＝Managed OAuth（開発専用。ChatGPT Apps は凍結。ホストは解体しない）。機能単位の有料マスクは採らない。
 
@@ -45,7 +45,7 @@
 
 公開 REST の認証は階層ではなく併存する（詳細は `public-api.md`）。
 
-- iOS アカウント不要: HAPIS が短命匿名トークンを発行。本番は App Attest 必須。iOS プレビューの Access JWT は段階 A のまま。段階 B で HAPIS 短命 + Attest に移る。**現行クライアント: Debug は stub mint、Release は App Attest を sessions に載せる。本番制御面は `ATTEST_MODE=enforce`**（Team / Bundle は制御面。blt-server は見ない。App Attest の hash は attest = `SHA256(challenge bytes)`、assertion = `SHA256(client_data JSON)`。詳細は `ios-client.md`）
+- iOS アカウント不要: HAPIS が短命匿名トークンを発行。本番は App Attest 必須。**Release は HAPIS ゲートウェイ + App Attest。Simulator はローカル stub。開発 / agents の REST は Service Token（アプリには埋め込まない）。Debug 実機の「HAPIS 本番」も App Attest。**（Team / Bundle は制御面。blt-server は見ない。App Attest の hash は attest = `SHA256(challenge bytes)`、assertion = `SHA256(client_data JSON)`。詳細は `ios-client.md`）
 - 任意 Bearer: 顧客アカウントは有料機能・ウォッチリスト同期が要るときだけ
 - 機械 / エンドポイント直叩き: x402
 - Web: 当面、アカウント不要の無料枠は出さない
