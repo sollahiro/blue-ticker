@@ -404,12 +404,19 @@ struct BreakdownView: View {
     }
 
     /// 「26年2月の利益は、前年より増えました」のように前年差の結論だけを見出しにする。
+    /// 金額の指標は「増えた/減った」、率の指標は「上がった/下がった」。
     private func yearOutcomeTitle(_ year: FinancialsYear, total: Double?) -> String {
         let period = Format.fyJapanese(year.fyEnd)
         guard let total else { return "\(period)の\(metric.title)" }
-        if total > 0 { return "\(period)の\(metric.title)は、前年より増えました" }
-        if total < 0 { return "\(period)の\(metric.title)は、前年より減りました" }
-        return "\(period)の\(metric.title)は、前年とほぼ変わりませんでした"
+        if total == 0 { return "\(period)の\(metric.title)は、前年とほぼ変わりませんでした" }
+        let verb: String
+        switch metric {
+        case .businessProfit:
+            verb = total > 0 ? "増えました" : "減りました"
+        case .roic, .roe:
+            verb = total > 0 ? "上がりました" : "下がりました"
+        }
+        return "\(period)の\(metric.title)は、前年より\(verb)"
     }
 
     private struct FactorDetail {
