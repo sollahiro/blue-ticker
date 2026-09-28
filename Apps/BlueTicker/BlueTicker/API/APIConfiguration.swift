@@ -88,6 +88,15 @@ enum APIConfiguration {
                 if let raw = UserDefaults.standard.string(forKey: storageKey),
                     let url = validatedBaseURL(from: raw)
                 {
+                    if url.scheme?.lowercased() == "https",
+                        url.host?.lowercased() == "api.sollahiro.com"
+                    {
+                        let replacement = productionHAPISGatewayBaseURL
+                        UserDefaults.standard.set(replacement.absoluteString, forKey: storageKey)
+                        hapisGatewayBaseURL = replacement
+                        hapisAttestClientMode = .appAttest
+                        return replacement
+                    }
                     return url
                 }
                 return defaultBaseURL

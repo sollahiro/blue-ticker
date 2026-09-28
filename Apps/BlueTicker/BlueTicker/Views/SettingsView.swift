@@ -68,7 +68,7 @@ struct SettingsView: View {
             case .stub:
                 return "短命の匿名トークンを制御面から自動発行します（クライアント stub mint）。本番 HAPIS は ATTEST_MODE=enforce のため、このままでは mint できません。実機の検索は Release を使います。"
             case .appAttest:
-                return "短命の匿名トークンを制御面から自動発行します。mint は App Attest（challenge → attest / assertion）。Debug の App Attest 環境は development です。本番 HAPIS の既定は production。Debug の UserDefaults 上書きはプロセス起動時に読むので、変更後は再起動してください。"
+                return "短命の匿名トークンを制御面から自動発行します。mint は App Attest（challenge → attest / assertion）。Debug の App Attest 環境は development、本番 HAPIS の既定は production なので、この経路の mint は拒否され得る。本番検索は Release。UserDefaults 上書きはプロセス起動時に読むので、変更後は再起動してください。"
             }
         }
 

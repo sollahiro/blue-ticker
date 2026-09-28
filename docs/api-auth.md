@@ -1,6 +1,6 @@
 # REST / MCP 認証の住み分け
 
-段階 A が現行。段階 B の公開入口は HAPIS（`public-api.md`）。blt-server origin はどちらの段階でもトークンを検証しない（エッジ / ゲートウェイ信頼）。認証ミドルウェアは origin に載せない。
+段階の列は origin / 公開扉のロールアウト（段階 A が origin 現行。段階 B の公開入口は HAPIS。`public-api.md`）。iOS クライアントは段階 B：Release は HAPIS + App Attest、Simulator はローカル stub。開発 / agents の REST は Service Token（アプリには埋め込まない）。blt-server origin はどちらの段階でもトークンを検証しない（エッジ / ゲートウェイ信頼）。認証ミドルウェアは origin に載せない。
 
 ## origin の起動ガード
 
@@ -19,7 +19,7 @@
 |---|---|---|
 | 公開扉 | Cloudflare Access（`api.*`） | HAPIS。上流 BLT は非公開 |
 | programmatic | Access Service Token | 機械 / エンドポイント直叩きは x402 |
-| iOS | アプリは Access JWT を使わない。Simulator は loopback stub。Release は右列 | HAPIS 短命匿名トークン + 本番 App Attest。Simulator はローカル stub。開発 / agents の REST は Service Token（アプリには埋め込まない）。任意 Bearer は有料 / ウォッチ同期が要るときだけ |
+| iOS | （アプリ経路ではない。Access JWT は使わない） | HAPIS 短命匿名トークン + 本番 App Attest。Simulator はローカル stub。開発 / agents の REST は Service Token（アプリには埋め込まない）。任意 Bearer は有料 / ウォッチ同期が要るときだけ |
 | origin APIキー | 持たない | 持たない |
 | origin | 方式A・エッジのみ検証。blt-server は見ない | ゲートウェイ信頼。blt-server は見ない（API 認証・Attest・短命トークン・レート制限・課金アカウントは持たない） |
 | 旧 `BLT_AUTH_TOKEN` | **復活させない** | **復活させない** |
