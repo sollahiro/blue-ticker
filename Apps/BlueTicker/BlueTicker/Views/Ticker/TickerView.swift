@@ -30,6 +30,7 @@ struct TickerView: View {
     /// 削除の描画オフは indefinite 効果なので、消した直後だけ isActive にして戻す。
     @State private var watchAdded = 0
     @State private var watchDrawOff = false
+    @State private var watchDrawOffTask: Task<Void, Never>?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -206,13 +207,16 @@ struct TickerView: View {
         let matching = matchingRows
         if matching.isEmpty {
             _ = insertWatchRow()
+            watchDrawOffTask?.cancel()
+            watchDrawOff = false
             watchAdded += 1
         } else {
             for item in matching {
                 modelContext.delete(item)
             }
+            watchDrawOffTask?.cancel()
             watchDrawOff = true
-            Task {
+            watchDrawOffTask = Task {
                 try? await Task.sleep(for: .milliseconds(700))
                 watchDrawOff = false
             }
