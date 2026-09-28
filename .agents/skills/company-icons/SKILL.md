@@ -134,6 +134,8 @@ icons weekly 専用。次の **5 条件がすべて揃ったときだけ**、Aut
 
 origin: (1) ユーザー指定のコンシューマサイト (2) 有報「公告掲載方法」が自社なら scheme+host のみ (3) Pronexus なら有報本文の公式 URL、無ければトップで社名照合 (4) 公告に URL 無しなら Web 検索と IR。Pronexus / frameset / 紙面は favicon 取得先にしない。
 
+有報本文から公式 origin を拾うときは IR 配信ホスト・大学・省庁ホストを捨てる。Jetpack CDN は first-party の同一パスが取れるならそちら。製品ブランドサイトの apple-touch は本体マークではない。
+
 画像は FaviconFetcher（rel=icon 優先）と**逆順**:
 
 1. 正方形 apple-touch（144–192px）
@@ -252,6 +254,9 @@ DATABASE_URL="$BLT_NEON_WRITE_DATABASE_URL" ./.build/release/blt-server ingest -
 - **SNS フッター。** Facebook / X 等の共有ボタン画像は会社マークではない。`logo` パスの部分一致で拾わない
 - **OGP スクリーンショット。** トップページ全体のキャプチャはアイコンではない
 - **別名ドメイン。** 社名検索で当たった別法人ホストはマップ禁止（アルゴグラフィックス ≠ `algo.co.jp`）
+- **Jetpack CDN。** 公式 WP 画像のミラー。同一パスの first-party が GET できるならそちらをマップする
+- **製品ブランドサイト。** 上場会社本体ではなくサービス名ドメインの apple-touch は本体マークではない
+- **有報本文の URL 収穫。** IR 配信ホスト・大学・省庁ホストは公式 origin にしない
 
 ## 完了条件
 

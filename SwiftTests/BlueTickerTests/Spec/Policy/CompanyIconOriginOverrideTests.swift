@@ -311,6 +311,53 @@ import Testing
         }
     }
 
+    /// 2026-09-28 weekly: listed × company_icons 欠行。公告紙面／URL無し／Pronexus の公式画像。
+    /// Jetpack CDN・製品ブランドサイト・横長ワードマーク OGP はマップに載せない。
+    @Test func pins20260928WeeklyMissingListedManualImageURLs() {
+        let expected: [(String, String)] = [
+            ("2195", "https://www.amita-hd.co.jp/_assets/img/apple-touch-icon.png"),
+            ("2395", "https://snbl.com/wp-content/themes/snbl/apple-touch-icon.png"),
+            ("2449", "https://www.prap.co.jp/wp/wp-content/themes/custom-theme/apple-touch-icon.png"),
+            ("2894", "https://www.ishiifood.co.jp/assets/img/common/other/OGP.jpg"),
+            ("3083", "https://starseeds.co.jp/cms/wp-content/themes/corporate-theme/assets/icons/apple-touch-icon.png"),
+            ("3123", "https://www.saibo.co.jp/img/saibohp/favicon02.ico"),
+            ("339A", "https://progresstech-group.jp/assets/images/common/apple-touch-icon-180x180.png"),
+            ("3653", "https://www.morphoinc.com/assets/images/common/singleicon.png"),
+            ("4056", "https://www.neural-group.com/assets/img/apple-touch-icon.png"),
+            ("4092", "https://www.nippon-chem.co.jp/apple-touch-icon.png"),
+            ("4436", "https://minkabu.co.jp/wp-content/themes/wp-thema-infonoid-web-2022-main/assets/meta/apple-touch-icon.png"),
+            ("446A", "https://northsand.co.jp/wp-content/uploads/2025/10/cropped-n.png"),
+            ("4673", "https://www.kge.co.jp/wp-bridge2026/wp-content/uploads/2026/08/cropped-apple-touch-icon-180x180.png"),
+            ("4819", "https://www.garage.co.jp/wp/wp-content/themes/garage/assets/config/apple-touch-icon.jpg"),
+            ("5659", "https://www.n-seisen.co.jp/assets/images/common/apple-touch-icon.png"),
+            ("6203", "https://www.howa.co.jp/apple-touch-icon.png"),
+            ("6278", "https://www.uniontool.co.jp/assets/img/apple-touch-icon.png"),
+            ("6706", "https://denkikogyo.co.jp/wp-content/uploads/2022/09/cropped-favicon-180x180.png"),
+            ("6797", "https://www.nagoya-denki.co.jp/cms/wp-content/themes/nagoyadenki/icon.png"),
+            ("7265", "https://www.eiken-kk.co.jp/library/556d0b6270bd04a27f0002c1/favicon/556d0c5c70bd04a27f00037a/webclip.png?v=1707803673138"),
+            ("7266", "https://www.imasen.co.jp/wp-content/themes/imasen/img/common/apple-touch-icon.png"),
+            ("7443", "https://yokohamagyorui.co.jp/wp-content/uploads/2026/04/cropped-cropped-favicon-150x150-1-180x180.png"),
+            ("8225", "https://kk-takachiho.jp/files/favicon/apple-touch-icon.png"),
+            ("8595", "https://www.jafco.co.jp/apple-touch-icon.png"),
+            ("9245", "https://www.livero.co.jp/corporate/corp_assets/apple-touch-icon.png"),
+            ("9313", "https://www.maru8.co.jp/apple-touch-icon-144-precomposed.png"),
+            ("9930", "https://www.kitazawasangyo.co.jp/image/common/apple-touch-icon.png"),
+        ]
+        #expect(expected.count == 27)
+        #expect(Set(expected.map(\.0)).count == 27)
+        #expect(CompanyIconOriginOverride.manualSources["9445"] == nil)
+        #expect(CompanyIconOriginOverride.manualSources["9216"] == nil)
+        #expect(
+            Set(expected.map(\.0))
+                .isDisjoint(with: Set(CompanyIconOriginOverride.pronexusDisclosureHomepages.keys)))
+        for (code, url) in expected {
+            #expect(!url.contains("prtimes.jp"), "code=\(code)")
+            #expect(!url.contains("i0.wp.com"), "code=\(code)")
+            #expect(
+                CompanyIconOriginOverride.manualSources[code] == .imageURL(url), "code=\(code)")
+        }
+    }
+
     @Test func detectsPronexusDisclosureHosts() {
         #expect(CompanyIconOriginOverride.isPronexusDisclosureHost("https://www.pronexus.co.jp"))
         #expect(CompanyIconOriginOverride.isPronexusDisclosureHost("http://pronexus.co.jp"))
