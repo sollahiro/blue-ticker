@@ -335,19 +335,19 @@ import Foundation
         #expect(result.salesLabel == "営業収益")
     }
 
-    /// 本表に合計が無く、電気通信事業＋附帯事業だけがあるときは当期連結の合算。
-    @Test func testTelecomBusinessComponentsSumWhenNoTotal() {
+    /// 合算フォールバックはしない。合計タグが無ければ先勝ちの内訳のまま。
+    @Test func testTelecomBusinessComponentsAreNotSummedWhenNoTotal() {
         let fs = makeFieldSet(
             ("OperatingRevenueOILTelecommunications", 52_291_000_000.0, 50_695_000_000.0),
             ("OperatingRevenueIncidentalELC", 34_057_000_000.0, 33_619_000_000.0)
         )
         let result = IncomeStatementExtractor.extract(fieldSet: fs, accountingStandard: "J-GAAP")
-        #expect(result.sales == 86_348_000_000.0)
-        #expect(result.salesPrior == 84_314_000_000.0)
+        #expect(result.sales == 52_291_000_000.0)
+        #expect(result.salesPrior == 50_695_000_000.0)
         #expect(result.salesLabel == "営業収益")
     }
 
-    /// 通常の売上高企業は事業別営業収益の合算ルールに触れない。
+    /// 通常の売上高企業は営業収益合計タグの追加で変わらない。
     @Test func testNetSalesUnchangedWhenNoOperatingRevenueComponents() {
         let fs = makeFieldSet(("NetSales", 1_000_000.0, 900_000.0))
         let result = IncomeStatementExtractor.extract(fieldSet: fs, accountingStandard: "J-GAAP")
@@ -368,14 +368,26 @@ import Foundation
         #expect(result.salesLabel == "営業収益")
     }
 
-    /// 内訳のどれかが当期連結を欠くときは合算しない。
-    @Test func testDoesNotSumComponentsWhenAnyLacksCurrent() {
+    /// 東急: `OperatingRevenueRWY` は会社全体合計。Summary 合計より先。
+    @Test func testOperatingRevenueRWYBeatsSummaryTotal() {
         let fs = makeFieldSet(
-            ("OperatingRevenueOILTelecommunications", 52_291_000_000.0, 50_695_000_000.0),
-            ("OperatingRevenueIncidentalELC", nil, 33_619_000_000.0)
+            ("OperatingRevenueRWY", 1_086_179_000_000.0, nil),
+            ("OperatingRevenue1SummaryOfBusinessResults", 1_086_179_000_000.0, nil)
         )
-        let result = IncomeStatementExtractor.extract(fieldSet: fs, accountingStandard: "J-GAAP")
-        #expect(result.sales == nil)
-        #expect(result.salesPrior == nil)
+        let result = resolveNetSales(fs)
+        #expect(result.tag == "OperatingRevenueRWY")
+        #expect(result.current == 1_086_179_000_000.0)
+    }
+
+    /// JPX: `OperatingRevenueRevenue2IFRS` は `Revenue2IFRS` と Summary 合計より先。
+    @Test func testOperatingRevenueRevenue2IFRSBeatsRevenue2AndSummaryTotal() {
+        let fs = makeFieldSet(
+            ("OperatingRevenueRevenue2IFRS", 198_735_000_000.0, nil),
+            ("Revenue2IFRS", 210_000_000_000.0, nil),
+            ("OperatingRevenue1SummaryOfBusinessResults", 198_735_000_000.0, nil)
+        )
+        let result = resolveNetSales(fs)
+        #expect(result.tag == "OperatingRevenueRevenue2IFRS")
+        #expect(result.current == 198_735_000_000.0)
     }
 }

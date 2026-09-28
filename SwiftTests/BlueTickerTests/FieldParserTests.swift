@@ -87,15 +87,15 @@ import Foundation
         #expect(result.current == 86_348.0)
     }
 
-    @Test func testResolveNetSalesSumsComponentsWhenNoTotal() {
+    @Test func testResolveNetSalesDoesNotSumComponentsWhenNoTotal() {
         let fs = makeFieldSet(
             ("OperatingRevenueOILTelecommunications", 52_291.0, 50_695.0),
             ("OperatingRevenueIncidentalELC", 34_057.0, 33_619.0)
         )
         let result = resolveNetSales(fs)
-        #expect(result.tag == "OperatingRevenueIncidentalELC+OperatingRevenueOILTelecommunications")
-        #expect(result.current == 86_348.0)
-        #expect(result.prior == 84_314.0)
+        #expect(result.tag == "OperatingRevenueOILTelecommunications")
+        #expect(result.current == 52_291.0)
+        #expect(result.prior == 50_695.0)
     }
 
     @Test func testResolveNetSalesLeavesNetSalesUnchanged() {
