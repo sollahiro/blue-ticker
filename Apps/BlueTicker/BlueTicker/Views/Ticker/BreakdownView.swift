@@ -316,7 +316,7 @@ struct BreakdownView: View {
         let peak = (spec.factors.map { abs($0.value ?? 0) } + [abs(spec.totalValue ?? 0)]).max() ?? 0
         let prior = priorYear(of: year, in: years)
         return VStack(alignment: .leading, spacing: 8) {
-            Text("\(Format.fy(year.fyEnd)) の要因分解")
+            Text(yearOutcomeTitle(year, total: spec.totalValue))
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(Theme.text)
             ForEach(spec.factors) { factor in
@@ -401,6 +401,15 @@ struct BreakdownView: View {
         }
         .padding(.vertical, 2)
         .background(selected ? Theme.accent.opacity(0.12) : Color.clear)
+    }
+
+    /// 「26年2月の利益は、前年より増えました」のように前年差の結論だけを見出しにする。
+    private func yearOutcomeTitle(_ year: FinancialsYear, total: Double?) -> String {
+        let period = Format.fyJapanese(year.fyEnd)
+        guard let total else { return "\(period)の\(metric.title)" }
+        if total > 0 { return "\(period)の\(metric.title)は、前年より増えました" }
+        if total < 0 { return "\(period)の\(metric.title)は、前年より減りました" }
+        return "\(period)の\(metric.title)は、前年とほぼ変わりませんでした"
     }
 
     private struct FactorDetail {
