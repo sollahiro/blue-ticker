@@ -45,8 +45,7 @@ enum BreakdownFinancialsResolver {
             return CanonicalValue(value: yen, tag: "llm_table_subtotal")
         }
         let allTags = XBRLUtils.collectAllNumericElements(in: xbrlDir, nilAsZero: false)
-        let salesItem = resolveItemPreferCurrent(
-            fieldSetFromDuration(allTags), tags: Xbrl.netSalesTags)
+        let salesItem = resolveNetSales(fieldSetFromDuration(allTags))
         guard let unmasked = salesItem.current, unmasked != 0 else {
             return CanonicalValue(value: nil, tag: nil)
         }

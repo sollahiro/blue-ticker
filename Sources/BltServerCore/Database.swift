@@ -40,6 +40,7 @@ func configureDatabase(_ app: Application) async throws {
 
     // 書類同期: 書類一覧（edinet_documents）と同期進捗（edinet_sync_state）。
     app.migrations.add(CreateEdinetDocument())
+    app.migrations.add(AddParentDocIDToEdinetDocuments())
     app.migrations.add(CreateEdinetSyncState())
     // 数値 fact 取り込み: XBRL 数値 RAW（edinet_xbrl_facts、書類単位 JSONB）。
     app.migrations.add(CreateEdinetXbrlFacts())

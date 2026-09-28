@@ -16,7 +16,7 @@ struct IncomeStatementResult {
 enum IncomeStatementExtractor {
 
     static func extract(fieldSet: FieldSet, accountingStandard: String) -> IncomeStatementResult {
-        let salesItem = resolveItemPreferCurrent(fieldSet, tags: Xbrl.netSalesTags)
+        let salesItem = resolveNetSales(fieldSet)
         // 保険は営業利益概念が無く、経常利益フォールバックも使わない（全年 null）。
         var opItem = ResolvedItem(tag: nil, current: nil, prior: nil)
         if !Xbrl.isInsuranceFiling(fieldSet) {

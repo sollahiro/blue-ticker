@@ -170,6 +170,13 @@ public func isServableStatementNote(source: String, cacheVersion: String, noteTy
     return n >= statementNoteMinServableVersion(forType: noteType)
 }
 
+/// 公開 REST / MCP が当該注記を出してよいか。訂正 overlay 回帰の `needs_review` は隠す。
+public func isPubliclyServableStatementNote(needsReview: Bool, warnings: [String] = []) -> Bool {
+    if needsReview { return false }
+    if hasOverlayRegressionWarning(warnings) { return false }
+    return true
+}
+
 /// 財務諸表注記取り込み ingest（書類1件・note_type1つ分）の計算結果。`BreakdownResolveResult`（内訳取り込み）と同型の
 /// 3値パターン（`.agents/rules/data-handling.md`）。
 public enum StatementNoteResolveResult: Sendable {

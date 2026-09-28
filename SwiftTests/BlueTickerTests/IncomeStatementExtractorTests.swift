@@ -321,4 +321,73 @@ import Foundation
         #expect(result.sales == 91_788_000_000.0)
         #expect(result.salesLabel == "営業総収入")
     }
+
+    /// 9436 沖縄セルラー: 連結営業収益合計タグがあれば電気通信/附帯の内訳より優先する。
+    @Test func testOperatingRevenueTotalBeatsTelecomBusinessComponents() {
+        let fs = makeFieldSet(
+            ("OperatingRevenue1SummaryOfBusinessResults", 86_348_000_000.0, 84_314_000_000.0),
+            ("OperatingRevenueOILTelecommunications", 52_291_000_000.0, 50_695_000_000.0),
+            ("OperatingRevenueIncidentalELC", 34_057_000_000.0, 33_619_000_000.0)
+        )
+        let result = IncomeStatementExtractor.extract(fieldSet: fs, accountingStandard: "J-GAAP")
+        #expect(result.sales == 86_348_000_000.0)
+        #expect(result.salesPrior == 84_314_000_000.0)
+        #expect(result.salesLabel == "営業収益")
+    }
+
+    /// 合算フォールバックはしない。合計タグが無ければ先勝ちの内訳のまま。
+    @Test func testTelecomBusinessComponentsAreNotSummedWhenNoTotal() {
+        let fs = makeFieldSet(
+            ("OperatingRevenueOILTelecommunications", 52_291_000_000.0, 50_695_000_000.0),
+            ("OperatingRevenueIncidentalELC", 34_057_000_000.0, 33_619_000_000.0)
+        )
+        let result = IncomeStatementExtractor.extract(fieldSet: fs, accountingStandard: "J-GAAP")
+        #expect(result.sales == 52_291_000_000.0)
+        #expect(result.salesPrior == 50_695_000_000.0)
+        #expect(result.salesLabel == "営業収益")
+    }
+
+    /// 通常の売上高企業は営業収益合計タグの追加で変わらない。
+    @Test func testNetSalesUnchangedWhenNoOperatingRevenueComponents() {
+        let fs = makeFieldSet(("NetSales", 1_000_000.0, 900_000.0))
+        let result = IncomeStatementExtractor.extract(fieldSet: fs, accountingStandard: "J-GAAP")
+        #expect(result.sales == 1_000_000.0)
+        #expect(result.salesPrior == 900_000.0)
+        #expect(result.salesLabel == "売上高")
+    }
+
+    /// 電力: 営業収益合計 `OperatingRevenueELE` が電気事業/その他事業の内訳より勝つ。
+    @Test func testOperatingRevenueELEBeatsElectricUtilityComponents() {
+        let fs = makeFieldSet(
+            ("OperatingRevenueELE", 6_328_574_000_000.0, nil),
+            ("ElectricUtilityOperatingRevenueELE", 5_735_316_000_000.0, nil),
+            ("OtherBusinessOperatingRevenueELE", 593_258_000_000.0, nil)
+        )
+        let result = IncomeStatementExtractor.extract(fieldSet: fs, accountingStandard: "J-GAAP")
+        #expect(result.sales == 6_328_574_000_000.0)
+        #expect(result.salesLabel == "営業収益")
+    }
+
+    /// 東急: `OperatingRevenueRWY` は会社全体合計。Summary 合計より先。
+    @Test func testOperatingRevenueRWYBeatsSummaryTotal() {
+        let fs = makeFieldSet(
+            ("OperatingRevenueRWY", 1_086_179_000_000.0, nil),
+            ("OperatingRevenue1SummaryOfBusinessResults", 1_086_179_000_000.0, nil)
+        )
+        let result = resolveNetSales(fs)
+        #expect(result.tag == "OperatingRevenueRWY")
+        #expect(result.current == 1_086_179_000_000.0)
+    }
+
+    /// JPX: `OperatingRevenueRevenue2IFRS` は `Revenue2IFRS` と Summary 合計より先。
+    @Test func testOperatingRevenueRevenue2IFRSBeatsRevenue2AndSummaryTotal() {
+        let fs = makeFieldSet(
+            ("OperatingRevenueRevenue2IFRS", 198_735_000_000.0, nil),
+            ("Revenue2IFRS", 210_000_000_000.0, nil),
+            ("OperatingRevenue1SummaryOfBusinessResults", 198_735_000_000.0, nil)
+        )
+        let result = resolveNetSales(fs)
+        #expect(result.tag == "OperatingRevenueRevenue2IFRS")
+        #expect(result.current == 198_735_000_000.0)
+    }
 }

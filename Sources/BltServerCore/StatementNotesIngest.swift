@@ -55,6 +55,7 @@ func runStatementNotesIngest(
     cachedDocIDs: Set<String> = [],
     noteType: String,
     candidateSets: FilingSectionCandidateSets? = nil,
+    forceDocIDs: Set<String> = [],
     logger: Logger? = nil, resolve: StatementNoteResolveFn
 ) async throws -> StatementNotesIngestSummary {
     let currentCacheVersion = statementNoteCacheVersion(forType: noteType)
@@ -87,13 +88,23 @@ func runStatementNotesIngest(
     let classifyIndex = ingestIndexByID(classifyRows) { $0.id }
 
     for cand in baseCandidates {
+        if forceDocIDs.contains(cand.docID) {
+            missing.append(cand)
+            continue
+        }
         let key = CompanyStatementNote.compositeID(docID: cand.docID, noteType: noteType)
         guard let existing = classifyIndex[key] else {
             missing.append(cand)
             continue
         }
         if existing.needsReview {
-            flaggedForReview.append(cand)
+            // 決定論（xbrl_facts / overlay_regression）の needs_review は同じ入力では変わらない。
+            // LLM 注記だけ再キュー（現状 note_type は決定論のみ）。
+            if isVersionGatedStatementNoteSource(existing.source) {
+                skipped += 1
+            } else {
+                flaggedForReview.append(cand)
+            }
         } else if isVersionGatedStatementNoteSource(existing.source),
             existing.cacheVersion != currentCacheVersion
         {
@@ -122,7 +133,8 @@ func runStatementNotesIngest(
         ) {
             try await CompanyStatementNote.find(key, on: db)
         }
-        if let row = existing, row.needsReview == false,
+        if !forceDocIDs.contains(cand.docID), let row = existing, row.needsReview == false,
+            // `--doc-ids` は現行版・needs_review=false でも書き直す（艦隊の skip は変えない）。
             !isVersionGatedStatementNoteSource(row.source) || row.cacheVersion == currentCacheVersion
         {
             skipped += 1
@@ -144,6 +156,9 @@ func runStatementNotesIngest(
                     db: db)
             }
             stored += 1
+            await logXbrlOverlayRegressionIfNeeded(
+                warnings: payload.warnings, code: cand.code, docID: cand.docID, db: db,
+                logger: logger)
         case .notApplicable(let reason):
             notApplicable += 1
             if let existing, existing.source != statementNoteSourceNotApplicable {
@@ -280,12 +295,16 @@ func loadStoredStatementNote(
             among: candidates.map(\.docID), db: db)
         row = candidates.first {
             isServableStatementNote(source: $0.source, cacheVersion: $0.cacheVersion, noteType: noteType)
+                && isPubliclyServableStatementNote(
+                    needsReview: $0.needsReview, warnings: $0.payload.warnings)
                 && companyDocIDs.contains($0.docID)
         }
     }
 
     guard let row,
         isServableStatementNote(source: row.source, cacheVersion: row.cacheVersion, noteType: noteType),
+        isPubliclyServableStatementNote(
+            needsReview: row.needsReview, warnings: row.payload.warnings),
         let docID = row.id?.components(separatedBy: "#").first
     else { return .absent }
 

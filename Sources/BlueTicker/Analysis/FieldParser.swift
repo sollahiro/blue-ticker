@@ -310,6 +310,11 @@ func resolveItemPreferCurrent(_ fieldSet: FieldSet, tags: [String]) -> ResolvedI
     return fallback ?? ResolvedItem(tag: nil, current: nil, prior: nil)
 }
 
+/// Summary 売上。`netSalesTags` の先勝ち。事業別内訳の合算はしない。
+func resolveNetSales(_ fieldSet: FieldSet) -> ResolvedItem {
+    resolveItemPreferCurrent(fieldSet, tags: Xbrl.netSalesTags)
+}
+
 /// 複数コンポーネントを積み上げ合算する。
 /// componentTagLists: [[候補タグ]] - 各要素が1コンポーネント
 func resolveAggregate(_ fieldSet: FieldSet, componentTagLists: [[String]]) -> ResolvedItem {

@@ -41,9 +41,9 @@ enum Xbrl {
         "OperatingRevenuesIFRSKeyFinancialData",
         "OperatingRevenuesIFRSSummaryOfBusinessResults",
         "OperatingRevenue1",
-        "OperatingRevenue1SummaryOfBusinessResults",
-        "OperatingRevenueRWY",  // 鉄道業（東急 S100YE63）
-        "OperatingRevenueELE",  // 電気事業（東電HD S100YIHR）
+        "OperatingRevenue1SummaryOfBusinessResults",  // 9436 S100Y9T5 連結営業収益合計
+        "OperatingRevenueRWY",  // 東急 S100YE63 本表の会社全体合計（運輸セグメントではない）
+        "OperatingRevenueELE",  // 東電HD S100YIHR 本表の会社全体合計（電気事業内訳ではない）
         "OperatingRevenueRevenue2IFRS",  // JPX 等の営業収益（S100YA84）
         "OperatingRevenueSEC",  // 証券業の営業収益計（大和証券G S100YCMP）
         "OperatingRevenueIFRS",  // 単数。NSグループ 471A S100XSQQ・SBIアルヒ 7198 S100YFMO
@@ -52,7 +52,7 @@ enum Xbrl {
         "OperatingRevenueSPF",  // 貸金・割賦の営業収益合計（アコム 8572 S100YBXA）
         "OperatingRevenueCMD",  // 商品先物等の営業収益合計（日産証券G 8705 S100YB7U）
         "OperatingRevenueIVT",  // 投資顧問の営業収益計（スパークス 8739 S100Y7MV）
-        "OperatingRevenueOILTelecommunications",  // 沖縄セルラー 9436
+        "OperatingRevenueOILTelecommunications",  // 電気通信事業の内訳。合計ではない
     ]
 
     static let ordinaryRevenueTags: [String] = [
@@ -78,9 +78,8 @@ enum Xbrl {
         "NetSalesOfCompletedConstructionContractsCNS",
         "NetSalesOfCompletedConstructionContractsSummaryOfBusinessResults",
         "OperatingRevenue1",
-        "OperatingRevenue1SummaryOfBusinessResults",
-        "OperatingRevenueRWY",
-        "OperatingRevenueELE",
+        "OperatingRevenueRWY",  // 東急 S100YE63。会社全体合計。Summary 合計より先
+        "OperatingRevenueELE",  // 東電HD S100YIHR。会社全体合計
         "OperatingRevenueRevenue2IFRS",  // JPX 等の営業収益。Revenue2IFRS（収益計）より先
         "Revenue2IFRS",  // 三菱商事等の本表「収益」。JPX では営業収益+その他なので上より後
         "OperatingRevenueSEC",
@@ -99,7 +98,8 @@ enum Xbrl {
         "OperatingRevenue2",  // 営業収入（東宝 9602 S100Y5O3、アミューズ 4301）
         "ShippingBusinessRevenueAndOtherOperatingRevenueWAT",  // 川崎汽船 9107 S100YC6B
         "ShippingBusinessRevenueWAT",
-        "OperatingRevenueOILTelecommunications",
+        "OperatingRevenue1SummaryOfBusinessResults",  // 9436 S100Y9T5 連結営業収益合計。本表内訳より先、他社の本表合計より後
+        "OperatingRevenueOILTelecommunications",  // 電気通信事業の内訳。合計ではない
         "OperatingRevenueIFRS",
         "OperatingRevenueRevenueIFRS",
         "ContractsCompletedRevOA",  // 完成業務高（E・J HD 2153 S100YYLT）
@@ -138,10 +138,24 @@ enum Xbrl {
         "OperatingRevenuesIFRSSummaryOfBusinessResults",
         "OperatingRevenueContinuingOperationsIFRS",
         "OperatingRevenueOILTelecommunications",
+        "OperatingRevenueIncidentalELC",
+        "OperatingRevenue1SummaryOfBusinessResults",
         "OperatingRevenueRevenueIFRS",
         "GrossOperatingRevenue",
         "ShippingBusinessRevenueAndOtherOperatingRevenueWAT",
         "ShippingBusinessRevenueWAT",
+    ]
+
+    /// 本表が事業別に分割され合計行が無いときの連結営業収益合計（主要な経営指標等）。
+    /// 9436 沖縄セルラー S100Y9T5: `jpcrp_cor:OperatingRevenue1SummaryOfBusinessResults`。
+    /// Statement 組立の売上 FieldSet にだけ載せる。合算フォールバックはしない。
+    static let statementSalesSummaryTotalTags: [String] = [
+        "OperatingRevenue1SummaryOfBusinessResults",
+    ]
+
+    /// 本表の事業別内訳。合計タグが無いときの先勝ち候補であり、会社全体合計ではない。
+    static let operatingRevenueSplitComponentTags: Set<String> = [
+        "OperatingRevenueOILTelecommunications",
     ]
 
     /// 保険売上（J-GAAP 経常収益 / IFRS 保険収益）。業種名では切らず、FieldSet に

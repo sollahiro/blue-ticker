@@ -8,7 +8,15 @@ enum DescriptionOfBusinessExtractor {
     static let nextSectionPattern = #"【(?:関係会社の状況|従業員の状況)】"#
 
     /// 展開済み XBRL ディレクトリから本文を返す。無ければ空文字。
+    /// 訂正 overlay があるときは TextBlock を先に見る（訂正に当該要素があればそれが勝つ）。
     static func extract(in xbrlDir: URL) -> String {
+        if !overlayDirectories(in: xbrlDir).isEmpty,
+            let inner = XBRLUtils.extractTextblockHtml(
+                in: xbrlDir, textblockTag: Xbrl.descriptionOfBusinessTextblockTag)
+        {
+            let text = htmlToText(inner)
+            if !text.isEmpty { return text }
+        }
         for htmlFile in htmlFiles(in: xbrlDir) {
             guard let raw = try? String(contentsOf: htmlFile, encoding: .utf8) else { continue }
             let text = extract(html: raw)

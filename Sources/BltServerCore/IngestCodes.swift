@@ -15,3 +15,8 @@ public func parseIngestCodes(_ csv: String?) -> Set<String>? {
     }
     return result
 }
+
+/// `--doc-ids` の CSV。`--codes` と同じパーサ（空白除去・重複排除）。
+public func parseIngestDocIDs(_ csv: String?) -> Set<String>? {
+    parseIngestCodes(csv)
+}
