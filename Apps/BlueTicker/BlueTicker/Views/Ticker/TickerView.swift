@@ -26,7 +26,6 @@ struct TickerView: View {
     /// タイトル位置の社名ピルのウィンドウ座標。広がる始点に使う。
     @State private var pillRect: CGRect = .zero
     @State private var contentWidth: CGFloat = 0
-    @Environment(WatchAnimation.self) private var watchAnimation
 
     var body: some View {
         VStack(spacing: 0) {
@@ -87,11 +86,11 @@ struct TickerView: View {
             }
             ToolbarItemGroup(placement: .topBarTrailing) {
                 Button("保有情報", systemImage: "square.and.pencil", action: openHoldings)
-                Button(action: toggleWatch) {
-                    Image(systemName: isWatched ? "star.fill" : "star")
-                        .contentTransition(.symbolEffect(.replace.downUp.byLayer))
-                }
-                .accessibilityLabel(isWatched ? "リストから削除" : "リストに追加")
+                Button(
+                    isWatched ? "リストから削除" : "リストに追加",
+                    systemImage: isWatched ? "star.fill" : "star",
+                    action: toggleWatch
+                )
                 .accessibilityAddTraits(isWatched ? .isSelected : [])
             }
         }
@@ -201,12 +200,10 @@ struct TickerView: View {
         let matching = matchingRows
         if matching.isEmpty {
             _ = insertWatchRow()
-            watchAnimation.addedToList()
         } else {
             for item in matching {
                 modelContext.delete(item)
             }
-            watchAnimation.removedFromList()
             Task { await APIClient.shared.unpinCode(company.code) }
         }
     }

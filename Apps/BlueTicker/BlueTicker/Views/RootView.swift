@@ -1,33 +1,8 @@
 import SwiftData
 import SwiftUI
 
-/// 星ボタン押下時にタブバーの list.bullet を揺らすための共有トリガ。
-/// 追加はレイヤーごとのバウンス、削除は描画オフ（indefinite なので約0.7秒で戻す）。
-@MainActor @Observable
-final class WatchAnimation {
-    var added = 0
-    var drawOff = false
-    private var drawOffTask: Task<Void, Never>?
-
-    func addedToList() {
-        drawOffTask?.cancel()
-        drawOff = false
-        added += 1
-    }
-
-    func removedFromList() {
-        drawOffTask?.cancel()
-        drawOff = true
-        drawOffTask = Task {
-            try? await Task.sleep(for: .milliseconds(700))
-            drawOff = false
-        }
-    }
-}
-
 struct RootView: View {
     @State private var tab = 0
-    @State private var watchAnimation = WatchAnimation()
     @State private var searchPath = NavigationPath()
     @State private var searchQuery = ""
     @State private var screenSession = ScreenSession()
@@ -57,15 +32,7 @@ struct RootView: View {
                     .navigationDestination(for: CompanyRef.self, destination: ticker)
             }
             .toolbarTitleDisplayMode(.inline)
-            .tabItem {
-                Label {
-                    Text("リスト")
-                } icon: {
-                    Image(systemName: "list.bullet")
-                        .symbolEffect(.bounce.byLayer, value: watchAnimation.added)
-                        .symbolEffect(.drawOff.byLayer, isActive: watchAnimation.drawOff)
-                }
-            }
+            .tabItem { Label("リスト", systemImage: "list.bullet") }
             .tag(2)
 
             NavigationStack {
@@ -76,7 +43,6 @@ struct RootView: View {
             .tabItem { Label("ファンド", systemImage: "chart.pie.fill") }
             .tag(3)
         }
-        .environment(watchAnimation)
         .preferredColorScheme(.dark)
         .tint(Theme.accent)
         .toolbarBackground(.hidden, for: .tabBar)
