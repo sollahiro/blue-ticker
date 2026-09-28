@@ -9,6 +9,15 @@ enum Format {
         return String(format: "%02d/%@", y % 100, String(month))
     }
 
+    /// 「26年2月」のように、年度末を年月の日本語表記で返す。
+    static func fyJapanese(_ raw: String?) -> String {
+        guard let raw, raw.count >= 7 else { return raw ?? "—" }
+        guard let year = Int(raw.prefix(4)), let month = Int(raw.dropFirst(5).prefix(2)) else {
+            return raw
+        }
+        return "\(year % 100)年\(month)月"
+    }
+
     /// API の百万円を、3〜4桁になる単位へ自動変換。整数部が2桁なら小数1桁。
     static func autoYen(_ millionYen: Double?) -> String {
         guard let millionYen else { return "—" }
