@@ -182,7 +182,7 @@ Wayback は **バイト取得の代用** であってマップ値ではない。
 
 短い現状を出す（GO 待ちの差し替えと欠測を混ぜない）:
 
-- 欠測ピン: code とソース種別（公式 URL / CDN）。visual GO 不要。**マップする画像は製品ブランドに限らず全て Before/After で見せる**（欠測の Before は未格納）
+- 欠測ピン: code とソース種別（公式 URL / CDN）。visual GO 不要。**マップする画像は製品ブランドに限らず全て Before/After で見せる**（欠測の Before は未格納）。ラベルは ASCII+CJK 両対応フォントで描く（CJK fallback 専用だと証券コードが豆腐になる）
 - 差し替え: ユーザー visual GO 済みだけ。未 GO は Before/After のみでマップに入れない
 - ingest はマージ後。未マージで WRITE しない
 - 差し替えと欠測を同じ Ready PR に載せない
@@ -257,7 +257,7 @@ DATABASE_URL="$BLT_NEON_WRITE_DATABASE_URL" ./.build/release/blt-server ingest -
 - **別名ドメイン。** 社名検索で当たった別法人ホストはマップ禁止（アルゴグラフィックス ≠ `algo.co.jp`）
 - **Jetpack CDN。** 公式 WP 画像のミラー。同一パスの first-party が GET できるならそちらをマップする
 - **自社製品／コンシューマサイト。** 同一上場会社のサービス origin はコーポレートが timeout / 低視認のとき採用してよい（7203 / 581A / 9445 型）。別法人ホストは禁止のまま
-- **有報本文の URL 収穫。** IR 配信ホスト・大学・省庁ホストは公式 origin にしない
+- **Before/After ラベル。** ASCII+CJK 両対応フォントで描く。CJK fallback 専用だと証券コードが豆腐になる
 
 ## 完了条件
 
