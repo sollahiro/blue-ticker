@@ -375,7 +375,6 @@ enum APIClientError: LocalizedError {
     case http(status: Int, message: String)
     case decoding(Error)
     case transport(Error)
-    case needsAccessLogin
     case hapisUnavailable
 
     var errorDescription: String? {
@@ -391,8 +390,6 @@ enum APIClientError: LocalizedError {
             return "応答の形式を解釈できません"
         case .transport(let error):
             return error.localizedDescription
-        case .needsAccessLogin:
-            return "Cloudflare Access のログインが必要です。ファンドの開発ラボからログインしてください"
         case .hapisUnavailable:
             return "一時的に更新できません"
         }

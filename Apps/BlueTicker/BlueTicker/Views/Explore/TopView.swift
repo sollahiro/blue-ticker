@@ -16,9 +16,6 @@ final class FeedSession {
             error = nil
         } catch is CancellationError {
             return
-        } catch APIClientError.needsAccessLogin {
-            updates = []
-            error = APIClientError.needsAccessLogin.errorDescription
         } catch {
             updates = []
             self.error = "有報一覧を取得できませんでした"

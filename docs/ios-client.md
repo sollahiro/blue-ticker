@@ -80,7 +80,7 @@ Release Archive は HAPIS 本番 + App Attest production。Internal TestFlight �
 | 近くの本社 | v1 から外す（位置情報も HQ API も無い） |
 | ウォッチリスト | クライアントの SwiftData。同じ Apple ID の端末へ iCloud（CloudKit、コンテナ `iCloud.com.sollahiro.BlueTicker`）で同期する。保有の株数・取得単価・証券会社・口座の区分も同じ行なので一緒に同期する。Blue Ticker のサーバーへは送らない。1 本のリスト。見出しは「あなたの追加した企業」。行は株数と取得単価（円/株）が両方入れば保有、欠けていればウォッチ（第三 enum は無い）。同じ銘柄は口座違いで複数行可。並べ替え UI と編集モードは置かない（削除は行のスワイプのみ）。保有行のキャプションは口座ではなく保有数量。保有・口座の入力は銘柄画面ツールバーの保有情報。起動時に概要・分解・Overview を先読みし、解析キャッシュを 7 日持つ |
 | 解析キャッシュ | 概要・分解・Overview の REST 応答を端末 Caches に保存（標準 6 時間。ウォッチリスト銘柄は 7 日）。期限切れでも通信失敗時は最後の成功応答を出す。サーバーが 404 を返したら捨てる。検索・Feed はキャッシュしない。iOS は Core をリンクしないので `CacheManager` は使わない |
-| ファンド | タブ右端。公開 UI は「保有株数に応じた業績」（純利益 / 純資産 / 投資元本 / ファンドROE。ルックスルーは出さない）と「あなたの保有している企業」（ウォッチは出さない。リスト行と同じ会社アイコン。行は社名+コード、純利益・純資産・投資元本の 3 行。行タップで銘柄面）。保有・口座の入力は銘柄の `保有情報`。公開合計は銘柄単位で合算。バージョンはスクロール末尾に B マークと「バージョン x.y.z (ビルド n)」。免責・プライバシー・利用規約はアプリ内に出さず、App Store 用の公開ページ（Cloudflare Worker `workers/legal/`）。サーバー切替・Access・発行者 URL は出さない。Debug だけ開発ラボ（ローカル / Access プレビュー / HAPIS）。開発ラボの銘柄面（キヤノン、トヨタ自動車、守谷輸送機工業、ファーストリテイリング、ジャパンエレベーターサービスHD）は通信なしで銘柄ツールバーの保有情報まで行ける（リストには入れない。保有を保存したときだけウォッチ行になる）。設定タブは復活させない |
+| ファンド | タブ右端。公開 UI は「保有株数に応じた業績」（純利益 / 純資産 / 投資元本 / ファンドROE。ルックスルーは出さない）と「あなたの保有している企業」（ウォッチは出さない。リスト行と同じ会社アイコン。行は社名+コード、純利益・純資産・投資元本の 3 行。行タップで銘柄面）。保有・口座の入力は銘柄の `保有情報`。公開合計は銘柄単位で合算。バージョンはスクロール末尾に B マークと「バージョン x.y.z (ビルド n)」。免責・プライバシー・利用規約はアプリ内に出さず、App Store 用の公開ページ（Cloudflare Worker `workers/legal/`）。サーバー切替・発行者 URL は出さない。Debug だけ開発ラボ（ローカル / HAPIS 本番）。開発ラボの銘柄面（キヤノン、トヨタ自動車、守谷輸送機工業、ファーストリテイリング、ジャパンエレベーターサービスHD）は通信なしで銘柄ツールバーの保有情報まで行ける（リストには入れない。保有を保存したときだけウォッチ行になる）。設定タブは復活させない |
 | 会社行 | 社名・業種に加え銘柄コードを載せる。社名は最大3行 |
 | 業種タグ | `search_companies` の `sector`（例: 富士フイルムは `化学`）。Feed からの遷移は `CompanyRef.sector` が空なので、銘柄面は `GET /v1/companies/{code}/financials` の `sector` で補う |
 
@@ -162,15 +162,15 @@ Screen REST は `GET /v1/screen`（`screen_index` 読み取り。`sector` 完全
 
 ## 認証
 
-iOS は第三者と同じ公開 REST のクライアント。privileged にしない。トークン / Service Token は埋め込まない。`HAPIS_API_TOKEN` も consumer JWT として使わない。
+iOS は第三者と同じ公開 REST のクライアント。privileged にしない。トークン / Service Token は埋め込まない。`HAPIS_API_TOKEN` も consumer JWT として使わない。アプリに Cloudflare Access の JWT / OTP / Service Token は載せない。
 
-| 段階 | 方針 |
+| 経路 | 方針 |
 |---|---|
-| 開発 | loopback / http は無認証・Attest なし。既定 `http://127.0.0.1:3000`。同じ Wi-Fi の `http://<MacのIP>:3000` も無認証（現行どおり。段階 B でも変えない） |
-| 自社プレビュー（段階 A） | `https://api.sollahiro.com` だけ Access SSO / OTP の短命 JWT（`CF_Authorization`）。**Debug ファンド → 開発ラボ**の WebView（App Launcher）または Cookie 貼り付け。任意の https には載せない。Store 配布の口ではない |
-| 段階 B（HAPIS、現行実装） | アカウント不要の本線は HAPIS ゲートウェイ。iOS は制御面で短命匿名 JWT を mint / refresh し、ゲートウェイへ `Authorization: Bearer` を付ける。blt-server は見ない。**クライアントは App Attest を sessions に載せる（Release）。本番制御面は `ATTEST_MODE=enforce`**（stub mint は `missing_attest`）。Debug ビルドは stub mint のまま（Simulator / 手元ループバック用）。有料機能・ウォッチリスト同期が要るときだけ任意ログイン（Bearer）。機械直叩きの x402 は iOS の本線ではない |
+| Release | HAPIS ゲートウェイ + App Attest。起動時からゲートウェイ固定。設定操作は不要（トークンはサイレント mint / refresh） |
+| Simulator | ローカル stub。既定 `http://127.0.0.1:3000`。同じ Wi-Fi の `http://<MacのIP>:3000` も無認証・Attest なし |
+| 開発 / agents | REST を Service Token で叩く（アプリには埋め込まない）。手元 Debug の開発ラボはローカル、または実機の HAPIS 本番（App Attest） |
 
-**Release** は起動時から HAPIS ゲートウェイ固定。設定操作は不要（トークンはサイレント mint / refresh）。同じ Bundle ID の Debug UserDefaults は読まない。**Debug** のサーバー切替・Access SSO・発行者 URL はファンド面の開発ラボ。https 本番のログインは Access の App Launcher（`sollahiro.cloudflareaccess.com`）から入る。`api.*` 直叩きは 403 interstitial になる。段階 B 着地後の本番公開扉は HAPIS（Access は staging の内部退避に残す）。MCP は製品認証に使わない。
+**Release** は起動時から HAPIS ゲートウェイ固定。同じ Bundle ID の Debug UserDefaults は読まない。**Debug** のサーバー切替・発行者 URL はファンド面の開発ラボ。本番公開扉は HAPIS。MCP は製品認証に使わない。
 
 ### HAPIS consumer mint（クライアント）
 
@@ -183,15 +183,15 @@ iOS は第三者と同じ公開 REST のクライアント。privileged にし�
 
 - `GET /v1/consumer/challenge` — App Attest の mint / attest / assertion のたびに取る（単回使い切り。stub mint では呼ばない）。応答 `challenge` は 32 バイトの unpadded base64url
 - `POST /v1/consumer/sessions` — 201 で `token` / `refresh_at` / `expires_at`
-  - **Debug（既定）:** ボディ `{}`（stub）。本番制御面は `ATTEST_MODE=enforce` なので拒否する（`missing_attest`）。Simulator / ローカル用
-  - **Release（本番ゲートウェイ経路）:** App Attest 証拠。`attest.key_id` + `challenge` + `client_data` + 初回は `attestation`、以降の remint は `assertion`
+  - **Simulator / Debug ローカル:** ボディ `{}`（stub）。challenge は叩かない。本番制御面は `ATTEST_MODE=enforce` なので stub mint は拒否する（`missing_attest`）
+  - **Release および Debug の「HAPIS 本番」:** App Attest 証拠。`attest.key_id` + `challenge` + `client_data` + 初回は `attestation`、以降の remint は `assertion`
 - `POST /v1/consumer/token/refresh` — まだ有効な Bearer。期限の約 5 分前（`refresh_at` / `refresh_in`）にサイレント refresh。期限切れは remint（401 `token_expired`）。refresh は JWT のみで Attest しない。blt-server / Vapor には consumer JWT を付けない
 - ゲートウェイへの REST だけに Bearer を付ける。発行者以外の上流へ consumer JWT を送らない
 - **Release** の API base / 発行者はハードコード（ゲートウェイ + `hapis.sollahiro.workers.dev`）。ファンド面では切り替えない
-- **Debug** の「HAPIS 本番」がゲートウェイを API base にする。「本番サーバー」は段階 A の `api.sollahiro.com`（Access）のまま
-- Attest / トークン失敗: 制御面の mint / refresh は一時失敗を 2〜3 回。ゲートウェイの 401 `token_expired` は 1 回 remint。だめならキャッシュ表示 + 柔らかい「一時的に更新できない」。ハードブロックしない。Attest なしの緊急トークンは出さない（Simulator で App Attest 未対応なら失敗する。Debug は stub なので Simulator 検索は動く）
+- **Debug** の「HAPIS 本番」がゲートウェイを API base にし、App Attest を使う（`blt.hapis.attestMode=appAttest`。起動時に読むので切替後は再起動）
+- Attest / トークン失敗: 制御面の mint / refresh は一時失敗を 2〜3 回。ゲートウェイの 401 `token_expired` は 1 回 remint。だめならキャッシュ表示 + 柔らかい「一時的に更新できない」。ハードブロックしない。Attest なしの緊急トークンは出さない（Simulator で App Attest 未対応なら失敗する。Simulator 検索はローカル stub で動く）
 
-#### App Attest 証拠（Release / `blt.hapis.attestMode=appAttest`）
+#### App Attest 証拠（Release / Debug の HAPIS 本番 / `blt.hapis.attestMode=appAttest`）
 
 `DCAppAttestService`。鍵 ID は発行者 origin と App Attest 環境（Debug `development` / Release `production`）ごとに Keychain（JWT とは別）。Apple Team / Bundle はクライアントに秘密として置かず、enforce 時に制御面へ載せる。
 
@@ -214,7 +214,7 @@ iOS は第三者と同じ公開 REST のクライアント。privileged にし�
 8. Debug stub で発行したトークンを App Attest 経路（Release、または Debug 上書き再起動）に持ち込んだときは refresh せず取り直す。サーバー `attest_mode` は live stub でも `stub` なので、局所 `clientMintMode` で判定する
 9. 鍵レコードは `client_data_hash_contract_version`（現行 `1` = attest が challenge bytes）。欠落や古い版は Keychain から捨て、次の mint で新しい `attestKey` をする。assertion の JSON hash は変えない。hash 契約をまた変えるときはこの版を上げる
 
-Debug 実機で Attest を試す: UserDefaults `blt.hapis.attestMode` = `appAttest`。`APIClient.shared` は起動時に provider を固定するので、上書きの反映には再起動。Release は常に App Attest。Entitlements: Debug `development`、Release `production`。
+Debug 実機で Attest を試す: 開発ラボの「HAPIS 本番」（既定で App Attest）。`APIClient.shared` は起動時に provider を固定するので、切替の反映には再起動。Release は常に App Attest。Entitlements: Debug `development`、Release `production`。
 
 段階 B のトークン: TTL 約 1 時間。期限の約 5 分前にサイレント refresh。残り 60 秒超なら手元のトークンで即リクエストを出し、refresh は裏で 1 本だけ走らせる（リクエスト経路で制御面の往復を待たない）。残り 60 秒以下は refresh を待つ。
 
@@ -228,19 +228,19 @@ Cloud Agent の Linux VM と、手元に Mac が無いラウンドではシミ�
 
 1. Debug → ファンド → 開発ラボ → ローカル（`http://127.0.0.1:3000` または LAN `http`）で検索できること（Bearer が付かない）
 2. Debug → ファンド → 開発ラボ → トヨタ自動車 → 保有情報。通信不要。株数タップで右上の `完了` が出ること。隣の社名はピル幅の確認用（リストには入らない）
-3. Debug → ファンド → 開発ラボ → HAPIS 本番。名称検索で `7203` など。200 で BLT JSON。制御面は stub mint（`POST /v1/consumer/sessions` が `{}`。challenge は叩かない）
+3. Simulator では HAPIS 本番を使わない（App Attest 不可）。実機 Debug の HAPIS 本番、または Release で名称検索（`7203` など。200 で BLT JSON）
 4. プロキシで確認: ゲートウェイへ `Authorization: Bearer eyJ…`。発行者の mint/refresh（と Attest 時の challenge）以外に JWT が流れないこと
 5. プロセスを殺して再起動しても、期限内なら mint せず検索できること。Keychain のトークンを捨てると sessions が再発行されること
-6. Release はファンドの開発ラボを触らず検索できること（API base は HAPIS ゲートウェイ。バージョンはファンドのフッター）。Xcode の Run（Debug）は stub mint のため、本番 HAPIS（`ATTEST_MODE=enforce`）では `missing_attest` になる。実機の検索は Release を入れる
+6. Release はファンドの開発ラボを触らず検索できること（API base は HAPIS ゲートウェイ。バージョンはファンドのフッター）。Xcode の Run（Debug）の既定はローカル stub。実機で本番 HAPIS を叩くときは Release、または Debug の「HAPIS 本番」+ 再起動
 
 #### 実機 App Attest（後で。Simulator では不可）
 
-本番 `ATTEST_MODE` は enforce。実機 Release（または Debug + `blt.hapis.attestMode=appAttest`。ただし Debug の Attest 環境は `development` で、本番 HAPIS の既定 `APP_ATTEST_ENVIRONMENT=production` とは合わない）:
+本番 `ATTEST_MODE` は enforce。実機 Release（または Debug の「HAPIS 本番」。ただし Debug の Attest 環境は `development` で、本番 HAPIS の既定 `APP_ATTEST_ENVIRONMENT=production` とは合わない）:
 
-1. Release はファンドの開発ラボを触らず検索できること。Debug で試すときはファンド → 開発ラボ → HAPIS 本番
+1. Release はファンドの開発ラボを触らず検索できること。Debug で試すときはファンド → 開発ラボ → HAPIS 本番（切替後は再起動）
 2. プロキシ: `GET /v1/consumer/challenge` のあと `POST /v1/consumer/sessions` に `attest.key_id`・`challenge`・`client_data`（`{"challenge":…}`）と、初回は `attestation`、2 回目以降は `assertion`
 3. Debug のトークン破棄後の再検索は assertion（同じ key_id）。App Attest 未対応なら「一時的に更新できない」で、空の stub mint には落ちない
-4. Debug の Access「本番サーバー」と loopback は従来どおり（Attest も consumer JWT も付けない）
+4. Simulator / ローカルは Attest も consumer JWT も付けない
 
 
 ## 未決

@@ -3,7 +3,7 @@ import Foundation
 import FoundationNetworking
 #endif
 
-/// HAPIS ゲートウェイへ短命匿名トークンを付ける対象か。loopback / LAN `http` と Access 本番は対象外。
+/// HAPIS ゲートウェイへ短命匿名トークンを付ける対象か。loopback / LAN `http` は対象外。
 /// 比較は https origin（host + 非既定 port）。host 部分一致や別ポートには付けない。
 enum HAPISConsumerAuth {
     static func applies(to url: URL, gatewayBases: [URL]) -> Bool {

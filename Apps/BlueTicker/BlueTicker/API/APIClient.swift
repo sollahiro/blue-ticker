@@ -5,7 +5,6 @@ actor APIClient {
 
     private let session: URLSession
     private let decoder: JSONDecoder
-    private let redirectDelegate: AccessRedirectDelegate?
     private let cache: ResponseCache
     private let hapis: HAPISConsumerClient
     private let originGate: HAPISOriginGate
@@ -27,15 +26,11 @@ actor APIClient {
         self.cache = cache
         if let session {
             self.session = session
-            redirectDelegate = nil
         } else {
             let config = URLSessionConfiguration.ephemeral
             config.httpShouldSetCookies = false
             config.httpCookieAcceptPolicy = .never
-            let delegate = AccessRedirectDelegate()
-            redirectDelegate = delegate
-            self.session = URLSession(
-                configuration: config, delegate: delegate, delegateQueue: nil)
+            self.session = URLSession(configuration: config)
         }
         decoder = JSONDecoder()
         self.originGate = originGate
@@ -344,19 +339,9 @@ actor APIClient {
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
         request.setValue("application/json", forHTTPHeaderField: "Accept")
-        // 段階 A: `api.sollahiro.com` だけ Access Cookie。段階 B: HAPIS ゲートウェイだけ
-        // 制御面で mint した consumer JWT を Bearer に付ける（ハードコードしない）。
-        // Debug は stub mint、Release は App Attest。loopback / LAN `http` はどちらも付けない。
-        if AccessSession.usesAccess(url) {
-            if let jwt = AccessSession.jwt(for: url) {
-                if AccessSession.isExpired(jwt) {
-                    AccessSession.clear(for: url)
-                    throw APIClientError.needsAccessLogin
-                }
-                request.setValue(
-                    "\(AccessSession.cookieName)=\(jwt)", forHTTPHeaderField: "Cookie")
-            }
-        } else if APIConfiguration.usesHAPISConsumer(url) {
+        // HAPIS ゲートウェイだけ、制御面で mint した consumer JWT を Bearer に付ける。
+        // Release と Debug の HAPIS 本番は App Attest。loopback / LAN `http` は付けない。
+        if APIConfiguration.usesHAPISConsumer(url) {
             try Task.checkCancellation()
             do {
                 request = try await hapis.authorize(request)
@@ -378,9 +363,6 @@ actor APIClient {
             throw APIClientError.transport(error)
         }
         let http = response as? HTTPURLResponse
-        if let http, AccessChallenge.isChallenge(http) {
-            throw APIClientError.needsAccessLogin
-        }
         let status = http?.statusCode ?? 0
         if status == 401, APIConfiguration.usesHAPISConsumer(url), !hapisRemintAttempted {
             if GatewayErrorBody.parse(data)?.isTokenExpired == true {

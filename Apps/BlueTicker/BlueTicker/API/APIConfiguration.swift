@@ -2,24 +2,18 @@ import Foundation
 
 enum APIConfiguration {
     static let defaultBaseURL = URL(string: "http://127.0.0.1:3000")!
-    /// 段階 A プレビュー（Cloudflare Access）。段階 B の公開扉は `productionHAPISGatewayBaseURL`。
-    static let productionBaseURL = URL(string: "https://api.sollahiro.com")!
     /// HAPIS 制御面（challenge / sessions / refresh）。秘密ではない。
     static let defaultHAPISIssuerURL = URL(string: "https://hapis.sollahiro.workers.dev")!
-    /// 段階 B のクライアント向け本番ゲートウェイ。blt-server origin ではない。
+    /// クライアント向け本番ゲートウェイ。blt-server origin ではない。
     static let productionHAPISGatewayBaseURL = URL(
         string: "https://hapis-blue-ticker-production.sollahiro.workers.dev")!
-    /// Debug 実機で App Attest を試すときだけ `appAttest`。Release は常に App Attest。
+    /// Debug の「HAPIS 本番」は App Attest。`stub` 上書きは Simulator / ローカル用。Release は常に App Attest。
     private static let attestModeStorageKey = "blt.hapis.attestMode"
-    /// Access のログイン UI（App Launcher）。`api.*` 直叩きは 403 interstitial になる。
-    static let accessLauncherURL = URL(string: "https://sollahiro.cloudflareaccess.com")!
     /// REST が `icon_url: null` のときの公開ホスト（秘密ではない。拡張子は会社ごとに違う）。
     static let defaultIconBaseURL = URL(string: "https://icons.sollahiro.com")!
     private static let storageKey = "blt.api.baseURL"
     private static let issuerStorageKey = "blt.hapis.issuerURL"
     private static let gatewayStorageKey = "blt.hapis.gatewayBaseURL"
-
-    static var usesAccess: Bool { AccessSession.usesAccess(baseURL) }
 
     static var usesHAPISConsumer: Bool { usesHAPISConsumer(baseURL) }
 
@@ -28,18 +22,25 @@ enum APIConfiguration {
             to: url, gatewayBases: [hapisGatewayBaseURL, productionHAPISGatewayBaseURL])
     }
 
-    /// Debug 既定は stub mint。Release / 本番ゲートウェイ経路は App Attest（enforce はサーバー側）。
+    /// Debug の HAPIS ゲートウェイ経路は App Attest。ローカルは stub。Release は常に App Attest。
     static var hapisAttestClientMode: HAPISAttestClientMode {
-        #if DEBUG
-            if let raw = UserDefaults.standard.string(forKey: attestModeStorageKey),
-                let mode = HAPISAttestClientMode(rawValue: raw)
-            {
-                return mode
-            }
-            return .stub
-        #else
-            return .appAttest
-        #endif
+        get {
+            #if DEBUG
+                if let raw = UserDefaults.standard.string(forKey: attestModeStorageKey),
+                    let mode = HAPISAttestClientMode(rawValue: raw)
+                {
+                    return mode
+                }
+                return usesHAPISConsumer ? .appAttest : .stub
+            #else
+                return .appAttest
+            #endif
+        }
+        set {
+            #if DEBUG
+                UserDefaults.standard.set(newValue.rawValue, forKey: attestModeStorageKey)
+            #endif
+        }
     }
 
     /// Debug だけ UserDefaults で上書き。Release は HAPIS 本番に固定（同じ Bundle ID の Debug 値を読まない）。
@@ -87,6 +88,15 @@ enum APIConfiguration {
                 if let raw = UserDefaults.standard.string(forKey: storageKey),
                     let url = validatedBaseURL(from: raw)
                 {
+                    if url.scheme?.lowercased() == "https",
+                        url.host?.lowercased() == "api.sollahiro.com"
+                    {
+                        let replacement = productionHAPISGatewayBaseURL
+                        UserDefaults.standard.set(replacement.absoluteString, forKey: storageKey)
+                        hapisGatewayBaseURL = replacement
+                        hapisAttestClientMode = .appAttest
+                        return replacement
+                    }
                     return url
                 }
                 return defaultBaseURL
