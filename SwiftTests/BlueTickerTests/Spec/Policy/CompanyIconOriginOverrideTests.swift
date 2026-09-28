@@ -312,7 +312,7 @@ import Testing
     }
 
     /// 2026-09-28 weekly: listed × company_icons 欠行。公告紙面／URL無し／Pronexus の公式画像。
-    /// Jetpack CDN・製品ブランドサイト・横長ワードマーク OGP はマップに載せない。
+    /// Jetpack CDN・横長ワードマーク OGP はマップに載せない。9445 は自社製品ブランド。
     @Test func pins20260928WeeklyMissingListedManualImageURLs() {
         let expected: [(String, String)] = [
             ("2195", "https://www.amita-hd.co.jp/_assets/img/apple-touch-icon.png"),
@@ -342,10 +342,10 @@ import Testing
             ("9245", "https://www.livero.co.jp/corporate/corp_assets/apple-touch-icon.png"),
             ("9313", "https://www.maru8.co.jp/apple-touch-icon-144-precomposed.png"),
             ("9930", "https://www.kitazawasangyo.co.jp/image/common/apple-touch-icon.png"),
+            ("9445", "https://www.collabo-one.jp/wp-content/themes/collaboone/images/common/webclip.png"),
         ]
-        #expect(expected.count == 27)
-        #expect(Set(expected.map(\.0)).count == 27)
-        #expect(CompanyIconOriginOverride.manualSources["9445"] == nil)
+        #expect(expected.count == 28)
+        #expect(Set(expected.map(\.0)).count == 28)
         #expect(CompanyIconOriginOverride.manualSources["9216"] == nil)
         #expect(
             Set(expected.map(\.0))

@@ -80,7 +80,8 @@ enum CompanyIconOriginOverride {
     /// 8370 紀陽銀行はユーザー指定でマスコット中央のみを 512 白地にして R2 CDN へ（公式 OGP は横長ロックアップ）。
     /// 603A: アイ・グリッド・ソリューションズ。先頭 rel=icon が 16.jpg のため apple-touch 256.jpg。
     /// 2026-09-28 weekly: 公告紙面／URL無し／Pronexus の欠行。公式 apple-touch / 正方形 /
-    /// 中央マークのある OGP。Jetpack CDN・製品ブランドサイト・横長ワードマーク OGP は載せない。
+    /// 中央マークのある OGP。Jetpack CDN・横長ワードマーク OGP は載せない。
+    /// 9445: コーポレート origin が timeout のため自社 DX サービス apple-touch。
     static let manualSources: [String: CompanyIconManualSource] = [
         "7203": .homepageOrigin("https://toyota.jp"),
         "9267": .homepageOrigin("https://www.genky.co.jp"),
@@ -268,6 +269,8 @@ enum CompanyIconOriginOverride {
         "9313": .imageURL("https://www.maru8.co.jp/apple-touch-icon-144-precomposed.png"),
         "9930": .imageURL(
             "https://www.kitazawasangyo.co.jp/image/common/apple-touch-icon.png"),
+        "9445": .imageURL(
+            "https://www.collabo-one.jp/wp-content/themes/collaboone/images/common/webclip.png"),
     ]
 
     static func manualSource(for code: String) -> CompanyIconManualSource? {
