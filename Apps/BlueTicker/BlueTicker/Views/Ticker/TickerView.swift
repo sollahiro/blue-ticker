@@ -26,6 +26,10 @@ struct TickerView: View {
     /// タイトル位置の社名ピルのウィンドウ座標。広がる始点に使う。
     @State private var pillRect: CGRect = .zero
     @State private var contentWidth: CGFloat = 0
+    /// 星のアニメーション。追加はレイヤーごとのバウンス（discrete のトリガ）。
+    /// 削除の描画オフは indefinite 効果なので、消した直後だけ isActive にして戻す。
+    @State private var watchAdded = 0
+    @State private var watchDrawOff = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -86,12 +90,14 @@ struct TickerView: View {
             }
             ToolbarItemGroup(placement: .topBarTrailing) {
                 Button("保有情報", systemImage: "square.and.pencil", action: openHoldings)
-                Button(
-                    isWatched ? "リストから削除" : "リストに追加",
-                    systemImage: isWatched ? "star.fill" : "star",
-                    action: toggleWatch
-                )
+                Button(action: toggleWatch) {
+                    Image(systemName: isWatched ? "star.fill" : "star")
+                        .contentTransition(.symbolEffect(.replace.downUp.byLayer))
+                        .symbolEffect(.drawOff.byLayer, isActive: watchDrawOff)
+                }
+                .accessibilityLabel(isWatched ? "リストから削除" : "リストに追加")
                 .accessibilityAddTraits(isWatched ? .isSelected : [])
+                .symbolEffect(.bounce.byLayer, value: watchAdded)
             }
         }
         .background { InteractivePopGestureEnabler(allowsPop: page == .summary && !showsCompanyCard) }
@@ -200,9 +206,15 @@ struct TickerView: View {
         let matching = matchingRows
         if matching.isEmpty {
             _ = insertWatchRow()
+            watchAdded += 1
         } else {
             for item in matching {
                 modelContext.delete(item)
+            }
+            watchDrawOff = true
+            Task {
+                try? await Task.sleep(for: .milliseconds(700))
+                watchDrawOff = false
             }
             Task { await APIClient.shared.unpinCode(company.code) }
         }
