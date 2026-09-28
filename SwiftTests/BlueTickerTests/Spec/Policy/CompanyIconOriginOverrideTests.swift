@@ -315,10 +315,10 @@ import Testing
     /// Jetpack CDN・横長ワードマーク OGP はマップに載せない。9445 は自社製品ブランド。
     @Test func pins20260928WeeklyMissingListedManualImageURLs() {
         let expected: [(String, String)] = [
-            ("2195", "https://www.amita-hd.co.jp/_assets/img/apple-touch-icon.png"),
+            ("2195", "https://icons.sollahiro.com/company-icons/2195.png"), // pragma: allowlist secret
             ("2395", "https://snbl.com/wp-content/themes/snbl/apple-touch-icon.png"),
             ("2449", "https://www.prap.co.jp/wp/wp-content/themes/custom-theme/apple-touch-icon.png"),
-            ("2894", "https://www.ishiifood.co.jp/assets/img/common/other/OGP.jpg"),
+            ("2894", "https://icons.sollahiro.com/company-icons/2894.png"), // pragma: allowlist secret
             ("3083", "https://starseeds.co.jp/cms/wp-content/themes/corporate-theme/assets/icons/apple-touch-icon.png"),
             ("3123", "https://www.saibo.co.jp/img/saibohp/favicon02.ico"),
             ("339A", "https://progresstech-group.jp/assets/images/common/apple-touch-icon-180x180.png"),
@@ -330,11 +330,11 @@ import Testing
             ("4673", "https://www.kge.co.jp/wp-bridge2026/wp-content/uploads/2026/08/cropped-apple-touch-icon-180x180.png"),
             ("4819", "https://www.garage.co.jp/wp/wp-content/themes/garage/assets/config/apple-touch-icon.jpg"),
             ("5659", "https://www.n-seisen.co.jp/assets/images/common/apple-touch-icon.png"),
-            ("6203", "https://www.howa.co.jp/apple-touch-icon.png"),
+            ("6203", "https://icons.sollahiro.com/company-icons/6203.png"), // pragma: allowlist secret
             ("6278", "https://www.uniontool.co.jp/assets/img/apple-touch-icon.png"),
             ("6706", "https://denkikogyo.co.jp/wp-content/uploads/2022/09/cropped-favicon-180x180.png"),
             ("6797", "https://www.nagoya-denki.co.jp/cms/wp-content/themes/nagoyadenki/icon.png"),
-            ("7265", "https://www.eiken-kk.co.jp/library/556d0b6270bd04a27f0002c1/favicon/556d0c5c70bd04a27f00037a/webclip.png?v=1707803673138"),
+            ("7265", "https://icons.sollahiro.com/company-icons/7265.png"), // pragma: allowlist secret
             ("7266", "https://www.imasen.co.jp/wp-content/themes/imasen/img/common/apple-touch-icon.png"),
             ("7443", "https://yokohamagyorui.co.jp/wp-content/uploads/2026/04/cropped-cropped-favicon-150x150-1-180x180.png"),
             ("8225", "https://kk-takachiho.jp/files/favicon/apple-touch-icon.png"),

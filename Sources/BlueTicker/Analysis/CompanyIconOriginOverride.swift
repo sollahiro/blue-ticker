@@ -82,6 +82,7 @@ enum CompanyIconOriginOverride {
     /// 2026-09-28 weekly: 公告紙面／URL無し／Pronexus の欠行。公式 apple-touch / 正方形 /
     /// 中央マークのある OGP。Jetpack CDN・横長ワードマーク OGP は載せない。
     /// 9445: コーポレート origin が timeout のため自社 DX サービス apple-touch。
+    /// 2195 / 2894 / 6203 / 7265: ユーザー指定のワンオフ 512 白地クロップを R2 CDN へ。
     static let manualSources: [String: CompanyIconManualSource] = [
         "7203": .homepageOrigin("https://toyota.jp"),
         "9267": .homepageOrigin("https://www.genky.co.jp"),
@@ -228,11 +229,11 @@ enum CompanyIconOriginOverride {
         "9622": .imageURL("https://www.space-tokyo.co.jp/assets/img/apple-touch-icon.png"),
         "603A": .imageURL(
             "https://igrid.co.jp/wp-content/themes/igrid2024/dist/img/favicon/256.jpg"),
-        "2195": .imageURL("https://www.amita-hd.co.jp/_assets/img/apple-touch-icon.png"),
+        "2195": .imageURL("https://icons.sollahiro.com/company-icons/2195.png"), // R2 CDN AMITA wordmark 512 // pragma: allowlist secret
         "2395": .imageURL("https://snbl.com/wp-content/themes/snbl/apple-touch-icon.png"),
         "2449": .imageURL(
             "https://www.prap.co.jp/wp/wp-content/themes/custom-theme/apple-touch-icon.png"),
-        "2894": .imageURL("https://www.ishiifood.co.jp/assets/img/common/other/OGP.jpg"),
+        "2894": .imageURL("https://icons.sollahiro.com/company-icons/2894.png"), // R2 CDN tight crop 512 // pragma: allowlist secret
         "3083": .imageURL(
             "https://starseeds.co.jp/cms/wp-content/themes/corporate-theme/assets/icons/apple-touch-icon.png"),
         "3123": .imageURL("https://www.saibo.co.jp/img/saibohp/favicon02.ico"),
@@ -250,14 +251,13 @@ enum CompanyIconOriginOverride {
             "https://www.garage.co.jp/wp/wp-content/themes/garage/assets/config/apple-touch-icon.jpg"),
         "5659": .imageURL(
             "https://www.n-seisen.co.jp/assets/images/common/apple-touch-icon.png"),
-        "6203": .imageURL("https://www.howa.co.jp/apple-touch-icon.png"),
+        "6203": .imageURL("https://icons.sollahiro.com/company-icons/6203.png"), // R2 CDN Howa wordmark white 512 // pragma: allowlist secret
         "6278": .imageURL("https://www.uniontool.co.jp/assets/img/apple-touch-icon.png"),
         "6706": .imageURL(
             "https://denkikogyo.co.jp/wp-content/uploads/2022/09/cropped-favicon-180x180.png"),
         "6797": .imageURL(
             "https://www.nagoya-denki.co.jp/cms/wp-content/themes/nagoyadenki/icon.png"),
-        "7265": .imageURL(
-            "https://www.eiken-kk.co.jp/library/556d0b6270bd04a27f0002c1/favicon/556d0c5c70bd04a27f00037a/webclip.png?v=1707803673138"),
+        "7265": .imageURL("https://icons.sollahiro.com/company-icons/7265.png"), // R2 CDN left mark crop 512 // pragma: allowlist secret
         "7266": .imageURL(
             "https://www.imasen.co.jp/wp-content/themes/imasen/img/common/apple-touch-icon.png"),
         "7443": .imageURL(
