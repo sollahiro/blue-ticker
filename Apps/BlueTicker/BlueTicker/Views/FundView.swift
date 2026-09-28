@@ -14,21 +14,31 @@ struct FundView: View {
                 LabeledContent("ファンドROE", value: Format.percent(snapshot.fundROEPercent))
             } header: {
                 Text("保有株数に応じた業績")
+                    .foregroundStyle(Theme.textMuted)
+                    .textCase(nil)
             }
 
             if snapshot.tickerTotals.isEmpty {
-                Section("あなたの保有している企業") {
+                Section {
                     Text("銘柄画面の保有情報で、株数と取得単価を入れるとここに出ます。")
                         .foregroundStyle(Theme.textMuted)
+                } header: {
+                    Text("あなたの保有している企業")
+                        .foregroundStyle(Theme.textMuted)
+                        .textCase(nil)
                 }
             } else {
-                Section("あなたの保有している企業") {
+                Section {
                     ForEach(snapshot.tickerTotals, id: \.code) { total in
                         NavigationLink(value: companyRef(for: total)) {
                             tickerTotalRow(total)
                         }
                         .listRowBackground(Theme.elevated)
                     }
+                } header: {
+                    Text("あなたの保有している企業")
+                        .foregroundStyle(Theme.textMuted)
+                        .textCase(nil)
                 }
             }
 

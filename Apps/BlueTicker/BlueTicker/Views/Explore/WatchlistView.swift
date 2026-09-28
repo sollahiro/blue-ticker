@@ -4,7 +4,6 @@ import SwiftUI
 struct WatchlistView: View {
     @Query(sort: \WatchedCompany.sortOrder) private var companies: [WatchedCompany]
     @Environment(\.modelContext) private var modelContext
-    @Environment(\.editMode) private var editMode
 
     var body: some View {
         Group {
@@ -16,52 +15,30 @@ struct WatchlistView: View {
                 )
             } else {
                 List {
-                    Section("あなたの追加した企業") {
+                    Section {
                         ForEach(listRows) { item in
                             NavigationLink(value: CompanyRef(item)) {
                                 CompanyRowView(
                                     company: CompanyRef(item),
-                                    caption: item.listCaption,
-                                    showsIcon: !isEditing,
-                                    showsSector: !isEditing,
-                                    locksNameLayout: isEditing
+                                    caption: item.listCaption
                                 )
                             }
-                            .navigationLinkIndicatorVisibility(isEditing ? .hidden : .visible)
-                            .disabled(isEditing)
                             .listRowBackground(Theme.elevated)
-                            .animation(nil, value: isEditing)
                         }
                         .onDelete(perform: delete)
-                        .onMove(perform: move)
+                    } header: {
+                        Text("あなたの追加した企業")
+                            .foregroundStyle(Theme.textMuted)
+                            .textCase(nil)
                     }
                 }
             }
         }
         .bltChrome("リスト")
-        .toolbar {
-            if isEditing {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("完了") {
-                        withAnimation { editMode?.wrappedValue = .inactive }
-                    }
-                }
-            } else if !companies.isEmpty {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("編集", systemImage: "pencil") {
-                        withAnimation { editMode?.wrappedValue = .active }
-                    }
-                }
-            }
-        }
         .onAppear {
             WatchedCompany.repairSortOrderIfNeeded(companies)
             WatchedCompany.pruneBlankRowsCoveredByHoldings(companies, in: modelContext)
         }
-    }
-
-    private var isEditing: Bool {
-        editMode?.wrappedValue == .active
     }
 
     /// 同じ銘柄に保有があるとき、残ったウォッチ行は出さない。
@@ -86,11 +63,4 @@ struct WatchlistView: View {
         }
     }
 
-    private func move(from source: IndexSet, to destination: Int) {
-        var ordered = listRows
-        ordered.move(fromOffsets: source, toOffset: destination)
-        for (index, item) in ordered.enumerated() {
-            item.sortOrder = index
-        }
-    }
 }

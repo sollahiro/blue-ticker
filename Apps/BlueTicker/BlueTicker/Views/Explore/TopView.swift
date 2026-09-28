@@ -32,11 +32,12 @@ struct TopView: View {
     @State private var isSearching = false
     @State private var searchTask: Task<Void, Never>?
     @State private var searchGeneration = 0
+    @State private var history: [CompanyRef] = []
 
     var body: some View {
         List {
             if showsSearchSection {
-                Section("検索結果") {
+                Section {
                     if isSearching && searchResults.isEmpty && searchError == nil {
                         ProgressView()
                     }
@@ -47,6 +48,10 @@ struct TopView: View {
                     ForEach(searchResults) { hit in
                         companyLink(CompanyRef(hit))
                     }
+                } header: {
+                    Text("検索結果")
+                        .foregroundStyle(Theme.textMuted)
+                        .textCase(nil)
                 }
             }
 
@@ -76,10 +81,21 @@ struct TopView: View {
                 }
                 .textCase(nil)
             }
+
+            if !history.isEmpty {
+                Section {
+                    ForEach(history) { company in
+                        companyLink(company)
+                    }
+                } header: {
+                    Text("最近あなたが調べた企業")
+                        .foregroundStyle(Theme.textMuted)
+                        .textCase(nil)
+                }
+            }
         }
         .scrollDismissesKeyboard(.immediately)
         .bltChrome("名称検索")
-        .bltHistoryToolbar()
         .safeAreaBar(edge: .bottom) {
             NameSearchField(query: $query)
         }
@@ -87,6 +103,7 @@ struct TopView: View {
             scheduleSearch(newValue, debounce: .milliseconds(280))
         }
         .task { await feed.loadIfNeeded() }
+        .onAppear { history = CompanyHistory.load() }
     }
 
     private var showsSearchSection: Bool {
