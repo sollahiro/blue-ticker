@@ -1,8 +1,10 @@
 // LLM 内訳正規化器が共有する金額スケール。
 // 有報 HTML 表は百万円表示が最多だが、千円・円の表もある。連結売上の比較分母は円。
 // 表ヘッダー／キャプションの「単位：…」をコードで読み、LLM の申告 unit はヘッダーが
-// 取れないときのフォールバックにする。LLM が unit=million_yen と申告しつつ行金額を
-// 既に円で返すと、従来の一律 ×1e6 が分母を約 1e12（百万円表示比）に膨らませる。
+// 取れないときのフォールバックにする。ヘッダーと LLM 申告が食い違うときは分母比で
+// 候補を選ぶ（LLM が千円表を百万円へ直して申告したのにヘッダー ×1000 を再適用すると
+// 1000 倍小さくなる）。LLM が unit=million_yen と申告しつつ行金額を既に円で返すと、
+// 従来の一律 ×1e6 が分母を約 1e12（百万円表示比）に膨らませる。
 
 import Foundation
 
@@ -18,7 +20,8 @@ enum BreakdownLLMAmountScale {
         var multiplier: Double
         /// ヘッダーにも LLM にも信頼できる単位が無い。格納してよいが trusted ではない。
         var unresolved: Bool
-        /// ヘッダー単位と LLM 申告がどちらも決まり、倍率が食い違う。ヘッダー側でスケールする。
+        /// ヘッダー単位と LLM 申告がどちらも決まり、倍率が食い違う。
+        /// 分母が取れるときは候補から選ぶ。取れない／曖昧ならヘッダー倍率。
         var headerLlmMismatch: Bool
         /// `parseUnitCaption` が返した語（百万円 / 千円 / 円 等）。無ければ nil。
         var headerToken: String?
@@ -56,7 +59,9 @@ enum BreakdownLLMAmountScale {
         return (resolved.multiplier, resolved.unresolved)
     }
 
-    /// 表ヘッダーの単位を優先し、無ければ LLM 申告。食い違い時はヘッダーでスケールし mismatch を立てる。
+    /// 表ヘッダーの単位を優先し、無ければ LLM 申告。食い違い時は
+    /// {ヘッダー倍率, LLM 申告倍率, ×1} のうち分母比が 0.90...1.10 に入り 1 に最も近いものを選ぶ。
+    /// 分母が無い・許容内に入らない・同距離ならヘッダー倍率。mismatch フラグは立てる。
     /// どちらからも円倍率が決まらなければ fail closed（unresolved、倍率 1）。
     static func resolve(
         headerToken: String?,
@@ -73,10 +78,22 @@ enum BreakdownLLMAmountScale {
         if let headerToken {
             if let headerScale = yenScale(forHeaderToken: headerToken) {
                 let mismatch = declared.nominal.map { $0 != headerScale } ?? false
-                // ヘッダー倍率を正とするが、LLM が既に円換算している場合は再乗算しない
-                // （geography が unit=yen で分母一致、ヘッダーは千円、の取り違え防止。Konami 型と同型）。
-                let applied = scaleTowardYen(
-                    proposed: headerScale, rawAmounts: rawAmounts, consolidatedSales: consolidatedSales)
+                let applied: Double
+                if mismatch {
+                    applied = pickScaleAgainstDenominator(
+                        candidates: [headerScale, declared.nominal ?? 1, 1],
+                        defaultMultiplier: headerScale,
+                        rawAmounts: rawAmounts,
+                        consolidatedSales: consolidatedSales
+                    )
+                } else {
+                    // 一致時はヘッダー倍率を正とするが、既に円スケールなら再乗算しない
+                    // （geography が unit=yen で分母一致、ヘッダーは千円、の取り違え防止。Konami 型と同型）。
+                    applied = scaleTowardYen(
+                        proposed: headerScale,
+                        rawAmounts: rawAmounts,
+                        consolidatedSales: consolidatedSales)
+                }
                 return Resolution(
                     multiplier: applied,
                     unresolved: false,
@@ -263,6 +280,42 @@ enum BreakdownLLMAmountScale {
     ) -> Double {
         scaleTowardYen(
             proposed: Financial.millionYen, rawAmounts: rawAmounts, consolidatedSales: consolidatedSales)
+    }
+
+    /// LLM 正規化器の分母許容と同じ。食い違い時の候補採否に使う。
+    static let denominatorRatioTolerance = 0.90...1.10
+
+    /// 分母比が `denominatorRatioTolerance` に入る候補のうち、1 に最も近い倍率。
+    /// 分母なし・該当なし・同距離は `defaultMultiplier`（ヘッダー）。
+    private static func pickScaleAgainstDenominator(
+        candidates: [Double],
+        defaultMultiplier: Double,
+        rawAmounts: [Double],
+        consolidatedSales: Double?
+    ) -> Double {
+        guard let sales = consolidatedSales, sales != 0 else { return defaultMultiplier }
+        let rawRef = rawAmounts.map { abs($0) }.max() ?? 0
+        guard rawRef != 0 else { return defaultMultiplier }
+
+        struct Scored {
+            var multiplier: Double
+            var distance: Double
+        }
+        var scored: [Scored] = []
+        var seen = Set<Double>()
+        for multiplier in candidates where seen.insert(multiplier).inserted {
+            let ratio = rawRef * multiplier / abs(sales)
+            guard denominatorRatioTolerance.contains(ratio) else { continue }
+            scored.append(Scored(multiplier: multiplier, distance: logDistanceFromUnity(ratio)))
+        }
+        guard let bestDistance = scored.map(\.distance).min() else {
+            return defaultMultiplier
+        }
+        let tied = scored.filter { abs($0.distance - bestDistance) < 1e-12 }
+        if tied.count != 1 {
+            return defaultMultiplier
+        }
+        return tied[0].multiplier
     }
 
     /// 提案倍率を掛けたほうが分母に近いか、既に円スケールか。
