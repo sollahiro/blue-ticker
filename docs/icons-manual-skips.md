@@ -64,3 +64,23 @@
 | 8877 | low_vis_no_source | 2026-09-21 | エスリード。公式 OGP 1200×630 ワードマークのみ |
 | 8141 | low_vis_no_source | 2026-09-21 | 新光商事。OGP がトップページのスクリーンショット |
 | 7595 | low_vis_no_source | 2026-09-21 | アルゴグラフィックス。corp.argo-graph.co.jp は 16×16 と横長 logo のみ |
+| 3024 | timeout | 2026-09-28 | クリエイト。www.cr-net.co.jp 取得不能 |
+| 6191 | blocked | 2026-09-28 | エアトリ。origin 403 |
+| 8135 | low_vis_no_source | 2026-09-28 | ゼット。公式トップ 200 だが正方形/OGP なし |
+| 9419 | low_vis_no_source | 2026-09-28 | ワイヤレスゲート。Pronexus。公式トップ 200 だが usable 画像なし |
+| 2597 | low_vis_no_source | 2026-09-28 | ユニカフェ。横長ワードマークのみ |
+| 3943 | low_vis_no_source | 2026-09-28 | 大石産業。OGP は製品写真＋小さなワードマーク |
+| 4235 | low_vis_no_source | 2026-09-28 | ウルトラファブリックスHD。logo 78×78 |
+| 4524 | low_vis_no_source | 2026-09-28 | 森下仁丹。横長 logo |
+| 5368 | low_vis_no_source | 2026-09-28 | 日本インシュレーション。OGP はビル写真＋小さなワードマーク |
+| 5956 | low_vis_no_source | 2026-09-28 | トーソー。OGP は室内写真＋ワードマーク |
+| 5979 | low_vis_no_source | 2026-09-28 | カネソウ。正方形だがスローガン＋ワードマークで中身が小さい |
+| 6027 | low_vis_no_source | 2026-09-28 | 弁護士ドットコム。OGP はイラスト＋小さなワードマーク |
+| 6035 | low_vis_no_source | 2026-09-28 | IRジャパンHD。favicon 64×64 |
+| 6846 | low_vis_no_source | 2026-09-28 | 中央製作所。OGP は横長ロックアップ |
+| 6863 | low_vis_no_source | 2026-09-28 | ニレコ。favicon 64×64 |
+| 7600 | low_vis_no_source | 2026-09-28 | 日本エム・ディ・エム。横長 logo |
+| 7989 | low_vis_no_source | 2026-09-28 | 立川ブラインド。OGP は室内写真＋ワードマーク |
+| 9171 | low_vis_no_source | 2026-09-28 | 栗林商船。OGP は横長ロックアップ |
+| 9216 | needs_link | 2026-09-28 | ビーウィズ。採用サイトは別名ドメイン。公式正方形なし |
+| 9767 | low_vis_no_source | 2026-09-28 | 日建工学。横長 logo |

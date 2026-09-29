@@ -79,6 +79,10 @@ enum CompanyIconOriginOverride {
     /// 検証済み OGP。フッター SNS・別名ドメイン・横長ワードマーク OGP は載せない。
     /// 8370 紀陽銀行はユーザー指定でマスコット中央のみを 512 白地にして R2 CDN へ（公式 OGP は横長ロックアップ）。
     /// 603A: アイ・グリッド・ソリューションズ。先頭 rel=icon が 16.jpg のため apple-touch 256.jpg。
+    /// 2026-09-28 weekly: 公告紙面／URL無し／Pronexus の欠行。公式 apple-touch / 正方形 /
+    /// 中央マークのある OGP。Jetpack CDN・横長ワードマーク OGP は載せない。
+    /// 9445: コーポレート origin が timeout のため自社 DX サービス apple-touch。
+    /// 2195 / 2894 / 6203 / 7265: ユーザー指定のワンオフ 512 白地クロップを R2 CDN へ。
     static let manualSources: [String: CompanyIconManualSource] = [
         "7203": .homepageOrigin("https://toyota.jp"),
         "9267": .homepageOrigin("https://www.genky.co.jp"),
@@ -225,6 +229,48 @@ enum CompanyIconOriginOverride {
         "9622": .imageURL("https://www.space-tokyo.co.jp/assets/img/apple-touch-icon.png"),
         "603A": .imageURL(
             "https://igrid.co.jp/wp-content/themes/igrid2024/dist/img/favicon/256.jpg"),
+        "2195": .imageURL("https://icons.sollahiro.com/company-icons/2195.png"), // R2 CDN AMITA wordmark 512 // pragma: allowlist secret
+        "2395": .imageURL("https://snbl.com/wp-content/themes/snbl/apple-touch-icon.png"),
+        "2449": .imageURL(
+            "https://www.prap.co.jp/wp/wp-content/themes/custom-theme/apple-touch-icon.png"),
+        "2894": .imageURL("https://icons.sollahiro.com/company-icons/2894.png"), // R2 CDN tight crop 512 // pragma: allowlist secret
+        "3083": .imageURL(
+            "https://starseeds.co.jp/cms/wp-content/themes/corporate-theme/assets/icons/apple-touch-icon.png"),
+        "3123": .imageURL("https://www.saibo.co.jp/img/saibohp/favicon02.ico"),
+        "339A": .imageURL(
+            "https://progresstech-group.jp/assets/images/common/apple-touch-icon-180x180.png"),
+        "3653": .imageURL("https://www.morphoinc.com/assets/images/common/singleicon.png"),
+        "4056": .imageURL("https://www.neural-group.com/assets/img/apple-touch-icon.png"),
+        "4092": .imageURL("https://www.nippon-chem.co.jp/apple-touch-icon.png"),
+        "4436": .imageURL(
+            "https://minkabu.co.jp/wp-content/themes/wp-thema-infonoid-web-2022-main/assets/meta/apple-touch-icon.png"),
+        "446A": .imageURL("https://northsand.co.jp/wp-content/uploads/2025/10/cropped-n.png"),
+        "4673": .imageURL(
+            "https://www.kge.co.jp/wp-bridge2026/wp-content/uploads/2026/08/cropped-apple-touch-icon-180x180.png"),
+        "4819": .imageURL(
+            "https://www.garage.co.jp/wp/wp-content/themes/garage/assets/config/apple-touch-icon.jpg"),
+        "5659": .imageURL(
+            "https://www.n-seisen.co.jp/assets/images/common/apple-touch-icon.png"),
+        "6203": .imageURL("https://icons.sollahiro.com/company-icons/6203.png"), // R2 CDN Howa wordmark white 512 // pragma: allowlist secret
+        "6278": .imageURL("https://www.uniontool.co.jp/assets/img/apple-touch-icon.png"),
+        "6706": .imageURL(
+            "https://denkikogyo.co.jp/wp-content/uploads/2022/09/cropped-favicon-180x180.png"),
+        "6797": .imageURL(
+            "https://www.nagoya-denki.co.jp/cms/wp-content/themes/nagoyadenki/icon.png"),
+        "7265": .imageURL("https://icons.sollahiro.com/company-icons/7265.png"), // R2 CDN left mark crop 512 // pragma: allowlist secret
+        "7266": .imageURL(
+            "https://www.imasen.co.jp/wp-content/themes/imasen/img/common/apple-touch-icon.png"),
+        "7443": .imageURL(
+            "https://yokohamagyorui.co.jp/wp-content/uploads/2026/04/cropped-cropped-favicon-150x150-1-180x180.png"),
+        "8225": .imageURL("https://kk-takachiho.jp/files/favicon/apple-touch-icon.png"),
+        "8595": .imageURL("https://www.jafco.co.jp/apple-touch-icon.png"),
+        "9245": .imageURL(
+            "https://www.livero.co.jp/corporate/corp_assets/apple-touch-icon.png"),
+        "9313": .imageURL("https://www.maru8.co.jp/apple-touch-icon-144-precomposed.png"),
+        "9930": .imageURL(
+            "https://www.kitazawasangyo.co.jp/image/common/apple-touch-icon.png"),
+        "9445": .imageURL(
+            "https://www.collabo-one.jp/wp-content/themes/collaboone/images/common/webclip.png"),
     ]
 
     static func manualSource(for code: String) -> CompanyIconManualSource? {
