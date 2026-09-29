@@ -745,6 +745,19 @@ extension FinancialsResponse {
         copy.years = uniquedYearsByFyEnd(years)
         return copy
     }
+
+    /// 当該 `periodEnd`（`fy_end`）の capex（百万円）。無ければ nil。
+    public func capexMillionYen(periodEnd: String) -> Double? {
+        years.first { $0.fyEnd == periodEnd }?.capex
+    }
+
+    /// 当該 FY の capex だけを差し替える。該当年が無ければ false。
+    @discardableResult
+    public mutating func replaceCapex(periodEnd: String, millionYen: Double) -> Bool {
+        guard let index = years.firstIndex(where: { $0.fyEnd == periodEnd }) else { return false }
+        years[index].capex = millionYen
+        return true
+    }
 }
 
 /// 同一 `fy_end` は配列先頭だけ残す。空の期末はキーにしない（誤って 1 行に畳まない）。

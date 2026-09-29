@@ -82,6 +82,7 @@ func configureDatabase(_ app: Application) async throws {
     app.migrations.add(AddScreenV3MetricsToScreenIndex())
     app.migrations.add(AddScreenCagrMetricsToScreenIndex())
     app.migrations.add(AddScreenPayoutRatio3yToScreenIndex())
+    app.migrations.add(CreateManualXbrlOverrides())
     try await withDbRetry(
         operationTimeoutSeconds: Api.dbBootstrapOperationTimeoutSeconds,
         logger: app.logger,
