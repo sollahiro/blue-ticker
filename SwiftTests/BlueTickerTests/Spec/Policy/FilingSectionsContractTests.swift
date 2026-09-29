@@ -35,7 +35,7 @@ import Testing
         #expect(try #require(filingSectionsCacheVersionNumber("sections-v7")) < sectionsN)
         #expect(filingSectionsCacheVersion == "sections-v8")
         // breakdown of-which refinements already at v12; this bump is filing-sections specials only.
-        #expect(geographyBreakdownCacheVersion == "breakdown-geography-v12")
-        #expect(businessBreakdownCacheVersion == "breakdown-business-v13")
+        #expect(geographyBreakdownCacheVersion == "breakdown-geography-v13")
+        #expect(businessBreakdownCacheVersion == "breakdown-business-v14")
     }
 }

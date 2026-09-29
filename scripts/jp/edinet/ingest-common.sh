@@ -15,6 +15,8 @@ fi
 REPO="${REPO:-$(cd "$(dirname "${(%):-%x}")/../../.." && pwd)}"
 BLT_SERVER="${BLT_SERVER:-$REPO/.build/release/blt-server}"
 INGEST_LOCAL_ENV="${INGEST_LOCAL_ENV:-$REPO/scripts/jp/edinet/ingest.local.env}"
+# launchd / 手動ジョブの CWD が repo 根でないときも標準ラベル _lab.xml を見つける。
+export BLUE_TICKER_ASSETS_PATH="${BLUE_TICKER_ASSETS_PATH:-$REPO/assets}"
 
 # 手元チューニング（limit / skip / write）。ingest.local.env は .gitignore。
 ingest_load_local_config() {

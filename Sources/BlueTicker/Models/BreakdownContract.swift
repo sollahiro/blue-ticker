@@ -74,26 +74,30 @@ public func isSupportedBreakdownAxis(_ axis: String) -> Bool {
 /// フォールバックし、由来タグを偽の `income_statement.sales` にしない。
 /// Summary が本表 `Revenue2IFRS`「収益」を sales に載せても、収益認識表の分母は顧客契約のまま
 /// （`fin-v21`。金額比較では切り替えない）。
+/// v14: ingest 時に jpcrp 標準 member の日本語ラベルを補完（生 `*Member` 表示の誤表示）。
 /// v12 のままでは決定論変更後も clean 行が skip される。
-public let businessBreakdownCacheVersion = "breakdown-business-v13"
+public let businessBreakdownCacheVersion = "breakdown-business-v14"
 /// v11: 単位のみ表を捨てて dedicated contextRef の period を通し、うち列を抽出時に落とす。
 /// v12: うち列ドロップの決定論を精緻化（1段うち豪州、地域コンテキスト、軸ゲート）。
+/// v13: ingest 時に jpcrp 標準 member の日本語ラベルを補完（生 `*Member` 表示の誤表示）。
 /// v11 のままでは決定論変更後も clean 行が skip される。
-public let geographyBreakdownCacheVersion = "breakdown-geography-v12"
+public let geographyBreakdownCacheVersion = "breakdown-geography-v13"
 /// うち / タグ付き合計列の subtotal 化は targeted `--codes`（対象行削除）で定着。v2 は日経225全件再計算になるため上げない。
-public let employeesBreakdownCacheVersion = "breakdown-employees-v1"
-public let researchAndDevelopmentBreakdownCacheVersion = "breakdown-research-and-development-v1"
-public let goodwillBreakdownCacheVersion = "breakdown-goodwill-v1"
+/// v2: ingest 時に jpcrp 標準 member の日本語ラベルを補完（生 `*Member` 表示の誤表示）。
+public let employeesBreakdownCacheVersion = "breakdown-employees-v2"
+public let researchAndDevelopmentBreakdownCacheVersion = "breakdown-research-and-development-v2"
+public let goodwillBreakdownCacheVersion = "breakdown-goodwill-v2"
 /// v2: 分母を segment+reconciling に固定（表小計の閾値切替を廃止）。
 /// v3: 連結の無 dimension EntityTotal があるとき分母を連結 BS 計上額に固定。差額表と segment の同額 reconciling を dedupe。
-public let segmentAssetsBreakdownCacheVersion = "breakdown-segment-assets-v3"
-public let depreciationAndAmortizationBreakdownCacheVersion = "breakdown-depreciation-and-amortization-v2"
-public let goodwillAmortizationBreakdownCacheVersion = "breakdown-goodwill-amortization-v2"
-public let impairmentLossBreakdownCacheVersion = "breakdown-impairment-loss-v2"
-public let equityMethodInvestmentsBreakdownCacheVersion = "breakdown-equity-method-investments-v2"
-public let capitalExpendituresBreakdownCacheVersion = "breakdown-capital-expenditures-v2"
-public let capitalExpendituresOverviewBreakdownCacheVersion = "breakdown-capital-expenditures-overview-v2"
-public let noncurrentAssetAdditionsBreakdownCacheVersion = "breakdown-noncurrent-asset-additions-v2"
+/// v4: ingest 時に jpcrp 標準 member の日本語ラベルを補完（生 `*Member` 表示の誤表示）。
+public let segmentAssetsBreakdownCacheVersion = "breakdown-segment-assets-v4"
+public let depreciationAndAmortizationBreakdownCacheVersion = "breakdown-depreciation-and-amortization-v3"
+public let goodwillAmortizationBreakdownCacheVersion = "breakdown-goodwill-amortization-v3"
+public let impairmentLossBreakdownCacheVersion = "breakdown-impairment-loss-v3"
+public let equityMethodInvestmentsBreakdownCacheVersion = "breakdown-equity-method-investments-v3"
+public let capitalExpendituresBreakdownCacheVersion = "breakdown-capital-expenditures-v3"
+public let capitalExpendituresOverviewBreakdownCacheVersion = "breakdown-capital-expenditures-overview-v3"
+public let noncurrentAssetAdditionsBreakdownCacheVersion = "breakdown-noncurrent-asset-additions-v3"
 
 /// 軸に対応する現行 cache_version 文字列。未知の軸は business 扱い（安全側に決定的バンプ対象へ）。
 public func breakdownCacheVersion(forAxis axis: String) -> String {

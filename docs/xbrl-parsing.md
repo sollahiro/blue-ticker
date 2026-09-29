@@ -165,3 +165,38 @@ CI では `swift-macos` / `swift-linux` ジョブの `Test` ステップに repo
 - 回帰は `XbrlAmendmentSourceTests` / `XbrlOverlayRegressionTests`。`cache_version` はバンプしない（データ源の refinement。対象会社-FY は `--doc-ids` で再 ingest）。
 
 ---
+
+## 4. 標準タクソノミ日本語ラベル（ingest）
+
+提出パッケージの `_lab.xml` には企業拡張タグ分しか無いことが多い。EDINET 標準 member（`OtherReportableSegmentsMember`、報告セグメント小計、調整項目、`EntityTotal` など）の日本語は **ingest 時のラベル解決**で埋める。勘定科目（販管費・有形固定資産・のれん等）は提出パッケージと HTML に任せ、標準タクソノミでは埋めない（本表・注記の `preferredLabel` / 会社文言を変えない）。配信時の書き換えや固定文言置換はしない。会社提出ラベルが常に勝つ。
+
+### 4.1 配置
+
+git 管理する日本語 `_lab.xml` だけを置く（フルタクソノミ ZIP 約 105MB は置かない）。
+
+```
+assets/taxonomy/labels/
+  SOURCE.md
+  jpcrp_2025-11-01_lab.xml      # 開示府令 jpcrp_cor（報告セグメント member）
+  jppfs_2025-11-01_lab.xml      # 財務諸表本表 jppfs_cor
+  jpigp_2025-11-01_lab.xml      # IFRS jpigp_cor
+```
+
+廃止タクソノミの `_dep_lab.xml` は同梱しない。そこには標準ロールが無く `deprecatedLabel` / `deprecatedDateLabel`（「2019年版更新」や日付）だけがあり、収束ラベルに漏れる。ingest は標準ロール `http://www.xbrl.org/2003/role/label` だけを表示ラベルにし、deprecated ロールは捨てる。`verboseLabel` / `terseLabel` / `totalLabel` / 期首期末ロールは Statement の `preferredLabel` 用に残す。
+
+出典は **2026年版 EDINETタクソノミ**（タクソノミ日付 **2025-11-01**。金融庁 2025-11-11 公表の本体 ZIP）。手順は `assets/taxonomy/labels/SOURCE.md`。手元に `assets/taxonomy/{GAAP,IFRS}/*.zip` がある場合は shipped に無いタグの補完だけ使う（ZIP 内の `deprecated/` と `_dep` lab も読まない）。
+
+`EntityTotal` はタクソノミ member ではなく合成キーのため、どの `_lab.xml` にも無い。ingest 時に jpcrp `EntityTotalMember` と同じ「連結合計又は会社合計」をコード側で足す。
+
+### 4.2 ingest ホストがファイルを得る経路
+
+本番 ingest は Sorahiro 手元 Mac のみ（launchd が repo checkout から `blt-server` をビルド）。Docker / Fly では ingest しない。ラベルファイルは repo の `assets/taxonomy/labels/` に置き、実行時は checkout から読む。
+
+| 実行場所 | バイナリ | ラベルファイル |
+|---|---|---|
+| 本番 ingest（手元 Mac、launchd → `scripts/jp/edinet/*.local.sh`） | repo で `swift build -c release --product blt-server` | git の `assets/taxonomy/labels/`。`ingest-common.sh` が `BLUE_TICKER_ASSETS_PATH=$REPO/assets` を既定セット |
+| CI `swift test` | テストプロセス | checkout された `assets/taxonomy/labels/`（CWD = パッケージ根） |
+
+`resolveAssetFileURL("taxonomy")` が `BLUE_TICKER_ASSETS_PATH` → CWD `assets/` → 実行ファイル隣接 `assets/` の順で探す。launchd ラッパーは repo 根でビルド・実行する（雛形 `ingest-run-cycle.local.example.sh`）。`assets/taxonomy/labels` が見つからないか読めないときは ingest プロセスあたり 1 回、そのパスと `BLUE_TICKER_ASSETS_PATH` を stderr に警告する（黙ってコード側 sentinel だけに落とさない）。
+
+---

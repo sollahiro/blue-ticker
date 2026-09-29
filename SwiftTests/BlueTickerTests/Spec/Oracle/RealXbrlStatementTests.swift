@@ -87,7 +87,7 @@ import Foundation
         return year
     }
 
-    /// `assets/taxonomy`（EDINET 公式タクソノミ、ユーザーが配置。git 管理外）が無い環境では
+    /// `assets/taxonomy/labels`（git 管理の日本語 `_lab.xml`）が無い環境では
     /// 標準タグのラベルは解決できない（`XBRLUtils.loadStandardTaxonomyLabels` 参照）。
     /// ラベル文言に依存するテストはこれで追加ガードし、値・区分・is_total/components の検証
     /// （taxonomy 非依存）とは環境依存性を切り分ける。
@@ -291,8 +291,8 @@ import Foundation
     )
     func nintendoValuationAndTranslationAdjustmentsUsesTotalLabelVariant() async throws {
         // 回帰テスト: `preferredLabel=totalLabel` により通常ラベル「評価・換算差額等」ではなく
-        // 合計ラベル（「…合計」）を使うべきケース。標準タグのラベル解決は `assets/taxonomy`
-        // （git 管理外）が無い環境では成立しないため、値/区分/is_total とは別テストに分離する。
+        // 合計ラベル（「…合計」）を使うべきケース。標準タグのラベル解決は
+        // `assets/taxonomy/labels` の日本語 `_lab.xml` に依存する。
         let year = try Self.requireResolved(
             await Self.analyzer().extract(docID: "S100W73A", statementTypes: [.balanceSheet]))
         let byTag = Dictionary(uniqueKeysWithValues: year.balanceSheet.map { ($0.tag, $0) })

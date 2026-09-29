@@ -5,7 +5,11 @@
 cache/
 analysis_cache/
 tmp_cache/
-taxonomy/
+# Full EDINET taxonomy zips / extracted trees (~105MB). Japanese _lab.xml
+# excerpts for ingest live in assets/taxonomy/labels/ (git-tracked).
+/taxonomy/
+assets/taxonomy/GAAP/
+assets/taxonomy/IFRS/
 
 # Reports and generated data
 reports/
