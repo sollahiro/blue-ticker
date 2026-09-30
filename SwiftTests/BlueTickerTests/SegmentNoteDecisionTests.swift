@@ -138,14 +138,14 @@ import Testing
             axis: .business, tables: tables,
             sentences: [
                 "当社グループは、ソフトフロントジャパン事業の単一セグメントであるため、記載を省略しております。",
-                domesticNinety,
             ],
             hasCleanDeterministicSnapshot: false, decider: decider)
-        #expect(business == .omitBusiness)
+        #expect(business.action == .omitBusiness)
+        #expect(business.needsReview == false)
         let geography = await SegmentNoteDecision.decide(
             axis: .geography, tables: tables, sentences: [domesticComprehensive],
             hasCleanDeterministicSnapshot: false, decider: decider)
-        #expect(geography == .omitGeography)
+        #expect(geography.action == .omitGeography)
         #expect(await decider.tableCalls == 2)
     }
 
@@ -156,14 +156,15 @@ import Testing
         let omitted = await SegmentNoteDecision.decide(
             axis: .business, tables: [relatedCustomerTable()], sentences: [productNinety],
             hasCleanDeterministicSnapshot: false, decider: product)
-        #expect(omitted == .omitBusiness)
+        #expect(omitted.action == .omitBusiness)
 
         let duplicate = FakeSegmentNoteDecider(
             selection: .noneOfThese, omissionsBySnippet: ["同様の情報": .none])
         let kept = await SegmentNoteDecision.decide(
             axis: .business, tables: [relatedCustomerTable()], sentences: [duplicateDisclosure],
             hasCleanDeterministicSnapshot: false, decider: duplicate)
-        #expect(kept == .unchanged)
+        #expect(kept.action == .unchanged)
+        #expect(kept.needsReview == false)
     }
 
     @Test func chosenTableIsKeptAndCleanSnapshotSkipsJev() async {
@@ -171,12 +172,13 @@ import Testing
         let kept = await SegmentNoteDecision.decide(
             axis: .business, tables: [relatedCustomerTable()], sentences: [singleSegment],
             hasCleanDeterministicSnapshot: false, decider: decider)
-        #expect(kept == .keepTable(0))
+        #expect(kept.action == .keepTable(0))
 
         let skipped = await SegmentNoteDecision.decide(
             axis: .business, tables: [relatedCustomerTable()], sentences: [singleSegment],
             hasCleanDeterministicSnapshot: true, decider: decider)
-        #expect(skipped == .unchanged)
+        #expect(skipped.action == .unchanged)
+        #expect(skipped.audit == nil)
         #expect(await decider.tableCalls == 1)
     }
 
@@ -188,8 +190,8 @@ import Testing
         let noTables = await SegmentNoteDecision.decide(
             axis: .geography, tables: [], sentences: [domesticComprehensive],
             hasCleanDeterministicSnapshot: false, decider: decider)
-        #expect(noSentences == .unchanged)
-        #expect(noTables == .unchanged)
+        #expect(noSentences.action == .unchanged)
+        #expect(noTables.action == .unchanged)
         #expect(await decider.tableCalls == 0)
     }
 
@@ -198,11 +200,13 @@ import Testing
         let unavailable = await failure.selectBreakdownTable(
             tables: [SegmentNoteTableCandidate(index: 0, heading: "関連情報", period: "当期", markdown: "| 主要な顧客 |")],
             sentences: [singleSegment])
-        #expect(unavailable == .unavailable)
+        #expect(unavailable.selected == nil)
         let action = await SegmentNoteDecision.decide(
             axis: .business, tables: [relatedCustomerTable()], sentences: [singleSegment],
             hasCleanDeterministicSnapshot: false, decider: failure)
-        #expect(action == .unchanged)
+        #expect(action.action == .unchanged)
+        #expect(action.needsReview == false)
+        #expect(action.audit == nil)
 
         let noneBody = choiceBody(question: "breakdown_table", selected: "none_of_these")
         let omissionBody = choiceBody(
@@ -213,9 +217,11 @@ import Testing
             tables: [SegmentNoteTableCandidate(
                 index: 0, heading: "地域ごとの情報", period: "前期", markdown: "| 日本 | 112974 |")],
             sentences: [domesticComprehensive])
-        #expect(selection == .noneOfThese)
+        #expect(selection.selected == "none_of_these")
+        #expect(selection.probability == 0.9)
         let omission = await decider.classifyOmission(sentence: domesticComprehensive)
-        #expect(omission == .domesticExternalSalesOver90)
+        #expect(omission.selected == "domestic_external_sales_over_90")
+        #expect(omission.probability == 0.9)
 
         let requests = await script.recordedRequests()
         let tableRequest = try #require(jsonObject(requests[0]))
@@ -240,6 +246,111 @@ import Testing
         #expect(state["sentence"] as? String == domesticComprehensive)
     }
 
+    @Test func belowThresholdLeavesDeterministicResultAndNeedsReview() async throws {
+        let low = SegmentNoteDecision.applyProbabilityThreshold - 0.01
+        let decider = FakeSegmentNoteDecider(
+            selection: .noneOfThese, omissionsBySnippet: ["単一セグメント": .singleSegment],
+            omissionProbability: low)
+        let outcome = await SegmentNoteDecision.decide(
+            axis: .business, code: "2321", docID: "S100LS0U",
+            tables: [relatedCustomerTable()], sentences: [singleSegment],
+            hasCleanDeterministicSnapshot: false, decider: decider)
+        #expect(outcome.action == .unchanged)
+        #expect(outcome.needsReview == true)
+        let audit = try #require(outcome.audit)
+        #expect(audit.applied == false)
+        #expect(audit.needsReview == true)
+        #expect(audit.calls.contains { $0.selected == "single_segment" && $0.probability == low && !$0.applied })
+    }
+
+    @Test func missingProbabilityDoesNotApply() async throws {
+        let decider = FakeSegmentNoteDecider(
+            selection: .noneOfThese, omissionsBySnippet: ["単一セグメント": .singleSegment],
+            omissionProbability: nil)
+        let outcome = await SegmentNoteDecision.decide(
+            axis: .business, docID: "S-missing", tables: [relatedCustomerTable()],
+            sentences: [singleSegment], hasCleanDeterministicSnapshot: false, decider: decider)
+        #expect(outcome.action == .unchanged)
+        #expect(outcome.needsReview == true)
+        let sentence = try #require(outcome.audit?.calls.last)
+        #expect(sentence.selected == "single_segment")
+        #expect(sentence.probability == nil)
+        #expect(sentence.applied == false)
+
+        #expect(OpenRouterSegmentNoteDecider.selectedProbability(
+            selected: "single_segment", probabilities: [:]) == nil)
+        #expect(OpenRouterSegmentNoteDecider.selectedProbability(
+            selected: "single_segment", probabilities: ["none": 0.99]) == nil)
+        #expect(OpenRouterSegmentNoteDecider.selectedProbability(
+            selected: "single_segment", probabilities: ["single_segment": 1.4]) == nil)
+    }
+
+    @Test func conflictingSentenceClassesDoNotOmit() async {
+        let decider = FakeSegmentNoteDecider(
+            selection: .noneOfThese,
+            omissionsBySnippet: ["単一セグメント": .singleSegment, "本邦": .domesticExternalSalesOver90])
+        let outcome = await SegmentNoteDecision.decide(
+            axis: .business, docID: "S-conflict", tables: [relatedCustomerTable()],
+            sentences: [singleSegment, domesticNinety],
+            hasCleanDeterministicSnapshot: false, decider: decider)
+        #expect(outcome.action == .unchanged)
+        #expect(outcome.needsReview == true)
+        #expect(outcome.audit?.applied == false)
+        #expect(outcome.audit?.calls.allSatisfy { !$0.applied } == true)
+    }
+
+    @Test func auditRecordsConsultedDecision() async throws {
+        let decider = FakeSegmentNoteDecider(
+            selection: .noneOfThese, omissionsBySnippet: ["製品": .productOrServiceExternalSalesOver90])
+        let outcome = await SegmentNoteDecision.decide(
+            axis: .business, code: "2321", docID: "S100LS0U",
+            tables: [relatedCustomerTable()], sentences: [productNinety],
+            hasCleanDeterministicSnapshot: false, decider: decider)
+        let audit = try #require(outcome.audit)
+        #expect(audit.code == "2321")
+        #expect(audit.docID == "S100LS0U")
+        #expect(audit.axis == "business")
+        #expect(audit.model == "typesafe/jev-1.13")
+        #expect(audit.threshold == SegmentNoteDecision.applyProbabilityThreshold)
+        #expect(audit.sentences == [productNinety])
+        #expect(audit.applied == true)
+        #expect(audit.needsReview == false)
+        let table = try #require(audit.calls.first)
+        #expect(table.question == "breakdown_table")
+        #expect(table.options.contains("none_of_these"))
+        #expect(table.options.contains("0"))
+        #expect(table.selected == "none_of_these")
+        #expect(table.probability == 1)
+        #expect(table.applied == true)
+        let sentence = try #require(audit.calls.last)
+        #expect(sentence.question == "omission")
+        #expect(sentence.options == OpenRouterSegmentNoteDecider.omissionOptionKeys)
+        #expect(sentence.selected == "product_or_service_external_sales_over_90")
+        #expect(sentence.probability == 1)
+        #expect(sentence.sentences == [productNinety])
+        #expect(sentence.applied == true)
+
+        let stored = LLMBreakdownAuditPayload.segmentNoteJev(audit)
+        let data = try JSONEncoder().encode(stored)
+        let decoded = try JSONDecoder().decode(LLMBreakdownAuditPayload.self, from: data)
+        #expect(decoded.jev == audit)
+        let legacy = """
+        {"sourceTableIndex":0,"periodColumn":"当期","unit":"million_yen","profitDisclosed":false,"notes":"n"}
+        """.data(using: .utf8)!
+        let old = try JSONDecoder().decode(LLMBreakdownAuditPayload.self, from: legacy)
+        #expect(old.jev == nil)
+        #expect(old.unit == "million_yen")
+        let json = stored.jsonObject()
+        let jev = try #require(json["jev"] as? [String: Any])
+        #expect(jev["doc_id"] as? String == "S100LS0U")
+        #expect(jev["model"] as? String == "typesafe/jev-1.13")
+        #expect(jev["applied"] as? Bool == true)
+        let bare = LLMBreakdownAuditPayload(
+            sourceTableIndex: 0, periodColumn: "当期", unit: "million_yen",
+            profitDisclosed: false, notes: "n")
+        #expect(bare.jsonObject()["jev"] == nil)
+    }
+
     private func relatedCustomerTable() -> BreakdownTable {
         BreakdownTable(heading: "セグメント情報", markdown: "| 主要な顧客 | 売上高 |\n| A社 | 100 |", period: "当期")
     }
@@ -259,25 +370,44 @@ import Testing
 private actor FakeSegmentNoteDecider: SegmentNoteDeciding {
     private(set) var tableCalls = 0
     let selection: SegmentNoteTableSelection
+    let tableProbability: Double?
     let omissionsBySnippet: [String: SegmentNoteOmission]
+    let omissionProbability: Double?
 
-    init(selection: SegmentNoteTableSelection, omissionsBySnippet: [String: SegmentNoteOmission]) {
+    init(
+        selection: SegmentNoteTableSelection, omissionsBySnippet: [String: SegmentNoteOmission],
+        tableProbability: Double? = 1, omissionProbability: Double? = 1
+    ) {
         self.selection = selection
+        self.tableProbability = tableProbability
         self.omissionsBySnippet = omissionsBySnippet
+        self.omissionProbability = omissionProbability
     }
 
     func selectBreakdownTable(
         tables: [SegmentNoteTableCandidate], sentences: [String]
-    ) async -> SegmentNoteTableSelection {
+    ) async -> SegmentNoteConsultedChoice {
         tableCalls += 1
-        return selection
+        return SegmentNoteConsultedChoice(
+            question: OpenRouterSegmentNoteDecider.breakdownTableQuestion,
+            selected: selection.choiceKey,
+            probability: tableProbability,
+            options: tables.map { "\($0.index)" } + [OpenRouterSegmentNoteDecider.noneOfThese],
+            sentences: sentences)
     }
 
-    func classifyOmission(sentence: String) async -> SegmentNoteOmission {
-        for (snippet, omission) in omissionsBySnippet where sentence.contains(snippet) {
-            return omission
+    func classifyOmission(sentence: String) async -> SegmentNoteConsultedChoice {
+        var omission = SegmentNoteOmission.none
+        for (snippet, value) in omissionsBySnippet where sentence.contains(snippet) {
+            omission = value
+            break
         }
-        return .none
+        return SegmentNoteConsultedChoice(
+            question: OpenRouterSegmentNoteDecider.omissionQuestion,
+            selected: omission.choiceKey,
+            probability: omissionProbability,
+            options: OpenRouterSegmentNoteDecider.omissionOptionKeys,
+            sentences: [sentence])
     }
 }
 

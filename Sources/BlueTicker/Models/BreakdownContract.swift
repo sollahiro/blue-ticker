@@ -352,9 +352,60 @@ public struct BreakdownSnapshotPayload: Codable, Sendable, Equatable {
     }
 }
 
+/// Jev に一度聞いた Choice。適用しなくても残す。
+public struct SegmentNoteJevCallPayload: Codable, Sendable, Equatable {
+    public var question: String
+    public var options: [String]
+    public var selected: String?
+    public var probability: Double?
+    public var sentences: [String]
+    public var applied: Bool
+
+    public init(
+        question: String, options: [String], selected: String?, probability: Double?,
+        sentences: [String], applied: Bool
+    ) {
+        self.question = question
+        self.options = options
+        self.selected = selected
+        self.probability = probability
+        self.sentences = sentences
+        self.applied = applied
+    }
+}
+
+/// セグメント注記の Jev 判断。`company_breakdowns.llm_audit` の任意フィールド。
+/// 列の追加はしない（既存 JSON に無いキーは nil）。
+public struct SegmentNoteJevAuditPayload: Codable, Sendable, Equatable {
+    public var code: String
+    public var docID: String
+    public var axis: String
+    public var model: String
+    public var threshold: Double
+    public var applied: Bool
+    public var needsReview: Bool
+    public var sentences: [String]
+    public var calls: [SegmentNoteJevCallPayload]
+
+    public init(
+        code: String, docID: String, axis: String, model: String, threshold: Double,
+        applied: Bool, needsReview: Bool, sentences: [String], calls: [SegmentNoteJevCallPayload]
+    ) {
+        self.code = code
+        self.docID = docID
+        self.axis = axis
+        self.model = model
+        self.threshold = threshold
+        self.applied = applied
+        self.needsReview = needsReview
+        self.sentences = sentences
+        self.calls = calls
+    }
+}
+
 /// LLMBreakdownAudit（内部型）の公開 Codable 写経。LLM 経由の行にのみ添える軽量な監査情報
 /// （どの表・期間列・単位・利益開示有無を採用したか）。生レスポンス全文のログ化は別途未着手
-/// 。
+/// 。`jev` はセグメント注記の判断を載せたときだけある。
 public struct LLMBreakdownAuditPayload: Codable, Sendable, Equatable {
     public var sourceTableIndex: Int?
     public var periodColumn: String?
@@ -363,13 +414,38 @@ public struct LLMBreakdownAuditPayload: Codable, Sendable, Equatable {
     /// 「未開示（確認済み）」と「見落とし」を区別できないため独立して持つ。
     public var profitDisclosed: Bool
     public var notes: String
+    public var jev: SegmentNoteJevAuditPayload?
 
-    public init(sourceTableIndex: Int?, periodColumn: String?, unit: String, profitDisclosed: Bool, notes: String) {
+    public init(
+        sourceTableIndex: Int?, periodColumn: String?, unit: String, profitDisclosed: Bool, notes: String,
+        jev: SegmentNoteJevAuditPayload? = nil
+    ) {
         self.sourceTableIndex = sourceTableIndex
         self.periodColumn = periodColumn
         self.unit = unit
         self.profitDisclosed = profitDisclosed
         self.notes = notes
+        self.jev = jev
+    }
+
+    /// 正規化監査が無いときの Jev だけの行。
+    public static func segmentNoteJev(_ jev: SegmentNoteJevAuditPayload) -> LLMBreakdownAuditPayload {
+        LLMBreakdownAuditPayload(
+            sourceTableIndex: nil, periodColumn: nil, unit: "", profitDisclosed: false, notes: "",
+            jev: jev)
+    }
+
+    public func replacingJev(_ jev: SegmentNoteJevAuditPayload) -> LLMBreakdownAuditPayload {
+        var copy = self
+        copy.jev = jev
+        return copy
+    }
+
+    /// ingest が証券コードを知っているので、空のときだけ埋める。
+    public func stamped(code: String) -> LLMBreakdownAuditPayload {
+        guard var jev, jev.code.isEmpty, !code.isEmpty else { return self }
+        jev.code = code
+        return replacingJev(jev)
     }
 }
 
@@ -412,12 +488,45 @@ public extension LLMBreakdownAuditPayload {
     /// `notes` は「どの表・期間列・単位・転置有無を採用したか」の自由文で、`denominator_tag`が
     /// "income_statement.sales" 以外（例: "llm_table_subtotal"）のときに実際の指標名を知る手がかりになる。
     func jsonObject() -> [String: Any] {
-        [
+        var object: [String: Any] = [
             "source_table_index": sourceTableIndex ?? NSNull(),
             "period_column": periodColumn ?? NSNull(),
             "unit": unit,
             "profit_disclosed": profitDisclosed,
             "notes": notes,
+        ]
+        if let jev {
+            object["jev"] = jev.jsonObject()
+        }
+        return object
+    }
+}
+
+extension SegmentNoteJevAuditPayload {
+    func jsonObject() -> [String: Any] {
+        [
+            "code": code,
+            "doc_id": docID,
+            "axis": axis,
+            "model": model,
+            "threshold": threshold,
+            "applied": applied,
+            "needs_review": needsReview,
+            "sentences": sentences,
+            "calls": calls.map { $0.jsonObject() },
+        ]
+    }
+}
+
+extension SegmentNoteJevCallPayload {
+    func jsonObject() -> [String: Any] {
+        [
+            "question": question,
+            "options": options,
+            "selected": selected ?? NSNull(),
+            "probability": probability ?? NSNull(),
+            "sentences": sentences,
+            "applied": applied,
         ]
     }
 }

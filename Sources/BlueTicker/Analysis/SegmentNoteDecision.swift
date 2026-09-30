@@ -8,6 +8,13 @@ import Foundation
 enum SegmentNoteAxis: Sendable {
     case business
     case geography
+
+    var wire: String {
+        switch self {
+        case .business: return "business"
+        case .geography: return "geography"
+        }
+    }
 }
 
 enum SegmentNoteAction: Equatable, Sendable {
@@ -28,6 +35,23 @@ enum SegmentNoteTableSelection: Equatable, Sendable {
     case table(Int)
     case noneOfThese
     case unavailable
+
+    var choiceKey: String? {
+        switch self {
+        case .table(let index): return "\(index)"
+        case .noneOfThese: return OpenRouterSegmentNoteDecider.noneOfThese
+        case .unavailable: return nil
+        }
+    }
+}
+
+/// Jev が返した Choice 一つ。`selected == nil` は応答が無い（今日の分類に戻す）。
+struct SegmentNoteConsultedChoice: Equatable, Sendable {
+    var question: String
+    var selected: String?
+    var probability: Double?
+    var options: [String]
+    var sentences: [String]
 }
 
 enum SegmentNoteOmission: Equatable, Sendable {
@@ -61,22 +85,38 @@ enum SegmentNoteOmission: Equatable, Sendable {
 protocol SegmentNoteDeciding: Sendable {
     func selectBreakdownTable(
         tables: [SegmentNoteTableCandidate], sentences: [String]
-    ) async -> SegmentNoteTableSelection
+    ) async -> SegmentNoteConsultedChoice
 
-    func classifyOmission(sentence: String) async -> SegmentNoteOmission
+    func classifyOmission(sentence: String) async -> SegmentNoteConsultedChoice
+}
+
+struct SegmentNoteDecisionOutcome: Equatable, Sendable {
+    var action: SegmentNoteAction
+    /// 確率不足・欠測・解釈不能・文クラスの衝突。決定論の結果は変えない。
+    var needsReview: Bool
+    var audit: SegmentNoteJevAuditPayload?
+
+    static let unchanged = SegmentNoteDecisionOutcome(action: .unchanged, needsReview: false, audit: nil)
 }
 
 enum SegmentNoteDecision {
-    /// 表が分析すべき当期の内訳か。違い、かつ省略の種類が軸に合うときだけ今日の経路を変える。
+    /// 選ばれた選択肢の `probabilities[choice]` がこれ以上のときだけ表の採用か省略を適用する。
+    /// `confidence` では代用しない。校正値は PR 本文。誤った省略より needs_review を残す。
+    static let applyProbabilityThreshold: Double = 0.9
+
+    /// 表が分析すべき当期の内訳か。違い、かつ省略の種類が軸に合い、確率が閾値以上で、
+    /// 文の種類が食い違わないときだけ今日の経路を変える。
     /// 決定論で既に business / geography が確定しているときは呼ばない前提で、
     /// `hasCleanDeterministicSnapshot` が true ならネットワークに行かない。
     static func decide(
         axis: SegmentNoteAxis,
+        code: String = "",
+        docID: String = "",
         tables: [BreakdownTable],
         sentences: [String],
         hasCleanDeterministicSnapshot: Bool,
         decider: any SegmentNoteDeciding
-    ) async -> SegmentNoteAction {
+    ) async -> SegmentNoteDecisionOutcome {
         guard !hasCleanDeterministicSnapshot, !tables.isEmpty, !sentences.isEmpty else {
             return .unchanged
         }
@@ -84,32 +124,131 @@ enum SegmentNoteDecision {
             SegmentNoteTableCandidate(
                 index: index, heading: table.heading, period: table.period, markdown: table.markdown)
         }
-        let selection = await decider.selectBreakdownTable(tables: candidates, sentences: sentences)
-        switch selection {
-        case .unavailable:
-            return .unchanged
-        case .table(let index):
-            guard tables.indices.contains(index) else { return .unchanged }
-            return .keepTable(index)
-        case .noneOfThese:
-            var omissions: [SegmentNoteOmission] = []
-            for sentence in sentences {
-                let omission = await decider.classifyOmission(sentence: sentence)
-                if omission != .unavailable { omissions.append(omission) }
+        let tableChoice = await decider.selectBreakdownTable(tables: candidates, sentences: sentences)
+        guard tableChoice.selected != nil else { return .unchanged }
+
+        if tableChoice.selected == OpenRouterSegmentNoteDecider.noneOfThese {
+            guard meetsThreshold(tableChoice.probability) else {
+                return finish(
+                    axis: axis, code: code, docID: docID, sentences: sentences,
+                    action: .unchanged, needsReview: true,
+                    calls: [call(tableChoice, sentences: sentences, applied: false)])
             }
-            return action(axis: axis, omissions: omissions)
+            return await classifySentences(
+                axis: axis, code: code, docID: docID, sentences: sentences,
+                tableChoice: tableChoice, decider: decider)
+        }
+        if let selected = tableChoice.selected, let index = Int(selected), tables.indices.contains(index) {
+            let apply = meetsThreshold(tableChoice.probability)
+            return finish(
+                axis: axis, code: code, docID: docID, sentences: sentences,
+                action: apply ? .keepTable(index) : .unchanged, needsReview: !apply,
+                calls: [call(tableChoice, sentences: sentences, applied: apply)])
+        }
+        return finish(
+            axis: axis, code: code, docID: docID, sentences: sentences,
+            action: .unchanged, needsReview: true,
+            calls: [call(tableChoice, sentences: sentences, applied: false)])
+    }
+
+    private static func classifySentences(
+        axis: SegmentNoteAxis, code: String, docID: String, sentences: [String],
+        tableChoice: SegmentNoteConsultedChoice, decider: any SegmentNoteDeciding
+    ) async -> SegmentNoteDecisionOutcome {
+        struct Record {
+            var choice: SegmentNoteConsultedChoice
+            var omission: SegmentNoteOmission?
+            var unparsable: Bool
+            var sentence: String
+        }
+        var records: [Record] = []
+        for sentence in sentences {
+            let choice = await decider.classifyOmission(sentence: sentence)
+            if choice.selected == nil {
+                records.append(Record(choice: choice, omission: nil, unparsable: false, sentence: sentence))
+                continue
+            }
+            let parsed = SegmentNoteOmission.fromChoiceKey(choice.selected ?? "")
+            if parsed == .unavailable {
+                records.append(Record(choice: choice, omission: nil, unparsable: true, sentence: sentence))
+            } else {
+                records.append(Record(choice: choice, omission: parsed, unparsable: false, sentence: sentence))
+            }
+        }
+
+        let parsed = records.compactMap(\.omission)
+        let classes = Set(parsed.compactMap(positiveClass))
+        let conflict = classes.count > 1
+        let weak = records.contains { record in
+            record.omission != nil && !meetsThreshold(record.choice.probability)
+        }
+        let sawUnparsable = records.contains { $0.unparsable }
+        let sawTransportGap = records.contains { $0.choice.selected == nil }
+        let needsReview = parsed.isEmpty
+            ? sawUnparsable
+            : (weak || conflict || sawUnparsable || sawTransportGap)
+        let agreed = classes.count == 1 ? classes.first : nil
+        let canOmit = !needsReview && agreed.map { omissionMatches(axis: axis, $0) } == true
+        var calls = [call(tableChoice, sentences: sentences, applied: canOmit)]
+        for record in records {
+            let applied = canOmit && record.omission.map { omissionMatches(axis: axis, $0) } == true
+            calls.append(call(record.choice, sentences: [record.sentence], applied: applied))
+        }
+        let action: SegmentNoteAction
+        if canOmit {
+            switch axis {
+            case .business: action = .omitBusiness
+            case .geography: action = .omitGeography
+            }
+        } else {
+            action = .unchanged
+        }
+        return finish(
+            axis: axis, code: code, docID: docID, sentences: sentences,
+            action: action, needsReview: needsReview, calls: calls)
+    }
+
+    private static func positiveClass(_ omission: SegmentNoteOmission) -> SegmentNoteOmission? {
+        switch omission {
+        case .singleSegment, .productOrServiceExternalSalesOver90, .domesticExternalSalesOver90:
+            return omission
+        case .none, .unavailable:
+            return nil
         }
     }
 
-    private static func action(axis: SegmentNoteAxis, omissions: [SegmentNoteOmission]) -> SegmentNoteAction {
+    private static func omissionMatches(axis: SegmentNoteAxis, _ omission: SegmentNoteOmission) -> Bool {
         switch axis {
         case .business:
-            let omitsBusiness = omissions.contains(.singleSegment)
-                || omissions.contains(.productOrServiceExternalSalesOver90)
-            return omitsBusiness ? .omitBusiness : .unchanged
+            return omission == .singleSegment || omission == .productOrServiceExternalSalesOver90
         case .geography:
-            return omissions.contains(.domesticExternalSalesOver90) ? .omitGeography : .unchanged
+            return omission == .domesticExternalSalesOver90
         }
+    }
+
+    /// 選ばれたキーの確率だけを見る。欠ける、有限でない、0...1 の外は適用しない。
+    static func meetsThreshold(_ probability: Double?) -> Bool {
+        guard let probability, probability.isFinite, (0.0...1.0).contains(probability) else { return false }
+        return probability >= applyProbabilityThreshold
+    }
+
+    private static func call(
+        _ choice: SegmentNoteConsultedChoice, sentences: [String], applied: Bool
+    ) -> SegmentNoteJevCallPayload {
+        SegmentNoteJevCallPayload(
+            question: choice.question, options: choice.options, selected: choice.selected,
+            probability: choice.probability, sentences: sentences, applied: applied)
+    }
+
+    private static func finish(
+        axis: SegmentNoteAxis, code: String, docID: String, sentences: [String],
+        action: SegmentNoteAction, needsReview: Bool, calls: [SegmentNoteJevCallPayload]
+    ) -> SegmentNoteDecisionOutcome {
+        let audit = SegmentNoteJevAuditPayload(
+            code: code, docID: docID, axis: axis.wire, model: Api.openrouterDecisionsModel,
+            threshold: applyProbabilityThreshold, applied: action != .unchanged,
+            needsReview: needsReview, sentences: sentences, calls: calls)
+        return SegmentNoteDecisionOutcome(action: action, needsReview: needsReview, audit: audit)
     }
 }
 
@@ -121,31 +260,47 @@ struct OpenRouterSegmentNoteDecider: SegmentNoteDeciding {
     static let breakdownTableQuestion = "breakdown_table"
     static let omissionQuestion = "omission"
     static let noneOfThese = "none_of_these"
+    static let omissionOptionKeys = [
+        "single_segment",
+        "product_or_service_external_sales_over_90",
+        "domestic_external_sales_over_90",
+        "none",
+    ]
     private static let markdownLimit = 4_000
 
     func selectBreakdownTable(
         tables: [SegmentNoteTableCandidate], sentences: [String]
-    ) async -> SegmentNoteTableSelection {
+    ) async -> SegmentNoteConsultedChoice {
+        let options = tables.map { "\($0.index)" } + [Self.noneOfThese]
+        let unavailable = SegmentNoteConsultedChoice(
+            question: Self.breakdownTableQuestion, selected: nil, probability: nil,
+            options: options, sentences: sentences)
         guard let body = Self.tableRequestJSON(model: model, tables: tables, sentences: sentences) else {
-            return .unavailable
+            return unavailable
         }
         do {
             let data = try await client.decide(requestJSON: body)
-            return Self.tableSelection(from: data, tableCount: tables.count)
+            return Self.consultedChoice(
+                from: data, question: Self.breakdownTableQuestion, options: options, sentences: sentences)
         } catch {
-            return .unavailable
+            return unavailable
         }
     }
 
-    func classifyOmission(sentence: String) async -> SegmentNoteOmission {
+    func classifyOmission(sentence: String) async -> SegmentNoteConsultedChoice {
+        let unavailable = SegmentNoteConsultedChoice(
+            question: Self.omissionQuestion, selected: nil, probability: nil,
+            options: Self.omissionOptionKeys, sentences: [sentence])
         guard let body = Self.omissionRequestJSON(model: model, sentence: sentence) else {
-            return .unavailable
+            return unavailable
         }
         do {
             let data = try await client.decide(requestJSON: body)
-            return Self.omission(from: data)
+            return Self.consultedChoice(
+                from: data, question: Self.omissionQuestion, options: Self.omissionOptionKeys,
+                sentences: [sentence])
         } catch {
-            return .unavailable
+            return unavailable
         }
     }
 
@@ -212,17 +367,24 @@ struct OpenRouterSegmentNoteDecider: SegmentNoteDeciding {
             questions: questions)
     }
 
-    static func tableSelection(from data: Data, tableCount: Int) -> SegmentNoteTableSelection {
-        guard let selected = OpenRouterDecisionsCodec.answers(from: data)[breakdownTableQuestion]?.choice?.selected
-        else { return .unavailable }
-        if selected == noneOfThese { return .noneOfThese }
-        guard let index = Int(selected), (0..<tableCount).contains(index) else { return .unavailable }
-        return .table(index)
+    static func consultedChoice(
+        from data: Data, question: String, options: [String], sentences: [String]
+    ) -> SegmentNoteConsultedChoice {
+        guard let choice = OpenRouterDecisionsCodec.answers(from: data)[question]?.choice else {
+            return SegmentNoteConsultedChoice(
+                question: question, selected: nil, probability: nil, options: options, sentences: sentences)
+        }
+        return SegmentNoteConsultedChoice(
+            question: question, selected: choice.selected,
+            probability: selectedProbability(selected: choice.selected, probabilities: choice.probabilities),
+            options: options, sentences: sentences)
     }
 
-    static func omission(from data: Data) -> SegmentNoteOmission {
-        guard let selected = OpenRouterDecisionsCodec.answers(from: data)[omissionQuestion]?.choice?.selected
-        else { return .unavailable }
-        return SegmentNoteOmission.fromChoiceKey(selected)
+    /// `probabilities` の選ばれたキーだけ。`confidence` が別にあっても使わない。
+    static func selectedProbability(selected: String, probabilities: [String: Double]) -> Double? {
+        guard let value = probabilities[selected], value.isFinite, (0.0...1.0).contains(value) else {
+            return nil
+        }
+        return value
     }
 }
