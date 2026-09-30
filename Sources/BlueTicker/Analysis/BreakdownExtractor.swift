@@ -413,6 +413,14 @@ enum BreakdownExtractor {
     ]
     static let singleSegmentDisclosureExclusionMarkers = ["報告セグメントと同一", "同様の情報を開示"]
 
+    /// セグメント注記の省略文を切る対象。収益認識・研究開発費・設備投資・減損は含めない。
+    static let segmentNoteOmissionTextBlockTags: Set<String> =
+        singleSegmentDisclosureTags
+        .union(Xbrl.businessSegmentTextBlockTags)
+        .union(Xbrl.businessSegmentEtcTextBlockTags)
+        .union(Xbrl.productOrServiceTextBlockTags)
+        .union(Xbrl.geographyTextBlockTags)
+
     /// セグメント注記が「単一セグメントのため記載を省略」である旨を明示しているかを診断する。
     /// `classifyNotApplicableReason`（company_breakdowns への永続化に使う本番判定）から呼ばれる
     /// ほか、診断表示にも使う。専用タグは即採用、非専用（製品・サービス別情報）タグは
@@ -447,10 +455,71 @@ enum BreakdownExtractor {
         return nil
     }
 
+    /// セグメント注記の TextBlock から「記載を省略」を含む文を切る。表が無い当期ブロックも残す
+    /// （太平電業 `S100TU63` の当期は省略文だけで、表は前期ブロックにしか無い）。
+    /// Jev にはこの文を渡し、文の切り出し自体はコードが行う。
+    static func segmentNoteOmissionSentences(xbrlDir: URL) -> [String] {
+        var seen = Set<String>()
+        var sentences: [String] = []
+        for root in XBRLUtils.xbrlSearchRoots(in: xbrlDir) {
+            for file in XBRLUtils.findXbrlFiles(in: root) {
+                guard let data = try? Data(contentsOf: file) else { continue }
+                let collector = TextBlockSAXCollector(targetTags: segmentNoteOmissionTextBlockTags)
+                let parser = XMLParser(data: data)
+                parser.delegate = collector
+                parser.parse()
+                for block in collector.blocks {
+                    for source in omissionSentenceSources(in: block.content) {
+                        for sentence in omissionSentences(in: source) where seen.insert(sentence).inserted {
+                            sentences.append(sentence)
+                        }
+                    }
+                }
+            }
+        }
+        return sentences
+    }
+
+    /// 表のセルを地の文に混ぜない。段落が無い TextBlock は本文全体を1つにする。
+    private static func omissionSentenceSources(in html: String) -> [String] {
+        guard let doc = try? SwiftSoup.parse(html) else { return [html] }
+        try? doc.select("table").remove()
+        let paragraphs = (try? doc.select("p"))?.array() ?? []
+        if paragraphs.isEmpty {
+            let text = bs4Text(doc, strip: true)
+            return text.isEmpty ? [] : [text]
+        }
+        return paragraphs.map { bs4Text($0, strip: true) }.filter { !$0.isEmpty }
+    }
+
+    /// 「。」で切り、「記載を省略」を含む文だけを残す。句点が無い短文も1件として残す。
+    static func omissionSentences(in text: String) -> [String] {
+        let flattened = text.replacingOccurrences(of: "\n", with: "")
+        var sentences: [String] = []
+        var current = ""
+        for character in flattened {
+            current.append(character)
+            if character == "。" {
+                appendOmissionSentence(current, to: &sentences)
+                current = ""
+            }
+        }
+        appendOmissionSentence(current, to: &sentences)
+        return sentences
+    }
+
+    private static func appendOmissionSentence(_ raw: String, to sentences: inout [String]) {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, trimmed.contains(singleSegmentDisclosureMarker) else { return }
+        guard trimmed.count <= 800 else { return }
+        sentences.append(trimmed)
+    }
+
     /// `BusinessBreakdownResolver.resolve` が business 軸を解決できなかった（snapshot == nil）ときの
     /// 理由を推定する（診断用、issue #130）。単一セグメント開示（F）は表が無いときだけ確定する
     /// （製品別 html_table がある東京エレクトロン型を F にすると再試行されない）。表が無い資生堂型は
-    /// 地域軸 facts（E）より F を優先する。
+    /// 地域軸 facts（E）より F を優先する。関連情報の表を内訳から外す判定は、キーがあるときの
+    /// `SegmentNoteDecision` だけが行い、この関数は変えない。
     /// `llmHint` は html_table 経由（`RevenueRecognitionLLMNormalizer`/`SegmentInfoLLMNormalizer`）で
     /// LLM が `applicable=false` と判定したときの `LLMBreakdownAudit.notApplicableReason`
     /// （issue #135）。xbrl_facts 経路の判定は method=="xbrl_facts" のときしか効かないため、

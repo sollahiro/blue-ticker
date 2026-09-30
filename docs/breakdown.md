@@ -15,6 +15,8 @@
 1. TextBlock 内 HTML 表 → `html_table`
 2. dimension 付き数値 fact → `xbrl_facts`
 
+セグメント注記（business / geography の省略）だけ、`OPENROUTER_API_KEY` があるときに OpenRouter Decisions API（`typesafe/jev-1.13`）へ Choice を出す。コードが候補の文と表を切り出し、Jev は表が分析すべき内訳か（違えば `none_of_these`）、違えば省略が単一セグメント・製品サービス外部売上90％超・本邦外部売上90％超・どれでもない、のどれかを返す。関連情報の表は内訳表ではない。キーが無いときは決定論のまま（F は表が無いときだけ）。研究開発費・設備投資・減損はこの判定を使わない。公開 reason と `cache_version` は変えない。
+
 | API キー | 意味 |
 |---|---|
 | `segments` | 報告セグメント（事業とも地域とも限らない） |
