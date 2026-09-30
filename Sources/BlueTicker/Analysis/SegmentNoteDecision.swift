@@ -92,14 +92,22 @@ protocol SegmentNoteDeciding: Sendable {
 
 struct SegmentNoteDecisionOutcome: Equatable, Sendable {
     var action: SegmentNoteAction
-    /// 確率不足・欠測・解釈不能・文クラスの衝突。決定論の結果は変えない。
+    /// 確率不足・欠測・解釈不能・文クラスの衝突、または省略理由の根拠が無い。決定論の結果は変えない。
     var needsReview: Bool
     var audit: SegmentNoteJevAuditPayload?
+    /// business の省略を適用したときの公開 reason。`single_segment_disclosed` か `geography_only`。
+    var omissionReason: String?
+    var appliedOmission: SegmentNoteOmission?
 
-    static let unchanged = SegmentNoteDecisionOutcome(action: .unchanged, needsReview: false, audit: nil)
+    static let unchanged = SegmentNoteDecisionOutcome(
+        action: .unchanged, needsReview: false, audit: nil, omissionReason: nil, appliedOmission: nil)
 }
 
 enum SegmentNoteDecision {
+    /// 製品90％だが、単一セグメントの根拠も地域報告セグメントも無い。公開 reason にはしない。
+    static let withheldProductOmissionReason =
+        "product_or_service_over_90_without_single_segment_or_geography_evidence"
+
     /// 選ばれた選択肢の `probabilities[choice]` がこれ以上のときだけ表の採用か省略を適用する。
     /// `confidence` では代用しない。校正値は PR 本文。誤った省略より needs_review を残す。
     static let applyProbabilityThreshold: Double = 0.9
@@ -205,7 +213,46 @@ enum SegmentNoteDecision {
         }
         return finish(
             axis: axis, code: code, docID: docID, sentences: sentences,
-            action: action, needsReview: needsReview, calls: calls)
+            action: action, needsReview: needsReview, calls: calls,
+            appliedOmission: canOmit ? agreed : nil)
+    }
+
+    /// business の省略を公開 reason に写す。単一セグメントの根拠が先。
+    /// 製品90％で報告セグメントが地域だけのときは `geography_only`。
+    /// どちらも無ければ省略しない。
+    static func resolveBusinessOmissionReason(
+        _ outcome: SegmentNoteDecisionOutcome,
+        hasDedicatedSingleSegmentTag: Bool,
+        reportedSegmentsAreGeographic: Bool
+    ) -> SegmentNoteDecisionOutcome {
+        guard outcome.action == .omitBusiness else { return outcome }
+        let singleSegmentEvidence = outcome.appliedOmission == .singleSegment || hasDedicatedSingleSegmentTag
+        if singleSegmentEvidence {
+            var copy = outcome
+            copy.omissionReason = breakdownNotApplicableSingleSegmentDisclosed
+            return copy
+        }
+        if outcome.appliedOmission == .productOrServiceExternalSalesOver90, reportedSegmentsAreGeographic {
+            var copy = outcome
+            copy.omissionReason = breakdownNotApplicableGeographyOnly
+            return copy
+        }
+        var copy = outcome
+        copy.action = .unchanged
+        copy.needsReview = true
+        copy.omissionReason = nil
+        if var audit = copy.audit {
+            audit.applied = false
+            audit.needsReview = true
+            audit.withheldReason = withheldProductOmissionReason
+            audit.calls = audit.calls.map { call in
+                var call = call
+                call.applied = false
+                return call
+            }
+            copy.audit = audit
+        }
+        return copy
     }
 
     private static func positiveClass(_ omission: SegmentNoteOmission) -> SegmentNoteOmission? {
@@ -242,13 +289,16 @@ enum SegmentNoteDecision {
 
     private static func finish(
         axis: SegmentNoteAxis, code: String, docID: String, sentences: [String],
-        action: SegmentNoteAction, needsReview: Bool, calls: [SegmentNoteJevCallPayload]
+        action: SegmentNoteAction, needsReview: Bool, calls: [SegmentNoteJevCallPayload],
+        appliedOmission: SegmentNoteOmission? = nil
     ) -> SegmentNoteDecisionOutcome {
         let audit = SegmentNoteJevAuditPayload(
             code: code, docID: docID, axis: axis.wire, model: Api.openrouterDecisionsModel,
             threshold: applyProbabilityThreshold, applied: action != .unchanged,
             needsReview: needsReview, sentences: sentences, calls: calls)
-        return SegmentNoteDecisionOutcome(action: action, needsReview: needsReview, audit: audit)
+        return SegmentNoteDecisionOutcome(
+            action: action, needsReview: needsReview, audit: audit, omissionReason: nil,
+            appliedOmission: appliedOmission)
     }
 }
 

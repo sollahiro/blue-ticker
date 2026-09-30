@@ -533,15 +533,48 @@ enum BreakdownExtractor {
         if detectSingleSegmentDisclosure(xbrlDir: xbrlDir) != nil, segments.tables.isEmpty {
             return .singleSegmentDisclosed
         }
-        if segments.method == "xbrl_facts",
-            BreakdownNormalizer.normalize(segments, consolidatedSales: consolidatedSales)?.axis == "geography"
-        {
+        if reportedSegmentsAreGeographic(segments: segments, consolidatedSales: consolidatedSales) {
             return .geographyOnly
         }
         if llmHint == BusinessBreakdownNotApplicableReason.geographyOnly.rawValue {
             return .geographyOnly
         }
         return .unknown
+    }
+
+    /// 決定論 E と同じ条件。method が xbrl_facts で、正規化軸が geography のときだけ。
+    static func reportedSegmentsAreGeographic(
+        segments: ExtractedBreakdown, consolidatedSales: Double?
+    ) -> Bool {
+        segments.method == "xbrl_facts"
+            && BreakdownNormalizer.normalize(segments, consolidatedSales: consolidatedSales)?.axis == "geography"
+    }
+
+    /// 報告セグメントの売上 member が全て地域か。収益認識へ swap した後の抽出結果ではなく、
+    /// `isGeographyAxis`（E の軸判定と同じ `allMembersAreGeography`）を書類の facts にかける。
+    static func reportedOperatingSegmentsAreGeographic(xbrlDir: URL) -> Bool {
+        let contextMap = loadDimensionContextMap(xbrlDir: xbrlDir)
+        let facts = extractFactsByDimension(
+            xbrlDir: xbrlDir, dimensionKeywords: Xbrl.businessSegmentDimensionKeywords, contextMap: contextMap)
+        return isGeographyAxis(facts)
+    }
+
+    /// 単一セグメント専用タグに本文があるか。製品90％の文だけでは単一セグメントにしない。
+    static func hasDedicatedSingleSegmentDisclosureTag(xbrlDir: URL) -> Bool {
+        for root in XBRLUtils.xbrlSearchRoots(in: xbrlDir) {
+            for file in XBRLUtils.findXbrlFiles(in: root) {
+                guard let data = try? Data(contentsOf: file) else { continue }
+                let collector = TextBlockSAXCollector(targetTags: singleSegmentDisclosureTags)
+                let parser = XMLParser(data: data)
+                parser.delegate = collector
+                parser.parse()
+                for block in collector.blocks {
+                    let text = (try? SwiftSoup.parse(block.content)).map { bs4Text($0, strip: true) } ?? block.content
+                    if !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return true }
+                }
+            }
+        }
+        return false
     }
 
     /// 連結財務諸表注記から地域別（所在地別）の**外部売上**情報を抽出する。

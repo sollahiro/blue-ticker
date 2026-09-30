@@ -580,7 +580,14 @@ public extension BltServerContext {
         case .unchanged:
             return (extracted, outcome)
         case .omitBusiness:
-            return (axis == .business ? nil : extracted, outcome)
+            guard axis == .business else { return (extracted, outcome) }
+            let resolved = SegmentNoteDecision.resolveBusinessOmissionReason(
+                outcome,
+                hasDedicatedSingleSegmentTag: BreakdownExtractor.hasDedicatedSingleSegmentDisclosureTag(
+                    xbrlDir: xbrlDir),
+                reportedSegmentsAreGeographic: BreakdownExtractor.reportedOperatingSegmentsAreGeographic(
+                    xbrlDir: xbrlDir))
+            return (resolved.action == .omitBusiness ? nil : extracted, resolved)
         case .omitGeography:
             return (axis == .geography ? nil : extracted, outcome)
         case .keepTable(let index):
@@ -614,7 +621,7 @@ public extension BltServerContext {
             consolidatedSales: consolidatedSales, labelsByTag: labelsByTag)
         guard let resolvedSegments = gate.extracted else {
             return .notApplicable(
-                reason: breakdownNotApplicableSingleSegmentDisclosed,
+                reason: gate.outcome.omissionReason ?? breakdownNotApplicableSingleSegmentDisclosed,
                 audit: gate.outcome.audit.map(LLMBreakdownAuditPayload.segmentNoteJev))
         }
         let hash = breakdownContentHash(extracted: resolvedSegments, consolidatedSales: consolidatedSales)

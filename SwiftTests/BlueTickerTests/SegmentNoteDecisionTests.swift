@@ -351,6 +351,76 @@ import Testing
         #expect(bare.jsonObject()["jev"] == nil)
     }
 
+    @Test func productNinetyWithGeographicSegmentsUsesGeographyOnly() async throws {
+        let outcome = SegmentNoteDecision.resolveBusinessOmissionReason(
+            await productNinetyOmission(),
+            hasDedicatedSingleSegmentTag: false,
+            reportedSegmentsAreGeographic: true)
+        #expect(outcome.action == .omitBusiness)
+        #expect(outcome.omissionReason == breakdownNotApplicableGeographyOnly)
+        #expect(outcome.needsReview == false)
+        #expect(outcome.audit?.applied == true)
+        #expect(outcome.audit?.withheldReason == nil)
+    }
+
+    @Test func productNinetyWithSingleSegmentEvidenceUsesSingleSegmentDisclosed() async throws {
+        let fromTag = SegmentNoteDecision.resolveBusinessOmissionReason(
+            await productNinetyOmission(),
+            hasDedicatedSingleSegmentTag: true,
+            reportedSegmentsAreGeographic: false)
+        #expect(fromTag.action == .omitBusiness)
+        #expect(fromTag.omissionReason == breakdownNotApplicableSingleSegmentDisclosed)
+
+        let fromSentence = SegmentNoteDecision.resolveBusinessOmissionReason(
+            await singleSegmentOmission(),
+            hasDedicatedSingleSegmentTag: false,
+            reportedSegmentsAreGeographic: true)
+        #expect(fromSentence.omissionReason == breakdownNotApplicableSingleSegmentDisclosed)
+
+        let xml = XBRLTestSupport.makeXbrlDuration(
+            """
+            <jpcrp_cor:DescriptionOfFactThatCompanysBusinessComprisesSingleSegment contextRef="CurrentYearDuration">当社グループは、信用保証事業のみであるため、記載を省略しております。</jpcrp_cor:DescriptionOfFactThatCompanysBusinessComprisesSingleSegment>
+            """)
+        try XBRLTestSupport.withXbrlDir(xml) { dir in
+            #expect(BreakdownExtractor.hasDedicatedSingleSegmentDisclosureTag(xbrlDir: dir))
+        }
+    }
+
+    @Test func productNinetyWithoutEvidenceIsNotApplied() async throws {
+        let outcome = SegmentNoteDecision.resolveBusinessOmissionReason(
+            await productNinetyOmission(),
+            hasDedicatedSingleSegmentTag: false,
+            reportedSegmentsAreGeographic: false)
+        #expect(outcome.action == .unchanged)
+        #expect(outcome.needsReview == true)
+        #expect(outcome.omissionReason == nil)
+        let audit = try #require(outcome.audit)
+        #expect(audit.applied == false)
+        #expect(audit.needsReview == true)
+        #expect(audit.withheldReason == SegmentNoteDecision.withheldProductOmissionReason)
+        #expect(audit.calls.allSatisfy { !$0.applied })
+        let json = LLMBreakdownAuditPayload.segmentNoteJev(audit).jsonObject()
+        let jev = try #require(json["jev"] as? [String: Any])
+        #expect(jev["withheld_reason"] as? String == SegmentNoteDecision.withheldProductOmissionReason)
+        #expect(jev["applied"] as? Bool == false)
+    }
+
+    private func productNinetyOmission() async -> SegmentNoteDecisionOutcome {
+        let decider = FakeSegmentNoteDecider(
+            selection: .noneOfThese, omissionsBySnippet: ["製品": .productOrServiceExternalSalesOver90])
+        return await SegmentNoteDecision.decide(
+            axis: .business, docID: "S-product", tables: [relatedCustomerTable()], sentences: [productNinety],
+            hasCleanDeterministicSnapshot: false, decider: decider)
+    }
+
+    private func singleSegmentOmission() async -> SegmentNoteDecisionOutcome {
+        let decider = FakeSegmentNoteDecider(
+            selection: .noneOfThese, omissionsBySnippet: ["単一セグメント": .singleSegment])
+        return await SegmentNoteDecision.decide(
+            axis: .business, docID: "S-single", tables: [relatedCustomerTable()], sentences: [singleSegment],
+            hasCleanDeterministicSnapshot: false, decider: decider)
+    }
+
     private func relatedCustomerTable() -> BreakdownTable {
         BreakdownTable(heading: "セグメント情報", markdown: "| 主要な顧客 | 売上高 |\n| A社 | 100 |", period: "当期")
     }

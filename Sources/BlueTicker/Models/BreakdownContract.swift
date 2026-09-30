@@ -386,10 +386,13 @@ public struct SegmentNoteJevAuditPayload: Codable, Sendable, Equatable {
     public var needsReview: Bool
     public var sentences: [String]
     public var calls: [SegmentNoteJevCallPayload]
+    /// 製品90％を省略にしなかった理由。公開 reason ではない。無い行は nil。
+    public var withheldReason: String?
 
     public init(
         code: String, docID: String, axis: String, model: String, threshold: Double,
-        applied: Bool, needsReview: Bool, sentences: [String], calls: [SegmentNoteJevCallPayload]
+        applied: Bool, needsReview: Bool, sentences: [String], calls: [SegmentNoteJevCallPayload],
+        withheldReason: String? = nil
     ) {
         self.code = code
         self.docID = docID
@@ -400,6 +403,7 @@ public struct SegmentNoteJevAuditPayload: Codable, Sendable, Equatable {
         self.needsReview = needsReview
         self.sentences = sentences
         self.calls = calls
+        self.withheldReason = withheldReason
     }
 }
 
@@ -504,7 +508,7 @@ public extension LLMBreakdownAuditPayload {
 
 extension SegmentNoteJevAuditPayload {
     func jsonObject() -> [String: Any] {
-        [
+        var object: [String: Any] = [
             "code": code,
             "doc_id": docID,
             "axis": axis,
@@ -515,6 +519,10 @@ extension SegmentNoteJevAuditPayload {
             "sentences": sentences,
             "calls": calls.map { $0.jsonObject() },
         ]
+        if let withheldReason {
+            object["withheld_reason"] = withheldReason
+        }
+        return object
     }
 }
 

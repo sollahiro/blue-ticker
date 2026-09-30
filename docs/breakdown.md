@@ -15,7 +15,7 @@
 1. TextBlock 内 HTML 表 → `html_table`
 2. dimension 付き数値 fact → `xbrl_facts`
 
-セグメント注記（business / geography の省略）だけ、`OPENROUTER_DECISION_API_KEY` があるときに OpenRouter Decisions API（`typesafe/jev-1.13`）へ Choice を出す。コードが候補の文と表を切り出し、Jev は表が分析すべき内訳か（違えば `none_of_these`）、違えば省略が単一セグメント・製品サービス外部売上90％超・本邦外部売上90％超・どれでもない、のどれかを返す。関連情報の表は内訳表ではない。選ばれた選択肢の確率が `SegmentNoteDecision.applyProbabilityThreshold` 未満、欠測、または文ごとの種類が食い違うときは適用せず、決定論の結果に `needs_review` を残す。相談した判断は `company_breakdowns.llm_audit` の `jev` に残す（列追加なし）。キーが無いときは決定論のまま（F は表が無いときだけ）。研究開発費・設備投資・減損はこの判定を使わない。公開 reason と `cache_version` は変えない。`SegmentInfoLLMNormalizer` と `GeographyBreakdownLLMNormalizer` は選ばれた html_table を行・金額・単位へ写す。Jev は金額を読まない。
+セグメント注記（business / geography の省略）だけ、`OPENROUTER_DECISION_API_KEY` があるときに OpenRouter Decisions API（`typesafe/jev-1.13`）へ Choice を出す。コードが候補の文と表を切り出し、Jev は表が分析すべき内訳か（違えば `none_of_these`）、違えば省略が単一セグメント・製品サービス外部売上90％超・本邦外部売上90％超・どれでもない、のどれかを返す。関連情報の表は内訳表ではない。選ばれた選択肢の確率が `SegmentNoteDecision.applyProbabilityThreshold` 未満、欠測、または文ごとの種類が食い違うときは適用せず、決定論の結果に `needs_review` を残す。business の省略は、単一セグメント文か専用タグがあるときだけ `single_segment_disclosed`、製品90％かつ報告セグメントが地域だけのとき `geography_only`、どちらも無ければ適用しない。相談した判断は `company_breakdowns.llm_audit` の `jev` に残す（列追加なし）。キーが無いときは決定論のまま（F は表が無いときだけ）。研究開発費・設備投資・減損はこの判定を使わない。公開 reason と `cache_version` は変えない。`SegmentInfoLLMNormalizer` と `GeographyBreakdownLLMNormalizer` は選ばれた html_table を行・金額・単位へ写す。Jev は金額を読まない。
 
 | API キー | 意味 |
 |---|---|
