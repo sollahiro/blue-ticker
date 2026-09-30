@@ -1,5 +1,5 @@
 // セグメント注記の Jev 判定。既定はフィクスチャのみで、ネットワークは使わない。
-// ライブ呼び出しは OPENROUTER_API_KEY が無いとクライアント自体を作らない。
+// ライブ呼び出しは OPENROUTER_DECISION_API_KEY が無いとクライアント自体を作らない。
 
 import Foundation
 import Testing
@@ -14,9 +14,10 @@ import Testing
     private let duplicateDisclosure = "セグメント情報に同様の情報を開示しているため、記載を省略しています。"
 
     @Test func endpointRequiresOpenRouterAPIKey() {
-        #expect(openRouterDecisionsAPIKeyEnv == "OPENROUTER_API_KEY")
+        #expect(openRouterDecisionsAPIKeyEnv == "OPENROUTER_DECISION_API_KEY")
         #expect(resolveOpenRouterDecisionsEndpoint([:]) == nil)
         #expect(resolveOpenRouterDecisionsEndpoint([openRouterDecisionsAPIKeyEnv: "  "]) == nil)
+        #expect(resolveOpenRouterDecisionsEndpoint(["OPENROUTER_API_KEY": "generic-key"]) == nil)
         #expect(resolveOpenRouterDecisionsEndpoint(["OPENROUTER_OVERVIEW_API_KEY": "overview-key"]) == nil)
         let endpoint = resolveOpenRouterDecisionsEndpoint([openRouterDecisionsAPIKeyEnv: "decisions-key"])
         #expect(endpoint?.apiKey == "decisions-key")

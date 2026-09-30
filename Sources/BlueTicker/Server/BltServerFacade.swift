@@ -42,7 +42,7 @@ public struct BltServerContext: Sendable {
     /// Overview 生成。`OPENROUTER_OVERVIEW_API_KEY` 未設定なら `UnavailableChatClient`。
     let overviewChatClient: ChatCompleting
     let overviewModel: String
-    /// セグメント注記の Jev。`OPENROUTER_API_KEY` 未設定なら nil（今日の分類のまま）。
+    /// セグメント注記の Jev。`OPENROUTER_DECISION_API_KEY` 未設定なら nil（今日の分類のまま）。
     let segmentNoteDecider: (any SegmentNoteDeciding)?
     /// employees / rd / goodwill / 報告セグメント指標軸が同一 doc を軸ループで再パースしないためのメモ。
     let businessSegmentDimensionCache: BusinessSegmentDimensionCache

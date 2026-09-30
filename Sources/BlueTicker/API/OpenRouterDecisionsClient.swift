@@ -1,13 +1,13 @@
 // OpenRouter Decisions API（Jev）。Chat Completions とは別エンドポイント。
 // 返すのは Choice / Noul / Score と確率で、散文は返さない。
-// セグメント注記は `OPENROUTER_API_KEY` があるときだけ呼ぶ。未設定ならクライアントを作らない。
+// セグメント注記は `OPENROUTER_DECISION_API_KEY` があるときだけ呼ぶ。未設定ならクライアントを作らない。
 
 import Foundation
 #if canImport(FoundationNetworking)
 import FoundationNetworking
 #endif
 
-let openRouterDecisionsAPIKeyEnv = "OPENROUTER_API_KEY"
+let openRouterDecisionsAPIKeyEnv = "OPENROUTER_DECISION_API_KEY"
 
 struct OpenRouterDecisionsEndpoint: Sendable, Equatable {
     var url: String
@@ -16,7 +16,7 @@ struct OpenRouterDecisionsEndpoint: Sendable, Equatable {
     var timeoutSeconds: Double = 60
 }
 
-/// `OPENROUTER_API_KEY` だけを読む。空なら nil。Overview 用キーは見ない。
+/// `OPENROUTER_DECISION_API_KEY` だけを読む。空なら nil。Overview 用キーは見ない。
 func resolveOpenRouterDecisionsEndpoint(
     _ env: [String: String] = ProcessInfo.processInfo.environment
 ) -> OpenRouterDecisionsEndpoint? {

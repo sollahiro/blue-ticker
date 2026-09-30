@@ -1,6 +1,6 @@
 // セグメント注記（business / geography の省略）だけを Jev に判定させる。
 // コードが候補の文と表を切り出す。Jev は Choice だけを返す。
-// `OPENROUTER_API_KEY` が無いときは呼ばない（今日の決定論のまま）。
+// `OPENROUTER_DECISION_API_KEY` が無いときは呼ばない（今日の決定論のまま）。
 // 研究開発費・設備投資・減損は対象外。公開 reason は既存の文字列だけを使う。
 
 import Foundation
