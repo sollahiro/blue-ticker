@@ -556,7 +556,7 @@ public extension BltServerContext {
     /// キーが無いとき、応答が無いときは、専用タグ以外は抽出結果をそのまま返す。
     /// 呼び出し失敗では `needsReview` を足さない。
     /// 確率が閾値未満のときは抽出結果を変えず、`needsReview` を立てる。
-    func segmentsAfterNoteDecision(
+    internal func segmentsAfterNoteDecision(
         axis: SegmentNoteAxis, docID: String, extracted: ExtractedBreakdown, xbrlDir: URL,
         consolidatedSales: Double?, labelsByTag: [String: String]
     ) async -> (extracted: ExtractedBreakdown?, outcome: SegmentNoteDecisionOutcome) {
