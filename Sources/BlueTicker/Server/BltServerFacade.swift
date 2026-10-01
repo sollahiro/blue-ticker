@@ -550,13 +550,22 @@ public extension BltServerContext {
     }
 
     /// セグメント注記の Jev。`extracted == nil` は省略確定（呼び出し側が not_applicable にする）。
-    /// キーが無いとき、応答が無いときは抽出結果をそのまま返す。
+    /// business の専用タグに本文があるときは Jev を呼ばず `single_segment_disclosed`。
+    /// 顧客表・製品90％・本邦90％・報告セグメント fact はその省略を取り消さない。
+    /// 専用タグは geography を飛ばさない。キーがある geography は Jev のまま。
+    /// キーが無いとき、応答が無いときは、専用タグ以外は抽出結果をそのまま返す。
+    /// 呼び出し失敗では `needsReview` を足さない。
     /// 確率が閾値未満のときは抽出結果を変えず、`needsReview` を立てる。
-    private func segmentsAfterNoteDecision(
+    func segmentsAfterNoteDecision(
         axis: SegmentNoteAxis, docID: String, extracted: ExtractedBreakdown, xbrlDir: URL,
         consolidatedSales: Double?, labelsByTag: [String: String]
     ) async -> (extracted: ExtractedBreakdown?, outcome: SegmentNoteDecisionOutcome) {
         let pass = (extracted: extracted as ExtractedBreakdown?, outcome: SegmentNoteDecisionOutcome.unchanged)
+        if axis == .business,
+            let tagText = BreakdownExtractor.dedicatedSingleSegmentDisclosureText(xbrlDir: xbrlDir)
+        {
+            return (nil, SegmentNoteDecision.dedicatedTagBusinessOutcome(docID: docID, tagText: tagText))
+        }
         guard let decider = segmentNoteDecider else { return pass }
         guard !extracted.tables.isEmpty else { return pass }
         let clean: Bool
@@ -583,8 +592,6 @@ public extension BltServerContext {
             guard axis == .business else { return (extracted, outcome) }
             let resolved = SegmentNoteDecision.resolveBusinessOmissionReason(
                 outcome,
-                hasDedicatedSingleSegmentTag: BreakdownExtractor.hasDedicatedSingleSegmentDisclosureTag(
-                    xbrlDir: xbrlDir),
                 reportedSegmentsAreGeographic: BreakdownExtractor.reportedOperatingSegmentsAreGeographic(
                     xbrlDir: xbrlDir))
             return (resolved.action == .omitBusiness ? nil : extracted, resolved)

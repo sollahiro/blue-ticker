@@ -1,6 +1,7 @@
 // セグメント注記（business / geography の省略）だけを Jev に判定させる。
 // コードが候補の文と表を切り出す。Jev は Choice だけを返す。
-// `OPENROUTER_DECISION_API_KEY` が無いときは呼ばない（今日の決定論のまま）。
+// business の専用タグに本文があるときは Jev を呼ばず `single_segment_disclosed`。
+// その本文が無いとき、`OPENROUTER_DECISION_API_KEY` が無ければ今日の決定論のまま。
 // 研究開発費・設備投資・減損は対象外。公開 reason は既存の文字列だけを使う。
 
 import Foundation
@@ -104,9 +105,12 @@ struct SegmentNoteDecisionOutcome: Equatable, Sendable {
 }
 
 enum SegmentNoteDecision {
-    /// 製品90％だが、単一セグメントの根拠も地域報告セグメントも無い。公開 reason にはしない。
+    /// 製品90％だが、Jev の単一セグメントも地域報告セグメントも無い。公開 reason にはしない。
     static let withheldProductOmissionReason =
         "product_or_service_over_90_without_single_segment_or_geography_evidence"
+
+    /// 専用タグ本文で business を確定した監査。Jev は呼んでいない。公開 reason ではない。
+    static let dedicatedTagDecisionSource = "dedicated_single_segment_tag"
 
     /// 選ばれた選択肢の `probabilities[choice]` がこれ以上のときだけ表の採用か省略を適用する。
     /// `confidence` では代用しない。校正値は PR 本文。誤った省略より needs_review を残す。
@@ -217,17 +221,34 @@ enum SegmentNoteDecision {
             appliedOmission: canOmit ? agreed : nil)
     }
 
-    /// business の省略を公開 reason に写す。単一セグメントの根拠が先。
+    /// 専用タグの本文だけで business を `single_segment_disclosed` にする。Jev は呼ばない。
+    /// 製品90％・本邦90％・顧客表・報告セグメント fact はこの結果を取り消さない。
+    /// geography には使わない。
+    static func dedicatedTagBusinessOutcome(
+        code: String = "", docID: String = "", tagText: String
+    ) -> SegmentNoteDecisionOutcome {
+        let text = tagText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let audit = SegmentNoteJevAuditPayload(
+            code: code, docID: docID, axis: SegmentNoteAxis.business.wire, model: "",
+            threshold: applyProbabilityThreshold, applied: true, needsReview: false,
+            sentences: text.isEmpty ? [] : [text], calls: [],
+            decisionSource: dedicatedTagDecisionSource)
+        return SegmentNoteDecisionOutcome(
+            action: .omitBusiness, needsReview: false, audit: audit,
+            omissionReason: breakdownNotApplicableSingleSegmentDisclosed, appliedOmission: nil)
+    }
+
+    /// business の Jev 省略を公開 reason に写す。
+    /// `single_segment_disclosed` は Jev の `single_segment` だけ。専用タグはここでは見ない。
+    /// 製品90％の文だけでは `single_segment_disclosed` にしない。
     /// 製品90％で報告セグメントが地域だけのときは `geography_only`。
-    /// どちらも無ければ省略しない。
+    /// どちらも無ければ省略しない。`detectSingleSegmentDisclosure` の散文は使わない。
     static func resolveBusinessOmissionReason(
         _ outcome: SegmentNoteDecisionOutcome,
-        hasDedicatedSingleSegmentTag: Bool,
         reportedSegmentsAreGeographic: Bool
     ) -> SegmentNoteDecisionOutcome {
         guard outcome.action == .omitBusiness else { return outcome }
-        let singleSegmentEvidence = outcome.appliedOmission == .singleSegment || hasDedicatedSingleSegmentTag
-        if singleSegmentEvidence {
+        if outcome.appliedOmission == .singleSegment {
             var copy = outcome
             copy.omissionReason = breakdownNotApplicableSingleSegmentDisclosed
             return copy

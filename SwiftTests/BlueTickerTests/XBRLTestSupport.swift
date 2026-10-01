@@ -105,6 +105,23 @@ enum XBRLTestSupport {
         try body(dir)
     }
 
+    /// 非同期の判定（セグメント注記の Jev フェイク）向け。ネットワークは使わない。
+    static func withXbrlDir(
+        _ xml: String? = nil,
+        extraFiles: [String: String] = [:],
+        _ body: (URL) async throws -> Void
+    ) async rethrows {
+        guard let dir = try? ServiceTestSupport.makeTempDir() else { return }
+        defer { try? FileManager.default.removeItem(at: dir) }
+        if let xml = xml {
+            try? xml.write(to: dir.appendingPathComponent("instance.xml"), atomically: true, encoding: .utf8)
+        }
+        for (name, content) in extraFiles {
+            try? content.write(to: dir.appendingPathComponent(name), atomically: true, encoding: .utf8)
+        }
+        try await body(dir)
+    }
+
     /// XBRL ディレクトリから Duration FieldSet と会計基準を構築する（IndividualAnalyzer と同じ流儀）。
     static func durationFieldSet(in dir: URL) -> (fieldSet: FieldSet, standard: String) {
         let tags = XBRLUtils.collectAllNumericElements(in: dir, nilAsZero: false)

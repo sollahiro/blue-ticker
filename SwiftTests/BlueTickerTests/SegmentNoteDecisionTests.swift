@@ -354,7 +354,6 @@ import Testing
     @Test func productNinetyWithGeographicSegmentsUsesGeographyOnly() async throws {
         let outcome = SegmentNoteDecision.resolveBusinessOmissionReason(
             await productNinetyOmission(),
-            hasDedicatedSingleSegmentTag: false,
             reportedSegmentsAreGeographic: true)
         #expect(outcome.action == .omitBusiness)
         #expect(outcome.omissionReason == breakdownNotApplicableGeographyOnly)
@@ -363,33 +362,174 @@ import Testing
         #expect(outcome.audit?.withheldReason == nil)
     }
 
-    @Test func productNinetyWithSingleSegmentEvidenceUsesSingleSegmentDisclosed() async throws {
-        let fromTag = SegmentNoteDecision.resolveBusinessOmissionReason(
-            await productNinetyOmission(),
-            hasDedicatedSingleSegmentTag: true,
-            reportedSegmentsAreGeographic: false)
-        #expect(fromTag.action == .omitBusiness)
-        #expect(fromTag.omissionReason == breakdownNotApplicableSingleSegmentDisclosed)
-
+    @Test func jevSingleSegmentClassUsesSingleSegmentDisclosed() async throws {
         let fromSentence = SegmentNoteDecision.resolveBusinessOmissionReason(
             await singleSegmentOmission(),
-            hasDedicatedSingleSegmentTag: false,
             reportedSegmentsAreGeographic: true)
+        #expect(fromSentence.action == .omitBusiness)
         #expect(fromSentence.omissionReason == breakdownNotApplicableSingleSegmentDisclosed)
+        #expect(fromSentence.audit?.decisionSource == nil)
+        #expect(fromSentence.audit?.calls.isEmpty == false)
+    }
 
+    @Test func dedicatedTagPublishesSingleSegmentWithoutJev() async throws {
+        let tagText = "当社グループは、信用保証事業のみであるため、記載を省略しております。"
+        let customer = """
+        &lt;p&gt;\(productNinety)&lt;/p&gt;
+        &lt;p&gt;関連情報&lt;/p&gt;
+        &lt;table&gt;&lt;tr&gt;&lt;td&gt;主要な顧客&lt;/td&gt;&lt;td&gt;売上高&lt;/td&gt;&lt;/tr&gt;
+        &lt;tr&gt;&lt;td&gt;A社&lt;/td&gt;&lt;td&gt;100&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;
+        &lt;p&gt;\(domesticNinety)&lt;/p&gt;
+        """
         let xml = XBRLTestSupport.makeXbrlDuration(
             """
-            <jpcrp_cor:DescriptionOfFactThatCompanysBusinessComprisesSingleSegment contextRef="CurrentYearDuration">当社グループは、信用保証事業のみであるため、記載を省略しております。</jpcrp_cor:DescriptionOfFactThatCompanysBusinessComprisesSingleSegment>
+            <jpcrp_cor:DescriptionOfFactThatCompanysBusinessComprisesSingleSegment contextRef="CurrentYearDuration">\(tagText)</jpcrp_cor:DescriptionOfFactThatCompanysBusinessComprisesSingleSegment>
+            <jpcrp_cor:SegmentInformationTextBlock contextRef="CurrentYearDuration">\(customer)</jpcrp_cor:SegmentInformationTextBlock>
             """)
-        try XBRLTestSupport.withXbrlDir(xml) { dir in
-            #expect(BreakdownExtractor.hasDedicatedSingleSegmentDisclosureTag(xbrlDir: dir))
+        let decider = FakeSegmentNoteDecider(
+            selection: .table(0), omissionsBySnippet: ["製品": .productOrServiceExternalSalesOver90],
+            tableProbability: 0.5)
+        try await XBRLTestSupport.withXbrlDir(xml) { dir in
+            let sentences = BreakdownExtractor.segmentNoteOmissionSentences(xbrlDir: dir)
+            #expect(sentences.contains(productNinety))
+            #expect(sentences.contains(domesticNinety))
+            #expect(BreakdownExtractor.dedicatedSingleSegmentDisclosureText(xbrlDir: dir) == tagText)
+            let extracted = businessFactsWithCustomerTable()
+            let snapshot = try #require(
+                BreakdownNormalizer.normalize(extracted, consolidatedSales: 1_000))
+            #expect(snapshot.axis == "business")
+            #expect(snapshot.needsReview == false)
+            let context = noteContext(decider: decider)
+            let business = await context.segmentsAfterNoteDecision(
+                axis: .business, docID: "S100LS0U", extracted: extracted, xbrlDir: dir,
+                consolidatedSales: 1_000, labelsByTag: [:])
+            #expect(business.extracted == nil)
+            #expect(business.outcome.action == .omitBusiness)
+            #expect(business.outcome.needsReview == false)
+            #expect(business.outcome.omissionReason == breakdownNotApplicableSingleSegmentDisclosed)
+            let audit = try #require(business.outcome.audit)
+            #expect(audit.calls.isEmpty)
+            #expect(audit.model == "")
+            #expect(audit.applied == true)
+            #expect(audit.decisionSource == SegmentNoteDecision.dedicatedTagDecisionSource)
+            #expect(audit.sentences == [tagText])
+            let json = LLMBreakdownAuditPayload.segmentNoteJev(audit).jsonObject()
+            let jev = try #require(json["jev"] as? [String: Any])
+            #expect(jev["decision_source"] as? String == SegmentNoteDecision.dedicatedTagDecisionSource)
+            #expect((jev["calls"] as? [Any])?.isEmpty == true)
+            #expect(await decider.tableCalls == 0)
+
+            let withoutKey = await noteContext(decider: nil).segmentsAfterNoteDecision(
+                axis: .business, docID: "S100LS0U", extracted: extracted, xbrlDir: dir,
+                consolidatedSales: 1_000, labelsByTag: [:])
+            #expect(withoutKey.extracted == nil)
+            #expect(withoutKey.outcome.omissionReason == breakdownNotApplicableSingleSegmentDisclosed)
+            #expect(withoutKey.outcome.needsReview == false)
+
+            let geography = await context.segmentsAfterNoteDecision(
+                axis: .geography, docID: "S100LS0U", extracted: extracted, xbrlDir: dir,
+                consolidatedSales: 1_000, labelsByTag: [:])
+            #expect(geography.outcome.audit?.axis == "geography")
+            #expect(geography.outcome.audit?.decisionSource == nil)
+            #expect(geography.outcome.omissionReason == nil)
+            #expect(await decider.tableCalls == 1)
+
+            let geographyWithoutKey = await noteContext(decider: nil).segmentsAfterNoteDecision(
+                axis: .geography, docID: "S100LS0U", extracted: extracted, xbrlDir: dir,
+                consolidatedSales: 1_000, labelsByTag: [:])
+            #expect(geographyWithoutKey.extracted == extracted)
+            #expect(geographyWithoutKey.outcome == .unchanged)
+        }
+    }
+
+    @Test func ifrsDedicatedTagPublishesSingleSegmentWithoutJev() async throws {
+        let tagText = "当社グループは、単一の事業セグメントであるため、記載を省略しております。"
+        let xml = XBRLTestSupport.makeXbrlDuration(
+            """
+            <jpcrp_cor:DescriptionOfFactThatCompanysBusinessComprisesSingleSegmentIFRS contextRef="CurrentYearDuration">\(tagText)</jpcrp_cor:DescriptionOfFactThatCompanysBusinessComprisesSingleSegmentIFRS>
+            """)
+        let decider = FakeSegmentNoteDecider(selection: .noneOfThese, omissionsBySnippet: [:])
+        try await XBRLTestSupport.withXbrlDir(xml) { dir in
+            let business = await noteContext(decider: decider).segmentsAfterNoteDecision(
+                axis: .business, docID: "S-ifrs", extracted: businessFactsWithCustomerTable(),
+                xbrlDir: dir, consolidatedSales: 1_000, labelsByTag: [:])
+            #expect(business.extracted == nil)
+            #expect(business.outcome.omissionReason == breakdownNotApplicableSingleSegmentDisclosed)
+            #expect(business.outcome.audit?.decisionSource == SegmentNoteDecision.dedicatedTagDecisionSource)
+            #expect(await decider.tableCalls == 0)
+        }
+    }
+
+    @Test func emptyDedicatedTagDoesNotShortcut() async throws {
+        let xml = XBRLTestSupport.makeXbrlDuration(
+            """
+            <jpcrp_cor:DescriptionOfFactThatCompanysBusinessComprisesSingleSegment contextRef="CurrentYearDuration">   </jpcrp_cor:DescriptionOfFactThatCompanysBusinessComprisesSingleSegment>
+            <jpcrp_cor:SegmentInformationTextBlock contextRef="CurrentYearDuration">\(singleSegment)</jpcrp_cor:SegmentInformationTextBlock>
+            """)
+        let decider = FakeSegmentNoteDecider(
+            selection: .noneOfThese, omissionsBySnippet: ["単一セグメント": .singleSegment])
+        try await XBRLTestSupport.withXbrlDir(xml) { dir in
+            #expect(BreakdownExtractor.dedicatedSingleSegmentDisclosureText(xbrlDir: dir) == nil)
+            #expect(BreakdownExtractor.hasDedicatedSingleSegmentDisclosureTag(xbrlDir: dir) == false)
+            let business = await noteContext(decider: decider).segmentsAfterNoteDecision(
+                axis: .business, docID: "S-empty", extracted: customerTableOnly(),
+                xbrlDir: dir, consolidatedSales: 1_000, labelsByTag: [:])
+            #expect(business.extracted == nil)
+            #expect(business.outcome.omissionReason == breakdownNotApplicableSingleSegmentDisclosed)
+            #expect(business.outcome.audit?.decisionSource == nil)
+            #expect(await decider.tableCalls == 1)
+        }
+    }
+
+    @Test func concentrationProseDoesNotBecomeSingleSegmentDisclosed() async throws {
+        let prose = "化粧品事業の外部顧客への売上高が連結損益計算書上の売上高のほとんどを占めているため、記載を省略します。"
+        let xml = XBRLTestSupport.makeXbrlDuration(
+            """
+            <jpcrp_cor:InformationForEachProductOrServiceTextBlock contextRef="CurrentYearDuration">\(prose)</jpcrp_cor:InformationForEachProductOrServiceTextBlock>
+            """)
+        let decider = FakeSegmentNoteDecider(
+            selection: .noneOfThese,
+            omissionsBySnippet: ["ほとんど": .productOrServiceExternalSalesOver90, "製品": .productOrServiceExternalSalesOver90])
+        try await XBRLTestSupport.withXbrlDir(xml) { dir in
+            #expect(BreakdownExtractor.detectSingleSegmentDisclosure(xbrlDir: dir) == prose)
+            #expect(BreakdownExtractor.dedicatedSingleSegmentDisclosureText(xbrlDir: dir) == nil)
+            let business = await noteContext(decider: decider).segmentsAfterNoteDecision(
+                axis: .business, docID: "S-prose", extracted: customerTableOnly(),
+                xbrlDir: dir, consolidatedSales: 1_000, labelsByTag: [:])
+            #expect(business.extracted != nil)
+            #expect(business.outcome.action == .unchanged)
+            #expect(business.outcome.omissionReason == nil)
+            #expect(business.outcome.needsReview == true)
+            #expect(await decider.tableCalls == 1)
+        }
+    }
+
+    @Test func missingKeyWithoutDedicatedTagKeepsDeterministicResult() async throws {
+        let xml = XBRLTestSupport.makeXbrlDuration(
+            """
+            <jpcrp_cor:SegmentInformationTextBlock contextRef="CurrentYearDuration">\(productNinety)</jpcrp_cor:SegmentInformationTextBlock>
+            """)
+        try await XBRLTestSupport.withXbrlDir(xml) { dir in
+            let extracted = customerTableOnly()
+            let business = await noteContext(decider: nil).segmentsAfterNoteDecision(
+                axis: .business, docID: "S-nokey", extracted: extracted, xbrlDir: dir,
+                consolidatedSales: 1_000, labelsByTag: [:])
+            #expect(business.extracted == extracted)
+            #expect(business.outcome == .unchanged)
+            let failure = OpenRouterSegmentNoteDecider(client: ThrowingDecisionsClient())
+            let failed = await noteContext(decider: failure).segmentsAfterNoteDecision(
+                axis: .business, docID: "S-fail", extracted: extracted, xbrlDir: dir,
+                consolidatedSales: 1_000, labelsByTag: [:])
+            #expect(failed.extracted == extracted)
+            #expect(failed.outcome.action == .unchanged)
+            #expect(failed.outcome.needsReview == false)
+            #expect(failed.outcome.audit == nil)
         }
     }
 
     @Test func productNinetyWithoutEvidenceIsNotApplied() async throws {
         let outcome = SegmentNoteDecision.resolveBusinessOmissionReason(
             await productNinetyOmission(),
-            hasDedicatedSingleSegmentTag: false,
             reportedSegmentsAreGeographic: false)
         #expect(outcome.action == .unchanged)
         #expect(outcome.needsReview == true)
@@ -403,6 +543,32 @@ import Testing
         let jev = try #require(json["jev"] as? [String: Any])
         #expect(jev["withheld_reason"] as? String == SegmentNoteDecision.withheldProductOmissionReason)
         #expect(jev["applied"] as? Bool == false)
+    }
+
+    private func noteContext(decider: (any SegmentNoteDeciding)?) -> BltServerContext {
+        BltServerContext(
+            apiKey: "test", cacheDir: URL(fileURLWithPath: NSTemporaryDirectory()),
+            businessChatClient: UnavailableChatClient(),
+            geographyChatClient: UnavailableChatClient(),
+            segmentNoteDecider: decider)
+    }
+
+    /// 2321 型: セグメント情報の下の主要顧客表と、きれいな事業 member fact。
+    private func businessFactsWithCustomerTable() -> ExtractedBreakdown {
+        ExtractedBreakdown(
+            method: "xbrl_facts",
+            tables: [relatedCustomerTable()],
+            facts: [
+                BreakdownFact(
+                    tag: "RevenuesFromExternalCustomers",
+                    contextRef: "CurrentYearDuration_CreditGuaranteeBusinessMember",
+                    dimensions: ["OperatingSegmentsAxis": "CreditGuaranteeBusinessMember"],
+                    value: 1_000, label: nil, unitRef: "JPY", decimals: "0"),
+            ])
+    }
+
+    private func customerTableOnly() -> ExtractedBreakdown {
+        ExtractedBreakdown(method: "html_table", tables: [relatedCustomerTable()], facts: [])
     }
 
     private func productNinetyOmission() async -> SegmentNoteDecisionOutcome {

@@ -518,8 +518,9 @@ enum BreakdownExtractor {
     /// `BusinessBreakdownResolver.resolve` が business 軸を解決できなかった（snapshot == nil）ときの
     /// 理由を推定する（診断用、issue #130）。単一セグメント開示（F）は表が無いときだけ確定する
     /// （製品別 html_table がある東京エレクトロン型を F にすると再試行されない）。表が無い資生堂型は
-    /// 地域軸 facts（E）より F を優先する。関連情報の表を内訳から外す判定は、キーがあるときの
-    /// `SegmentNoteDecision` だけが行い、この関数は変えない。
+    /// 地域軸 facts（E）より F を優先する。専用タグ本文がある business の省略は
+    /// `SegmentNoteDecision` が先に確定し、この関数は変えない。
+    /// `detectSingleSegmentDisclosure` の散文・集中度は、その省略の公開 reason には使わない。
     /// `llmHint` は html_table 経由（`RevenueRecognitionLLMNormalizer`/`SegmentInfoLLMNormalizer`）で
     /// LLM が `applicable=false` と判定したときの `LLMBreakdownAudit.notApplicableReason`
     /// （issue #135）。xbrl_facts 経路の判定は method=="xbrl_facts" のときしか効かないため、
@@ -559,8 +560,8 @@ enum BreakdownExtractor {
         return isGeographyAxis(facts)
     }
 
-    /// 単一セグメント専用タグに本文があるか。製品90％の文だけでは単一セグメントにしない。
-    static func hasDedicatedSingleSegmentDisclosureTag(xbrlDir: URL) -> Bool {
+    /// 単一セグメント専用タグの本文。空・空白だけは nil。製品90％の散文や集中度マーカーは見ない。
+    static func dedicatedSingleSegmentDisclosureText(xbrlDir: URL) -> String? {
         for root in XBRLUtils.xbrlSearchRoots(in: xbrlDir) {
             for file in XBRLUtils.findXbrlFiles(in: root) {
                 guard let data = try? Data(contentsOf: file) else { continue }
@@ -570,11 +571,17 @@ enum BreakdownExtractor {
                 parser.parse()
                 for block in collector.blocks {
                     let text = (try? SwiftSoup.parse(block.content)).map { bs4Text($0, strip: true) } ?? block.content
-                    if !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return true }
+                    let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                    if !trimmed.isEmpty { return trimmed }
                 }
             }
         }
-        return false
+        return nil
+    }
+
+    /// 単一セグメント専用タグに本文があるか。製品90％の文だけでは単一セグメントにしない。
+    static func hasDedicatedSingleSegmentDisclosureTag(xbrlDir: URL) -> Bool {
+        dedicatedSingleSegmentDisclosureText(xbrlDir: xbrlDir) != nil
     }
 
     /// 連結財務諸表注記から地域別（所在地別）の**外部売上**情報を抽出する。

@@ -388,11 +388,14 @@ public struct SegmentNoteJevAuditPayload: Codable, Sendable, Equatable {
     public var calls: [SegmentNoteJevCallPayload]
     /// 製品90％を省略にしなかった理由。公開 reason ではない。無い行は nil。
     public var withheldReason: String?
+    /// business を専用タグ本文で確定したとき `dedicated_single_segment_tag`。Jev 呼び出しは無い。
+    /// 公開 reason ではない。無い行は nil。
+    public var decisionSource: String?
 
     public init(
         code: String, docID: String, axis: String, model: String, threshold: Double,
         applied: Bool, needsReview: Bool, sentences: [String], calls: [SegmentNoteJevCallPayload],
-        withheldReason: String? = nil
+        withheldReason: String? = nil, decisionSource: String? = nil
     ) {
         self.code = code
         self.docID = docID
@@ -404,6 +407,7 @@ public struct SegmentNoteJevAuditPayload: Codable, Sendable, Equatable {
         self.sentences = sentences
         self.calls = calls
         self.withheldReason = withheldReason
+        self.decisionSource = decisionSource
     }
 }
 
@@ -521,6 +525,9 @@ extension SegmentNoteJevAuditPayload {
         ]
         if let withheldReason {
             object["withheld_reason"] = withheldReason
+        }
+        if let decisionSource {
+            object["decision_source"] = decisionSource
         }
         return object
     }
