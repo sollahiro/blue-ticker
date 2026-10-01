@@ -198,6 +198,37 @@ extension BreakdownLoadResult {
         }
     }
 
+    /// Jev が省略を適用しなかったときは、決定的 reason でも needs_review と llm_audit を残す。
+    @Test func ingestKeepsJevAuditWhenOmissionIsWithheld() async throws {
+        try await withMigratedApp { app in
+            try await seedDoc("S1", secCode: "72030", db: app.db)
+            let call = SegmentNoteJevCallPayload(
+                question: "omission", options: ["single_segment", "none"],
+                selected: "single_segment", probability: 0.5, sentences: ["文"], applied: false)
+            let jev = SegmentNoteJevAuditPayload(
+                code: "", docID: "S1", axis: "business", model: "typesafe/jev-1.13",
+                threshold: 0.9, applied: false, needsReview: true, sentences: ["文"], calls: [call])
+
+            _ = try await runBreakdownIngest(
+                db: app.db, listedCodes: ["7203"], years: 3, limit: nil
+            ) { _ in
+                .notApplicable(
+                    reason: breakdownNotApplicableSingleSegmentDisclosed,
+                    audit: .segmentNoteJev(jev))
+            }
+
+            let key = CompanyBreakdown.compositeID(docID: "S1", axis: "business")
+            let row = try #require(try await CompanyBreakdown.find(key, on: app.db))
+            #expect(row.notApplicableReason == breakdownNotApplicableSingleSegmentDisclosed)
+            #expect(row.needsReview == true)
+            #expect(row.llmAudit?.jev?.applied == false)
+            #expect(row.llmAudit?.jev?.needsReview == true)
+            #expect(row.llmAudit?.jev?.code == row.code)
+            #expect(row.llmAudit?.jev?.calls.first?.probability == 0.5)
+            #expect(row.llmAudit?.jev?.calls.first?.selected == "single_segment")
+        }
+    }
+
     /// unknown は要調査のため needsReview=true で保存する。決定論なので通常巡回では
     /// 再計算せず、分類ロジック改善後は cache_version バンプで再分類する。
     @Test func ingestFlagsUnknownNotApplicableReasonForReview() async throws {

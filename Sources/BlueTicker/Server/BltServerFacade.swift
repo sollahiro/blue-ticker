@@ -42,6 +42,8 @@ public struct BltServerContext: Sendable {
     /// Overview 生成。`OPENROUTER_OVERVIEW_API_KEY` 未設定なら `UnavailableChatClient`。
     let overviewChatClient: ChatCompleting
     let overviewModel: String
+    /// セグメント注記の Jev。`OPENROUTER_DECISION_API_KEY` 未設定なら nil（今日の分類のまま）。
+    let segmentNoteDecider: (any SegmentNoteDeciding)?
     /// employees / rd / goodwill / 報告セグメント指標軸が同一 doc を軸ループで再パースしないためのメモ。
     let businessSegmentDimensionCache: BusinessSegmentDimensionCache
 
@@ -49,7 +51,8 @@ public struct BltServerContext: Sendable {
         apiKey: String, cacheDir: URL, businessChatClient: ChatCompleting,
         geographyChatClient: ChatCompleting,
         overviewChatClient: ChatCompleting = UnavailableChatClient(),
-        overviewModel: String = companyOverviewDefaultModel
+        overviewModel: String = companyOverviewDefaultModel,
+        segmentNoteDecider: (any SegmentNoteDeciding)? = nil
     ) {
         self.cacheDir = cacheDir
         let store = EdinetCacheStore(cacheDir: edinetCacheDir(cacheDir))
@@ -62,6 +65,7 @@ public struct BltServerContext: Sendable {
         self.geographyChatClient = geographyChatClient
         self.overviewChatClient = overviewChatClient
         self.overviewModel = overviewModel
+        self.segmentNoteDecider = segmentNoteDecider
         self.businessSegmentDimensionCache = BusinessSegmentDimensionCache()
     }
 }
@@ -159,10 +163,14 @@ public func makeBltServerContext() async -> BltServerContext? {
     let overviewEndpoint = resolveOverviewLLMEndpoint(env)
     let overviewChatClient: ChatCompleting =
         overviewEndpoint.map { ChatCompletionClient(endpoint: $0) } ?? UnavailableChatClient()
+    let segmentNoteDecider: (any SegmentNoteDeciding)? = resolveOpenRouterDecisionsEndpoint(env).map {
+        OpenRouterSegmentNoteDecider(client: OpenRouterDecisionsClient(endpoint: $0))
+    }
     return BltServerContext(
         apiKey: key, cacheDir: cacheDir, businessChatClient: businessChatClient,
         geographyChatClient: geographyChatClient, overviewChatClient: overviewChatClient,
-        overviewModel: overviewEndpoint?.model ?? companyOverviewDefaultModel)
+        overviewModel: overviewEndpoint?.model ?? companyOverviewDefaultModel,
+        segmentNoteDecider: segmentNoteDecider)
 }
 
 // MARK: - REST Facade
@@ -484,9 +492,14 @@ public enum BreakdownResolveResult: Sendable {
     /// `reason` は `breakdownNotApplicable*`（`Models/BreakdownContract.swift`）のいずれか。
     /// 呼び出し元の `BreakdownIngest` が `company_breakdowns.not_applicable_reason` へ永続化する
     /// （business / geography どちらも REST/MCP の 404 応答へ反映）。
-    case notApplicable(reason: String)
+    case notApplicable(reason: String, audit: LLMBreakdownAuditPayload?)
     /// 書類取得・抽出自体が失敗（EDINET ダウンロード不可等）。行は作らない。
     case failed
+
+    /// 監査の無い not_applicable。既存の呼び出しはこちら。
+    public static func notApplicable(reason: String) -> BreakdownResolveResult {
+        .notApplicable(reason: reason, audit: nil)
+    }
 }
 
 public extension BltServerContext {
@@ -536,6 +549,62 @@ public extension BltServerContext {
         return .generated(draft: draft, sourceText: sourceText)
     }
 
+    /// セグメント注記の Jev。`extracted == nil` は省略確定（呼び出し側が not_applicable にする）。
+    /// business の専用タグに本文があるときは Jev を呼ばず `single_segment_disclosed`。
+    /// 顧客表・製品90％・本邦90％・報告セグメント fact はその省略を取り消さない。
+    /// 専用タグは geography を飛ばさない。キーがある geography は Jev のまま。
+    /// キーが無いとき、応答が無いときは、専用タグ以外は抽出結果をそのまま返す。
+    /// 呼び出し失敗では `needsReview` を足さない。
+    /// 確率が閾値未満のときは抽出結果を変えず、`needsReview` を立てる。
+    internal func segmentsAfterNoteDecision(
+        axis: SegmentNoteAxis, docID: String, extracted: ExtractedBreakdown, xbrlDir: URL,
+        consolidatedSales: Double?, labelsByTag: [String: String]
+    ) async -> (extracted: ExtractedBreakdown?, outcome: SegmentNoteDecisionOutcome) {
+        let pass = (extracted: extracted as ExtractedBreakdown?, outcome: SegmentNoteDecisionOutcome.unchanged)
+        if axis == .business,
+            let tagText = BreakdownExtractor.dedicatedSingleSegmentDisclosureText(xbrlDir: xbrlDir)
+        {
+            return (nil, SegmentNoteDecision.dedicatedTagBusinessOutcome(docID: docID, tagText: tagText))
+        }
+        guard let decider = segmentNoteDecider else { return pass }
+        guard !extracted.tables.isEmpty else { return pass }
+        let clean: Bool
+        if let snapshot = BreakdownNormalizer.normalize(
+            extracted, consolidatedSales: consolidatedSales, labelsByTag: labelsByTag)
+        {
+            switch axis {
+            case .business:
+                clean = snapshot.axis == "business" && !snapshot.needsReview
+            case .geography:
+                clean = snapshot.axis == "geography" && !snapshot.needsReview
+            }
+        } else {
+            clean = false
+        }
+        let outcome = await SegmentNoteDecision.decide(
+            axis: axis, docID: docID, tables: extracted.tables,
+            sentences: BreakdownExtractor.segmentNoteOmissionSentences(xbrlDir: xbrlDir),
+            hasCleanDeterministicSnapshot: clean, decider: decider)
+        switch outcome.action {
+        case .unchanged:
+            return (extracted, outcome)
+        case .omitBusiness:
+            guard axis == .business else { return (extracted, outcome) }
+            let resolved = SegmentNoteDecision.resolveBusinessOmissionReason(
+                outcome,
+                reportedSegmentsAreGeographic: BreakdownExtractor.reportedOperatingSegmentsAreGeographic(
+                    xbrlDir: xbrlDir))
+            return (resolved.action == .omitBusiness ? nil : extracted, resolved)
+        case .omitGeography:
+            return (axis == .geography ? nil : extracted, outcome)
+        case .keepTable(let index):
+            guard extracted.tables.indices.contains(index) else { return (extracted, outcome) }
+            var copy = extracted
+            copy.tables = [extracted.tables[index]]
+            return (copy, outcome)
+        }
+    }
+
     /// 内訳取り込み: 書類1件分の business 軸内訳を解決する。xbrl_facts（決定的）/ 収益認識注記 LLM /
     /// segment_info LLM のいずれかへ `BusinessBreakdownResolver` が振り分ける。LLM 呼び出しは
     /// html_table 経路でのみ発生する（xbrl_facts で解決できれば呼ばない。LLM 費用最小化）。
@@ -553,22 +622,34 @@ public extension BltServerContext {
         let denomItem = BreakdownFinancialsResolver.breakdownBusinessSalesDenominatorItem(
             xbrlDir: xbrlDir, tables: segments.tables)
         let consolidatedSales = denomItem.value
-        let hash = breakdownContentHash(extracted: segments, consolidatedSales: consolidatedSales)
         let labelsByTag = XBRLUtils.loadLabelsByTag(in: xbrlDir)
+        let gate = await segmentsAfterNoteDecision(
+            axis: .business, docID: docID, extracted: segments, xbrlDir: xbrlDir,
+            consolidatedSales: consolidatedSales, labelsByTag: labelsByTag)
+        guard let resolvedSegments = gate.extracted else {
+            return .notApplicable(
+                reason: gate.outcome.omissionReason ?? breakdownNotApplicableSingleSegmentDisclosed,
+                audit: gate.outcome.audit.map(LLMBreakdownAuditPayload.segmentNoteJev))
+        }
+        let hash = breakdownContentHash(extracted: resolvedSegments, consolidatedSales: consolidatedSales)
         let result = await BusinessBreakdownResolver.resolve(
-            segments: segments, consolidatedSales: consolidatedSales, client: businessChatClient,
+            segments: resolvedSegments, consolidatedSales: consolidatedSales, client: businessChatClient,
             labelsByTag: labelsByTag, denominatorTag: denomItem.tag)
         guard let snapshot = result.snapshot else {
             let reason = BreakdownExtractor.classifyNotApplicableReason(
                 segments: segments, consolidatedSales: consolidatedSales, xbrlDir: xbrlDir,
                 llmHint: result.audit?.notApplicableReason)
-            return .notApplicable(reason: reason.rawValue)
+            return applyingSegmentNoteDecision(
+                gate.outcome,
+                to: .notApplicable(reason: reason.rawValue, audit: nil))
         }
-        return breakdownByRecordingOverlayRegressions(
-            .resolved(
-                payload: breakdownSnapshotPayload(from: snapshot), source: result.source.rawValue,
-                contentHash: hash, audit: result.audit.map(llmBreakdownAuditPayload(from:))),
-            xbrlDir: xbrlDir)
+        return applyingSegmentNoteDecision(
+            gate.outcome,
+            to: breakdownByRecordingOverlayRegressions(
+                .resolved(
+                    payload: breakdownSnapshotPayload(from: snapshot), source: result.source.rawValue,
+                    contentHash: hash, audit: result.audit.map(llmBreakdownAuditPayload(from:))),
+                xbrlDir: xbrlDir))
     }
 
     /// 内訳取り込み: 書類1件分の geography 軸内訳を解決する。`GeographyBreakdownResolver` が
@@ -587,29 +668,44 @@ public extension BltServerContext {
         if geography.method == "not_found" {
             return .notApplicable(reason: breakdownNotApplicableNotFound)
         }
-
-        let hash = breakdownContentHash(extracted: geography, consolidatedSales: consolidatedSales)
         let labelsByTag = XBRLUtils.loadLabelsByTag(in: xbrlDir)
+        let gate = await segmentsAfterNoteDecision(
+            axis: .geography, docID: docID, extracted: geography, xbrlDir: xbrlDir,
+            consolidatedSales: consolidatedSales, labelsByTag: labelsByTag)
+        guard let resolvedGeography = gate.extracted else {
+            return .notApplicable(
+                reason: breakdownNotApplicableNotFound,
+                audit: gate.outcome.audit.map(LLMBreakdownAuditPayload.segmentNoteJev))
+        }
+
+        let hash = breakdownContentHash(extracted: resolvedGeography, consolidatedSales: consolidatedSales)
         let result = await GeographyBreakdownResolver.resolve(
-            geography: geography, consolidatedSales: consolidatedSales, client: geographyChatClient,
+            geography: resolvedGeography, consolidatedSales: consolidatedSales, client: geographyChatClient,
             labelsByTag: labelsByTag)
         guard let snapshot = result.snapshot else {
             // Resolver の notFound は「地域注記なし」または LLM の applicable=false。
             // audit があれば LLM が明示的に非該当と答えた正当欠測。audit 無しで表だけある場合は
             // LLM 呼び出し失敗の可能性が高いので unknown（再試行）に落とす。
+            let reason: String
             if result.source == .notFound {
                 if result.audit != nil || geography.tables.isEmpty {
-                    return .notApplicable(reason: breakdownNotApplicableNotFound)
+                    reason = breakdownNotApplicableNotFound
+                } else {
+                    reason = breakdownNotApplicableUnknown
                 }
-                return .notApplicable(reason: breakdownNotApplicableUnknown)
+            } else {
+                reason = breakdownNotApplicableUnknown
             }
-            return .notApplicable(reason: breakdownNotApplicableUnknown)
+            return applyingSegmentNoteDecision(
+                gate.outcome, to: .notApplicable(reason: reason, audit: nil))
         }
-        return breakdownByRecordingOverlayRegressions(
-            .resolved(
-                payload: breakdownSnapshotPayload(from: snapshot), source: result.source.rawValue,
-                contentHash: hash, audit: result.audit.map(llmBreakdownAuditPayload(from:))),
-            xbrlDir: xbrlDir)
+        return applyingSegmentNoteDecision(
+            gate.outcome,
+            to: breakdownByRecordingOverlayRegressions(
+                .resolved(
+                    payload: breakdownSnapshotPayload(from: snapshot), source: result.source.rawValue,
+                    contentHash: hash, audit: result.audit.map(llmBreakdownAuditPayload(from:))),
+                xbrlDir: xbrlDir))
     }
 }
 
@@ -830,6 +926,24 @@ private func breakdownSnapshotPayload(from s: BreakdownSnapshot) -> BreakdownSna
                 profit: $0.profit, rowKind: $0.rowKind, description: $0.description)
         },
         sourceKind: s.sourceKind, needsReview: s.needsReview, warnings: s.warnings)
+}
+
+/// 相談した Jev 判断を結果へ載せる。適用しなかったときは needs_review を立て、決定論の中身は変えない。
+private func applyingSegmentNoteDecision(
+    _ outcome: SegmentNoteDecisionOutcome, to result: BreakdownResolveResult
+) -> BreakdownResolveResult {
+    guard let jev = outcome.audit else { return result }
+    switch result {
+    case .resolved(var payload, let source, let contentHash, let audit):
+        if outcome.needsReview { payload.needsReview = true }
+        let merged = (audit ?? .segmentNoteJev(jev)).replacingJev(jev)
+        return .resolved(payload: payload, source: source, contentHash: contentHash, audit: merged)
+    case .notApplicable(let reason, let audit):
+        let merged = (audit ?? .segmentNoteJev(jev)).replacingJev(jev)
+        return .notApplicable(reason: reason, audit: merged)
+    case .failed:
+        return result
+    }
 }
 
 /// 内部型 LLMBreakdownAudit を公開格納用 LLMBreakdownAuditPayload へ写経する。

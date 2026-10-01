@@ -8,6 +8,9 @@ public enum Api {
     static let openaiBaseURL = "https://api.openai.com/v1"
     /// Overview 生成（OpenRouter / Chat Completions 互換）。内訳 LLM の `LLM_PROVIDER` とは別。
     static let openrouterBaseURL = "https://openrouter.ai/api/v1"
+    /// セグメント注記の Decisions API。Chat Completions の `/api/v1` とは別パス。
+    static let openrouterDecisionsURL = "https://openrouter.ai/api/alpha/decisions"
+    static let openrouterDecisionsModel = "typesafe/jev-1.13"
 
     /// remote バックエンドの既定 blt-server URL（契約ドキュメント・クライアント既定用。秘密情報ではない）。
     static let defaultRemoteServerURL = "https://api.sollahiro.com"

@@ -186,7 +186,7 @@ func runBreakdownIngest(
             await logXbrlOverlayRegressionIfNeeded(
                 warnings: payload.warnings, code: cand.code, docID: cand.docID, db: db,
                 logger: logger)
-        case .notApplicable(let reason):
+        case .notApplicable(let reason, let audit):
             notApplicable += 1
             switch reason {
             case breakdownNotApplicableGeographyOnly: notApplicableGeographyOnly += 1
@@ -206,7 +206,10 @@ func runBreakdownIngest(
             } else {
                 // E/F / geography not_found は決定的判定のため needsReview=false。
                 // unknown 等は要調査のため needsReview=true で残す（再計算は cache_version バンプ）。
-                let needsReview = !isDeterministicBreakdownNotApplicableReason(reason)
+                // Jev が確率不足・欠測・文クラスの衝突で適用しなかったときは、決定的 reason でも
+                // needs_review を立て、判断を llm_audit に残す。
+                let withheld = audit?.jev?.needsReview == true
+                let needsReview = withheld || !isDeterministicBreakdownNotApplicableReason(reason)
                 let placeholder = BreakdownSnapshotPayload(
                     axis: axis, denominator: 0, denominatorTag: "", rows: [],
                     sourceKind: breakdownSourceNotApplicable, needsReview: needsReview, warnings: [])
@@ -218,7 +221,7 @@ func runBreakdownIngest(
                         docID: cand.docID, axis: axis,
                         code: cand.code, submitDateTime: cand.submitDateTime, payload: placeholder,
                         source: breakdownSourceNotApplicable, contentHash: "",
-                        cacheVersion: currentCacheVersion, llmAudit: nil,
+                        cacheVersion: currentCacheVersion, llmAudit: audit,
                         notApplicableReason: reason, db: db)
                 }
             }
@@ -275,7 +278,7 @@ func storeBreakdown(
         row.source = source
         row.contentHash = contentHash
         row.cacheVersion = cacheVersion
-        row.llmAudit = llmAudit
+        row.llmAudit = llmAudit?.stamped(code: code)
         row.notApplicableReason = notApplicableReason
     }
     if let row = existing {
