@@ -44,6 +44,8 @@ public struct BltServerContext: Sendable {
     let overviewModel: String
     /// セグメント注記の Jev。`OPENROUTER_DECISION_API_KEY` 未設定なら nil（今日の分類のまま）。
     let segmentNoteDecider: (any SegmentNoteDeciding)?
+    /// 研究開発費の本文総額。同じキーが無いときは nil（数値タグが無い書類は not_found のまま）。
+    let researchAndDevelopmentProseDecider: (any ResearchAndDevelopmentProseDeciding)?
     /// employees / rd / goodwill / 報告セグメント指標軸が同一 doc を軸ループで再パースしないためのメモ。
     let businessSegmentDimensionCache: BusinessSegmentDimensionCache
 
@@ -52,7 +54,8 @@ public struct BltServerContext: Sendable {
         geographyChatClient: ChatCompleting,
         overviewChatClient: ChatCompleting = UnavailableChatClient(),
         overviewModel: String = companyOverviewDefaultModel,
-        segmentNoteDecider: (any SegmentNoteDeciding)? = nil
+        segmentNoteDecider: (any SegmentNoteDeciding)? = nil,
+        researchAndDevelopmentProseDecider: (any ResearchAndDevelopmentProseDeciding)? = nil
     ) {
         self.cacheDir = cacheDir
         let store = EdinetCacheStore(cacheDir: edinetCacheDir(cacheDir))
@@ -66,6 +69,7 @@ public struct BltServerContext: Sendable {
         self.overviewChatClient = overviewChatClient
         self.overviewModel = overviewModel
         self.segmentNoteDecider = segmentNoteDecider
+        self.researchAndDevelopmentProseDecider = researchAndDevelopmentProseDecider
         self.businessSegmentDimensionCache = BusinessSegmentDimensionCache()
     }
 }
@@ -163,14 +167,22 @@ public func makeBltServerContext() async -> BltServerContext? {
     let overviewEndpoint = resolveOverviewLLMEndpoint(env)
     let overviewChatClient: ChatCompleting =
         overviewEndpoint.map { ChatCompletionClient(endpoint: $0) } ?? UnavailableChatClient()
-    let segmentNoteDecider: (any SegmentNoteDeciding)? = resolveOpenRouterDecisionsEndpoint(env).map {
-        OpenRouterSegmentNoteDecider(client: OpenRouterDecisionsClient(endpoint: $0))
+    let decisionsClient = resolveOpenRouterDecisionsEndpoint(env).map {
+        OpenRouterDecisionsClient(endpoint: $0)
     }
+    let segmentNoteDecider: (any SegmentNoteDeciding)? = decisionsClient.map {
+        OpenRouterSegmentNoteDecider(client: $0)
+    }
+    let researchAndDevelopmentProseDecider: (any ResearchAndDevelopmentProseDeciding)? =
+        decisionsClient.map {
+            OpenRouterResearchAndDevelopmentProseDecider(client: $0)
+        }
     return BltServerContext(
         apiKey: key, cacheDir: cacheDir, businessChatClient: businessChatClient,
         geographyChatClient: geographyChatClient, overviewChatClient: overviewChatClient,
         overviewModel: overviewEndpoint?.model ?? companyOverviewDefaultModel,
-        segmentNoteDecider: segmentNoteDecider)
+        segmentNoteDecider: segmentNoteDecider,
+        researchAndDevelopmentProseDecider: researchAndDevelopmentProseDecider)
 }
 
 // MARK: - REST Facade
@@ -710,9 +722,11 @@ public extension BltServerContext {
     }
 
     /// 内訳取り込み: 書類1件分の research_and_development 軸を解決する（2026-08-01追加）。
-    /// 決定論のみ、LLM なし。全社 R&D 分母は同一 XBRL パスで `BreakdownFinancialsResolver` /
+    /// 全社 R&D 分母は同一 XBRL パスで `BreakdownFinancialsResolver` /
     /// `financialsCanonicalRd` が直接解決する（#9 / #10b）。セグメント dimension が無くても
     /// total があれば denominator のみの resolved になる（合計の正本を本軸に寄せる）。
+    /// 数値タグもセグメント fact も無いときだけ、キーがあれば本文の当期総額を補う。
+    /// Summary の `rd` はこの本文総額を読まない。
     func resolveResearchAndDevelopmentBreakdown(docID: String, correctionDocIDs: [String] = []) async -> BreakdownResolveResult {
         guard let xbrlDir = await downloadAnnualFilingXbrl(
             docID: docID, correctionDocIDs: correctionDocIDs
@@ -724,7 +738,7 @@ public extension BltServerContext {
                 facts: cached.facts, total: rd.value, totalTag: rd.tag,
                 axis: breakdownAxisResearchAndDevelopment, labelsByTag: cached.labelsByTag)
         else {
-            return .notApplicable(reason: breakdownNotApplicableNotFound)
+            return await resolveResearchAndDevelopmentProseTotal(xbrlDir: xbrlDir, docID: docID)
         }
         let extracted = ExtractedBreakdown(method: "xbrl_facts", tables: [], facts: cached.facts)
         let hash = breakdownContentHash(extracted: extracted, consolidatedSales: rd.value)
@@ -762,6 +776,38 @@ public extension BltServerContext {
 }
 
 private extension BltServerContext {
+    /// 数値タグが無い研究開発費。キーが無い、候補が無い、分類が採用条件を外れたときは not_found。
+    /// 応答が無いときは行を作らない。
+    func resolveResearchAndDevelopmentProseTotal(xbrlDir: URL, docID: String) async -> BreakdownResolveResult {
+        guard let decider = researchAndDevelopmentProseDecider else {
+            return .notApplicable(reason: breakdownNotApplicableNotFound)
+        }
+        guard let text = ResearchAndDevelopmentProseTotalDecision.activityPlainText(in: xbrlDir) else {
+            return .notApplicable(reason: breakdownNotApplicableNotFound)
+        }
+        switch await ResearchAndDevelopmentProseTotalDecision.decide(
+            plainText: text, docID: docID, decider: decider)
+        {
+        case .applied(let total):
+            let snapshot = ResearchAndDevelopmentProseTotalDecision.snapshot(
+                axis: breakdownAxisResearchAndDevelopment, total: total)
+            let extracted = ExtractedBreakdown(
+                method: breakdownSourceResearchAndDevelopmentProse, tables: [], facts: [])
+            let hash = breakdownContentHash(extracted: extracted, consolidatedSales: total.yen)
+            return breakdownByRecordingOverlayRegressions(
+                .resolved(
+                    payload: breakdownSnapshotPayload(from: snapshot),
+                    source: breakdownSourceResearchAndDevelopmentProse,
+                    contentHash: hash,
+                    audit: .segmentNoteJev(total.audit)),
+                xbrlDir: xbrlDir)
+        case .notApplied:
+            return .notApplicable(reason: breakdownNotApplicableNotFound)
+        case .unavailable:
+            return .failed
+        }
+    }
+
     /// 報告セグメント別の決定論指標を共通の XBRL fact 経路で解決する。
     /// `segment_assets` は連結資産の内訳（segment + 非分類 reconciling、分母=連結 EntityTotal）。
     func resolveSegmentMetricBreakdown(docID: String, axis: String, correctionDocIDs: [String] = []) async -> BreakdownResolveResult {

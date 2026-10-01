@@ -373,8 +373,9 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                 segment_assets / depreciation_and_amortization / goodwill_amortization / impairment_loss /
                 equity_method_investments / capital_expenditures /
                 capital_expenditures_overview / noncurrent_asset_additions に対応。
-                これらの決定論軸は LLM フォールバックなしで、
-                報告セグメント別の内訳が開示されている企業のみ値が入ります。
+                数値タグとセグメント fact から解決します。合計のみの開示は分母だけの行になります。
+                research_and_development は、数値タグが無いとき本文の当期の会社全体の総額だけを補うことがあります。
+                その行の warnings に not_allocatable_to_segments があっても 404 にはしません。
                 内訳が取得できない場合は 404 とともに reason が返ることがあります（reason 無しの 404 は単に未取り込み）。
                 axis=business: geography_only（報告セグメントが地域別のみで事業別への変換不可）、
                 single_segment_disclosed（単一セグメントのため報告セグメント開示自体を省略）、

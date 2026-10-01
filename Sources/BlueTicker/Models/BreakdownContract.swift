@@ -85,6 +85,7 @@ public let geographyBreakdownCacheVersion = "breakdown-geography-v13"
 /// うち / タグ付き合計列の subtotal 化は targeted `--codes`（対象行削除）で定着。v2 は日経225全件再計算になるため上げない。
 /// v2: ingest 時に jpcrp 標準 member の日本語ラベルを補完（生 `*Member` 表示の誤表示）。
 public let employeesBreakdownCacheVersion = "breakdown-employees-v2"
+/// 本文の当期総額（`research_and_development_prose`）は非破壊。既存の `not_found` は行削除または `--codes` で再計算する。
 public let researchAndDevelopmentBreakdownCacheVersion = "breakdown-research-and-development-v2"
 public let goodwillBreakdownCacheVersion = "breakdown-goodwill-v2"
 /// v2: 分母を segment+reconciling に固定（表小計の閾値切替を廃止）。
@@ -135,6 +136,14 @@ public let breakdownSourceGeographyLLM = "geography_llm"
 /// `BreakdownExtractor.classifyNotApplicableReason` による決定的判定のため、xbrl_facts と同様
 /// `cache_version` 世代でゲートする（`isVersionGatedBreakdownSource` 参照）。
 public let breakdownSourceNotApplicable = "not_applicable"
+/// 数値タグが無く、研究開発活動の本文から当期の会社全体の総額だけを採用した行。
+/// Jev は文の分類だけを返し、金額はコードが円へ換算する。`cache_version` は上げない。
+public let breakdownSourceResearchAndDevelopmentProse = "research_and_development_prose"
+/// 本文総額の分母出所。数値 fact のタグが無いときの sentinel。
+public let breakdownDenominatorTagResearchAndDevelopmentProse = "research_and_development_prose"
+/// セグメントへ配分できない、またはセグメント別の記載をしないため総額のみ、という開示。
+/// `not_applicable_reason` にはしない。404 にすると総額が消える。
+public let breakdownWarningNotAllocatableToSegments = "not_allocatable_to_segments"
 
 /// business breakdown が解決できなかった理由（issue #130、E/F判定の検知結果明示化）。
 /// `BreakdownExtractor.BusinessBreakdownNotApplicableReason`（internal 型）の rawValue と揃える
@@ -223,13 +232,16 @@ public func breakdownCacheVersionNumber(_ version: String) -> Int? {
 
 /// `cache_version` 世代で再計算・read 可否を判定すべき source か。
 /// 決定論（xbrl_facts / stacked_segment_pnl / not_applicable）に加え、LLM 経由
-/// （segment_info_llm / revenue_recognition_llm / geography_llm）も含める。
+/// （segment_info_llm / revenue_recognition_llm / geography_llm）と
+/// 研究開発費の本文総額（research_and_development_prose）を含める。
 /// clean な LLM 行がバンプを無視すると誤った profit が再 ingest でも残るため
 /// （`isServableBreakdown` / 内訳取り込み ingest の staleness 判定で共用）。
+/// 本文総額は `isLLMBreakdownSource` に入れない。`needs_review` だけでは再試行しない。
 public func isVersionGatedBreakdownSource(_ source: String) -> Bool {
     source == breakdownSourceXbrlFacts
         || source == breakdownSourceStackedSegmentPnL
         || source == breakdownSourceNotApplicable
+        || source == breakdownSourceResearchAndDevelopmentProse
         || isLLMBreakdownSource(source)
 }
 
@@ -247,8 +259,10 @@ public let breakdownWarningLLMUnitUnresolved = "llm_unit_unresolved"
 
 /// 公開 REST / MCP（iOS Breakdown の backing）が当該格納行を出してよいか。
 /// `needs_review` または `llm_unit_unresolved` の行は出さない（千円単位の 1000 倍誤りの stopgap。
-/// fail closed）。XBRL（`xbrl_facts` / `stacked_segment_pnl`）と `not_applicable`（'none'）は
-/// フラグがあってもそのまま出す。ただし訂正 overlay 回帰（`overlay_regression`）は XBRL 行も隠す。
+/// fail closed）。XBRL（`xbrl_facts` / `stacked_segment_pnl`）と `not_applicable`（'none'）、
+/// 研究開発費の本文総額（`research_and_development_prose`）はフラグがあってもそのまま出す。
+/// `not_allocatable_to_segments` は総額行に付く警告であり、404 にしない。
+/// ただし訂正 overlay 回帰（`overlay_regression`）はこれらの行も隠す。
 /// ingest / status-report の `isServableBreakdown` とは独立（格納行は消さない・書き換えない。
 /// `cache_version` も上げない）。
 public func isPubliclyServableBreakdown(
@@ -258,6 +272,7 @@ public func isPubliclyServableBreakdown(
     if source == breakdownSourceXbrlFacts
         || source == breakdownSourceStackedSegmentPnL
         || source == breakdownSourceNotApplicable
+        || source == breakdownSourceResearchAndDevelopmentProse
     {
         return true
     }

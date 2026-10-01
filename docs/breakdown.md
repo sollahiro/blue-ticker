@@ -21,7 +21,9 @@
 
 geography は変えない。本邦90％の `not_found` は既存の Jev ゲートだけを通る。専用タグは geography の判定を飛ばさず、置き換えない。キーがあるときは、business を専用タグで確定しても geography の Jev は続ける。
 
-キーが無い、または呼び出しに失敗したときは、専用タグ以外は今日の決定論のまま。失敗で `needs_review` は足さない。専用タグの business はキーが無くても適用する。研究開発費・設備投資・減損はこの判定を使わない。公開 reason は `single_segment_disclosed` / `geography_only` / `not_found`。`cache_version` は変えない。`SegmentInfoLLMNormalizer` と `GeographyBreakdownLLMNormalizer` は選ばれた html_table を行・金額・単位へ写す。Jev は金額を読まない。
+キーが無い、または呼び出しに失敗したときは、専用タグ以外は今日の決定論のまま。失敗で `needs_review` は足さない。専用タグの business はキーが無くても適用する。研究開発費・設備投資・減損はこの省略判定を使わない。公開 reason は `single_segment_disclosed` / `geography_only` / `not_found`。`cache_version` は変えない。`SegmentInfoLLMNormalizer` と `GeographyBreakdownLLMNormalizer` は選ばれた html_table を行・金額・単位へ写す。Jev は金額を読まない。
+
+研究開発費で数値タグもセグメント fact も無いときは、`OPENROUTER_DECISION_API_KEY` がある場合だけ別の Choice を出す。対象は `ResearchAndDevelopmentActivitiesTextBlock`。コードが文を切り、百万円・千円・億円を円へ換算する。1文に金額が2つある文、0円、割合だけの文は候補にしない。候補が12を超えるときは「研究開発費」を含む文を先に残す。Jev は各文を当期の会社全体の総額 / 前期 / 一部金額 / 無関係に分類し、金額は返さない。`probabilities[choice]` が 0.9 以上の当期総額がちょうど1文のときだけ `rows=[]` の resolved にする。source は `research_and_development_prose`、`denominator_tag` も同じ sentinel。本文がセグメントへ配分できない、またはセグメント別の記載をしないと言うときは `warnings` に `not_allocatable_to_segments` を付ける。`single_segment_disclosed` にはしない。確率不足や当期総額が複数のときは `not_found` のままで、`needs_review` は足さない。応答が無いときは行を作らず、次回の欠測 ingest で再試行する。キーが無いときは数値タグの決定論のまま。`cache_version` は上げない。既存の `not_found` は行削除または `--codes` まで残る。Summary の `rd` は数値タグのままで、この本文総額は breakdown の分母にだけ入る。複数金額のセグメント散文と、分母との差額埋めは対象外。
 
 | API キー | 意味 |
 |---|---|
@@ -52,7 +54,7 @@ geography は変えない。本邦90％の `not_found` は既存の Jev ゲー�
 - 比較用スナップショット: `BreakdownSnapshot`（`BreakdownContract.swift` / `BreakdownNormalizer`）。
 - 保存: `company_breakdowns`（filing-sections とは別。LLM 行を filing バンプに巻き込まない）。主キー `doc_id#axis`。
 - `not_found` は行を作らない。business の E/F/unknown は `not_applicable` プレースホルダ。REST と開発用 MCP は 404＋ボディ `reason`（200 化しない）。
-- 公開 serving（REST `GET /v1/companies/{code}/breakdown`、開発用 MCP `get_breakdown`。iOS Breakdown の backing）は `needs_review=true` または `warnings` に `llm_unit_unresolved` がある **LLM 行を出さない**（千円表の 1000 倍誤り stopgap。fail closed）。残行が 0 なら未算出と同じ 404。payload 形は変えない。XBRL（`xbrl_facts` / `stacked_segment_pnl`）と `not_applicable`（'none'）はそのまま出す。抽出・Neon 行・`cache_version` は触らない。
+- 公開 serving（REST `GET /v1/companies/{code}/breakdown`、開発用 MCP `get_breakdown`。iOS Breakdown の backing）は `needs_review=true` または `warnings` に `llm_unit_unresolved` がある **LLM 行を出さない**（千円表の 1000 倍誤り stopgap。fail closed）。残行が 0 なら未算出と同じ 404。payload 形は変えない。XBRL（`xbrl_facts` / `stacked_segment_pnl`）と `not_applicable`（'none'）、研究開発費の本文総額（`research_and_development_prose`）はそのまま出す。`not_allocatable_to_segments` が付いていても 404 にしない。抽出・Neon 行・`cache_version` は触らない。
 - 対象母集団: 全軸とも上場全体（日経225は処理順の先頭寄せのみ。2026-09 に employees / rd / goodwill および報告セグメント別指標軸も日経225限定を廃止して拡大）。read は Fly 専用（ingest 時に LLM 計算）。処理順は各社の最新有報 → 前年以降。同一年次内は日経225 → ローカル XBRL 展開済み → 欠測/要再試行/版ずれのラウンドロビン（軸ごとにキャッシュ集合を取り直す）。
 - 売上分母・employees / rd の Summary 正本は breakdown 分母（ingest も同一 XBRL パスで直接解決）。
 - 報告セグメント別指標の分母は通常 segment + reconciling（表の小計・EntityTotal は行として保持）。`segment_assets` は連結の無 dimension EntityTotal（連結 BS 計上額）があるとき分母をそれに固定し、銀行の固定資産など EntityTotal が無いときだけ segment + reconciling。差額表 HTML の非分類行が既存 segment 行と同額のときは、その行だけ落とす（ラベル非依存）。
