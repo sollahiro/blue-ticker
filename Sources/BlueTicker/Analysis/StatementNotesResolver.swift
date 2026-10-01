@@ -378,6 +378,17 @@ enum StatementNotesResolver {
         return html.isEmpty ? XBRLUtils.findXbrlFiles(in: dir) : html
     }
 
+    private static let sgaNonFractionPattern = try! NSRegularExpression(
+        pattern: #"<ix:nonFraction\b([^>]*)>"#,
+        options: [.caseInsensitive])
+    private static let sgaFactNamePattern = try! NSRegularExpression(
+        pattern: #"name\s*=\s*["'](?:[\w]+:)?([A-Za-z0-9]+)["']"#)
+    private static let sgaContextRefPattern = try! NSRegularExpression(
+        pattern: #"contextRef\s*=\s*["']([^"']+)["']"#)
+    private static let sgaTableCellPattern = try! NSRegularExpression(
+        pattern: #"<t[dh]\b[^>]*>(.*?)</t[dh]>"#,
+        options: [.caseInsensitive, .dotMatchesLineSeparators])
+
     /// 表行 HTML の先頭付近にある日本語科目名セル（金額・単位・年度見出しは除外）。
     private static func sgaExpenseBreakdownLabelFromRowHTML(
         _ row: String, cellPattern: NSRegularExpression
