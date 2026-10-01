@@ -228,6 +228,80 @@ import Testing
         #expect(ignored.probability == nil)
     }
 
+    /// SPEC_ORACLE: 数値タグがある書類は本文経路に入らない。本文の単一金額は同じ円になる。
+    /// S100W043 4,409百万円、S100W07G 7,302億円、S100W17I 4,360億円。
+    @Test func proseYenMatchesTheNumericTag() async throws {
+        let cases: [(docID: String, yen: Double)] = [
+            ("S100W043", 4_409_000_000),
+            ("S100W07G", 730_200_000_000),
+            ("S100W17I", 436_000_000_000),
+        ]
+        await SmokeCacheSupport.ensureCached(cases.map(\.docID))
+        for item in cases {
+            let dir = SmokeCacheSupport.cacheDir.appendingPathComponent("\(item.docID)_xbrl")
+            guard FileManager.default.fileExists(atPath: dir.path) else { continue }
+            let rd = BreakdownFinancialsResolver.financialsCanonicalRdItem(xbrlDir: dir)
+            #expect(rd.tag == "ResearchAndDevelopmentExpensesResearchAndDevelopmentActivities")
+            #expect(rd.value == item.yen)
+            let text = try #require(ResearchAndDevelopmentProseTotalDecision.activityPlainText(in: dir))
+            let found = ResearchAndDevelopmentProseTotalDecision.candidates(in: text)
+            #expect(found.contains { $0.yen == item.yen })
+        }
+    }
+
+    /// SPEC_ORACLE: 東レ S100W2HQ。総額744億円とこのうち526億円が同一文。候補にしない。
+    /// 数値タグが 74,400,000,000 を持つので本文経路は使わない。
+    @Test func torayParentheticalTotalIsNotACandidate() async throws {
+        let docID = "S100W2HQ"
+        await SmokeCacheSupport.ensureCached([docID])
+        let dir = SmokeCacheSupport.cacheDir.appendingPathComponent("\(docID)_xbrl")
+        guard FileManager.default.fileExists(atPath: dir.path) else { return }
+        let rd = BreakdownFinancialsResolver.financialsCanonicalRdItem(xbrlDir: dir)
+        #expect(rd.value == 74_400_000_000)
+        let text = try #require(ResearchAndDevelopmentProseTotalDecision.activityPlainText(in: dir))
+        #expect(ResearchAndDevelopmentProseTotalDecision.candidates(in: text).isEmpty)
+    }
+
+    /// SPEC_ORACLE: 日産化学 S100W4NI。数値タグは無い。
+    /// グループ全体 17,578百万円と、セグメント別の5文（合計が同じ17,578百万円）が別文。
+    /// 当期総額が1文だけのとき、採用するのはその総額で、セグメント文は行にしない。
+    @Test func nissanChemicalProseKeepsOnlyTheCompanyTotal() async throws {
+        let docID = "S100W4NI"
+        await SmokeCacheSupport.ensureCached([docID])
+        let dir = SmokeCacheSupport.cacheDir.appendingPathComponent("\(docID)_xbrl")
+        guard FileManager.default.fileExists(atPath: dir.path) else { return }
+        let rd = BreakdownFinancialsResolver.financialsCanonicalRdItem(xbrlDir: dir)
+        #expect(rd.value == nil)
+        let text = try #require(ResearchAndDevelopmentProseTotalDecision.activityPlainText(in: dir))
+        let found = ResearchAndDevelopmentProseTotalDecision.candidates(in: text)
+        #expect(found.map(\.yen) == [
+            17_578_000_000, 273_000_000, 8_303_000_000, 4_472_000_000, 589_000_000, 3_941_000_000,
+        ])
+        let partials = found.dropFirst().map(\.yen).reduce(0, +)
+        #expect(partials == found.first?.yen)
+        #expect(ResearchAndDevelopmentProseTotalDecision.mentionsNotAllocatableToSegments(text) == false)
+
+        var selected: [String: (String, Double)] = [:]
+        for candidate in found {
+            let role = candidate.sentence.contains("グループ全体の研究開発費の総額")
+                ? ResearchAndDevelopmentProseRole.currentCompanyTotal
+                : ResearchAndDevelopmentProseRole.partialAmount
+            selected[candidate.sentence] = (role, 0.95)
+        }
+        let decision = await ResearchAndDevelopmentProseTotalDecision.decide(
+            plainText: text, docID: docID, decider: ScriptedProseDecider(selected: selected))
+        guard case .applied(let total) = decision else {
+            Issue.record("expected the company total")
+            return
+        }
+        #expect(total.yen == 17_578_000_000)
+        #expect(total.warnings.isEmpty)
+        let snapshot = ResearchAndDevelopmentProseTotalDecision.snapshot(
+            axis: breakdownAxisResearchAndDevelopment, total: total)
+        #expect(snapshot.rows.isEmpty)
+        #expect(snapshot.sourceKind == breakdownSourceResearchAndDevelopmentProse)
+    }
+
     @Test func requestAsksForAClassAndNotAnAmount() throws {
         let data = try #require(
             OpenRouterResearchAndDevelopmentProseDecider.requestJSON(
