@@ -776,14 +776,8 @@ private extension BltServerContext {
                 snapshot: BreakdownNormalizer.normalizeSegmentAssets(
                     facts: cached.facts, labelsByTag: cached.labelsByTag),
                 xbrlDir: xbrlDir)
-        case breakdownAxisDepreciationAndAmortization:
-            snapshot = BreakdownNormalizer.normalizeDepreciationAndAmortization(
-                facts: cached.facts, labelsByTag: cached.labelsByTag)
         case breakdownAxisGoodwillAmortization:
             snapshot = BreakdownNormalizer.normalizeGoodwillAmortization(
-                facts: cached.facts, labelsByTag: cached.labelsByTag)
-        case breakdownAxisImpairmentLoss:
-            snapshot = BreakdownNormalizer.normalizeImpairmentLoss(
                 facts: cached.facts, labelsByTag: cached.labelsByTag)
         case breakdownAxisEquityMethodInvestments:
             snapshot = BreakdownNormalizer.normalizeEquityMethodInvestments(
@@ -841,23 +835,10 @@ public extension BltServerContext {
             docID: docID, axis: breakdownAxisSegmentAssets, correctionDocIDs: correctionDocIDs)
     }
 
-    /// 報告セグメント別の減価償却費及び償却費を解決する。
-    func resolveDepreciationAndAmortizationBreakdown(docID: String, correctionDocIDs: [String] = []) async -> BreakdownResolveResult {
-        await resolveSegmentMetricBreakdown(
-            docID: docID, axis: breakdownAxisDepreciationAndAmortization,
-            correctionDocIDs: correctionDocIDs)
-    }
-
     /// 報告セグメント別ののれんの償却額を解決する。
     func resolveGoodwillAmortizationBreakdown(docID: String, correctionDocIDs: [String] = []) async -> BreakdownResolveResult {
         await resolveSegmentMetricBreakdown(
             docID: docID, axis: breakdownAxisGoodwillAmortization, correctionDocIDs: correctionDocIDs)
-    }
-
-    /// 報告セグメント別の減損損失を解決する。
-    func resolveImpairmentLossBreakdown(docID: String, correctionDocIDs: [String] = []) async -> BreakdownResolveResult {
-        await resolveSegmentMetricBreakdown(
-            docID: docID, axis: breakdownAxisImpairmentLoss, correctionDocIDs: correctionDocIDs)
     }
 
     /// 報告セグメント別の持分法会計処理される投資を解決する。

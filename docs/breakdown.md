@@ -21,16 +21,14 @@
 
 geography は変えない。本邦90％の `not_found` は既存の Jev ゲートだけを通る。専用タグは geography の判定を飛ばさず、置き換えない。キーがあるときは、business を専用タグで確定しても geography の Jev は続ける。
 
-キーが無い、または呼び出しに失敗したときは、専用タグ以外は今日の決定論のまま。失敗で `needs_review` は足さない。専用タグの business はキーが無くても適用する。研究開発費・設備投資・減損はこの判定を使わない。公開 reason は `single_segment_disclosed` / `geography_only` / `not_found`。`cache_version` は変えない。`SegmentInfoLLMNormalizer` と `GeographyBreakdownLLMNormalizer` は選ばれた html_table を行・金額・単位へ写す。Jev は金額を読まない。
+キーが無い、または呼び出しに失敗したときは、専用タグ以外は今日の決定論のまま。失敗で `needs_review` は足さない。専用タグの business はキーが無くても適用する。研究開発費・設備投資はこの判定を使わない。公開 reason は `single_segment_disclosed` / `geography_only` / `not_found`。`cache_version` は変えない。`SegmentInfoLLMNormalizer` と `GeographyBreakdownLLMNormalizer` は選ばれた html_table を行・金額・単位へ写す。Jev は金額を読まない。
 
 | API キー | 意味 |
 |---|---|
 | `segments` | 報告セグメント（事業とも地域とも限らない） |
 | `geography` | 地域別注記 |
 | `segment_assets` | 連結資産の内訳（報告セグメント + 非分類。銀行の「固定資産」含む） |
-| `depreciation_and_amortization` | 報告セグメントごとの減価償却費及び償却費（J-GAAPは減価償却費） |
 | `goodwill_amortization` | 報告セグメントごとののれんの償却額 |
-| `impairment_loss` | 報告セグメントごとの減損損失 |
 | `equity_method_investments` | 報告セグメントごとの持分法会計処理される投資 |
 | `capital_expenditures` | 報告セグメントごとの資本的支出 |
 | `capital_expenditures_overview` | notes「設備投資等の概要」のセグメント別Capex（`capital_expenditures`とは別値）。US-GAAP も Overview タグにセグメント dimension 付き fact があり決定論で再構成可能 |
@@ -45,7 +43,7 @@ geography は変えない。本邦90％の `not_found` は既存の Jev ゲー�
 | `employees` | 従業員内訳 |
 | `research_and_development` | 研究開発費内訳（発生支出） |
 | `goodwill` | のれん |
-| `segment_assets` 他7指標 | 報告セグメント別指標 |
+| `segment_assets` 他5指標 | 報告セグメント別指標 |
 
 ## 契約・永続化
 

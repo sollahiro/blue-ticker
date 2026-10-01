@@ -771,23 +771,10 @@ enum Xbrl {
         "NonCurrentAssetsIFRS",
     ]
 
-    static let segmentDepreciationAndAmortizationTags: [String] = [
-        "DepreciationSegmentInformation",
-        "DepreciationAndAmortizationOperatingExpensesIFRS",
-        "DepreciationAndAmortization",
-    ]
-
     static let segmentGoodwillAmortizationTags: [String] = [
         "AmortizationOfGoodwillSGA",
         "AmortizationOfGoodwill",
         "AmortizationOfGoodwillIFRS",
-    ]
-
-    static let segmentImpairmentLossTags: [String] = [
-        "ImpairmentLossEL",
-        "ImpairmentLossesPLIFRS",
-        "ImpairmentLoss",
-        "ImpairmentLossIFRS",
     ]
 
     static let segmentEquityMethodInvestmentTags: [String] = [
