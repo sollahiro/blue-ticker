@@ -10,10 +10,8 @@ import Testing
         }
     }
 
-    @Test func closedItemSetIsCapexAndPolicyHoldings() {
-        #expect(
-            ManualXbrlOverrideItem.allCases.map(\.rawValue).sorted()
-                == ["capex", "policy_holding_securities"])
+    @Test func closedItemSetIsCapex() {
+        #expect(ManualXbrlOverrideItem.allCases.map(\.rawValue) == ["capex"])
     }
 
     @Test func capexPayloadRequiresYenUnitAndScale() throws {
@@ -33,20 +31,6 @@ import Testing
         }
         #expect(throws: ManualXbrlOverrideValidationError.self) {
             try parseCapexManualOverridePayload(["value": 1, "unit": "JPY", "scale": 99])
-        }
-    }
-
-    @Test func policyHoldingsRejectsUnknownRowKeys() {
-        #expect(throws: ManualXbrlOverrideValidationError.self) {
-            try parsePolicyHoldingManualOverridePayload(
-                [
-                    "securities": [
-                        [
-                            "issuer_name": "A",
-                            "ticker": "7203",
-                        ]
-                    ]
-                ])
         }
     }
 
@@ -99,59 +83,26 @@ import Testing
     @Test func applyAfterOverlayClearsOnlyCoveredItem() throws {
         let overlayWarning =
             "overlay_regression:row_loss:S100X7DX:orig=S100W0S7:tag=Holding:before=70:after=13"
-        var holdings: [PolicyHoldingSecurityPayload] = []
-        for i in 1...70 {
-            holdings.append(
-                PolicyHoldingSecurityPayload(
-                    issuerName: "Issuer\(i)", numberOfShares: Double(i), carryingAmount: Double(i * 10),
-                    purpose: "policy", isDeemedHolding: false))
-        }
         let before = ManualXbrlCompanyYearState(
             capexMillionYen: 3_705, capexNeedsReview: true,
-            capexWarnings: [overlayWarning],
-            policyHoldings: StatementNotePayload(
-                securities: Array(holdings.prefix(13)), needsReview: true,
-                warnings: [overlayWarning]),
-            policyHoldingsNeedsReview: true, policyHoldingsWarnings: [overlayWarning],
-            otherNeedsReview: true)
+            capexWarnings: [overlayWarning], otherNeedsReview: true)
         let capex = ManualXbrlOverrideRecord(
             edinetCode: "E03614", periodEnd: "2025-03-31", item: .capex,
             payload: .capex(CapexManualOverridePayload(value: 370_500, unit: "JPY", scale: 6)),
             sourceDocID: "S100WRZH", sourcePage: "設備の状況", reason: "scale", createdBy: "t")
-        let rows = ManualXbrlOverrideRecord(
-            edinetCode: "E03614", periodEnd: "2025-03-31", item: .policyHoldingSecurities,
-            payload: .policyHoldingSecurities(
-                PolicyHoldingSecuritiesManualOverridePayload(
-                    securities: holdings, policyHoldingSummary: nil)),
-            sourceDocID: "S100WRZH", sourcePage: "提出会社の状況", reason: "retag", createdBy: "t")
 
-        let once = applyManualXbrlOverrides(to: before, overrides: [capex, rows])
+        let once = applyManualXbrlOverrides(to: before, overrides: [capex])
         #expect(once.capexMillionYen == 370_500)
         #expect(once.capexNeedsReview == false)
-        #expect(once.policyHoldings?.securities?.count == 70)
-        #expect(once.policyHoldingsNeedsReview == false)
         #expect(once.otherNeedsReview == true)
         #expect(!once.capexWarnings.contains { $0.hasPrefix(xbrlOverlayRegressionWarningPrefix) })
-        #expect(
-            once.policyHoldingsWarnings.contains {
-                $0.hasPrefix(manualXbrlOverrideWarningPrefix)
-            })
-        #expect(
-            !isPubliclyServableStatementNote(
-                needsReview: before.policyHoldingsNeedsReview,
-                warnings: before.policyHoldingsWarnings))
-        #expect(
-            isPubliclyServableStatementNote(
-                needsReview: once.policyHoldingsNeedsReview,
-                warnings: once.policyHoldingsWarnings))
+        #expect(once.capexWarnings.contains { $0.hasPrefix(manualXbrlOverrideWarningPrefix) })
 
-        let twice = applyManualXbrlOverrides(to: once, overrides: [capex, rows])
+        let twice = applyManualXbrlOverrides(to: once, overrides: [capex])
         #expect(twice.capexMillionYen == once.capexMillionYen)
         #expect(twice.capexNeedsReview == once.capexNeedsReview)
-        #expect(twice.policyHoldings?.securities?.count == once.policyHoldings?.securities?.count)
-        #expect(twice.policyHoldingsNeedsReview == once.policyHoldingsNeedsReview)
         #expect(twice.otherNeedsReview == once.otherNeedsReview)
-        #expect(twice.policyHoldingsWarnings == once.policyHoldingsWarnings)
+        #expect(twice.capexWarnings == once.capexWarnings)
     }
 
     @Test func revokedOverridesAreIgnoredWhenNotPassed() {
@@ -163,54 +114,11 @@ import Testing
         #expect(after.otherNeedsReview == true)
     }
 
-    @Test func policyHoldingOverrideAppliesAfterOverlayStampedNote() {
-        let overlayWarning =
-            "overlay_regression:scale_jump:S100X7DX:orig=S100W0S7:tag=Capex"
-        let stamped = StatementNoteResolveResult.resolved(
-            payload: StatementNotePayload(
-                securities: [
-                    PolicyHoldingSecurityPayload(
-                        issuerName: "partial", numberOfShares: 1, carryingAmount: 1, purpose: nil)
-                ],
-                needsReview: true, warnings: [overlayWarning]),
-            source: statementNoteSourceXbrlFacts, contentHash: "h")
-        let override = ManualXbrlOverrideRecord(
-            edinetCode: "E03614", periodEnd: "2025-03-31", item: .policyHoldingSecurities,
-            payload: .policyHoldingSecurities(
-                PolicyHoldingSecuritiesManualOverridePayload(
-                    securities: [
-                        PolicyHoldingSecurityPayload(
-                            issuerName: "full", numberOfShares: 2, carryingAmount: 2, purpose: "p")
-                    ],
-                    policyHoldingSummary: nil)),
-            sourceDocID: "S100WRZH", sourcePage: "p", reason: "r", createdBy: "t")
-        let applied = applyManualPolicyHoldingOverride(to: stamped, override: override)
-        guard case .resolved(let payload, let source, _) = applied else {
-            Issue.record("expected resolved")
-            return
-        }
-        #expect(source == statementNoteSourceManualOverride)
-        #expect(payload.needsReview == false)
-        #expect(payload.securities?.first?.issuerName == "full")
-        #expect(!hasOverlayRegressionWarning(payload.warnings))
-        #expect(
-            isPubliclyServableStatementNote(needsReview: payload.needsReview, warnings: payload.warnings)
-        )
-    }
-
-    @Test func smfgSyntheticFixtureClearsCapexAndHoldingsReview() throws {
+    @Test func smfgSyntheticFixtureClearsCapexReview() throws {
         // S100W0S7 / WRZH / X7DX packages are not checked in on main; this is the
-        // 8316 FY2025 shape (wrong 3,705M capex + overlay needs_review, 70 WRZH rows).
-        var rows: [PolicyHoldingSecurityPayload] = []
-        for i in 1...70 {
-            rows.append(
-                PolicyHoldingSecurityPayload(
-                    issuerName: "Name\(i)", numberOfShares: 1, carryingAmount: 1, purpose: "p"))
-        }
+        // 8316 FY2025 shape (wrong 3,705M capex + overlay needs_review).
         let overlay = ManualXbrlCompanyYearState(
-            capexMillionYen: 3_705, capexNeedsReview: true,
-            policyHoldings: StatementNotePayload(securities: rows, needsReview: true),
-            policyHoldingsNeedsReview: true, otherNeedsReview: true)
+            capexMillionYen: 3_705, capexNeedsReview: true, otherNeedsReview: true)
         let applied = applyManualXbrlOverrides(
             to: overlay,
             overrides: [
@@ -218,19 +126,10 @@ import Testing
                     edinetCode: "E03614", periodEnd: "2025-03-31", item: .capex,
                     payload: .capex(
                         CapexManualOverridePayload(value: 370_500, unit: "JPY", scale: 6)),
-                    sourceDocID: "S100WRZH", sourcePage: "設備の状況", reason: "億円", createdBy: "t"),
-                ManualXbrlOverrideRecord(
-                    edinetCode: "E03614", periodEnd: "2025-03-31", item: .policyHoldingSecurities,
-                    payload: .policyHoldingSecurities(
-                        PolicyHoldingSecuritiesManualOverridePayload(
-                            securities: rows, policyHoldingSummary: nil)),
-                    sourceDocID: "S100WRZH", sourcePage: "提出会社の状況", reason: "70 names",
-                    createdBy: "t"),
+                    sourceDocID: "S100WRZH", sourcePage: "設備の状況", reason: "億円", createdBy: "t")
             ])
         #expect(applied.capexMillionYen == 370_500)
         #expect(applied.capexNeedsReview == false)
-        #expect(applied.policyHoldings?.securities?.count == 70)
-        #expect(applied.policyHoldingsNeedsReview == false)
         #expect(applied.otherNeedsReview == true)
     }
 }

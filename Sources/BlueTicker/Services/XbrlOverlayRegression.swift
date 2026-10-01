@@ -198,12 +198,6 @@ func overlayRegressionAffectsStatementNote(
     _ regression: XbrlOverlayRegression, payload: StatementNotePayload
 ) -> Bool {
     if payload.items?.contains(where: { $0.tag == regression.tag }) == true { return true }
-    if payload.securities != nil || payload.policyHoldingSummary != nil {
-        return isPolicyHoldingOverlayTag(regression.tag)
-    }
-    if payload.dividendEvents != nil {
-        return regression.tag.localizedCaseInsensitiveContains("Dividend")
-    }
     if payload.borrowingsComponents != nil {
         return regression.tag.localizedCaseInsensitiveContains("Borrow")
             || regression.tag.localizedCaseInsensitiveContains("Loan")
@@ -225,12 +219,6 @@ func overlayRegressionAffectsBreakdown(
     default:
         return false
     }
-}
-
-func isPolicyHoldingOverlayTag(_ tag: String) -> Bool {
-    tag.contains("HeldForPurposesOtherThanPureInvestment")
-        || tag.contains("DeemedHoldings")
-        || tag.contains("SpecifiedInvestment")
 }
 
 func isCapitalExpenditureOverlayTag(_ tag: String) -> Bool {

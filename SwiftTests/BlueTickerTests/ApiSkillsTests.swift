@@ -89,6 +89,8 @@ import Testing
         for text in surfaces {
             #expect(!text.contains("sga_expense_breakdown"))
             #expect(!text.contains("販売費及び一般管理費の費目内訳"))
+            #expect(!text.contains("dividends"))
+            #expect(!text.contains("policy_holding_securities"))
         }
         for published in allStatementNoteTypes {
             #expect(

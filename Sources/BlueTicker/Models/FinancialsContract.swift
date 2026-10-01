@@ -106,7 +106,7 @@ public func isCurrentFinancialsAssemblyFingerprint(_ stored: String?) -> Bool {
 // | roe, roic, net_cash, net_de, cfc, working_capital, dso/dio/dpo/ccc | 派生 | IndividualAnalyzer / Waterfall 投影 | derived |
 // | business_profit*, roic_delta*, roe_delta*, *_change_impact | Waterfall 専用派生 | Waterfall 関数（analysisOnlyKeys） | derived |
 //
-// Summary 非搭載（正本 API のみ、組立対象外）: goodwill 明細、PPE 区分明細、借入明細、政策保有株式明細。
+// Summary 非搭載（正本 API のみ、組立対象外）: goodwill 明細、PPE 区分明細、借入明細。
 
 // MARK: - 年度エントリ（フラット形）
 

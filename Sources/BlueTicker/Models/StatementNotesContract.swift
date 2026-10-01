@@ -6,10 +6,7 @@
 // company_statements（Statement取り込み 本体）とは別テーブル（バージョニング独立。
 // 提供面は docs/statement.md）。
 //
-// 政策保有株式（policyHoldingSecurities）は当初「LLM必須」と見込んでいたが、実データ検証
-// （2026-08-02）の結果 EDINET標準タクソノミで銘柄ごとに完全構造化タグされていると判明したため、
-// 現状 v1 は全 note_type が決定論経路（xbrl_facts）のみで、LLM経由は未使用（`PolicyHoldingSecurityPayload`
-// はLLM正規化結果ではなく `StatementNotesResolver.resolvePolicyHoldingSecurities` の決定論抽出結果）。
+// 現状の公開 note_type は決定論経路（xbrl_facts）のみ。LLM経由は未使用。
 //
 // Foundation のみ依存（NIO/Vapor 非依存）。
 
@@ -19,11 +16,7 @@ import Foundation
 /// v1 時点は全 note_type が決定論経路（xbrl_facts）。
 public let statementNoteTypePerShareInformation = "per_share_information"
 public let statementNoteTypeIssuedSharesAndCapital = "issued_shares_and_capital"
-public let statementNoteTypeDividends = "dividends"
 public let statementNoteTypeBorrowingsSchedule = "borrowings_schedule"
-/// 決定論（EDINET標準タクソノミの銘柄別構造化タグ、`StatementNotesResolver.resolvePolicyHoldingSecurities`
-/// 参照）。当初「LLM必須」と見込んでいたが実データ検証で構造化タグの存在が判明し方針転換した。
-public let statementNoteTypePolicyHoldingSecurities = "policy_holding_securities"
 public let statementNoteTypePropertyPlantEquipmentSchedule = "property_plant_equipment_schedule"
 public let statementNoteTypeGoodwillAndIntangibles = "goodwill_and_intangibles"
 /// リース負債（連結）。IFRS リース注記 TextBlock（`IFRSLease`）から決定論で抽出する。
@@ -43,12 +36,10 @@ public let statementNoteTypeSgaExpenseBreakdown = "sga_expense_breakdown"
 public let allStatementNoteTypes: [String] = [
     statementNoteTypePerShareInformation,
     statementNoteTypeIssuedSharesAndCapital,
-    statementNoteTypeDividends,
     statementNoteTypeBorrowingsSchedule,
     statementNoteTypePropertyPlantEquipmentSchedule,
     statementNoteTypeGoodwillAndIntangibles,
     statementNoteTypeLeaseLiabilities,
-    statementNoteTypePolicyHoldingSecurities,
 ]
 
 /// 既知の note_type かどうか（`allStatementNoteTypes` と一致）。
@@ -63,15 +54,10 @@ public func isKnownStatementNoteType(_ noteType: String) -> Bool {
 /// `NetAssetsPerShare` より優先（IFRS 移行年度の比較表残存、スズキ S100W4MT）。
 public let perShareInformationNoteCacheVersion = "notes-eps-v3"
 public let issuedSharesAndCapitalNoteCacheVersion = "notes-issued-shares-and-capital-v1"
-public let dividendsNoteCacheVersion = "notes-dividends-v1"
 /// v2（2026-08-05）: 抽出ロジック・payload構造を大幅改修（IFRS/J-GAAP多数のフォールバック経路追加、
 /// J-GAAP附属明細表のスケール判定・インデント処理バグ修正、日経225全224銘柄の実データレビュー完了）。
 /// v3（2026-08-12）: US-GAAP 連結を巨大注記 HTML（注記9の社債・借入金／長期債務表）から抽出。
 public let borrowingsScheduleNoteCacheVersion = "notes-borrowings-schedule-v3"
-/// v2（2026-08-11）: みなし保有株式（`isDeemedHolding`）・`policyHoldingSummary`（銘柄数及び貸借対照表
-/// 計上額の合計額）を追加する payload 構造変更。本番は v1 時点で0件ingest済みのため実害はないが、
-/// 将来の再発防止として抽出ロジック変更に揃えてバンプする。
-public let policyHoldingSecuritiesNoteCacheVersion = "notes-policy-holding-securities-v2"
 /// v2（2026-08-16）: `available_via_statement` を会計基準一括ではなく BS 区分タグ当期値あり判定に変更
 /// （`lease_liabilities` と同型。区分タグ無し J-GAAP は `not_found`）。
 public let propertyPlantEquipmentScheduleNoteCacheVersion = "notes-ppe-schedule-v2"
@@ -96,9 +82,7 @@ public func statementNoteCacheVersion(forType noteType: String) -> String {
     switch noteType {
     case statementNoteTypePerShareInformation: return perShareInformationNoteCacheVersion
     case statementNoteTypeIssuedSharesAndCapital: return issuedSharesAndCapitalNoteCacheVersion
-    case statementNoteTypeDividends: return dividendsNoteCacheVersion
     case statementNoteTypeBorrowingsSchedule: return borrowingsScheduleNoteCacheVersion
-    case statementNoteTypePolicyHoldingSecurities: return policyHoldingSecuritiesNoteCacheVersion
     case statementNoteTypePropertyPlantEquipmentSchedule: return propertyPlantEquipmentScheduleNoteCacheVersion
     case statementNoteTypeGoodwillAndIntangibles: return goodwillAndIntangiblesNoteCacheVersion
     case statementNoteTypeLeaseLiabilities: return leaseLiabilitiesNoteCacheVersion
@@ -189,19 +173,18 @@ public enum StatementNoteResolveResult: Sendable {
 /// - スカラー値の note は `value`/`unit` を使う
 /// - 表形式の note（EPS/BPS等・PPE明細・のれん明細）は `items` を使う
 ///   （`StatementLineItem` を再利用し、Statement 本体と表現を揃える）
-/// - 配当金は `dividendEvents`、設備投資概要は `capexSegments`、発行済株式・資本金等は
+/// - 設備投資概要は `capexSegments`、発行済株式・資本金等は
 ///   `issuedSharesEvents`（textblock表のイベント列）と `issuedSharesAsOf`（期末の離散タグ
 ///   スナップショット。summary 移行時はこちらを正とする）
 /// - 借入金等明細表は `borrowingsComponents`（当期首/当期末残高・平均利率、2026-08-02再設計。
 ///   単一値の `items` では平均利率を表現できないため専用型に切り出した）
-/// - 政策保有株式（決定論、銘柄別 XBRL タグ抽出）は `securities` を使う
+///
+/// REST `note` JSON の `securities` / `policy_holding_summary` / `dividend_events` は
+/// 廃止した note_type のキー。残す注記でも常に null で出す（キー削除は breaking）。
 public struct StatementNotePayload: Codable, Sendable {
     public var value: Double?
     public var unit: String?
     public var items: [StatementLineItem]?
-    public var securities: [PolicyHoldingSecurityPayload]?
-    public var policyHoldingSummary: PolicyHoldingAggregateSummaryPayload?
-    public var dividendEvents: [DividendEventPayload]?
     public var capexSegments: [CapexSegmentPayload]?
     public var issuedSharesEvents: [IssuedSharesEventPayload]?
     /// 期末スナップショット（離散XBRLタグ）。`issued_shares_and_capital` note_type 専用。
@@ -212,9 +195,7 @@ public struct StatementNotePayload: Codable, Sendable {
 
     public init(
         value: Double? = nil, unit: String? = nil, items: [StatementLineItem]? = nil,
-        securities: [PolicyHoldingSecurityPayload]? = nil,
-        policyHoldingSummary: PolicyHoldingAggregateSummaryPayload? = nil,
-        dividendEvents: [DividendEventPayload]? = nil, capexSegments: [CapexSegmentPayload]? = nil,
+        capexSegments: [CapexSegmentPayload]? = nil,
         issuedSharesEvents: [IssuedSharesEventPayload]? = nil,
         issuedSharesAsOf: IssuedSharesAsOfPayload? = nil,
         borrowingsComponents: [BorrowingsComponentPayload]? = nil,
@@ -223,9 +204,6 @@ public struct StatementNotePayload: Codable, Sendable {
         self.value = value
         self.unit = unit
         self.items = items
-        self.securities = securities
-        self.policyHoldingSummary = policyHoldingSummary
-        self.dividendEvents = dividendEvents
         self.capexSegments = capexSegments
         self.issuedSharesEvents = issuedSharesEvents
         self.issuedSharesAsOf = issuedSharesAsOf
@@ -240,9 +218,9 @@ public struct StatementNotePayload: Codable, Sendable {
             "value": value as Any? ?? NSNull(),
             "unit": unit as Any? ?? NSNull(),
             "items": items.map { $0.map { $0.jsonObject() } } as Any? ?? NSNull(),
-            "securities": securities.map { $0.map { $0.jsonObject() } } as Any? ?? NSNull(),
-            "policy_holding_summary": policyHoldingSummary?.jsonObject() as Any? ?? NSNull(),
-            "dividend_events": dividendEvents.map { $0.map { $0.jsonObject() } } as Any? ?? NSNull(),
+            "securities": NSNull(),
+            "policy_holding_summary": NSNull(),
+            "dividend_events": NSNull(),
             "capex_segments": capexSegments.map { $0.map { $0.jsonObject() } } as Any? ?? NSNull(),
             "borrowings_components": borrowingsComponents.map { $0.map { $0.jsonObject() } } as Any? ?? NSNull(),
             "issued_shares_events": issuedSharesEvents.map { $0.map { $0.jsonObject() } } as Any? ?? NSNull(),
@@ -318,44 +296,6 @@ public struct CapexSegmentPayload: Codable, Sendable {
     }
 }
 
-/// 配当イベント1件分（決議単位、`dividends` note_type 専用）。中間・期末等の区分は
-/// `resolutionBody`（決議機関、例: 「取締役会決議」「定時株主総会決議」）と `resolutionDate` から
-/// 呼び出し側が判断する。実データ上、決議機関だけでは中間/期末を確定できない会社があるため
-/// （臨時決議等）、本payloadでは推測した区分ラベルを持たず、開示された値のみを返す。
-public struct DividendEventPayload: Codable, Sendable {
-    public var resolutionDate: String?
-    public var resolutionBody: String?
-    public var dividendPerShare: Double?
-    public var totalAmount: Double?
-    /// `dividendPerShare` の由来タグ名（`jpcrp_cor:` 接頭辞なし）。値が取れた場合のみ非 nil。
-    public var dividendPerShareTag: String?
-    /// `totalAmount` の由来タグ名。値が取れた場合のみ非 nil。
-    public var totalAmountTag: String?
-
-    public init(
-        resolutionDate: String?, resolutionBody: String?, dividendPerShare: Double?,
-        totalAmount: Double?, dividendPerShareTag: String? = nil, totalAmountTag: String? = nil
-    ) {
-        self.resolutionDate = resolutionDate
-        self.resolutionBody = resolutionBody
-        self.dividendPerShare = dividendPerShare
-        self.totalAmount = totalAmount
-        self.dividendPerShareTag = dividendPerShareTag
-        self.totalAmountTag = totalAmountTag
-    }
-
-    public func jsonObject() -> [String: Any] {
-        [
-            "resolution_date": resolutionDate as Any? ?? NSNull(),
-            "resolution_body": resolutionBody as Any? ?? NSNull(),
-            "dividend_per_share": dividendPerShare as Any? ?? NSNull(),
-            "total_amount": totalAmount as Any? ?? NSNull(),
-            "dividend_per_share_tag": dividendPerShareTag as Any? ?? NSNull(),
-            "total_amount_tag": totalAmountTag as Any? ?? NSNull(),
-        ]
-    }
-}
-
 /// 発行済株式・資本金等の期末スナップショット（`issued_shares_and_capital` note_type 専用）。
 /// textblock 表（`issuedSharesEvents`）とは別経路の離散XBRLタグ。表が千株丸めの会社でも
 /// financials / 将来の summary←notes 移行で使う期末値はこちらを正とする。
@@ -417,80 +357,6 @@ public struct IssuedSharesEventPayload: Codable, Sendable {
             "capital_balance": capitalBalance as Any? ?? NSNull(),
             "capital_reserve_delta": capitalReserveDelta as Any? ?? NSNull(),
             "capital_reserve_balance": capitalReserveBalance as Any? ?? NSNull(),
-        ]
-    }
-}
-
-/// 政策保有株式1銘柄分（決定論抽出結果、`StatementNotesResolver.resolvePolicyHoldingSecurities` 参照）。
-/// `policy_holding_securities` note_type 専用。`isDeemedHolding` は「みなし保有株式」（退職給付信託等、
-/// 議決権行使を指図する権限のみ保有するケース）か「特定投資株式」（提出会社・子会社が直接保有）かの区別。
-public struct PolicyHoldingSecurityPayload: Codable, Sendable {
-    public var issuerName: String
-    public var numberOfShares: Double?
-    public var carryingAmount: Double?
-    public var purpose: String?
-    public var isDeemedHolding: Bool
-
-    public init(
-        issuerName: String, numberOfShares: Double?, carryingAmount: Double?, purpose: String?,
-        isDeemedHolding: Bool = false
-    ) {
-        self.issuerName = issuerName
-        self.numberOfShares = numberOfShares
-        self.carryingAmount = carryingAmount
-        self.purpose = purpose
-        self.isDeemedHolding = isDeemedHolding
-    }
-
-    /// `isDeemedHolding` 追加（2026-08-11）前に格納された行にも対応するため、欠落時は
-    /// `false`（特定投資株式扱い）にフォールバックする。合成 Decodable のデフォルト値非対応を回避。
-    public init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        issuerName = try container.decode(String.self, forKey: .issuerName)
-        numberOfShares = try container.decodeIfPresent(Double.self, forKey: .numberOfShares)
-        carryingAmount = try container.decodeIfPresent(Double.self, forKey: .carryingAmount)
-        purpose = try container.decodeIfPresent(String.self, forKey: .purpose)
-        isDeemedHolding = try container.decodeIfPresent(Bool.self, forKey: .isDeemedHolding) ?? false
-    }
-
-    public func jsonObject() -> [String: Any] {
-        [
-            "issuer_name": issuerName,
-            "number_of_shares": numberOfShares as Any? ?? NSNull(),
-            "carrying_amount": carryingAmount as Any? ?? NSNull(),
-            "purpose": purpose as Any? ?? NSNull(),
-            "is_deemed_holding": isDeemedHolding,
-        ]
-    }
-}
-
-/// 政策保有株式（保有目的が純投資目的以外の目的である投資株式）の銘柄数及び貸借対照表計上額の合計額
-/// （決定論抽出結果、`StatementNotesResolver.resolvePolicyHoldingSecurities` 参照）。`policy_holding_securities`
-/// note_type 専用。`securities`（個別開示される上位銘柄のみ）とは異なり、非開示の銘柄も含めた全銘柄の
-/// 総数・総額を表す（提出会社・子会社の各variantを合算した値）。特定投資株式・みなし保有株式を区別
-/// しない単一の合計（開示上もこの区分での合算しか存在しない）。
-public struct PolicyHoldingAggregateSummaryPayload: Codable, Sendable {
-    public var unlistedIssueCount: Int?
-    public var unlistedCarryingAmount: Double?
-    public var listedIssueCount: Int?
-    public var listedCarryingAmount: Double?
-
-    public init(
-        unlistedIssueCount: Int?, unlistedCarryingAmount: Double?,
-        listedIssueCount: Int?, listedCarryingAmount: Double?
-    ) {
-        self.unlistedIssueCount = unlistedIssueCount
-        self.unlistedCarryingAmount = unlistedCarryingAmount
-        self.listedIssueCount = listedIssueCount
-        self.listedCarryingAmount = listedCarryingAmount
-    }
-
-    public func jsonObject() -> [String: Any] {
-        [
-            "unlisted_issue_count": unlistedIssueCount as Any? ?? NSNull(),
-            "unlisted_carrying_amount": unlistedCarryingAmount as Any? ?? NSNull(),
-            "listed_issue_count": listedIssueCount as Any? ?? NSNull(),
-            "listed_carrying_amount": listedCarryingAmount as Any? ?? NSNull(),
         ]
     }
 }

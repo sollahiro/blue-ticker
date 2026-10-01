@@ -94,25 +94,12 @@ func stampDerivedRowsStaleAfterOverrideRevoke(
         .filter(\.$docTypeCode == Api.docTypeAnnualReport)
         .all()
     let codes = Set(docs.compactMap { listedTickerCode(fromSecCode: $0.secCode) })
-    let docIDs = Set(docs.compactMap(\.id))
 
     if row.item == ManualXbrlOverrideItem.capex.rawValue {
         for code in codes {
             guard let financials = try await CompanyFinancials.find(code, on: db) else { continue }
             financials.assemblyFingerprint = nil
             try await financials.update(on: db)
-        }
-    }
-    if row.item == ManualXbrlOverrideItem.policyHoldingSecurities.rawValue {
-        for docID in docIDs {
-            let key = CompanyStatementNote.compositeID(
-                docID: docID, noteType: statementNoteTypePolicyHoldingSecurities)
-            guard let note = try await CompanyStatementNote.find(key, on: db),
-                note.source == statementNoteSourceManualOverride
-            else { continue }
-            note.needsReview = true
-            note.payload.needsReview = true
-            try await note.update(on: db)
         }
     }
 }
@@ -135,44 +122,7 @@ func manualXbrlOverrideForceTargets(
             }
         }
     }
-    let staleNotes = try await CompanyStatementNote.query(on: db)
-        .filter(\.$source == statementNoteSourceManualOverride)
-        .filter(\.$noteType == statementNoteTypePolicyHoldingSecurities)
-        .all()
-    let activeKeys = Set(
-        overrides.filter { $0.item == .policyHoldingSecurities }.map {
-            "\($0.edinetCode)#\($0.periodEnd)"
-        })
-    for note in staleNotes {
-        guard let doc = try await EdinetDocument.find(note.docID, on: db) else {
-            docIDs.insert(note.docID)
-            codes.insert(note.code)
-            continue
-        }
-        let key = "\(doc.edinetCode)#\(doc.periodEnd ?? "")"
-        if !activeKeys.contains(key) {
-            docIDs.insert(note.docID)
-            codes.insert(note.code)
-        }
-    }
     return (codes, docIDs)
-}
-
-func policyHoldingOverridesByOriginalDocID(
-    overrides: [ManualXbrlOverrideRecord], on db: Database
-) async throws -> [String: ManualXbrlOverrideRecord] {
-    var mapped: [String: ManualXbrlOverrideRecord] = [:]
-    for override in overrides where override.item == .policyHoldingSecurities {
-        let docs = try await EdinetDocument.query(on: db)
-            .filter(\.$edinetCode == override.edinetCode)
-            .filter(\.$periodEnd == override.periodEnd)
-            .filter(\.$docTypeCode == Api.docTypeAnnualReport)
-            .all()
-        for doc in docs {
-            if let id = doc.id { mapped[id] = override }
-        }
-    }
-    return mapped
 }
 
 func overrideMatching(

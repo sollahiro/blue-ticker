@@ -46,12 +46,10 @@
 |---|---|
 | `per_share_information` | 1 株当たり情報 |
 | `issued_shares_and_capital` | 発行済株式・資本金等 |
-| `dividends` | 配当 |
 | `borrowings_schedule` | 借入金等明細 |
 | `property_plant_equipment_schedule` | 有形固定資産明細 |
 | `goodwill_and_intangibles` | のれん・無形資産 |
 | `lease_liabilities` | リース負債 |
-| `policy_holding_securities` | 政策保有株式 |
 
 未公開: `sga_expense_breakdown`（販管費の主要な費目内訳。発生支出の `research_and_development` 軸とは別。US-GAAP 非対応）。
 

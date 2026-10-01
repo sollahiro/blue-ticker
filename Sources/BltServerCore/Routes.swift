@@ -219,7 +219,7 @@ func registerRoutes(
             notFoundMessage: "財務諸表は未抽出です")
     }
 
-    // GET /v1/companies/{code}/statement/notes?note_type=policy_holding_securities&doc_id=...
+    // GET /v1/companies/{code}/statement/notes?note_type=borrowings_schedule&doc_id=...
     // DB（財務諸表注記取り込み company_statement_notes）の格納済み注記のみを返す。note_type 省略時は 400。
     // `statement` 本体とは別エンドポイント（バージョニング独立。docs/statement.md）。
     // 財務諸表注記取り込み の対象母集団は上場全体（日経225は処理順のみ。2026-09 に限定を廃止して拡大。ingest 側）。

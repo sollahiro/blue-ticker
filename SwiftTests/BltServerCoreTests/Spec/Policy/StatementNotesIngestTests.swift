@@ -426,21 +426,44 @@ private func fixedResolvedResolve(value: Double = 123.45) -> StatementNoteResolv
         }
     }
 
+    @Test func loadRejectsDroppedNoteTypesEvenIfRowsExist() async throws {
+        try await withMigratedApp { app in
+            for noteType in ["dividends", "policy_holding_securities"] {
+                let row = CompanyStatementNote(docID: "S1", noteType: noteType)
+                row.code = "7203"
+                row.submitDateTime = "2025-06-20 09:00"
+                row.payload = StatementNotePayload(needsReview: false, warnings: [])
+                row.needsReview = false
+                row.source = statementNoteSourceXbrlFacts
+                row.contentHash = "x"
+                row.cacheVersion = "notes-legacy-v1"
+                try await row.create(on: app.db)
+
+                let result = try await loadStoredStatementNote(
+                    code: "7203", docId: nil, noteType: noteType, db: app.db)
+                guard case .absent = result else {
+                    Issue.record("expected .absent for \(noteType), got \(result)")
+                    return
+                }
+            }
+        }
+    }
+
     @Test func loadReturnsNotApplicableReasonWhenRowIsNotApplicable() async throws {
         try await withMigratedApp { app in
-            let row = CompanyStatementNote(docID: "S1", noteType: statementNoteTypeDividends)
+            let row = CompanyStatementNote(docID: "S1", noteType: statementNoteTypeBorrowingsSchedule)
             row.code = "7203"
             row.submitDateTime = "2025-06-20 09:00"
             row.payload = StatementNotePayload(needsReview: false, warnings: [])
             row.needsReview = false
             row.source = statementNoteSourceNotApplicable
             row.contentHash = ""
-            row.cacheVersion = statementNoteCacheVersion(forType: statementNoteTypeDividends)
+            row.cacheVersion = statementNoteCacheVersion(forType: statementNoteTypeBorrowingsSchedule)
             row.notApplicableReason = statementNoteNotApplicableNotFound
             try await row.create(on: app.db)
 
             let result = try await loadStoredStatementNote(
-                code: "7203", docId: nil, noteType: statementNoteTypeDividends, db: app.db)
+                code: "7203", docId: nil, noteType: statementNoteTypeBorrowingsSchedule, db: app.db)
             guard case .notApplicable(let reason) = result else {
                 Issue.record("expected .notApplicable, got \(result)")
                 return
@@ -503,7 +526,7 @@ private func fixedResolvedResolve(value: Double = 123.45) -> StatementNoteResolv
     @Test func loadHidesNeedsReviewNotesFromPublicSurface() async throws {
         try await withMigratedApp { app in
             let row = CompanyStatementNote(
-                docID: "S100W0S7", noteType: statementNoteTypePolicyHoldingSecurities)
+                docID: "S100W0S7", noteType: statementNoteTypePerShareInformation)
             row.code = "8316"
             row.submitDateTime = "2025-06-20 09:00"
             row.payload = StatementNotePayload(
@@ -515,11 +538,11 @@ private func fixedResolvedResolve(value: Double = 123.45) -> StatementNoteResolv
             row.source = statementNoteSourceXbrlFacts
             row.contentHash = "70"
             row.cacheVersion = statementNoteCacheVersion(
-                forType: statementNoteTypePolicyHoldingSecurities)
+                forType: statementNoteTypePerShareInformation)
             try await row.create(on: app.db)
 
             let byCode = try await loadStoredStatementNote(
-                code: "8316", docId: nil, noteType: statementNoteTypePolicyHoldingSecurities,
+                code: "8316", docId: nil, noteType: statementNoteTypePerShareInformation,
                 db: app.db)
             guard case .absent = byCode else {
                 Issue.record("expected .absent for needs_review note, got \(byCode)")
@@ -527,7 +550,7 @@ private func fixedResolvedResolve(value: Double = 123.45) -> StatementNoteResolv
             }
             let byDoc = try await loadStoredStatementNote(
                 code: "8316", docId: "S100W0S7",
-                noteType: statementNoteTypePolicyHoldingSecurities, db: app.db)
+                noteType: statementNoteTypePerShareInformation, db: app.db)
             guard case .absent = byDoc else {
                 Issue.record("expected .absent by doc_id, got \(byDoc)")
                 return
@@ -539,7 +562,7 @@ private func fixedResolvedResolve(value: Double = 123.45) -> StatementNoteResolv
         try await withMigratedApp { app in
             try await seedDoc("S100W0S7", secCode: "83160", db: app.db)
             let pre = CompanyStatementNote(
-                docID: "S100W0S7", noteType: statementNoteTypePolicyHoldingSecurities)
+                docID: "S100W0S7", noteType: statementNoteTypePerShareInformation)
             pre.code = "8316"
             pre.submitDateTime = "2025-06-20 09:00"
             pre.payload = StatementNotePayload(value: 70, unit: "shares", needsReview: true)
@@ -547,12 +570,12 @@ private func fixedResolvedResolve(value: Double = 123.45) -> StatementNoteResolv
             pre.source = statementNoteSourceXbrlFacts
             pre.contentHash = "70"
             pre.cacheVersion = statementNoteCacheVersion(
-                forType: statementNoteTypePolicyHoldingSecurities)
+                forType: statementNoteTypePerShareInformation)
             try await pre.create(on: app.db)
 
             let summary = try await runStatementNotesIngest(
                 db: app.db, listedCodes: ["8316"], years: 3, limit: nil,
-                noteType: statementNoteTypePolicyHoldingSecurities
+                noteType: statementNoteTypePerShareInformation
             ) { _, _ in
                 Issue.record("resolver must not run for deterministic needs_review")
                 return .failed
@@ -561,7 +584,7 @@ private func fixedResolvedResolve(value: Double = 123.45) -> StatementNoteResolv
             #expect(summary.skipped == 1)
             #expect(summary.attempted == 0)
             let key = CompanyStatementNote.compositeID(
-                docID: "S100W0S7", noteType: statementNoteTypePolicyHoldingSecurities)
+                docID: "S100W0S7", noteType: statementNoteTypePerShareInformation)
             let row = try #require(try await CompanyStatementNote.find(key, on: app.db))
             #expect(row.payload.value == 70)
             #expect(row.needsReview == true)
@@ -578,7 +601,7 @@ private func fixedResolvedResolve(value: Double = 123.45) -> StatementNoteResolv
                 "overlay_regression:row_loss:S100X7DX:orig=S100W0S7:tag=Holding:before=70:after=13"
             let summary = try await runStatementNotesIngest(
                 db: app.db, listedCodes: ["8316"], years: 3, limit: nil,
-                noteType: statementNoteTypePolicyHoldingSecurities, logger: logger
+                noteType: statementNoteTypePerShareInformation, logger: logger
             ) { _, _ in
                 .resolved(
                     payload: StatementNotePayload(
@@ -588,12 +611,12 @@ private func fixedResolvedResolve(value: Double = 123.45) -> StatementNoteResolv
 
             #expect(summary.stored == 1)
             let key = CompanyStatementNote.compositeID(
-                docID: "S100W0S7", noteType: statementNoteTypePolicyHoldingSecurities)
+                docID: "S100W0S7", noteType: statementNoteTypePerShareInformation)
             let row = try #require(try await CompanyStatementNote.find(key, on: app.db))
             #expect(row.payload.value == 70)
             #expect(row.needsReview == true)
             let published = try await loadStoredStatementNote(
-                code: "8316", docId: nil, noteType: statementNoteTypePolicyHoldingSecurities,
+                code: "8316", docId: nil, noteType: statementNoteTypePerShareInformation,
                 db: app.db)
             guard case .absent = published else {
                 Issue.record("overlay regression must stay hidden, got \(published)")

@@ -20,6 +20,7 @@ private func withOverrideApp(_ body: (Application) async throws -> Void) async t
         app.migrations.add(AddAssemblyFingerprintToCompanyFinancials())
         app.migrations.add(CreateCompanyStatementNotes())
         app.migrations.add(CreateManualXbrlOverrides())
+        app.migrations.add(RestrictManualXbrlOverridesToCapex())
         try await app.autoMigrate()
         try await body(app)
     } catch {
@@ -65,49 +66,6 @@ private func sampleCapexRecord() -> ManualXbrlOverrideRecord {
             let replaced = try await insertManualXbrlOverride(record, on: app.db)
             #expect(replaced.id != row.id)
             #expect(try await loadActiveManualXbrlOverrides(on: app.db).count == 1)
-        }
-    }
-
-    @Test func applyAfterOverlayStoreAndRevokeIgnore() async throws {
-        try await withOverrideApp { app in
-            let holdings = (1...70).map {
-                PolicyHoldingSecurityPayload(
-                    issuerName: "N\($0)", numberOfShares: 1, carryingAmount: 1, purpose: "p")
-            }
-            let record = ManualXbrlOverrideRecord(
-                edinetCode: "E03614", periodEnd: "2025-03-31", item: .policyHoldingSecurities,
-                payload: .policyHoldingSecurities(
-                    PolicyHoldingSecuritiesManualOverridePayload(
-                        securities: holdings, policyHoldingSummary: nil)),
-                sourceDocID: "S100WRZH", sourcePage: "提出会社の状況", reason: "70 names",
-                createdBy: "t")
-            _ = try await insertManualXbrlOverride(record, on: app.db)
-
-            let overlayWarning =
-                "overlay_regression:row_loss:S100X7DX:orig=S100W0S7:tag=Holding:before=70:after=13"
-            let stamped = StatementNoteResolveResult.resolved(
-                payload: StatementNotePayload(
-                    securities: Array(holdings.prefix(13)), needsReview: true,
-                    warnings: [overlayWarning]),
-                source: statementNoteSourceXbrlFacts, contentHash: "13")
-            let active = try await loadActiveManualXbrlOverrides(on: app.db)
-            let applied = applyManualPolicyHoldingOverride(to: stamped, override: active[0])
-            guard case .resolved(let payload, let source, _) = applied else {
-                Issue.record("expected resolved")
-                return
-            }
-            #expect(source == statementNoteSourceManualOverride)
-            #expect(payload.securities?.count == 70)
-            #expect(payload.needsReview == false)
-            #expect(
-                isPubliclyServableStatementNote(
-                    needsReview: payload.needsReview, warnings: payload.warnings))
-
-            let row = try #require(try await findActiveManualXbrlOverride(
-                edinetCode: "E03614", periodEnd: "2025-03-31", item: .policyHoldingSecurities,
-                on: app.db))
-            _ = try await revokeManualXbrlOverride(id: try #require(row.id), on: app.db)
-            #expect(try await loadActiveManualXbrlOverrides(on: app.db).isEmpty)
         }
     }
 
