@@ -419,20 +419,6 @@ public extension BltServerContext {
             StatementNotesResolver.resolvePerShareInformation(xbrlDir: xbrlDir), xbrlDir: xbrlDir)
     }
 
-    /// 財務諸表注記取り込み: 書類1件分の `dividends` note_type を解決する。ロジックは
-    /// `StatementNotesResolver.resolveDividends` に委譲する（EDINET標準タクソノミの決議単位
-    /// 構造化タグから決定論で抽出、LLM 不要）。財務取り込み の単一集計値 passthrough を置き換える
-    /// （実データレビューで決議単位のテーブル構造が判明したため、2026-08-02）。
-    func resolveDividendsNote(docID: String, correctionDocIDs: [String] = [])
-        async -> StatementNoteResolveResult
-    {
-        guard let xbrlDir = await downloadAnnualFilingXbrl(
-            docID: docID, correctionDocIDs: correctionDocIDs
-        ) else { return .failed }
-        return statementNoteByRecordingOverlayRegressions(
-            StatementNotesResolver.resolveDividends(xbrlDir: xbrlDir), xbrlDir: xbrlDir)
-    }
-
     /// 財務諸表注記取り込み: 書類1件分の `issued_shares_and_capital` note_type を解決する。ロジックは
     /// `StatementNotesResolver.resolveIssuedSharesAndCapital` に委譲する。期末スナップショット（離散タグ:
     /// 発行済・資本金・資本準備金）と textblock 表のイベント列を併記（LLM不要）。
@@ -444,20 +430,6 @@ public extension BltServerContext {
         ) else { return .failed }
         return statementNoteByRecordingOverlayRegressions(
             StatementNotesResolver.resolveIssuedSharesAndCapital(xbrlDir: xbrlDir), xbrlDir: xbrlDir)
-    }
-
-    /// 財務諸表注記取り込み: 書類1件分の `policy_holding_securities` note_type を解決する。ロジックは
-    /// `StatementNotesResolver.resolvePolicyHoldingSecurities` に委譲する（EDINET標準タクソノミの
-    /// 銘柄別構造化タグから決定論で抽出、LLM 不要）。
-    /// `correctionDocIDs` は同一 FY の訂正(130)。fact / TextBlock overlay。格納 `doc_id` は原本。
-    func resolvePolicyHoldingSecuritiesNote(docID: String, correctionDocIDs: [String] = [])
-        async -> StatementNoteResolveResult
-    {
-        guard let xbrlDir = await downloadAnnualFilingXbrl(
-            docID: docID, correctionDocIDs: correctionDocIDs
-        ) else { return .failed }
-        return statementNoteByRecordingOverlayRegressions(
-            StatementNotesResolver.resolvePolicyHoldingSecurities(xbrlDir: xbrlDir), xbrlDir: xbrlDir)
     }
 
     /// 有報(120)の XBRL。同一 FY の訂正(130)があれば、パースできるものを提出順に overlay する。

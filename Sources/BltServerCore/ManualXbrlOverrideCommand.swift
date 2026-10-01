@@ -214,7 +214,6 @@ func manualXbrlOverrideDiff(
         .filter(\.$docTypeCode == Api.docTypeAnnualReport)
         .all()
     let codes = docs.compactMap { listedTickerCode(fromSecCode: $0.secCode) }
-    let docIDs = docs.compactMap(\.id)
     switch record.payload {
     case .capex(let payload):
         var current: Double? = nil
@@ -226,24 +225,6 @@ func manualXbrlOverrideDiff(
             "current_capex_million_yen": current as Any? ?? NSNull(),
             "override_capex_million_yen": payload.millionYen,
             "override_yen": payload.yen,
-        ]
-    case .policyHoldingSecurities(let payload):
-        var currentCount: Int? = nil
-        var currentNeedsReview: Bool? = nil
-        if let docID = docIDs.first {
-            let key = CompanyStatementNote.compositeID(
-                docID: docID, noteType: statementNoteTypePolicyHoldingSecurities)
-            if let note = try await CompanyStatementNote.find(key, on: db) {
-                currentCount = note.payload.securities?.count
-                currentNeedsReview = note.needsReview
-            }
-        }
-        return [
-            "item": record.item.rawValue,
-            "current_securities_count": currentCount as Any? ?? NSNull(),
-            "current_needs_review": currentNeedsReview as Any? ?? NSNull(),
-            "override_securities_count": payload.securities?.count as Any? ?? NSNull(),
-            "override_has_summary": payload.policyHoldingSummary != nil,
         ]
     }
 }

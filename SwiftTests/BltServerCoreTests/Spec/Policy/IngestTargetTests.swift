@@ -75,7 +75,13 @@ struct StatementNoteTypesParseTests {
 
     @Test("未知トークンは nil")
     func unknownTokenIsNil() {
-        #expect(parseStatementNoteTypes("dividends,foo") == nil)
+        #expect(parseStatementNoteTypes("borrowings_schedule,foo") == nil)
+    }
+
+    @Test("廃止した note_type は未知")
+    func droppedTypesAreUnknown() {
+        #expect(parseStatementNoteTypes("dividends") == nil)
+        #expect(parseStatementNoteTypes("policy_holding_securities") == nil)
     }
 
     @Test("空選択は nil")

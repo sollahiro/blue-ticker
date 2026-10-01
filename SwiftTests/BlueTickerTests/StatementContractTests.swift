@@ -142,6 +142,21 @@ import Testing
         #expect(statementNoteCacheVersion(forType: "capital_expenditures_overview").isEmpty)
     }
 
+    @Test func droppedDividendsAndPolicyHoldingNoteTypesAreUnknown() {
+        for type in ["dividends", "policy_holding_securities"] {
+            #expect(isKnownStatementNoteType(type) == false)
+            #expect(!allStatementNoteTypes.contains(type))
+            #expect(statementNoteCacheVersion(forType: type).isEmpty)
+        }
+    }
+
+    @Test func notePayloadKeepsRetiredKeysAsNull() {
+        let json = StatementNotePayload(value: 1, unit: "JPY").jsonObject()
+        #expect(json["securities"] is NSNull)
+        #expect(json["policy_holding_summary"] is NSNull)
+        #expect(json["dividend_events"] is NSNull)
+    }
+
     @Test func sgaExpenseBreakdownIsImplementedButUnpublished() {
         // sga_expense_breakdown: resolver / cache_version / smoke·golden はあるが公開一覧・ingest・API 未配線。
         #expect(isKnownStatementNoteType(statementNoteTypeSgaExpenseBreakdown) == false)

@@ -305,8 +305,6 @@ public func runFactsIngestCommand(
         let activeOverrides = try await loadActiveManualXbrlOverrides(on: app.db)
         let overrideForce = try await manualXbrlOverrideForceTargets(
             overrides: activeOverrides, on: app.db)
-        let policyHoldingOverrideByDocID = try await policyHoldingOverridesByOriginalDocID(
-            overrides: activeOverrides, on: app.db)
         if !activeOverrides.isEmpty {
             app.logger.notice(
                 "Active manual XBRL overrides loaded",
@@ -583,8 +581,8 @@ public func runFactsIngestCommand(
         if targets.contains(.notes) {
             // 財務諸表注記取り込み: 対象母集団は上場全体（`listed`。日経225=`priority`は処理順の
             // 先頭寄せのみ。2026-09: 日経225限定を廃止し statements と同じ上場全体へ拡大）。
-            // EPS/発行済株式・資本金/配当金/borrowings_schedule/PPE・のれん/
-            // lease_liabilities/policy_holding_securities は注記からXBRL直接抽出（決定論）。
+            // EPS/発行済株式・資本金/borrowings_schedule/PPE・のれん/
+            // lease_liabilities は注記からXBRL直接抽出（決定論）。
             // `sga_expense_breakdown` は未公開のためここにも job-03 にも載せない（進捗は Linear Team `blue-ticker`）。
             let statementNotesListed = codes ?? listed
             if statementNotesListed.isEmpty {
@@ -605,13 +603,6 @@ public func runFactsIngestCommand(
                         statementNoteTypeIssuedSharesAndCapital,
                         { docID, _ in
                             await context.resolveIssuedSharesAndCapitalNote(
-                                docID: docID, correctionDocIDs: correctionIDsByOriginal[docID] ?? [])
-                        }
-                    ),
-                    (
-                        statementNoteTypeDividends,
-                        { docID, _ in
-                            await context.resolveDividendsNote(
                                 docID: docID, correctionDocIDs: correctionIDsByOriginal[docID] ?? [])
                         }
                     ),
@@ -641,18 +632,6 @@ public func runFactsIngestCommand(
                         { docID, _ in
                             await context.resolveLeaseLiabilitiesNote(
                                 docID: docID, correctionDocIDs: correctionIDsByOriginal[docID] ?? [])
-                        }
-                    ),
-                    (
-                        statementNoteTypePolicyHoldingSecurities,
-                        { docID, _ in
-                            let resolved = await context.resolvePolicyHoldingSecuritiesNote(
-                                docID: docID, correctionDocIDs: correctionIDsByOriginal[docID] ?? [])
-                            guard let override = policyHoldingOverrideByDocID[docID] else {
-                                return resolved
-                            }
-                            return applyManualPolicyHoldingOverride(
-                                to: resolved, override: override)
                         }
                     ),
                 ]

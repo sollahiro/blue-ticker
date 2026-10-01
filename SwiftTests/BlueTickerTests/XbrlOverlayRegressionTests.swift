@@ -179,9 +179,9 @@ import Testing
         let stamped = statementNoteByRecordingOverlayRegressions(
             .resolved(
                 payload: StatementNotePayload(
-                    securities: [
-                        PolicyHoldingSecurityPayload(
-                            issuerName: "A", numberOfShares: 1, carryingAmount: 1, purpose: nil)
+                    items: [
+                        StatementLineItem(
+                            tag: holdingTag, label: "A", value: 1, unit: "shares", order: 0)
                     ],
                     needsReview: false),
                 source: statementNoteSourceXbrlFacts, contentHash: "h"),
@@ -192,7 +192,7 @@ import Testing
         }
         #expect(payload.needsReview)
         #expect(hasOverlayRegressionWarning(payload.warnings))
-        #expect(payload.securities?.count == 1)
+        #expect(payload.items?.count == 1)
         #expect(
             !isPubliclyServableStatementNote(
                 needsReview: payload.needsReview, warnings: payload.warnings))
@@ -268,9 +268,9 @@ import Testing
         #expect(!hasOverlayRegressionWarning(other.warnings))
     }
 
-    /// 8316 FY2025 実パッケージ: 120 + WRZH + X7DX。X7DX はレイヤごと捨て、WRZH の 70 銘柄と
+    /// 8316 FY2025 実パッケージ: 120 + WRZH + X7DX。X7DX はレイヤごと捨て、WRZH の
     /// 設備投資 370,500 百万円を残し、needs_review と X7DX の warning を付ける。
-    @Test func smfgRealPackagesSkipX7DXKeepSeventySecuritiesAndCapex() async throws {
+    @Test func smfgRealPackagesSkipX7DXKeepCapex() async throws {
         let original = "S100W0S7"
         let wrzh = "S100WRZH"
         let x7dx = "S100X7DX"
@@ -285,17 +285,6 @@ import Testing
                 download: { StatementNotesOracleSupport.smokeXbrlDir($0) }))
         #expect(
             overlayDirectoryEntries(in: merged).compactMap(\.correctionDocID) == [wrzh])
-        let stamped = statementNoteByRecordingOverlayRegressions(
-            StatementNotesResolver.resolvePolicyHoldingSecurities(xbrlDir: merged),
-            xbrlDir: merged)
-        guard case .resolved(let payload, _, _) = stamped else {
-            Issue.record("expected resolved policy holdings")
-            return
-        }
-        #expect(payload.securities?.count == 70)
-        #expect(payload.needsReview)
-        #expect(hasOverlayRegressionWarning(payload.warnings))
-        #expect(payload.warnings.contains { $0.contains(x7dx) })
         let capexFacts = XBRLUtils.collectAllNumericFacts(in: merged, nilAsZero: false)
         #expect(
             capexFacts["CapitalExpendituresOverviewOfCapitalExpendituresEtc"]?[

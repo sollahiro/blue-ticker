@@ -490,8 +490,8 @@ public func apiSkillsCatalog() -> [ApiSkill] {
             name: "財務諸表注記",
             description: """
                 貸借対照表・損益計算書・キャッシュ・フロー計算書（get-statement）の外にある注記
-                （EPS・発行済株式数・配当金・
-                借入金等明細表・政策保有株式・有形固定資産等明細表・のれん及び無形資産明細・
+                （EPS・発行済株式数・
+                借入金等明細表・有形固定資産等明細表・のれん及び無形資産明細・
                 リース負債）を
                 note_type 単位で取得します（格納済みデータのみ）。
                 対象は上場企業（日経225は ingest の処理順の優先のみ）。doc_id を省略すると最新の有価証券報告書を使用します。
@@ -523,8 +523,7 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                     type: .string,
                     description: """
                         注記種別: per_share_information / issued_shares_and_capital / \
-                        dividends / \
-                        borrowings_schedule / policy_holding_securities / \
+                        borrowings_schedule / \
                         property_plant_equipment_schedule / goodwill_and_intangibles / \
                         lease_liabilities
                         """,
@@ -547,7 +546,7 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                 優先し、それ以外は BS 構造化タグ当期値で available_via_statement（lease は借入金等明細表の
                 リース債務なら available_via_notes。US-GAAP は us_gaap_unsupported）。
                 goodwill_and_intangibles は IFRS 注記限定。
-                例: GET /v1/companies/7203/statement/notes?note_type=policy_holding_securities
+                例: GET /v1/companies/7203/statement/notes?note_type=borrowings_schedule
                 """,
             mcpOutputSchema:
                 """

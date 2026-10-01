@@ -50,7 +50,7 @@ enum StatementNotesOracleSupport {
     }
 
     /// note_type共通のoracle突合。`itemsKey`は期待JSON内の配列キー名（例:
-    /// "components"/"items"/"securities"/"dividend_events"）。`content_hash`は開示HTMLから決定的に
+    /// "components"/"items"）。`content_hash`は開示HTMLから決定的に
     /// 導出される値で「仕様」ではないため期待JSONには含めない（比較対象外）。
     static func assertMatchesOracle(
         docID: String, expectedFileURL: URL, result: StatementNoteResolveResult,

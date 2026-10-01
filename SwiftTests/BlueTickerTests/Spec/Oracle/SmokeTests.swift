@@ -1168,10 +1168,6 @@ import Foundation
     /// notes から足せる未配線フィールド。statement で取れた値は組立側で優先する。
     private func notesRemainingFills(xbrlDir: URL) -> [String: Double] {
         var out: [String: Double] = [:]
-        if case .resolved(let payload, _, _) = StatementNotesResolver.resolveDividends(xbrlDir: xbrlDir) {
-            let sum = (payload.dividendEvents ?? []).compactMap(\.totalAmount).reduce(0, +)
-            if sum != 0 { out["dividend_ss"] = sum }
-        }
         if let v = StatementNotesResolver.financialsCanonicalInterestExpense(xbrlDir: xbrlDir) {
             out["interest_expense"] = v
         }
