@@ -112,8 +112,9 @@ import Foundation
                     in: Self.xbrlDir("S100W4FB"), tags: Xbrl.segmentCapitalExpenditureTags))
         }
         if snapshot.flowMetric == capexFlowMetricNoncurrentAssetAdditions {
-            #expect(snapshot.flow?.denominatorTag == "AdditionsOfFixedAssets"
-                || snapshot.flow?.denominatorTag.contains("Addition") == true)
+            if let tag = snapshot.flow?.denominatorTag {
+                #expect(tag == "AdditionsOfFixedAssets" || tag.contains("Addition"))
+            }
         }
         #expect(snapshot.segmentAssets != nil || snapshot.flow != nil
             || snapshot.capitalExpendituresOverview != nil)
