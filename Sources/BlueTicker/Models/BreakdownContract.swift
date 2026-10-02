@@ -22,12 +22,8 @@ public let breakdownAxisResearchAndDevelopment = "research_and_development"
 public let breakdownAxisGoodwill = "goodwill"
 /// 報告セグメント別の資産額（2026-08-20追加）。決定論のみ。
 public let breakdownAxisSegmentAssets = "segment_assets"
-/// 報告セグメント別の減価償却費及び償却費（2026-08-20追加）。決定論のみ。
-public let breakdownAxisDepreciationAndAmortization = "depreciation_and_amortization"
 /// 報告セグメント別ののれんの償却額（2026-08-20追加）。決定論のみ。
 public let breakdownAxisGoodwillAmortization = "goodwill_amortization"
-/// 報告セグメント別の減損損失（2026-08-20追加）。決定論のみ。
-public let breakdownAxisImpairmentLoss = "impairment_loss"
 /// 報告セグメント別の持分法会計処理される投資（2026-08-20追加）。決定論のみ。
 public let breakdownAxisEquityMethodInvestments = "equity_method_investments"
 /// 報告セグメント別の資本的支出（2026-08-20追加）。決定論のみ。
@@ -44,9 +40,7 @@ public let breakdownSegmentMetricAxes = [
     breakdownAxisResearchAndDevelopment,
     breakdownAxisGoodwill,
     breakdownAxisSegmentAssets,
-    breakdownAxisDepreciationAndAmortization,
     breakdownAxisGoodwillAmortization,
-    breakdownAxisImpairmentLoss,
     breakdownAxisEquityMethodInvestments,
     breakdownAxisCapitalExpenditures,
     breakdownAxisCapitalExpendituresOverview,
@@ -91,9 +85,7 @@ public let goodwillBreakdownCacheVersion = "breakdown-goodwill-v2"
 /// v3: 連結の無 dimension EntityTotal があるとき分母を連結 BS 計上額に固定。差額表と segment の同額 reconciling を dedupe。
 /// v4: ingest 時に jpcrp 標準 member の日本語ラベルを補完（生 `*Member` 表示の誤表示）。
 public let segmentAssetsBreakdownCacheVersion = "breakdown-segment-assets-v4"
-public let depreciationAndAmortizationBreakdownCacheVersion = "breakdown-depreciation-and-amortization-v3"
 public let goodwillAmortizationBreakdownCacheVersion = "breakdown-goodwill-amortization-v3"
-public let impairmentLossBreakdownCacheVersion = "breakdown-impairment-loss-v3"
 public let equityMethodInvestmentsBreakdownCacheVersion = "breakdown-equity-method-investments-v3"
 public let capitalExpendituresBreakdownCacheVersion = "breakdown-capital-expenditures-v3"
 public let capitalExpendituresOverviewBreakdownCacheVersion = "breakdown-capital-expenditures-overview-v3"
@@ -107,9 +99,7 @@ public func breakdownCacheVersion(forAxis axis: String) -> String {
     case breakdownAxisResearchAndDevelopment: return researchAndDevelopmentBreakdownCacheVersion
     case breakdownAxisGoodwill: return goodwillBreakdownCacheVersion
     case breakdownAxisSegmentAssets: return segmentAssetsBreakdownCacheVersion
-    case breakdownAxisDepreciationAndAmortization: return depreciationAndAmortizationBreakdownCacheVersion
     case breakdownAxisGoodwillAmortization: return goodwillAmortizationBreakdownCacheVersion
-    case breakdownAxisImpairmentLoss: return impairmentLossBreakdownCacheVersion
     case breakdownAxisEquityMethodInvestments: return equityMethodInvestmentsBreakdownCacheVersion
     case breakdownAxisCapitalExpenditures: return capitalExpendituresBreakdownCacheVersion
     case breakdownAxisCapitalExpendituresOverview: return capitalExpendituresOverviewBreakdownCacheVersion
@@ -173,9 +163,7 @@ public let employeesBreakdownMinServableVersion = 1
 public let researchAndDevelopmentBreakdownMinServableVersion = 1
 public let goodwillBreakdownMinServableVersion = 1
 public let segmentAssetsBreakdownMinServableVersion = 1
-public let depreciationAndAmortizationBreakdownMinServableVersion = 1
 public let goodwillAmortizationBreakdownMinServableVersion = 1
-public let impairmentLossBreakdownMinServableVersion = 1
 public let equityMethodInvestmentsBreakdownMinServableVersion = 1
 public let capitalExpendituresBreakdownMinServableVersion = 1
 public let capitalExpendituresOverviewBreakdownMinServableVersion = 1
@@ -189,9 +177,7 @@ public func breakdownMinServableVersion(forAxis axis: String) -> Int {
     case breakdownAxisResearchAndDevelopment: return researchAndDevelopmentBreakdownMinServableVersion
     case breakdownAxisGoodwill: return goodwillBreakdownMinServableVersion
     case breakdownAxisSegmentAssets: return segmentAssetsBreakdownMinServableVersion
-    case breakdownAxisDepreciationAndAmortization: return depreciationAndAmortizationBreakdownMinServableVersion
     case breakdownAxisGoodwillAmortization: return goodwillAmortizationBreakdownMinServableVersion
-    case breakdownAxisImpairmentLoss: return impairmentLossBreakdownMinServableVersion
     case breakdownAxisEquityMethodInvestments: return equityMethodInvestmentsBreakdownMinServableVersion
     case breakdownAxisCapitalExpenditures: return capitalExpendituresBreakdownMinServableVersion
     case breakdownAxisCapitalExpendituresOverview: return capitalExpendituresOverviewBreakdownMinServableVersion
@@ -207,8 +193,8 @@ public func breakdownCacheVersionNumber(_ version: String) -> Int? {
     let prefixes = [
         "breakdown-business-v", "breakdown-geography-v", "breakdown-employees-v",
         "breakdown-research-and-development-v", "breakdown-goodwill-v",
-        "breakdown-segment-assets-v", "breakdown-depreciation-and-amortization-v",
-        "breakdown-goodwill-amortization-v", "breakdown-impairment-loss-v",
+        "breakdown-segment-assets-v",
+        "breakdown-goodwill-amortization-v",
         "breakdown-equity-method-investments-v", "breakdown-capital-expenditures-v",
         "breakdown-capital-expenditures-overview-v", "breakdown-noncurrent-asset-additions-v",
         "breakdown-v",

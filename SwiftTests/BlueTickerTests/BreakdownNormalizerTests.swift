@@ -1572,7 +1572,7 @@ import Foundation
         #expect(snap.denominatorTag == "company_financials")
     }
 
-    /// 報告セグメントごとの情報に含まれる7指標を、smokeの実抽出factsから軸別に
+    /// 報告セグメントごとの指標を、smokeの実抽出factsから軸別に
     /// 正規化する床。各指標の denominator_tag は固定プレースホルダーではなく、
     /// fixture の実タグ候補のいずれかになることも確認する。
     @Test func segmentMetricAxesNormalizeSmokeFacts() throws {
@@ -1592,12 +1592,6 @@ import Foundation
         try expectTag(
             BreakdownNormalizer.normalizeSegmentAssets(facts: ajinomoto),
             Xbrl.segmentAssetsTags)
-        try expectTag(
-            BreakdownNormalizer.normalizeDepreciationAndAmortization(facts: ajinomoto),
-            Xbrl.segmentDepreciationAndAmortizationTags)
-        try expectTag(
-            BreakdownNormalizer.normalizeImpairmentLoss(facts: ajinomoto),
-            Xbrl.segmentImpairmentLossTags)
         try expectTag(
             BreakdownNormalizer.normalizeEquityMethodInvestments(facts: ajinomoto),
             Xbrl.segmentEquityMethodInvestmentTags)
@@ -1787,31 +1781,31 @@ import Foundation
         #expect(!snapshot.rows.contains { $0.labelRaw == Xbrl.entityTotalMemberName })
     }
 
-    /// SPEC_ORACLE: 他軸（D&A）は個別 EntityTotal フォールバックを残す。全軸から個別を外さない。
+    /// SPEC_ORACLE: セグメント資産以外の指標軸は個別 EntityTotal フォールバックを残す。
     @Test func otherMetricAxesStillFallBackToNonConsolidatedEntityTotal() throws {
         let facts = [
             BreakdownFact(
-                tag: "DepreciationSegmentInformation",
+                tag: "CapitalExpenditures",
                 contextRef: "CurrentYearDuration_SegmentAMember",
                 dimensions: ["OperatingSegmentsAxis": "SegmentAMember"],
                 value: 100, label: nil, unitRef: "JPY", decimals: "0"),
             BreakdownFact(
-                tag: "DepreciationSegmentInformation",
+                tag: "CapitalExpenditures",
                 contextRef: "CurrentYearDuration_ReportableSegmentsMember",
                 dimensions: ["OperatingSegmentsAxis": "ReportableSegmentsMember"],
                 value: 100, label: nil, unitRef: "JPY", decimals: "0"),
             BreakdownFact(
-                tag: "DepreciationSegmentInformation",
+                tag: "CapitalExpenditures",
                 contextRef: "CurrentYearDuration_NonConsolidatedMember",
                 dimensions: ["ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember"],
                 value: 9_999, label: nil, unitRef: "JPY", decimals: "0"),
         ]
         let snapshot = try #require(
-            BreakdownNormalizer.normalizeDepreciationAndAmortization(facts: facts))
+            BreakdownNormalizer.normalizeCapitalExpenditures(facts: facts))
         #expect(snapshot.denominator == 100)
         #expect(snapshot.needsReview == true)
         #expect(snapshot.warnings.contains(
-            "depreciation_and_amortization_entity_total_differs_from_table_total"))
+            "capital_expenditures_entity_total_differs_from_table_total"))
         let entity = try #require(snapshot.rows.first { $0.labelRaw == Xbrl.entityTotalMemberName })
         #expect(entity.amount == 9_999)
     }
