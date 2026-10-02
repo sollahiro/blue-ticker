@@ -449,6 +449,117 @@ import Testing
         #expect(remainder["type"] as? String == "choice")
         let remainderCriteria = try #require(remainder["criteria"] as? [String: String])
         #expect(Set(remainderCriteria.keys) == Set(ResearchAndDevelopmentRemainderRole.optionKeys))
+
+        let exclusionData = try #require(
+            OpenRouterResearchAndDevelopmentProseDecider.exclusionRequestJSON(
+                model: Api.openrouterDecisionsModel,
+                sentence: "グループ全体の研究開発費は、15,051百万円であり、このほか1,046百万円の探鉱費を支出いたしました"))
+        let exclusionObject = try #require(JSONSerialization.jsonObject(with: exclusionData) as? [String: Any])
+        let exclusionQuestions = try #require(exclusionObject["questions"] as? [String: Any])
+        let exclusion = try #require(
+            exclusionQuestions[OpenRouterResearchAndDevelopmentProseDecider.exclusionQuestion] as? [String: Any])
+        #expect(exclusion["type"] as? String == "choice")
+        let exclusionCriteria = try #require(exclusion["criteria"] as? [String: String])
+        #expect(Set(exclusionCriteria.keys) == Set(ResearchAndDevelopmentExclusionRole.optionKeys))
+    }
+
+    /// SPEC_ORACLE: 神戸製鋼 S100OAOM。活動タグに全社合計が無く、本文の 332億円が
+    /// 製造費用込みの注記 33,244百万円と 0.5億円以内で一致する。販管費 19,754百万円へは落ちない。
+    @Test func manufacturingNoteMatchesOneActivityTotalSentence() {
+        let text = """
+            当連結会計年度における当社グループの研究開発費は、332億円であります。\
+            なお、本費用には、各事業区分に配分できない費用として計上する費用57億円が含まれております。\
+            なお、当連結会計年度における研究開発費は、62億円であります。
+            """
+        #expect(
+            ResearchAndDevelopmentProseTotalDecision.confirmsManufacturingNote(
+                extractedTag: "ResearchAndDevelopmentExpensesSGA",
+                extractedYen: 19_754_000_000, noteYen: 33_244_000_000, plainText: text))
+        #expect(
+            ResearchAndDevelopmentProseTotalDecision.confirmsManufacturingNote(
+                extractedTag: "ResearchAndDevelopmentExpensesResearchAndDevelopmentActivities",
+                extractedYen: 33_244_000_000, noteYen: 33_244_000_000, plainText: text) == false)
+    }
+
+    /// SPEC_ORACLE: 配分できない 57億円は差額 6,244百万円と 5百万円では一致しない。
+    /// その1文だけを足すと 32,700百万円になり、分母 33,244百万円の 5% 以内に収まる。
+    @Test func unallocatedOkuSentenceFillsARoundedShortfall() async throws {
+        let text = """
+            当連結会計年度における当社グループの研究開発費は、332億円であります。\
+            なお、本費用には、各事業区分に配分できない費用として計上する費用57億円が含まれております。\
+            なお、当連結会計年度における研究開発費は、62億円であります。
+            """
+        let snapshot = shortfallSnapshot(denominator: 33_244_000_000, tagged: 27_000_000_000)
+        let gap = try #require(ResearchAndDevelopmentProseTotalDecision.shortfall(in: snapshot))
+        #expect(gap == 6_244_000_000)
+        let exact = ResearchAndDevelopmentProseTotalDecision.candidates(in: text, limit: nil)
+            .filter { ResearchAndDevelopmentProseTotalDecision.matchesShortfall($0.yen, gap: gap) }
+        #expect(exact.isEmpty)
+        let sentence = "なお、本費用には、各事業区分に配分できない費用として計上する費用57億円が含まれております"
+        let filled = await ResearchAndDevelopmentProseTotalDecision.fillShortfall(
+            snapshot: snapshot, plainText: text,
+            decider: ScriptedProseDecider(
+                selected: [:],
+                remainder: [sentence: (ResearchAndDevelopmentRemainderRole.unallocatedRemainder, 0.95)]))
+        #expect(filled.audit != nil)
+        #expect(filled.snapshot.needsReview == false)
+        let added = try #require(
+            filled.snapshot.rows.first { $0.rowKind == "reconciling" })
+        #expect(added.amount == 5_700_000_000)
+        #expect(added.label == "配分不能")
+        #expect(filled.snapshot.warnings.contains(breakdownWarningResearchAndDevelopmentProseRemainder))
+    }
+
+    /// SPEC_ORACLE: 三井金属 S100YBQV。総額 15,051百万円と探鉱費 1,046百万円は同じ文。
+    /// 超過分と一致する外の金額だけを負の行にし、既存行は残す。
+    @Test func explorationOutsideTheTotalBecomesANegativeRow() async throws {
+        let sentence = "当連結会計年度におけるグループ全体の研究開発費は、15,051百万円であり、このほか海外鉱山開発に向けた探鉱活動に取り組んでおり、1,046百万円の探鉱費を支出いたしました"
+        let inside = "この結果、当部門に係る研究開発費は探鉱費を含めて1,169百万円であります"
+        let text = sentence + "。" + inside
+        let total = 15_051_000_000.0
+        let tagged = 16_097_000_000.0
+        let found = ResearchAndDevelopmentProseTotalDecision.exclusionCandidates(
+            in: text, total: total, excess: 1_046_000_000)
+        #expect(found.count == 1)
+        #expect(found.first?.yen == 1_046_000_000)
+        #expect(ResearchAndDevelopmentProseTotalDecision.exclusionLabel(in: sentence) == "探鉱費")
+        let snapshot = shortfallSnapshot(denominator: total, tagged: tagged)
+        let filled = await ResearchAndDevelopmentProseTotalDecision.fillExclusion(
+            snapshot: snapshot, plainText: text,
+            decider: ScriptedProseDecider(
+                selected: [:],
+                exclusion: [sentence: (ResearchAndDevelopmentExclusionRole.excludedFromTotal, 0.95)]))
+        #expect(filled.snapshot.needsReview == false)
+        let added = try #require(filled.snapshot.rows.first { $0.amount < 0 })
+        #expect(added.amount == -1_046_000_000)
+        #expect(added.label == "探鉱費")
+        #expect(added.rowKind == "reconciling")
+        #expect(filled.snapshot.rows.contains { $0.amount == tagged })
+        #expect(filled.snapshot.warnings.contains(breakdownWarningResearchAndDevelopmentProseExclusion))
+    }
+
+    /// SPEC_ORACLE: 神戸製鋼 S100OAOM の分母は製造費用込みの注記。三井金属 S100YBQV は活動タグのまま。
+    @Test func kobeNoteAndMitsuiActivityTotalStayOnTheirTags() async throws {
+        let cases: [(docID: String, tag: String, yen: Double)] = [
+            (
+                "S100OAOM",
+                Xbrl.rdExpenseIncludedInGaAndManufacturingCostTag,
+                33_244_000_000
+            ),
+            (
+                "S100YBQV",
+                "ResearchAndDevelopmentExpensesResearchAndDevelopmentActivities",
+                15_051_000_000
+            ),
+        ]
+        await SmokeCacheSupport.ensureCached(cases.map(\.docID))
+        for item in cases {
+            let dir = SmokeCacheSupport.cacheDir.appendingPathComponent("\(item.docID)_xbrl")
+            guard FileManager.default.fileExists(atPath: dir.path) else { continue }
+            let rd = BreakdownFinancialsResolver.financialsCanonicalRdItem(xbrlDir: dir)
+            #expect(rd.tag == item.tag, "\(item.docID) tag \(String(describing: rd.tag))")
+            #expect(rd.value == item.yen, "\(item.docID) value \(String(describing: rd.value))")
+        }
     }
 }
 
@@ -469,6 +580,7 @@ private struct ScriptedProseDecider: ResearchAndDevelopmentProseDeciding {
     var selected: [String: (String, Double)]
     var unavailableSentences: Set<String> = []
     var remainder: [String: (String, Double)] = [:]
+    var exclusion: [String: (String, Double)] = [:]
 
     func classify(sentence: String) async -> ResearchAndDevelopmentProseChoice {
         if unavailableSentences.contains(sentence) {
@@ -490,6 +602,15 @@ private struct ScriptedProseDecider: ResearchAndDevelopmentProseDeciding {
         return ResearchAndDevelopmentProseChoice(
             sentence: sentence, selected: ResearchAndDevelopmentRemainderRole.unrelated, probability: 0.99)
     }
+
+    func classifyExclusion(sentence: String) async -> ResearchAndDevelopmentProseChoice {
+        if let hit = exclusion[sentence] {
+            return ResearchAndDevelopmentProseChoice(
+                sentence: sentence, selected: hit.0, probability: hit.1)
+        }
+        return ResearchAndDevelopmentProseChoice(
+            sentence: sentence, selected: ResearchAndDevelopmentExclusionRole.unrelated, probability: 0.99)
+    }
 }
 
 private actor CountingProseDecider: ResearchAndDevelopmentProseDeciding {
@@ -505,6 +626,12 @@ private actor CountingProseDecider: ResearchAndDevelopmentProseDeciding {
         calls += 1
         return ResearchAndDevelopmentProseChoice(
             sentence: sentence, selected: ResearchAndDevelopmentRemainderRole.unrelated, probability: 0.99)
+    }
+
+    func classifyExclusion(sentence: String) async -> ResearchAndDevelopmentProseChoice {
+        calls += 1
+        return ResearchAndDevelopmentProseChoice(
+            sentence: sentence, selected: ResearchAndDevelopmentExclusionRole.unrelated, probability: 0.99)
     }
 }
 

@@ -727,7 +727,9 @@ public extension BltServerContext {
     /// total があれば denominator のみの resolved になる（合計の正本を本軸に寄せる）。
     /// 数値タグもセグメント fact も無いときだけ、キーがあれば本文の当期総額を補う。
     /// タグ付き行が全社合計より 5% 以上足りないときは、差額と一致する本文1文を足す。
-    /// Summary の `rd` はこの本文総額を読まない。
+    /// タグ付き合計が全社合計を超えるときは、総額の外の金額を負の行で足す。
+    /// 活動タグの全社合計が無く本文総額が製造費用込みの注記と一致するときは、その注記が分母になる。
+    /// Summary の `rd` は本文だけの総額を読まず、この注記へ替わった分母は読む。
     func resolveResearchAndDevelopmentBreakdown(docID: String, correctionDocIDs: [String] = []) async -> BreakdownResolveResult {
         guard let xbrlDir = await downloadAnnualFilingXbrl(
             docID: docID, correctionDocIDs: correctionDocIDs
@@ -780,6 +782,8 @@ public extension BltServerContext {
 
 private extension BltServerContext {
     /// タグ付き行が全社合計より 5% 以上足りないとき、差額と一致する本文1文を足す。
+    /// 億円丸めで差額とずれる配分不能の1文も、足した合計が 5% 以内なら足す。
+    /// タグ付き合計が全社合計を 5% 以上超えるときは、総額の外と分類された金額を負の行で足す。
     /// キーが無い、一致が1文でない、分類が外れた、応答が無いときは決定論のスナップショットを残す。
     func fillResearchAndDevelopmentShortfall(
         snapshot: BreakdownSnapshot, xbrlDir: URL, docID: String
@@ -789,7 +793,12 @@ private extension BltServerContext {
         else { return (snapshot, nil) }
         let filled = await ResearchAndDevelopmentProseTotalDecision.fillShortfall(
             snapshot: snapshot, plainText: text, docID: docID, decider: decider)
-        return (filled.snapshot, filled.audit.map { .segmentNoteJev($0) })
+        if filled.audit != nil {
+            return (filled.snapshot, filled.audit.map { .segmentNoteJev($0) })
+        }
+        let excluded = await ResearchAndDevelopmentProseTotalDecision.fillExclusion(
+            snapshot: snapshot, plainText: text, docID: docID, decider: decider)
+        return (excluded.snapshot, excluded.audit.map { .segmentNoteJev($0) })
     }
 
     /// 数値タグが無い研究開発費。キーが無い、候補が無い、分類が採用条件を外れたときは not_found。

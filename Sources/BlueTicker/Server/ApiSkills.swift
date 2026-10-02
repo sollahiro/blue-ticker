@@ -377,7 +377,9 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                 research_and_development は、数値タグが無いとき本文の当期の会社全体の総額だけを補うことがあります。
                 その行の warnings に not_allocatable_to_segments があっても 404 にはしません。
                 全社合計のタグがありセグメント行が足りないときは、差額と一致する本文1文を reconciling 行として足すことがあります。
-                warnings の research_and_development_prose_remainder は 404 にしません。
+                億円単位で差額とずれる配分不能の1文も、足した合計が 5% 以内なら足すことがあります。
+                タグ付き合計が全社合計を超えるときは、総額の外の金額を負の reconciling 行として足すことがあります。
+                warnings の research_and_development_prose_remainder と research_and_development_prose_exclusion は 404 にしません。
                 内訳が取得できない場合は 404 とともに reason が返ることがあります（reason 無しの 404 は単に未取り込み）。
                 axis=business: geography_only（報告セグメントが地域別のみで事業別への変換不可）、
                 single_segment_disclosed（単一セグメントのため報告セグメント開示自体を省略）、

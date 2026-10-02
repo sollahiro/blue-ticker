@@ -85,7 +85,8 @@ public let geographyBreakdownCacheVersion = "breakdown-geography-v13"
 /// うち / タグ付き合計列の subtotal 化は targeted `--codes`（対象行削除）で定着。v2 は日経225全件再計算になるため上げない。
 /// v2: ingest 時に jpcrp 標準 member の日本語ラベルを補完（生 `*Member` 表示の誤表示）。
 public let employeesBreakdownCacheVersion = "breakdown-employees-v2"
-/// 本文の当期総額と、タグ付き行の不足分を本文1文で埋める処理は非破壊。既存行は行削除または `--codes` で再計算する。
+/// 本文の当期総額、タグ付き行の不足分、研究開発費の外の金額を本文から足す処理は非破壊。
+/// 既存行は行削除または `--codes` で再計算する。分母を製造費用込みの注記へ替えるのも同じ。
 public let researchAndDevelopmentBreakdownCacheVersion = "breakdown-research-and-development-v2"
 public let goodwillBreakdownCacheVersion = "breakdown-goodwill-v2"
 /// v2: 分母を segment+reconciling に固定（表小計の閾値切替を廃止）。
@@ -148,6 +149,10 @@ public let breakdownWarningNotAllocatableToSegments = "not_allocatable_to_segmen
 /// `needs_review` は合計が再び揃えば外す。404 にはしない。
 public let breakdownWarningResearchAndDevelopmentProseRemainder =
     "research_and_development_prose_remainder"
+/// 本文が研究開発費の総額の外に置いた金額を、負の reconciling 行として足した印。
+/// `needs_review` は合計が再び揃えば外す。404 にはしない。
+public let breakdownWarningResearchAndDevelopmentProseExclusion =
+    "research_and_development_prose_exclusion"
 
 /// business breakdown が解決できなかった理由（issue #130、E/F判定の検知結果明示化）。
 /// `BreakdownExtractor.BusinessBreakdownNotApplicableReason`（internal 型）の rawValue と揃える

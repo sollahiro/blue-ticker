@@ -65,12 +65,23 @@ enum BreakdownFinancialsResolver {
     }
 
     /// financials の `rd` 分母と、その由来タグを返す。
+    /// 活動タグの全社合計が無く販管費タグに落ち、研究開発活動の本文総額が
+    /// 製造費用込みの注記と一致するときは、その注記を分母にする。
     static func financialsCanonicalRdItem(xbrlDir: URL) -> CanonicalValue {
         let allTags = XBRLUtils.collectAllNumericElements(in: xbrlDir, nilAsZero: false)
+        let fieldSet = fieldSetFromDuration(allTags)
         let result = RDExtractor.extract(
-            fieldSet: fieldSetFromDuration(allTags),
+            fieldSet: fieldSet,
             accountingStandard: detectAccountingStandard(allTags)
         )
+        let noteTag = Xbrl.rdExpenseIncludedInGaAndManufacturingCostTag
+        if let text = ResearchAndDevelopmentProseTotalDecision.activityPlainText(in: xbrlDir),
+            ResearchAndDevelopmentProseTotalDecision.confirmsManufacturingNote(
+                extractedTag: result.tag, extractedYen: result.current,
+                noteYen: fieldSet[noteTag]?.current, plainText: text)
+        {
+            return CanonicalValue(value: fieldSet[noteTag]?.current, tag: noteTag)
+        }
         return CanonicalValue(value: result.current, tag: result.tag)
     }
 
