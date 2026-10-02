@@ -72,7 +72,7 @@ import Testing
                 ]) == false)
     }
 
-    @Test func publicServingKeepsCapexProseTotal() {
+    @Test func publicServingKeepsCapexProseTotal() throws {
         #expect(isVersionGatedBreakdownSource(breakdownSourceCapexProse))
         #expect(isLLMBreakdownSource(breakdownSourceCapexProse) == false)
         #expect(capexBreakdownCacheVersion == "breakdown-capex-v1")

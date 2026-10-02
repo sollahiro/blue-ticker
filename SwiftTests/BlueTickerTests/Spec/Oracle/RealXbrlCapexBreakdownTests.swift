@@ -113,7 +113,7 @@ import Foundation
         }
         if snapshot.flowMetric == capexFlowMetricNoncurrentAssetAdditions {
             #expect(snapshot.flow?.denominatorTag == "AdditionsOfFixedAssets"
-                || snapshot.flow?.denominatorTag?.contains("Addition") == true)
+                || snapshot.flow?.denominatorTag.contains("Addition") == true)
         }
         #expect(snapshot.segmentAssets != nil || snapshot.flow != nil
             || snapshot.capitalExpendituresOverview != nil)

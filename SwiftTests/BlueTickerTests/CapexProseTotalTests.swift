@@ -52,7 +52,7 @@ private struct ScriptedCapexDecider: CapexProseDeciding {
                 in: "ヘルスケア事業の設備投資は10百万円、イメージングは20百万円であります。").isEmpty)
     }
 
-    @Test func appliesCompanyTotalToOverviewCellOnly() async {
+    @Test func appliesCompanyTotalToOverviewCellOnly() async throws {
         let text = "当連結会計年度の設備投資は4,409百万円であります。"
         let applied = await CapexProseTotalDecision.decide(
             plainText: text,
