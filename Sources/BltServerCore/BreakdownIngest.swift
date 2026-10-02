@@ -351,8 +351,8 @@ enum BreakdownLoadResult {
 /// 格納済み 内訳取り込み 内訳を引いて公開契約 {code, doc_id, axis, breakdown} を返す。
 /// axis は `isSupportedBreakdownAxis` が受け付ける軸を受け付ける
 /// （geography は 2026-07-27、品質ゲート＝最新有報の needs_review=true・あいまい失敗0を確認のうえ
-/// 解禁。employees/research_and_development/goodwill は決定論のみで LLM 非依存だが
-/// REST/MCP への実際の公開可否は別途都度確認する。未知の軸は absent）。
+/// 解禁。employees / goodwill は決定論のみ。research_and_development は数値タグが無いとき
+/// 本文の当期総額だけを別 Choice で補うことがある。未知の軸は absent）。
 /// doc_id 指定時はその書類（当該 code のもの）、省略時は当該 code の最新会社有報
 /// （提出日時降順のうち read 可能・会社開示府令の先頭）。特定有価証券府令(030)は選ばない。
 /// read 可否は `isServableBreakdown`（決定論・LLM とも cache_version の床でゲート）。

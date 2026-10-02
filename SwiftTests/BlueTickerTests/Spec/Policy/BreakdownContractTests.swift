@@ -51,6 +51,27 @@ import Testing
                 ]) == false)
     }
 
+    @Test func publicServingKeepsResearchAndDevelopmentProseTotal() {
+        #expect(isVersionGatedBreakdownSource(breakdownSourceResearchAndDevelopmentProse))
+        #expect(isLLMBreakdownSource(breakdownSourceResearchAndDevelopmentProse) == false)
+        #expect(researchAndDevelopmentBreakdownCacheVersion == "breakdown-research-and-development-v2")
+        #expect(
+            isPubliclyServableBreakdown(
+                source: breakdownSourceResearchAndDevelopmentProse, needsReview: false,
+                warnings: [breakdownWarningNotAllocatableToSegments]) == true)
+        #expect(
+            isPubliclyServableBreakdown(
+                source: breakdownSourceResearchAndDevelopmentProse, needsReview: true,
+                warnings: [breakdownWarningNotAllocatableToSegments]) == true)
+        #expect(
+            isPubliclyServableBreakdown(
+                source: breakdownSourceResearchAndDevelopmentProse, needsReview: false,
+                warnings: [
+                    breakdownWarningNotAllocatableToSegments,
+                    "overlay_regression:row_loss:S100X7DX:orig=S100W0S7:tag=Holding:before=70:after=13",
+                ]) == false)
+    }
+
     @Test func publicServingFailsClosedForUnknownSources() {
         #expect(
             isPubliclyServableBreakdown(source: "unknown_llm", needsReview: true, warnings: [])

@@ -338,7 +338,7 @@ enum Xbrl {
     /// セグメント情報ののれん償却）。`ResearchAndDevelopmentExpensesSGA`（販管費内の研究開発費）は含めない。
     static let sgaExpenseBreakdownExcludedTags: Set<String> = [
         "ResearchAndDevelopmentExpensesResearchAndDevelopmentActivities",
-        "ResearchAndDevelopmentExpensesIncludedInGeneralAndAdministrativeExpensesAndManufacturingCostForCurrentPeriod",
+        rdExpenseIncludedInGaAndManufacturingCostTag,
         "GeneralAndAdministrativeExpensesOEBNK",
         "ResearchAndDevelopmentExpenses",
         "ResearchAndDevelopmentExpensesIFRS",
@@ -741,6 +741,11 @@ enum Xbrl {
         "ResearchAndDevelopmentExpensesIFRS",
         "ResearchAndDevelopmentCostsIFRS",
     ]
+
+    /// 一般管理費及び当期製造費用に含まれる研究開発費。活動タグの全社合計が無く、
+    /// 研究開発活動の本文総額とこの注記が一致するときだけ分母に使う。
+    static let rdExpenseIncludedInGaAndManufacturingCostTag =
+        "ResearchAndDevelopmentExpensesIncludedInGeneralAndAdministrativeExpensesAndManufacturingCostForCurrentPeriod"
 
     // MARK: - のれんタグ（J-GAAP、breakdown軸 goodwill 専用）
     //

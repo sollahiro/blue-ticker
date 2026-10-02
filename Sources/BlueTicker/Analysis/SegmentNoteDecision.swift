@@ -2,7 +2,8 @@
 // コードが候補の文と表を切り出す。Jev は Choice だけを返す。
 // business の専用タグに本文があるときは Jev を呼ばず `single_segment_disclosed`。
 // その本文が無いとき、`OPENROUTER_DECISION_API_KEY` が無ければ今日の決定論のまま。
-// 研究開発費・設備投資・減損は対象外。公開 reason は既存の文字列だけを使う。
+// 研究開発費・設備投資・減損の省略判定は対象外。公開 reason は既存の文字列だけを使う。
+// 研究開発費の本文総額は ResearchAndDevelopmentProseTotal が別の Choice で扱う。
 
 import Foundation
 
