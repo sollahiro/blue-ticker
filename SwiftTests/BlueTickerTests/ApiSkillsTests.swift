@@ -98,4 +98,15 @@ import Testing
                 "note_type param must list published type \(published)")
         }
     }
+
+    @Test func breakdownCatalogListsCapexAndOmitsRetiredAxes() throws {
+        let skill = try #require(apiSkill(id: "get-breakdown"))
+        let axis = try #require(skill.parameters.first { $0.name == "axis" })
+        #expect(axis.description.contains("capex"))
+        #expect(!axis.description.contains("segment_assets"))
+        #expect(!axis.description.contains("capital_expenditures_overview"))
+        #expect(!axis.description.contains("noncurrent_asset_additions"))
+        #expect(skill.description.contains("capex"))
+        #expect(apiSkillsSchemaVersion == 2)
+    }
 }

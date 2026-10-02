@@ -213,9 +213,16 @@ func overlayRegressionAffectsBreakdown(
 ) -> Bool {
     if regression.tag == payload.denominatorTag { return true }
     switch payload.axis {
-    case breakdownAxisCapitalExpenditures, breakdownAxisCapitalExpendituresOverview,
-        breakdownAxisNoncurrentAssetAdditions:
+    case breakdownAxisCapex:
+        let tags = [
+            payload.segmentAssets?.denominatorTag,
+            payload.flow?.denominatorTag,
+            payload.capitalExpendituresOverview?.denominatorTag,
+        ].compactMap { $0 }
+        if tags.contains(regression.tag) { return true }
         return isCapitalExpenditureOverlayTag(regression.tag)
+            || regression.tag.contains("Assets")
+            || regression.tag.contains("Addition")
     default:
         return false
     }

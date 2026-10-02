@@ -7,7 +7,7 @@ import Foundation
 // MARK: - 契約型
 
 /// REST skills 応答の `schema_version`。形を破壊的に変えたときのみ +1。
-public let apiSkillsSchemaVersion = 1
+public let apiSkillsSchemaVersion = 2
 
 /// パラメータの置き場所（REST パス変数 / クエリ）。
 public enum ApiSkillParameterLocation: String, Sendable {
@@ -366,20 +366,23 @@ public func apiSkillsCatalog() -> [ApiSkill] {
             name: "事業別・地域別売上内訳",
             description: """
                 有価証券報告書から事業別/地域別売上高、従業員数、研究開発費、のれん、
-                報告セグメント別の資産・のれんの償却額・
-                持分法会計処理される投資・資本的支出・非流動性資産への追加額を取得します（格納済みデータのみ）。
+                報告セグメント別ののれんの償却額・持分法会計処理される投資、
+                設備投資マトリクス（capex）を取得します（格納済みデータのみ）。
                 対象は取り込み済みの上場企業です。doc_id を省略すると最新の有価証券報告書を使用します。
                 axis は business（既定）/ geography / employees / research_and_development / goodwill /
-                segment_assets / goodwill_amortization /
-                equity_method_investments / capital_expenditures /
-                capital_expenditures_overview / noncurrent_asset_additions に対応。
+                goodwill_amortization / equity_method_investments / capex に対応。
                 数値タグとセグメント fact から解決します。合計のみの開示は分母だけの行になります。
+                axis=capex は名前付きセル（segment_assets / flow / capital_expenditures_overview）で、
+                行の amount は使いません。flow は書類単位で capital_expenditures があればそれ、
+                無ければ noncurrent_asset_additions です。混ぜず足しません。欠測セルは null です。
                 research_and_development は、数値タグが無いとき本文の当期の会社全体の総額だけを補うことがあります。
+                capex も Overview 本文から会社全体の総額、またはタグ付き行の不足分を補うことがあります。
                 その行の warnings に not_allocatable_to_segments があっても 404 にはしません。
                 全社合計のタグがありセグメント行が足りないときは、差額と一致する本文1文を reconciling 行として足すことがあります。
                 億円単位で差額とずれる配分不能の1文も、足した合計が 5% 以内なら足すことがあります。
                 タグ付き合計が全社合計を超えるときは、総額の外の金額を負の reconciling 行として足すことがあります。
-                warnings の research_and_development_prose_remainder と research_and_development_prose_exclusion は 404 にしません。
+                warnings の research_and_development_prose_remainder と research_and_development_prose_exclusion、
+                capex_prose_remainder と capex_prose_exclusion は 404 にしません。
                 内訳が取得できない場合は 404 とともに reason が返ることがあります（reason 無しの 404 は単に未取り込み）。
                 axis=business: geography_only（報告セグメントが地域別のみで事業別への変換不可）、
                 single_segment_disclosed（単一セグメントのため報告セグメント開示自体を省略）、
@@ -410,18 +413,19 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                     name: "axis",
                     location: .query,
                     type: .string,
-                    description: "内訳の軸（business / geography / employees / research_and_development / goodwill / segment_assets / goodwill_amortization / equity_method_investments / capital_expenditures / capital_expenditures_overview / noncurrent_asset_additions。省略時 business）",
+                    description: "内訳の軸（business / geography / employees / research_and_development / goodwill / goodwill_amortization / equity_method_investments / capex。省略時 business）",
                     required: false,
                     defaultValue: .string("business")
                 ),
             ],
             instructions: """
-                Breakdown（事業別/地域別売上、従業員数、研究開発費、のれん、報告セグメント別指標の構造化）。
+                Breakdown（事業別/地域別売上、従業員数、研究開発費、のれん、報告セグメント別指標、設備投資マトリクスの構造化）。
                 自由テキストのセグメント記述は get-filing-content の segments。
                 格納済みデータのみ。未算出は 404、DB 非接続は 503。
                 例: GET /v1/companies/6758/breakdown?axis=business
                 例: GET /v1/companies/6758/breakdown?axis=geography
                 例: GET /v1/companies/6758/breakdown?axis=employees
+                例: GET /v1/companies/6758/breakdown?axis=capex
                 """,
             mcpOutputSchema:
                 """

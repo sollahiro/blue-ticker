@@ -459,13 +459,6 @@ public func runFactsIngestCommand(
                         docID: docID, correctionDocIDs: correctionIDsByOriginal[docID] ?? [])
                 },
                 BreakdownStage(
-                    axis: breakdownAxisSegmentAssets, target: "breakdowns-\(breakdownAxisSegmentAssets)",
-                    listedCodes: deterministicMetricsListed, limit: unpublishedLimit, candidateSets: unpublishedSets
-                ) { docID in
-                    await context.resolveSegmentAssetsBreakdown(
-                        docID: docID, correctionDocIDs: correctionIDsByOriginal[docID] ?? [])
-                },
-                BreakdownStage(
                     axis: breakdownAxisGoodwillAmortization,
                     target: "breakdowns-\(breakdownAxisGoodwillAmortization)",
                     listedCodes: deterministicMetricsListed, limit: unpublishedLimit, candidateSets: unpublishedSets
@@ -482,27 +475,12 @@ public func runFactsIngestCommand(
                         docID: docID, correctionDocIDs: correctionIDsByOriginal[docID] ?? [])
                 },
                 BreakdownStage(
-                    axis: breakdownAxisCapitalExpenditures,
-                    target: "breakdowns-\(breakdownAxisCapitalExpenditures)",
-                    listedCodes: deterministicMetricsListed, limit: unpublishedLimit, candidateSets: unpublishedSets
+                    axis: breakdownAxisCapex,
+                    target: "breakdowns-\(breakdownAxisCapex)",
+                    listedCodes: deterministicMetricsListed, limit: unpublishedLimit,
+                    candidateSets: unpublishedSets
                 ) { docID in
-                    await context.resolveCapitalExpendituresBreakdown(
-                        docID: docID, correctionDocIDs: correctionIDsByOriginal[docID] ?? [])
-                },
-                BreakdownStage(
-                    axis: breakdownAxisCapitalExpendituresOverview,
-                    target: "breakdowns-\(breakdownAxisCapitalExpendituresOverview)",
-                    listedCodes: deterministicMetricsListed, limit: unpublishedLimit, candidateSets: unpublishedSets
-                ) { docID in
-                    await context.resolveCapitalExpendituresOverviewBreakdown(
-                        docID: docID, correctionDocIDs: correctionIDsByOriginal[docID] ?? [])
-                },
-                BreakdownStage(
-                    axis: breakdownAxisNoncurrentAssetAdditions,
-                    target: "breakdowns-\(breakdownAxisNoncurrentAssetAdditions)",
-                    listedCodes: deterministicMetricsListed, limit: unpublishedLimit, candidateSets: unpublishedSets
-                ) { docID in
-                    await context.resolveNoncurrentAssetAdditionsBreakdown(
+                    await context.resolveCapexBreakdown(
                         docID: docID, correctionDocIDs: correctionIDsByOriginal[docID] ?? [])
                 },
             ]

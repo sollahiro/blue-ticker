@@ -238,9 +238,13 @@ import Testing
         let stamped = breakdownByRecordingOverlayRegressions(
             .resolved(
                 payload: BreakdownSnapshotPayload(
-                    axis: breakdownAxisCapitalExpendituresOverview, denominator: 1,
-                    denominatorTag: "capex", rows: [], sourceKind: breakdownSourceXbrlFacts,
-                    needsReview: false, warnings: []),
+                    axis: breakdownAxisCapex, denominator: 0,
+                    denominatorTag: "", rows: [], sourceKind: breakdownSourceXbrlFacts,
+                    needsReview: false, warnings: [], flowMetric: nil, segmentAssets: nil,
+                    flow: nil,
+                    capitalExpendituresOverview: CapexMetricTotalsPayload(
+                        denominator: 1,
+                        denominatorTag: "CapitalExpendituresOverviewOfCapitalExpendituresEtc")),
                 source: breakdownSourceXbrlFacts, contentHash: "h", audit: nil),
             xbrlDir: dir)
         guard case .resolved(let payload, let source, _, _) = stamped else {

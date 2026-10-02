@@ -1247,4 +1247,64 @@ extension BreakdownLoadResult {
             #expect(json["axis"] as? String == breakdownAxisGoodwill)
         }
     }
+
+    @Test func loadStoredBreakdownReturnsCapexAxis() async throws {
+        try await withMigratedApp { app in
+            try await seedRow(
+                "S1", code: "7203", submit: "2025-06-20 09:00", db: app.db,
+                axis: breakdownAxisCapex, source: breakdownSourceXbrlFacts,
+                cacheVersion: capexBreakdownCacheVersion)
+
+            let result = try await loadStoredBreakdown(
+                code: "7203", docId: nil, axis: breakdownAxisCapex, db: app.db)
+            let json = try #require(result.foundJSON)
+            #expect(json["axis"] as? String == breakdownAxisCapex)
+            let breakdown = try #require(json["breakdown"] as? [String: Any])
+            #expect(breakdown["amount"] == nil)
+            #expect(breakdown["denominator"] == nil)
+            #expect(breakdown["axis"] as? String == breakdownAxisCapex)
+        }
+    }
+
+    @Test func loadStoredBreakdownRejectsRetiredCapexAxes() async throws {
+        try await withMigratedApp { app in
+            for axis in retiredBreakdownAxes {
+                try await seedRow(
+                    "S-\(axis)", code: "7203", submit: "2025-06-20 09:00", db: app.db,
+                    axis: axis, source: breakdownSourceXbrlFacts,
+                    cacheVersion: "stale")
+                let result = try await loadStoredBreakdown(
+                    code: "7203", docId: nil, axis: axis, db: app.db)
+                #expect(result.isAbsent)
+            }
+        }
+    }
+
+    @Test func capexIngestStoresResolvedRow() async throws {
+        try await withMigratedApp { app in
+            let model = EdinetDocument()
+            model.id = "S1"
+            model.edinetCode = "E00001"
+            model.secCode = "72030"
+            model.filerName = "トヨタ自動車株式会社"
+            model.docTypeCode = Api.docTypeAnnualReport
+            model.ordinanceCode = Api.ordinanceCompanyDisclosure
+            model.formCode = "030000"
+            model.submitDateTime = "2025-06-20 09:00"
+            try await model.create(on: app.db)
+
+            let summary = try await runBreakdownIngest(
+                db: app.db, listedCodes: ["7203"], years: 3, limit: nil,
+                axis: breakdownAxisCapex
+            ) { _ in
+                .resolved(
+                    payload: fakePayload(axis: breakdownAxisCapex),
+                    source: breakdownSourceXbrlFacts, contentHash: "h-capex", audit: nil)
+            }
+            #expect(summary.stored == 1)
+            let key = CompanyBreakdown.compositeID(docID: "S1", axis: breakdownAxisCapex)
+            let row = try #require(try await CompanyBreakdown.find(key, on: app.db))
+            #expect(row.cacheVersion == capexBreakdownCacheVersion)
+        }
+    }
 }

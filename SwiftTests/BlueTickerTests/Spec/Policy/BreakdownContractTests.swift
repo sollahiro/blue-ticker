@@ -72,6 +72,33 @@ import Testing
                 ]) == false)
     }
 
+    @Test func publicServingKeepsCapexProseTotal() throws {
+        #expect(isVersionGatedBreakdownSource(breakdownSourceCapexProse))
+        #expect(isLLMBreakdownSource(breakdownSourceCapexProse) == false)
+        #expect(capexBreakdownCacheVersion == "breakdown-capex-v1")
+        #expect(try #require(breakdownCacheVersionNumber(capexBreakdownCacheVersion)) == 1)
+        #expect(
+            isPubliclyServableBreakdown(
+                source: breakdownSourceCapexProse, needsReview: false,
+                warnings: [breakdownWarningNotAllocatableToSegments]) == true)
+        #expect(
+            isPubliclyServableBreakdown(
+                source: breakdownSourceCapexProse, needsReview: true,
+                warnings: [breakdownWarningCapexProseRemainder]) == true)
+    }
+
+    @Test func retiredCapexAxesAreUnsupportedAndCapexIsSupported() {
+        #expect(isSupportedBreakdownAxis(breakdownAxisCapex))
+        #expect(breakdownCacheVersion(forAxis: breakdownAxisCapex) == capexBreakdownCacheVersion)
+        for axis in retiredBreakdownAxes {
+            #expect(isSupportedBreakdownAxis(axis) == false)
+            #expect(!breakdownSegmentMetricAxes.contains(axis))
+        }
+        #expect(!breakdownSegmentMetricAxes.contains(breakdownAxisSegmentAssets)
+            || breakdownAxisSegmentAssets == capexCellSegmentAssets)
+        #expect(breakdownSegmentMetricAxes.contains(breakdownAxisCapex))
+    }
+
     @Test func publicServingFailsClosedForUnknownSources() {
         #expect(
             isPubliclyServableBreakdown(source: "unknown_llm", needsReview: true, warnings: [])

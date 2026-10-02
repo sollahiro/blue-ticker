@@ -20,31 +20,53 @@ public let breakdownAxisResearchAndDevelopment = "research_and_development"
 /// ——本軸はJ-GAAP企業がBS/注記に持つ「のれん」単一タグをセグメントdimensionで内訳化する
 /// （実データ検証: オークマ・三井住友・三菱UFJ）。
 public let breakdownAxisGoodwill = "goodwill"
-/// 報告セグメント別の資産額（2026-08-20追加）。決定論のみ。
-public let breakdownAxisSegmentAssets = "segment_assets"
 /// 報告セグメント別ののれんの償却額（2026-08-20追加）。決定論のみ。
 public let breakdownAxisGoodwillAmortization = "goodwill_amortization"
 /// 報告セグメント別の持分法会計処理される投資（2026-08-20追加）。決定論のみ。
 public let breakdownAxisEquityMethodInvestments = "equity_method_investments"
-/// 報告セグメント別の資本的支出（2026-08-20追加）。決定論のみ。
-public let breakdownAxisCapitalExpenditures = "capital_expenditures"
-/// notes「設備投資等の概要」のセグメント別Capex（2026-08-20追加）。決定論のみ。
-/// `capital_expenditures`（報告セグメント表）とは同じ会社でも値が異なり得るため別軸。
-public let breakdownAxisCapitalExpendituresOverview = "capital_expenditures_overview"
-/// 報告セグメント別の非流動性資産への追加額（2026-08-20追加）。決定論のみ。
-public let breakdownAxisNoncurrentAssetAdditions = "noncurrent_asset_additions"
+/// 設備投資マトリクス（資産 Instant / フロー Duration / Overview Duration）。
+/// 旧 4 軸（`segment_assets` / `capital_expenditures` / `noncurrent_asset_additions` /
+/// `capital_expenditures_overview`）は REST / MCP / skills から廃止。セル名としては残す。
+public let breakdownAxisCapex = "capex"
+
+/// capex 行のセルキー。Instant の連結資産内訳。
+public let capexCellSegmentAssets = "segment_assets"
+/// capex 行のフローセル。書類単位で `capital_expenditures` があればそれ、無ければ
+/// `noncurrent_asset_additions`。レベルを混ぜず、足し算もしない。
+public let capexCellFlow = "flow"
+/// capex 行の Overview セル。HTML 表があるときは表が正本。HTML ラベルと XBRL member は初期は結合しない。
+public let capexCellCapitalExpendituresOverview = "capital_expenditures_overview"
+
+/// フローセルが資本的支出タグ由来。
+public let capexFlowMetricCapitalExpenditures = "capital_expenditures"
+/// フローセルが非流動性資産／固定資産への追加額タグ由来。
+public let capexFlowMetricNoncurrentAssetAdditions = "noncurrent_asset_additions"
+
+/// 財務諸表計上額（無 dimension の連結計上額）。他の「計」行（`subtotal`）とは別。
+public let breakdownRowKindEntityTotal = "EntityTotal"
+
+/// 内部の指標組み立てとセル名。公開軸ではない。
+public let breakdownAxisSegmentAssets = capexCellSegmentAssets
+public let breakdownAxisCapitalExpenditures = capexFlowMetricCapitalExpenditures
+public let breakdownAxisCapitalExpendituresOverview = capexCellCapitalExpendituresOverview
+public let breakdownAxisNoncurrentAssetAdditions = capexFlowMetricNoncurrentAssetAdditions
+
+/// 旧 4 軸。REST / MCP は 404（`.absent`）。
+public let retiredBreakdownAxes = [
+    breakdownAxisSegmentAssets,
+    breakdownAxisCapitalExpenditures,
+    breakdownAxisCapitalExpendituresOverview,
+    breakdownAxisNoncurrentAssetAdditions,
+]
 
 /// business / geography を除く、報告セグメント別の決定論指標軸。
 public let breakdownSegmentMetricAxes = [
     breakdownAxisEmployees,
     breakdownAxisResearchAndDevelopment,
     breakdownAxisGoodwill,
-    breakdownAxisSegmentAssets,
     breakdownAxisGoodwillAmortization,
     breakdownAxisEquityMethodInvestments,
-    breakdownAxisCapitalExpenditures,
-    breakdownAxisCapitalExpendituresOverview,
-    breakdownAxisNoncurrentAssetAdditions,
+    breakdownAxisCapex,
 ]
 
 /// `company_breakdowns.axis` として実装済みの軸か。
@@ -89,9 +111,12 @@ public let goodwillBreakdownCacheVersion = "breakdown-goodwill-v2"
 public let segmentAssetsBreakdownCacheVersion = "breakdown-segment-assets-v4"
 public let goodwillAmortizationBreakdownCacheVersion = "breakdown-goodwill-amortization-v3"
 public let equityMethodInvestmentsBreakdownCacheVersion = "breakdown-equity-method-investments-v3"
+/// 旧 4 軸の最終スタンプ。公開軸ではなくなったため上げない。配信は止める。
 public let capitalExpendituresBreakdownCacheVersion = "breakdown-capital-expenditures-v3"
 public let capitalExpendituresOverviewBreakdownCacheVersion = "breakdown-capital-expenditures-overview-v3"
 public let noncurrentAssetAdditionsBreakdownCacheVersion = "breakdown-noncurrent-asset-additions-v3"
+/// 設備投資マトリクス。破壊的な新軸のため v1 から。
+public let capexBreakdownCacheVersion = "breakdown-capex-v1"
 
 /// 軸に対応する現行 cache_version 文字列。未知の軸は business 扱い（安全側に決定的バンプ対象へ）。
 public func breakdownCacheVersion(forAxis axis: String) -> String {
@@ -100,12 +125,9 @@ public func breakdownCacheVersion(forAxis axis: String) -> String {
     case breakdownAxisEmployees: return employeesBreakdownCacheVersion
     case breakdownAxisResearchAndDevelopment: return researchAndDevelopmentBreakdownCacheVersion
     case breakdownAxisGoodwill: return goodwillBreakdownCacheVersion
-    case breakdownAxisSegmentAssets: return segmentAssetsBreakdownCacheVersion
+    case breakdownAxisCapex: return capexBreakdownCacheVersion
     case breakdownAxisGoodwillAmortization: return goodwillAmortizationBreakdownCacheVersion
     case breakdownAxisEquityMethodInvestments: return equityMethodInvestmentsBreakdownCacheVersion
-    case breakdownAxisCapitalExpenditures: return capitalExpendituresBreakdownCacheVersion
-    case breakdownAxisCapitalExpendituresOverview: return capitalExpendituresOverviewBreakdownCacheVersion
-    case breakdownAxisNoncurrentAssetAdditions: return noncurrentAssetAdditionsBreakdownCacheVersion
     default: return businessBreakdownCacheVersion
     }
 }
@@ -130,8 +152,12 @@ public let breakdownSourceNotApplicable = "not_applicable"
 /// 数値タグが無く、研究開発活動の本文から当期の会社全体の総額だけを採用した行。
 /// Jev は文の分類だけを返し、金額はコードが円へ換算する。`cache_version` は上げない。
 public let breakdownSourceResearchAndDevelopmentProse = "research_and_development_prose"
+/// 数値タグも該当表も無く、設備投資等の概要本文から当期の会社全体の総額だけを採用した行。
+/// Jev は文の Role だけを返し、金額はコードが円へ換算する。公開面は研究開発費本文総額と同じ。
+public let breakdownSourceCapexProse = "capex_prose"
 /// 本文総額の分母出所。数値 fact のタグが無いときの sentinel。
 public let breakdownDenominatorTagResearchAndDevelopmentProse = "research_and_development_prose"
+public let breakdownDenominatorTagCapexProse = "capex_prose"
 /// セグメントへ配分できない、またはセグメント別の記載をしないため総額のみ、という開示。
 /// `not_applicable_reason` にはしない。404 にすると総額が消える。
 public let breakdownWarningNotAllocatableToSegments = "not_allocatable_to_segments"
@@ -143,6 +169,8 @@ public let breakdownWarningResearchAndDevelopmentProseRemainder =
 /// `needs_review` は合計が再び揃えば外す。404 にはしない。
 public let breakdownWarningResearchAndDevelopmentProseExclusion =
     "research_and_development_prose_exclusion"
+public let breakdownWarningCapexProseRemainder = "capex_prose_remainder"
+public let breakdownWarningCapexProseExclusion = "capex_prose_exclusion"
 
 /// business breakdown が解決できなかった理由（issue #130、E/F判定の検知結果明示化）。
 /// `BreakdownExtractor.BusinessBreakdownNotApplicableReason`（internal 型）の rawValue と揃える
@@ -186,6 +214,7 @@ public let equityMethodInvestmentsBreakdownMinServableVersion = 1
 public let capitalExpendituresBreakdownMinServableVersion = 1
 public let capitalExpendituresOverviewBreakdownMinServableVersion = 1
 public let noncurrentAssetAdditionsBreakdownMinServableVersion = 1
+public let capexBreakdownMinServableVersion = 1
 
 /// 軸に対応する read 床。未知の軸は business 床。
 public func breakdownMinServableVersion(forAxis axis: String) -> Int {
@@ -194,12 +223,9 @@ public func breakdownMinServableVersion(forAxis axis: String) -> Int {
     case breakdownAxisEmployees: return employeesBreakdownMinServableVersion
     case breakdownAxisResearchAndDevelopment: return researchAndDevelopmentBreakdownMinServableVersion
     case breakdownAxisGoodwill: return goodwillBreakdownMinServableVersion
-    case breakdownAxisSegmentAssets: return segmentAssetsBreakdownMinServableVersion
+    case breakdownAxisCapex: return capexBreakdownMinServableVersion
     case breakdownAxisGoodwillAmortization: return goodwillAmortizationBreakdownMinServableVersion
     case breakdownAxisEquityMethodInvestments: return equityMethodInvestmentsBreakdownMinServableVersion
-    case breakdownAxisCapitalExpenditures: return capitalExpendituresBreakdownMinServableVersion
-    case breakdownAxisCapitalExpendituresOverview: return capitalExpendituresOverviewBreakdownMinServableVersion
-    case breakdownAxisNoncurrentAssetAdditions: return noncurrentAssetAdditionsBreakdownMinServableVersion
     default: return businessBreakdownMinServableVersion
     }
 }
@@ -215,6 +241,7 @@ public func breakdownCacheVersionNumber(_ version: String) -> Int? {
         "breakdown-goodwill-amortization-v",
         "breakdown-equity-method-investments-v", "breakdown-capital-expenditures-v",
         "breakdown-capital-expenditures-overview-v", "breakdown-noncurrent-asset-additions-v",
+        "breakdown-capex-v",
         "breakdown-v",
     ]
     for prefix in prefixes where version.hasPrefix(prefix) {
@@ -228,7 +255,8 @@ public func breakdownCacheVersionNumber(_ version: String) -> Int? {
 /// `cache_version` 世代で再計算・read 可否を判定すべき source か。
 /// 決定論（xbrl_facts / stacked_segment_pnl / not_applicable）に加え、LLM 経由
 /// （segment_info_llm / revenue_recognition_llm / geography_llm）と
-/// 研究開発費の本文総額（research_and_development_prose）を含める。
+/// 研究開発費の本文総額（research_and_development_prose）と設備投資本文総額
+/// （capex_prose）を含める。
 /// clean な LLM 行がバンプを無視すると誤った profit が再 ingest でも残るため
 /// （`isServableBreakdown` / 内訳取り込み ingest の staleness 判定で共用）。
 /// 本文総額は `isLLMBreakdownSource` に入れない。`needs_review` だけでは再試行しない。
@@ -237,6 +265,7 @@ public func isVersionGatedBreakdownSource(_ source: String) -> Bool {
         || source == breakdownSourceStackedSegmentPnL
         || source == breakdownSourceNotApplicable
         || source == breakdownSourceResearchAndDevelopmentProse
+        || source == breakdownSourceCapexProse
         || isLLMBreakdownSource(source)
 }
 
@@ -255,7 +284,8 @@ public let breakdownWarningLLMUnitUnresolved = "llm_unit_unresolved"
 /// 公開 REST / MCP（iOS Breakdown の backing）が当該格納行を出してよいか。
 /// `needs_review` または `llm_unit_unresolved` の行は出さない（千円単位の 1000 倍誤りの stopgap。
 /// fail closed）。XBRL（`xbrl_facts` / `stacked_segment_pnl`）と `not_applicable`（'none'）、
-/// 研究開発費の本文総額（`research_and_development_prose`）はフラグがあってもそのまま出す。
+/// 研究開発費の本文総額（`research_and_development_prose`）と設備投資本文総額
+/// （`capex_prose`）はフラグがあってもそのまま出す。
 /// `not_allocatable_to_segments` は総額行に付く警告であり、404 にしない。
 /// ただし訂正 overlay 回帰（`overlay_regression`）はこれらの行も隠す。
 /// ingest / status-report の `isServableBreakdown` とは独立（格納行は消さない・書き換えない。
@@ -268,6 +298,7 @@ public func isPubliclyServableBreakdown(
         || source == breakdownSourceStackedSegmentPnL
         || source == breakdownSourceNotApplicable
         || source == breakdownSourceResearchAndDevelopmentProse
+        || source == breakdownSourceCapexProse
     {
         return true
     }
@@ -286,6 +317,21 @@ public func isServableBreakdown(source: String, cacheVersion: String, axis: Stri
     return n >= breakdownMinServableVersion(forAxis: axis)
 }
 
+/// capex 軸の指標別分母。開示が無いときは null。
+public struct CapexMetricTotalsPayload: Codable, Sendable, Equatable {
+    public var denominator: Double
+    public var denominatorTag: String
+
+    public init(denominator: Double, denominatorTag: String) {
+        self.denominator = denominator
+        self.denominatorTag = denominatorTag
+    }
+
+    func jsonObject() -> [String: Any] {
+        ["denominator": denominator, "denominator_tag": denominatorTag]
+    }
+}
+
 /// BreakdownRow（内部型）の公開 Codable 写経。
 public struct BreakdownRowPayload: Codable, Sendable, Equatable {
     public var labelRaw: String
@@ -297,14 +343,20 @@ public struct BreakdownRowPayload: Codable, Sendable, Equatable {
     public var rowKind: String
     /// notes「設備投資等の概要」の設備内容・目的。その他の軸は nil。
     public var description: String?
+    /// capex 軸の名前付きセル。他軸は nil。REST では capex だけ出す。
+    public var segmentAssets: Double?
+    public var flow: Double?
+    public var capitalExpendituresOverview: Double?
 
     private enum CodingKeys: String, CodingKey {
         case labelRaw, label, amount, profit, rowKind, description
+        case segmentAssets, flow, capitalExpendituresOverview
     }
 
     public init(
         labelRaw: String, label: String, amount: Double, profit: Double?, rowKind: String,
-        description: String? = nil
+        description: String? = nil, segmentAssets: Double? = nil, flow: Double? = nil,
+        capitalExpendituresOverview: Double? = nil
     ) {
         self.labelRaw = labelRaw
         self.label = label
@@ -312,6 +364,9 @@ public struct BreakdownRowPayload: Codable, Sendable, Equatable {
         self.profit = profit
         self.rowKind = rowKind
         self.description = description
+        self.segmentAssets = segmentAssets
+        self.flow = flow
+        self.capitalExpendituresOverview = capitalExpendituresOverview
     }
 
     /// 旧公開initializer。既存の呼び出し側・ビルド済みテストとの互換性を維持する。
@@ -331,10 +386,14 @@ public struct BreakdownRowPayload: Codable, Sendable, Equatable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         labelRaw = try container.decode(String.self, forKey: .labelRaw)
         label = try container.decodeIfPresent(String.self, forKey: .label) ?? labelRaw
-        amount = try container.decode(Double.self, forKey: .amount)
+        amount = try container.decodeIfPresent(Double.self, forKey: .amount) ?? 0
         profit = try container.decodeIfPresent(Double.self, forKey: .profit)
         rowKind = try container.decode(String.self, forKey: .rowKind)
         description = try container.decodeIfPresent(String.self, forKey: .description)
+        segmentAssets = try container.decodeIfPresent(Double.self, forKey: .segmentAssets)
+        flow = try container.decodeIfPresent(Double.self, forKey: .flow)
+        capitalExpendituresOverview = try container.decodeIfPresent(
+            Double.self, forKey: .capitalExpendituresOverview)
     }
 }
 
@@ -347,10 +406,18 @@ public struct BreakdownSnapshotPayload: Codable, Sendable, Equatable {
     public var sourceKind: String
     public var needsReview: Bool
     public var warnings: [String]
+    /// capex 軸だけ。書類単位のフロー指標。無いときは nil。
+    public var flowMetric: String?
+    public var segmentAssets: CapexMetricTotalsPayload?
+    public var flow: CapexMetricTotalsPayload?
+    public var capitalExpendituresOverview: CapexMetricTotalsPayload?
 
     public init(
         axis: String, denominator: Double, denominatorTag: String, rows: [BreakdownRowPayload],
-        sourceKind: String, needsReview: Bool, warnings: [String]
+        sourceKind: String, needsReview: Bool, warnings: [String],
+        flowMetric: String? = nil, segmentAssets: CapexMetricTotalsPayload? = nil,
+        flow: CapexMetricTotalsPayload? = nil,
+        capitalExpendituresOverview: CapexMetricTotalsPayload? = nil
     ) {
         self.axis = axis
         self.denominator = denominator
@@ -359,6 +426,10 @@ public struct BreakdownSnapshotPayload: Codable, Sendable, Equatable {
         self.sourceKind = sourceKind
         self.needsReview = needsReview
         self.warnings = warnings
+        self.flowMetric = flowMetric
+        self.segmentAssets = segmentAssets
+        self.flow = flow
+        self.capitalExpendituresOverview = capitalExpendituresOverview
     }
 }
 
@@ -484,16 +555,51 @@ public extension BreakdownRowPayload {
         }
         return object
     }
+
+    /// capex 軸の行。`amount` は出さない（名前付きセルが正）。欠測セルは null。
+    func capexJsonObject() -> [String: Any] {
+        var object: [String: Any] = [
+            "label_raw": labelRaw,
+            "label": label,
+            "row_kind": rowKind,
+            capexCellSegmentAssets: segmentAssets ?? NSNull(),
+            capexCellFlow: flow ?? NSNull(),
+            capexCellCapitalExpendituresOverview: capitalExpendituresOverview ?? NSNull(),
+        ]
+        if let description {
+            object["description"] = description
+        }
+        return object
+    }
 }
 
 public extension BreakdownSnapshotPayload {
     /// REST/MCP 応答用 JSON オブジェクト（snake_case キー）。
     func jsonObject() -> [String: Any] {
-        [
+        if axis == breakdownAxisCapex {
+            return capexJsonObject()
+        }
+        return [
             "axis": axis,
             "denominator": denominator,
             "denominator_tag": denominatorTag,
             "rows": rows.map { $0.jsonObject() },
+            "source_kind": sourceKind,
+            "needs_review": needsReview,
+            "warnings": warnings,
+        ]
+    }
+
+    /// capex 軸の公開形。単一 `amount` / 単一 `denominator` は出さない。
+    func capexJsonObject() -> [String: Any] {
+        [
+            "axis": axis,
+            "flow_metric": flowMetric ?? NSNull(),
+            capexCellSegmentAssets: segmentAssets?.jsonObject() ?? NSNull(),
+            capexCellFlow: flow?.jsonObject() ?? NSNull(),
+            capexCellCapitalExpendituresOverview: capitalExpendituresOverview?.jsonObject()
+                ?? NSNull(),
+            "rows": rows.map { $0.capexJsonObject() },
             "source_kind": sourceKind,
             "needs_review": needsReview,
             "warnings": warnings,
