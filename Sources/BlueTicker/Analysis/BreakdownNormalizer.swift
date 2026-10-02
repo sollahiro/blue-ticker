@@ -424,13 +424,15 @@ enum BreakdownNormalizer {
     /// 分母は通常 segment + reconciling。`segment_assets` は連結資産の内訳軸として、連結の無
     /// dimension EntityTotal（連結財務諸表の資産合計）があるとき分母をそれに固定する。
     /// 銀行の固定資産など連結 EntityTotal が無いときだけ segment+reconciling。
+    /// capex の flow / Overview は連結 EntityTotal を分母にし、無いときは加算合計を分母にしない。
     /// 非分類は `reconciling`（差額表 HTML / XBRL 調整 member）。表小計・EntityTotal 行は表示用。
     /// `denominatorTag` には実際に採用した指標タグ名を残す。
     private static func normalizeSegmentMetric(
         facts: [BreakdownFact], amountTags: [String], axis: String, warningPrefix: String,
         labelsByTag: [String: String], memberParents: [String: String] = [:],
         allowNonConsolidatedEntityTotal: Bool = true,
-        useConsolidatedEntityTotalAsDenominatorWhenPresent: Bool = false
+        useConsolidatedEntityTotalAsDenominatorWhenPresent: Bool = false,
+        allowDerivedSumAsDenominator: Bool = true
     ) -> BreakdownSnapshot? {
         guard let amountTag = amountTags.first(where: { tag in
             !resolvePerMember(facts: facts, tag: tag).isEmpty
@@ -446,7 +448,8 @@ enum BreakdownNormalizer {
         return buildCountBasisSnapshot(
             perMember: perMember, amountTag: amountTag, total: total, axis: axis,
             warningPrefix: warningPrefix, labelsByTag: labelsByTag, memberParents: memberParents,
-            warnOnDerivedTotal: false, useEntityTotalAsDenominator: useEntityDenom)
+            warnOnDerivedTotal: false, useEntityTotalAsDenominator: useEntityDenom,
+            allowDerivedSumAsDenominator: allowDerivedSumAsDenominator)
     }
 
     /// セグメント資産。
@@ -485,7 +488,8 @@ enum BreakdownNormalizer {
             memberParents: memberParents)
     }
 
-    /// 資本的支出。
+    /// 資本的支出。capex `flow` 用。分母は連結の無 dimension EntityTotal（総額タグ）。
+    /// 加算した segment+reconciling は分母にしない。
     static func normalizeCapitalExpenditures(
         facts: [BreakdownFact], axis: String = breakdownAxisCapitalExpenditures,
         labelsByTag: [String: String] = [:], memberParents: [String: String] = [:]
@@ -493,10 +497,14 @@ enum BreakdownNormalizer {
         normalizeSegmentMetric(
             facts: facts, amountTags: Xbrl.segmentCapitalExpenditureTags, axis: axis,
             warningPrefix: "capital_expenditures", labelsByTag: labelsByTag,
-            memberParents: memberParents)
+            memberParents: memberParents,
+            allowNonConsolidatedEntityTotal: false,
+            useConsolidatedEntityTotalAsDenominatorWhenPresent: true,
+            allowDerivedSumAsDenominator: false)
     }
 
     /// notes「設備投資等の概要」のCapex。報告セグメント表の資本的支出とは別軸。
+    /// 分母は連結の無 dimension 総額タグ（EntityTotal）。加算合計は分母にしない。
     static func normalizeCapitalExpendituresOverview(
         facts: [BreakdownFact], axis: String = breakdownAxisCapitalExpendituresOverview,
         total: Double? = nil, totalTag: String? = nil, labelsByTag: [String: String] = [:],
@@ -505,7 +513,10 @@ enum BreakdownNormalizer {
         if let snapshot = normalizeSegmentMetric(
             facts: facts, amountTags: Xbrl.capexOverviewTags, axis: axis,
             warningPrefix: "capital_expenditures_overview", labelsByTag: labelsByTag,
-            memberParents: memberParents)
+            memberParents: memberParents,
+            allowNonConsolidatedEntityTotal: false,
+            useConsolidatedEntityTotalAsDenominatorWhenPresent: true,
+            allowDerivedSumAsDenominator: false)
         {
             return snapshot
         }
@@ -554,30 +565,32 @@ enum BreakdownNormalizer {
                 rowKind: rowKind, description: segment.description)
         }
         guard !rows.isEmpty else { return nil }
-        // 分母は segment+reconciling（xbrl_facts 経路と同形）。小計行は表示用に残す。
-        // 複数小計があるときは segment+reconciling に最も近いものを照合用に使い、5%超ずれなら
-        // needs_review（部分小計を分母に採用しない）。
+        // 分母は HTML の総額セル（合計 / isTotal）。加算した segment+reconciling は分母にしない。
+        // 複数小計があるときは加算合計に最も近いものを総額とみなし、5%超ずれなら needs_review。
         let reconciledSum = rows
             .filter { $0.rowKind == "segment" || $0.rowKind == "reconciling" }
             .map(\.amount).reduce(0, +)
         var warnings: [String] = []
+        let subtotals = rows.filter { $0.rowKind == "subtotal" }.map(\.amount)
         let denominator: Double
-        if reconciledSum > 0 {
-            denominator = reconciledSum
-            let subtotals = rows.filter { $0.rowKind == "subtotal" }.map(\.amount)
-            if let nearest = subtotals.min(by: { abs($0 - reconciledSum) < abs($1 - reconciledSum) }),
-                nearest > 0
-            {
-                let scale = max(1.0, abs(nearest), abs(reconciledSum))
-                if abs(nearest - reconciledSum) / scale > 0.05 {
-                    warnings.append("capital_expenditures_overview_subtotal_differs_from_segment_sum")
-                }
+        if reconciledSum > 0,
+            let nearest = subtotals.min(by: { abs($0 - reconciledSum) < abs($1 - reconciledSum) }),
+            nearest > 0
+        {
+            denominator = nearest
+            let scale = max(1.0, abs(nearest), abs(reconciledSum))
+            if abs(nearest - reconciledSum) / scale > 0.05 {
+                warnings.append("capital_expenditures_overview_subtotal_differs_from_segment_sum")
             }
         } else if let total = rows.last(where: { $0.rowKind == "subtotal" })?.amount, total > 0 {
             denominator = total
-            warnings.append("capital_expenditures_overview_denominator_from_subtotal_only")
         } else {
-            return nil
+            // 総額行が無い。行は残し、分母は後段（総額タグ / Jev）に任せる。
+            return BreakdownSnapshot(
+                axis: axis, denominator: 0,
+                denominatorTag: "CapitalExpendituresOverviewOfCapitalExpendituresEtc",
+                rows: rows, sourceKind: "html_table",
+                needsReview: false, warnings: [])
         }
         var resolvedRows = rows
         for index in resolvedRows.indices {
@@ -590,7 +603,7 @@ enum BreakdownNormalizer {
             needsReview: !warnings.isEmpty, warnings: warnings)
     }
 
-    /// 非流動性資産への追加額。
+    /// 非流動性資産への追加額。capex `flow` 用。分母は連結の無 dimension EntityTotal。
     static func normalizeNoncurrentAssetAdditions(
         facts: [BreakdownFact], axis: String = breakdownAxisNoncurrentAssetAdditions,
         labelsByTag: [String: String] = [:], memberParents: [String: String] = [:]
@@ -598,7 +611,10 @@ enum BreakdownNormalizer {
         normalizeSegmentMetric(
             facts: facts, amountTags: Xbrl.segmentNoncurrentAssetAdditionTags, axis: axis,
             warningPrefix: "noncurrent_asset_additions", labelsByTag: labelsByTag,
-            memberParents: memberParents)
+            memberParents: memberParents,
+            allowNonConsolidatedEntityTotal: false,
+            useConsolidatedEntityTotalAsDenominatorWhenPresent: true,
+            allowDerivedSumAsDenominator: false)
     }
 
     /// `normalizeCountBasis`/`normalizeGoodwill` 共通の後処理（member 分類・分母解決・行組み立て）。
@@ -610,6 +626,7 @@ enum BreakdownNormalizer {
         warningPrefix: String, labelsByTag: [String: String], memberParents: [String: String] = [:],
         warnOnDerivedTotal: Bool = true,
         useEntityTotalAsDenominator: Bool = true,
+        allowDerivedSumAsDenominator: Bool = true,
         applyOfWhichNestedChildDemotion: Bool = false,
         applyTaggedTotalEqualToDenominator: Bool = false
     ) -> BreakdownSnapshot? {
@@ -659,7 +676,7 @@ enum BreakdownNormalizer {
                     warnings.append("\(warningPrefix)_segment_sum_far_from_total")
                 }
             }
-        } else {
+        } else if allowDerivedSumAsDenominator {
             let value = amounts.keys.filter { reconciledKinds.contains(kinds[$0]!) }
                 .reduce(0.0) { $0 + amounts[$1]! }
             denominator = value
@@ -672,14 +689,21 @@ enum BreakdownNormalizer {
                     warnings.append("\(warningPrefix)_entity_total_differs_from_table_total")
                 }
             }
+        } else {
+            denominator = 0
         }
-        guard denominator > 0 else { return nil }
+        if allowDerivedSumAsDenominator {
+            guard denominator > 0 else { return nil }
+        } else if amounts.isEmpty {
+            return nil
+        }
 
         let rows = amounts.keys.sorted().map { member -> BreakdownRow in
             let amount = amounts[member]!
             return BreakdownRow(
                 labelRaw: member, label: labelsByTag[member], amount: amount,
-                share: amount / denominator, profit: nil, rowKind: kinds[member]!)
+                share: denominator > 0 ? amount / denominator : nil, profit: nil,
+                rowKind: kinds[member]!)
         }
 
         return BreakdownSnapshot(

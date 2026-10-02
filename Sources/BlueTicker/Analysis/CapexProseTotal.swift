@@ -67,8 +67,29 @@ enum CapexProseCell: Equatable, Sendable {
     var farWarning: String {
         switch self {
         case .segmentAssets: return "segment_assets_segment_sum_far_from_total"
-        case .flow: return "capex_flow_segment_sum_far_from_total"
-        case .overview: return "capital_expenditures_overview_subtotal_differs_from_segment_sum"
+        case .flow: return "capital_expenditures_segment_sum_far_from_total"
+        case .overview: return "capital_expenditures_overview_segment_sum_far_from_total"
+        }
+    }
+
+    func farWarnings(flowMetric: String? = nil) -> [String] {
+        switch self {
+        case .segmentAssets:
+            return [farWarning]
+        case .flow:
+            var names = [
+                farWarning, "capex_flow_segment_sum_far_from_total",
+                "noncurrent_asset_additions_segment_sum_far_from_total",
+            ]
+            if flowMetric == capexFlowMetricNoncurrentAssetAdditions {
+                names.insert("noncurrent_asset_additions_segment_sum_far_from_total", at: 0)
+            }
+            return names
+        case .overview:
+            return [
+                farWarning,
+                "capital_expenditures_overview_subtotal_differs_from_segment_sum",
+            ]
         }
     }
 }
@@ -242,7 +263,9 @@ enum CapexProseTotalDecision {
         let filled = payloadByAddingAdjustment(
             payload, cell: cell, yen: match.yen, label: remainderLabel(in: match.sentence),
             warning: breakdownWarningCapexProseRemainder)
-        guard !filled.warnings.contains(cell.farWarning) else { return (payload, nil) }
+        guard !cell.farWarnings(flowMetric: filled.flowMetric).contains(where: {
+            filled.warnings.contains($0)
+        }) else { return (payload, nil) }
         let call = SegmentNoteJevCallPayload(
             question: OpenRouterCapexProseDecider.remainderQuestion,
             options: CapexRemainderRole.optionKeys,
@@ -275,7 +298,9 @@ enum CapexProseTotalDecision {
         let filled = payloadByAddingAdjustment(
             payload, cell: cell, yen: -match.yen, label: exclusionLabel(in: match.sentence),
             warning: breakdownWarningCapexProseExclusion)
-        guard !filled.warnings.contains(cell.farWarning) else { return (payload, nil) }
+        guard !cell.farWarnings(flowMetric: filled.flowMetric).contains(where: {
+            filled.warnings.contains($0)
+        }) else { return (payload, nil) }
         let call = SegmentNoteJevCallPayload(
             question: OpenRouterCapexProseDecider.exclusionQuestion,
             options: CapexExclusionRole.optionKeys,
@@ -350,7 +375,9 @@ enum CapexProseTotalDecision {
         case .overview: row.capitalExpendituresOverview = yen
         }
         filled.rows.append(row)
-        var warnings = filled.warnings.filter { $0 != cell.farWarning }
+        var warnings = filled.warnings.filter { warning in
+            !cell.farWarnings(flowMetric: filled.flowMetric).contains(warning)
+        }
         if let totals = totals(filled, cell: cell), totals.denominator > 0 {
             let additive = additiveSum(filled, cell: cell)
             if additive > 0, abs(additive - totals.denominator) / totals.denominator > 0.05 {
@@ -359,7 +386,9 @@ enum CapexProseTotalDecision {
         }
         if !warnings.contains(warning) { warnings.append(warning) }
         filled.warnings = warnings
-        filled.needsReview = warnings.contains(cell.farWarning)
+        filled.needsReview = cell.farWarnings(flowMetric: filled.flowMetric).contains {
+            warnings.contains($0)
+        }
         return filled
     }
 

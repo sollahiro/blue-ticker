@@ -118,4 +118,21 @@ import Foundation
         #expect(snapshot.segmentAssets != nil || snapshot.flow != nil
             || snapshot.capitalExpendituresOverview != nil)
     }
+
+    /// 味の素: Overview 総額タグ 96,439百万円が分母。segment+reconciling 96,437 は分母にしない。
+    @Test func ajinomotoOverviewDenominatorIsEntityTotalNotSegmentSum() async throws {
+        guard await Self.ensureAvailable("S100VXJA") else { return }
+        let snapshot = try #require(Self.snapshot("S100VXJA"))
+        #expect(snapshot.capitalExpendituresOverview?.denominator == 96_439_000_000)
+        let additive = snapshot.rows
+            .filter { $0.rowKind == "segment" || $0.rowKind == "reconciling" }
+            .compactMap(\.capitalExpendituresOverview).reduce(0, +)
+        #expect(additive == 96_437_000_000)
+        #expect(snapshot.needsReview == false)
+        let entity = snapshot.rows.first { $0.labelRaw == Xbrl.entityTotalMemberName }
+        if let entity {
+            #expect(entity.rowKind == breakdownRowKindEntityTotal)
+            #expect(entity.capitalExpendituresOverview == 96_439_000_000)
+        }
+    }
 }

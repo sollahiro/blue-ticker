@@ -1781,8 +1781,9 @@ import Foundation
         #expect(!snapshot.rows.contains { $0.labelRaw == Xbrl.entityTotalMemberName })
     }
 
-    /// SPEC_ORACLE: セグメント資産以外の指標軸は個別 EntityTotal フォールバックを残す。
-    @Test func otherMetricAxesStillFallBackToNonConsolidatedEntityTotal() throws {
+    /// SPEC_ORACLE: capex flow / Overview は個別 EntityTotal を分母にも行にも使わない。
+    /// 連結総額が無いときの加算合計は 100% 分母にしない。
+    @Test func capexFlowDoesNotUseNonConsolidatedEntityTotalAsDenominator() throws {
         let facts = [
             BreakdownFact(
                 tag: "CapitalExpenditures",
@@ -1802,12 +1803,12 @@ import Foundation
         ]
         let snapshot = try #require(
             BreakdownNormalizer.normalizeCapitalExpenditures(facts: facts))
-        #expect(snapshot.denominator == 100)
-        #expect(snapshot.needsReview == true)
-        #expect(snapshot.warnings.contains(
+        #expect(snapshot.denominator == 0)
+        #expect(snapshot.needsReview == false)
+        #expect(!snapshot.warnings.contains(
             "capital_expenditures_entity_total_differs_from_table_total"))
-        let entity = try #require(snapshot.rows.first { $0.labelRaw == Xbrl.entityTotalMemberName })
-        #expect(entity.amount == 9_999)
+        #expect(!snapshot.rows.contains { $0.labelRaw == Xbrl.entityTotalMemberName })
+        #expect(snapshot.rows.contains { $0.labelRaw == "SegmentAMember" && $0.amount == 100 })
     }
 
     /// SPEC_ORACLE: ミニストップ 9946 型。差額表の非分類（全社資産）を reconciling に足すと EntityTotal と一致。
@@ -1942,7 +1943,7 @@ import Foundation
         #expect(segment.rowKind == "segment")
         let corporate = try #require(snapshot.rows.first { $0.labelRaw == "全社" })
         #expect(corporate.rowKind == "reconciling")
-        #expect(snapshot.denominator == 343_239_000_000)
+        #expect(snapshot.denominator == 344_238_000_000)
         #expect(snapshot.rows.allSatisfy { $0.description != "12.3" })
     }
 
@@ -1964,5 +1965,41 @@ import Foundation
         #expect(corporate.rowKind == "reconciling")
         #expect(snapshot.denominator == 100)
         #expect(snapshot.needsReview == false)
+    }
+
+    @Test func capexOverviewHtmlWithoutTotalLeavesDenominatorUnset() throws {
+        let snapshot = try #require(
+            BreakdownNormalizer.normalizeCapitalExpendituresOverview(
+                segments: [
+                    CapexSegmentPayload(
+                        segmentName: "事業A", investmentAmount: 80, yoyPercent: nil,
+                        description: nil),
+                    CapexSegmentPayload(
+                        segmentName: "全社", investmentAmount: 20, yoyPercent: nil,
+                        description: nil),
+                ]))
+        #expect(snapshot.denominator == 0)
+        #expect(snapshot.needsReview == false)
+        #expect(snapshot.rows.contains { $0.rowKind == "segment" && $0.amount == 80 })
+    }
+
+    @Test func capexOverviewFactsUseEntityTotalAsDenominator() throws {
+        let facts = [
+            BreakdownFact(
+                tag: "CapitalExpendituresOverviewOfCapitalExpendituresEtc",
+                contextRef: "CurrentYearDuration_SegAMember",
+                dimensions: ["OperatingSegmentsAxis": "SegAMember"],
+                value: 96_437_000_000, label: nil, unitRef: "JPY", decimals: "-6"),
+            BreakdownFact(
+                tag: "CapitalExpendituresOverviewOfCapitalExpendituresEtc",
+                contextRef: "CurrentYearDuration",
+                dimensions: [:], value: 96_439_000_000, label: nil, unitRef: "JPY", decimals: "-6"),
+        ]
+        let snapshot = try #require(
+            BreakdownNormalizer.normalizeCapitalExpendituresOverview(facts: facts))
+        #expect(snapshot.denominator == 96_439_000_000)
+        #expect(snapshot.needsReview == false)
+        let entity = try #require(snapshot.rows.first { $0.labelRaw == Xbrl.entityTotalMemberName })
+        #expect(entity.amount == 96_439_000_000)
     }
 }

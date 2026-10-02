@@ -129,6 +129,7 @@ import Testing
         #expect(htmlRow.capitalExpendituresOverview == 5)
         #expect(htmlRow.segmentAssets == nil)
         #expect(htmlRow.description == "工場")
+        #expect(snapshot.capitalExpendituresOverview == nil)
     }
 
     @Test func returnsNilWhenNothingIsDisclosed() {
@@ -147,5 +148,53 @@ import Testing
         #expect(snapshot.rows.isEmpty)
         #expect(snapshot.flow?.denominator == 50)
         #expect(snapshot.flowMetric == capexFlowMetricCapitalExpenditures)
+    }
+
+    @Test func usesEntityTotalAsFlowDenominatorWhenSegmentSumDiffersByRounding() throws {
+        let facts = [
+            fact(tag: "CapitalExpendituresIFRS", member: "SegAMember", value: 80),
+            fact(tag: "CapitalExpendituresIFRS", member: "ReconcilingItemsMember", value: 18),
+            fact(tag: "CapitalExpendituresIFRS", member: nil, value: 100),
+        ]
+        let snapshot = try #require(
+            CapexNormalizer.normalize(
+                facts: facts, capitalExpendituresPresent: true,
+                noncurrentAssetAdditionsPresent: false))
+        #expect(snapshot.flow?.denominator == 100)
+        #expect(snapshot.needsReview == false)
+        let additive = snapshot.rows
+            .filter { $0.rowKind == "segment" || $0.rowKind == "reconciling" }
+            .compactMap(\.flow).reduce(0, +)
+        #expect(additive == 98)
+        #expect(additive != snapshot.flow?.denominator)
+    }
+
+    @Test func doesNotUseAdditiveSumAsFlowDenominatorWhenEntityTotalIsMissing() throws {
+        let facts = [
+            fact(tag: "CapitalExpendituresIFRS", member: "SegAMember", value: 80),
+            fact(tag: "CapitalExpendituresIFRS", member: "ReconcilingItemsMember", value: 20),
+        ]
+        let snapshot = try #require(
+            CapexNormalizer.normalize(
+                facts: facts, capitalExpendituresPresent: true,
+                noncurrentAssetAdditionsPresent: false))
+        #expect(snapshot.flow == nil)
+        #expect(snapshot.rows.contains { $0.rowKind == "segment" && $0.flow == 80 })
+        #expect(snapshot.needsReview == false)
+    }
+
+    @Test func overlaysUndimensionedCompanyTotalWhenEntityTotalMemberIsMissing() throws {
+        let facts = [
+            fact(tag: "CapitalExpendituresIFRS", member: "SegAMember", value: 80),
+        ]
+        let snapshot = try #require(
+            CapexNormalizer.normalize(
+                facts: facts, capitalExpendituresPresent: true,
+                noncurrentAssetAdditionsPresent: false,
+                flowCompanyTotal: (100, "CapitalExpendituresIFRS")))
+        #expect(snapshot.flow?.denominator == 100)
+        #expect(snapshot.needsReview == true)
+        #expect(snapshot.warnings.contains("capital_expenditures_segment_sum_far_from_total"))
+        #expect(snapshot.rows.contains { $0.rowKind == "segment" && $0.flow == 80 })
     }
 }

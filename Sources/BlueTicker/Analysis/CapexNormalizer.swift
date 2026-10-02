@@ -1,8 +1,10 @@
 // 設備投資マトリクス（axis=`capex`）。行は既存 row_kind（セグメント / 調整額 /
 // 財務諸表計上額=EntityTotal）。セルは segment_assets / flow / Overview。
 // フローは書類単位で capital_expenditures があればそれ、無ければ
-// noncurrent_asset_additions。混ぜず足さない。PPE と Summary capex は触らない。
-// Overview HTML 表は正本。HTML ラベルと XBRL member は初期は結合しない。
+// noncurrent_asset_additions。混ぜず足さない。各セルの分母は連結の無 dimension
+// 総額タグ（EntityTotal）。加算した segment+reconciling は分母にしない。
+// PPE と Summary capex は触らない。Overview HTML 表は正本（合計行が総額）。
+// HTML ラベルと XBRL member は初期は結合しない。
 
 import Foundation
 
@@ -23,17 +25,19 @@ enum CapexNormalizer {
         let flowSnapshot: BreakdownSnapshot?
         if capitalExpendituresPresent {
             flowMetric = capexFlowMetricCapitalExpenditures
-            flowSnapshot =
+            flowSnapshot = withCompanyTotalDenominator(
                 BreakdownNormalizer.normalizeCapitalExpenditures(
-                    facts: facts, labelsByTag: labelsByTag, memberParents: memberParents)
+                    facts: facts, labelsByTag: labelsByTag, memberParents: memberParents),
+                companyTotal: flowCompanyTotal, warningPrefix: "capital_expenditures")
                 ?? companyTotalSnapshot(
                     axis: breakdownAxisCapitalExpenditures, total: flowCompanyTotal,
                     warningPrefix: "capital_expenditures")
         } else if noncurrentAssetAdditionsPresent {
             flowMetric = capexFlowMetricNoncurrentAssetAdditions
-            flowSnapshot =
+            flowSnapshot = withCompanyTotalDenominator(
                 BreakdownNormalizer.normalizeNoncurrentAssetAdditions(
-                    facts: facts, labelsByTag: labelsByTag, memberParents: memberParents)
+                    facts: facts, labelsByTag: labelsByTag, memberParents: memberParents),
+                companyTotal: flowCompanyTotal, warningPrefix: "noncurrent_asset_additions")
                 ?? companyTotalSnapshot(
                     axis: breakdownAxisNoncurrentAssetAdditions, total: flowCompanyTotal,
                     warningPrefix: "noncurrent_asset_additions")
@@ -46,9 +50,13 @@ enum CapexNormalizer {
             facts: facts, labelsByTag: labelsByTag, memberParents: memberParents)
         let overview: BreakdownSnapshot?
         if let overviewFacts {
-            overview = overviewFacts
+            overview = withCompanyTotalDenominator(
+                overviewFacts, companyTotal: overviewCompanyTotal,
+                warningPrefix: "capital_expenditures_overview")
         } else if let overviewHTML {
-            overview = overviewHTML
+            overview = withCompanyTotalDenominator(
+                overviewHTML, companyTotal: overviewCompanyTotal,
+                warningPrefix: "capital_expenditures_overview")
         } else if let overviewCompanyTotal, overviewCompanyTotal.value > 0 {
             overview = BreakdownNormalizer.normalizeCapitalExpendituresOverview(
                 facts: [], total: overviewCompanyTotal.value, totalTag: overviewCompanyTotal.tag)
@@ -166,6 +174,38 @@ enum CapexNormalizer {
         if kinds.contains("html_table") { return "html_table" }
         if kinds.contains(breakdownSourceCapexProse) { return breakdownSourceCapexProse }
         return kinds.first ?? breakdownSourceXbrlFacts
+    }
+
+    /// 連結の無 dimension 総額タグを分母にする。既に EntityTotal 分母があるときはそのまま。
+    /// 加算合計を 100% 分母にはしない。
+    static func withCompanyTotalDenominator(
+        _ snapshot: BreakdownSnapshot?, companyTotal: (value: Double, tag: String)?,
+        warningPrefix: String
+    ) -> BreakdownSnapshot? {
+        guard var snapshot else { return nil }
+        if snapshot.denominator > 0 { return snapshot }
+        guard let companyTotal, companyTotal.value > 0 else { return snapshot }
+        let additive = snapshot.rows
+            .filter { $0.rowKind == "segment" || $0.rowKind == "reconciling" }
+            .map(\.amount).reduce(0, +)
+        var warnings = snapshot.warnings.filter {
+            $0 != "\(warningPrefix)_denominator_derived_from_segment_sum"
+                && $0 != "\(warningPrefix)_entity_total_differs_from_table_total"
+        }
+        if additive > 0, abs(additive - companyTotal.value) / companyTotal.value > 0.05 {
+            let warning = "\(warningPrefix)_segment_sum_far_from_total"
+            if !warnings.contains(warning) { warnings.append(warning) }
+        }
+        snapshot.denominator = companyTotal.value
+        snapshot.denominatorTag = companyTotal.tag
+        snapshot.rows = snapshot.rows.map { row in
+            var copy = row
+            copy.share = row.amount / companyTotal.value
+            return copy
+        }
+        snapshot.warnings = warnings
+        snapshot.needsReview = !warnings.isEmpty
+        return snapshot
     }
 
     private static func companyTotalSnapshot(
