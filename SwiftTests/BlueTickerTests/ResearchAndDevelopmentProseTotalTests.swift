@@ -302,6 +302,120 @@ import Testing
         #expect(snapshot.sourceKind == breakdownSourceResearchAndDevelopmentProse)
     }
 
+    @Test func fillsAShortfallWhenOneSentenceMatchesAndJevCallsItUnallocated() async {
+        let denominator = 339_288_000_000.0
+        let tagged = 286_317_000_000.0
+        let snapshot = shortfallSnapshot(denominator: denominator, tagged: tagged)
+        let sentence = "基礎研究等のその他及び全社に係る研究開発費は52,971百万円であります"
+        let text = """
+            研究開発費の総額は339,288百万円であります。
+            \(sentence)。
+            イメージングは112,298百万円であります。
+            """
+        let filled = await ResearchAndDevelopmentProseTotalDecision.fillShortfall(
+            snapshot: snapshot, plainText: text, docID: "S100XTLJ",
+            decider: ScriptedProseDecider(
+                selected: [:],
+                remainder: [sentence: (ResearchAndDevelopmentRemainderRole.unallocatedRemainder, 0.97)]))
+        #expect(filled.snapshot.rows.count == 2)
+        let added = filled.snapshot.rows[1]
+        #expect(added.amount == 52_971_000_000)
+        #expect(added.rowKind == "reconciling")
+        #expect(added.label == "基礎研究等のその他及び全社に係る研究開発費")
+        #expect(filled.snapshot.needsReview == false)
+        #expect(filled.snapshot.warnings == [breakdownWarningResearchAndDevelopmentProseRemainder])
+        #expect(filled.snapshot.sourceKind == breakdownSourceXbrlFacts)
+        #expect(filled.snapshot.denominatorTag == snapshot.denominatorTag)
+        #expect(filled.audit?.applied == true)
+        #expect(filled.audit?.calls.filter(\.applied).count == 1)
+    }
+
+    @Test func keepsTheTaggedSnapshotWhenTheRemainderSentenceDoesNotQualify() async {
+        let snapshot = shortfallSnapshot(denominator: 339_288_000_000, tagged: 286_317_000_000)
+        let sentence = "基礎研究等のその他及び全社に係る研究開発費は52,971百万円であります"
+        let low = await ResearchAndDevelopmentProseTotalDecision.fillShortfall(
+            snapshot: snapshot, plainText: sentence + "。",
+            decider: ScriptedProseDecider(
+                selected: [:],
+                remainder: [sentence: (ResearchAndDevelopmentRemainderRole.unallocatedRemainder, 0.5)]))
+        #expect(low.snapshot.rows.count == 1)
+        #expect(low.audit == nil)
+
+        let segment = await ResearchAndDevelopmentProseTotalDecision.fillShortfall(
+            snapshot: snapshot, plainText: sentence + "。",
+            decider: ScriptedProseDecider(
+                selected: [:],
+                remainder: [sentence: (ResearchAndDevelopmentRemainderRole.segmentAmount, 0.99)]))
+        #expect(segment.snapshot.rows.count == 1)
+
+        let two = """
+            基礎研究は52,971百万円であります。
+            全社共通は52,971百万円であります。
+            """
+        let counter = CountingProseDecider()
+        let ambiguous = await ResearchAndDevelopmentProseTotalDecision.fillShortfall(
+            snapshot: snapshot, plainText: two, decider: counter)
+        #expect(ambiguous.snapshot.rows.count == 1)
+        #expect(await counter.calls == 0)
+
+        let balanced = shortfallSnapshot(denominator: 100, tagged: 100)
+        let untouched = await ResearchAndDevelopmentProseTotalDecision.fillShortfall(
+            snapshot: balanced, plainText: "残りは52,971百万円であります。", decider: counter)
+        #expect(untouched.snapshot.rows.count == 1)
+        #expect(await counter.calls == 0)
+
+        let totalOnly = BreakdownSnapshot(
+            axis: breakdownAxisResearchAndDevelopment, denominator: 52_971_000_000,
+            denominatorTag: "ResearchAndDevelopmentExpensesResearchAndDevelopmentActivities",
+            rows: [], sourceKind: breakdownSourceXbrlFacts, needsReview: false, warnings: [])
+        let notDoubled = await ResearchAndDevelopmentProseTotalDecision.fillShortfall(
+            snapshot: totalOnly, plainText: sentence + "。", decider: counter)
+        #expect(notDoubled.snapshot.rows.isEmpty)
+        #expect(await counter.calls == 0)
+    }
+
+    @Test func matchesAShortfallWithinMillionYenRounding() {
+        #expect(
+            ResearchAndDevelopmentProseTotalDecision.matchesShortfall(
+                2_096_000_000, gap: 2_098_000_000))
+        #expect(
+            ResearchAndDevelopmentProseTotalDecision.matchesShortfall(
+                934_000_000, gap: 937_000_000))
+        #expect(
+            ResearchAndDevelopmentProseTotalDecision.matchesShortfall(
+                40_000_000_000, gap: 52_971_000_000) == false)
+        let label = ResearchAndDevelopmentProseTotalDecision.remainderLabel(
+            in: "なお、各セグメントに帰属しない研究開発費の合計は138,353百万円です")
+        #expect(label == "各セグメントに帰属しない研究開発費の合計")
+    }
+
+    /// SPEC_ORACLE: キヤノン S100XTLJ とエーザイ S100YB05。
+    /// タグ付き行の不足額と一致する本文は1文。
+    @Test func canonAndEisaiShortfallsMatchOneResearchSentence() async throws {
+        let cases = ["S100XTLJ", "S100YB05"]
+        await SmokeCacheSupport.ensureCached(cases)
+        for docID in cases {
+            let dir = SmokeCacheSupport.cacheDir.appendingPathComponent("\(docID)_xbrl")
+            guard FileManager.default.fileExists(atPath: dir.path) else { continue }
+            let contextMap = BreakdownExtractor.loadDimensionContextMap(xbrlDir: dir)
+            let facts = BreakdownExtractor.extractFactsByDimension(
+                xbrlDir: dir, dimensionKeywords: Xbrl.businessSegmentDimensionKeywords,
+                contextMap: contextMap)
+            let labels = XBRLUtils.breakdownMemberLabels(in: dir)
+            let rd = BreakdownFinancialsResolver.financialsCanonicalRdItem(xbrlDir: dir)
+            let snapshot = try #require(
+                BreakdownNormalizer.normalizeResearchAndDevelopment(
+                    facts: facts, total: rd.value, totalTag: rd.tag,
+                    axis: breakdownAxisResearchAndDevelopment, labelsByTag: labels))
+            let gap = try #require(ResearchAndDevelopmentProseTotalDecision.shortfall(in: snapshot))
+            let text = try #require(ResearchAndDevelopmentProseTotalDecision.activityPlainText(in: dir))
+            let matches = ResearchAndDevelopmentProseTotalDecision.candidates(in: text, limit: nil)
+                .filter { ResearchAndDevelopmentProseTotalDecision.matchesShortfall($0.yen, gap: gap) }
+            #expect(matches.count == 1, "\(docID) gap \(gap) matches \(matches.map(\.yen))")
+            #expect(matches.first?.sentence.contains("研究開発費") == true)
+        }
+    }
+
     @Test func requestAsksForAClassAndNotAnAmount() throws {
         let data = try #require(
             OpenRouterResearchAndDevelopmentProseDecider.requestJSON(
@@ -317,12 +431,38 @@ import Testing
         #expect(instructions.contains("金額の数値は選ばない"))
         let criteria = try #require(question["criteria"] as? [String: String])
         #expect(Set(criteria.keys) == Set(ResearchAndDevelopmentProseRole.optionKeys))
+
+        let remainderData = try #require(
+            OpenRouterResearchAndDevelopmentProseDecider.remainderRequestJSON(
+                model: Api.openrouterDecisionsModel,
+                sentence: "基礎研究等のその他及び全社に係る研究開発費は52,971百万円であります"))
+        let remainderObject = try #require(JSONSerialization.jsonObject(with: remainderData) as? [String: Any])
+        let remainderQuestions = try #require(remainderObject["questions"] as? [String: Any])
+        let remainder = try #require(
+            remainderQuestions[OpenRouterResearchAndDevelopmentProseDecider.remainderQuestion] as? [String: Any])
+        #expect(remainder["type"] as? String == "choice")
+        let remainderCriteria = try #require(remainder["criteria"] as? [String: String])
+        #expect(Set(remainderCriteria.keys) == Set(ResearchAndDevelopmentRemainderRole.optionKeys))
     }
+}
+
+private func shortfallSnapshot(denominator: Double, tagged: Double) -> BreakdownSnapshot {
+    BreakdownSnapshot(
+        axis: breakdownAxisResearchAndDevelopment, denominator: denominator,
+        denominatorTag: "ResearchAndDevelopmentExpensesResearchAndDevelopmentActivities",
+        rows: [
+            BreakdownRow(
+                labelRaw: "Imaging", label: "イメージング", amount: tagged,
+                share: tagged / denominator, profit: nil, rowKind: "segment")
+        ],
+        sourceKind: breakdownSourceXbrlFacts, needsReview: true,
+        warnings: [ResearchAndDevelopmentProseTotalDecision.segmentSumFarWarning])
 }
 
 private struct ScriptedProseDecider: ResearchAndDevelopmentProseDeciding {
     var selected: [String: (String, Double)]
     var unavailableSentences: Set<String> = []
+    var remainder: [String: (String, Double)] = [:]
 
     func classify(sentence: String) async -> ResearchAndDevelopmentProseChoice {
         if unavailableSentences.contains(sentence) {
@@ -335,6 +475,15 @@ private struct ScriptedProseDecider: ResearchAndDevelopmentProseDeciding {
         return ResearchAndDevelopmentProseChoice(
             sentence: sentence, selected: ResearchAndDevelopmentProseRole.unrelated, probability: 0.99)
     }
+
+    func classifyRemainder(sentence: String) async -> ResearchAndDevelopmentProseChoice {
+        if let hit = remainder[sentence] {
+            return ResearchAndDevelopmentProseChoice(
+                sentence: sentence, selected: hit.0, probability: hit.1)
+        }
+        return ResearchAndDevelopmentProseChoice(
+            sentence: sentence, selected: ResearchAndDevelopmentRemainderRole.unrelated, probability: 0.99)
+    }
 }
 
 private actor CountingProseDecider: ResearchAndDevelopmentProseDeciding {
@@ -344,6 +493,12 @@ private actor CountingProseDecider: ResearchAndDevelopmentProseDeciding {
         calls += 1
         return ResearchAndDevelopmentProseChoice(
             sentence: sentence, selected: ResearchAndDevelopmentProseRole.unrelated, probability: 0.99)
+    }
+
+    func classifyRemainder(sentence: String) async -> ResearchAndDevelopmentProseChoice {
+        calls += 1
+        return ResearchAndDevelopmentProseChoice(
+            sentence: sentence, selected: ResearchAndDevelopmentRemainderRole.unrelated, probability: 0.99)
     }
 }
 

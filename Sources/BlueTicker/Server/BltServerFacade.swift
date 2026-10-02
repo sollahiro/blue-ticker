@@ -726,6 +726,7 @@ public extension BltServerContext {
     /// `financialsCanonicalRd` が直接解決する（#9 / #10b）。セグメント dimension が無くても
     /// total があれば denominator のみの resolved になる（合計の正本を本軸に寄せる）。
     /// 数値タグもセグメント fact も無いときだけ、キーがあれば本文の当期総額を補う。
+    /// タグ付き行が全社合計より 5% 以上足りないときは、差額と一致する本文1文を足す。
     /// Summary の `rd` はこの本文総額を読まない。
     func resolveResearchAndDevelopmentBreakdown(docID: String, correctionDocIDs: [String] = []) async -> BreakdownResolveResult {
         guard let xbrlDir = await downloadAnnualFilingXbrl(
@@ -740,12 +741,14 @@ public extension BltServerContext {
         else {
             return await resolveResearchAndDevelopmentProseTotal(xbrlDir: xbrlDir, docID: docID)
         }
+        let filled = await fillResearchAndDevelopmentShortfall(
+            snapshot: snapshot, xbrlDir: xbrlDir, docID: docID)
         let extracted = ExtractedBreakdown(method: "xbrl_facts", tables: [], facts: cached.facts)
         let hash = breakdownContentHash(extracted: extracted, consolidatedSales: rd.value)
         return breakdownByRecordingOverlayRegressions(
             .resolved(
-                payload: breakdownSnapshotPayload(from: snapshot), source: breakdownSourceXbrlFacts,
-                contentHash: hash, audit: nil),
+                payload: breakdownSnapshotPayload(from: filled.snapshot), source: breakdownSourceXbrlFacts,
+                contentHash: hash, audit: filled.audit),
             xbrlDir: xbrlDir)
     }
 
@@ -776,6 +779,19 @@ public extension BltServerContext {
 }
 
 private extension BltServerContext {
+    /// タグ付き行が全社合計より 5% 以上足りないとき、差額と一致する本文1文を足す。
+    /// キーが無い、一致が1文でない、分類が外れた、応答が無いときは決定論のスナップショットを残す。
+    func fillResearchAndDevelopmentShortfall(
+        snapshot: BreakdownSnapshot, xbrlDir: URL, docID: String
+    ) async -> (snapshot: BreakdownSnapshot, audit: LLMBreakdownAuditPayload?) {
+        guard let decider = researchAndDevelopmentProseDecider,
+            let text = ResearchAndDevelopmentProseTotalDecision.activityPlainText(in: xbrlDir)
+        else { return (snapshot, nil) }
+        let filled = await ResearchAndDevelopmentProseTotalDecision.fillShortfall(
+            snapshot: snapshot, plainText: text, docID: docID, decider: decider)
+        return (filled.snapshot, filled.audit.map { .segmentNoteJev($0) })
+    }
+
     /// 数値タグが無い研究開発費。キーが無い、候補が無い、分類が採用条件を外れたときは not_found。
     /// 応答が無いときは行を作らない。
     func resolveResearchAndDevelopmentProseTotal(xbrlDir: URL, docID: String) async -> BreakdownResolveResult {

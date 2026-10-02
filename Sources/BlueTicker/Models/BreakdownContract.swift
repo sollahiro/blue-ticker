@@ -85,7 +85,7 @@ public let geographyBreakdownCacheVersion = "breakdown-geography-v13"
 /// うち / タグ付き合計列の subtotal 化は targeted `--codes`（対象行削除）で定着。v2 は日経225全件再計算になるため上げない。
 /// v2: ingest 時に jpcrp 標準 member の日本語ラベルを補完（生 `*Member` 表示の誤表示）。
 public let employeesBreakdownCacheVersion = "breakdown-employees-v2"
-/// 本文の当期総額（`research_and_development_prose`）は非破壊。既存の `not_found` は行削除または `--codes` で再計算する。
+/// 本文の当期総額と、タグ付き行の不足分を本文1文で埋める処理は非破壊。既存行は行削除または `--codes` で再計算する。
 public let researchAndDevelopmentBreakdownCacheVersion = "breakdown-research-and-development-v2"
 public let goodwillBreakdownCacheVersion = "breakdown-goodwill-v2"
 /// v2: 分母を segment+reconciling に固定（表小計の閾値切替を廃止）。
@@ -144,6 +144,10 @@ public let breakdownDenominatorTagResearchAndDevelopmentProse = "research_and_de
 /// セグメントへ配分できない、またはセグメント別の記載をしないため総額のみ、という開示。
 /// `not_applicable_reason` にはしない。404 にすると総額が消える。
 public let breakdownWarningNotAllocatableToSegments = "not_allocatable_to_segments"
+/// 全社合計の数値タグがあり、タグ付き行の不足分を本文の1文から足した印。
+/// `needs_review` は合計が再び揃えば外す。404 にはしない。
+public let breakdownWarningResearchAndDevelopmentProseRemainder =
+    "research_and_development_prose_remainder"
 
 /// business breakdown が解決できなかった理由（issue #130、E/F判定の検知結果明示化）。
 /// `BreakdownExtractor.BusinessBreakdownNotApplicableReason`（internal 型）の rawValue と揃える

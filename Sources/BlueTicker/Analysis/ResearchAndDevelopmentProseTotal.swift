@@ -30,6 +30,16 @@ struct ResearchAndDevelopmentProseChoice: Equatable, Sendable {
 
 protocol ResearchAndDevelopmentProseDeciding: Sendable {
     func classify(sentence: String) async -> ResearchAndDevelopmentProseChoice
+    /// 差額と一致する文が、セグメントに載っていない当期の残りか。
+    func classifyRemainder(sentence: String) async -> ResearchAndDevelopmentProseChoice
+}
+
+enum ResearchAndDevelopmentRemainderRole {
+    static let unallocatedRemainder = "unallocated_remainder"
+    static let segmentAmount = "segment_amount"
+    static let priorPeriod = "prior_period"
+    static let unrelated = "unrelated"
+    static let optionKeys = [unallocatedRemainder, segmentAmount, priorPeriod, unrelated]
 }
 
 struct ResearchAndDevelopmentProseTotal: Equatable, Sendable {
@@ -79,8 +89,8 @@ enum ResearchAndDevelopmentProseTotalDecision {
     }
 
     /// 1文にちょうど1つの正の金額がある文だけ。長い文と、上限を超えたあとの文は落とす。
-    /// 上限を超えるときは「研究開発費」を含む文を先に残す。
-    static func candidates(in text: String) -> [ResearchAndDevelopmentProseCandidate] {
+    /// 上限を超えるときは「研究開発費」を含む文を先に残す。`limit == nil` は上限なし（差額照合用）。
+    static func candidates(in text: String, limit: Int? = maxCandidates) -> [ResearchAndDevelopmentProseCandidate] {
         let flattened = text
             .replacingOccurrences(of: "\r\n", with: " ")
             .replacingOccurrences(of: "\n", with: " ")
@@ -92,10 +102,103 @@ enum ResearchAndDevelopmentProseTotalDecision {
             guard let yen = singlePositiveYen(in: sentence) else { continue }
             found.append(ResearchAndDevelopmentProseCandidate(sentence: sentence, yen: yen))
         }
-        guard found.count > maxCandidates else { return found }
+        guard let limit, found.count > limit else { return found }
         let preferred = found.filter { $0.sentence.contains("研究開発費") }
         let rest = found.filter { !$0.sentence.contains("研究開発費") }
-        return Array((preferred + rest).prefix(maxCandidates))
+        return Array((preferred + rest).prefix(limit))
+    }
+
+    static let segmentSumFarWarning = "research_and_development_segment_sum_far_from_total"
+
+    /// タグ付きの segment と reconciling が全社合計より 5% 以上少ないときの不足額。
+    /// セグメント行が無い合計のみは nil（総額を残り行として二重に載せない）。
+    static func shortfall(in snapshot: BreakdownSnapshot) -> Double? {
+        guard snapshot.denominator > 0 else { return nil }
+        let additive = snapshot.rows
+            .filter { $0.rowKind == "segment" || $0.rowKind == "reconciling" }
+            .map(\.amount)
+            .reduce(0, +)
+        let gap = snapshot.denominator - additive
+        guard additive > 0, gap > 0, gap / snapshot.denominator > 0.05 else { return nil }
+        return gap
+    }
+
+    /// 百万円の丸め（日揮の 2百万円、日清製粉の 3百万円）を許容する。
+    static func matchesShortfall(_ yen: Double, gap: Double) -> Bool {
+        abs(yen - gap) <= max(5_000_000, gap * 0.005)
+    }
+
+    static func remainderLabel(in sentence: String) -> String {
+        var label = sentence
+        if let range = label.range(of: "は") {
+            label = String(label[..<range.lowerBound])
+        }
+        for prefix in ["なお、", "また、", "ただし、"] where label.hasPrefix(prefix) {
+            label.removeFirst(prefix.count)
+        }
+        label = label.trimmingCharacters(in: .whitespacesAndNewlines)
+        if label.count > 80 {
+            label = String(label.prefix(80))
+        }
+        return label.isEmpty ? "配分不能" : label
+    }
+
+    /// 差額と一致する文がちょうど1つで、Jev が配分されていない残りと分類したときだけ行を足す。
+    /// 応答が無い、分類が外れたときはスナップショットを変えない。
+    static func fillShortfall(
+        snapshot: BreakdownSnapshot, plainText: String, code: String = "", docID: String = "",
+        decider: any ResearchAndDevelopmentProseDeciding
+    ) async -> (snapshot: BreakdownSnapshot, audit: SegmentNoteJevAuditPayload?) {
+        guard let gap = shortfall(in: snapshot) else { return (snapshot, nil) }
+        let matches = candidates(in: plainText, limit: nil).filter { matchesShortfall($0.yen, gap: gap) }
+        guard matches.count == 1, let match = matches.first else { return (snapshot, nil) }
+        let choice = await decider.classifyRemainder(sentence: match.sentence)
+        guard let selected = choice.selected else { return (snapshot, nil) }
+        let applied = selected == ResearchAndDevelopmentRemainderRole.unallocatedRemainder
+            && meetsThreshold(choice.probability)
+        guard applied else { return (snapshot, nil) }
+        let filled = snapshotByAddingRemainder(snapshot, sentence: match.sentence, yen: match.yen)
+        guard !filled.warnings.contains(segmentSumFarWarning) else { return (snapshot, nil) }
+        let call = SegmentNoteJevCallPayload(
+            question: OpenRouterResearchAndDevelopmentProseDecider.remainderQuestion,
+            options: ResearchAndDevelopmentRemainderRole.optionKeys,
+            selected: selected, probability: choice.probability,
+            sentences: [match.sentence], applied: true)
+        let audit = SegmentNoteJevAuditPayload(
+            code: code, docID: docID, axis: breakdownAxisResearchAndDevelopment,
+            model: Api.openrouterDecisionsModel,
+            threshold: SegmentNoteDecision.applyProbabilityThreshold,
+            applied: true, needsReview: false,
+            sentences: [match.sentence], calls: [call])
+        return (filled, audit)
+    }
+
+    private static func snapshotByAddingRemainder(
+        _ snapshot: BreakdownSnapshot, sentence: String, yen: Double
+    ) -> BreakdownSnapshot {
+        var filled = snapshot
+        let label = remainderLabel(in: sentence)
+        filled.rows.append(
+            BreakdownRow(
+                labelRaw: label, label: label, amount: yen,
+                share: snapshot.denominator > 0 ? yen / snapshot.denominator : nil,
+                profit: nil, rowKind: "reconciling"))
+        var warnings = filled.warnings.filter { $0 != segmentSumFarWarning }
+        let additive = filled.rows
+            .filter { $0.rowKind == "segment" || $0.rowKind == "reconciling" }
+            .map(\.amount)
+            .reduce(0, +)
+        if filled.denominator > 0, additive > 0,
+            abs(additive - filled.denominator) / filled.denominator > 0.05
+        {
+            warnings.append(segmentSumFarWarning)
+        }
+        if !warnings.contains(breakdownWarningResearchAndDevelopmentProseRemainder) {
+            warnings.append(breakdownWarningResearchAndDevelopmentProseRemainder)
+        }
+        filled.warnings = warnings
+        filled.needsReview = warnings.contains(segmentSumFarWarning)
+        return filled
     }
 
     static func mentionsNotAllocatableToSegments(_ text: String) -> Bool {
@@ -221,15 +324,31 @@ struct OpenRouterResearchAndDevelopmentProseDecider: ResearchAndDevelopmentProse
     let client: any DecisionsCompleting
     var model: String = Api.openrouterDecisionsModel
 
+    static let remainderQuestion = "research_and_development_remainder"
+
     func classify(sentence: String) async -> ResearchAndDevelopmentProseChoice {
+        await choice(
+            question: ResearchAndDevelopmentProseTotalDecision.question,
+            body: Self.requestJSON(model: model, sentence: sentence),
+            sentence: sentence)
+    }
+
+    func classifyRemainder(sentence: String) async -> ResearchAndDevelopmentProseChoice {
+        await choice(
+            question: Self.remainderQuestion,
+            body: Self.remainderRequestJSON(model: model, sentence: sentence),
+            sentence: sentence)
+    }
+
+    private func choice(question: String, body: Data?, sentence: String) async -> ResearchAndDevelopmentProseChoice {
         let unavailable = ResearchAndDevelopmentProseChoice(
             sentence: sentence, selected: nil, probability: nil)
-        guard let body = Self.requestJSON(model: model, sentence: sentence) else { return unavailable }
+        guard let body else { return unavailable }
         do {
             let data = try await client.decide(requestJSON: body)
-            guard let choice = OpenRouterDecisionsCodec.answers(from: data)[
-                ResearchAndDevelopmentProseTotalDecision.question]?.choice
-            else { return unavailable }
+            guard let choice = OpenRouterDecisionsCodec.answers(from: data)[question]?.choice else {
+                return unavailable
+            }
             return ResearchAndDevelopmentProseChoice(
                 sentence: sentence, selected: choice.selected,
                 probability: OpenRouterSegmentNoteDecider.selectedProbability(
@@ -258,6 +377,32 @@ struct OpenRouterResearchAndDevelopmentProseDecider: ResearchAndDevelopmentProse
         let questions: [String: Any] = [
             ResearchAndDevelopmentProseTotalDecision.question: OpenRouterDecisionsCodec.choiceQuestion(
                 instructions: "この文に出てくる金額は、当期の会社全体の研究開発費の総額か。文の意味で一つ選ぶ。金額の数値は選ばない。",
+                criteria: criteria),
+        ]
+        return OpenRouterDecisionsCodec.requestJSON(
+            model: model, state: ["sentence": sentence], questions: questions)
+    }
+
+    static func remainderRequestJSON(model: String, sentence: String) -> Data? {
+        let criteria: [String: String] = [
+            ResearchAndDevelopmentRemainderRole.unallocatedRemainder: """
+                報告セグメントに配分されていない当期の研究開発費の残りを述べている。 \
+                全社、共通、基礎研究、本社、各セグメントに帰属しない金額がこれにあたる。 \
+                会社全体の研究開発費の総額そのものではない。
+                """,
+            ResearchAndDevelopmentRemainderRole.segmentAmount: """
+                特定の報告セグメント、事業、地域、疾患領域だけの当期の金額である。
+                """,
+            ResearchAndDevelopmentRemainderRole.priorPeriod: """
+                前期、前連結会計年度、前事業年度の金額である。
+                """,
+            ResearchAndDevelopmentRemainderRole.unrelated: """
+                研究開発費の残りではない。売上、従業員数、設備投資、割合だけ、注記番号への参照を含む。
+                """,
+        ]
+        let questions: [String: Any] = [
+            remainderQuestion: OpenRouterDecisionsCodec.choiceQuestion(
+                instructions: "この文の金額は、報告セグメントに配分されていない当期の研究開発費の残りか。文の意味で一つ選ぶ。金額の数値は選ばない。",
                 criteria: criteria),
         ]
         return OpenRouterDecisionsCodec.requestJSON(
