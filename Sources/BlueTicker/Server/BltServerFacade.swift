@@ -46,6 +46,8 @@ public struct BltServerContext: Sendable {
     let segmentNoteDecider: (any SegmentNoteDeciding)?
     /// 研究開発費の本文総額。同じキーが無いときは nil（数値タグが無い書類は not_found のまま）。
     let researchAndDevelopmentProseDecider: (any ResearchAndDevelopmentProseDeciding)?
+    /// 設備投資マトリクスの本文総額。同じキーが無いときは nil。
+    let capexProseDecider: (any CapexProseDeciding)?
     /// employees / rd / goodwill / 報告セグメント指標軸が同一 doc を軸ループで再パースしないためのメモ。
     let businessSegmentDimensionCache: BusinessSegmentDimensionCache
 
@@ -55,7 +57,8 @@ public struct BltServerContext: Sendable {
         overviewChatClient: ChatCompleting = UnavailableChatClient(),
         overviewModel: String = companyOverviewDefaultModel,
         segmentNoteDecider: (any SegmentNoteDeciding)? = nil,
-        researchAndDevelopmentProseDecider: (any ResearchAndDevelopmentProseDeciding)? = nil
+        researchAndDevelopmentProseDecider: (any ResearchAndDevelopmentProseDeciding)? = nil,
+        capexProseDecider: (any CapexProseDeciding)? = nil
     ) {
         self.cacheDir = cacheDir
         let store = EdinetCacheStore(cacheDir: edinetCacheDir(cacheDir))
@@ -70,6 +73,7 @@ public struct BltServerContext: Sendable {
         self.overviewModel = overviewModel
         self.segmentNoteDecider = segmentNoteDecider
         self.researchAndDevelopmentProseDecider = researchAndDevelopmentProseDecider
+        self.capexProseDecider = capexProseDecider
         self.businessSegmentDimensionCache = BusinessSegmentDimensionCache()
     }
 }
@@ -177,12 +181,16 @@ public func makeBltServerContext() async -> BltServerContext? {
         decisionsClient.map {
             OpenRouterResearchAndDevelopmentProseDecider(client: $0)
         }
+    let capexProseDecider: (any CapexProseDeciding)? = decisionsClient.map {
+        OpenRouterCapexProseDecider(client: $0)
+    }
     return BltServerContext(
         apiKey: key, cacheDir: cacheDir, businessChatClient: businessChatClient,
         geographyChatClient: geographyChatClient, overviewChatClient: overviewChatClient,
         overviewModel: overviewEndpoint?.model ?? companyOverviewDefaultModel,
         segmentNoteDecider: segmentNoteDecider,
-        researchAndDevelopmentProseDecider: researchAndDevelopmentProseDecider)
+        researchAndDevelopmentProseDecider: researchAndDevelopmentProseDecider,
+        capexProseDecider: capexProseDecider)
 }
 
 // MARK: - REST Facade
@@ -834,7 +842,6 @@ private extension BltServerContext {
     }
 
     /// 報告セグメント別の決定論指標を共通の XBRL fact 経路で解決する。
-    /// `segment_assets` は連結資産の内訳（segment + 非分類 reconciling、分母=連結 EntityTotal）。
     func resolveSegmentMetricBreakdown(docID: String, axis: String, correctionDocIDs: [String] = []) async -> BreakdownResolveResult {
         guard let xbrlDir = await downloadAnnualFilingXbrl(
             docID: docID, correctionDocIDs: correctionDocIDs
@@ -842,37 +849,11 @@ private extension BltServerContext {
         let cached = await businessSegmentDimensionCache.load(docID: docID, xbrlDir: xbrlDir)
         let snapshot: BreakdownSnapshot?
         switch axis {
-        case breakdownAxisSegmentAssets:
-            snapshot = BreakdownNormalizer.enrichSegmentAssetsWithDifferenceTable(
-                snapshot: BreakdownNormalizer.normalizeSegmentAssets(
-                    facts: cached.facts, labelsByTag: cached.labelsByTag),
-                xbrlDir: xbrlDir)
         case breakdownAxisGoodwillAmortization:
             snapshot = BreakdownNormalizer.normalizeGoodwillAmortization(
                 facts: cached.facts, labelsByTag: cached.labelsByTag)
         case breakdownAxisEquityMethodInvestments:
             snapshot = BreakdownNormalizer.normalizeEquityMethodInvestments(
-                facts: cached.facts, labelsByTag: cached.labelsByTag)
-        case breakdownAxisCapitalExpenditures:
-            snapshot = BreakdownNormalizer.normalizeCapitalExpenditures(
-                facts: cached.facts, labelsByTag: cached.labelsByTag)
-        case breakdownAxisCapitalExpendituresOverview:
-            if case .resolved(let payload, _, _) =
-                StatementNotesResolver.resolveCapitalExpendituresOverview(xbrlDir: xbrlDir),
-                let segments = payload.capexSegments,
-                let htmlSnapshot = BreakdownNormalizer.normalizeCapitalExpendituresOverview(
-                    segments: segments)
-            {
-                snapshot = htmlSnapshot
-            } else {
-                let overview = BreakdownFinancialsResolver.breakdownCanonicalCapexOverviewItem(
-                    xbrlDir: xbrlDir)
-                snapshot = BreakdownNormalizer.normalizeCapitalExpendituresOverview(
-                    facts: cached.facts, total: overview.value, totalTag: overview.tag,
-                    labelsByTag: cached.labelsByTag)
-            }
-        case breakdownAxisNoncurrentAssetAdditions:
-            snapshot = BreakdownNormalizer.normalizeNoncurrentAssetAdditions(
                 facts: cached.facts, labelsByTag: cached.labelsByTag)
         default:
             snapshot = nil
@@ -880,16 +861,7 @@ private extension BltServerContext {
         guard let snapshot else {
             return .notApplicable(reason: breakdownNotApplicableNotFound)
         }
-        var extracted = ExtractedBreakdown(method: "xbrl_facts", tables: [], facts: cached.facts)
-        if axis == breakdownAxisSegmentAssets,
-           let html = SegmentAssetsDifferenceTable.differenceTextBlockHtml(in: xbrlDir)
-        {
-            extracted.tables = [
-                BreakdownTable(
-                    heading: SegmentAssetsDifferenceTable.textBlockTag, markdown: html,
-                    period: "当期", unitCaption: nil),
-            ]
-        }
+        let extracted = ExtractedBreakdown(method: "xbrl_facts", tables: [], facts: cached.facts)
         let hash = breakdownContentHash(extracted: extracted, consolidatedSales: snapshot.denominator)
         return breakdownByRecordingOverlayRegressions(
             .resolved(
@@ -897,15 +869,159 @@ private extension BltServerContext {
                 contentHash: hash, audit: nil),
             xbrlDir: xbrlDir)
     }
+
+    /// 設備投資マトリクス。旧 4 軸を 1 軸にまとめる。Jev は Role だけ、円はコード。
+    func resolveCapexBreakdownImpl(docID: String, correctionDocIDs: [String] = []) async -> BreakdownResolveResult {
+        guard let xbrlDir = await downloadAnnualFilingXbrl(
+            docID: docID, correctionDocIDs: correctionDocIDs
+        ) else { return .failed }
+        let cached = await businessSegmentDimensionCache.load(docID: docID, xbrlDir: xbrlDir)
+        let memberParents = XBRLUtils.operatingSegmentMemberParents(in: xbrlDir)
+        let cePresent = CapexNormalizer.filingHasCurrentTags(
+            in: xbrlDir, tags: Xbrl.segmentCapitalExpenditureTags)
+        let naaPresent = CapexNormalizer.filingHasCurrentTags(
+            in: xbrlDir, tags: Xbrl.segmentNoncurrentAssetAdditionTags)
+        let allTags = XBRLUtils.collectAllNumericElements(in: xbrlDir, nilAsZero: false)
+        let durationFS = fieldSetFromDuration(allTags)
+        let flowTags = cePresent
+            ? Xbrl.segmentCapitalExpenditureTags : Xbrl.segmentNoncurrentAssetAdditionTags
+        let flowItem = resolveItem(durationFS, tags: flowTags)
+        let flowTotal: (value: Double, tag: String)? =
+            flowItem.current.flatMap { value in
+                guard let tag = flowItem.tag, value > 0 else { return nil }
+                return (value, tag)
+            }
+        let overviewItem = BreakdownFinancialsResolver.breakdownCanonicalCapexOverviewItem(
+            xbrlDir: xbrlDir)
+        let overviewTotal: (value: Double, tag: String)? =
+            overviewItem.value.flatMap { value in
+                guard let tag = overviewItem.tag, value > 0 else { return nil }
+                return (value, tag)
+            }
+        var overviewHTML: BreakdownSnapshot?
+        if case .resolved(let note, _, _) =
+            StatementNotesResolver.resolveCapitalExpendituresOverview(xbrlDir: xbrlDir),
+            let segments = note.capexSegments
+        {
+            overviewHTML = BreakdownNormalizer.normalizeCapitalExpendituresOverview(
+                segments: segments)
+        }
+        var assets = BreakdownNormalizer.normalizeSegmentAssets(
+            facts: cached.facts, labelsByTag: cached.labelsByTag, memberParents: memberParents)
+        assets = BreakdownNormalizer.enrichSegmentAssetsWithDifferenceTable(
+            snapshot: assets, xbrlDir: xbrlDir)
+
+        let payload = CapexNormalizer.normalize(
+            facts: cached.facts, labelsByTag: cached.labelsByTag, memberParents: memberParents,
+            capitalExpendituresPresent: cePresent, noncurrentAssetAdditionsPresent: naaPresent,
+            overviewHTML: overviewHTML, overviewCompanyTotal: overviewTotal,
+            flowCompanyTotal: flowTotal, prebuiltAssets: assets)
+
+        let filled = await fillCapexProse(
+            payload: payload, xbrlDir: xbrlDir, docID: docID)
+        switch filled {
+        case .failed:
+            return .failed
+        case .notFound:
+            return .notApplicable(reason: breakdownNotApplicableNotFound)
+        case .resolved(let result):
+            var extracted = ExtractedBreakdown(
+                method: result.source, tables: [], facts: cached.facts)
+            if let html = SegmentAssetsDifferenceTable.differenceTextBlockHtml(in: xbrlDir) {
+                extracted.tables = [
+                    BreakdownTable(
+                        heading: SegmentAssetsDifferenceTable.textBlockTag, markdown: html,
+                        period: "当期", unitCaption: nil),
+                ]
+            }
+            let hash = breakdownContentHash(
+                extracted: extracted, consolidatedSales: result.payload.segmentAssets?.denominator
+                    ?? result.payload.flow?.denominator
+                    ?? result.payload.capitalExpendituresOverview?.denominator)
+            return breakdownByRecordingOverlayRegressions(
+                .resolved(
+                    payload: result.payload, source: result.source, contentHash: hash,
+                    audit: result.audit),
+                xbrlDir: xbrlDir)
+        }
+    }
+
+    /// 本文総額と remainder / exclusion。タグが無い書類で応答が無いときは行を作らず failed。
+    /// 決定論のマトリクスがあるときは、Overview 本文の応答無しで既存セルを捨てない。
+    func fillCapexProse(
+        payload: BreakdownSnapshotPayload?, xbrlDir: URL, docID: String
+    ) async -> CapexProseFillResult {
+        if var payload {
+            let filled = await fillCapexTaggedShortfalls(
+                payload: payload, xbrlDir: xbrlDir, docID: docID)
+            payload = filled.payload
+            if payload.capitalExpendituresOverview == nil,
+                let decider = capexProseDecider,
+                let text = CapexProseTotalDecision.overviewPlainText(in: xbrlDir)
+            {
+                switch await CapexProseTotalDecision.decide(
+                    plainText: text, docID: docID, decider: decider)
+                {
+                case .applied(let total):
+                    payload = CapexProseTotalDecision.applyCompanyTotal(to: payload, total: total)
+                    let audit = filled.audit ?? .segmentNoteJev(total.audit)
+                    return .resolved((payload, payload.sourceKind, audit))
+                case .unavailable:
+                    break
+                case .notApplied:
+                    break
+                }
+            }
+            return .resolved((payload, payload.sourceKind, filled.audit))
+        }
+        guard let decider = capexProseDecider else { return .notFound }
+        guard let text = CapexProseTotalDecision.overviewPlainText(in: xbrlDir) else { return .notFound }
+        switch await CapexProseTotalDecision.decide(plainText: text, docID: docID, decider: decider)
+        {
+        case .applied(let total):
+            let snapshot = CapexProseTotalDecision.snapshotFromCompanyTotal(total)
+            return .resolved((snapshot, breakdownSourceCapexProse, .segmentNoteJev(total.audit)))
+        case .notApplied:
+            return .notFound
+        case .unavailable:
+            return .failed
+        }
+    }
+
+    func fillCapexTaggedShortfalls(
+        payload: BreakdownSnapshotPayload, xbrlDir: URL, docID: String
+    ) async -> (payload: BreakdownSnapshotPayload, audit: LLMBreakdownAuditPayload?) {
+        guard let decider = capexProseDecider,
+            let text = CapexProseTotalDecision.overviewPlainText(in: xbrlDir)
+        else { return (payload, nil) }
+        var current = payload
+        var audit: LLMBreakdownAuditPayload?
+        for cell in [CapexProseCell.segmentAssets, .flow, .overview] {
+            let remainder = await CapexProseTotalDecision.fillShortfall(
+                payload: current, cell: cell, plainText: text, docID: docID, decider: decider)
+            if remainder.audit != nil {
+                current = remainder.payload
+                audit = remainder.audit.map { .segmentNoteJev($0) }
+                continue
+            }
+            let excluded = await CapexProseTotalDecision.fillExclusion(
+                payload: current, cell: cell, plainText: text, docID: docID, decider: decider)
+            if excluded.audit != nil {
+                current = excluded.payload
+                audit = excluded.audit.map { .segmentNoteJev($0) }
+            }
+        }
+        return (current, audit)
+    }
+}
+
+enum CapexProseFillResult {
+    case resolved((payload: BreakdownSnapshotPayload, source: String, audit: LLMBreakdownAuditPayload?))
+    case failed
+    case notFound
 }
 
 public extension BltServerContext {
-    /// 報告セグメント別のセグメント資産を解決する。
-    func resolveSegmentAssetsBreakdown(docID: String, correctionDocIDs: [String] = []) async -> BreakdownResolveResult {
-        await resolveSegmentMetricBreakdown(
-            docID: docID, axis: breakdownAxisSegmentAssets, correctionDocIDs: correctionDocIDs)
-    }
-
     /// 報告セグメント別ののれんの償却額を解決する。
     func resolveGoodwillAmortizationBreakdown(docID: String, correctionDocIDs: [String] = []) async -> BreakdownResolveResult {
         await resolveSegmentMetricBreakdown(
@@ -918,24 +1034,9 @@ public extension BltServerContext {
             docID: docID, axis: breakdownAxisEquityMethodInvestments, correctionDocIDs: correctionDocIDs)
     }
 
-    /// 報告セグメント別の資本的支出を解決する。
-    func resolveCapitalExpendituresBreakdown(docID: String, correctionDocIDs: [String] = []) async -> BreakdownResolveResult {
-        await resolveSegmentMetricBreakdown(
-            docID: docID, axis: breakdownAxisCapitalExpenditures, correctionDocIDs: correctionDocIDs)
-    }
-
-    /// notes「設備投資等の概要」のCapexをbreakdown軸として解決する。
-    func resolveCapitalExpendituresOverviewBreakdown(docID: String, correctionDocIDs: [String] = []) async -> BreakdownResolveResult {
-        await resolveSegmentMetricBreakdown(
-            docID: docID, axis: breakdownAxisCapitalExpendituresOverview,
-            correctionDocIDs: correctionDocIDs)
-    }
-
-    /// 報告セグメント別の非流動性資産への追加額を解決する。
-    func resolveNoncurrentAssetAdditionsBreakdown(docID: String, correctionDocIDs: [String] = []) async -> BreakdownResolveResult {
-        await resolveSegmentMetricBreakdown(
-            docID: docID, axis: breakdownAxisNoncurrentAssetAdditions,
-            correctionDocIDs: correctionDocIDs)
+    /// 設備投資マトリクス（axis=`capex`）を解決する。
+    func resolveCapexBreakdown(docID: String, correctionDocIDs: [String] = []) async -> BreakdownResolveResult {
+        await resolveCapexBreakdownImpl(docID: docID, correctionDocIDs: correctionDocIDs)
     }
 }
 

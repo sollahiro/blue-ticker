@@ -1003,9 +1003,14 @@ enum BreakdownNormalizer {
     }
 
     /// 当期コンテキストかどうか（セグメント軸は Member 修飾があるため ContextHelpers は使わず判定する）。
-    private static func isCurrentPeriod(_ contextRef: String) -> Bool {
+    static func isCurrentPeriodContext(_ contextRef: String) -> Bool {
         Xbrl.durationContextPatterns.contains(where: contextRef.contains)
             || Xbrl.instantContextPatterns.contains(where: contextRef.contains)
+    }
+
+    /// 当期コンテキストかどうか（セグメント軸は Member 修飾があるため ContextHelpers は使わず判定する）。
+    private static func isCurrentPeriod(_ contextRef: String) -> Bool {
+        isCurrentPeriodContext(contextRef)
     }
 
     /// segment 行の member ラベルが地域名キーワードと全一致すれば geography、
