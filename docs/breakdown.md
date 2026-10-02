@@ -21,7 +21,7 @@
 
 geography は変えない。本邦90％の `not_found` は既存の Jev ゲートだけを通る。専用タグは geography の判定を飛ばさず、置き換えない。キーがあるときは、business を専用タグで確定しても geography の Jev は続ける。
 
-キーが無い、または呼び出しに失敗したときは、専用タグ以外は今日の決定論のまま。失敗で `needs_review` は足さない。専用タグの business はキーが無くても適用する。研究開発費・設備投資・減損はこの省略判定を使わない。公開 reason は `single_segment_disclosed` / `geography_only` / `not_found`。`cache_version` は変えない。`SegmentInfoLLMNormalizer` と `GeographyBreakdownLLMNormalizer` は選ばれた html_table を行・金額・単位へ写す。Jev は金額を読まない。
+キーが無い、または呼び出しに失敗したときは、専用タグ以外は今日の決定論のまま。失敗で `needs_review` は足さない。専用タグの business はキーが無くても適用する。研究開発費・設備投資はこの省略判定を使わない。公開 reason は `single_segment_disclosed` / `geography_only` / `not_found`。`cache_version` は変えない。`SegmentInfoLLMNormalizer` と `GeographyBreakdownLLMNormalizer` は選ばれた html_table を行・金額・単位へ写す。Jev は金額を読まない。
 
 研究開発費で数値タグもセグメント fact も無いときは、`OPENROUTER_DECISION_API_KEY` がある場合だけ別の Choice を出す。対象は `ResearchAndDevelopmentActivitiesTextBlock`。コードが文を切り、百万円・千円・億円を円へ換算する。1文に金額が2つある文、0円、割合だけの文は候補にしない。候補が12を超えるときは「研究開発費」を含む文を先に残す。Jev は各文を当期の会社全体の総額 / 前期 / 一部金額 / 無関係に分類し、金額は返さない。`probabilities[choice]` が 0.9 以上の当期総額がちょうど1文のときだけ `rows=[]` の resolved にする。source は `research_and_development_prose`、`denominator_tag` も同じ sentinel。本文がセグメントへ配分できない、またはセグメント別の記載をしないと言うときは `warnings` に `not_allocatable_to_segments` を付ける。`single_segment_disclosed` にはしない。確率不足や当期総額が複数のときは `not_found` のままで、`needs_review` は足さない。応答が無いときは行を作らず、次回の欠測 ingest で再試行する。キーが無いときは数値タグの決定論のまま。`cache_version` は上げない。既存の `not_found` は行削除または `--codes` まで残る。Summary の `rd` は数値タグのままで、この本文総額は breakdown の分母にだけ入る。複数金額が1文に入るセグメント散文は対象外。
 
@@ -36,9 +36,7 @@ geography は変えない。本邦90％の `not_found` は既存の Jev ゲー�
 | `segments` | 報告セグメント（事業とも地域とも限らない） |
 | `geography` | 地域別注記 |
 | `segment_assets` | 連結資産の内訳（報告セグメント + 非分類。銀行の「固定資産」含む） |
-| `depreciation_and_amortization` | 報告セグメントごとの減価償却費及び償却費（J-GAAPは減価償却費） |
 | `goodwill_amortization` | 報告セグメントごとののれんの償却額 |
-| `impairment_loss` | 報告セグメントごとの減損損失 |
 | `equity_method_investments` | 報告セグメントごとの持分法会計処理される投資 |
 | `capital_expenditures` | 報告セグメントごとの資本的支出 |
 | `capital_expenditures_overview` | notes「設備投資等の概要」のセグメント別Capex（`capital_expenditures`とは別値）。US-GAAP も Overview タグにセグメント dimension 付き fact があり決定論で再構成可能 |
@@ -53,7 +51,7 @@ geography は変えない。本邦90％の `not_found` は既存の Jev ゲー�
 | `employees` | 従業員内訳 |
 | `research_and_development` | 研究開発費内訳（発生支出） |
 | `goodwill` | のれん |
-| `segment_assets` 他7指標 | 報告セグメント別指標 |
+| `segment_assets` 他5指標 | 報告セグメント別指標 |
 
 ## 契約・永続化
 

@@ -366,11 +366,11 @@ public func apiSkillsCatalog() -> [ApiSkill] {
             name: "事業別・地域別売上内訳",
             description: """
                 有価証券報告書から事業別/地域別売上高、従業員数、研究開発費、のれん、
-                報告セグメント別の資産・減価償却費及び償却費・のれんの償却額・減損損失・
+                報告セグメント別の資産・のれんの償却額・
                 持分法会計処理される投資・資本的支出・非流動性資産への追加額を取得します（格納済みデータのみ）。
                 対象は取り込み済みの上場企業です。doc_id を省略すると最新の有価証券報告書を使用します。
                 axis は business（既定）/ geography / employees / research_and_development / goodwill /
-                segment_assets / depreciation_and_amortization / goodwill_amortization / impairment_loss /
+                segment_assets / goodwill_amortization /
                 equity_method_investments / capital_expenditures /
                 capital_expenditures_overview / noncurrent_asset_additions に対応。
                 数値タグとセグメント fact から解決します。合計のみの開示は分母だけの行になります。
@@ -410,7 +410,7 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                     name: "axis",
                     location: .query,
                     type: .string,
-                    description: "内訳の軸（business / geography / employees / research_and_development / goodwill / segment_assets / depreciation_and_amortization / goodwill_amortization / impairment_loss / equity_method_investments / capital_expenditures / capital_expenditures_overview / noncurrent_asset_additions。省略時 business）",
+                    description: "内訳の軸（business / geography / employees / research_and_development / goodwill / segment_assets / goodwill_amortization / equity_method_investments / capital_expenditures / capital_expenditures_overview / noncurrent_asset_additions。省略時 business）",
                     required: false,
                     defaultValue: .string("business")
                 ),

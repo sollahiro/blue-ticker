@@ -463,17 +463,6 @@ enum BreakdownNormalizer {
         return finalizeSegmentAssetsSnapshot(snapshot)
     }
 
-    /// 減価償却費及び償却費。
-    static func normalizeDepreciationAndAmortization(
-        facts: [BreakdownFact], axis: String = breakdownAxisDepreciationAndAmortization,
-        labelsByTag: [String: String] = [:], memberParents: [String: String] = [:]
-    ) -> BreakdownSnapshot? {
-        normalizeSegmentMetric(
-            facts: facts, amountTags: Xbrl.segmentDepreciationAndAmortizationTags, axis: axis,
-            warningPrefix: "depreciation_and_amortization", labelsByTag: labelsByTag,
-            memberParents: memberParents)
-    }
-
     /// のれんの償却額。
     static func normalizeGoodwillAmortization(
         facts: [BreakdownFact], axis: String = breakdownAxisGoodwillAmortization,
@@ -482,17 +471,6 @@ enum BreakdownNormalizer {
         normalizeSegmentMetric(
             facts: facts, amountTags: Xbrl.segmentGoodwillAmortizationTags, axis: axis,
             warningPrefix: "goodwill_amortization", labelsByTag: labelsByTag,
-            memberParents: memberParents)
-    }
-
-    /// 減損損失。
-    static func normalizeImpairmentLoss(
-        facts: [BreakdownFact], axis: String = breakdownAxisImpairmentLoss,
-        labelsByTag: [String: String] = [:], memberParents: [String: String] = [:]
-    ) -> BreakdownSnapshot? {
-        normalizeSegmentMetric(
-            facts: facts, amountTags: Xbrl.segmentImpairmentLossTags, axis: axis,
-            warningPrefix: "impairment_loss", labelsByTag: labelsByTag,
             memberParents: memberParents)
     }
 
