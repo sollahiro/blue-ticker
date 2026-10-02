@@ -384,6 +384,12 @@ import Testing
         #expect(
             ResearchAndDevelopmentProseTotalDecision.matchesShortfall(
                 40_000_000_000, gap: 52_971_000_000) == false)
+        #expect(
+            ResearchAndDevelopmentProseTotalDecision.matchesShortfall(
+                52_639_000_000, gap: 52_589_000_000) == false)
+        #expect(
+            ResearchAndDevelopmentProseTotalDecision.matchesShortfall(
+                16_602_000_000, gap: 16_589_000_000) == false)
         let label = ResearchAndDevelopmentProseTotalDecision.remainderLabel(
             in: "なお、各セグメントに帰属しない研究開発費の合計は138,353百万円です")
         #expect(label == "各セグメントに帰属しない研究開発費の合計")

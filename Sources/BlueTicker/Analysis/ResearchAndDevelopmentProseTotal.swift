@@ -123,9 +123,10 @@ enum ResearchAndDevelopmentProseTotalDecision {
         return gap
     }
 
-    /// 百万円の丸め（日揮の 2百万円、日清製粉の 3百万円）を許容する。
+    /// 百万円の丸め（日揮の 2百万円、日清製粉の 3百万円）まで。5百万円を超える相対幅は、
+    /// 別セグメントの金額を同じ差額として拾う（キヤノン S100VHZZ の 50百万円差）。
     static func matchesShortfall(_ yen: Double, gap: Double) -> Bool {
-        abs(yen - gap) <= max(5_000_000, gap * 0.005)
+        abs(yen - gap) <= 5_000_000
     }
 
     static func remainderLabel(in sentence: String) -> String {
