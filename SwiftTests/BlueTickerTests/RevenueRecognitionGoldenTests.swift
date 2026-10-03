@@ -56,7 +56,7 @@ import Testing
         #expect(segments[0].amount == 410_483 * 1_000)
         #expect(segments[1].label == "調味料")
         #expect(segments[1].amount == 1_592_960 * 1_000)
-        #expect(!segments.contains { $0.label.contains("油脂・乳製品調味料") })
+        #expect(!segments.contains { $0.label?.contains("油脂・乳製品調味料") == true })
         #expect(!segments.contains { $0.label == "油脂" })
     }
 
@@ -125,7 +125,7 @@ import Testing
         #expect(snapshot.rows[0].amount != 1_698_931 * Financial.millionYen)
         #expect(snapshot.denominator != 21_925_876 * Financial.millionYen)
         #expect(snapshot.rows[0].label == "工事表示板・標識")
-        #expect(!snapshot.rows.contains { $0.label.contains("工事表示板・標識仮設防護柵") })
+        #expect(!snapshot.rows.contains { $0.label?.contains("工事表示板・標識仮設防護柵") == true })
     }
 
     @Test func z42g7532NestedCandidatesAndRows() async throws {
