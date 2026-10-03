@@ -44,6 +44,8 @@ public struct BltServerContext: Sendable {
     let overviewModel: String
     /// セグメント注記の Jev。`OPENROUTER_DECISION_API_KEY` 未設定なら nil（今日の分類のまま）。
     let segmentNoteDecider: (any SegmentNoteDeciding)?
+    /// 収益分解の当期列選択。同じキーが無いときは nil（Chat Completions には落とさない）。
+    let revenueRecognitionColumnDecider: (any RevenueRecognitionColumnDeciding)?
     /// 研究開発費の本文総額。同じキーが無いときは nil（数値タグが無い書類は not_found のまま）。
     let researchAndDevelopmentProseDecider: (any ResearchAndDevelopmentProseDeciding)?
     /// 設備投資マトリクスの本文総額。同じキーが無いときは nil。
@@ -57,6 +59,7 @@ public struct BltServerContext: Sendable {
         overviewChatClient: ChatCompleting = UnavailableChatClient(),
         overviewModel: String = companyOverviewDefaultModel,
         segmentNoteDecider: (any SegmentNoteDeciding)? = nil,
+        revenueRecognitionColumnDecider: (any RevenueRecognitionColumnDeciding)? = nil,
         researchAndDevelopmentProseDecider: (any ResearchAndDevelopmentProseDeciding)? = nil,
         capexProseDecider: (any CapexProseDeciding)? = nil
     ) {
@@ -72,6 +75,7 @@ public struct BltServerContext: Sendable {
         self.overviewChatClient = overviewChatClient
         self.overviewModel = overviewModel
         self.segmentNoteDecider = segmentNoteDecider
+        self.revenueRecognitionColumnDecider = revenueRecognitionColumnDecider
         self.researchAndDevelopmentProseDecider = researchAndDevelopmentProseDecider
         self.capexProseDecider = capexProseDecider
         self.businessSegmentDimensionCache = BusinessSegmentDimensionCache()
@@ -177,6 +181,10 @@ public func makeBltServerContext() async -> BltServerContext? {
     let segmentNoteDecider: (any SegmentNoteDeciding)? = decisionsClient.map {
         OpenRouterSegmentNoteDecider(client: $0)
     }
+    let revenueRecognitionColumnDecider: (any RevenueRecognitionColumnDeciding)? =
+        decisionsClient.map {
+            OpenRouterRevenueRecognitionColumnDecider(client: $0)
+        }
     let researchAndDevelopmentProseDecider: (any ResearchAndDevelopmentProseDeciding)? =
         decisionsClient.map {
             OpenRouterResearchAndDevelopmentProseDecider(client: $0)
@@ -189,6 +197,7 @@ public func makeBltServerContext() async -> BltServerContext? {
         geographyChatClient: geographyChatClient, overviewChatClient: overviewChatClient,
         overviewModel: overviewEndpoint?.model ?? companyOverviewDefaultModel,
         segmentNoteDecider: segmentNoteDecider,
+        revenueRecognitionColumnDecider: revenueRecognitionColumnDecider,
         researchAndDevelopmentProseDecider: researchAndDevelopmentProseDecider,
         capexProseDecider: capexProseDecider)
 }
@@ -542,7 +551,9 @@ public extension BltServerContext {
     }
 
     /// セグメント注記の Jev。`extracted == nil` は省略確定（呼び出し側が not_applicable にする）。
-    /// business の専用タグに本文があるときは Jev を呼ばず `single_segment_disclosed`。
+    /// business の専用タグに本文があるときは、収益認識の分解表が無い場合だけ
+    /// `single_segment_disclosed`。分解表があるときは表ステップへ進む。
+    /// 選んだ表が合計行だけでカテゴリが無いときは専用タグへ戻す（8771）。
     /// 顧客表・製品90％・本邦90％・報告セグメント fact はその省略を取り消さない。
     /// 専用タグは geography を飛ばさない。キーがある geography は Jev のまま。
     /// キーが無いとき、応答が無いときは、専用タグ以外は抽出結果をそのまま返す。
@@ -554,7 +565,10 @@ public extension BltServerContext {
     ) async -> (extracted: ExtractedBreakdown?, outcome: SegmentNoteDecisionOutcome) {
         let pass = (extracted: extracted as ExtractedBreakdown?, outcome: SegmentNoteDecisionOutcome.unchanged)
         if axis == .business,
-            let tagText = BreakdownExtractor.dedicatedSingleSegmentDisclosureText(xbrlDir: xbrlDir)
+            let tagText = BreakdownExtractor.dedicatedSingleSegmentDisclosureText(xbrlDir: xbrlDir),
+            !extracted.tables.contains(where: {
+                $0.heading == BreakdownExtractor.revenueRecognitionHeading
+            })
         {
             return (nil, SegmentNoteDecision.dedicatedTagBusinessOutcome(docID: docID, tagText: tagText))
         }
@@ -626,14 +640,40 @@ public extension BltServerContext {
         let hash = breakdownContentHash(extracted: resolvedSegments, consolidatedSales: consolidatedSales)
         let result = await BusinessBreakdownResolver.resolve(
             segments: resolvedSegments, consolidatedSales: consolidatedSales, client: businessChatClient,
-            labelsByTag: labelsByTag, denominatorTag: denomItem.tag)
+            labelsByTag: labelsByTag, denominatorTag: denomItem.tag,
+            columnDecider: revenueRecognitionColumnDecider,
+            fiscalYearEnd: BreakdownExtractor.currentFiscalYearEnd(fromXbrlDir: xbrlDir),
+            docID: docID)
+        let dedicatedTag = BreakdownExtractor.dedicatedSingleSegmentDisclosureText(xbrlDir: xbrlDir)
+        if BusinessBreakdownResolver.dedicatedSingleSegmentFallback(
+            snapshot: result.snapshot, dedicatedTagText: dedicatedTag),
+           let dedicatedTag
+        {
+            let outcome = SegmentNoteDecision.dedicatedTagBusinessOutcome(
+                docID: docID, tagText: dedicatedTag)
+            var audit = outcome.audit.map(LLMBreakdownAuditPayload.segmentNoteJev)
+            if let column = result.audit {
+                let columnPayload = llmBreakdownAuditPayload(from: column)
+                audit?.columnJev = columnPayload.columnJev ?? columnPayload.jev
+                audit?.sourceTableIndex = columnPayload.sourceTableIndex
+                audit?.periodColumn = columnPayload.periodColumn
+                audit?.unit = columnPayload.unit
+                if audit?.notes.isEmpty == true {
+                    audit?.notes = columnPayload.notes
+                }
+            }
+            return .notApplicable(
+                reason: breakdownNotApplicableSingleSegmentDisclosed, audit: audit)
+        }
         guard let snapshot = result.snapshot else {
             let reason = BreakdownExtractor.classifyNotApplicableReason(
                 segments: segments, consolidatedSales: consolidatedSales, xbrlDir: xbrlDir,
                 llmHint: result.audit?.notApplicableReason)
             return applyingSegmentNoteDecision(
                 gate.outcome,
-                to: .notApplicable(reason: reason.rawValue, audit: nil))
+                to: .notApplicable(
+                    reason: reason.rawValue,
+                    audit: result.audit.map(llmBreakdownAuditPayload(from:))))
         }
         return applyingSegmentNoteDecision(
             gate.outcome,
@@ -1048,7 +1088,8 @@ private func breakdownSnapshotPayload(from s: BreakdownSnapshot) -> BreakdownSna
         rows: s.rows.map {
             BreakdownRowPayload(
                 labelRaw: $0.labelRaw, label: $0.label ?? $0.labelRaw, amount: $0.amount,
-                profit: $0.profit, rowKind: $0.rowKind, description: $0.description)
+                profit: $0.profit, rowKind: $0.rowKind, description: $0.description,
+                categoryGroup: $0.categoryGroup, category: $0.category)
         },
         sourceKind: s.sourceKind, needsReview: s.needsReview, warnings: s.warnings)
 }
@@ -1075,7 +1116,7 @@ private func applyingSegmentNoteDecision(
 private func llmBreakdownAuditPayload(from a: LLMBreakdownAudit) -> LLMBreakdownAuditPayload {
     LLMBreakdownAuditPayload(
         sourceTableIndex: a.sourceTableIndex, periodColumn: a.periodColumn, unit: a.unit,
-        profitDisclosed: a.profitDisclosed, notes: a.notes)
+        profitDisclosed: a.profitDisclosed, notes: a.notes, jev: a.jev, columnJev: a.columnJev)
 }
 
 /// 生入力（ExtractedBreakdown + 採用前の consolidatedSales）のみのハッシュ。プロンプト/モデル/

@@ -27,7 +27,7 @@ import Foundation
     /// axis-aware swap（docs/breakdown.md）により、
     /// golden の "segments" が xbrl_facts（地域別）から html_table（収益認識１由来の製品別）
     /// に変わった。BreakdownNormalizer.normalize は method=="xbrl_facts" のみ対象なので nil になる
-    /// （html_table 側の正規化は RevenueRecognitionLLMNormalizer が別途担う）。
+    /// （html_table 側の正規化は RevenueRecognitionColumnNormalizer が別途担う）。
     /// 銀行2社（8306・8316）はここには含まれない: `normalizeBankBasis`（粗利益/営業純益基準）で
     /// 解決できるようになったため（issue調査 2026-07-21、下記 bankCompaniesResolveViaGrossProfitBasis 参照）。
     private static let expectedNilCodes: Set<String> = ["4901", "6103", "7751"]

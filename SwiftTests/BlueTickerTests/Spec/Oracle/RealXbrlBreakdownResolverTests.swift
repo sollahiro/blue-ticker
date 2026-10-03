@@ -31,6 +31,13 @@ import Foundation
         return true
     }
 
+    private static func resolvedLabels(_ snapshot: BreakdownSnapshot?) -> Set<String> {
+        Set(
+            (snapshot?.rows ?? []).flatMap { row -> [String] in
+                [row.category, row.categoryGroup, row.labelRaw, row.label].compactMap { $0 }
+            })
+    }
+
     /// 実抽出結果の当期表インデックス（タイヤ/サーマルを含む最初の当期表）。無ければ 0。
     private static func preferredTableIndex(_ tables: [BreakdownTable], containing needle: String) -> Int {
         if let i = tables.firstIndex(where: { $0.period == "当期" && $0.markdown.contains(needle) }) {
@@ -65,17 +72,16 @@ import Foundation
         let sales = 4_429_452_000_000.0
 
         let (snapshot, source, audit) = await BusinessBreakdownResolver.resolve(
-            segments: segments, consolidatedSales: sales, client: client
+            segments: segments, consolidatedSales: sales, client: client,
+            columnDecider: FakeRevenueRecognitionColumnDecider(containing: "タイヤ")
         )
 
         #expect(source == .revenueRecognitionLLM)
-        #expect(await client.schemaName() == "revenue_recognition_breakdown")
         #expect(snapshot?.axis == "business")
-        let labels = Set(snapshot?.rows.map(\.labelRaw) ?? [])
+        let labels = Self.resolvedLabels(snapshot)
         #expect(labels.contains("タイヤ"))
         #expect(labels.contains("その他"))
-        #expect(audit?.notes.contains("化工品") == true || audit?.notes.contains("ソリューション") == true)
-        #expect(await client.timesCalled() == 1)
+        #expect(audit?.jev != nil)
     }
 
     @Test func densoResolvesViaRevenueRecognitionLLM() async throws {
@@ -107,16 +113,16 @@ import Foundation
         let sales = 7_539_975_000_000.0
 
         let (snapshot, source, _) = await BusinessBreakdownResolver.resolve(
-            segments: segments, consolidatedSales: sales, client: client
+            segments: segments, consolidatedSales: sales, client: client,
+            columnDecider: FakeRevenueRecognitionColumnDecider(containing: "サーマルシステム")
         )
 
         #expect(source == .revenueRecognitionLLM)
         #expect(snapshot?.axis == "business")
-        let labels = Set(snapshot?.rows.map(\.labelRaw) ?? [])
+        let labels = Self.resolvedLabels(snapshot)
         #expect(labels.contains("サーマルシステム"))
         #expect(labels.contains("パワトレインシステム"))
         #expect(labels.contains("モビリティエレクトロニクス"))
-        #expect(await client.timesCalled() == 1)
     }
 
     @Test func discoResolvesViaRevenueRecognitionLLM() async throws {
@@ -142,15 +148,19 @@ import Foundation
         let client = RealXbrlMockChat(responseJSON: response)
         let sales = 436_889_000_000.0
         let (snapshot, source, _) = await BusinessBreakdownResolver.resolve(
-            segments: segments, consolidatedSales: sales, client: client
+            segments: segments, consolidatedSales: sales, client: client,
+            columnDecider: FakeRevenueRecognitionColumnDecider(containing: "精密加工装置")
         )
         #expect(source == .revenueRecognitionLLM)
         #expect(snapshot?.axis == "business")
-        let labels = Set(snapshot?.rows.map(\.labelRaw) ?? [])
+        let labels = Self.resolvedLabels(snapshot)
         #expect(labels.contains("精密加工装置"))
         #expect(labels.contains("精密加工ツール"))
-        #expect(snapshot?.rows.contains { $0.labelRaw == "精密加工装置" && $0.amount == 273_957_000_000 } == true)
-        #expect(await client.timesCalled() == 1)
+        let precision: Bool = snapshot?.rows.contains { row in
+            (row.categoryGroup == "精密加工装置" || row.labelRaw == "精密加工装置")
+                && row.amount == 273_957_000_000
+        } == true
+        #expect(precision)
     }
 
     @Test func tokyoElectronResolvesViaRevenueRecognitionLLM() async throws {
@@ -175,15 +185,26 @@ import Foundation
         let client = RealXbrlMockChat(responseJSON: response)
         let sales = 2_443_533_000_000.0
         let (snapshot, source, _) = await BusinessBreakdownResolver.resolve(
-            segments: segments, consolidatedSales: sales, client: client
+            segments: segments, consolidatedSales: sales, client: client,
+            columnDecider: FakeRevenueRecognitionColumnDecider(containing: "新規装置")
         )
         #expect(source == .revenueRecognitionLLM)
         #expect(snapshot?.axis == "business")
-        let labels = Set(snapshot?.rows.map(\.labelRaw) ?? [])
+        let labels = Self.resolvedLabels(snapshot)
         #expect(labels.contains("新規装置"))
         #expect(labels.contains("フィールドソリューション他"))
-        #expect(snapshot?.rows.contains { $0.labelRaw == "新規装置" && $0.amount == 1_817_250_000_000 } == true)
-        #expect(await client.timesCalled() == 1)
+        #expect(!labels.contains("日本"))
+        #expect(!labels.contains("地理的区分"))
+        let needsReview: Bool? = snapshot?.needsReview
+        let denominator: Double? = snapshot?.denominator
+        let expectedDenom: Double = 2_443_533_000_000
+        let equipment: Bool = snapshot?.rows.contains { row in
+            (row.categoryGroup == "新規装置" || row.labelRaw == "新規装置")
+                && row.amount == 1_817_250_000_000
+        } == true
+        #expect(needsReview == false)
+        #expect(denominator == expectedDenom)
+        #expect(equipment)
     }
 
     @Test func mitsubishiBusinessDenominatorKeepsCustomerContractWhenPLRevenueDiffers() async throws {
@@ -191,7 +212,10 @@ import Foundation
         let dir = Self.xbrlDir("S100YB25")
         // Summary sales は本表 Revenue2IFRS「収益」18,915,995 百万円。
         #expect(BreakdownFinancialsResolver.financialsCanonicalSales(xbrlDir: dir) == 18_915_995_000_000)
-        // business 分母は PDF 顧客との契約の連結金額 13,948,091 百万円。合計行 18,915,995 ではない。
+        // NotesRevenue2 当期表（単位：百万円）。顧客との契約から認識した収益:
+        //   合計列 13,939,592（報告セグメント小計）≠ 連結金額列 13,948,091。
+        // その他の源泉から認識した収益 連結金額 4,967,904。合計行 連結金額 18,915,995。
+        // business 分母は顧客との契約の連結金額 13,948,091。その他の源泉は含めない。
         let denom = BreakdownFinancialsResolver.breakdownBusinessSalesDenominatorItem(xbrlDir: dir)
         #expect(denom.value == 13_948_091_000_000)
         #expect(denom.tag == "llm_table_subtotal")
@@ -230,20 +254,26 @@ import Foundation
             xbrlDir: dir, tables: segments.tables)
         let (snapshot, source, _) = await BusinessBreakdownResolver.resolve(
             segments: segments, consolidatedSales: denom.value, client: client,
-            denominatorTag: denom.tag
+            denominatorTag: denom.tag,
+            columnDecider: FakeRevenueRecognitionColumnDecider(containing: "地球環境エネルギー")
         )
         #expect(source == .revenueRecognitionLLM)
         #expect(snapshot?.axis == "business")
+        // 顧客との契約から認識した収益 × 連結金額。合計列 13,939,592 ではない。
         #expect(snapshot?.denominator == 13_948_091_000_000)
         #expect(snapshot?.denominatorTag == "llm_table_subtotal")
-        let labels = Set(snapshot?.rows.map(\.labelRaw) ?? [])
+        let labels = Self.resolvedLabels(snapshot)
         #expect(labels.contains("地球環境エネルギー"))
-        #expect(labels.contains("S.L.C."))
+        let slc: Bool = labels.contains("S.L.C.") || labels.contains(where: { $0.contains("S.L.C") })
+        #expect(slc)
         #expect(labels.contains("電力ソリューション"))
-        #expect(snapshot?.rows.contains { $0.labelRaw == "金属資源" && $0.amount == 1_243_344_000_000 } == true)
-        #expect(snapshot?.rows.contains { $0.rowKind == "subtotal" && $0.amount == 13_948_091_000_000 } == true)
-        #expect(snapshot?.needsReview == false)
-        #expect(await client.timesCalled() == 1)
+        let metal: Bool = snapshot?.rows.contains { row in
+            (row.categoryGroup == "金属資源" || row.category == "金属資源" || row.labelRaw == "金属資源")
+                && row.amount == 1_243_344_000_000
+        } == true
+        let needsReview: Bool? = snapshot?.needsReview
+        #expect(metal)
+        #expect(needsReview == false)
     }
 
     @Test func sumitomoResolvesViaSegmentInfoLLMFromProductTable() async throws {

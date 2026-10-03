@@ -12,7 +12,7 @@ import Foundation
 
 /// LLM がどの表・どの期間列・どの単位を採用したかの監査情報（目視検証用）。
 /// `BreakdownSnapshot` 自体（xbrl_facts 経路と共有する契約型）は汚さず、別チャネルで返す。
-/// business 軸の正規化器（`RevenueRecognitionLLMNormalizer` 等）と共有する型。
+/// business 軸の正規化器（`RevenueRecognitionColumnNormalizer` 等）と共有する型。
 struct LLMBreakdownAudit {
     var sourceTableIndex: Int?
     var periodColumn: String?
@@ -23,10 +23,14 @@ struct LLMBreakdownAudit {
     var profitDisclosed: Bool
     var notes: String
     /// `applicable=false` のときの理由種別（`geography_only` | `other`）。business 軸の
-    /// 正規化器（`RevenueRecognitionLLMNormalizer`/`SegmentInfoLLMNormalizer`）のみが設定する
+    /// 正規化器（`SegmentInfoLLMNormalizer`）のみが設定する
     /// （issue #135: html_table経由でLLMが地域別のみと判定したケースをE判定として拾うため）。
     /// `applicable=true` のときは無視されるフィールドのため nil のままでよい。
     var notApplicableReason: String? = nil
+    /// 収益分解の列選択など、Jev を使ったときの監査。無い経路は nil。
+    var jev: SegmentNoteJevAuditPayload? = nil
+    /// 収益分解の列選択 Jev。`jev` は後段のセグメント注記判断で上書きされる。
+    var columnJev: SegmentNoteJevAuditPayload? = nil
 }
 
 enum GeographyBreakdownLLMNormalizer {

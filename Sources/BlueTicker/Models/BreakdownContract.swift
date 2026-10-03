@@ -91,8 +91,11 @@ public func isSupportedBreakdownAxis(_ axis: String) -> Bool {
 /// Summary が本表 `Revenue2IFRS`「収益」を sales に載せても、収益認識表の分母は顧客契約のまま
 /// （`fin-v21`。金額比較では切り替えない）。
 /// v14: ingest 時に jpcrp 標準 member の日本語ラベルを補完（生 `*Member` 表示の誤表示）。
-/// v12 のままでは決定論変更後も clean 行が skip される。
-public let businessBreakdownCacheVersion = "breakdown-business-v14"
+/// v15: 収益分解を Jev 列選択 + 決定論 2 段（category_group / category）に切り替え。
+/// 格納 JSON の意味が変わるためバンプする。Luna 経路の誤行を現行版 skip で残さない。
+/// `company_breakdowns.payload` は JSONB のため DDL は無い。本番への適用はマージ後の
+/// v15 再計算（別承認）で行う。
+public let businessBreakdownCacheVersion = "breakdown-business-v15"
 /// v11: 単位のみ表を捨てて dedicated contextRef の period を通し、うち列を抽出時に落とす。
 /// v12: うち列ドロップの決定論を精緻化（1段うち豪州、地域コンテキスト、軸ゲート）。
 /// v13: ingest 時に jpcrp 標準 member の日本語ラベルを補完（生 `*Member` 表示の誤表示）。
@@ -337,6 +340,8 @@ public struct BreakdownRowPayload: Codable, Sendable, Equatable {
     public var labelRaw: String
     // 表示用の解決済みラベル。xbrl_facts 経路は XBRL ラベルリンクベースの日本語ラベル（無ければ
     // labelRaw にフォールバック）、html_table/LLM 経路は元々開示書類のテキストのため labelRaw と同値。
+    // 収益分解は DB に label を残さず、読み出し時に category があればそれを、
+    // 無ければ category_group をそのまま label にする（括弧連結はしない）。
     public var label: String
     public var amount: Double
     public var profit: Double?
@@ -347,16 +352,23 @@ public struct BreakdownRowPayload: Codable, Sendable, Equatable {
     public var segmentAssets: Double?
     public var flow: Double?
     public var capitalExpendituresOverview: Double?
+    /// 収益分解の親区分。他軸・旧行は nil。
+    public var categoryGroup: String?
+    /// 収益分解の明細。フラット表では nil。
+    public var category: String?
 
     private enum CodingKeys: String, CodingKey {
         case labelRaw, label, amount, profit, rowKind, description
         case segmentAssets, flow, capitalExpendituresOverview
+        case categoryGroup = "category_group"
+        case category
     }
 
     public init(
         labelRaw: String, label: String, amount: Double, profit: Double?, rowKind: String,
         description: String? = nil, segmentAssets: Double? = nil, flow: Double? = nil,
-        capitalExpendituresOverview: Double? = nil
+        capitalExpendituresOverview: Double? = nil,
+        categoryGroup: String? = nil, category: String? = nil
     ) {
         self.labelRaw = labelRaw
         self.label = label
@@ -367,13 +379,11 @@ public struct BreakdownRowPayload: Codable, Sendable, Equatable {
         self.segmentAssets = segmentAssets
         self.flow = flow
         self.capitalExpendituresOverview = capitalExpendituresOverview
-    }
-
-    /// 旧公開initializer。既存の呼び出し側・ビルド済みテストとの互換性を維持する。
-    public init(labelRaw: String, label: String, amount: Double, profit: Double?, rowKind: String) {
-        self.init(
-            labelRaw: labelRaw, label: label, amount: amount, profit: profit, rowKind: rowKind,
-            description: nil)
+        self.categoryGroup = categoryGroup
+        self.category = category
+        if let categoryGroup {
+            self.label = Self.displayLabel(categoryGroup: categoryGroup, category: category)
+        }
     }
 
     /// 手書き実装（`StatementLine.init(from:)` と同型、`StatementContract.swift` 参照）: `label` を
@@ -385,7 +395,8 @@ public struct BreakdownRowPayload: Codable, Sendable, Equatable {
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         labelRaw = try container.decode(String.self, forKey: .labelRaw)
-        label = try container.decodeIfPresent(String.self, forKey: .label) ?? labelRaw
+        categoryGroup = try container.decodeIfPresent(String.self, forKey: .categoryGroup)
+        category = try container.decodeIfPresent(String.self, forKey: .category)
         amount = try container.decodeIfPresent(Double.self, forKey: .amount) ?? 0
         profit = try container.decodeIfPresent(Double.self, forKey: .profit)
         rowKind = try container.decode(String.self, forKey: .rowKind)
@@ -394,6 +405,35 @@ public struct BreakdownRowPayload: Codable, Sendable, Equatable {
         flow = try container.decodeIfPresent(Double.self, forKey: .flow)
         capitalExpendituresOverview = try container.decodeIfPresent(
             Double.self, forKey: .capitalExpendituresOverview)
+        if let categoryGroup {
+            label = try container.decodeIfPresent(String.self, forKey: .label)
+                ?? Self.displayLabel(categoryGroup: categoryGroup, category: category)
+        } else {
+            label = try container.decodeIfPresent(String.self, forKey: .label) ?? labelRaw
+        }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(labelRaw, forKey: .labelRaw)
+        if categoryGroup == nil {
+            try container.encode(label, forKey: .label)
+        }
+        try container.encode(amount, forKey: .amount)
+        try container.encodeIfPresent(profit, forKey: .profit)
+        try container.encode(rowKind, forKey: .rowKind)
+        try container.encodeIfPresent(description, forKey: .description)
+        try container.encodeIfPresent(segmentAssets, forKey: .segmentAssets)
+        try container.encodeIfPresent(flow, forKey: .flow)
+        try container.encodeIfPresent(
+            capitalExpendituresOverview, forKey: .capitalExpendituresOverview)
+        try container.encodeIfPresent(categoryGroup, forKey: .categoryGroup)
+        try container.encodeIfPresent(category, forKey: .category)
+    }
+
+    public static func displayLabel(categoryGroup: String, category: String?) -> String {
+        if let category, !category.isEmpty { return category }
+        return categoryGroup
     }
 }
 
@@ -504,10 +544,13 @@ public struct LLMBreakdownAuditPayload: Codable, Sendable, Equatable {
     public var profitDisclosed: Bool
     public var notes: String
     public var jev: SegmentNoteJevAuditPayload?
+    /// 収益分解の列選択 Jev。`jev` はセグメント注記判断で上書きされるため別キー。
+    public var columnJev: SegmentNoteJevAuditPayload?
 
     public init(
         sourceTableIndex: Int?, periodColumn: String?, unit: String, profitDisclosed: Bool, notes: String,
-        jev: SegmentNoteJevAuditPayload? = nil
+        jev: SegmentNoteJevAuditPayload? = nil,
+        columnJev: SegmentNoteJevAuditPayload? = nil
     ) {
         self.sourceTableIndex = sourceTableIndex
         self.periodColumn = periodColumn
@@ -515,6 +558,7 @@ public struct LLMBreakdownAuditPayload: Codable, Sendable, Equatable {
         self.profitDisclosed = profitDisclosed
         self.notes = notes
         self.jev = jev
+        self.columnJev = columnJev
     }
 
     /// 正規化監査が無いときの Jev だけの行。
@@ -532,9 +576,17 @@ public struct LLMBreakdownAuditPayload: Codable, Sendable, Equatable {
 
     /// ingest が証券コードを知っているので、空のときだけ埋める。
     public func stamped(code: String) -> LLMBreakdownAuditPayload {
-        guard var jev, jev.code.isEmpty, !code.isEmpty else { return self }
-        jev.code = code
-        return replacingJev(jev)
+        guard !code.isEmpty else { return self }
+        var copy = self
+        if var jev = copy.jev, jev.code.isEmpty {
+            jev.code = code
+            copy.jev = jev
+        }
+        if var columnJev = copy.columnJev, columnJev.code.isEmpty {
+            columnJev.code = code
+            copy.columnJev = columnJev
+        }
+        return copy
     }
 }
 
@@ -542,13 +594,23 @@ public extension BreakdownRowPayload {
     /// REST/MCP 応答用 JSON オブジェクト（snake_case キー）。欠損は NSNull（`FinancialsYear` の
     /// delta フィールドと同じ表現方針）。
     func jsonObject() -> [String: Any] {
+        let resolvedLabel: String
+        if let categoryGroup {
+            resolvedLabel = Self.displayLabel(categoryGroup: categoryGroup, category: category)
+        } else {
+            resolvedLabel = label
+        }
         var object: [String: Any] = [
             "label_raw": labelRaw,
-            "label": label,
+            "label": resolvedLabel,
             "amount": amount,
             "profit": profit ?? NSNull(),
             "row_kind": rowKind,
         ]
+        if let categoryGroup {
+            object["category_group"] = categoryGroup
+            object["category"] = category ?? NSNull()
+        }
         // description は Capex Overview 等で値があるときだけ載せる（他軸に null を増やすのを避ける）。
         if let description {
             object["description"] = description
@@ -621,6 +683,9 @@ public extension LLMBreakdownAuditPayload {
         ]
         if let jev {
             object["jev"] = jev.jsonObject()
+        }
+        if let columnJev {
+            object["column_jev"] = columnJev.jsonObject()
         }
         return object
     }

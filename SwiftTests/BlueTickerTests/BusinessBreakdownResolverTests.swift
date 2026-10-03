@@ -71,69 +71,45 @@ private actor MockChatCompleting: ChatCompleting {
     }
 
     /// オークマ（segments は既に収益認識関係へ swap 済み、見出しで振り分けて
-    /// RevenueRecognitionLLMNormalizer 経由で解決する）。
+    /// Jev 列選択 + 決定論の行組立で解決する）。
     @Test func okumaSwappedSegmentsResolveViaRevenueRecognitionLLM() async throws {
         let segments = try Self.segmentsResult(docID: "S100W043")
         #expect(segments.method == "html_table")
         #expect(segments.tables.first?.heading == "収益認識関係")
         let sales = try #require(try Self.loadSales(code: "6103"))
-
-        let response: [String: Any] = [
-            "applicable": true,
-            "unit": "million_yen",
-            "source_table_index": 1,
-            "period_column": "当期",
-            "profit_disclosed": false,
-            "rows": [
-                ["label": "ＮＣ旋盤", "amount": 37_366, "profit": NSNull(), "row_kind": "segment"],
-                ["label": "マシニングセンタ", "amount": 104_235, "profit": NSNull(), "row_kind": "segment"],
-                ["label": "複合加工機", "amount": 55_653, "profit": NSNull(), "row_kind": "segment"],
-                ["label": "ＮＣ研削盤", "amount": 2_280, "profit": NSNull(), "row_kind": "segment"],
-                ["label": "その他", "amount": 7_287, "profit": NSNull(), "row_kind": "segment"],
-            ],
-            "notes": "test",
-        ]
-        let client = MockChatCompleting(responseJSON: response)
+        let client = MockChatCompleting(responseJSON: nil)
+        let decider = FakeRevenueRecognitionColumnDecider()
 
         let (snapshot, source, audit) = await BusinessBreakdownResolver.resolve(
-            segments: segments, consolidatedSales: sales, client: client
+            segments: segments, consolidatedSales: sales, client: client, columnDecider: decider
         )
 
         #expect(source == .revenueRecognitionLLM)
         #expect(snapshot?.axis == "business")
         #expect(!(snapshot?.needsReview ?? true))
-        #expect(audit != nil)
-        #expect(await client.timesCalled() == 1)
+        #expect(audit?.jev?.model == "typesafe/jev-1.13")
+        #expect(await client.timesCalled() == 0)
+        let labels = Set(snapshot?.rows.map(\.categoryGroup) ?? [])
+        #expect(labels.contains("ＮＣ旋盤"))
+        #expect(labels.contains("マシニングセンタ"))
     }
 
-    /// 収益認識 LLM が needs_review（分母不一致など）でも snapshot は採用する。
+    /// 列選択の confidence が閾値未満でも snapshot は採用する（needs_review）。
     /// 捨てると単一セグメント開示（F）へ落ち、東京エレクトロン型の製品別が取れない。
     @Test func revenueRecognitionLLMResultWithNeedsReviewIsStillAdopted() async throws {
         let segments = try Self.segmentsResult(docID: "S100W043")
         #expect(segments.tables.first?.heading == "収益認識関係")
         let sales = try #require(try Self.loadSales(code: "6103"))
-
-        // 分母（sales）の117%相当を返し、llm_row_sum_mismatch で needs_review が立つ
-        let response: [String: Any] = [
-            "applicable": true,
-            "unit": "million_yen",
-            "source_table_index": 0,
-            "period_column": "前期",
-            "profit_disclosed": false,
-            "rows": [
-                ["label": "ＮＣ旋盤", "amount": (sales * 1.17) / Financial.millionYen, "profit": NSNull(), "row_kind": "segment"],
-            ],
-            "notes": "test",
-        ]
-        let client = MockChatCompleting(responseJSON: response)
+        let client = MockChatCompleting(responseJSON: nil)
+        let decider = FakeRevenueRecognitionColumnDecider(confidence: 0.49)
 
         let (snapshot, source, _) = await BusinessBreakdownResolver.resolve(
-            segments: segments, consolidatedSales: sales, client: client
+            segments: segments, consolidatedSales: sales, client: client, columnDecider: decider
         )
 
         #expect(source == .revenueRecognitionLLM)
         #expect(snapshot?.needsReview == true)
-        #expect(snapshot?.warnings.contains("llm_row_sum_mismatch") == true)
+        #expect(snapshot?.warnings.contains(RevenueRecognitionColumnNormalizer.warningLowConfidence) == true)
     }
 
     /// Grok 4.5 レビュー指摘の回帰テスト（issue調査 2026-07-21）: `method == "xbrl_facts"` でも
@@ -360,60 +336,35 @@ private actor MockChatCompleting: ChatCompleting {
         #expect(audit?.notApplicableReason == "geography_only")
     }
 
-    /// issue #135: revenueRecognitionLLM 経路でも同様に、applicable=false・
-    /// not_applicable_reason=geography_only のとき audit が notFound まで伝搬すること
-    /// （segmentInfoLLM 経路は `propagatesAuditWithGeographyOnlyReasonWhenLlmSaysNotApplicable` で
-    /// カバー済み。Opus監査 2026-07-26 指摘: 両分岐を個別に検証する）。
+    /// Jev が none_of_these のとき snapshot は無く、列選択の audit は持ち帰る。
     @Test func revenueRecognitionLLMPropagatesAuditWithGeographyOnlyReasonWhenNotApplicable() async throws {
         let segments = try Self.segmentsResult(docID: "S100W043")
         #expect(segments.tables.first?.heading == "収益認識関係")
         let sales = try #require(try Self.loadSales(code: "6103"))
-
-        let response: [String: Any] = [
-            "applicable": false,
-            "unit": "million_yen",
-            "source_table_index": 0,
-            "period_column": "当期",
-            "profit_disclosed": false,
-            "rows": [[String: Any]](),
-            "not_applicable_reason": "geography_only",
-            "notes": "仕向地別の地域分解のみで事業別データが存在しない",
-        ]
-        let client = MockChatCompleting(responseJSON: response)
+        let client = MockChatCompleting(responseJSON: nil)
+        let decider = FakeRevenueRecognitionColumnDecider(
+            selected: RevenueRecognitionColumnNormalizer.noneOfThese, confidence: 0.95,
+            pNone: 0.9)
 
         let (snapshot, source, audit) = await BusinessBreakdownResolver.resolve(
-            segments: segments, consolidatedSales: sales, client: client
+            segments: segments, consolidatedSales: sales, client: client, columnDecider: decider
         )
 
         #expect(snapshot == nil)
         #expect(source == .notFound)
-        #expect(audit?.notApplicableReason == "geography_only")
+        #expect(audit?.jev?.calls.first?.selected == RevenueRecognitionColumnNormalizer.noneOfThese)
     }
 
-    /// 収益認識 LLM が needs_review でも採用する。schema 制約で埋まった
-    /// not_applicable_reason（applicable=true）は audit へ漏らさない。
+    /// 列選択が needs_review でも採用する。not_applicable_reason は無い。
     @Test func adoptedNeedsReviewResultDoesNotLeakStrayNotApplicableReasonIntoAudit() async throws {
         let segments = try Self.segmentsResult(docID: "S100W043")
         #expect(segments.tables.first?.heading == "収益認識関係")
         let sales = try #require(try Self.loadSales(code: "6103"))
-
-        let response: [String: Any] = [
-            "applicable": true,
-            "unit": "million_yen",
-            "source_table_index": 0,
-            "period_column": "前期",
-            "profit_disclosed": false,
-            "rows": [
-                ["label": "ＮＣ旋盤", "amount": (sales * 1.17) / Financial.millionYen, "profit": NSNull(), "row_kind": "segment"],
-            ],
-            // schema 制約でやむなく埋まった値。applicable=true のため無視されるべき。
-            "not_applicable_reason": "geography_only",
-            "notes": "test",
-        ]
-        let client = MockChatCompleting(responseJSON: response)
+        let client = MockChatCompleting(responseJSON: nil)
+        let decider = FakeRevenueRecognitionColumnDecider(confidence: 0.49)
 
         let (snapshot, source, audit) = await BusinessBreakdownResolver.resolve(
-            segments: segments, consolidatedSales: sales, client: client
+            segments: segments, consolidatedSales: sales, client: client, columnDecider: decider
         )
 
         #expect(snapshot?.needsReview == true)
