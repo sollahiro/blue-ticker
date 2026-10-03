@@ -203,7 +203,10 @@ import Foundation
         let dir = Self.xbrlDir("S100YB25")
         // Summary sales は本表 Revenue2IFRS「収益」18,915,995 百万円。
         #expect(BreakdownFinancialsResolver.financialsCanonicalSales(xbrlDir: dir) == 18_915_995_000_000)
-        // business 分母は PDF 顧客との契約の連結金額 13,948,091 百万円。合計行 18,915,995 ではない。
+        // NotesRevenue2 当期表（単位：百万円）。顧客との契約から認識した収益:
+        //   合計列 13,939,592（報告セグメント小計）≠ 連結金額列 13,948,091。
+        // その他の源泉から認識した収益 連結金額 4,967,904。合計行 連結金額 18,915,995。
+        // business 分母は顧客との契約の連結金額 13,948,091。その他の源泉は含めない。
         let denom = BreakdownFinancialsResolver.breakdownBusinessSalesDenominatorItem(xbrlDir: dir)
         #expect(denom.value == 13_948_091_000_000)
         #expect(denom.tag == "llm_table_subtotal")
@@ -247,6 +250,7 @@ import Foundation
         )
         #expect(source == .revenueRecognitionLLM)
         #expect(snapshot?.axis == "business")
+        // 顧客との契約から認識した収益 × 連結金額。合計列 13,939,592 ではない。
         #expect(snapshot?.denominator == 13_948_091_000_000)
         #expect(snapshot?.denominatorTag == "llm_table_subtotal")
         let labels = Self.resolvedLabels(snapshot)
