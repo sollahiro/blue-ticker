@@ -534,7 +534,10 @@ enum BreakdownExtractor {
         // 単一セグメント開示（F）は、製品別・収益認識の表が無いときだけ確定する。
         // 表がある東京エレクトロン型を F にすると needs_review=false の not_applicable になり
         // 再試行されない（新規上場の同型が欠測のまま残る）。
-        if detectSingleSegmentDisclosure(xbrlDir: xbrlDir) != nil, segments.tables.isEmpty {
+        // 当期の報告セグメント売上 member が 2 以上あるときは専用タグを F に使わない。
+        if currentYearReportableOperatingSegmentSalesMemberCount(xbrlDir: xbrlDir) < 2,
+            detectSingleSegmentDisclosure(xbrlDir: xbrlDir) != nil, segments.tables.isEmpty
+        {
             return .singleSegmentDisclosed
         }
         if reportedSegmentsAreGeographic(segments: segments, consolidatedSales: consolidatedSales) {
@@ -563,8 +566,26 @@ enum BreakdownExtractor {
         return isGeographyAxis(facts)
     }
 
+    /// `CurrentYearDuration` / `CurrentYearInstant` と、それに連結・非連結 member が付いた
+    /// コンテキスト。`Prior*` は当期ではない。FilingDate / Interim / YTD は使わない。
+    static func isCurrentYearContext(_ contextRef: String) -> Bool {
+        if contextRef.contains("Prior") { return false }
+        return contextRef.contains("CurrentYearDuration") || contextRef.contains("CurrentYearInstant")
+    }
+
     /// 単一セグメント専用タグの本文。空・空白だけは nil。製品90％の散文や集中度マーカーは見ない。
+    /// 当期コンテキストの本文だけを返す。`Prior*` は無視する（7063 の前年定型文）。
     static func dedicatedSingleSegmentDisclosureText(xbrlDir: URL) -> String? {
+        dedicatedSingleSegmentDisclosureTexts(xbrlDir: xbrlDir).currentYear
+    }
+
+    /// 当期コンテキストの専用タグ本文と、期間を問わない最初の本文。
+    /// 報告セグメント売上が当期 2 以上のときは Prior 本文を省略判定に使わない。
+    static func dedicatedSingleSegmentDisclosureTexts(xbrlDir: URL) -> (
+        currentYear: String?, any: String?
+    ) {
+        var currentYear: String?
+        var any: String?
         for root in XBRLUtils.xbrlSearchRoots(in: xbrlDir) {
             for file in XBRLUtils.findXbrlFiles(in: root) {
                 guard let data = try? Data(contentsOf: file) else { continue }
@@ -575,16 +596,76 @@ enum BreakdownExtractor {
                 for block in collector.blocks {
                     let text = (try? SwiftSoup.parse(block.content)).map { bs4Text($0, strip: true) } ?? block.content
                     let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-                    if !trimmed.isEmpty { return trimmed }
+                    guard !trimmed.isEmpty else { continue }
+                    if any == nil { any = trimmed }
+                    if let contextRef = block.contextRef, isCurrentYearContext(contextRef),
+                        currentYear == nil
+                    {
+                        currentYear = trimmed
+                    }
+                    if currentYear != nil, any != nil { return (currentYear, any) }
                 }
             }
         }
-        return nil
+        return (currentYear, any)
+    }
+
+    /// 省略に使ってよい専用タグ本文。当期の報告セグメント売上 member が 2 以上なら nil。
+    /// 1 以下なら当期本文、無ければ Prior を含む最初の本文（9853）。
+    static func dedicatedSingleSegmentTagTrustedForOmission(xbrlDir: URL) -> String? {
+        if currentYearReportableOperatingSegmentSalesMemberCount(xbrlDir: xbrlDir) >= 2 {
+            return nil
+        }
+        let texts = dedicatedSingleSegmentDisclosureTexts(xbrlDir: xbrlDir)
+        return texts.currentYear ?? texts.any
     }
 
     /// 単一セグメント専用タグに本文があるか。製品90％の文だけでは単一セグメントにしない。
     static func hasDedicatedSingleSegmentDisclosureTag(xbrlDir: URL) -> Bool {
         dedicatedSingleSegmentDisclosureText(xbrlDir: xbrlDir) != nil
+    }
+
+    /// 当期の報告セグメント（OperatingSegments 系）で売上/収益 fact を持つ member。
+    /// 小計・調整・全社・報告対象外の「その他」は除く。
+    static func currentYearReportableOperatingSegmentSalesMembers(xbrlDir: URL) -> Set<String> {
+        let contextMap = loadDimensionContextMap(xbrlDir: xbrlDir)
+        let facts = extractFactsByDimension(
+            xbrlDir: xbrlDir, dimensionKeywords: Xbrl.businessSegmentDimensionKeywords,
+            contextMap: contextMap)
+        var members: Set<String> = []
+        for fact in facts {
+            guard isCurrentYearContext(fact.contextRef) else { continue }
+            guard factsContainRecognizedAmountTag([fact]) else { continue }
+            guard let member = XBRLUtils.primaryBreakdownMember(fact.dimensions) else { continue }
+            guard !Xbrl.segmentSubtotalMemberNames.contains(member),
+                !Xbrl.segmentReconcilingMemberNames.contains(member),
+                !Xbrl.segmentOtherBusinessMemberNames.contains(member)
+            else { continue }
+            members.insert(member)
+        }
+        return members
+    }
+
+    static func currentYearReportableOperatingSegmentSalesMemberCount(xbrlDir: URL) -> Int {
+        currentYearReportableOperatingSegmentSalesMembers(xbrlDir: xbrlDir).count
+    }
+
+    /// 当期コンテキストの専用タグがあり、かつ当期の報告セグメント売上 member が 2 以上。
+    static func dedicatedTagDisagreesWithCurrentYearReportableSegments(xbrlDir: URL) -> Bool {
+        dedicatedSingleSegmentDisclosureTexts(xbrlDir: xbrlDir).currentYear != nil
+            && currentYearReportableOperatingSegmentSalesMemberCount(xbrlDir: xbrlDir) >= 2
+    }
+
+    static func applyingDedicatedTagDisagreementWarning(
+        to snapshot: BreakdownSnapshot
+    ) -> BreakdownSnapshot {
+        var copy = snapshot
+        copy.needsReview = true
+        let warning = breakdownWarningSingleSegmentTagDisagreesWithCurrentYearReportableSegments
+        if !copy.warnings.contains(warning) {
+            copy.warnings.append(warning)
+        }
+        return copy
     }
 
     /// 連結財務諸表注記から地域別（所在地別）の**外部売上**情報を抽出する。
