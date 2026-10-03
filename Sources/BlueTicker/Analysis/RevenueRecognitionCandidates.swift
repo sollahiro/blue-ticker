@@ -9,6 +9,8 @@ enum RevenueRecognitionCandidates {
         "顧客との契約から生じる収益",
         "顧客との契約から認識した収益",
         "その他の収益",
+        "その他の源泉から認識した収益",
+        "その他の源泉から生じる収益",
         "外部顧客への売上高",
         "外部収益合計",
         "連結合計",
@@ -264,7 +266,8 @@ enum RevenueRecognitionCandidates {
 
     static func stripNoteMarker(_ label: String) -> String {
         let compact = compactCell(label)
-        let pattern = try! NSRegularExpression(pattern: #"[（(]注[）)]?\s*[0-9０-９]*$"#)
+        let pattern = try! NSRegularExpression(
+            pattern: #"[（(]注(?:[）)]?\s*)?[0-9０-９]+[）)]?$"#)
         let ns = compact as NSString
         let range = NSRange(location: 0, length: ns.length)
         guard let match = pattern.firstMatch(in: compact, options: [], range: range) else {
@@ -387,12 +390,18 @@ enum RevenueRecognitionCandidates {
         compactCell(label).contains("うち")
     }
 
+    /// `その他の収益` は完全一致または接頭辞だけ。`contains` だと「その他」製品行を合計にする。
     private static func isTotalLabel(_ label: String) -> Bool {
         let collapsed = label.replacingOccurrences(of: " ", with: "")
             .replacingOccurrences(of: "\u{3000}", with: "")
-        if collapsed == "合計" || collapsed == "売上高合計" { return true }
+        if collapsed == "合計" || collapsed == "売上高合計" || collapsed == "連結合計"
+            || collapsed == "連結計" || collapsed == "連結金額"
+        {
+            return true
+        }
         return totalMarkers.contains { marker in
-            collapsed.contains(marker.replacingOccurrences(of: " ", with: ""))
+            let token = marker.replacingOccurrences(of: " ", with: "")
+            return collapsed == token || collapsed.hasPrefix(token)
         }
     }
 

@@ -352,6 +352,8 @@ import Testing
 
     @Test func stripNoteMarkerFromTotalAndDisplayLabelDropsGroupBrackets() {
         #expect(RevenueRecognitionCandidates.stripNoteMarker("その他の収益（注）１") == "その他の収益")
+        #expect(RevenueRecognitionCandidates.stripNoteMarker("タイヤ(注１)") == "タイヤ")
+        #expect(RevenueRecognitionCandidates.stripNoteMarker("その他(注２)") == "その他")
         #expect(
             RevenueRecognitionCandidates.displayLabel(categoryGroup: "（海外）", category: "北米")
                 == "北米（海外）")

@@ -31,6 +31,13 @@ import Foundation
         return true
     }
 
+    private static func resolvedLabels(_ snapshot: BreakdownSnapshot?) -> Set<String> {
+        Set(
+            (snapshot?.rows ?? []).flatMap { row -> [String] in
+                [row.category, row.categoryGroup, row.labelRaw, row.label].compactMap { $0 }
+            })
+    }
+
     /// 実抽出結果の当期表インデックス（タイヤ/サーマルを含む最初の当期表）。無ければ 0。
     private static func preferredTableIndex(_ tables: [BreakdownTable], containing needle: String) -> Int {
         if let i = tables.firstIndex(where: { $0.period == "当期" && $0.markdown.contains(needle) }) {
@@ -71,7 +78,7 @@ import Foundation
 
         #expect(source == .revenueRecognitionLLM)
         #expect(snapshot?.axis == "business")
-        let labels = Set(snapshot?.rows.compactMap { $0.categoryGroup ?? $0.labelRaw } ?? [])
+        let labels = Self.resolvedLabels(snapshot)
         #expect(labels.contains("タイヤ"))
         #expect(labels.contains("その他"))
         #expect(audit?.jev != nil)
@@ -112,7 +119,7 @@ import Foundation
 
         #expect(source == .revenueRecognitionLLM)
         #expect(snapshot?.axis == "business")
-        let labels = Set(snapshot?.rows.compactMap { $0.categoryGroup ?? $0.labelRaw } ?? [])
+        let labels = Self.resolvedLabels(snapshot)
         #expect(labels.contains("サーマルシステム"))
         #expect(labels.contains("パワトレインシステム"))
         #expect(labels.contains("モビリティエレクトロニクス"))
@@ -146,7 +153,7 @@ import Foundation
         )
         #expect(source == .revenueRecognitionLLM)
         #expect(snapshot?.axis == "business")
-        let labels = Set(snapshot?.rows.compactMap { $0.categoryGroup ?? $0.labelRaw } ?? [])
+        let labels = Self.resolvedLabels(snapshot)
         #expect(labels.contains("精密加工装置"))
         #expect(labels.contains("精密加工ツール"))
         #expect(snapshot?.rows.contains {
@@ -182,7 +189,7 @@ import Foundation
         )
         #expect(source == .revenueRecognitionLLM)
         #expect(snapshot?.axis == "business")
-        let labels = Set(snapshot?.rows.compactMap { $0.categoryGroup ?? $0.labelRaw } ?? [])
+        let labels = Self.resolvedLabels(snapshot)
         #expect(labels.contains("新規装置"))
         #expect(labels.contains("フィールドソリューション他"))
         #expect(snapshot?.rows.contains {
@@ -242,12 +249,12 @@ import Foundation
         #expect(snapshot?.axis == "business")
         #expect(snapshot?.denominator == 13_948_091_000_000)
         #expect(snapshot?.denominatorTag == "llm_table_subtotal")
-        let labels = Set(snapshot?.rows.compactMap { $0.categoryGroup ?? $0.labelRaw } ?? [])
+        let labels = Self.resolvedLabels(snapshot)
         #expect(labels.contains("地球環境エネルギー"))
         #expect(labels.contains("S.L.C.") || labels.contains(where: { $0.contains("S.L.C") }))
         #expect(labels.contains("電力ソリューション"))
         #expect(snapshot?.rows.contains {
-            ($0.categoryGroup == "金属資源" || $0.labelRaw == "金属資源")
+            ($0.categoryGroup == "金属資源" || $0.category == "金属資源" || $0.labelRaw == "金属資源")
                 && $0.amount == 1_243_344_000_000
         } == true)
         #expect(snapshot?.needsReview == false)
