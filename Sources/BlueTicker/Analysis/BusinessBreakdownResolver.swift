@@ -3,7 +3,7 @@
 // 既にオークマ型（axis が geography 判定される場合）を収益認識関係注記へ axis-aware に
 // swap 済みで返す（`isGeographyAxis` 判定＋`extractRevenueRecognitionInfo` フォールバック）。
 // 本リゾルバはその後段として、method に応じてどの正規化器（xbrl_facts の決定的経路 /
-// 2種類の LLM 正規化器）に振り分けるかだけを判断する。
+// 収益認識の Jev 列選択 / SegmentInfoLLM）に振り分けるかだけを判断する。
 //
 // swap 済みの html_table は見出しが `BreakdownExtractor.revenueRecognitionHeading`
 // （`extractRevenueRecognitionInfo` の dedicatedHeading）で判別できる（swap はその
@@ -31,7 +31,10 @@ enum BusinessBreakdownResolver {
     static func resolve(
         segments: ExtractedBreakdown, consolidatedSales: Double?, client: ChatCompleting,
         labelsByTag: [String: String] = [:],
-        denominatorTag: String? = nil
+        denominatorTag: String? = nil,
+        columnDecider: (any RevenueRecognitionColumnDeciding)? = nil,
+        fiscalYearEnd: String? = nil,
+        docID: String = ""
     ) async -> (snapshot: BreakdownSnapshot?, source: BusinessBreakdownSource, audit: LLMBreakdownAudit?) {
         let factsSnapshot = BreakdownNormalizer.normalize(
             segments, consolidatedSales: consolidatedSales, labelsByTag: labelsByTag)
@@ -71,17 +74,13 @@ enum BusinessBreakdownResolver {
         var lastAudit: LLMBreakdownAudit?
         if !segments.tables.isEmpty {
             if segments.tables.first?.heading == BreakdownExtractor.revenueRecognitionHeading {
-                let (snapshot, audit) = await RevenueRecognitionLLMNormalizer.normalize(
-                    segments, consolidatedSales: consolidatedSales, client: client,
-                    denominatorTag: denominatorTag
-                )
-                lastAudit = audit
-                // needs_review 付きでも採用する（segment_info 経路と同じ）。空にすると
-                // classifyNotApplicableReason が単一セグメント開示（F）を確定し、東京エレクトロン・
-                // ディスコ（報告セグメント省略＋収益認識の製品別）と三菱商事（事業グループ別）の
-                // 新規銘柄が not_applicable のまま再試行されない。INPEX 型のぶれは needs_review
-                // でキューに残す。
-                if let snapshot { return (snapshot, .revenueRecognitionLLM, audit) }
+                if let columnDecider {
+                    let (snapshot, audit) = await RevenueRecognitionColumnNormalizer.normalize(
+                        segments, consolidatedSales: consolidatedSales, decider: columnDecider,
+                        fiscalYearEnd: fiscalYearEnd, docID: docID, denominatorTag: denominatorTag)
+                    lastAudit = audit
+                    if let snapshot { return (snapshot, .revenueRecognitionLLM, audit) }
+                }
             } else {
                 let (snapshot, audit) = await SegmentInfoLLMNormalizer.normalize(
                     segments, consolidatedSales: consolidatedSales, client: client,

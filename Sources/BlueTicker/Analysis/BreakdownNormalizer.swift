@@ -19,6 +19,10 @@ struct BreakdownRow: Equatable {
     var rowKind: String  // "segment" | "subtotal" | "reconciling"
     /// notes「設備投資等の概要」の設備内容・目的。その他の軸は nil。
     var description: String? = nil
+    /// 収益分解の親区分。他軸は nil。DB には `label` ではなくこちらを残す。
+    var categoryGroup: String? = nil
+    /// 収益分解の明細。フラット表では nil。
+    var category: String? = nil
 }
 
 struct BreakdownSnapshot: Equatable {
@@ -29,7 +33,7 @@ struct BreakdownSnapshot: Equatable {
     // sentinel 文字列 "income_statement.sales" を使う（意図的な語彙の使い分け）。
     var denominatorTag: String
     var rows: [BreakdownRow]
-    var sourceKind: String  // "xbrl_facts"（本ファイル） | "html_table"（GeographyBreakdownLLMNormalizer） | "revenue_recognition"（RevenueRecognitionLLMNormalizer） | "segment_info"（SegmentInfoLLMNormalizer）
+    var sourceKind: String  // "xbrl_facts"（本ファイル） | "html_table"（GeographyBreakdownLLMNormalizer） | "revenue_recognition"（RevenueRecognitionColumnNormalizer） | "segment_info"（SegmentInfoLLMNormalizer）
     var needsReview: Bool
     var warnings: [String]
 }

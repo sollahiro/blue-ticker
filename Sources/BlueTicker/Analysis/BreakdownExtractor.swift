@@ -45,6 +45,9 @@ struct BreakdownTable: Equatable {
     var unitCaptionOrigin: BreakdownUnitCaptionOrigin? = nil
     /// 期間ラベルの根拠。辞書往復では落とす（公開 REST/MCP の形は変えない）。
     var periodBasis: BreakdownPeriodBasis? = nil
+    /// 表の直前キャプション（当連結会計年度（自…至…）等）。Jev の列選択肢に載せる。
+    /// content_hash / 公開 payload には含めない。
+    var precedingCaption: String? = nil
 }
 
 struct BreakdownFact: Equatable {
@@ -521,7 +524,7 @@ enum BreakdownExtractor {
     /// 地域軸 facts（E）より F を優先する。専用タグ本文がある business の省略は
     /// `SegmentNoteDecision` が先に確定し、この関数は変えない。
     /// `detectSingleSegmentDisclosure` の散文・集中度は、その省略の公開 reason には使わない。
-    /// `llmHint` は html_table 経由（`RevenueRecognitionLLMNormalizer`/`SegmentInfoLLMNormalizer`）で
+    /// `llmHint` は html_table 経由（`SegmentInfoLLMNormalizer`）で
     /// LLM が `applicable=false` と判定したときの `LLMBreakdownAudit.notApplicableReason`
     /// （issue #135）。xbrl_facts 経路の判定は method=="xbrl_facts" のときしか効かないため、
     /// LLM 自身が「地域別のみ」と申告したケースを拾う目的で追加した。
@@ -787,31 +790,50 @@ enum BreakdownExtractor {
     // MARK: - HTML 表の構造化
 
     /// rowspan / colspan を展開してセル文字列の二次元グリッドにする。
+    /// 同一 `td`/`th` にカテゴリが `<p>` で縦積みされているとき（7413 / 5237 / 272A）は
+    /// 段落ごとに行へ展開する。積み `<p>` が無い表（geography 等）は従来どおり。
     static func expandTable(_ table: Element) -> [[String]] {
         var grid: [Int: [Int: String]] = [:]
         var rowIdx = 0
         guard let trs = try? table.select("tr") else { return [] }
         for tr in trs {
-            var colIdx = 0
             let cells = (try? tr.select("td, th"))?.array() ?? []
-            for cell in cells {
-                while grid[rowIdx]?[colIdx] != nil { colIdx += 1 }
-                let text = bs4Text(cell, strip: true)
-                let rowspan = XBRLUtils.parseHtmlIntAttribute(cell, "rowspan")
-                let colspan = XBRLUtils.parseHtmlIntAttribute(cell, "colspan")
-                for r in 0..<max(rowspan, 0) {
-                    for c in 0..<max(colspan, 0) {
-                        grid[rowIdx + r, default: [:]][colIdx + c] = text
+            let stacks = cells.map(stackedParagraphs(in:))
+            let explodeCount = stacks.compactMap(\.self).map(\.count).max() ?? 1
+            let slices = explodeCount >= 2 ? explodeCount : 1
+            for slice in 0..<slices {
+                var colIdx = 0
+                for (cell, stack) in zip(cells, stacks) {
+                    while grid[rowIdx]?[colIdx] != nil { colIdx += 1 }
+                    let text: String
+                    if slices > 1, let stack {
+                        text = slice < stack.count ? stack[slice] : ""
+                    } else {
+                        text = bs4Text(cell, strip: true)
                     }
+                    let rowspan = slices > 1 ? 1 : XBRLUtils.parseHtmlIntAttribute(cell, "rowspan")
+                    let colspan = XBRLUtils.parseHtmlIntAttribute(cell, "colspan")
+                    for r in 0..<max(rowspan, 0) {
+                        for c in 0..<max(colspan, 0) {
+                            grid[rowIdx + r, default: [:]][colIdx + c] = text
+                        }
+                    }
+                    colIdx += colspan
                 }
-                colIdx += colspan
+                rowIdx += 1
             }
-            rowIdx += 1
         }
         guard !grid.isEmpty else { return [] }
         let maxRow = grid.keys.max()! + 1
         let maxCol = grid.values.compactMap { $0.keys.max() }.max()! + 1
         return (0..<maxRow).map { r in (0..<maxCol).map { c in grid[r]?[c] ?? "" } }
+    }
+
+    /// セル内の非空 `<p>` が2つ以上なら、そのテキスト列。Markdown セル内改行にはしない。
+    static func stackedParagraphs(in cell: Element) -> [String]? {
+        guard let paragraphs = try? cell.select("p") else { return nil }
+        let texts = paragraphs.array().map { bs4Text($0, strip: true) }.filter { !$0.isEmpty }
+        return texts.count >= 2 ? texts : nil
     }
 
     /// グリッドを列幅揃えの Markdown テーブル文字列にする。
@@ -1406,6 +1428,18 @@ enum BreakdownExtractor {
         return nil
     }
 
+    /// 表の直前にある期間キャプション原文。Jev の列選択肢用。期間語の有無で判定し、
+    /// 「自」接頭辞だけでは期間とみなさない（自社メディア広告は実カテゴリ）。
+    static func nearestPeriodCaption(before table: Element) -> String? {
+        for text in precedingShortCaptions(before: table).reversed() {
+            if isPeriodCueProse(text) { continue }
+            if parsePeriodCue(text) != nil || isCaptionLikePeriodText(text) {
+                return text
+            }
+        }
+        return nil
+    }
+
     /// 「前事業年度 当事業年度」のように期間語以外が残らないラベルは比較表の見出し。
     private static func isBareComparisonPeriodLabel(_ text: String) -> Bool {
         var remainder = text
@@ -1993,7 +2027,8 @@ enum BreakdownExtractor {
                     period: pendingPeriod,
                     unitCaption: caption,
                     unitCaptionOrigin: origin,
-                    periodBasis: pendingPeriodBasis
+                    periodBasis: pendingPeriodBasis,
+                    precedingCaption: pendingElement.flatMap(nearestPeriodCaption(before:))
                 ))
             }
             pendingElement = nil
@@ -2260,7 +2295,8 @@ enum BreakdownExtractor {
                         period: workingPeriod,
                         unitCaption: caption,
                         unitCaptionOrigin: origin,
-                        periodBasis: workingBasis
+                        periodBasis: workingBasis,
+                        precedingCaption: nearestPeriodCaption(before: workingTable)
                     ))
 
                     // 定性の対応表のあとに本表が続く場合は打ち切らず次の表を見る。

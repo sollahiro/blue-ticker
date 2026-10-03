@@ -1073,7 +1073,7 @@ enum Xbrl {
     // `NotesRevenue2ConsolidatedFinancialStatementsIFRSTextBlock`（三菱商事型）: セグメント注記は
     // 売上総利益・純利益・資産のみで、事業グループ別の「顧客との契約から認識した収益」が
     // Revenue2 注記側にだけある（実データ検証 2026-07-24）。
-    // 見出しは抽出側で `収益認識関係` に揃えて RevenueRecognitionLLMNormalizer へ振る。
+    // 見出しは抽出側で `収益認識関係` に揃えて RevenueRecognitionColumnNormalizer へ振る。
     static let revenueRecognitionTextBlockTags: Set<String> = [
         "NotesRevenueRecognitionConsolidatedFinancialStatementsTextBlock",
         "NotesRevenueConsolidatedFinancialStatementsIFRSTextBlock",

@@ -1,0 +1,446 @@
+// 収益認識注記の html_table から、決定論で 2 段候補（category_group / category）を組む。
+// Jev は当期の全社金額列だけを選び、行ラベルと金額はここが読む。
+// docs/breakdown.md
+
+import Foundation
+
+enum RevenueRecognitionCandidates {
+    static let totalMarkers = [
+        "顧客との契約から生じる収益",
+        "顧客との契約から認識した収益",
+        "その他の収益",
+        "外部顧客への売上高",
+        "外部収益合計",
+        "連結合計",
+        "連結計",
+    ]
+
+    static let balanceMarkers = [
+        "契約負債", "契約資産", "受取手形", "売掛金", "一時点で認識", "一定期間にわたり",
+    ]
+
+    static let dashCells: Set<String> = ["―", "－", "-", "−", "—", "─", "‐"]
+
+    struct ParsedTable: Equatable {
+        var tableIndex: Int
+        var grid: [[String]]
+        var headerRowCount: Int
+        var columnHeaders: [Int: String]
+        var precedingCaption: String?
+        var unitCaption: String?
+        var items: [Item]
+        var totals: [Total]
+        var groups: [GroupHeader]
+    }
+
+    struct Item: Equatable {
+        var group: String
+        var label: String
+        var row: Int
+        var isPartial: Bool
+    }
+
+    struct Total: Equatable {
+        var label: String
+        var row: Int
+    }
+
+    struct GroupHeader: Equatable {
+        var group: String
+        var row: Int
+    }
+
+    struct AmountColumn: Equatable {
+        var key: String
+        var tableIndex: Int
+        var column: Int
+        var header: String
+        var caption: String?
+        var unit: String?
+    }
+
+    struct BuiltRow: Equatable {
+        var categoryGroup: String
+        var category: String?
+        var amount: Double
+        var isPartial: Bool
+        var rowKind: String
+    }
+
+    /// 契約残高表を除き、金額列がある分解表だけを候補にする。
+    static func parse(
+        tables: [BreakdownTable], skipBalanceTables: Bool = true
+    ) -> [ParsedTable] {
+        var parsed: [ParsedTable] = []
+        for (index, table) in tables.enumerated() {
+            let grid = BreakdownExtractor.markdownToGrid(table.markdown)
+            guard !grid.isEmpty else { continue }
+            if skipBalanceTables, isContractBalanceTable(grid) { continue }
+            guard hasAmountColumn(grid) else { continue }
+            parsed.append(parseTable(index: index, grid: grid, table: table))
+        }
+        return parsed
+    }
+
+    static func amountColumns(in tables: [ParsedTable]) -> [AmountColumn] {
+        var columns: [AmountColumn] = []
+        for table in tables {
+            let dataRows = table.grid.dropFirst(table.headerRowCount)
+            for (column, header) in table.columnHeaders.sorted(by: { $0.key < $1.key }) {
+                let hasAmount = dataRows.contains { row in
+                    column < row.count && isAmountCell(row[column])
+                }
+                guard hasAmount else { continue }
+                columns.append(AmountColumn(
+                    key: "t\(table.tableIndex)_c\(column)",
+                    tableIndex: table.tableIndex,
+                    column: column,
+                    header: header,
+                    caption: table.precedingCaption,
+                    unit: table.unitCaption
+                ))
+            }
+        }
+        return columns
+    }
+
+    /// 選んだ列のセルから行を組む。Jev は呼ばない。
+    static func buildRows(table: ParsedTable, column: Int) -> (rows: [BuiltRow], needsReview: Bool) {
+        let amounts = dataAmounts(table: table, column: column)
+        var built: [BuiltRow] = []
+        var needsReview = false
+
+        let itemsByGroup = Dictionary(grouping: table.items, by: \.group)
+        let orderedGroups = uniqueGroups(in: table)
+        if orderedGroups.isEmpty {
+            for item in table.items {
+                let amount = amounts[item.row] ?? 0
+                built.append(BuiltRow(
+                    categoryGroup: item.label, category: nil, amount: amount,
+                    isPartial: item.isPartial, rowKind: "segment"))
+            }
+        } else {
+            for group in orderedGroups {
+                let items = itemsByGroup[group] ?? []
+                let headerRow = table.groups.first { $0.group == group }?.row
+                let groupAmount = headerRow.flatMap { amounts[$0] }
+                let partialItems = items.filter(\.isPartial)
+                let fullItems = items.filter { !$0.isPartial }
+                let pattern = classifyPattern(
+                    groupAmount: groupAmount, fullItems: fullItems, partialItems: partialItems)
+
+                switch pattern {
+                case .groupOnly:
+                    if let groupAmount {
+                        built.append(BuiltRow(
+                            categoryGroup: group, category: nil, amount: groupAmount,
+                            isPartial: false, rowKind: "segment"))
+                    }
+                case .groupPlusPartial:
+                    if let groupAmount {
+                        built.append(BuiltRow(
+                            categoryGroup: group, category: nil, amount: groupAmount,
+                            isPartial: false, rowKind: "segment"))
+                    }
+                    for item in partialItems {
+                        built.append(BuiltRow(
+                            categoryGroup: group, category: item.label,
+                            amount: amounts[item.row] ?? 0, isPartial: true, rowKind: "segment"))
+                    }
+                case .groupPlusExhaustive:
+                    if let groupAmount {
+                        let itemSum = fullItems.reduce(0.0) { $0 + (amounts[$1.row] ?? 0) }
+                        if !sumMatches(itemSum, subtotal: groupAmount, itemCount: fullItems.count) {
+                            needsReview = true
+                        }
+                    }
+                    if fullItems.isEmpty, let groupAmount {
+                        built.append(BuiltRow(
+                            categoryGroup: group, category: nil, amount: groupAmount,
+                            isPartial: false, rowKind: "segment"))
+                    } else {
+                        for item in fullItems {
+                            built.append(BuiltRow(
+                                categoryGroup: group, category: item.label,
+                                amount: amounts[item.row] ?? 0, isPartial: false, rowKind: "segment"))
+                        }
+                    }
+                    for item in partialItems {
+                        built.append(BuiltRow(
+                            categoryGroup: group, category: item.label,
+                            amount: amounts[item.row] ?? 0, isPartial: true, rowKind: "segment"))
+                    }
+                case .shortSumWithoutUchi:
+                    needsReview = true
+                    if let groupAmount {
+                        built.append(BuiltRow(
+                            categoryGroup: group, category: nil, amount: groupAmount,
+                            isPartial: false, rowKind: "segment"))
+                    }
+                    for item in fullItems {
+                        built.append(BuiltRow(
+                            categoryGroup: group, category: item.label,
+                            amount: amounts[item.row] ?? 0, isPartial: false, rowKind: "segment"))
+                    }
+                }
+            }
+        }
+
+        return (built, needsReview)
+    }
+
+    static func tableTotal(table: ParsedTable, column: Int, preferredLabels: [String] = [
+        "外部顧客への売上高", "顧客との契約から生じる収益", "顧客との契約から認識した収益",
+        "外部収益合計",
+    ]) -> (label: String, amount: Double)? {
+        let amounts = dataAmounts(table: table, column: column)
+        for marker in preferredLabels {
+            if let total = table.totals.first(where: { $0.label == marker }),
+               let amount = amounts[total.row]
+            {
+                return (total.label, amount)
+            }
+        }
+        if let last = table.totals.last, let amount = amounts[last.row] {
+            return (last.label, amount)
+        }
+        return nil
+    }
+
+    /// 行が指標・列が事業のマトリクス（三菱商事 / ファナック）。明細行が無いときだけ、
+    /// 選んだ全社列で表を特定し、合計行の他列を category_group にする。
+    static func transposeMetricRow(table: ParsedTable, wholeCompanyColumn: Int) -> [BuiltRow] {
+        guard table.items.isEmpty else { return [] }
+        let preferred = [
+            "顧客との契約から生じる収益", "顧客との契約から認識した収益",
+            "外部顧客への売上高", "外部収益合計",
+        ]
+        let total = preferred.compactMap { marker in
+            table.totals.first { $0.label == marker || $0.label.hasPrefix(marker) }
+        }.first ?? table.totals.first
+        guard let total, total.row < table.grid.count else { return [] }
+        let row = table.grid[total.row]
+        var built: [BuiltRow] = []
+        for (column, header) in table.columnHeaders.sorted(by: { $0.key < $1.key }) {
+            if column == wholeCompanyColumn { continue }
+            if isAggregateColumnHeader(header) { continue }
+            guard column < row.count, let amount = parseAmount(row[column]) else { continue }
+            let name = compactCell(header)
+            guard !name.isEmpty else { continue }
+            built.append(BuiltRow(
+                categoryGroup: name, category: nil, amount: amount,
+                isPartial: false, rowKind: "segment"))
+        }
+        return built
+    }
+
+    static func isAggregateColumnHeader(_ header: String) -> Bool {
+        let compact = compactCell(header)
+        return compact.contains("合計") || compact.contains("連結") || compact.contains("調整")
+            || compact.contains("消去")
+    }
+
+    static func displayLabel(categoryGroup: String, category: String?) -> String {
+        guard let category, !category.isEmpty else { return categoryGroup }
+        return "\(category)（\(stripOwnBrackets(categoryGroup))）"
+    }
+
+    static func stripOwnBrackets(_ group: String) -> String {
+        var s = group.trimmingCharacters(in: .whitespacesAndNewlines)
+        let pairs: [(Character, Character)] = [("（", "）"), ("(", ")")]
+        for (open, close) in pairs where s.first == open && s.last == close {
+            s.removeFirst()
+            s.removeLast()
+            return s
+        }
+        return s
+    }
+
+    static func stripNoteMarker(_ label: String) -> String {
+        let compact = compactCell(label)
+        let pattern = try! NSRegularExpression(pattern: #"[（(]注[）)]?\s*[0-9０-９]*$"#)
+        let ns = compact as NSString
+        let range = NSRange(location: 0, length: ns.length)
+        guard let match = pattern.firstMatch(in: compact, options: [], range: range) else {
+            return compact
+        }
+        return ns.substring(to: match.range.location)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    static func isAmountCell(_ raw: String) -> Bool {
+        let text = compactCell(raw)
+        if dashCells.contains(text) { return true }
+        return XBRLUtils.parseHtmlNumber(text) != nil
+    }
+
+    static func parseAmount(_ raw: String) -> Double? {
+        let text = compactCell(raw)
+        if dashCells.contains(text) { return 0 }
+        return XBRLUtils.parseHtmlNumber(text)
+    }
+
+    /// |sum - subtotal| <= 項目数 × 表の 1 単位。パターン3でグループに小計があるときだけ。
+    static func sumMatches(_ sum: Double, subtotal: Double, itemCount: Int) -> Bool {
+        abs(sum - subtotal) <= Double(max(itemCount, 1))
+    }
+
+    static func compactCell(_ text: String) -> String {
+        text.replacingOccurrences(of: "\u{00a0}", with: "")
+            .replacingOccurrences(of: "\u{3000}", with: "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    // MARK: - parse one table
+
+    private static func parseTable(
+        index: Int, grid: [[String]], table: BreakdownTable
+    ) -> ParsedTable {
+        let ncol = grid.map(\.count).max() ?? 0
+        let rows = grid.map { $0 + Array(repeating: "", count: max(0, ncol - $0.count)) }
+        var firstData = 0
+        while firstData < rows.count {
+            let row = rows[firstData]
+            let amounts = row.dropFirst().contains { isAmountCell($0) }
+            let labelOnly = !compactCell(row.first ?? "").isEmpty
+                && row.dropFirst().allSatisfy { compactCell($0).isEmpty }
+            if amounts || labelOnly { break }
+            firstData += 1
+        }
+        var headers: [Int: String] = [:]
+        for column in 1..<ncol {
+            let parts = rows.prefix(firstData).compactMap { row -> String? in
+                let text = compactCell(row[column])
+                return text.isEmpty ? nil : text
+            }
+            headers[column] = parts.joined(separator: " / ")
+        }
+
+        var items: [Item] = []
+        var totals: [Total] = []
+        var groups: [GroupHeader] = []
+        var group = ""
+        for i in firstData..<rows.count {
+            let row = rows[i]
+            let rawLabel = compactCell(row.first ?? "")
+            if rawLabel.isEmpty { continue }
+            if isPeriodHeadingLabel(rawLabel) { continue }
+            let label = stripNoteMarker(rawLabel)
+            if label.isEmpty { continue }
+            let hasAmt = row.dropFirst().contains { isAmountCell($0) }
+            if isTotalLabel(label) {
+                totals.append(Total(label: label, row: i))
+                continue
+            }
+            if !hasAmt {
+                group = rawLabel
+                groups.append(GroupHeader(group: rawLabel, row: i))
+                continue
+            }
+            let partial = isPartialItem(label)
+            if partial {
+                var parentGroup = group
+                if parentGroup.isEmpty, let parent = items.last, !parent.isPartial {
+                    parentGroup = parent.label
+                    if !groups.contains(where: { $0.group == parent.label }) {
+                        groups.append(GroupHeader(group: parent.label, row: parent.row))
+                    }
+                    items.removeLast()
+                }
+                items.append(Item(
+                    group: parentGroup, label: label, row: i, isPartial: true))
+                continue
+            }
+            items.append(Item(
+                group: group, label: label, row: i, isPartial: false))
+        }
+        return ParsedTable(
+            tableIndex: index, grid: rows, headerRowCount: firstData, columnHeaders: headers,
+            precedingCaption: table.precedingCaption, unitCaption: table.unitCaption,
+            items: items, totals: totals, groups: groups)
+    }
+
+    /// 期間見出しか。`自` 接頭辞だけでは期間にしない（自社メディア広告）。
+    static func isPeriodHeadingLabel(_ label: String) -> Bool {
+        let compact = compactCell(label)
+        if compact.hasPrefix("自") && !compact.contains("当") && !compact.contains("前")
+            && !compact.contains("至")
+        {
+            return false
+        }
+        if compact.contains("当連結会計年度") || compact.contains("前連結会計年度")
+            || compact.contains("当事業年度") || compact.contains("前事業年度")
+        {
+            return true
+        }
+        return BreakdownExtractor.parsePeriodCue(compact) != nil
+            && (compact.contains("連結") || compact.contains("事業年度") || compact.contains("年度"))
+    }
+
+    static func isPartialItem(_ label: String) -> Bool {
+        compactCell(label).contains("うち")
+    }
+
+    private static func isTotalLabel(_ label: String) -> Bool {
+        let collapsed = label.replacingOccurrences(of: " ", with: "")
+            .replacingOccurrences(of: "\u{3000}", with: "")
+        if collapsed == "合計" || collapsed == "売上高合計" { return true }
+        return totalMarkers.contains { marker in
+            collapsed.contains(marker.replacingOccurrences(of: " ", with: ""))
+        }
+    }
+
+    private static func isContractBalanceTable(_ grid: [[String]]) -> Bool {
+        let flat = grid.flatMap { $0 }.joined()
+        return balanceMarkers.contains { flat.contains($0) }
+    }
+
+    private static func hasAmountColumn(_ grid: [[String]]) -> Bool {
+        grid.contains { row in
+            row.dropFirst().contains { isAmountCell($0) && !dashCells.contains(compactCell($0)) }
+        }
+    }
+
+    private static func dataAmounts(table: ParsedTable, column: Int) -> [Int: Double] {
+        var amounts: [Int: Double] = [:]
+        for (index, row) in table.grid.enumerated() where index >= table.headerRowCount {
+            guard column < row.count, let value = parseAmount(row[column]) else { continue }
+            amounts[index] = value
+        }
+        return amounts
+    }
+
+    private static func uniqueGroups(in table: ParsedTable) -> [String] {
+        var seen = Set<String>()
+        var ordered: [String] = []
+        for header in table.groups where seen.insert(header.group).inserted {
+            ordered.append(header.group)
+        }
+        for item in table.items where !item.group.isEmpty && seen.insert(item.group).inserted {
+            ordered.append(item.group)
+        }
+        return ordered
+    }
+
+    private enum GroupPattern {
+        case groupOnly
+        case groupPlusPartial
+        case groupPlusExhaustive
+        case shortSumWithoutUchi
+    }
+
+    private static func classifyPattern(
+        groupAmount: Double?, fullItems: [Item], partialItems: [Item]
+    ) -> GroupPattern {
+        if !partialItems.isEmpty && fullItems.isEmpty {
+            return .groupPlusPartial
+        }
+        if !partialItems.isEmpty {
+            return .groupPlusExhaustive
+        }
+        if fullItems.isEmpty {
+            return .groupOnly
+        }
+        return .groupPlusExhaustive
+    }
+}

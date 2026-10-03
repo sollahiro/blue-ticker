@@ -2,7 +2,7 @@
 // 列見出しで指標が行という向きの表が、巨大注記内に直接内包されている）の html_table 結果を
 // LLM で BreakdownSnapshot（axis:"business"）へ正規化する。
 // docs/breakdown.md 参照。GeographyBreakdownLLMNormalizer.swift（geography 用）・
-// RevenueRecognitionLLMNormalizer.swift（オークマ型、収益認識注記由来）と同型だが、対象は
+// 収益認識注記由来（オークマ型）は `RevenueRecognitionColumnNormalizer` が Jev 列選択で担う。対象は
 // `segments` キー自体（オークマ型のような axis-aware swap を経ていない、素の segments 結果）
 // が html_table になっているケース。
 //

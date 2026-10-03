@@ -7,9 +7,9 @@ import Testing
     @Test func htmlExtractorSharedPathBumpsBusinessWithGeography() throws {
         let businessN = try #require(breakdownCacheVersionNumber(businessBreakdownCacheVersion))
         let geographyN = try #require(breakdownCacheVersionNumber(geographyBreakdownCacheVersion))
-        #expect(businessN == 14)
+        #expect(businessN == 15)
         #expect(geographyN == 13)
-        #expect(try #require(breakdownCacheVersionNumber("breakdown-business-v13")) < businessN)
+        #expect(try #require(breakdownCacheVersionNumber("breakdown-business-v14")) < businessN)
         #expect(try #require(breakdownCacheVersionNumber("breakdown-geography-v12")) < geographyN)
         // fact-only axes do not share allTablesFromHtml / keywordTablesFromHtml.
         #expect(employeesBreakdownCacheVersion == "breakdown-employees-v2")
@@ -110,5 +110,21 @@ import Testing
         #expect(
             isPubliclyServableBreakdown(source: "unknown_llm", needsReview: false, warnings: [])
                 == true)
+    }
+
+    @Test func revenueRecognitionPayloadOmitsLabelAndRestoresOnRead() throws {
+        let row = BreakdownRowPayload(
+            labelRaw: "北米", label: "stored", amount: 1, profit: nil, rowKind: "segment",
+            categoryGroup: "（海外）", category: "北米")
+        #expect(row.label == "北米（海外）")
+        let encoded = try JSONEncoder().encode(row)
+        let object = try #require(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+        #expect(object["label"] == nil)
+        #expect(object["category_group"] as? String == "（海外）")
+        let decoded = try JSONDecoder().decode(BreakdownRowPayload.self, from: encoded)
+        #expect(decoded.label == "北米（海外）")
+        #expect(decoded.category == "北米")
+        #expect(row.jsonObject()["label"] as? String == "北米（海外）")
+        #expect(row.jsonObject()["category"] as? String == "北米")
     }
 }
