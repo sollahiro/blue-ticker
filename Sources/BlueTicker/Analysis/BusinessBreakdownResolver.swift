@@ -100,4 +100,14 @@ enum BusinessBreakdownResolver {
 
         return (nil, .notFound, lastAudit)
     }
+
+    /// 専用タグがあり、選んだ収益分解表にカテゴリ行が無い（合計行だけ）ときは
+    /// main と同じ `single_segment_disclosed`。製品行がある表は残す（8771 S100YKOI）。
+    static func dedicatedSingleSegmentFallback(
+        snapshot: BreakdownSnapshot?, dedicatedTagText: String?
+    ) -> Bool {
+        let tag = dedicatedTagText?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard !tag.isEmpty else { return false }
+        return snapshot?.rows.contains { $0.rowKind == "segment" } != true
+    }
 }

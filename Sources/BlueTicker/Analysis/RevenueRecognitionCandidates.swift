@@ -247,6 +247,7 @@ enum RevenueRecognitionCandidates {
         for (column, header) in table.columnHeaders.sorted(by: { $0.key < $1.key }) {
             if column == wholeCompanyColumn { continue }
             if isAggregateColumnHeader(header) { continue }
+            if isPeriodHeadingLabel(header) { continue }
             guard column < row.count, let amount = parseAmount(row[column]) else { continue }
             let name = compactCell(header)
             guard !name.isEmpty else { continue }

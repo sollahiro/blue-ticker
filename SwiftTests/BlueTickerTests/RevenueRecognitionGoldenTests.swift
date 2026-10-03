@@ -403,6 +403,72 @@ import Testing
         }
     }
 
+    /// 8771 S100YKOI: 収益認識表は顧客契約 / その他 / 外部顧客の合計だけ。
+    /// Jev が当期列を選んでもカテゴリ行は無く、専用タグがあるので main と同じ F。
+    @Test func ykoi8771TotalsOnlyFallsBackToSingleSegmentDisclosed() async throws {
+        let tagText = "当社グループは単一セグメントであるため、記載を省略しております。"
+        let xml = XBRLTestSupport.makeXbrlDuration(
+            """
+            <jpcrp_cor:DescriptionOfFactThatCompanysBusinessComprisesSingleSegment contextRef="CurrentYearDuration">\(tagText)</jpcrp_cor:DescriptionOfFactThatCompanysBusinessComprisesSingleSegment>
+            """)
+        let html = """
+            <p>当連結会計年度（自 2025年4月1日 至 2026年3月31日）</p>
+            <p>（単位：百万円）</p>
+            <table>
+              <tr><td></td><td>前連結会計年度</td><td>当連結会計年度</td></tr>
+              <tr><td>顧客との契約から生じる収益</td><td>80</td><td>90</td></tr>
+              <tr><td>その他の源泉から生じる収益</td><td>10</td><td>12</td></tr>
+              <tr><td>外部顧客への売上高</td><td>90</td><td>102</td></tr>
+            </table>
+            """
+        try await XBRLTestSupport.withXbrlDir(xml) { dir in
+            let extracted = ExtractedBreakdown(
+                method: "html_table",
+                tables: BreakdownExtractor.allTablesFromHtml(
+                    html, defaultHeading: BreakdownExtractor.revenueRecognitionHeading),
+                facts: [])
+            let context = BltServerContext(
+                apiKey: "test", cacheDir: URL(fileURLWithPath: NSTemporaryDirectory()),
+                businessChatClient: UnavailableChatClient(),
+                geographyChatClient: UnavailableChatClient())
+            let gate = await context.segmentsAfterNoteDecision(
+                axis: .business, docID: "S100YKOI", extracted: extracted, xbrlDir: dir,
+                consolidatedSales: 102 * Financial.millionYen, labelsByTag: [:])
+            #expect(gate.extracted?.tables.isEmpty == false)
+            #expect(gate.outcome.omissionReason == nil)
+
+            let parsed = RevenueRecognitionCandidates.parse(tables: extracted.tables)
+            #expect(parsed[0].items.isEmpty)
+            #expect(Set(parsed[0].totals.map(\.label)).isSuperset(of: [
+                "顧客との契約から生じる収益", "その他の源泉から生じる収益", "外部顧客への売上高",
+            ]))
+            let transposed = RevenueRecognitionCandidates.transposeMetricRow(
+                table: parsed[0], wholeCompanyColumn: 2)
+            #expect(transposed.rows.isEmpty)
+            #expect(!transposed.rows.contains { $0.categoryGroup.contains("前連結会計年度") })
+
+            let decider = FakeRevenueRecognitionColumnDecider(selected: "t0_c2", confidence: 0.97)
+            let (snapshot, _, audit) = await BusinessBreakdownResolver.resolve(
+                segments: extracted, consolidatedSales: 102 * Financial.millionYen,
+                client: UnavailableChatClient(), columnDecider: decider,
+                fiscalYearEnd: "2026-03-31", docID: "S100YKOI")
+            #expect(snapshot?.rows.contains { $0.rowKind == "segment" } != true)
+            let tag = try #require(
+                BreakdownExtractor.dedicatedSingleSegmentDisclosureText(xbrlDir: dir))
+            #expect(BusinessBreakdownResolver.dedicatedSingleSegmentFallback(
+                snapshot: snapshot, dedicatedTagText: tag))
+            #expect(!BusinessBreakdownResolver.dedicatedSingleSegmentFallback(
+                snapshot: snapshot, dedicatedTagText: nil))
+            let outcome = SegmentNoteDecision.dedicatedTagBusinessOutcome(
+                docID: "S100YKOI", tagText: tag)
+            #expect(outcome.omissionReason == breakdownNotApplicableSingleSegmentDisclosed)
+            #expect(outcome.audit?.decisionSource == SegmentNoteDecision.dedicatedTagDecisionSource)
+            #expect(outcome.audit?.calls.isEmpty == true)
+            #expect(audit?.columnJev?.calls.first?.selected == "t0_c2"
+                || audit?.jev?.calls.first?.selected == "t0_c2")
+        }
+    }
+
     @Test func belowConfidenceThresholdSetsNeedsReview() async throws {
         let html = priorAndCurrent(
             currentCaption: "当連結会計年度（自 2025年4月1日 至 2026年3月31日）",

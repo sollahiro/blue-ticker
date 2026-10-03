@@ -553,6 +553,7 @@ public extension BltServerContext {
     /// セグメント注記の Jev。`extracted == nil` は省略確定（呼び出し側が not_applicable にする）。
     /// business の専用タグに本文があるときは、収益認識の分解表が無い場合だけ
     /// `single_segment_disclosed`。分解表があるときは表ステップへ進む。
+    /// 選んだ表が合計行だけでカテゴリが無いときは専用タグへ戻す（8771）。
     /// 顧客表・製品90％・本邦90％・報告セグメント fact はその省略を取り消さない。
     /// 専用タグは geography を飛ばさない。キーがある geography は Jev のまま。
     /// キーが無いとき、応答が無いときは、専用タグ以外は抽出結果をそのまま返す。
@@ -643,6 +644,27 @@ public extension BltServerContext {
             columnDecider: revenueRecognitionColumnDecider,
             fiscalYearEnd: BreakdownExtractor.currentFiscalYearEnd(fromXbrlDir: xbrlDir),
             docID: docID)
+        let dedicatedTag = BreakdownExtractor.dedicatedSingleSegmentDisclosureText(xbrlDir: xbrlDir)
+        if BusinessBreakdownResolver.dedicatedSingleSegmentFallback(
+            snapshot: result.snapshot, dedicatedTagText: dedicatedTag),
+           let dedicatedTag
+        {
+            let outcome = SegmentNoteDecision.dedicatedTagBusinessOutcome(
+                docID: docID, tagText: dedicatedTag)
+            var audit = outcome.audit.map(LLMBreakdownAuditPayload.segmentNoteJev)
+            if let column = result.audit {
+                let columnPayload = llmBreakdownAuditPayload(from: column)
+                audit?.columnJev = columnPayload.columnJev ?? columnPayload.jev
+                audit?.sourceTableIndex = columnPayload.sourceTableIndex
+                audit?.periodColumn = columnPayload.periodColumn
+                audit?.unit = columnPayload.unit
+                if audit?.notes.isEmpty == true {
+                    audit?.notes = columnPayload.notes
+                }
+            }
+            return .notApplicable(
+                reason: breakdownNotApplicableSingleSegmentDisclosed, audit: audit)
+        }
         guard let snapshot = result.snapshot else {
             let reason = BreakdownExtractor.classifyNotApplicableReason(
                 segments: segments, consolidatedSales: consolidatedSales, xbrlDir: xbrlDir,
