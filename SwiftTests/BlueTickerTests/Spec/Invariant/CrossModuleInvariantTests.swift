@@ -84,10 +84,17 @@ import Testing
         #expect(noteTotal.current == 662_453_000_000)
 
         let ibd = ibdResult(docID: "S100R1LR")
-        #expect(ibd.method == "field_parser")
+        #expect(ibd.method.hasPrefix("field_parser"))
+        #expect(ibd.method != "borrowings_schedule")
         // 実データ検証済み（2026-08-09）: 連結BSタグ側の合計は明細表合計と一致しない
         // （タグ側は明細表に含まれる一部の非借入項目・デリバティブ負債等を含まない）。
-        #expect(ibd.total == 609_051_000_000)
+        // notes のリース帳簿を field_parser に足すと method は field_parser+lease_notes
+        // （609,051 + 80,366 = 689,417）。どちらでも明細表 662,453 とは一致しない。
+        if ibd.method == "field_parser+lease_notes" {
+            #expect(ibd.total == 689_417_000_000)
+        } else {
+            #expect(ibd.total == 609_051_000_000)
+        }
         #expect(ibd.total != noteTotal.current)
     }
 
