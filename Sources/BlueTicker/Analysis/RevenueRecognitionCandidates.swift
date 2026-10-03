@@ -373,42 +373,37 @@ enum RevenueRecognitionCandidates {
         var groups: [GroupHeader] = []
         var group = ""
         var lastClosedRow = firstData - 1
-        for i in firstData..<rows.count {
-            let row = rows[i]
-            let labelCells = leadingLabelCells(row)
-            let parts = distinctLabelParts(labelCells).map(stripNoteMarker).filter { !$0.isEmpty }
-            if parts.isEmpty { continue }
-            if parts.contains(where: isPeriodHeadingLabel) { continue }
-            let display = parts.last!
-            let hasAmt = row.dropFirst(labelCells.count).contains { isAmountCell($0) }
-            if isTotalLabel(display) {
-                totals.append(Total(label: display, row: i))
+        for classified in structure.rows {
+            let i = classified.index
+            if classified.amountKind == .subtotal {
+                let label = classified.category ?? classified.categoryGroup ?? ""
+                if isTotalLabel(label) {
+                    totals.append(Total(label: label, row: i))
+                } else if isGroupSubtotalLabel(label) {
+                    attachGroupSubtotal(
+                        stem: groupNameFromSubtotal(label), subtotalRow: i,
+                        items: &items, groups: &groups, lastClosedRow: lastClosedRow)
+                    group = ""
+                    lastClosedRow = i
+                }
                 continue
             }
-            if isGroupSubtotalLabel(display) {
-                attachGroupSubtotal(
-                    stem: groupNameFromSubtotal(display), subtotalRow: i,
-                    items: &items, groups: &groups, lastClosedRow: lastClosedRow)
-                group = ""
-                lastClosedRow = i
+            if classified.labelKind == .categoryGroup, classified.amountKind == nil {
+                group = classified.categoryGroup ?? ""
+                groups.append(GroupHeader(group: group, row: i))
                 continue
             }
-            if parts.count >= 2, hasAmt {
-                let outer = parts[0]
-                let inner = parts[1]
-                items.append(Item(
-                    group: outer, label: inner, row: i, isPartial: isPartialItem(inner)))
+            guard classified.amountKind == .segment else { continue }
+            let label = classified.category ?? classified.categoryGroup ?? ""
+            if label.isEmpty { continue }
+            if classified.labelKind == .categoryGroup, classified.category == nil {
+                items.append(Item(group: "", label: label, row: i, isPartial: false))
                 continue
             }
-            if !hasAmt {
-                group = parts[0]
-                groups.append(GroupHeader(group: parts[0], row: i))
-                continue
-            }
-            let label = display
+            let assigned = classified.categoryGroup ?? group
             let partial = isPartialItem(label)
             if partial {
-                var parentGroup = group
+                var parentGroup = assigned
                 if parentGroup.isEmpty, let parent = items.last {
                     if parent.isPartial {
                         parentGroup = parent.group
@@ -425,7 +420,7 @@ enum RevenueRecognitionCandidates {
                 continue
             }
             items.append(Item(
-                group: group, label: label, row: i, isPartial: false))
+                group: assigned, label: label, row: i, isPartial: false))
         }
         return ParsedTable(
             tableIndex: index, grid: rows, headerRowCount: firstData, columnHeaders: headers,
