@@ -114,9 +114,9 @@ enum RevenueRecognitionColumnNormalizer {
         }
         let tableTotal = RevenueRecognitionCandidates.tableTotal(
             table: table, column: column.column)
-        let tableSumReview = transposedWholeCompany == nil
+        var tableSumReview = transposedWholeCompany == nil
             && RevenueRecognitionCandidates.tableSumMismatch(
-                rows: built, table: table, column: column.column)
+                rows: built, table: table, column: column.column, cap: tableTotal?.amount)
 
         let scale = BreakdownLLMAmountScale.scaling(
             declaredUnit: "other",
@@ -157,6 +157,15 @@ enum RevenueRecognitionColumnNormalizer {
             return (nil, audit)
         }
         guard denominator != 0 else { return (nil, audit) }
+        if transposedWholeCompany == nil, !built.isEmpty {
+            let tableUnitCap = denominator / multiplier
+            if RevenueRecognitionCandidates.emittedSumExceedsCap(built, cap: tableUnitCap) {
+                needsReview = true
+                if !warnings.contains(warningTableSumMismatch) {
+                    warnings.append(warningTableSumMismatch)
+                }
+            }
+        }
         if built.isEmpty {
             audit.sourceTableIndex = table.tableIndex
             audit.periodColumn = column.key

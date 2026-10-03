@@ -244,7 +244,7 @@ import Testing
             #expect(thermal == false)
             #expect(other == false)
             #expect(equipment == false)
-            #expect(otherRevenue == false)
+            #expect(otherRevenue)
         }
 
         @Test func densoGroupCloserIsSubtotalCategoriesAreSegments() throws {
@@ -317,7 +317,9 @@ import Testing
                 in: structure, grid: rows, column: 2, tableTotal: tableTotal)
             let parallelCount: Int = parallel.count
             #expect(parallelCount == 2)
-            let business = try #require(RevenueRecognitionTableStructure.businessBlock(in: parallel))
+            let business = try #require(
+                RevenueRecognitionTableStructure.businessBlock(
+                    in: parallel, rows: structure.rows))
             let businessHeading: String? = business.heading
             #expect(businessHeading == "製品及びサービス")
             let table = RevenueRecognitionTableStructureTests.parsed(
@@ -420,22 +422,97 @@ import Testing
             let html = """
                 <table>
                   <tr><td></td><td>当期</td></tr>
-                  <tr><td>酒類</td><td>40</td></tr>
-                  <tr><td>食品</td><td>25</td></tr>
-                  <tr><td>その他収益</td><td>5</td></tr>
-                  <tr><td>顧客A</td><td>60</td></tr>
-                  <tr><td>合計</td><td>70</td></tr>
+                  <tr><td>サイバートレーニングソリューション</td><td>389,248</td></tr>
+                  <tr><td>セキュリティ診断・調査ソリューション</td><td>438,605</td></tr>
+                  <tr><td>セキュリティコンサルティングソリューション</td><td>537,970</td></tr>
+                  <tr><td>その他</td><td>－</td></tr>
+                  <tr><td>顧客との契約から生じる収益</td><td>1,365,823</td></tr>
+                  <tr><td>その他収益</td><td>－</td></tr>
+                  <tr><td>外部顧客への売上高</td><td>1,365,823</td></tr>
                 </table>
                 """
             let rows = try RevenueRecognitionTableStructureTests.padded(html)
             let structure = RevenueRecognitionTableStructure.inspect(grid: rows)
-            let tableTotal: Double = 70
+            let tableTotal: Double = 1_365_823
             let parallel = RevenueRecognitionTableStructure.stage4ParallelDimensions(
                 in: structure, grid: rows, column: 1, tableTotal: tableTotal)
             let empty: Bool = parallel.isEmpty
             let otherIsTotal: Bool = RevenueRecognitionCandidates.isTotalLabel("その他収益")
+            let otherProductIsTotal: Bool = RevenueRecognitionCandidates.isTotalLabel("その他")
+            let blockCount: Int = structure.blocks.count
             #expect(empty)
-            #expect(otherIsTotal == false)
+            #expect(otherIsTotal)
+            #expect(otherProductIsTotal == false)
+            #expect(blockCount == 1)
+        }
+
+        @Test func dashOnlySecondBlockIsNotADimension() throws {
+            let html = """
+                <table>
+                  <tr><td></td><td>当期</td></tr>
+                  <tr><td>製品A</td><td>60</td></tr>
+                  <tr><td>製品B</td><td>40</td></tr>
+                  <tr><td>顧客との契約から生じる収益</td><td>100</td></tr>
+                  <tr><td>空の次元</td><td></td></tr>
+                  <tr><td>幽霊</td><td>－</td></tr>
+                  <tr><td>外部顧客への売上高</td><td>100</td></tr>
+                </table>
+                """
+            let rows = try RevenueRecognitionTableStructureTests.padded(html)
+            let structure = RevenueRecognitionTableStructure.inspect(grid: rows)
+            let parallel = RevenueRecognitionTableStructure.stage4ParallelDimensions(
+                in: structure, grid: rows, column: 1, tableTotal: 100)
+            let empty: Bool = parallel.isEmpty
+            #expect(empty)
+        }
+
+        @Test func timingItemLabelsAreNotTheProductBlock() throws {
+            let html = """
+                <table>
+                  <tr><td colspan="2">セグメント</td><td>合計</td></tr>
+                  <tr><td colspan="2">主要な財又はサービスのライン</td><td></td></tr>
+                  <tr><td></td><td>メカトロ製品</td><td>66,453</td></tr>
+                  <tr><td></td><td>サプライ製品</td><td>96,981</td></tr>
+                  <tr><td></td><td>計</td><td>163,434</td></tr>
+                  <tr><td colspan="2">収益認識の時期</td><td></td></tr>
+                  <tr><td></td><td>一時点で移転される財又はサービス</td><td>153,316</td></tr>
+                  <tr><td></td><td>一定の期間にわたり移転される財又はサービス</td><td>10,118</td></tr>
+                  <tr><td></td><td>計</td><td>163,434</td></tr>
+                  <tr><td colspan="2">外部顧客への売上高</td><td>163,434</td></tr>
+                </table>
+                """
+            let rows = try RevenueRecognitionTableStructureTests.padded(html)
+            let structure = RevenueRecognitionTableStructure.inspect(grid: rows)
+            let parallel = RevenueRecognitionTableStructure.stage4ParallelDimensions(
+                in: structure, grid: rows, column: 2, tableTotal: 163_434)
+            let parallelCount: Int = parallel.count
+            #expect(parallelCount >= 2)
+            let chosen = try #require(
+                RevenueRecognitionTableStructure.businessBlock(
+                    in: parallel, rows: structure.rows))
+            let labels = RevenueRecognitionTableStructure.itemLabels(
+                of: chosen, rows: structure.rows)
+            let hasMechatro: Bool = labels.contains("メカトロ製品")
+            let hasTiming: Bool = labels.contains(where: {
+                RevenueRecognitionTableStructure.isTimingAxisLabel($0)
+            })
+            let unresolved: Bool = RevenueRecognitionCandidates.parallelDimensionsUnresolved(
+                table: RevenueRecognitionTableStructureTests.parsed(html), column: 2)
+            #expect(hasMechatro)
+            #expect(hasTiming == false)
+            #expect(unresolved == false)
+        }
+
+        @Test func timingLabelWinsOverServiceKeyword() {
+            let timing: Bool = RevenueRecognitionTableStructure.isTimingAxisLabel(
+                "一時点で移転される財又はサービス")
+            let product: Bool = RevenueRecognitionTableStructure.isProductAxisLabel(
+                "一時点で移転される財又はサービス")
+            let heading: Bool = RevenueRecognitionTableStructure.isProductOrBusinessHeading(
+                "一時点で移転される財又はサービス")
+            #expect(timing)
+            #expect(product == false)
+            #expect(heading == false)
         }
     }
 }

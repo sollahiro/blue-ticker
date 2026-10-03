@@ -190,14 +190,17 @@ enum RevenueRecognitionTableStructure {
     static func isProductOrBusinessHeading(_ label: String) -> Bool {
         let token = RevenueRecognitionCandidates.compactCell(label)
         if token.isEmpty || isGeographyHeading(token) { return false }
+        if isTimingAxisLabel(token) { return false }
         return token.contains("製品") || token.contains("サービス") || token.contains("事業")
             || token.contains("品種") || token.contains("品目")
     }
 
     /// 表レベルの製品・事業軸。`事業` 単体は顧客行（市販・非車載事業）にも出るので使わない。
+    /// 時点ラベル（一時点で移転される財又はサービス）はサービス / 財より先に時点へ倒す。
     static func isProductAxisLabel(_ label: String) -> Bool {
         let token = RevenueRecognitionCandidates.compactCell(label)
         if token.isEmpty || isGeographyHeading(token) { return false }
+        if isTimingAxisLabel(token) { return false }
         if token.contains("品種別") || token.contains("品目別") || token.contains("製品別")
             || token.contains("事業別") || token.contains("サービス別")
         {
@@ -235,6 +238,19 @@ enum RevenueRecognitionTableStructure {
         return token.contains("一時点") || token.contains("一定の期間") || token.contains("一定期間")
     }
 
+    /// 行ラベルの地域。見出しの「地域別」ではなく、日本 / 海外 などの値そのもの。
+    static func isRegionAxisLabel(_ label: String) -> Bool {
+        let token = RevenueRecognitionCandidates.compactCell(label)
+        if token.isEmpty || RevenueRecognitionCandidates.isTotalLabel(token) { return false }
+        if isTimingAxisLabel(token) { return false }
+        if isGeographyHeading(token) { return true }
+        let regions = [
+            "日本", "海外", "国内", "国外", "本邦", "北米", "米州", "中南米", "欧州",
+            "アジア", "オセアニア", "中国", "韓国", "台湾", "米国", "アメリカ", "その他の地域",
+        ]
+        return regions.contains(token)
+    }
+
     static func tableAxis(of table: RevenueRecognitionCandidates.ParsedTable) -> TableAxis {
         var product = false
         var customer = false
@@ -243,7 +259,10 @@ enum RevenueRecognitionTableStructure {
             let token = RevenueRecognitionCandidates.compactCell(raw)
             guard !token.isEmpty else { return }
             if RevenueRecognitionCandidates.isTotalLabel(token) { return }
-            if isTimingAxisLabel(token) { timing = true }
+            if isTimingAxisLabel(token) {
+                timing = true
+                return
+            }
             if isCustomerAxisLabel(token) { customer = true }
             if isProductAxisLabel(token) { product = true }
         }
@@ -272,7 +291,8 @@ enum RevenueRecognitionTableStructure {
 
     static func kind(of heading: String?) -> DimensionKind {
         guard let heading, !heading.isEmpty else { return .unknown }
-        if isGeographyHeading(heading) { return .geography }
+        if isGeographyHeading(heading) || isRegionAxisLabel(heading) { return .geography }
+        if isTimingAxisLabel(heading) { return .unknown }
         if isProductOrBusinessHeading(heading) { return .productOrBusiness }
         return .unknown
     }
@@ -331,7 +351,11 @@ enum RevenueRecognitionTableStructure {
         in structure: Result, grid: [[String]], column: Int, tableTotal: Double?
     ) -> [Block] {
         guard let tableTotal else { return [] }
-        let blocks = structure.blocks
+        // 全行が「－」/0/空、または明細が無いブロックは次元ではない（2467 S100YMA4 の
+        // その他収益）。顧客契約 / その他収益 / 外部顧客の調整末尾もここに落ちる。
+        let blocks = structure.blocks.filter { block in
+            !isEmptyOrDashBlock(block, grid: grid, column: column)
+        }
         guard blocks.count >= 2 else { return [] }
         let matching = blocks.filter { block in
             guard let row = block.closingTotalRow, row < grid.count, column < grid[row].count,
@@ -339,16 +363,70 @@ enum RevenueRecognitionTableStructure {
             else { return false }
             return RevenueRecognitionCandidates.sumMatches(amount, subtotal: tableTotal, itemCount: 1)
         }
-        // 一部のブロックだけが全社合計と一致しても並行次元にしない（その他収益を closer
-        // と誤認した 2467 S100YMA4）。全てのブロックが表合計と同じ小計で閉じるときだけ。
+        // 一部のブロックだけが全社合計と一致しても並行次元にしない。残ったブロックの
+        // 全てが表合計と同じ小計で閉じるときだけ。
         guard matching.count == blocks.count else { return [] }
         return matching
     }
 
-    static func businessBlock(in parallel: [Block]) -> Block? {
-        let business = parallel.filter { $0.kind == .productOrBusiness }
+    /// 並行ブロックは見出しに加え行ラベルで分類する。時点・地域だけのブロックは製品ではない。
+    /// 残りがちょうど1つならそれを残す（6287 S100YE10 の見出し無し製品ブロック）。
+    static func businessBlock(
+        in parallel: [Block], rows: [ClassifiedRow] = []
+    ) -> Block? {
+        let remaining = parallel.filter { !isTimingOrRegionBlock($0, rows: rows) }
+        if remaining.count == 1 { return remaining[0] }
+        let business = remaining.filter { classifiedKind(of: $0, rows: rows) == .productOrBusiness }
         if business.count == 1 { return business[0] }
         return nil
+    }
+
+    static func isEmptyOrDashBlock(
+        _ block: Block, grid: [[String]], column: Int
+    ) -> Bool {
+        if block.itemRows.isEmpty { return true }
+        return block.itemRows.allSatisfy { row in
+            guard row < grid.count, column < grid[row].count else { return true }
+            let cell = RevenueRecognitionCandidates.compactCell(grid[row][column])
+            if cell.isEmpty { return true }
+            guard let amount = RevenueRecognitionCandidates.parseAmount(cell) else { return true }
+            return amount == 0
+        }
+    }
+
+    static func isTimingOrRegionBlock(_ block: Block, rows: [ClassifiedRow]) -> Bool {
+        if classifiedKind(of: block, rows: rows) == .geography { return true }
+        if let heading = block.heading, isTimingAxisLabel(heading) { return true }
+        let labels = itemLabels(of: block, rows: rows)
+        if block.itemRows.isEmpty { return true }
+        if labels.isEmpty { return false }
+        return labels.allSatisfy {
+            isTimingAxisLabel($0) || isRegionAxisLabel($0) || isGeographyHeading($0)
+        }
+    }
+
+    static func classifiedKind(of block: Block, rows: [ClassifiedRow]) -> DimensionKind {
+        if let heading = block.heading, !heading.isEmpty {
+            let fromHeading = kind(of: heading)
+            if fromHeading != .unknown { return fromHeading }
+        }
+        let labels = itemLabels(of: block, rows: rows)
+        if labels.isEmpty { return block.kind }
+        if labels.allSatisfy(isTimingAxisLabel) { return .unknown }
+        if labels.allSatisfy({ isRegionAxisLabel($0) || isGeographyHeading($0) }) {
+            return .geography
+        }
+        if labels.contains(where: isProductAxisLabel) { return .productOrBusiness }
+        return block.kind
+    }
+
+    static func itemLabels(of block: Block, rows: [ClassifiedRow]) -> [String] {
+        let byIndex = Dictionary(uniqueKeysWithValues: rows.map { ($0.index, $0) })
+        return block.itemRows.compactMap { index in
+            guard let row = byIndex[index] else { return nil }
+            let token = row.category ?? row.categoryGroup ?? ""
+            return token.isEmpty ? nil : token
+        }
     }
 
     static func labelAreaWidth(rows: [[String]], from firstData: Int) -> Int {

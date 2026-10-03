@@ -9,6 +9,7 @@ enum RevenueRecognitionCandidates {
         "顧客との契約から生じる収益",
         "顧客との契約から認識した収益",
         "その他の収益",
+        "その他収益",
         "その他の源泉から認識した収益",
         "その他の源泉から生じる収益",
         "外部顧客への売上高",
@@ -212,6 +213,7 @@ enum RevenueRecognitionCandidates {
         }
 
         built = mergeWrappedRows(built)
+        built = collapseParentChildRows(built)
         return (built, needsReview)
     }
 
@@ -298,9 +300,17 @@ enum RevenueRecognitionCandidates {
     }
 
     static func joinHeaderParts(_ parts: [String]) -> String {
-        let meaningful = parts.filter { !isStubAxisHeader($0) }
+        let meaningful = parts.filter { !isStubAxisHeader($0) && !isUnitCaptionHeader($0) }
         if !meaningful.isEmpty { return meaningful.joined(separator: " / ") }
-        return parts.joined(separator: " / ")
+        return parts.filter { !isUnitCaptionHeader($0) }.joined(separator: " / ")
+    }
+
+    /// 列見出しに載った「（単位：百万円）」はカテゴリ名ではない（6140）。
+    static func isUnitCaptionHeader(_ label: String) -> Bool {
+        let token = compactCell(label)
+        if token.isEmpty { return false }
+        if BreakdownExtractor.parseUnitCaption(token) != nil { return true }
+        return token.contains("単位")
     }
 
     /// 先頭から連続する非金額セル。Denso / 7416 のラベル域（空 rowspan + 内側ラベル）。
@@ -453,7 +463,9 @@ enum RevenueRecognitionCandidates {
         let parallel = RevenueRecognitionTableStructure.parallelDimensionBlocks(
             in: table.structure, grid: table.grid, column: column, tableTotal: whole)
         guard parallel.count >= 2 else { return false }
-        guard let chosen = RevenueRecognitionTableStructure.businessBlock(in: parallel) else {
+        guard let chosen = RevenueRecognitionTableStructure.businessBlock(
+            in: parallel, rows: table.structure.rows)
+        else {
             table.items = []
             table.groups = []
             return true
@@ -475,7 +487,8 @@ enum RevenueRecognitionCandidates {
         let parallel = RevenueRecognitionTableStructure.parallelDimensionBlocks(
             in: table.structure, grid: table.grid, column: column, tableTotal: whole)
         return parallel.count >= 2
-            && RevenueRecognitionTableStructure.businessBlock(in: parallel) == nil
+            && RevenueRecognitionTableStructure.businessBlock(
+                in: parallel, rows: table.structure.rows) == nil
     }
 
     /// 期間見出しか。`自` 接頭辞だけでは期間にしない（自社メディア広告）。
@@ -509,7 +522,7 @@ enum RevenueRecognitionCandidates {
     }
 
     /// 表全体の合計行。`自動車分野計` のようなグループ小計は含めない。
-    /// `その他の収益` は完全一致だけ。`その他収益` は製品行であり合計ではない（2467 S100YMA4）。
+    /// `その他の収益` / `その他収益` は完全一致だけ（調整末尾。2467 S100YMA4 の製品行は `その他`）。
     /// 裸の `計` はブロック／表のクローザー（4825 / 6287）。
     static func isTotalLabel(_ label: String) -> Bool {
         let token = totalToken(label)
@@ -617,19 +630,71 @@ enum RevenueRecognitionCandidates {
         return merged
     }
 
+    /// 金額行の直後に、その金額へ合計する行が続くとき親子。一致すれば子だけ残す（4519 S100XTBJ）。
+    static func collapseParentChildRows(_ rows: [BuiltRow]) -> [BuiltRow] {
+        guard rows.count >= 2 else { return rows }
+        var result: [BuiltRow] = []
+        var index = 0
+        while index < rows.count {
+            let parent = rows[index]
+            if parent.isPartial {
+                result.append(parent)
+                index += 1
+                continue
+            }
+            var sum = 0.0
+            var childCount = 0
+            var childEnd: Int?
+            for follower in (index + 1)..<rows.count {
+                if rows[follower].isPartial { break }
+                sum += rows[follower].amount
+                childCount += 1
+                if childCount >= 2,
+                   sumMatches(sum, subtotal: parent.amount, itemCount: childCount)
+                {
+                    childEnd = follower
+                    break
+                }
+                if abs(sum) > abs(parent.amount) + Double(childCount) { break }
+            }
+            if let childEnd {
+                result.append(contentsOf: rows[(index + 1)...childEnd])
+                index = childEnd + 1
+            } else {
+                result.append(parent)
+                index += 1
+            }
+        }
+        return result
+    }
+
     /// 明細（うちを除く）の合計が、表のどの合計行とも合わないとき。
     /// 顧客との契約から生じる収益 と 外部顧客への売上高 が違う（その他の収益がある）表では、
-    /// どちらかに合えば足りる。
+    /// どちらかに合えば足りる。合計が分母（または表の最大合計）を超えたときも不一致（4519）。
     static func tableSumMismatch(
-        rows: [BuiltRow], table: ParsedTable, column: Int
+        rows: [BuiltRow], table: ParsedTable, column: Int, cap: Double? = nil
     ) -> Bool {
         let full = rows.filter { !$0.isPartial }
         guard !full.isEmpty else { return false }
         let amounts = dataAmounts(table: table, column: column)
         let totalAmounts = table.totals.compactMap { amounts[$0.row] }
-        guard !totalAmounts.isEmpty else { return false }
         let sum = full.reduce(0.0) { $0 + $1.amount }
+        let ceilings = totalAmounts + [cap].compactMap { $0 }
+        if let ceiling = ceilings.max(),
+           sum > ceiling,
+           !sumMatches(sum, subtotal: ceiling, itemCount: full.count)
+        {
+            return true
+        }
+        guard !totalAmounts.isEmpty else { return false }
         return !totalAmounts.contains { sumMatches(sum, subtotal: $0, itemCount: full.count) }
+    }
+
+    static func emittedSumExceedsCap(_ rows: [BuiltRow], cap: Double) -> Bool {
+        let full = rows.filter { !$0.isPartial }
+        guard !full.isEmpty else { return false }
+        let sum = full.reduce(0.0) { $0 + $1.amount }
+        return sum > cap && !sumMatches(sum, subtotal: cap, itemCount: full.count)
     }
 
     static func isContractBalanceTable(_ grid: [[String]]) -> Bool {

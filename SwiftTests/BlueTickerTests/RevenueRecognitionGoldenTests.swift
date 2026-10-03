@@ -807,54 +807,244 @@ import Testing
         }
     }
 
-    /// 2467 S100YMA4: 「その他収益」は合計ではない。計が各次元を閉じ、製品ブロックだけ残す。
+    /// 2467 S100YMA4: その他収益は「－」の調整末尾であり並行次元ではない。製品 4 行。
     @Test func yma42467OtherRevenueIsNotParallelCloser() async throws {
         let html = """
             <p>当連結会計年度（自 2025年4月1日 至 2026年3月31日）</p>
-            <p>（単位：百万円）</p>
+            <p>（単位：千円）</p>
             <table>
-              <tr><td></td><td>当連結会計年度</td></tr>
-              <tr><td>財又はサービスの種類</td><td></td></tr>
-              <tr><td>酒類</td><td>40</td></tr>
-              <tr><td>食品</td><td>25</td></tr>
-              <tr><td>店舗</td><td>20</td></tr>
-              <tr><td>その他</td><td>12</td></tr>
-              <tr><td>加工</td><td>8</td></tr>
-              <tr><td>計</td><td>105</td></tr>
-              <tr><td>主要な顧客</td><td></td></tr>
-              <tr><td>顧客A</td><td>60</td></tr>
-              <tr><td>顧客B</td><td>40</td></tr>
-              <tr><td>その他収益</td><td>5</td></tr>
-              <tr><td>合計</td><td>105</td></tr>
+              <tr><td></td><td>前連結会計年度</td><td>当連結会計年度</td></tr>
+              <tr><td>サイバートレーニングソリューション</td><td>485,325</td><td>389,248</td></tr>
+              <tr><td>セキュリティ診断・調査ソリューション</td><td>391,293</td><td>438,605</td></tr>
+              <tr><td>セキュリティコンサルティングソリューション</td><td>590,022</td><td>537,970</td></tr>
+              <tr><td>その他</td><td>138,442</td><td>－</td></tr>
+              <tr><td>顧客との契約から生じる収益</td><td>1,605,082</td><td>1,365,823</td></tr>
+              <tr><td>その他収益</td><td>－</td><td>－</td></tr>
+              <tr><td>外部顧客への売上高</td><td>1,605,082</td><td>1,365,823</td></tr>
             </table>
             """
-        let snapshot = try await run(html: html, docID: "S100YMA4", fyEnd: "2026-03-31", pick: "t0_c1")
+        let snapshot = try await run(html: html, docID: "S100YMA4", fyEnd: "2026-03-31", pick: "t0_c2")
         let segments = snapshot.rows.filter { $0.rowKind == "segment" }
         let segmentCount: Int = segments.count
-        let names: [String] = ["酒類", "食品", "店舗", "その他", "加工"]
-        #expect(segmentCount == 5)
+        let names: [String] = [
+            "サイバートレーニングソリューション", "セキュリティ診断・調査ソリューション",
+            "セキュリティコンサルティングソリューション", "その他",
+        ]
+        #expect(segmentCount == 4)
         for name in names {
             let found: Bool = segments.contains {
                 $0.category == name || $0.categoryGroup == name
             }
             #expect(found)
         }
+        let cyber: Bool = hasRow(segments, label: "サイバートレーニングソリューション", amount: sen(389_248))
+        let diag: Bool = hasRow(segments, label: "セキュリティ診断・調査ソリューション", amount: sen(438_605))
+        let cons: Bool = hasRow(segments, label: "セキュリティコンサルティングソリューション", amount: sen(537_970))
+        let other: Bool = segments.contains {
+            ($0.category == "その他" || $0.categoryGroup == "その他") && $0.amount == 0
+        }
         let otherRevenue: Bool = segments.contains { $0.label == "その他収益" }
         let kei: Bool = segments.contains { $0.label == "計" || $0.categoryGroup == "計" }
-        let customer: Bool = segments.contains { $0.label == "顧客A" }
-        let notTotal: Bool = RevenueRecognitionCandidates.isTotalLabel("その他収益")
-        let keiIsTotal: Bool = RevenueRecognitionCandidates.isTotalLabel("計")
+        let isOtherRevenueTotal: Bool = RevenueRecognitionCandidates.isTotalLabel("その他収益")
+        let isOtherProductTotal: Bool = RevenueRecognitionCandidates.isTotalLabel("その他")
         let denominator: Double = snapshot.denominator
-        let expectedDenom: Double = yen(105)
+        let expectedDenom: Double = sen(1_365_823)
         let needsReview: Bool = snapshot.needsReview
+        let parallel: Bool = snapshot.warnings.contains(
+            RevenueRecognitionColumnNormalizer.warningParallelDimensions)
+        #expect(cyber)
+        #expect(diag)
+        #expect(cons)
+        #expect(other)
         #expect(otherRevenue == false)
         #expect(kei == false)
-        #expect(customer == false)
-        #expect(notTotal == false)
-        #expect(keiIsTotal)
+        #expect(isOtherRevenueTotal)
+        #expect(isOtherProductTotal == false)
         #expect(denominator == expectedDenom)
         #expect(needsReview == false)
+        #expect(parallel == false)
     }
+
+    /// 6287 S100YE10: 時点ブロックと見出し無し製品ブロックが同じ 計 で閉じる。製品 2 行を残す。
+    @Test func ye106287TimingBlockIsNotProductWhenParallel() async throws {
+        let html = """
+            <p>当連結会計年度（自 2025年4月1日 至 2026年3月31日）</p>
+            <p>（単位：百万円）</p>
+            <table>
+              <tr>
+                <td colspan="2">セグメント</td>
+                <td>自動認識ソリューション事業（日本）</td>
+                <td>自動認識ソリューション事業（海外）</td>
+                <td>合 計</td>
+              </tr>
+              <tr><td colspan="2">主要な財又はサービスのライン</td><td></td><td></td><td></td></tr>
+              <tr><td></td><td>メカトロ製品</td><td>36,769</td><td>29,683</td><td>66,453</td></tr>
+              <tr><td></td><td>サプライ製品</td><td>48,269</td><td>48,712</td><td>96,981</td></tr>
+              <tr><td></td><td>計</td><td>85,038</td><td>78,396</td><td>163,434</td></tr>
+              <tr><td colspan="2">収益認識の時期</td><td></td><td></td><td></td></tr>
+              <tr><td></td><td>一時点で移転される財又はサービス</td><td>77,021</td><td>76,294</td><td>153,316</td></tr>
+              <tr><td></td><td>一定の期間にわたり移転される財又はサービス</td><td>8,016</td><td>2,101</td><td>10,118</td></tr>
+              <tr><td></td><td>計</td><td>85,038</td><td>78,396</td><td>163,434</td></tr>
+              <tr><td colspan="2">外部顧客への売上高</td><td>85,038</td><td>78,396</td><td>163,434</td></tr>
+            </table>
+            """
+        let snapshot = try await run(html: html, docID: "S100YE10", fyEnd: "2026-03-31", pick: "t0_c4")
+        let segments = snapshot.rows.filter { $0.rowKind == "segment" }
+        let segmentCount: Int = segments.count
+        let mechatro: Bool = hasRow(segments, label: "メカトロ製品", amount: yen(66_453))
+        let supply: Bool = hasRow(segments, label: "サプライ製品", amount: yen(96_981))
+        let timing: Bool = segments.contains { $0.label?.contains("一時点") == true }
+        let denominator: Double = snapshot.denominator
+        let expectedDenom: Double = yen(163_434)
+        let needsReview: Bool = snapshot.needsReview
+        let parallel: Bool = snapshot.warnings.contains(
+            RevenueRecognitionColumnNormalizer.warningParallelDimensions)
+        #expect(segmentCount == 2)
+        #expect(mechatro)
+        #expect(supply)
+        #expect(timing == false)
+        #expect(denominator == expectedDenom)
+        #expect(needsReview == false)
+        #expect(parallel == false)
+    }
+
+    /// 7050: 一時点ラベルにサービスが含まれるが時点軸。顧客/時点だけの表は needs_review。
+    @Test func ysv97050TimingOnlyAxisNeedsReview() async throws {
+        let html = """
+            <p>当連結会計年度（自 2025年5月1日 至 2026年4月30日）</p>
+            <p>（単位：千円）</p>
+            <table>
+              <tr><td></td><td>プロモーション事業</td></tr>
+              <tr><td>一時点で移転される財又はサービス</td><td>27,880,877</td></tr>
+              <tr><td>一定の期間にわたり移転される財又はサービス</td><td>2,067,725</td></tr>
+              <tr><td>顧客との契約から生じる収益</td><td>29,948,603</td></tr>
+              <tr><td>その他の収益</td><td>－</td></tr>
+              <tr><td>外部顧客への売上高</td><td>29,948,603</td></tr>
+            </table>
+            """
+        let extracted = ExtractedBreakdown(
+            method: "html_table",
+            tables: BreakdownExtractor.allTablesFromHtml(html, defaultHeading: "収益認識関係"),
+            facts: [])
+        let parsed = RevenueRecognitionCandidates.parse(tables: extracted.tables)
+        let axis: RevenueRecognitionTableStructure.TableAxis =
+            RevenueRecognitionTableStructure.tableAxis(of: parsed[0])
+        let constraint: RevenueRecognitionTableStructure.AxisConstraint =
+            RevenueRecognitionTableStructure.axisConstraint(tables: parsed)
+        let timingWins: Bool = RevenueRecognitionTableStructure.isTimingAxisLabel(
+            "一時点で移転される財又はサービス")
+        let notProduct: Bool = RevenueRecognitionTableStructure.isProductAxisLabel(
+            "一時点で移転される財又はサービス")
+        #expect(axis == .timing)
+        #expect(constraint == .customerOrTimingOnly)
+        #expect(timingWins)
+        #expect(notProduct == false)
+        let snapshot = try await run(html: html, docID: "S100YSV9", fyEnd: "2026-04-30", pick: "t0_c1")
+        let needsReview: Bool = snapshot.needsReview
+        let axisWarning: Bool = snapshot.warnings.contains(
+            RevenueRecognitionColumnNormalizer.warningCustomerOrTimingAxis)
+        #expect(needsReview)
+        #expect(axisWarning)
+    }
+
+    /// 4519 S100XTBJ: 製商品売上高と日本/海外、その他の売上収益とその内訳は親子。子だけ出す。
+    @Test func xtbj4519ParentFollowedByChildrenEmitsChildren() async throws {
+        let html = """
+            <p>当連結会計年度（自 2025年1月1日 至 2025年12月31日）</p>
+            <p>（単位：百万円）</p>
+            <table>
+              <tr><td></td><td>合計</td></tr>
+              <tr><td>製商品売上高</td><td>1,077,803</td></tr>
+              <tr><td>日本</td><td>472,365</td></tr>
+              <tr><td>海外</td><td>605,437</td></tr>
+              <tr><td>その他の売上収益</td><td>180,138</td></tr>
+              <tr><td>ロイヤルティ及びプロフィットシェア収入</td><td>172,679</td></tr>
+              <tr><td>その他の営業収入</td><td>7,460</td></tr>
+            </table>
+            """
+        let extracted = ExtractedBreakdown(
+            method: "html_table",
+            tables: BreakdownExtractor.allTablesFromHtml(html, defaultHeading: "収益認識関係"),
+            facts: [])
+        let decider = FakeRevenueRecognitionColumnDecider(selected: "t0_c1", confidence: 0.9)
+        let (snapshot, _) = await RevenueRecognitionColumnNormalizer.normalize(
+            extracted, consolidatedSales: yen(1_257_941), decider: decider,
+            fiscalYearEnd: "2025-12-31", docID: "S100XTBJ")
+        let row = try #require(snapshot)
+        let segments = row.rows.filter { $0.rowKind == "segment" }
+        let labels: [String] = segments.compactMap(\.label)
+        let japan: Bool = hasRow(segments, label: "日本", amount: yen(472_365))
+        let overseas: Bool = hasRow(segments, label: "海外", amount: yen(605_437))
+        let royalty: Bool = hasRow(segments, label: "ロイヤルティ及びプロフィットシェア収入", amount: yen(172_679))
+        let otherIncome: Bool = hasRow(segments, label: "その他の営業収入", amount: yen(7_460))
+        let parentGoods: Bool = segments.contains { $0.label == "製商品売上高" }
+        let parentOther: Bool = segments.contains { $0.label == "その他の売上収益" }
+        let segmentCount: Int = segments.count
+        let needsReview: Bool = row.needsReview
+        let mismatch: Bool = row.warnings.contains(
+            RevenueRecognitionColumnNormalizer.warningTableSumMismatch)
+        #expect(segmentCount == 4)
+        #expect(japan)
+        #expect(overseas)
+        #expect(royalty)
+        #expect(otherIncome)
+        #expect(parentGoods == false)
+        #expect(parentOther == false)
+        #expect(labels.contains("日本"))
+        #expect(needsReview == false)
+        #expect(mismatch == false)
+    }
+
+    @Test func emittedSumExceedingDenominatorSetsTableSumMismatch() {
+        let rows: [RevenueRecognitionCandidates.BuiltRow] = [
+            .init(categoryGroup: "製商品売上高", category: nil, amount: 1_077_803, isPartial: false, rowKind: "segment"),
+            .init(categoryGroup: "日本", category: nil, amount: 472_365, isPartial: false, rowKind: "segment"),
+            .init(categoryGroup: "海外", category: nil, amount: 605_437, isPartial: false, rowKind: "segment"),
+        ]
+        let exceeds: Bool = RevenueRecognitionCandidates.emittedSumExceedsCap(
+            rows, cap: 1_257_941)
+        let collapsed = RevenueRecognitionCandidates.collapseParentChildRows(rows)
+        let collapsedCount: Int = collapsed.count
+        let collapsedExceeds: Bool = RevenueRecognitionCandidates.emittedSumExceedsCap(
+            collapsed, cap: 1_257_941)
+        #expect(exceeds)
+        #expect(collapsedCount == 2)
+        #expect(collapsedExceeds == false)
+    }
+
+    /// 6140: 列見出しの単位キャプションは結合しない。
+    @Test func yjmm6140UnitCaptionIsDroppedFromHeaderJoin() async throws {
+        let joined: String = RevenueRecognitionCandidates.joinHeaderParts(
+            ["(単位：百万円)", "その他"])
+        let stubAndUnit: String = RevenueRecognitionCandidates.joinHeaderParts(
+            ["業界の名称", "(単位：百万円)", "電子・半導体"])
+        #expect(joined == "その他")
+        #expect(stubAndUnit == "電子・半導体")
+        #expect(RevenueRecognitionCandidates.isUnitCaptionHeader("(単位：百万円)"))
+        let html = """
+            <p>当連結会計年度（自 2025年4月1日 至 2026年3月31日）</p>
+            <p>（単位：百万円）</p>
+            <table>
+              <tr><td></td><td></td><td></td><td></td><td></td><td colspan="2">(単位：百万円)</td></tr>
+              <tr><td rowspan="2"></td><td colspan="5">業界の名称</td><td rowspan="2">合計</td></tr>
+              <tr>
+                <td>電子・半導体</td><td>輸送機器</td><td>機械</td>
+                <td>石材・建設</td><td>その他</td>
+              </tr>
+              <tr>
+                <td>売上高</td><td>16,978</td><td>9,632</td><td>10,373</td>
+                <td>3,885</td><td>1,113</td><td>41,983</td>
+              </tr>
+            </table>
+            """
+        let snapshot = try await run(html: html, docID: "S100YJMM", fyEnd: "2026-03-31", pick: "t0_c6")
+        let segments = snapshot.rows.filter { $0.rowKind == "segment" }
+        let leaked: Bool = segments.contains { ($0.label ?? "").contains("単位") }
+        let other: Bool = segments.contains { $0.label == "その他" || $0.categoryGroup == "その他" }
+        #expect(leaked == false)
+        #expect(other)
+    }
+
 
     /// 5936 S100YKHR: 品種別ブロックを製品軸として残し、地域ブロックは加算しない。
     @Test func ykhr5936ProductKindBlockIsBusinessDimension() async throws {
@@ -1077,7 +1267,7 @@ import Testing
         #expect(RevenueRecognitionCandidates.isTotalLabel("（小計）"))
         #expect(RevenueRecognitionCandidates.isTotalLabel("計"))
         #expect(RevenueRecognitionCandidates.isTotalLabel("その他の収益"))
-        #expect(!RevenueRecognitionCandidates.isTotalLabel("その他収益"))
+        #expect(RevenueRecognitionCandidates.isTotalLabel("その他収益"))
         #expect(!RevenueRecognitionCandidates.isTotalLabel("自動車分野計"))
         #expect(RevenueRecognitionCandidates.isGroupSubtotalLabel("自動車分野計"))
         #expect(RevenueRecognitionCandidates.groupNameFromSubtotal("自動車分野計") == "自動車分野")
@@ -1427,6 +1617,9 @@ import Testing
             ["業界の名称", "電子・半導体"])
         #expect(header == "電子・半導体")
         #expect(RevenueRecognitionCandidates.isStubAxisHeader("業界の名称"))
+        let unitHeader: String = RevenueRecognitionCandidates.joinHeaderParts(
+            ["(単位：百万円)", "その他"])
+        #expect(unitHeader == "その他")
         let north: String = RevenueRecognitionCandidates.displayLabel(
             categoryGroup: "（海外）", category: "北米")
         let appliance: String = BreakdownRowPayload.displayLabel(
