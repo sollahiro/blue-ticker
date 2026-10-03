@@ -237,6 +237,7 @@ import Testing
             <table>
               <tr><td>サービス別</td><td>前連結会計年度</td><td>当連結会計年度</td></tr>
               <tr><td>BtoBコマースサービス</td><td>5,471,053</td><td>6,348,109</td></tr>
+              <tr><td>その他</td><td>1,395,271</td><td>1,471,904</td></tr>
               <tr><td>顧客との契約から生じる収益</td><td>6,866,324</td><td>7,820,013</td></tr>
             </table>
             </div>
