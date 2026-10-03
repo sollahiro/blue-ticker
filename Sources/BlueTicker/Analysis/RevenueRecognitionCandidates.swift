@@ -241,8 +241,8 @@ enum RevenueRecognitionCandidates {
         }.first ?? table.totals.first
         guard let total, total.row < table.grid.count else { return ([], nil) }
         let row = table.grid[total.row]
-        let wholeCompanyAmount: Double? =
-            wholeCompanyColumn < row.count ? parseAmount(row[wholeCompanyColumn]) : nil
+        let wholeCompanyAmount = consolidatedWholeCompanyAmount(
+            table: table, row: row, selectedColumn: wholeCompanyColumn)
         var built: [BuiltRow] = []
         for (column, header) in table.columnHeaders.sorted(by: { $0.key < $1.key }) {
             if column == wholeCompanyColumn { continue }
@@ -342,6 +342,7 @@ enum RevenueRecognitionCandidates {
         var totals: [Total] = []
         var groups: [GroupHeader] = []
         var group = ""
+        var lastClosedRow = firstData - 1
         for i in firstData..<rows.count {
             let row = rows[i]
             let rawLabel = compactCell(rowLabel(row))
@@ -355,6 +356,14 @@ enum RevenueRecognitionCandidates {
             }
             if isTotalLabel(label) {
                 totals.append(Total(label: label, row: i))
+                continue
+            }
+            if isGroupSubtotalLabel(label) {
+                attachGroupSubtotal(
+                    stem: groupNameFromSubtotal(label), subtotalRow: i,
+                    items: &items, groups: &groups, lastClosedRow: lastClosedRow)
+                group = ""
+                lastClosedRow = i
                 continue
             }
             if !hasAmt {
@@ -419,14 +428,12 @@ enum RevenueRecognitionCandidates {
             || (compact.hasPrefix("(") && compact.hasSuffix(")"))
     }
 
+    /// 表全体の合計行。`自動車分野計` のようなグループ小計は含めない。
     /// `その他の収益` は完全一致または接頭辞だけ。`contains` だと「その他」製品行を合計にする。
     static func isTotalLabel(_ label: String) -> Bool {
-        let collapsed = label.replacingOccurrences(of: " ", with: "")
-            .replacingOccurrences(of: "\u{3000}", with: "")
-        let token = unwrapParentheses(collapsed)
+        let token = totalToken(label)
         if token == "合計" || token == "売上高合計" || token == "連結合計"
             || token == "連結計" || token == "連結金額" || token == "売上高" || token == "小計"
-            || (token.hasSuffix("計") && token.count > 1)
         {
             return true
         }
@@ -436,9 +443,67 @@ enum RevenueRecognitionCandidates {
         }
     }
 
+    /// `{group}計` / `{group}合計`。表全体の合計行ではないグループ小計。
+    static func isGroupSubtotalLabel(_ label: String) -> Bool {
+        if isTotalLabel(label) { return false }
+        let token = totalToken(label)
+        if token.hasSuffix("合計") && token.count > 2 { return true }
+        return token.hasSuffix("計") && token.count > 1
+    }
+
+    static func groupNameFromSubtotal(_ label: String) -> String {
+        let token = totalToken(label)
+        if token.hasSuffix("合計") { return String(token.dropLast(2)) }
+        if token.hasSuffix("計") { return String(token.dropLast()) }
+        return token
+    }
+
     private static func unwrapParentheses(_ label: String) -> String {
         guard isFullyParenthesized(label) else { return label }
         return String(label.dropFirst().dropLast())
+    }
+
+    private static func totalToken(_ label: String) -> String {
+        let collapsed = label.replacingOccurrences(of: " ", with: "")
+            .replacingOccurrences(of: "\u{3000}", with: "")
+        return unwrapParentheses(collapsed)
+    }
+
+    /// `自動車分野計` の直前までをそのグループのカテゴリにする。見出し行があれば
+    /// 小計行の金額を groupAmount に使う。小計自体は row に出さない。
+    private static func attachGroupSubtotal(
+        stem: String, subtotalRow: Int,
+        items: inout [Item], groups: inout [GroupHeader], lastClosedRow: Int
+    ) {
+        guard !stem.isEmpty else { return }
+        let headerRow = groups.last(where: { $0.group == stem })?.row
+        let bound = headerRow ?? lastClosedRow
+        for index in items.indices where items[index].group.isEmpty && items[index].row > bound {
+            items[index].group = stem
+        }
+        if let existing = groups.firstIndex(where: { $0.group == stem }) {
+            groups[existing].row = subtotalRow
+        } else {
+            groups.append(GroupHeader(group: stem, row: subtotalRow))
+        }
+    }
+
+    /// 横結合表の `合計` 列は報告セグメント小計（三菱商事 13,939,592）。分母は `連結金額`。
+    static func consolidatedWholeCompanyAmount(
+        table: ParsedTable, row: [String], selectedColumn: Int
+    ) -> Double? {
+        let preferred = ["連結金額", "連結合計", "連結計"]
+        let headers = table.columnHeaders.sorted(by: { $0.key < $1.key })
+        for marker in preferred {
+            if let column = headers.first(where: {
+                let compact = compactCell($0.value)
+                return compact == marker || compact.contains(marker)
+            }), column.key < row.count, let amount = parseAmount(row[column.key]), amount != 0
+            {
+                return amount
+            }
+        }
+        return selectedColumn < row.count ? parseAmount(row[selectedColumn]) : nil
     }
 
     /// 改行で割れた同一金額のラベルを1行に戻す（1807 S100YJEE）。

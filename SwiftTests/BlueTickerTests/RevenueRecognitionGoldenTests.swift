@@ -100,8 +100,86 @@ import Testing
         let parsed = table[0]
         #expect(parsed.items.map(\.label).contains("サーマルシステム"))
         #expect(parsed.items.map(\.label).contains("パワトレインシステム"))
+        #expect(parsed.items.contains { $0.label == "サーマルシステム" && $0.group == "自動車分野" })
+        #expect(parsed.groups.map(\.group).contains("自動車分野"))
         #expect(Set(parsed.totals.map(\.label)).contains("合計"))
-        #expect(Set(parsed.totals.map(\.label)).contains("自動車分野計"))
+        #expect(!Set(parsed.totals.map(\.label)).contains("自動車分野計"))
+        #expect(!parsed.items.map(\.label).contains("自動車分野計"))
+        #expect(RevenueRecognitionCandidates.isGroupSubtotalLabel("自動車分野計"))
+        #expect(!RevenueRecognitionCandidates.isTotalLabel("自動車分野計"))
+        let (rows, _) = RevenueRecognitionCandidates.buildRows(table: parsed, column: 2)
+        #expect(rows.contains { $0.category == "サーマルシステム" && $0.categoryGroup == "自動車分野" })
+        #expect(rows.contains { $0.categoryGroup == "非車載事業分野" && $0.category == nil })
+        #expect(!rows.contains { $0.categoryGroup.contains("自動車分野計") || $0.category == "自動車分野計" })
+        let total = RevenueRecognitionCandidates.tableTotal(table: parsed, column: 2)
+        #expect(total?.label == "合計")
+        #expect(total?.amount == 7_539_975)
+    }
+
+    /// デンソー実表: 空の indent セルが rowspan=6 でカテゴリ行にコピーされる。
+    /// `自動車分野計` はグループ小計であり、サーマル等を落とさない。
+    @Test func densoRowspanIndentKeepsCategoriesUnderAutoGroup() async throws {
+        let html = """
+            <p>当連結会計年度（自 2025年4月1日 至 2026年3月31日）</p>
+            <p>（単位：百万円）</p>
+            <table>
+              <tr><td></td><td></td><td>(単位：百万円)</td></tr>
+              <tr><td rowspan="6"></td><td>サーマルシステム</td><td>1,780,351</td></tr>
+              <tr><td>パワトレインシステム</td><td>1,479,737</td></tr>
+              <tr><td>モビリティエレクトロニクス</td><td>2,198,663</td></tr>
+              <tr><td>エレクトリフィケーションシステム</td><td>1,433,456</td></tr>
+              <tr><td>先進デバイス</td><td>390,274</td></tr>
+              <tr><td>その他</td><td>108,587</td></tr>
+              <tr><td colspan="2">自動車分野計</td><td>7,391,068</td></tr>
+              <tr><td colspan="2">非車載事業分野</td><td>148,907</td></tr>
+              <tr><td colspan="2">合計</td><td>7,539,975</td></tr>
+            </table>
+            """
+        let snapshot = try await run(html: html, docID: "S100Y9T1", fyEnd: "2026-03-31", pick: "t0_c2")
+        let segments = snapshot.rows.filter { $0.rowKind == "segment" }
+        #expect(segments.contains { $0.category == "サーマルシステム" && $0.categoryGroup == "自動車分野" })
+        #expect(segments.contains { $0.category == "パワトレインシステム" })
+        #expect(segments.contains { $0.category == "モビリティエレクトロニクス" })
+        #expect(segments.contains { $0.categoryGroup == "非車載事業分野" && $0.category == nil })
+        #expect(!segments.contains { $0.label == "自動車分野計" || $0.categoryGroup == "自動車分野計" })
+        #expect(snapshot.denominator == 7_539_975 * Financial.millionYen)
+        #expect(snapshot.needsReview == false)
+    }
+
+    /// 三菱商事横結合: `合計` 列は報告セグメント小計 13,939,592。分母は `連結金額` 13,948,091。
+    @Test func mitsubishiConsolidatedAmountBeatsReportableSubtotalColumn() async throws {
+        let html = """
+            <p>当連結会計年度（自 2025年4月1日 至 2026年3月31日）</p>
+            <p>（単位：百万円）</p>
+            <table>
+              <tr>
+                <td></td><td>地球環境エネルギー</td><td>金属資源</td><td>S.L.C.</td>
+                <td>合計</td><td>その他</td><td>調整・消去</td><td>連結金額</td>
+              </tr>
+              <tr>
+                <td>顧客との契約から認識した収益</td>
+                <td>1,851,642</td><td>1,243,344</td><td>2,513,397</td>
+                <td>13,939,592</td><td>8,539</td><td>△40</td><td>13,948,091</td>
+              </tr>
+              <tr>
+                <td>その他の源泉から認識した収益</td>
+                <td>1,415,653</td><td>2,839,985</td><td>746</td>
+                <td>4,967,904</td><td>－</td><td>－</td><td>4,967,904</td>
+              </tr>
+              <tr>
+                <td>合計</td>
+                <td>3,267,295</td><td>4,083,329</td><td>2,514,143</td>
+                <td>18,907,496</td><td>8,539</td><td>△40</td><td>18,915,995</td>
+              </tr>
+            </table>
+            """
+        let snapshot = try await run(html: html, docID: "S100YB25", fyEnd: "2026-03-31", pick: "t0_c4")
+        #expect(snapshot.denominator == 13_948_091 * Financial.millionYen)
+        #expect(snapshot.rows.contains {
+            $0.categoryGroup == "金属資源" && $0.amount == 1_243_344 * Financial.millionYen
+        })
+        #expect(!snapshot.rows.contains { $0.categoryGroup == "合計" || $0.categoryGroup == "連結金額" })
+        #expect(snapshot.needsReview == false)
     }
 
     @Test func geographyTableWithoutStackedParagraphsIsUnchanged() throws {
@@ -442,6 +520,9 @@ import Testing
         #expect(RevenueRecognitionCandidates.isTotalLabel("小計"))
         #expect(RevenueRecognitionCandidates.isTotalLabel("売上高"))
         #expect(RevenueRecognitionCandidates.isTotalLabel("（小計）"))
+        #expect(!RevenueRecognitionCandidates.isTotalLabel("自動車分野計"))
+        #expect(RevenueRecognitionCandidates.isGroupSubtotalLabel("自動車分野計"))
+        #expect(RevenueRecognitionCandidates.groupNameFromSubtotal("自動車分野計") == "自動車分野")
     }
 
     @Test func y9513092ParenthesizedLinesArePartialUnderBusiness() async throws {

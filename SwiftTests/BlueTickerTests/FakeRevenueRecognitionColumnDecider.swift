@@ -97,10 +97,17 @@ actor FakeRevenueRecognitionColumnDecider: RevenueRecognitionColumnDeciding {
             let compactHeader = RevenueRecognitionCandidates.compactCell(column.header)
             let headerRank: Int
             if compactHeader.contains("連結金額") {
+                headerRank = 4
+            } else if compactHeader.contains("連結合計") || compactHeader.contains("連結計") {
                 headerRank = 3
-            } else if compactHeader.contains("合計") || compactHeader.contains("連結") {
+            } else if compactHeader.contains("連結") {
                 headerRank = 2
-            } else if compactHeader.contains("売上") || compactHeader.contains("金額") {
+            } else if compactHeader == "合計" {
+                // 報告セグメント小計。連結金額がある表では分母にしない。
+                headerRank = 1
+            } else if compactHeader.contains("合計") || compactHeader.contains("売上")
+                || compactHeader.contains("金額")
+            {
                 headerRank = 1
             } else {
                 headerRank = 0
