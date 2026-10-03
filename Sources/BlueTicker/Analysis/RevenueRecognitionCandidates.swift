@@ -203,8 +203,9 @@ enum RevenueRecognitionCandidates {
     ]) -> (label: String, amount: Double)? {
         let amounts = dataAmounts(table: table, column: column)
         for marker in preferredLabels {
-            if let total = table.totals.first(where: { $0.label == marker }),
-               let amount = amounts[total.row]
+            if let total = table.totals.first(where: {
+                $0.label == marker || $0.label.hasPrefix(marker)
+            }), let amount = amounts[total.row]
             {
                 return (total.label, amount)
             }
@@ -217,8 +218,10 @@ enum RevenueRecognitionCandidates {
 
     /// 行が指標・列が事業のマトリクス（三菱商事 / ファナック）。明細行が無いときだけ、
     /// 選んだ全社列で表を特定し、合計行の他列を category_group にする。
-    static func transposeMetricRow(table: ParsedTable, wholeCompanyColumn: Int) -> [BuiltRow] {
-        guard table.items.isEmpty else { return [] }
+    static func transposeMetricRow(
+        table: ParsedTable, wholeCompanyColumn: Int
+    ) -> (rows: [BuiltRow], wholeCompanyAmount: Double?) {
+        guard table.items.isEmpty else { return ([], nil) }
         let preferred = [
             "顧客との契約から生じる収益", "顧客との契約から認識した収益",
             "外部顧客への売上高", "外部収益合計",
@@ -226,8 +229,10 @@ enum RevenueRecognitionCandidates {
         let total = preferred.compactMap { marker in
             table.totals.first { $0.label == marker || $0.label.hasPrefix(marker) }
         }.first ?? table.totals.first
-        guard let total, total.row < table.grid.count else { return [] }
+        guard let total, total.row < table.grid.count else { return ([], nil) }
         let row = table.grid[total.row]
+        let wholeCompanyAmount: Double? =
+            wholeCompanyColumn < row.count ? parseAmount(row[wholeCompanyColumn]) : nil
         var built: [BuiltRow] = []
         for (column, header) in table.columnHeaders.sorted(by: { $0.key < $1.key }) {
             if column == wholeCompanyColumn { continue }
@@ -239,13 +244,13 @@ enum RevenueRecognitionCandidates {
                 categoryGroup: name, category: nil, amount: amount,
                 isPartial: false, rowKind: "segment"))
         }
-        return built
+        return (built, wholeCompanyAmount)
     }
 
     static func isAggregateColumnHeader(_ header: String) -> Bool {
         let compact = compactCell(header)
         return compact.contains("合計") || compact.contains("連結") || compact.contains("調整")
-            || compact.contains("消去")
+            || compact.contains("消去") || compact.hasSuffix("計")
     }
 
     static func displayLabel(categoryGroup: String, category: String?) -> String {

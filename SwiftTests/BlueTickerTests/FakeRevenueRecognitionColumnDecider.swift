@@ -39,12 +39,18 @@ actor FakeRevenueRecognitionColumnDecider: RevenueRecognitionColumnDeciding {
         columns: [RevenueRecognitionCandidates.AmountColumn],
         tables: [RevenueRecognitionCandidates.ParsedTable]
     ) -> String? {
-        let indexes = Set(
-            tables.filter { table in
-                table.grid.contains { row in row.contains { $0.contains(needle) } }
-            }.map(\.tableIndex)
-        )
-        let scoped = columns.filter { indexes.contains($0.tableIndex) }
+        let matching = tables.filter { table in
+            table.grid.contains { row in row.contains { $0.contains(needle) } }
+        }
+        func score(_ table: RevenueRecognitionCandidates.ParsedTable) -> (Int, Int, Int) {
+            let inItem = table.items.contains {
+                $0.label.contains(needle) || $0.group.contains(needle)
+            } ? 1 : 0
+            let inHeader = table.columnHeaders.values.contains { $0.contains(needle) } ? 1 : 0
+            return (inItem, inHeader, table.items.count)
+        }
+        let bestIndex = matching.max(by: { score($0) < score($1) })?.tableIndex
+        let scoped = columns.filter { $0.tableIndex == bestIndex }
         return preferWholeCompany(scoped.isEmpty ? columns : scoped, tables: tables)
     }
 

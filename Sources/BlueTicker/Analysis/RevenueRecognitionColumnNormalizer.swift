@@ -75,9 +75,12 @@ enum RevenueRecognitionColumnNormalizer {
         let belowThreshold = confidence.map { $0 < confidenceThreshold } ?? true
         var (built, groupSumReview) = RevenueRecognitionCandidates.buildRows(
             table: table, column: column.column)
+        var transposedWholeCompany: Double?
         if built.isEmpty {
-            built = RevenueRecognitionCandidates.transposeMetricRow(
+            let transposed = RevenueRecognitionCandidates.transposeMetricRow(
                 table: table, wholeCompanyColumn: column.column)
+            built = transposed.rows
+            transposedWholeCompany = transposed.wholeCompanyAmount
             groupSumReview = false
         }
         guard !built.isEmpty else { return (nil, audit) }
@@ -101,7 +104,10 @@ enum RevenueRecognitionColumnNormalizer {
             table: table, column: column.column)
         let denominator: Double
         let resolvedDenomTag: String
-        if let tableTotal {
+        if let transposedWholeCompany {
+            denominator = transposedWholeCompany * multiplier
+            resolvedDenomTag = denominatorTag ?? "llm_table_subtotal"
+        } else if let tableTotal {
             denominator = tableTotal.amount * multiplier
             resolvedDenomTag = denominatorTag ?? "llm_table_subtotal"
         } else if let consolidatedSales, consolidatedSales != 0 {
