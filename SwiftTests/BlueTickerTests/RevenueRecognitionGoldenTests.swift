@@ -24,7 +24,10 @@ import Testing
         let grid = BreakdownExtractor.expandTable(table)
         #expect(grid.contains { $0.contains("油脂・乳製品") && $0.contains("410,483") })
         #expect(grid.contains { $0.contains("調味料") && $0.contains("1,592,960") })
+        // bs4Text joins descendant text with no separator; that glued cell is the prod root cause.
         #expect(!grid.contains { $0.contains("油脂・乳製品調味料") })
+        #expect(!grid.contains { $0.contains("410,4831,592,960") })
+        #expect(grid.filter { $0.contains("油脂・乳製品") }.count == 1)
     }
 
     @Test func geographyTableWithoutStackedParagraphsIsUnchanged() throws {
@@ -38,11 +41,23 @@ import Testing
         #expect(RevenueRecognitionCandidates.isPeriodHeadingLabel("当連結会計年度") == true)
     }
 
+    /// 7413 S100YKKP: prod currently stores labels shifted by one row (油脂 instead of
+    /// 油脂・乳製品) after Luna re-split a cell that `bs4Text` had glued. Pin the disclosed
+    /// labels and 千円 amounts, not the shifted ones.
     @Test func ykkp7413CandidatesAndRows() async throws {
-        try await assert7413(
+        let snapshot = try await assert7413(
             docID: "S100YKKP", fyEnd: "2026-03-31",
             amounts: [410_483, 1_592_960, 1_080_049, 259_850, 1_233_827, 118_499, 55_945],
             total: 4_751_616)
+        let segments = snapshot.rows.filter { $0.rowKind == "segment" }
+        #expect(segments[0].label == "油脂・乳製品")
+        #expect(segments[0].categoryGroup == "油脂・乳製品")
+        #expect(segments[0].label != "油脂")
+        #expect(segments[0].amount == 410_483 * 1_000)
+        #expect(segments[1].label == "調味料")
+        #expect(segments[1].amount == 1_592_960 * 1_000)
+        #expect(!segments.contains { $0.label.contains("油脂・乳製品調味料") })
+        #expect(!segments.contains { $0.label == "油脂" })
     }
 
     @Test func r40s7413CandidatesAndRows() async throws {
@@ -85,6 +100,8 @@ import Testing
         #expect(snapshot.denominator == 21_954_062 * 1_000)
     }
 
+    /// 272A S100YSCR: prod currently stores amounts 1000× too large (百万円 applied to a
+    /// 千円 table) after the same glued `<p>` cell. Pin 千円 ×1,000, not ×1,000,000.
     @Test func yscr272ACandidatesAndRows() async throws {
         let cats = ["工事表示板・標識", "仮設防護柵", "保安灯・警告灯", "防災用品・環境整備用品", "その他商品", "サインメディア"]
         let amounts = [1_698_931, 1_027_294, 454_956, 2_743_990, 7_040_477, 8_960_225]
@@ -104,6 +121,11 @@ import Testing
         #expect(parsed.groups.isEmpty)
         try assertFlatRows(snapshot, groups: cats, amounts: amounts, unit: 1_000)
         #expect(snapshot.denominator == 21_925_876 * 1_000)
+        #expect(snapshot.rows[0].amount == 1_698_931 * 1_000)
+        #expect(snapshot.rows[0].amount != 1_698_931 * Financial.millionYen)
+        #expect(snapshot.denominator != 21_925_876 * Financial.millionYen)
+        #expect(snapshot.rows[0].label == "工事表示板・標識")
+        #expect(!snapshot.rows.contains { $0.label.contains("工事表示板・標識仮設防護柵") })
     }
 
     @Test func z42g7532NestedCandidatesAndRows() async throws {
@@ -304,9 +326,10 @@ import Testing
 
     // MARK: - helpers
 
+    @discardableResult
     private func assert7413(
         docID: String, fyEnd: String, amounts: [Int], total: Int
-    ) async throws {
+    ) async throws -> BreakdownSnapshot {
         let html = priorAndCurrent(
             currentCaption: "当連結会計年度（自 \(fyEnd.replacingOccurrences(of: "-", with: "年").dropLast(3) )）",
             unit: "千円",
@@ -321,6 +344,7 @@ import Testing
         try assertFlatRows(snapshot, groups: Self.cat7413, amounts: amounts, unit: 1_000)
         #expect(snapshot.denominator == Double(total) * 1_000)
         #expect(snapshot.needsReview == false)
+        return snapshot
     }
 
     private func parsedCurrent(_ html: String) throws -> RevenueRecognitionCandidates.ParsedTable {
