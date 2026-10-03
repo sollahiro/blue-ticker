@@ -83,6 +83,27 @@ import Testing
         #expect(!RevenueRecognitionCandidates.isContractBalanceTable(product))
     }
 
+    @Test func emptyLeadingCellStillReadsProductLabel() {
+        let table = RevenueRecognitionCandidates.parse(tables: [
+            BreakdownTable(
+                heading: BreakdownExtractor.revenueRecognitionHeading,
+                markdown: """
+                    |  |  | (単位：百万円) |
+                    |  | サーマルシステム | 1,780,351 |
+                    |  | パワトレインシステム | 1,479,737 |
+                    |  | 自動車分野計 | 7,391,068 |
+                    |  | 非車載事業分野 | 148,907 |
+                    |  | 合計 | 7,539,975 |
+                    """,
+                period: "当期")
+        ])
+        let parsed = table[0]
+        #expect(parsed.items.map(\.label).contains("サーマルシステム"))
+        #expect(parsed.items.map(\.label).contains("パワトレインシステム"))
+        #expect(Set(parsed.totals.map(\.label)).contains("合計"))
+        #expect(Set(parsed.totals.map(\.label)).contains("自動車分野計"))
+    }
+
     @Test func geographyTableWithoutStackedParagraphsIsUnchanged() throws {
         let html = "<table><tr><td>日本</td><td>100</td></tr><tr><td>アジア</td><td>50</td></tr></table>"
         let table = try XBRLTestSupport.parseFirstTable(html)

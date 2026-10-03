@@ -282,6 +282,16 @@ enum RevenueRecognitionCandidates {
             .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
+    static func rowLabel(_ row: [String]) -> String {
+        for cell in row {
+            let text = compactCell(cell)
+            if text.isEmpty { continue }
+            if isAmountCell(text) { continue }
+            return text
+        }
+        return compactCell(row.first ?? "")
+    }
+
     static func isAmountCell(_ raw: String) -> Bool {
         let text = compactCell(raw)
         if dashCells.contains(text) { return true }
@@ -336,12 +346,15 @@ enum RevenueRecognitionCandidates {
         var group = ""
         for i in firstData..<rows.count {
             let row = rows[i]
-            let rawLabel = compactCell(row.first ?? "")
+            let rawLabel = compactCell(rowLabel(row))
             if rawLabel.isEmpty { continue }
             if isPeriodHeadingLabel(rawLabel) { continue }
             let label = stripNoteMarker(rawLabel)
             if label.isEmpty { continue }
-            let hasAmt = row.dropFirst().contains { isAmountCell($0) }
+            let hasAmt = row.contains {
+                let cell = compactCell($0)
+                return cell != rawLabel && isAmountCell(cell)
+            }
             if isTotalLabel(label) {
                 totals.append(Total(label: label, row: i))
                 continue
@@ -401,6 +414,7 @@ enum RevenueRecognitionCandidates {
             .replacingOccurrences(of: "\u{3000}", with: "")
         if collapsed == "合計" || collapsed == "売上高合計" || collapsed == "連結合計"
             || collapsed == "連結計" || collapsed == "連結金額"
+            || (collapsed.hasSuffix("計") && collapsed.count > 1)
         {
             return true
         }
