@@ -551,10 +551,11 @@ public extension BltServerContext {
     }
 
     /// セグメント注記の Jev。`extracted == nil` は省略確定（呼び出し側が not_applicable にする）。
-    /// business の専用タグに本文があるときは、収益認識の分解表が無い場合だけ
-    /// `single_segment_disclosed`。分解表があるときは表ステップへ進む。
+    /// business の専用タグに**当期**本文があるとき、収益認識の分解表が無く、かつ当期の
+    /// 報告セグメント売上 member が 1 以下なら `single_segment_disclosed`。当期 member が
+    /// 2 以上ならタグを信じず表ステップへ進む。分解表があるときは表ステップへ進む。
     /// 選んだ表が合計行だけでカテゴリが無いときは専用タグへ戻す（8771）。
-    /// 顧客表・製品90％・本邦90％・報告セグメント fact はその省略を取り消さない。
+    /// 顧客表・製品90％・本邦90％はその省略を取り消さない。
     /// 専用タグは geography を飛ばさない。キーがある geography は Jev のまま。
     /// キーが無いとき、応答が無いときは、専用タグ以外は抽出結果をそのまま返す。
     /// 呼び出し失敗では `needsReview` を足さない。
@@ -564,8 +565,10 @@ public extension BltServerContext {
         consolidatedSales: Double?, labelsByTag: [String: String]
     ) async -> (extracted: ExtractedBreakdown?, outcome: SegmentNoteDecisionOutcome) {
         let pass = (extracted: extracted as ExtractedBreakdown?, outcome: SegmentNoteDecisionOutcome.unchanged)
+        let currentYearReportableCount =
+            BreakdownExtractor.currentYearReportableOperatingSegmentSalesMemberCount(xbrlDir: xbrlDir)
         if axis == .business,
-            let tagText = BreakdownExtractor.dedicatedSingleSegmentDisclosureText(xbrlDir: xbrlDir),
+            let tagText = BreakdownExtractor.dedicatedSingleSegmentTagTrustedForOmission(xbrlDir: xbrlDir),
             !extracted.tables.contains(where: {
                 $0.heading == BreakdownExtractor.revenueRecognitionHeading
             })
@@ -596,6 +599,13 @@ public extension BltServerContext {
             return (extracted, outcome)
         case .omitBusiness:
             guard axis == .business else { return (extracted, outcome) }
+            if currentYearReportableCount >= 2 {
+                var kept = outcome
+                kept.action = .unchanged
+                kept.omissionReason = nil
+                kept.needsReview = true
+                return (extracted, kept)
+            }
             let resolved = SegmentNoteDecision.resolveBusinessOmissionReason(
                 outcome,
                 reportedSegmentsAreGeographic: BreakdownExtractor.reportedOperatingSegmentsAreGeographic(
@@ -644,9 +654,14 @@ public extension BltServerContext {
             columnDecider: revenueRecognitionColumnDecider,
             fiscalYearEnd: BreakdownExtractor.currentFiscalYearEnd(fromXbrlDir: xbrlDir),
             docID: docID)
-        let dedicatedTag = BreakdownExtractor.dedicatedSingleSegmentDisclosureText(xbrlDir: xbrlDir)
+        let dedicatedTexts = BreakdownExtractor.dedicatedSingleSegmentDisclosureTexts(xbrlDir: xbrlDir)
+        let currentYearReportableCount =
+            BreakdownExtractor.currentYearReportableOperatingSegmentSalesMemberCount(xbrlDir: xbrlDir)
+        let dedicatedTag = currentYearReportableCount >= 2
+            ? nil : (dedicatedTexts.currentYear ?? dedicatedTexts.any)
         if BusinessBreakdownResolver.dedicatedSingleSegmentFallback(
-            snapshot: result.snapshot, dedicatedTagText: dedicatedTag),
+            snapshot: result.snapshot, dedicatedTagText: dedicatedTag,
+            currentYearReportableSalesMemberCount: currentYearReportableCount),
            let dedicatedTag
         {
             let outcome = SegmentNoteDecision.dedicatedTagBusinessOutcome(
@@ -665,7 +680,7 @@ public extension BltServerContext {
             return .notApplicable(
                 reason: breakdownNotApplicableSingleSegmentDisclosed, audit: audit)
         }
-        guard let snapshot = result.snapshot else {
+        guard var snapshot = result.snapshot else {
             let reason = BreakdownExtractor.classifyNotApplicableReason(
                 segments: segments, consolidatedSales: consolidatedSales, xbrlDir: xbrlDir,
                 llmHint: result.audit?.notApplicableReason)
@@ -674,6 +689,9 @@ public extension BltServerContext {
                 to: .notApplicable(
                     reason: reason.rawValue,
                     audit: result.audit.map(llmBreakdownAuditPayload(from:))))
+        }
+        if BreakdownExtractor.dedicatedTagDisagreesWithCurrentYearReportableSegments(xbrlDir: xbrlDir) {
+            snapshot = BreakdownExtractor.applyingDedicatedTagDisagreementWarning(to: snapshot)
         }
         return applyingSegmentNoteDecision(
             gate.outcome,

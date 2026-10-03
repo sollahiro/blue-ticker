@@ -224,7 +224,8 @@ enum SegmentNoteDecision {
     }
 
     /// 専用タグの本文だけで business を `single_segment_disclosed` にする。Jev は呼ばない。
-    /// 製品90％・本邦90％・顧客表・報告セグメント fact はこの結果を取り消さない。
+    /// 製品90％・本邦90％・顧客表はこの結果を取り消さない。
+    /// 当期の報告セグメント売上 member が 2 以上あるときは呼び出し側がタグを信じない。
     /// geography には使わない。
     static func dedicatedTagBusinessOutcome(
         code: String = "", docID: String = "", tagText: String
