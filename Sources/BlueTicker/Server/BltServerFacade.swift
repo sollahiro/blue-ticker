@@ -671,7 +671,9 @@ public extension BltServerContext {
                 llmHint: result.audit?.notApplicableReason)
             return applyingSegmentNoteDecision(
                 gate.outcome,
-                to: .notApplicable(reason: reason.rawValue, audit: nil))
+                to: .notApplicable(
+                    reason: reason.rawValue,
+                    audit: result.audit.map(llmBreakdownAuditPayload(from:))))
         }
         return applyingSegmentNoteDecision(
             gate.outcome,

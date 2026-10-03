@@ -2,7 +2,7 @@
 // 1 ラベル域は 1 または 2 列（rowspan/colspan 展開後）
 // 2 各行は category_group か category（金額なし見出し・2列目の外側は group）
 // 3 各行は subtotal（〜計 / 外部顧客への売上高・収益 / 合計 / 小計 …）か segment
-// 4 複数ブロックが表全体合計と同じ小計で閉じる → 並行次元。加算せず事業次元だけ。
+// 4 全てのブロックが表全体合計と同じ小計で閉じる → 並行次元。加算せず事業次元だけ。
 // docs/breakdown.md
 
 import Foundation
@@ -12,6 +12,20 @@ enum RevenueRecognitionTableStructure {
         case geography
         case productOrBusiness
         case unknown
+    }
+
+    /// 表全体の分解軸。Jev 列選択の前に、製品・事業表を顧客別／時点表より優先する。
+    enum TableAxis: Equatable {
+        case productOrBusiness
+        case customer
+        case timing
+        case unknown
+    }
+
+    enum AxisConstraint: Equatable {
+        case unconstrained
+        case productOnly
+        case customerOrTimingOnly
     }
 
     enum LabelKind: Equatable {
@@ -101,6 +115,12 @@ enum RevenueRecognitionTableStructure {
             if parts.count >= 2 {
                 let outer = parts[0]
                 let inner = parts[1]
+                if RevenueRecognitionCandidates.isStubAxisHeader(outer) {
+                    classified.append(ClassifiedRow(
+                        index: index, labelKind: .category, categoryGroup: nil, category: inner,
+                        amountKind: nil, hasAmount: hasAmount))
+                    continue
+                }
                 currentGroup = outer
                 classified.append(ClassifiedRow(
                     index: index, labelKind: .category, categoryGroup: outer, category: inner,
@@ -171,6 +191,83 @@ enum RevenueRecognitionTableStructure {
         let token = RevenueRecognitionCandidates.compactCell(label)
         if token.isEmpty || isGeographyHeading(token) { return false }
         return token.contains("製品") || token.contains("サービス") || token.contains("事業")
+            || token.contains("品種") || token.contains("品目")
+    }
+
+    /// 表レベルの製品・事業軸。`事業` 単体は顧客行（市販・非車載事業）にも出るので使わない。
+    static func isProductAxisLabel(_ label: String) -> Bool {
+        let token = RevenueRecognitionCandidates.compactCell(label)
+        if token.isEmpty || isGeographyHeading(token) { return false }
+        if token.contains("品種別") || token.contains("品目別") || token.contains("製品別")
+            || token.contains("事業別") || token.contains("サービス別")
+        {
+            return true
+        }
+        if token.contains("製品") || token.contains("分野") { return true }
+        if token.contains("財又はサービス") || token.contains("財・サービス")
+            || token.contains("製品及びサービス")
+        {
+            return true
+        }
+        return token.contains("サービス")
+    }
+
+    static func isCustomerAxisLabel(_ label: String) -> Bool {
+        let token = RevenueRecognitionCandidates.compactCell(label)
+        if token.isEmpty || RevenueRecognitionCandidates.isTotalLabel(token) { return false }
+        if token.contains("外部顧客") { return false }
+        if token.contains("顧客別") || token.contains("主要な顧客") || token.contains("主要顧客") {
+            return true
+        }
+        if token.contains("グループ向け") { return true }
+        if token.contains("向け") {
+            if token.contains("サービス") || token.contains("製品") || token.contains("保証") {
+                return false
+            }
+            return true
+        }
+        return false
+    }
+
+    static func isTimingAxisLabel(_ label: String) -> Bool {
+        let token = RevenueRecognitionCandidates.compactCell(label)
+        if token.isEmpty || RevenueRecognitionCandidates.isTotalLabel(token) { return false }
+        return token.contains("一時点") || token.contains("一定の期間") || token.contains("一定期間")
+    }
+
+    static func tableAxis(of table: RevenueRecognitionCandidates.ParsedTable) -> TableAxis {
+        var product = false
+        var customer = false
+        var timing = false
+        func consume(_ raw: String) {
+            let token = RevenueRecognitionCandidates.compactCell(raw)
+            guard !token.isEmpty else { return }
+            if RevenueRecognitionCandidates.isTotalLabel(token) { return }
+            if isTimingAxisLabel(token) { timing = true }
+            if isCustomerAxisLabel(token) { customer = true }
+            if isProductAxisLabel(token) { product = true }
+        }
+        for row in table.structure.rows {
+            if let group = row.categoryGroup { consume(group) }
+            if let category = row.category { consume(category) }
+        }
+        if product { return .productOrBusiness }
+        if customer { return .customer }
+        if timing { return .timing }
+        return .unknown
+    }
+
+    static func axisConstraint(
+        tables: [RevenueRecognitionCandidates.ParsedTable]
+    ) -> AxisConstraint {
+        let axes = tables.map(tableAxis(of:))
+        let hasProduct = axes.contains(.productOrBusiness)
+        let hasCustomerOrTiming = axes.contains(.customer) || axes.contains(.timing)
+        if hasProduct && hasCustomerOrTiming { return .productOnly }
+        if hasCustomerOrTiming && !hasProduct && !axes.contains(.unknown) {
+            return .customerOrTimingOnly
+        }
+        return .unconstrained
     }
 
     static func kind(of heading: String?) -> DimensionKind {
@@ -234,13 +331,18 @@ enum RevenueRecognitionTableStructure {
         in structure: Result, grid: [[String]], column: Int, tableTotal: Double?
     ) -> [Block] {
         guard let tableTotal else { return [] }
-        let matching = structure.blocks.filter { block in
+        let blocks = structure.blocks
+        guard blocks.count >= 2 else { return [] }
+        let matching = blocks.filter { block in
             guard let row = block.closingTotalRow, row < grid.count, column < grid[row].count,
                   let amount = RevenueRecognitionCandidates.parseAmount(grid[row][column])
             else { return false }
             return RevenueRecognitionCandidates.sumMatches(amount, subtotal: tableTotal, itemCount: 1)
         }
-        return matching.count >= 2 ? matching : []
+        // 一部のブロックだけが全社合計と一致しても並行次元にしない（その他収益を closer
+        // と誤認した 2467 S100YMA4）。全てのブロックが表合計と同じ小計で閉じるときだけ。
+        guard matching.count == blocks.count else { return [] }
+        return matching
     }
 
     static func businessBlock(in parallel: [Block]) -> Block? {

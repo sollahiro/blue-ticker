@@ -152,15 +152,19 @@ enum RevenueRecognitionCandidates {
                             isPartial: false, rowKind: "segment"))
                     }
                 case .groupPlusPartial:
-                    if let groupAmount {
+                    let childSum = partialItems.reduce(0.0) { $0 + (amounts[$1.row] ?? 0) }
+                    if let groupAmount,
+                       sumMatches(childSum, subtotal: groupAmount, itemCount: partialItems.count)
+                    {
+                        for item in partialItems {
+                            built.append(BuiltRow(
+                                categoryGroup: group, category: item.label,
+                                amount: amounts[item.row] ?? 0, isPartial: false, rowKind: "segment"))
+                        }
+                    } else if let groupAmount {
                         built.append(BuiltRow(
                             categoryGroup: group, category: nil, amount: groupAmount,
                             isPartial: false, rowKind: "segment"))
-                    }
-                    for item in partialItems {
-                        built.append(BuiltRow(
-                            categoryGroup: group, category: item.label,
-                            amount: amounts[item.row] ?? 0, isPartial: true, rowKind: "segment"))
                     }
                 case .groupPlusExhaustive:
                     if let groupAmount {
@@ -276,7 +280,7 @@ enum RevenueRecognitionCandidates {
     static func stripNoteMarker(_ label: String) -> String {
         let compact = compactCell(label)
         let pattern = try! NSRegularExpression(
-            pattern: #"[（(]注(?:[）)]?\s*)?[0-9０-９]+[）)]?$"#)
+            pattern: #"[（(]注(?:[）)]?\s*)?[0-9０-９]*[）)]?$"#)
         let ns = compact as NSString
         let range = NSRange(location: 0, length: ns.length)
         guard let match = pattern.firstMatch(in: compact, options: [], range: range) else {
@@ -284,6 +288,19 @@ enum RevenueRecognitionCandidates {
         }
         return ns.substring(to: match.range.location)
             .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// 列見出しの「業界の名称」など軸タイトル。カテゴリ本体だけ残す。
+    static func isStubAxisHeader(_ label: String) -> Bool {
+        let token = compactCell(label)
+        if token.isEmpty { return false }
+        return token.hasSuffix("の名称") || token == "名称"
+    }
+
+    static func joinHeaderParts(_ parts: [String]) -> String {
+        let meaningful = parts.filter { !isStubAxisHeader($0) }
+        if !meaningful.isEmpty { return meaningful.joined(separator: " / ") }
+        return parts.joined(separator: " / ")
     }
 
     /// 先頭から連続する非金額セル。Denso / 7416 のラベル域（空 rowspan + 内側ラベル）。
@@ -365,7 +382,7 @@ enum RevenueRecognitionCandidates {
                 let text = compactCell(row[column])
                 return text.isEmpty ? nil : text
             }
-            headers[column] = parts.joined(separator: " / ")
+            headers[column] = joinHeaderParts(parts)
         }
 
         var items: [Item] = []
@@ -492,16 +509,21 @@ enum RevenueRecognitionCandidates {
     }
 
     /// 表全体の合計行。`自動車分野計` のようなグループ小計は含めない。
-    /// `その他の収益` は完全一致または接頭辞だけ。`contains` だと「その他」製品行を合計にする。
+    /// `その他の収益` は完全一致だけ。`その他収益` は製品行であり合計ではない（2467 S100YMA4）。
+    /// 裸の `計` はブロック／表のクローザー（4825 / 6287）。
     static func isTotalLabel(_ label: String) -> Bool {
         let token = totalToken(label)
         if token == "合計" || token == "売上高合計" || token == "連結合計"
             || token == "連結計" || token == "連結金額" || token == "売上高" || token == "小計"
+            || token == "計"
         {
             return true
         }
         return totalMarkers.contains { marker in
             let markerToken = marker.replacingOccurrences(of: " ", with: "")
+            if markerToken.hasPrefix("その他") {
+                return token == markerToken
+            }
             return token == markerToken || token.hasPrefix(markerToken)
         }
     }

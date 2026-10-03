@@ -230,17 +230,21 @@ import Testing
             let externalRevenue: Bool = RevenueRecognitionTableStructure.isSubtotalLabel("外部顧客への収益")
             let total: Bool = RevenueRecognitionTableStructure.isSubtotalLabel("合計")
             let subtotal: Bool = RevenueRecognitionTableStructure.isSubtotalLabel("小計")
+            let kei: Bool = RevenueRecognitionTableStructure.isSubtotalLabel("計")
             let thermal: Bool = RevenueRecognitionTableStructure.isSubtotalLabel("サーマルシステム")
             let other: Bool = RevenueRecognitionTableStructure.isSubtotalLabel("非車載事業分野")
             let equipment: Bool = RevenueRecognitionTableStructure.isSubtotalLabel("新規装置")
+            let otherRevenue: Bool = RevenueRecognitionTableStructure.isSubtotalLabel("その他収益")
             #expect(groupCloser)
             #expect(externalSales)
             #expect(externalRevenue)
             #expect(total)
             #expect(subtotal)
+            #expect(kei)
             #expect(thermal == false)
             #expect(other == false)
             #expect(equipment == false)
+            #expect(otherRevenue == false)
         }
 
         @Test func densoGroupCloserIsSubtotalCategoriesAreSegments() throws {
@@ -395,6 +399,8 @@ import Testing
             let product: Bool = RevenueRecognitionTableStructure.isProductOrBusinessHeading(
                 "製品及びサービス")
             let business: Bool = RevenueRecognitionTableStructure.isProductOrBusinessHeading("事業")
+            let kind: Bool = RevenueRecognitionTableStructure.isProductOrBusinessHeading("品種別")
+            let itemKind: Bool = RevenueRecognitionTableStructure.isProductOrBusinessHeading("品目別")
             let productNotGeo: Bool = RevenueRecognitionTableStructure.isGeographyHeading(
                 "製品及びサービス")
             let geoNotProduct: Bool = RevenueRecognitionTableStructure.isProductOrBusinessHeading(
@@ -404,8 +410,32 @@ import Testing
             #expect(region)
             #expect(product)
             #expect(business)
+            #expect(kind)
+            #expect(itemKind)
             #expect(productNotGeo == false)
             #expect(geoNotProduct == false)
+        }
+
+        @Test func otherRevenueCloserDoesNotMakeSubsetParallel() throws {
+            let html = """
+                <table>
+                  <tr><td></td><td>当期</td></tr>
+                  <tr><td>酒類</td><td>40</td></tr>
+                  <tr><td>食品</td><td>25</td></tr>
+                  <tr><td>その他収益</td><td>5</td></tr>
+                  <tr><td>顧客A</td><td>60</td></tr>
+                  <tr><td>合計</td><td>70</td></tr>
+                </table>
+                """
+            let rows = try RevenueRecognitionTableStructureTests.padded(html)
+            let structure = RevenueRecognitionTableStructure.inspect(grid: rows)
+            let tableTotal: Double = 70
+            let parallel = RevenueRecognitionTableStructure.stage4ParallelDimensions(
+                in: structure, grid: rows, column: 1, tableTotal: tableTotal)
+            let empty: Bool = parallel.isEmpty
+            let otherIsTotal: Bool = RevenueRecognitionCandidates.isTotalLabel("その他収益")
+            #expect(empty)
+            #expect(otherIsTotal == false)
         }
     }
 }

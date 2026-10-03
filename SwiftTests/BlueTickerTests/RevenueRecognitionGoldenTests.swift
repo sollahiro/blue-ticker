@@ -227,6 +227,120 @@ import Testing
         #expect(needsReview == false)
     }
 
+    /// S100Y9T1 当期。自動車分野計 7,391,068 / 非車載事業分野 148,907 / 合計 7,539,975。
+    @Test func y9t1DensoCurrentYearProductTable() async throws {
+        let html = """
+            <p>当連結会計年度（自 2025年4月1日 至 2026年3月31日）</p>
+            <p>（単位：百万円）</p>
+            <table>
+              <tr><td></td><td></td><td>(単位：百万円)</td></tr>
+              <tr><td rowspan="6"></td><td>サーマルシステム</td><td>1,780,351</td></tr>
+              <tr><td>パワトレインシステム</td><td>1,479,737</td></tr>
+              <tr><td>モビリティエレクトロニクス</td><td>2,198,663</td></tr>
+              <tr><td>エレクトリフィケーションシステム</td><td>1,433,456</td></tr>
+              <tr><td>先進デバイス</td><td>390,274</td></tr>
+              <tr><td>その他</td><td>108,587</td></tr>
+              <tr><td colspan="2">自動車分野計</td><td>7,391,068</td></tr>
+              <tr><td colspan="2">非車載事業分野</td><td>148,907</td></tr>
+              <tr><td colspan="2">合計</td><td>7,539,975</td></tr>
+            </table>
+            """
+        let snapshot = try await run(html: html, docID: "S100Y9T1", fyEnd: "2026-03-31", pick: "t0_c2")
+        let segments = snapshot.rows.filter { $0.rowKind == "segment" }
+        let auto: [(String, Int)] = [
+            ("サーマルシステム", 1_780_351),
+            ("パワトレインシステム", 1_479_737),
+            ("モビリティエレクトロニクス", 2_198_663),
+            ("エレクトリフィケーションシステム", 1_433_456),
+            ("先進デバイス", 390_274),
+            ("その他", 108_587),
+        ]
+        let autoCount: Int = segments.filter { $0.categoryGroup == "自動車分野" }.count
+        #expect(autoCount == 6)
+        for (name, amount) in auto {
+            let expected: Double = yen(amount)
+            let found: Bool = hasRow(
+                segments, group: "自動車分野", category: name, amount: expected)
+            #expect(found)
+        }
+        let autoSum: Double = segments.filter { $0.categoryGroup == "自動車分野" }
+            .reduce(0) { $0 + $1.amount }
+        let expectedAutoSum: Double = yen(7_391_068)
+        #expect(autoSum == expectedAutoSum)
+        let other: Bool = hasRow(
+            segments, group: "非車載事業分野", nilCategory: true, amount: yen(148_907))
+        let closerAsRow: Bool = segments.contains {
+            $0.label == "自動車分野計" || $0.categoryGroup == "自動車分野計"
+        }
+        let customerKept: Bool = segments.contains { $0.label?.contains("向け") == true }
+        let denominator: Double = snapshot.denominator
+        let expectedDenom: Double = yen(7_539_975)
+        let needsReview: Bool = snapshot.needsReview
+        #expect(other)
+        #expect(closerAsRow == false)
+        #expect(customerKept == false)
+        #expect(denominator == expectedDenom)
+        #expect(needsReview == false)
+    }
+
+    /// 製品表と顧客表が両方あるとき、Jev が顧客表を選んでも製品表へ寄せる。
+    @Test func y9t1DensoPrefersProductTableOverCustomerAxis() async throws {
+        let html = """
+            <p>当連結会計年度（自 2025年4月1日 至 2026年3月31日）</p>
+            <p>（単位：百万円）</p>
+            <table>
+              <tr><td></td><td></td><td>(単位：百万円)</td></tr>
+              <tr><td rowspan="6"></td><td>サーマルシステム</td><td>1,780,351</td></tr>
+              <tr><td>パワトレインシステム</td><td>1,479,737</td></tr>
+              <tr><td>モビリティエレクトロニクス</td><td>2,198,663</td></tr>
+              <tr><td>エレクトリフィケーションシステム</td><td>1,433,456</td></tr>
+              <tr><td>先進デバイス</td><td>390,274</td></tr>
+              <tr><td>その他</td><td>108,587</td></tr>
+              <tr><td colspan="2">自動車分野計</td><td>7,391,068</td></tr>
+              <tr><td colspan="2">非車載事業分野</td><td>148,907</td></tr>
+              <tr><td colspan="2">合計</td><td>7,539,975</td></tr>
+            </table>
+            <p>顧客別</p>
+            <table>
+              <tr><td></td><td>当連結会計年度</td></tr>
+              <tr><td>トヨタグループ向け</td><td>6,000,000</td></tr>
+              <tr><td>その他</td><td>1,391,068</td></tr>
+              <tr><td>市販・非車載事業</td><td>148,907</td></tr>
+              <tr><td>合計</td><td>7,539,975</td></tr>
+            </table>
+            """
+        let extracted = ExtractedBreakdown(
+            method: "html_table",
+            tables: BreakdownExtractor.allTablesFromHtml(html, defaultHeading: "収益認識関係"),
+            facts: [])
+        let parsed = RevenueRecognitionCandidates.parse(tables: extracted.tables)
+        let productAxis: RevenueRecognitionTableStructure.TableAxis =
+            RevenueRecognitionTableStructure.tableAxis(of: parsed[0])
+        let customerAxis: RevenueRecognitionTableStructure.TableAxis =
+            RevenueRecognitionTableStructure.tableAxis(of: parsed[1])
+        let constraint: RevenueRecognitionTableStructure.AxisConstraint =
+            RevenueRecognitionTableStructure.axisConstraint(tables: parsed)
+        #expect(productAxis == .productOrBusiness)
+        #expect(customerAxis == .customer)
+        #expect(constraint == .productOnly)
+        let decider = FakeRevenueRecognitionColumnDecider(selected: "t1_c1", confidence: 0.77)
+        let (snapshot, _) = await RevenueRecognitionColumnNormalizer.normalize(
+            extracted, consolidatedSales: nil, decider: decider,
+            fiscalYearEnd: "2026-03-31", docID: "S100Y9T1")
+        let row = try #require(snapshot)
+        let segments = row.rows.filter { $0.rowKind == "segment" }
+        let thermal: Bool = hasRow(
+            segments, group: "自動車分野", category: "サーマルシステム", amount: yen(1_780_351))
+        let toyota: Bool = segments.contains { $0.label?.contains("トヨタ") == true }
+        let denominator: Double = row.denominator
+        let expectedDenom: Double = yen(7_539_975)
+        let needsReview: Bool = row.needsReview
+        #expect(thermal)
+        #expect(toyota == false)
+        #expect(denominator == expectedDenom)
+        #expect(needsReview == false)
+    }
+
     /// Outer rowspan has text: that cell is category_group, the inner cell is category.
     /// (Two-column label area. Tokyo Electron S100YEOO is a different, single-column
     /// parallel-dimension shape — see `yeooTokyoElectronParallelDimensionsPickProductBlock`.)
@@ -625,6 +739,17 @@ import Testing
                 snapshot: snapshot, dedicatedTagText: tag))
             #expect(!BusinessBreakdownResolver.dedicatedSingleSegmentFallback(
                 snapshot: snapshot, dedicatedTagText: nil))
+            let dropped = BreakdownSnapshot(
+                axis: "business", denominator: 102 * Financial.millionYen,
+                denominatorTag: "llm_table_subtotal", rows: [], sourceKind: "revenue_recognition",
+                needsReview: true,
+                warnings: [
+                    RevenueRecognitionColumnNormalizer.warningNoCategoryRows,
+                    RevenueRecognitionColumnNormalizer.warningParallelDimensions,
+                    RevenueRecognitionColumnNormalizer.warningCategoryRowsDropped,
+                ])
+            #expect(!BusinessBreakdownResolver.dedicatedSingleSegmentFallback(
+                snapshot: dropped, dedicatedTagText: tag))
             let outcome = SegmentNoteDecision.dedicatedTagBusinessOutcome(
                 docID: "S100YKOI", tagText: tag)
             #expect(outcome.omissionReason == breakdownNotApplicableSingleSegmentDisclosed)
@@ -633,6 +758,147 @@ import Testing
             #expect(audit?.columnJev?.calls.first?.selected == "t0_c2"
                 || audit?.jev?.calls.first?.selected == "t0_c2")
         }
+    }
+
+    /// 8771 S100R95J: 単一セグメント専用タグがあっても製品行がある表は残す（意図した変更）。
+    @Test func r95j8771ProductRowsKeptDespiteDedicatedSingleSegmentTag() async throws {
+        let tagText = "当社グループは単一セグメントであるため、記載を省略しております。"
+        let xml = XBRLTestSupport.makeXbrlDuration(
+            """
+            <jpcrp_cor:DescriptionOfFactThatCompanysBusinessComprisesSingleSegment contextRef="CurrentYearDuration">\(tagText)</jpcrp_cor:DescriptionOfFactThatCompanysBusinessComprisesSingleSegment>
+            """)
+        let html = """
+            <p>当連結会計年度（自 2023年4月1日 至 2024年3月31日）</p>
+            <p>（単位：百万円）</p>
+            <table>
+              <tr><td></td><td>当連結会計年度</td></tr>
+              <tr><td>事業法人向け保証サービス</td><td>80</td></tr>
+              <tr><td>金融法人向け保証サービス</td><td>20</td></tr>
+              <tr><td>顧客との契約から生じる収益</td><td>100</td></tr>
+            </table>
+            """
+        try await XBRLTestSupport.withXbrlDir(xml) { dir in
+            let extracted = ExtractedBreakdown(
+                method: "html_table",
+                tables: BreakdownExtractor.allTablesFromHtml(
+                    html, defaultHeading: BreakdownExtractor.revenueRecognitionHeading),
+                facts: [])
+            let decider = FakeRevenueRecognitionColumnDecider(selected: "t0_c1", confidence: 0.97)
+            let (snapshot, _, _) = await BusinessBreakdownResolver.resolve(
+                segments: extracted, consolidatedSales: 100 * Financial.millionYen,
+                client: UnavailableChatClient(), columnDecider: decider,
+                fiscalYearEnd: "2024-03-31", docID: "S100R95J")
+            let row = try #require(snapshot)
+            let tag = try #require(
+                BreakdownExtractor.dedicatedSingleSegmentDisclosureText(xbrlDir: dir))
+            #expect(!BusinessBreakdownResolver.dedicatedSingleSegmentFallback(
+                snapshot: row, dedicatedTagText: tag))
+            let segments = row.rows.filter { $0.rowKind == "segment" }
+            let segmentCount: Int = segments.count
+            let corporate: Bool = hasRow(
+                segments, group: "事業法人向け保証サービス", nilCategory: true, amount: yen(80))
+            let finance: Bool = hasRow(
+                segments, group: "金融法人向け保証サービス", nilCategory: true, amount: yen(20))
+            let needsReview: Bool = row.needsReview
+            #expect(segmentCount == 2)
+            #expect(corporate)
+            #expect(finance)
+            #expect(needsReview == false)
+        }
+    }
+
+    /// 2467 S100YMA4: 「その他収益」は合計ではない。計が各次元を閉じ、製品ブロックだけ残す。
+    @Test func yma42467OtherRevenueIsNotParallelCloser() async throws {
+        let html = """
+            <p>当連結会計年度（自 2025年4月1日 至 2026年3月31日）</p>
+            <p>（単位：百万円）</p>
+            <table>
+              <tr><td></td><td>当連結会計年度</td></tr>
+              <tr><td>財又はサービスの種類</td><td></td></tr>
+              <tr><td>酒類</td><td>40</td></tr>
+              <tr><td>食品</td><td>25</td></tr>
+              <tr><td>店舗</td><td>20</td></tr>
+              <tr><td>その他</td><td>10</td></tr>
+              <tr><td>加工</td><td>10</td></tr>
+              <tr><td>計</td><td>105</td></tr>
+              <tr><td>主要な顧客</td><td></td></tr>
+              <tr><td>顧客A</td><td>60</td></tr>
+              <tr><td>顧客B</td><td>40</td></tr>
+              <tr><td>その他収益</td><td>5</td></tr>
+              <tr><td>合計</td><td>105</td></tr>
+            </table>
+            """
+        let snapshot = try await run(html: html, docID: "S100YMA4", fyEnd: "2026-03-31", pick: "t0_c1")
+        let segments = snapshot.rows.filter { $0.rowKind == "segment" }
+        let segmentCount: Int = segments.count
+        let names: [String] = ["酒類", "食品", "店舗", "その他", "加工"]
+        #expect(segmentCount == 5)
+        for name in names {
+            let found: Bool = segments.contains {
+                $0.category == name || $0.categoryGroup == name
+            }
+            #expect(found)
+        }
+        let otherRevenue: Bool = segments.contains { $0.label == "その他収益" }
+        let kei: Bool = segments.contains { $0.label == "計" || $0.categoryGroup == "計" }
+        let customer: Bool = segments.contains { $0.label == "顧客A" }
+        let notTotal: Bool = RevenueRecognitionCandidates.isTotalLabel("その他収益")
+        let keiIsTotal: Bool = RevenueRecognitionCandidates.isTotalLabel("計")
+        let denominator: Double = snapshot.denominator
+        let expectedDenom: Double = yen(105)
+        let needsReview: Bool = snapshot.needsReview
+        #expect(otherRevenue == false)
+        #expect(kei == false)
+        #expect(customer == false)
+        #expect(notTotal == false)
+        #expect(keiIsTotal)
+        #expect(denominator == expectedDenom)
+        #expect(needsReview == false)
+    }
+
+    /// 5936 S100YKHR: 品種別ブロックを製品軸として残し、地域ブロックは加算しない。
+    @Test func ykhr5936ProductKindBlockIsBusinessDimension() async throws {
+        let html = """
+            <p>当連結会計年度（自 2025年4月1日 至 2026年3月31日）</p>
+            <p>（単位：百万円）</p>
+            <table>
+              <tr><td></td><td>当連結会計年度</td></tr>
+              <tr><td>品種別</td><td></td></tr>
+              <tr><td>甲</td><td>10</td></tr>
+              <tr><td>乙</td><td>20</td></tr>
+              <tr><td>丙</td><td>15</td></tr>
+              <tr><td>丁</td><td>12</td></tr>
+              <tr><td>戊</td><td>8</td></tr>
+              <tr><td>己</td><td>7</td></tr>
+              <tr><td>庚</td><td>6</td></tr>
+              <tr><td>辛</td><td>5</td></tr>
+              <tr><td>外部顧客への売上高</td><td>83</td></tr>
+              <tr><td>地域別</td><td></td></tr>
+              <tr><td>日本</td><td>50</td></tr>
+              <tr><td>海外</td><td>33</td></tr>
+              <tr><td>外部顧客への売上高</td><td>83</td></tr>
+            </table>
+            """
+        let heading: Bool = RevenueRecognitionTableStructure.isProductOrBusinessHeading("品種別")
+        #expect(heading)
+        let snapshot = try await run(html: html, docID: "S100YKHR", fyEnd: "2026-03-31", pick: "t0_c1")
+        let segments = snapshot.rows.filter { $0.rowKind == "segment" }
+        let segmentCount: Int = segments.count
+        let names: [String] = ["甲", "乙", "丙", "丁", "戊", "己", "庚", "辛"]
+        #expect(segmentCount == 8)
+        for name in names {
+            let found: Bool = segments.contains {
+                $0.category == name || $0.categoryGroup == name
+            }
+            #expect(found)
+        }
+        let japan: Bool = segments.contains { $0.label == "日本" }
+        let denominator: Double = snapshot.denominator
+        let expectedDenom: Double = yen(83)
+        let needsReview: Bool = snapshot.needsReview
+        #expect(japan == false)
+        #expect(denominator == expectedDenom)
+        #expect(needsReview == false)
     }
 
     @Test func belowConfidenceThresholdSetsNeedsReview() async throws {
@@ -695,6 +961,8 @@ import Testing
             fiscalYearEnd: "2026-03-31", docID: "S100NONE")
         #expect(snapshot == nil)
         #expect(audit?.jev?.calls.first?.selected == RevenueRecognitionColumnNormalizer.noneOfThese)
+        #expect(audit?.columnJev?.calls.first?.selected == RevenueRecognitionColumnNormalizer.noneOfThese)
+        #expect(audit?.columnJev != nil)
     }
 
     @Test func uchiItemsAreDisplayOnlyAndSkipSumCheck() async throws {
@@ -710,17 +978,16 @@ import Testing
             """
         let snapshot = try await run(html: html, docID: "S100UCHI", fyEnd: "2026-03-31", pick: "t0_c1")
         #expect(snapshot.needsReview == false)
-        #expect(snapshot.rows.count == 2)
+        let segments = snapshot.rows.filter { $0.rowKind == "segment" }
+        let segmentCount: Int = segments.count
+        #expect(segmentCount == 1)
         #expect(snapshot.rows[0].categoryGroup == "海外")
         #expect(snapshot.rows[0].category == nil)
         let overseas: Double = snapshot.rows[0].amount
         let expectedOverseas: Double = yen(1_000)
         #expect(overseas == expectedOverseas)
-        #expect(snapshot.rows[1].category == "うち中国")
-        #expect(snapshot.rows[1].label == "うち中国")
-        let china: Double = snapshot.rows[1].amount
-        let expectedChina: Double = yen(300)
-        #expect(china == expectedChina)
+        let china: Bool = snapshot.rows.contains { $0.category == "うち中国" }
+        #expect(china == false)
     }
 
     @Test func noneOfTheseLowPNoneTakesBestColumnAndNeedsReview() async throws {
@@ -808,6 +1075,9 @@ import Testing
         #expect(RevenueRecognitionCandidates.isTotalLabel("小計"))
         #expect(RevenueRecognitionCandidates.isTotalLabel("売上高"))
         #expect(RevenueRecognitionCandidates.isTotalLabel("（小計）"))
+        #expect(RevenueRecognitionCandidates.isTotalLabel("計"))
+        #expect(RevenueRecognitionCandidates.isTotalLabel("その他の収益"))
+        #expect(!RevenueRecognitionCandidates.isTotalLabel("その他収益"))
         #expect(!RevenueRecognitionCandidates.isTotalLabel("自動車分野計"))
         #expect(RevenueRecognitionCandidates.isGroupSubtotalLabel("自動車分野計"))
         #expect(RevenueRecognitionCandidates.groupNameFromSubtotal("自動車分野計") == "自動車分野")
@@ -841,19 +1111,18 @@ import Testing
         let used: Bool = hasRow(segments, category: "（USED販売）", amount: yen(20_113))
         let yahoo: Bool = hasRow(segments, group: "LINEヤフーコマース", nilCategory: true)
         let parenAsGroup: Bool = hasRow(segments, group: "（買取・製造販売）", nilCategory: true)
-        let full = segments.filter { $0.category == nil }
-        let fullSum: Double = full.reduce(0) { $0 + $1.amount }
-        let expectedFull: Double = yen(157_416 + 24_179 + 5_776 + 1_325 + 11_884 + 27_791)
+        let segmentSum: Double = segments.reduce(0) { $0 + $1.amount }
+        let expectedSum: Double = yen(228_373)
         let denominator: Double = snapshot.denominator
         let expectedDenom: Double = yen(228_373)
         let needsReview: Bool = snapshot.needsReview
-        #expect(zozo)
+        #expect(zozo == false)
         #expect(buy)
         #expect(consigned)
         #expect(used)
         #expect(yahoo)
         #expect(parenAsGroup == false)
-        #expect(fullSum == expectedFull)
+        #expect(segmentSum == expectedSum)
         #expect(denominator == expectedDenom)
         #expect(needsReview == false)
     }
@@ -1152,6 +1421,12 @@ import Testing
         #expect(RevenueRecognitionCandidates.stripNoteMarker("その他の収益（注）１") == "その他の収益")
         #expect(RevenueRecognitionCandidates.stripNoteMarker("タイヤ(注１)") == "タイヤ")
         #expect(RevenueRecognitionCandidates.stripNoteMarker("その他(注２)") == "その他")
+        #expect(RevenueRecognitionCandidates.stripNoteMarker("その他の収入(注)") == "その他の収入")
+        #expect(RevenueRecognitionCandidates.stripNoteMarker("その他の収入（注）") == "その他の収入")
+        let header: String = RevenueRecognitionCandidates.joinHeaderParts(
+            ["業界の名称", "電子・半導体"])
+        #expect(header == "電子・半導体")
+        #expect(RevenueRecognitionCandidates.isStubAxisHeader("業界の名称"))
         let north: String = RevenueRecognitionCandidates.displayLabel(
             categoryGroup: "（海外）", category: "北米")
         let appliance: String = BreakdownRowPayload.displayLabel(

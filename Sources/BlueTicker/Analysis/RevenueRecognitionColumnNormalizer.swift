@@ -38,6 +38,8 @@ enum RevenueRecognitionColumnNormalizer {
     static let warningNoneOfTheseOverridden = "jev_none_of_these_overridden"
     static let warningNoCategoryRows = "revenue_recognition_no_category_rows"
     static let warningParallelDimensions = "revenue_recognition_parallel_dimensions_unresolved"
+    static let warningCategoryRowsDropped = "revenue_recognition_category_rows_dropped"
+    static let warningCustomerOrTimingAxis = "revenue_recognition_customer_or_timing_axis_only"
 
     static func normalize(
         _ result: ExtractedBreakdown,
@@ -52,9 +54,16 @@ enum RevenueRecognitionColumnNormalizer {
         let columns = RevenueRecognitionCandidates.amountColumns(in: parsed)
         guard !columns.isEmpty else { return (nil, nil) }
 
+        let constraint = RevenueRecognitionTableStructure.axisConstraint(tables: parsed)
+        let offered = offeredColumns(columns, tables: parsed, constraint: constraint)
+        let offeredTables = parsed.filter { table in
+            offered.contains { $0.tableIndex == table.tableIndex }
+        }
         let choice = await decider.chooseColumn(
-            columns: columns, tables: parsed, fiscalYearEnd: fiscalYearEnd, docID: docID)
-        let resolved = resolveSelection(choice, columns: columns)
+            columns: offered, tables: offeredTables, fiscalYearEnd: fiscalYearEnd, docID: docID)
+        var resolved = resolveSelection(choice, columns: offered)
+        resolved = preferProductAxis(
+            resolved, columns: offered, tables: parsed, constraint: constraint)
         let jev = SegmentNoteJevAuditPayload(
             code: "", docID: docID, axis: breakdownAxisBusiness,
             model: choice.model, threshold: confidenceThreshold,
@@ -88,6 +97,7 @@ enum RevenueRecognitionColumnNormalizer {
               let table = parsed.first(where: { $0.tableIndex == column.tableIndex })
         else { return (nil, audit) }
 
+        let sourceHadCategoryRows = !table.items.isEmpty
         let confidence = choice.confidence
         let belowThreshold = confidence.map { $0 < confidenceThreshold } ?? true
         var (built, groupSumReview) = RevenueRecognitionCandidates.buildRows(
@@ -116,14 +126,18 @@ enum RevenueRecognitionColumnNormalizer {
             consolidatedSales: consolidatedSales
         )
         var warnings: [String] = []
+        let axisReview = constraint == .customerOrTimingOnly
+        let droppedCategoryRows = built.isEmpty && sourceHadCategoryRows
         var needsReview = belowThreshold || groupSumReview || tableSumReview
-            || resolved.forceReview || built.isEmpty || parallelUnresolved
+            || resolved.forceReview || built.isEmpty || parallelUnresolved || axisReview
         if belowThreshold { warnings.append(warningLowConfidence) }
         if resolved.forceReview { warnings.append(warningNoneOfTheseOverridden) }
         if groupSumReview && !parallelUnresolved { warnings.append(warningGroupSumMismatch) }
         if tableSumReview { warnings.append(warningTableSumMismatch) }
         if parallelUnresolved { warnings.append(warningParallelDimensions) }
         if built.isEmpty { warnings.append(warningNoCategoryRows) }
+        if droppedCategoryRows { warnings.append(warningCategoryRowsDropped) }
+        if axisReview { warnings.append(warningCustomerOrTimingAxis) }
         BreakdownLLMAmountScale.applyPublicFlags(
             scale, needsReview: &needsReview, warnings: &warnings)
         let multiplier = scale.multiplier
@@ -227,6 +241,60 @@ enum RevenueRecognitionColumnNormalizer {
             return best
         }
         return columns.first?.key
+    }
+
+    static func offeredColumns(
+        _ columns: [RevenueRecognitionCandidates.AmountColumn],
+        tables: [RevenueRecognitionCandidates.ParsedTable],
+        constraint: RevenueRecognitionTableStructure.AxisConstraint
+    ) -> [RevenueRecognitionCandidates.AmountColumn] {
+        guard constraint == .productOnly else { return columns }
+        let productTables = Set(
+            tables.filter {
+                RevenueRecognitionTableStructure.tableAxis(of: $0) == .productOrBusiness
+            }.map(\.tableIndex))
+        let filtered = columns.filter { productTables.contains($0.tableIndex) }
+        return filtered.isEmpty ? columns : filtered
+    }
+
+    static func preferProductAxis(
+        _ resolved: ResolvedColumn?,
+        columns: [RevenueRecognitionCandidates.AmountColumn],
+        tables: [RevenueRecognitionCandidates.ParsedTable],
+        constraint: RevenueRecognitionTableStructure.AxisConstraint
+    ) -> ResolvedColumn? {
+        guard constraint == .productOnly, let resolved else { return resolved }
+        let byIndex = Dictionary(uniqueKeysWithValues: tables.map { ($0.tableIndex, $0) })
+        if let column = columns.first(where: { $0.key == resolved.key }),
+           let table = byIndex[column.tableIndex],
+           RevenueRecognitionTableStructure.tableAxis(of: table) == .productOrBusiness
+        {
+            return resolved
+        }
+        guard let fallback = currentProductColumn(columns, tables: tables) ?? columns.first else {
+            return resolved
+        }
+        return ResolvedColumn(key: fallback.key, forceReview: false)
+    }
+
+    static func currentProductColumn(
+        _ columns: [RevenueRecognitionCandidates.AmountColumn],
+        tables: [RevenueRecognitionCandidates.ParsedTable]
+    ) -> RevenueRecognitionCandidates.AmountColumn? {
+        let byIndex = Dictionary(uniqueKeysWithValues: tables.map { ($0.tableIndex, $0) })
+        func isCurrent(_ column: RevenueRecognitionCandidates.AmountColumn) -> Bool {
+            let caption = column.caption ?? byIndex[column.tableIndex]?.precedingCaption ?? ""
+            if caption.contains("前連結会計年度") || caption.contains("前事業年度") {
+                return false
+            }
+            if caption.contains("当連結会計年度") || caption.contains("当事業年度")
+                || caption.contains("当期")
+            {
+                return true
+            }
+            return column.header.contains("当")
+        }
+        return columns.first(where: isCurrent)
     }
 
     private static func stampJev(
