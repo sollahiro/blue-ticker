@@ -2,7 +2,7 @@
 // (1) ラベル域は 1 または 2 列（rowspan/colspan 展開後）
 // (2) 各行は category_group か category
 // (3) 各行は subtotal か segment
-// (4) 同じ全社合計で閉じる複数ブロックは並行次元（加算しない）
+// (4) 全てのブロックが同じ全社合計で閉じるときだけ並行次元（加算しない）
 // ネットワークなし。macOS の #expect 型推論が倒れないよう、比較値は typed let に出す。
 
 import Foundation
