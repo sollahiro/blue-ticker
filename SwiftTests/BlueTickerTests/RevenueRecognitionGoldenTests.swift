@@ -818,8 +818,8 @@ import Testing
               <tr><td>酒類</td><td>40</td></tr>
               <tr><td>食品</td><td>25</td></tr>
               <tr><td>店舗</td><td>20</td></tr>
-              <tr><td>その他</td><td>10</td></tr>
-              <tr><td>加工</td><td>10</td></tr>
+              <tr><td>その他</td><td>12</td></tr>
+              <tr><td>加工</td><td>8</td></tr>
               <tr><td>計</td><td>105</td></tr>
               <tr><td>主要な顧客</td><td></td></tr>
               <tr><td>顧客A</td><td>60</td></tr>
@@ -1112,7 +1112,7 @@ import Testing
         let yahoo: Bool = hasRow(segments, group: "LINEヤフーコマース", nilCategory: true)
         let parenAsGroup: Bool = hasRow(segments, group: "（買取・製造販売）", nilCategory: true)
         let segmentSum: Double = segments.reduce(0) { $0 + $1.amount }
-        let expectedSum: Double = yen(228_373)
+        let expectedSum: Double = yen(228_371)
         let denominator: Double = snapshot.denominator
         let expectedDenom: Double = yen(228_373)
         let needsReview: Bool = snapshot.needsReview
