@@ -167,6 +167,8 @@ import Testing
     }
 
     /// Outer rowspan has text: that cell is category_group, the inner cell is category.
+    /// (Two-column label area. Tokyo Electron S100YEOO is a different, single-column
+    /// parallel-dimension shape — see `yeooTokyoElectronParallelDimensionsPickProductBlock`.)
     @Test func outerRowspanTextIsCategoryGroupInnerIsCategory() async throws {
         let html = """
             <p>当連結会計年度（自 2025年4月1日 至 2026年3月31日）</p>
@@ -188,6 +190,47 @@ import Testing
             $0.categoryGroup == "製品及びサービス" && $0.category == "フィールドソリューション他"
         })
         #expect(!segments.contains { $0.categoryGroup == "地理的区分" })
+        #expect(snapshot.denominator == 2_443_533 * Financial.millionYen)
+        #expect(snapshot.needsReview == false)
+    }
+
+    /// S100YEOO 0105010: 単一ラベル列。地理的区分と製品及びサービスは同じ全社合計の並行次元。
+    @Test func yeooTokyoElectronParallelDimensionsPickProductBlock() async throws {
+        let html = """
+            <p>当連結会計年度（自 2025年4月1日 至 2026年3月31日）</p>
+            <p>（単位：百万円）</p>
+            <table>
+              <tr><td></td><td>前連結会計年度</td><td>当連結会計年度</td></tr>
+              <tr><td>地理的区分</td><td></td><td></td></tr>
+              <tr><td>日本</td><td>189,979</td><td>239,427</td></tr>
+              <tr><td>北米</td><td>242,964</td><td>166,446</td></tr>
+              <tr><td>欧州</td><td>75,524</td><td>67,407</td></tr>
+              <tr><td>韓国</td><td>409,009</td><td>543,858</td></tr>
+              <tr><td>台湾</td><td>410,627</td><td>499,853</td></tr>
+              <tr><td>中国</td><td>1,015,060</td><td>832,555</td></tr>
+              <tr><td>その他</td><td>88,402</td><td>93,985</td></tr>
+              <tr><td>外部顧客への売上高</td><td>2,431,568</td><td>2,443,533</td></tr>
+              <tr><td></td><td></td><td></td></tr>
+              <tr><td>製品及びサービス</td><td></td><td></td></tr>
+              <tr><td>新規装置 (注)1</td><td>1,893,080</td><td>1,817,250</td></tr>
+              <tr><td>フィールドソリューション他 (注)1</td><td>538,488</td><td>626,282</td></tr>
+              <tr><td>外部顧客への売上高</td><td>2,431,568</td><td>2,443,533</td></tr>
+            </table>
+            """
+        let snapshot = try await run(html: html, docID: "S100YEOO", fyEnd: "2026-03-31", pick: "t0_c2")
+        let segments = snapshot.rows.filter { $0.rowKind == "segment" }
+        #expect(segments.count == 2)
+        #expect(segments.contains {
+            ($0.categoryGroup == "新規装置" || $0.category == "新規装置")
+                && $0.amount == 1_817_250 * Financial.millionYen
+        })
+        #expect(segments.contains {
+            ($0.categoryGroup == "フィールドソリューション他" || $0.category == "フィールドソリューション他")
+                && $0.amount == 626_282 * Financial.millionYen
+        })
+        #expect(!segments.contains { $0.label?.contains("注") == true })
+        #expect(!segments.contains { $0.categoryGroup == "地理的区分" || $0.categoryGroup == "日本" })
+        #expect(!segments.contains { $0.categoryGroup == "製品及びサービス" })
         #expect(snapshot.denominator == 2_443_533 * Financial.millionYen)
         #expect(snapshot.needsReview == false)
     }

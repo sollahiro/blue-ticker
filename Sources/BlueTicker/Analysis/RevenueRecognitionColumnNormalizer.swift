@@ -37,6 +37,7 @@ enum RevenueRecognitionColumnNormalizer {
     static let warningTableSumMismatch = "revenue_recognition_table_sum_mismatch"
     static let warningNoneOfTheseOverridden = "jev_none_of_these_overridden"
     static let warningNoCategoryRows = "revenue_recognition_no_category_rows"
+    static let warningParallelDimensions = "revenue_recognition_parallel_dimensions_unresolved"
 
     static func normalize(
         _ result: ExtractedBreakdown,
@@ -91,8 +92,10 @@ enum RevenueRecognitionColumnNormalizer {
         let belowThreshold = confidence.map { $0 < confidenceThreshold } ?? true
         var (built, groupSumReview) = RevenueRecognitionCandidates.buildRows(
             table: table, column: column.column)
+        let parallelUnresolved = RevenueRecognitionCandidates.parallelDimensionsUnresolved(
+            table: table, column: column.column)
         var transposedWholeCompany: Double?
-        if built.isEmpty {
+        if built.isEmpty && !parallelUnresolved {
             let transposed = RevenueRecognitionCandidates.transposeMetricRow(
                 table: table, wholeCompanyColumn: column.column)
             built = transposed.rows
@@ -114,11 +117,12 @@ enum RevenueRecognitionColumnNormalizer {
         )
         var warnings: [String] = []
         var needsReview = belowThreshold || groupSumReview || tableSumReview
-            || resolved.forceReview || built.isEmpty
+            || resolved.forceReview || built.isEmpty || parallelUnresolved
         if belowThreshold { warnings.append(warningLowConfidence) }
         if resolved.forceReview { warnings.append(warningNoneOfTheseOverridden) }
-        if groupSumReview { warnings.append(warningGroupSumMismatch) }
+        if groupSumReview && !parallelUnresolved { warnings.append(warningGroupSumMismatch) }
         if tableSumReview { warnings.append(warningTableSumMismatch) }
+        if parallelUnresolved { warnings.append(warningParallelDimensions) }
         if built.isEmpty { warnings.append(warningNoCategoryRows) }
         BreakdownLLMAmountScale.applyPublicFlags(
             scale, needsReview: &needsReview, warnings: &warnings)

@@ -41,6 +41,7 @@ enum RevenueRecognitionCandidates {
         var items: [Item]
         var totals: [Total]
         var groups: [GroupHeader]
+        var structure: RevenueRecognitionTableStructure.Result = RevenueRecognitionTableStructure.undetermined
     }
 
     struct Item: Equatable {
@@ -116,9 +117,13 @@ enum RevenueRecognitionCandidates {
 
     /// 選んだ列のセルから行を組む。Jev は呼ばない。
     static func buildRows(table: ParsedTable, column: Int) -> (rows: [BuiltRow], needsReview: Bool) {
+        var table = table
+        var needsReview = false
+        if applyBusinessDimension(&table, column: column) {
+            needsReview = true
+        }
         let amounts = dataAmounts(table: table, column: column)
         var built: [BuiltRow] = []
-        var needsReview = false
 
         let itemsByGroup = Dictionary(grouping: table.items, by: \.group)
         let orderedGroups = uniqueGroups(in: table)
@@ -333,11 +338,8 @@ enum RevenueRecognitionCandidates {
 
     // MARK: - parse one table
 
-    private static func parseTable(
-        index: Int, grid: [[String]], table: BreakdownTable
-    ) -> ParsedTable {
-        let ncol = grid.map(\.count).max() ?? 0
-        let rows = grid.map { $0 + Array(repeating: "", count: max(0, ncol - $0.count)) }
+    /// 期間・単位の列見出しの直後。ラベルだけの次元見出し（地理的区分）はデータ扱い。
+    static func dataStartRow(_ rows: [[String]]) -> Int {
         var firstData = 0
         while firstData < rows.count {
             let row = rows[firstData]
@@ -347,6 +349,16 @@ enum RevenueRecognitionCandidates {
             if amounts || labelOnly { break }
             firstData += 1
         }
+        return firstData
+    }
+
+    private static func parseTable(
+        index: Int, grid: [[String]], table: BreakdownTable
+    ) -> ParsedTable {
+        let ncol = grid.map(\.count).max() ?? 0
+        let rows = grid.map { $0 + Array(repeating: "", count: max(0, ncol - $0.count)) }
+        let structure = RevenueRecognitionTableStructure.inspect(grid: rows)
+        let firstData = structure.headerRowCount
         var headers: [Int: String] = [:]
         for column in 1..<ncol {
             let parts = rows.prefix(firstData).compactMap { row -> String? in
@@ -418,7 +430,40 @@ enum RevenueRecognitionCandidates {
         return ParsedTable(
             tableIndex: index, grid: rows, headerRowCount: firstData, columnHeaders: headers,
             precedingCaption: table.precedingCaption, unitCaption: table.unitCaption,
-            items: items, totals: totals, groups: groups)
+            items: items, totals: totals, groups: groups, structure: structure)
+    }
+
+    /// 同一全社合計で閉じる並行次元は加算しない。事業軸は製品・サービスブロックだけ残す。
+    static func applyBusinessDimension(_ table: inout ParsedTable, column: Int) -> Bool {
+        let amounts = dataAmounts(table: table, column: column)
+        let whole = tableTotal(table: table, column: column)?.amount
+            ?? table.totals.compactMap { amounts[$0.row] }.last
+        let parallel = RevenueRecognitionTableStructure.parallelDimensionBlocks(
+            in: table.structure, grid: table.grid, column: column, tableTotal: whole)
+        guard parallel.count >= 2 else { return false }
+        guard let chosen = RevenueRecognitionTableStructure.businessBlock(in: parallel) else {
+            table.items = []
+            table.groups = []
+            return true
+        }
+        let keep = Set(chosen.itemRows)
+        table.items = table.items.filter { keep.contains($0.row) }.map { item in
+            var copy = item
+            copy.group = ""
+            return copy
+        }
+        table.groups = []
+        return false
+    }
+
+    static func parallelDimensionsUnresolved(table: ParsedTable, column: Int) -> Bool {
+        let amounts = dataAmounts(table: table, column: column)
+        let whole = tableTotal(table: table, column: column)?.amount
+            ?? table.totals.compactMap { amounts[$0.row] }.last
+        let parallel = RevenueRecognitionTableStructure.parallelDimensionBlocks(
+            in: table.structure, grid: table.grid, column: column, tableTotal: whole)
+        return parallel.count >= 2
+            && RevenueRecognitionTableStructure.businessBlock(in: parallel) == nil
     }
 
     /// 期間見出しか。`自` 接頭辞だけでは期間にしない（自社メディア広告）。

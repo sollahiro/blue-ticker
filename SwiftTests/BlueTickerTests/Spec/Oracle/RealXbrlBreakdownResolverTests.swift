@@ -192,6 +192,10 @@ import Foundation
         let labels = Self.resolvedLabels(snapshot)
         #expect(labels.contains("新規装置"))
         #expect(labels.contains("フィールドソリューション他"))
+        #expect(!labels.contains("日本"))
+        #expect(!labels.contains("地理的区分"))
+        #expect(snapshot?.needsReview == false)
+        #expect(snapshot?.denominator == 2_443_533_000_000)
         #expect(snapshot?.rows.contains {
             ($0.categoryGroup == "新規装置" || $0.labelRaw == "新規装置")
                 && $0.amount == 1_817_250_000_000
