@@ -116,33 +116,79 @@ import Testing
         #expect(total?.amount == 7_539_975)
     }
 
-    /// デンソー実表: 空の indent セルが rowspan=6 でカテゴリ行にコピーされる。
-    /// `自動車分野計` はグループ小計であり、サーマル等を落とさない。
-    @Test func densoRowspanIndentKeepsCategoriesUnderAutoGroup() async throws {
+    /// S100Y9T1 0105100 iXBRL: two-column label area. Blank `rowspan=6` outer cell,
+    /// inner category, then `自動車分野計` / `非車載事業分野` / `合計` with `colspan=2`.
+    /// Figures are the prior-year table in that file (verified from the iXBRL).
+    @Test func densoTwoColumnLabelAreaClosesBlankRowspanWithSubtotal() async throws {
+        let html = """
+            <p>前連結会計年度（自 2024年4月1日 至 2025年3月31日）</p>
+            <p>（単位：百万円）</p>
+            <table>
+              <tr><td></td><td></td><td>(単位：百万円)</td></tr>
+              <tr><td rowspan="6"></td><td>サーマルシステム</td><td>1,728,469</td></tr>
+              <tr><td>パワトレインシステム</td><td>1,438,591</td></tr>
+              <tr><td>モビリティエレクトロニクス</td><td>2,017,304</td></tr>
+              <tr><td>エレクトリフィケーションシステム</td><td>1,354,426</td></tr>
+              <tr><td>先進デバイス</td><td>388,803</td></tr>
+              <tr><td>その他</td><td>113,659</td></tr>
+              <tr><td colspan="2">自動車分野計</td><td>7,041,252</td></tr>
+              <tr><td colspan="2">非車載事業分野</td><td>120,525</td></tr>
+              <tr><td colspan="2">合計</td><td>7,161,777</td></tr>
+            </table>
+            """
+        let snapshot = try await run(html: html, docID: "S100Y9T1", fyEnd: "2025-03-31", pick: "t0_c2")
+        let segments = snapshot.rows.filter { $0.rowKind == "segment" }
+        let auto = [
+            ("サーマルシステム", 1_728_469),
+            ("パワトレインシステム", 1_438_591),
+            ("モビリティエレクトロニクス", 2_017_304),
+            ("エレクトリフィケーションシステム", 1_354_426),
+            ("先進デバイス", 388_803),
+            ("その他", 113_659),
+        ]
+        #expect(segments.filter { $0.categoryGroup == "自動車分野" }.count == 6)
+        for (name, amount) in auto {
+            #expect(segments.contains {
+                $0.category == name && $0.categoryGroup == "自動車分野"
+                    && $0.amount == Double(amount) * Financial.millionYen
+            })
+        }
+        #expect(
+            segments.filter { $0.categoryGroup == "自動車分野" }.reduce(0) { $0 + $1.amount }
+                == 7_041_252 * Financial.millionYen)
+        #expect(segments.contains {
+            $0.categoryGroup == "非車載事業分野" && $0.category == nil
+                && $0.amount == 120_525 * Financial.millionYen
+        })
+        #expect(!segments.contains { $0.label == "自動車分野計" || $0.categoryGroup == "自動車分野計" })
+        #expect(!segments.contains { $0.categoryGroup == "合計" })
+        #expect(snapshot.denominator == 7_161_777 * Financial.millionYen)
+        #expect(snapshot.needsReview == false)
+    }
+
+    /// Outer rowspan has text: that cell is category_group, the inner cell is category.
+    @Test func outerRowspanTextIsCategoryGroupInnerIsCategory() async throws {
         let html = """
             <p>当連結会計年度（自 2025年4月1日 至 2026年3月31日）</p>
             <p>（単位：百万円）</p>
             <table>
-              <tr><td></td><td></td><td>(単位：百万円)</td></tr>
-              <tr><td rowspan="6"></td><td>サーマルシステム</td><td>1,780,351</td></tr>
-              <tr><td>パワトレインシステム</td><td>1,479,737</td></tr>
-              <tr><td>モビリティエレクトロニクス</td><td>2,198,663</td></tr>
-              <tr><td>エレクトリフィケーションシステム</td><td>1,433,456</td></tr>
-              <tr><td>先進デバイス</td><td>390,274</td></tr>
-              <tr><td>その他</td><td>108,587</td></tr>
-              <tr><td colspan="2">自動車分野計</td><td>7,391,068</td></tr>
-              <tr><td colspan="2">非車載事業分野</td><td>148,907</td></tr>
-              <tr><td colspan="2">合計</td><td>7,539,975</td></tr>
+              <tr><td></td><td></td><td>当期</td></tr>
+              <tr><td rowspan="2">製品及びサービス</td><td>新規装置</td><td>1,817,250</td></tr>
+              <tr><td>フィールドソリューション他</td><td>626,282</td></tr>
+              <tr><td colspan="2">合計</td><td>2,443,533</td></tr>
             </table>
             """
-        let snapshot = try await run(html: html, docID: "S100Y9T1", fyEnd: "2026-03-31", pick: "t0_c2")
+        let snapshot = try await run(html: html, docID: "S100YEOO", fyEnd: "2026-03-31", pick: "t0_c2")
         let segments = snapshot.rows.filter { $0.rowKind == "segment" }
-        #expect(segments.contains { $0.category == "サーマルシステム" && $0.categoryGroup == "自動車分野" })
-        #expect(segments.contains { $0.category == "パワトレインシステム" })
-        #expect(segments.contains { $0.category == "モビリティエレクトロニクス" })
-        #expect(segments.contains { $0.categoryGroup == "非車載事業分野" && $0.category == nil })
-        #expect(!segments.contains { $0.label == "自動車分野計" || $0.categoryGroup == "自動車分野計" })
-        #expect(snapshot.denominator == 7_539_975 * Financial.millionYen)
+        #expect(segments.contains {
+            $0.categoryGroup == "製品及びサービス" && $0.category == "新規装置"
+                && $0.amount == 1_817_250 * Financial.millionYen
+        })
+        #expect(segments.contains {
+            $0.categoryGroup == "製品及びサービス" && $0.category == "フィールドソリューション他"
+        })
+        #expect(!segments.contains { $0.categoryGroup == "地理的区分" })
+        #expect(snapshot.denominator == 2_443_533 * Financial.millionYen)
         #expect(snapshot.needsReview == false)
     }
 

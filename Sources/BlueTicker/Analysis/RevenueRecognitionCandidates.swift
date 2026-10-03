@@ -280,14 +280,31 @@ enum RevenueRecognitionCandidates {
             .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    static func rowLabel(_ row: [String]) -> String {
+    /// 先頭から連続する非金額セル。Denso / 7416 のラベル域（空 rowspan + 内側ラベル）。
+    static func leadingLabelCells(_ row: [String]) -> [String] {
+        var cells: [String] = []
         for cell in row {
             let text = compactCell(cell)
-            if text.isEmpty { continue }
-            if isAmountCell(text) { continue }
-            return text
+            if isAmountCell(text) { break }
+            cells.append(text)
         }
-        return compactCell(row.first ?? "")
+        return cells
+    }
+
+    /// colspan で同じ文言が複製されたセルは1つにする。空の外側セルは落とす。
+    static func distinctLabelParts(_ cells: [String]) -> [String] {
+        var parts: [String] = []
+        for cell in cells {
+            if cell.isEmpty { continue }
+            if parts.last == cell { continue }
+            parts.append(cell)
+        }
+        return parts
+    }
+
+    /// ラベル域の内側（カテゴリ）。外側 rowspan 見出しは `distinctLabelParts` の先頭。
+    static func rowLabel(_ row: [String]) -> String {
+        distinctLabelParts(leadingLabelCells(row)).last ?? compactCell(row.first ?? "")
     }
 
     static func isAmountCell(_ raw: String) -> Bool {
@@ -345,32 +362,37 @@ enum RevenueRecognitionCandidates {
         var lastClosedRow = firstData - 1
         for i in firstData..<rows.count {
             let row = rows[i]
-            let rawLabel = compactCell(rowLabel(row))
-            if rawLabel.isEmpty { continue }
-            if isPeriodHeadingLabel(rawLabel) { continue }
-            let label = stripNoteMarker(rawLabel)
-            if label.isEmpty { continue }
-            let hasAmt = row.contains {
-                let cell = compactCell($0)
-                return cell != rawLabel && isAmountCell(cell)
-            }
-            if isTotalLabel(label) {
-                totals.append(Total(label: label, row: i))
+            let labelCells = leadingLabelCells(row)
+            let parts = distinctLabelParts(labelCells).map(stripNoteMarker).filter { !$0.isEmpty }
+            if parts.isEmpty { continue }
+            if parts.contains(where: isPeriodHeadingLabel) { continue }
+            let display = parts.last!
+            let hasAmt = row.dropFirst(labelCells.count).contains { isAmountCell($0) }
+            if isTotalLabel(display) {
+                totals.append(Total(label: display, row: i))
                 continue
             }
-            if isGroupSubtotalLabel(label) {
+            if isGroupSubtotalLabel(display) {
                 attachGroupSubtotal(
-                    stem: groupNameFromSubtotal(label), subtotalRow: i,
+                    stem: groupNameFromSubtotal(display), subtotalRow: i,
                     items: &items, groups: &groups, lastClosedRow: lastClosedRow)
                 group = ""
                 lastClosedRow = i
                 continue
             }
-            if !hasAmt {
-                group = rawLabel
-                groups.append(GroupHeader(group: rawLabel, row: i))
+            if parts.count >= 2, hasAmt {
+                let outer = parts[0]
+                let inner = parts[1]
+                items.append(Item(
+                    group: outer, label: inner, row: i, isPartial: isPartialItem(inner)))
                 continue
             }
+            if !hasAmt {
+                group = parts[0]
+                groups.append(GroupHeader(group: parts[0], row: i))
+                continue
+            }
+            let label = display
             let partial = isPartialItem(label)
             if partial {
                 var parentGroup = group
