@@ -156,10 +156,11 @@ import Foundation
         let labels = Self.resolvedLabels(snapshot)
         #expect(labels.contains("精密加工装置"))
         #expect(labels.contains("精密加工ツール"))
-        #expect(snapshot?.rows.contains {
-            ($0.categoryGroup == "精密加工装置" || $0.labelRaw == "精密加工装置")
-                && $0.amount == 273_957_000_000
-        } == true)
+        let precision: Bool = snapshot?.rows.contains { row in
+            (row.categoryGroup == "精密加工装置" || row.labelRaw == "精密加工装置")
+                && row.amount == 273_957_000_000
+        } == true
+        #expect(precision)
     }
 
     @Test func tokyoElectronResolvesViaRevenueRecognitionLLM() async throws {
@@ -194,12 +195,16 @@ import Foundation
         #expect(labels.contains("フィールドソリューション他"))
         #expect(!labels.contains("日本"))
         #expect(!labels.contains("地理的区分"))
-        #expect(snapshot?.needsReview == false)
-        #expect(snapshot?.denominator == 2_443_533_000_000)
-        #expect(snapshot?.rows.contains {
-            ($0.categoryGroup == "新規装置" || $0.labelRaw == "新規装置")
-                && $0.amount == 1_817_250_000_000
-        } == true)
+        let needsReview: Bool? = snapshot?.needsReview
+        let denominator: Double? = snapshot?.denominator
+        let expectedDenom: Double = 2_443_533_000_000
+        let equipment: Bool = snapshot?.rows.contains { row in
+            (row.categoryGroup == "新規装置" || row.labelRaw == "新規装置")
+                && row.amount == 1_817_250_000_000
+        } == true
+        #expect(needsReview == false)
+        #expect(denominator == expectedDenom)
+        #expect(equipment)
     }
 
     @Test func mitsubishiBusinessDenominatorKeepsCustomerContractWhenPLRevenueDiffers() async throws {
@@ -259,13 +264,16 @@ import Foundation
         #expect(snapshot?.denominatorTag == "llm_table_subtotal")
         let labels = Self.resolvedLabels(snapshot)
         #expect(labels.contains("地球環境エネルギー"))
-        #expect(labels.contains("S.L.C.") || labels.contains(where: { $0.contains("S.L.C") }))
+        let slc: Bool = labels.contains("S.L.C.") || labels.contains(where: { $0.contains("S.L.C") })
+        #expect(slc)
         #expect(labels.contains("電力ソリューション"))
-        #expect(snapshot?.rows.contains {
-            ($0.categoryGroup == "金属資源" || $0.category == "金属資源" || $0.labelRaw == "金属資源")
-                && $0.amount == 1_243_344_000_000
-        } == true)
-        #expect(snapshot?.needsReview == false)
+        let metal: Bool = snapshot?.rows.contains { row in
+            (row.categoryGroup == "金属資源" || row.category == "金属資源" || row.labelRaw == "金属資源")
+                && row.amount == 1_243_344_000_000
+        } == true
+        let needsReview: Bool? = snapshot?.needsReview
+        #expect(metal)
+        #expect(needsReview == false)
     }
 
     @Test func sumitomoResolvesViaSegmentInfoLLMFromProductTable() async throws {

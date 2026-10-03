@@ -6,9 +6,30 @@ import Testing
 @testable import BlueTickerCore
 
 @Suite struct RevenueRecognitionGoldenTests {
-    private static let cat7413 = [
+    private static let cat7413: [String] = [
         "油脂・乳製品", "調味料", "嗜好品・飲料", "乾物・雑穀", "副食品", "栄養補助食品", "その他",
     ]
+
+    private func yen(_ n: Int) -> Double { Double(n) * Financial.millionYen }
+    private func sen(_ n: Int) -> Double { Double(n) * 1_000.0 }
+
+    private func hasRow(
+        _ rows: [BreakdownRow],
+        group: String? = nil,
+        category: String? = nil,
+        nilCategory: Bool = false,
+        label: String? = nil,
+        amount: Double? = nil
+    ) -> Bool {
+        rows.contains { row in
+            if let group, row.categoryGroup != group { return false }
+            if nilCategory, row.category != nil { return false }
+            if let category, row.category != category { return false }
+            if let label, row.label != label { return false }
+            if let amount, row.amount != amount { return false }
+            return true
+        }
+    }
 
     @Test func explodeStackedParagraphsIntoRows() throws {
         let html = """
@@ -22,12 +43,16 @@ import Testing
             """
         let table = try XBRLTestSupport.parseFirstTable(html)
         let grid = BreakdownExtractor.expandTable(table)
-        #expect(grid.contains { $0.contains("油脂・乳製品") && $0.contains("410,483") })
-        #expect(grid.contains { $0.contains("調味料") && $0.contains("1,592,960") })
-        // bs4Text joins descendant text with no separator; that glued cell is the prod root cause.
-        #expect(!grid.contains { $0.contains("油脂・乳製品調味料") })
-        #expect(!grid.contains { $0.contains("410,4831,592,960") })
-        #expect(grid.filter { $0.contains("油脂・乳製品") }.count == 1)
+        let oils: Bool = grid.contains { $0.contains("油脂・乳製品") && $0.contains("410,483") }
+        let seasoning: Bool = grid.contains { $0.contains("調味料") && $0.contains("1,592,960") }
+        let gluedLabel: Bool = grid.contains { $0.contains("油脂・乳製品調味料") }
+        let gluedAmount: Bool = grid.contains { $0.contains("410,4831,592,960") }
+        let oilsCount: Int = grid.filter { $0.contains("油脂・乳製品") }.count
+        #expect(oils)
+        #expect(seasoning)
+        #expect(gluedLabel == false)
+        #expect(gluedAmount == false)
+        #expect(oilsCount == 1)
     }
 
     @Test func headerStackedParagraphsWithoutAmountsStayOneRow() throws {
@@ -42,9 +67,14 @@ import Testing
             </table>
             """
         let grid = BreakdownExtractor.expandTable(try XBRLTestSupport.parseFirstTable(html))
-        #expect(grid.count == 2)
-        #expect(grid[0].contains { $0.contains("医薬品販売による収益") })
-        #expect(!grid.contains { $0.contains("医薬品販売") && !$0.contains("による収益") && $0.contains("226,140") })
+        let rowCount: Int = grid.count
+        let joinedCaption: Bool = grid[0].contains { $0.contains("医薬品販売による収益") }
+        let splitCaption: Bool = grid.contains {
+            $0.contains("医薬品販売") && !$0.contains("による収益") && $0.contains("226,140")
+        }
+        #expect(rowCount == 2)
+        #expect(joinedCaption)
+        #expect(splitCaption == false)
     }
 
     @Test func periodAndUnitStackedParagraphsDoNotExplodeGeographyHeader() throws {
@@ -59,9 +89,13 @@ import Testing
             </table>
             """
         let grid = BreakdownExtractor.expandTable(try XBRLTestSupport.parseFirstTable(html))
-        #expect(grid.count == 2)
-        #expect(grid[0].contains { $0.contains("前連結会計年度") && $0.contains("百万円") })
-        #expect(grid[1] == ["日本", "100", "110"])
+        let rowCount: Int = grid.count
+        let stackedHeader: Bool = grid[0].contains { $0.contains("前連結会計年度") && $0.contains("百万円") }
+        let japanRow: [String] = grid[1]
+        let expectedJapan: [String] = ["日本", "100", "110"]
+        #expect(rowCount == 2)
+        #expect(stackedHeader)
+        #expect(japanRow == expectedJapan)
     }
 
     @Test func remainingPerformanceAndContractCostTablesAreSkipped() {
@@ -98,22 +132,41 @@ import Testing
                 period: "当期")
         ])
         let parsed = table[0]
-        #expect(parsed.items.map(\.label).contains("サーマルシステム"))
-        #expect(parsed.items.map(\.label).contains("パワトレインシステム"))
-        #expect(parsed.items.contains { $0.label == "サーマルシステム" && $0.group == "自動車分野" })
-        #expect(parsed.groups.map(\.group).contains("自動車分野"))
-        #expect(Set(parsed.totals.map(\.label)).contains("合計"))
-        #expect(!Set(parsed.totals.map(\.label)).contains("自動車分野計"))
-        #expect(!parsed.items.map(\.label).contains("自動車分野計"))
-        #expect(RevenueRecognitionCandidates.isGroupSubtotalLabel("自動車分野計"))
-        #expect(!RevenueRecognitionCandidates.isTotalLabel("自動車分野計"))
+        let itemLabels: [String] = parsed.items.map(\.label)
+        let hasThermalItem: Bool = parsed.items.contains {
+            $0.label == "サーマルシステム" && $0.group == "自動車分野"
+        }
+        let groups: [String] = parsed.groups.map(\.group)
+        let totals: Set<String> = Set(parsed.totals.map(\.label))
+        let groupCloserIsGroup: Bool = RevenueRecognitionCandidates.isGroupSubtotalLabel("自動車分野計")
+        let groupCloserIsTotal: Bool = RevenueRecognitionCandidates.isTotalLabel("自動車分野計")
+        #expect(itemLabels.contains("サーマルシステム"))
+        #expect(itemLabels.contains("パワトレインシステム"))
+        #expect(hasThermalItem)
+        #expect(groups.contains("自動車分野"))
+        #expect(totals.contains("合計"))
+        #expect(totals.contains("自動車分野計") == false)
+        #expect(itemLabels.contains("自動車分野計") == false)
+        #expect(groupCloserIsGroup)
+        #expect(groupCloserIsTotal == false)
         let (rows, _) = RevenueRecognitionCandidates.buildRows(table: parsed, column: 2)
-        #expect(rows.contains { $0.category == "サーマルシステム" && $0.categoryGroup == "自動車分野" })
-        #expect(rows.contains { $0.categoryGroup == "非車載事業分野" && $0.category == nil })
-        #expect(!rows.contains { $0.categoryGroup.contains("自動車分野計") || $0.category == "自動車分野計" })
+        let thermalRow: Bool = rows.contains {
+            $0.category == "サーマルシステム" && $0.categoryGroup == "自動車分野"
+        }
+        let otherRow: Bool = rows.contains {
+            $0.categoryGroup == "非車載事業分野" && $0.category == nil
+        }
+        let closerAsRow: Bool = rows.contains {
+            $0.categoryGroup.contains("自動車分野計") || $0.category == "自動車分野計"
+        }
         let total = RevenueRecognitionCandidates.tableTotal(table: parsed, column: 2)
-        #expect(total?.label == "合計")
-        #expect(total?.amount == 7_539_975)
+        let totalLabel: String? = total?.label
+        let totalAmount: Double? = total?.amount
+        #expect(thermalRow)
+        #expect(otherRow)
+        #expect(closerAsRow == false)
+        #expect(totalLabel == "合計")
+        #expect(totalAmount == 7_539_975)
     }
 
     /// S100Y9T1 0105100 iXBRL: two-column label area. Blank `rowspan=6` outer cell,
@@ -138,7 +191,7 @@ import Testing
             """
         let snapshot = try await run(html: html, docID: "S100Y9T1", fyEnd: "2025-03-31", pick: "t0_c2")
         let segments = snapshot.rows.filter { $0.rowKind == "segment" }
-        let auto = [
+        let auto: [(String, Int)] = [
             ("サーマルシステム", 1_728_469),
             ("パワトレインシステム", 1_438_591),
             ("モビリティエレクトロニクス", 2_017_304),
@@ -146,24 +199,32 @@ import Testing
             ("先進デバイス", 388_803),
             ("その他", 113_659),
         ]
-        #expect(segments.filter { $0.categoryGroup == "自動車分野" }.count == 6)
+        let autoCount: Int = segments.filter { $0.categoryGroup == "自動車分野" }.count
+        #expect(autoCount == 6)
         for (name, amount) in auto {
-            #expect(segments.contains {
-                $0.category == name && $0.categoryGroup == "自動車分野"
-                    && $0.amount == Double(amount) * Financial.millionYen
-            })
+            let expected: Double = yen(amount)
+            let found: Bool = hasRow(
+                segments, group: "自動車分野", category: name, amount: expected)
+            #expect(found)
         }
-        #expect(
-            segments.filter { $0.categoryGroup == "自動車分野" }.reduce(0) { $0 + $1.amount }
-                == 7_041_252 * Financial.millionYen)
-        #expect(segments.contains {
-            $0.categoryGroup == "非車載事業分野" && $0.category == nil
-                && $0.amount == 120_525 * Financial.millionYen
-        })
-        #expect(!segments.contains { $0.label == "自動車分野計" || $0.categoryGroup == "自動車分野計" })
-        #expect(!segments.contains { $0.categoryGroup == "合計" })
-        #expect(snapshot.denominator == 7_161_777 * Financial.millionYen)
-        #expect(snapshot.needsReview == false)
+        let autoSum: Double = segments.filter { $0.categoryGroup == "自動車分野" }
+            .reduce(0) { $0 + $1.amount }
+        let expectedAutoSum: Double = yen(7_041_252)
+        #expect(autoSum == expectedAutoSum)
+        let other: Bool = hasRow(
+            segments, group: "非車載事業分野", nilCategory: true, amount: yen(120_525))
+        let closerAsRow: Bool = segments.contains {
+            $0.label == "自動車分野計" || $0.categoryGroup == "自動車分野計"
+        }
+        let totalAsRow: Bool = segments.contains { $0.categoryGroup == "合計" }
+        let denominator: Double = snapshot.denominator
+        let expectedDenom: Double = yen(7_161_777)
+        let needsReview: Bool = snapshot.needsReview
+        #expect(other)
+        #expect(closerAsRow == false)
+        #expect(totalAsRow == false)
+        #expect(denominator == expectedDenom)
+        #expect(needsReview == false)
     }
 
     /// Outer rowspan has text: that cell is category_group, the inner cell is category.
@@ -182,16 +243,19 @@ import Testing
             """
         let snapshot = try await run(html: html, docID: "S100YEOO", fyEnd: "2026-03-31", pick: "t0_c2")
         let segments = snapshot.rows.filter { $0.rowKind == "segment" }
-        #expect(segments.contains {
-            $0.categoryGroup == "製品及びサービス" && $0.category == "新規装置"
-                && $0.amount == 1_817_250 * Financial.millionYen
-        })
-        #expect(segments.contains {
-            $0.categoryGroup == "製品及びサービス" && $0.category == "フィールドソリューション他"
-        })
-        #expect(!segments.contains { $0.categoryGroup == "地理的区分" })
-        #expect(snapshot.denominator == 2_443_533 * Financial.millionYen)
-        #expect(snapshot.needsReview == false)
+        let equipment: Bool = hasRow(
+            segments, group: "製品及びサービス", category: "新規装置", amount: yen(1_817_250))
+        let solutions: Bool = hasRow(
+            segments, group: "製品及びサービス", category: "フィールドソリューション他")
+        let geo: Bool = segments.contains { $0.categoryGroup == "地理的区分" }
+        let denominator: Double = snapshot.denominator
+        let expectedDenom: Double = yen(2_443_533)
+        let needsReview: Bool = snapshot.needsReview
+        #expect(equipment)
+        #expect(solutions)
+        #expect(geo == false)
+        #expect(denominator == expectedDenom)
+        #expect(needsReview == false)
     }
 
     /// S100YEOO 0105010: 単一ラベル列。地理的区分と製品及びサービスは同じ全社合計の並行次元。
@@ -219,20 +283,33 @@ import Testing
             """
         let snapshot = try await run(html: html, docID: "S100YEOO", fyEnd: "2026-03-31", pick: "t0_c2")
         let segments = snapshot.rows.filter { $0.rowKind == "segment" }
-        #expect(segments.count == 2)
-        #expect(segments.contains {
+        let segmentCount: Int = segments.count
+        let expectedEquipment: Double = yen(1_817_250)
+        let expectedSolutions: Double = yen(626_282)
+        let equipment: Bool = segments.contains {
             ($0.categoryGroup == "新規装置" || $0.category == "新規装置")
-                && $0.amount == 1_817_250 * Financial.millionYen
-        })
-        #expect(segments.contains {
+                && $0.amount == expectedEquipment
+        }
+        let solutions: Bool = segments.contains {
             ($0.categoryGroup == "フィールドソリューション他" || $0.category == "フィールドソリューション他")
-                && $0.amount == 626_282 * Financial.millionYen
-        })
-        #expect(!segments.contains { $0.label?.contains("注") == true })
-        #expect(!segments.contains { $0.categoryGroup == "地理的区分" || $0.categoryGroup == "日本" })
-        #expect(!segments.contains { $0.categoryGroup == "製品及びサービス" })
-        #expect(snapshot.denominator == 2_443_533 * Financial.millionYen)
-        #expect(snapshot.needsReview == false)
+                && $0.amount == expectedSolutions
+        }
+        let noteInLabel: Bool = segments.contains { $0.label?.contains("注") == true }
+        let geoKept: Bool = segments.contains {
+            $0.categoryGroup == "地理的区分" || $0.categoryGroup == "日本"
+        }
+        let headingKept: Bool = segments.contains { $0.categoryGroup == "製品及びサービス" }
+        let denominator: Double = snapshot.denominator
+        let expectedDenom: Double = yen(2_443_533)
+        let needsReview: Bool = snapshot.needsReview
+        #expect(segmentCount == 2)
+        #expect(equipment)
+        #expect(solutions)
+        #expect(noteInLabel == false)
+        #expect(geoKept == false)
+        #expect(headingKept == false)
+        #expect(denominator == expectedDenom)
+        #expect(needsReview == false)
     }
 
     /// 三菱商事横結合: `合計` 列は報告セグメント小計 13,939,592。分母は `連結金額` 13,948,091。
@@ -263,18 +340,25 @@ import Testing
             </table>
             """
         let snapshot = try await run(html: html, docID: "S100YB25", fyEnd: "2026-03-31", pick: "t0_c4")
-        #expect(snapshot.denominator == 13_948_091 * Financial.millionYen)
-        #expect(snapshot.rows.contains {
-            $0.categoryGroup == "金属資源" && $0.amount == 1_243_344 * Financial.millionYen
-        })
-        #expect(!snapshot.rows.contains { $0.categoryGroup == "合計" || $0.categoryGroup == "連結金額" })
-        #expect(snapshot.needsReview == false)
+        let denominator: Double = snapshot.denominator
+        let expectedDenom: Double = yen(13_948_091)
+        let metal: Bool = hasRow(snapshot.rows, group: "金属資源", amount: yen(1_243_344))
+        let totalAsRow: Bool = snapshot.rows.contains {
+            $0.categoryGroup == "合計" || $0.categoryGroup == "連結金額"
+        }
+        let needsReview: Bool = snapshot.needsReview
+        #expect(denominator == expectedDenom)
+        #expect(metal)
+        #expect(totalAsRow == false)
+        #expect(needsReview == false)
     }
 
     @Test func geographyTableWithoutStackedParagraphsIsUnchanged() throws {
         let html = "<table><tr><td>日本</td><td>100</td></tr><tr><td>アジア</td><td>50</td></tr></table>"
         let table = try XBRLTestSupport.parseFirstTable(html)
-        #expect(BreakdownExtractor.expandTable(table) == [["日本", "100"], ["アジア", "50"]])
+        let grid: [[String]] = BreakdownExtractor.expandTable(table)
+        let expected: [[String]] = [["日本", "100"], ["アジア", "50"]]
+        #expect(grid == expected)
     }
 
     @Test func ownMediaAdIsCategoryNotPeriodHeading() {
@@ -294,11 +378,17 @@ import Testing
         #expect(segments[0].label == "油脂・乳製品")
         #expect(segments[0].categoryGroup == "油脂・乳製品")
         #expect(segments[0].label != "油脂")
-        #expect(segments[0].amount == 410_483 * 1_000)
+        let amount0: Double = segments[0].amount
+        let expected0: Double = sen(410_483)
+        #expect(amount0 == expected0)
         #expect(segments[1].label == "調味料")
-        #expect(segments[1].amount == 1_592_960 * 1_000)
-        #expect(!segments.contains { $0.label?.contains("油脂・乳製品調味料") == true })
-        #expect(!segments.contains { $0.label == "油脂" })
+        let amount1: Double = segments[1].amount
+        let expected1: Double = sen(1_592_960)
+        #expect(amount1 == expected1)
+        let glued: Bool = segments.contains { $0.label?.contains("油脂・乳製品調味料") == true }
+        let oilsOnly: Bool = segments.contains { $0.label == "油脂" }
+        #expect(glued == false)
+        #expect(oilsOnly == false)
     }
 
     @Test func r40s7413CandidatesAndRows() async throws {
@@ -334,11 +424,15 @@ import Testing
         )
         let snapshot = try await run(html: html, docID: "S100W6GR", fyEnd: "2025-03-31", pick: "t1_c1")
         let parsed = try parsedCurrent(html)
-        #expect(parsed.items.map(\.label) == cats)
+        let labels: [String] = parsed.items.map(\.label)
+        #expect(labels == cats)
         #expect(parsed.groups.isEmpty)
-        #expect(Set(parsed.totals.map(\.label)).contains("外部顧客への売上高"))
+        let totals: Set<String> = Set(parsed.totals.map(\.label))
+        #expect(totals.contains("外部顧客への売上高"))
         try assertFlatRows(snapshot, groups: cats, amounts: amounts, unit: 1_000)
-        #expect(snapshot.denominator == 21_954_062 * 1_000)
+        let denominator: Double = snapshot.denominator
+        let expectedDenom: Double = sen(21_954_062)
+        #expect(denominator == expectedDenom)
     }
 
     /// 272A S100YSCR: prod currently stores amounts 1000× too large (百万円 applied to a
@@ -358,15 +452,23 @@ import Testing
             html: priorThen(currentHTML: current), docID: "S100YSCR", fyEnd: "2026-04-30",
             pick: "t1_c1")
         let parsed = try parsedCurrent(priorThen(currentHTML: current))
-        #expect(parsed.items.map(\.label) == cats)
+        let parsedLabels: [String] = parsed.items.map(\.label)
+        #expect(parsedLabels == cats)
         #expect(parsed.groups.isEmpty)
         try assertFlatRows(snapshot, groups: cats, amounts: amounts, unit: 1_000)
-        #expect(snapshot.denominator == 21_925_876 * 1_000)
-        #expect(snapshot.rows[0].amount == 1_698_931 * 1_000)
-        #expect(snapshot.rows[0].amount != 1_698_931 * Financial.millionYen)
-        #expect(snapshot.denominator != 21_925_876 * Financial.millionYen)
+        let denominator: Double = snapshot.denominator
+        let expectedDenom: Double = sen(21_925_876)
+        let amount0: Double = snapshot.rows[0].amount
+        let expected0: Double = sen(1_698_931)
+        let notMillion: Double = yen(1_698_931)
+        let denomNotMillion: Double = yen(21_925_876)
+        let glued: Bool = snapshot.rows.contains { $0.label?.contains("工事表示板・標識仮設防護柵") == true }
+        #expect(denominator == expectedDenom)
+        #expect(amount0 == expected0)
+        #expect(amount0 != notMillion)
+        #expect(denominator != denomNotMillion)
         #expect(snapshot.rows[0].label == "工事表示板・標識")
-        #expect(!snapshot.rows.contains { $0.label?.contains("工事表示板・標識仮設防護柵") == true })
+        #expect(glued == false)
     }
 
     @Test func z42g7532NestedCandidatesAndRows() async throws {
@@ -377,13 +479,18 @@ import Testing
             facts: [])
         let parsed = RevenueRecognitionCandidates.parse(tables: extracted.tables)
         let current = try #require(parsed.first { $0.tableIndex == 1 } ?? parsed.last)
-        #expect(current.groups.map(\.group) == [
+        let groups: [String] = current.groups.map(\.group)
+        let expectedGroups: [String] = [
             "（ディスカウントストア）", "（ＵＮＹ事業）", "（海外）", "（その他）",
-        ])
-        #expect(current.items.count == 15)
-        #expect(Set(current.totals.map(\.label)).isSuperset(of: [
+        ]
+        #expect(groups == expectedGroups)
+        let itemCount: Int = current.items.count
+        #expect(itemCount == 15)
+        let totals: Set<String> = Set(current.totals.map(\.label))
+        let expectedTotals: Set<String> = [
             "顧客との契約から生じる収益", "その他の収益", "外部顧客への売上高",
-        ]))
+        ]
+        #expect(totals.isSuperset(of: expectedTotals))
         let snapshot = try await run(html: html, docID: "S100Z42G", fyEnd: "2026-06-30", pick: "t1_c4")
         let expected: [(String, String, Int)] = [
             ("（ディスカウントストア）", "家電製品", 93_241),
@@ -403,19 +510,29 @@ import Testing
             ("（その他）", "外販事業", 36_578),
         ]
         let segments = snapshot.rows.filter { $0.rowKind == "segment" }
-        #expect(segments.count == 15)
-        #expect(segments.reduce(0) { $0 + $1.amount } == 2_365_707 * Financial.millionYen)
+        let segmentCount: Int = segments.count
+        #expect(segmentCount == 15)
+        let segmentSum: Double = segments.reduce(0) { $0 + $1.amount }
+        let expectedSum: Double = yen(2_365_707)
+        #expect(segmentSum == expectedSum)
         for (index, row) in expected.enumerated() {
-            #expect(segments[index].categoryGroup == row.0)
-            #expect(segments[index].category == row.1)
-            #expect(segments[index].amount == Double(row.2) * Financial.millionYen)
-            #expect(
-                segments[index].label
-                    == RevenueRecognitionCandidates.displayLabel(
-                        categoryGroup: row.0, category: row.1))
+            let group: String? = segments[index].categoryGroup
+            let category: String? = segments[index].category
+            let amount: Double = segments[index].amount
+            let expectedAmount: Double = yen(row.2)
+            let expectedLabel: String = RevenueRecognitionCandidates.displayLabel(
+                categoryGroup: row.0, category: row.1)
+            let label: String? = segments[index].label
+            #expect(group == row.0)
+            #expect(category == row.1)
+            #expect(amount == expectedAmount)
+            #expect(label == expectedLabel)
         }
-        #expect(snapshot.denominator == 2_445_260 * Financial.millionYen)
-        #expect(snapshot.needsReview == false)
+        let denominator: Double = snapshot.denominator
+        let expectedDenom: Double = yen(2_445_260)
+        let needsReview: Bool = snapshot.needsReview
+        #expect(denominator == expectedDenom)
+        #expect(needsReview == false)
     }
 
     @Test func dedicatedSingleSegmentDoesNotSkipRevenueRecognitionTables() async throws {
@@ -482,13 +599,19 @@ import Testing
 
             let parsed = RevenueRecognitionCandidates.parse(tables: extracted.tables)
             #expect(parsed[0].items.isEmpty)
-            #expect(Set(parsed[0].totals.map(\.label)).isSuperset(of: [
+            let totals: Set<String> = Set(parsed[0].totals.map(\.label))
+            let expectedTotals: Set<String> = [
                 "顧客との契約から生じる収益", "その他の源泉から生じる収益", "外部顧客への売上高",
-            ]))
+            ]
+            #expect(totals.isSuperset(of: expectedTotals))
             let transposed = RevenueRecognitionCandidates.transposeMetricRow(
                 table: parsed[0], wholeCompanyColumn: 2)
-            #expect(transposed.rows.isEmpty)
-            #expect(!transposed.rows.contains { $0.categoryGroup.contains("前連結会計年度") })
+            let transposedEmpty: Bool = transposed.rows.isEmpty
+            let periodAsCategory: Bool = transposed.rows.contains {
+                $0.categoryGroup.contains("前連結会計年度")
+            }
+            #expect(transposedEmpty)
+            #expect(periodAsCategory == false)
 
             let decider = FakeRevenueRecognitionColumnDecider(selected: "t0_c2", confidence: 0.97)
             let (snapshot, _, audit) = await BusinessBreakdownResolver.resolve(
@@ -590,10 +713,14 @@ import Testing
         #expect(snapshot.rows.count == 2)
         #expect(snapshot.rows[0].categoryGroup == "海外")
         #expect(snapshot.rows[0].category == nil)
-        #expect(snapshot.rows[0].amount == 1_000 * Financial.millionYen)
+        let overseas: Double = snapshot.rows[0].amount
+        let expectedOverseas: Double = yen(1_000)
+        #expect(overseas == expectedOverseas)
         #expect(snapshot.rows[1].category == "うち中国")
         #expect(snapshot.rows[1].label == "うち中国")
-        #expect(snapshot.rows[1].amount == 300 * Financial.millionYen)
+        let china: Double = snapshot.rows[1].amount
+        let expectedChina: Double = yen(300)
+        #expect(china == expectedChina)
     }
 
     @Test func noneOfTheseLowPNoneTakesBestColumnAndNeedsReview() async throws {
@@ -646,9 +773,12 @@ import Testing
         let snapshot = try await run(html: html, docID: "S100YRWH", fyEnd: "2026-04-30", pick: "t1_c1")
         try assertFlatRows(
             snapshot, groups: ["不動産及び設備", "その他"], amounts: [14_672_799, 3_685_324], unit: 1_000)
-        #expect(snapshot.denominator == 18_358_123 * 1_000)
         #expect(snapshot.needsReview == false)
-        #expect(!snapshot.rows.contains { $0.label == "顧客との契約から生じる収益" })
+        let denominator: Double = snapshot.denominator
+        let expectedDenom: Double = sen(18_358_123)
+        #expect(denominator == expectedDenom)
+        let totalAsRow: Bool = snapshot.rows.contains { $0.label == "顧客との契約から生じる収益" }
+        #expect(totalAsRow == false)
     }
 
     @Test func yjhn6904GaibuKokyakuNiTaisuruIsTotal() async throws {
@@ -667,8 +797,11 @@ import Testing
         let snapshot = try await run(html: html, docID: "S100YJHN", fyEnd: "2026-03-31", pick: "t0_c5")
         try assertFlatRows(
             snapshot, groups: ["製品", "その他"], amounts: [42_163_192, 29_116], unit: 1_000)
-        #expect(snapshot.denominator == 42_192_309 * 1_000)
-        #expect(!snapshot.rows.contains { $0.label == "外部顧客に対する売上高" })
+        let denominator: Double = snapshot.denominator
+        let expectedDenom: Double = sen(42_192_309)
+        let totalAsRow: Bool = snapshot.rows.contains { $0.label == "外部顧客に対する売上高" }
+        #expect(denominator == expectedDenom)
+        #expect(totalAsRow == false)
         #expect(snapshot.needsReview == false)
         #expect(RevenueRecognitionCandidates.isTotalLabel("外部顧客に対する売上高"))
         #expect(RevenueRecognitionCandidates.isTotalLabel("外部顧客への収益"))
@@ -701,16 +834,28 @@ import Testing
             """
         let snapshot = try await run(html: html, docID: "S100Y951", fyEnd: "2026-03-31", pick: "t0_c4")
         let segments = snapshot.rows.filter { $0.rowKind == "segment" }
-        #expect(segments.contains { $0.categoryGroup == "ZOZOTOWN事業" && $0.category == nil && $0.amount == 157_416 * Financial.millionYen })
-        #expect(segments.contains { $0.category == "（買取・製造販売）" && $0.amount == 2_630 * Financial.millionYen })
-        #expect(segments.contains { $0.category == "（受託販売）" && $0.amount == 134_673 * Financial.millionYen })
-        #expect(segments.contains { $0.category == "（USED販売）" && $0.amount == 20_113 * Financial.millionYen })
-        #expect(segments.contains { $0.categoryGroup == "LINEヤフーコマース" && $0.category == nil })
-        #expect(!segments.contains { $0.categoryGroup == "（買取・製造販売）" && $0.category == nil })
+        let zozo: Bool = hasRow(
+            segments, group: "ZOZOTOWN事業", nilCategory: true, amount: yen(157_416))
+        let buy: Bool = hasRow(segments, category: "（買取・製造販売）", amount: yen(2_630))
+        let consigned: Bool = hasRow(segments, category: "（受託販売）", amount: yen(134_673))
+        let used: Bool = hasRow(segments, category: "（USED販売）", amount: yen(20_113))
+        let yahoo: Bool = hasRow(segments, group: "LINEヤフーコマース", nilCategory: true)
+        let parenAsGroup: Bool = hasRow(segments, group: "（買取・製造販売）", nilCategory: true)
         let full = segments.filter { $0.category == nil }
-        #expect(full.reduce(0) { $0 + $1.amount } == (157_416 + 24_179 + 5_776 + 1_325 + 11_884 + 27_791) * Financial.millionYen)
-        #expect(snapshot.denominator == 228_373 * Financial.millionYen)
-        #expect(snapshot.needsReview == false)
+        let fullSum: Double = full.reduce(0) { $0 + $1.amount }
+        let expectedFull: Double = yen(157_416 + 24_179 + 5_776 + 1_325 + 11_884 + 27_791)
+        let denominator: Double = snapshot.denominator
+        let expectedDenom: Double = yen(228_373)
+        let needsReview: Bool = snapshot.needsReview
+        #expect(zozo)
+        #expect(buy)
+        #expect(consigned)
+        #expect(used)
+        #expect(yahoo)
+        #expect(parenAsGroup == false)
+        #expect(fullSum == expectedFull)
+        #expect(denominator == expectedDenom)
+        #expect(needsReview == false)
     }
 
     @Test func yjc56482HeadingParagraphDoesNotTakeRobotAmounts() throws {
@@ -763,11 +908,18 @@ import Testing
             </table>
             """
         let grid = BreakdownExtractor.expandTable(try XBRLTestSupport.parseFirstTable(html))
-        #expect(grid.contains { $0.contains("ロボット") && $0.contains("14,947,321") })
-        #expect(grid.contains { $0.contains("特注機") && $0.contains("3,161,936") })
-        #expect(grid.contains { $0.contains("部品・保守サービス") && $0.contains("4,992,115") })
-        #expect(!grid.contains { $0.contains("製品及びサービス別") && $0.contains("14,947,321") })
-        #expect(!grid.contains { $0.contains("ロボット") && $0.contains("3,161,936") })
+        let robot: Bool = grid.contains { $0.contains("ロボット") && $0.contains("14,947,321") }
+        let custom: Bool = grid.contains { $0.contains("特注機") && $0.contains("3,161,936") }
+        let parts: Bool = grid.contains { $0.contains("部品・保守サービス") && $0.contains("4,992,115") }
+        let headingTakesAmount: Bool = grid.contains {
+            $0.contains("製品及びサービス別") && $0.contains("14,947,321")
+        }
+        let robotTakesCustom: Bool = grid.contains { $0.contains("ロボット") && $0.contains("3,161,936") }
+        #expect(robot)
+        #expect(custom)
+        #expect(parts)
+        #expect(headingTakesAmount == false)
+        #expect(robotTakesCustom == false)
     }
 
     @Test func yjc56482CandidatesAndRows() async throws {
@@ -823,13 +975,25 @@ import Testing
             """
         let snapshot = try await run(html: html, docID: "S100YJC5", fyEnd: "2026-03-31", pick: "t0_c5")
         let segments = snapshot.rows.filter { $0.rowKind == "segment" }
-        #expect(segments.map(\.label) == ["ロボット", "特注機", "部品・保守サービス"])
-        #expect(segments.map(\.categoryGroup) == ["製品及びサービス別", "製品及びサービス別", "製品及びサービス別"])
-        #expect(segments.map(\.category) == ["ロボット", "特注機", "部品・保守サービス"])
-        #expect(segments.map(\.amount) == [14_947_321 * 1_000.0, 3_161_936 * 1_000.0, 4_992_115 * 1_000.0])
-        #expect(snapshot.denominator == 23_101_373 * 1_000)
-        #expect(snapshot.needsReview == false)
-        #expect(!snapshot.rows.contains { $0.label == "製品及びサービス別" })
+        let labels: [String?] = segments.map(\.label)
+        let expectedLabels: [String?] = ["ロボット", "特注機", "部品・保守サービス"]
+        let groups: [String?] = segments.map(\.categoryGroup)
+        let expectedGroups: [String?] = ["製品及びサービス別", "製品及びサービス別", "製品及びサービス別"]
+        let categories: [String?] = segments.map(\.category)
+        let expectedCategories: [String?] = ["ロボット", "特注機", "部品・保守サービス"]
+        let amounts: [Double] = segments.map(\.amount)
+        let expectedAmounts: [Double] = [sen(14_947_321), sen(3_161_936), sen(4_992_115)]
+        let denominator: Double = snapshot.denominator
+        let expectedDenom: Double = sen(23_101_373)
+        let needsReview: Bool = snapshot.needsReview
+        let headingAsRow: Bool = snapshot.rows.contains { $0.label == "製品及びサービス別" }
+        #expect(labels == expectedLabels)
+        #expect(groups == expectedGroups)
+        #expect(categories == expectedCategories)
+        #expect(amounts == expectedAmounts)
+        #expect(denominator == expectedDenom)
+        #expect(needsReview == false)
+        #expect(headingAsRow == false)
     }
 
     @Test func yljd7416LabelsInSecondColumn() async throws {
@@ -854,8 +1018,11 @@ import Testing
         #expect(labels.contains("中衣料"))
         #expect(labels.contains("軽衣料"))
         #expect(labels.contains("補修加工賃収入"))
-        #expect(snapshot.rows.contains { $0.label == "重衣料" && $0.amount == 15_047_573 * 1_000 })
-        #expect(snapshot.denominator == 35_212_653 * 1_000)
+        let heavy: Bool = hasRow(snapshot.rows, label: "重衣料", amount: sen(15_047_573))
+        let denominator: Double = snapshot.denominator
+        let expectedDenom: Double = sen(35_212_653)
+        #expect(heavy)
+        #expect(denominator == expectedDenom)
     }
 
     @Test func yjee1807WrappedSameAmountRowsMerge() {
@@ -970,25 +1137,30 @@ import Testing
         )
         let (rows, needsReview) = RevenueRecognitionCandidates.buildRows(table: table, column: 1)
         #expect(needsReview)
-        #expect(rows.allSatisfy { !$0.isPartial })
-        #expect(Set(rows.map(\.category)) == ["関東", "関西"])
-        #expect(!RevenueRecognitionCandidates.sumMatches(700, subtotal: 1_000, itemCount: 2))
-        #expect(RevenueRecognitionCandidates.sumMatches(998, subtotal: 1_000, itemCount: 2))
+        let noPartial: Bool = rows.allSatisfy { !$0.isPartial }
+        let categories: Set<String?> = Set(rows.map(\.category))
+        let expectedCategories: Set<String?> = ["関東", "関西"]
+        let sumOff: Bool = RevenueRecognitionCandidates.sumMatches(700, subtotal: 1_000, itemCount: 2)
+        let sumOn: Bool = RevenueRecognitionCandidates.sumMatches(998, subtotal: 1_000, itemCount: 2)
+        #expect(noPartial)
+        #expect(categories == expectedCategories)
+        #expect(sumOff == false)
+        #expect(sumOn)
     }
 
     @Test func stripNoteMarkerFromTotalAndDisplayLabelIsCategoryOrGroup() {
         #expect(RevenueRecognitionCandidates.stripNoteMarker("その他の収益（注）１") == "その他の収益")
         #expect(RevenueRecognitionCandidates.stripNoteMarker("タイヤ(注１)") == "タイヤ")
         #expect(RevenueRecognitionCandidates.stripNoteMarker("その他(注２)") == "その他")
-        #expect(
-            RevenueRecognitionCandidates.displayLabel(categoryGroup: "（海外）", category: "北米")
-                == "北米")
-        #expect(
-            BreakdownRowPayload.displayLabel(categoryGroup: "（ディスカウントストア）", category: "家電製品")
-                == "家電製品")
-        #expect(
-            BreakdownRowPayload.displayLabel(categoryGroup: "油脂・乳製品", category: nil)
-                == "油脂・乳製品")
+        let north: String = RevenueRecognitionCandidates.displayLabel(
+            categoryGroup: "（海外）", category: "北米")
+        let appliance: String = BreakdownRowPayload.displayLabel(
+            categoryGroup: "（ディスカウントストア）", category: "家電製品")
+        let oils: String = BreakdownRowPayload.displayLabel(
+            categoryGroup: "油脂・乳製品", category: nil)
+        #expect(north == "北米")
+        #expect(appliance == "家電製品")
+        #expect(oils == "油脂・乳製品")
     }
 
     @Test func payloadOmitsStoredLabelAndJsonObjectRebuildsIt() throws {
@@ -1022,11 +1194,15 @@ import Testing
         )
         let snapshot = try await run(html: html, docID: docID, fyEnd: fyEnd, pick: "t1_c1")
         let parsed = try parsedCurrent(html)
-        #expect(parsed.items.map(\.label) == Self.cat7413)
+        let labels: [String] = parsed.items.map(\.label)
+        let expectedLabels: [String] = Self.cat7413
+        #expect(labels == expectedLabels)
         #expect(parsed.groups.isEmpty)
         #expect(parsed.totals.map(\.label).contains("顧客との契約から生じる収益"))
         try assertFlatRows(snapshot, groups: Self.cat7413, amounts: amounts, unit: 1_000)
-        #expect(snapshot.denominator == Double(total) * 1_000)
+        let denominator: Double = snapshot.denominator
+        let expectedDenom: Double = sen(total)
+        #expect(denominator == expectedDenom)
         #expect(snapshot.needsReview == false)
         return snapshot
     }
@@ -1056,10 +1232,15 @@ import Testing
         let segments = snapshot.rows.filter { $0.rowKind == "segment" }
         #expect(segments.count == groups.count)
         for (index, group) in groups.enumerated() {
-            #expect(segments[index].categoryGroup == group)
-            #expect(segments[index].category == nil)
-            #expect(segments[index].label == group)
-            #expect(segments[index].amount == Double(amounts[index]) * unit)
+            let rowGroup: String? = segments[index].categoryGroup
+            let rowCategory: String? = segments[index].category
+            let rowLabel: String? = segments[index].label
+            let amount: Double = segments[index].amount
+            let expectedAmount: Double = Double(amounts[index]) * unit
+            #expect(rowGroup == group)
+            #expect(rowCategory == nil)
+            #expect(rowLabel == group)
+            #expect(amount == expectedAmount)
         }
     }
 
