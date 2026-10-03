@@ -12,6 +12,8 @@ enum RevenueRecognitionCandidates {
         "その他の源泉から認識した収益",
         "その他の源泉から生じる収益",
         "外部顧客への売上高",
+        "外部顧客に対する売上高",
+        "外部顧客への収益",
         "外部収益合計",
         "連結合計",
         "連結計",
@@ -192,13 +194,21 @@ enum RevenueRecognitionCandidates {
                     }
                 }
             }
+            for item in table.items where item.group.isEmpty && !item.isPartial {
+                let amount = amounts[item.row] ?? 0
+                built.append(BuiltRow(
+                    categoryGroup: item.label, category: nil, amount: amount,
+                    isPartial: false, rowKind: "segment"))
+            }
         }
 
+        built = mergeWrappedRows(built)
         return (built, needsReview)
     }
 
     static func tableTotal(table: ParsedTable, column: Int, preferredLabels: [String] = [
-        "外部顧客への売上高", "顧客との契約から生じる収益", "顧客との契約から認識した収益",
+        "外部顧客への売上高", "外部顧客に対する売上高", "外部顧客への収益",
+        "顧客との契約から生じる収益", "顧客との契約から認識した収益",
         "外部収益合計",
     ]) -> (label: String, amount: Double)? {
         let amounts = dataAmounts(table: table, column: column)
@@ -224,7 +234,7 @@ enum RevenueRecognitionCandidates {
         guard table.items.isEmpty else { return ([], nil) }
         let preferred = [
             "顧客との契約から生じる収益", "顧客との契約から認識した収益",
-            "外部顧客への売上高", "外部収益合計",
+            "外部顧客への売上高", "外部顧客に対する売上高", "外部顧客への収益", "外部収益合計",
         ]
         let total = preferred.compactMap { marker in
             table.totals.first { $0.label == marker || $0.label.hasPrefix(marker) }
@@ -355,12 +365,16 @@ enum RevenueRecognitionCandidates {
             let partial = isPartialItem(label)
             if partial {
                 var parentGroup = group
-                if parentGroup.isEmpty, let parent = items.last, !parent.isPartial {
-                    parentGroup = parent.label
-                    if !groups.contains(where: { $0.group == parent.label }) {
-                        groups.append(GroupHeader(group: parent.label, row: parent.row))
+                if parentGroup.isEmpty, let parent = items.last {
+                    if parent.isPartial {
+                        parentGroup = parent.group
+                    } else {
+                        parentGroup = parent.label
+                        if !groups.contains(where: { $0.group == parent.label }) {
+                            groups.append(GroupHeader(group: parent.label, row: parent.row))
+                        }
+                        items.removeLast()
                     }
-                    items.removeLast()
                 }
                 items.append(Item(
                     group: parentGroup, label: label, row: i, isPartial: true))
@@ -393,23 +407,79 @@ enum RevenueRecognitionCandidates {
     }
 
     static func isPartialItem(_ label: String) -> Bool {
-        compactCell(label).contains("うち")
+        let compact = compactCell(label)
+        if compact.contains("うち") { return true }
+        return isFullyParenthesized(compact) && !isTotalLabel(compact)
+    }
+
+    static func isFullyParenthesized(_ label: String) -> Bool {
+        let compact = compactCell(label)
+        guard compact.count > 2 else { return false }
+        return (compact.hasPrefix("（") && compact.hasSuffix("）"))
+            || (compact.hasPrefix("(") && compact.hasSuffix(")"))
     }
 
     /// `その他の収益` は完全一致または接頭辞だけ。`contains` だと「その他」製品行を合計にする。
-    private static func isTotalLabel(_ label: String) -> Bool {
+    static func isTotalLabel(_ label: String) -> Bool {
         let collapsed = label.replacingOccurrences(of: " ", with: "")
             .replacingOccurrences(of: "\u{3000}", with: "")
-        if collapsed == "合計" || collapsed == "売上高合計" || collapsed == "連結合計"
-            || collapsed == "連結計" || collapsed == "連結金額"
-            || (collapsed.hasSuffix("計") && collapsed.count > 1)
+        let token = unwrapParentheses(collapsed)
+        if token == "合計" || token == "売上高合計" || token == "連結合計"
+            || token == "連結計" || token == "連結金額" || token == "売上高" || token == "小計"
+            || (token.hasSuffix("計") && token.count > 1)
         {
             return true
         }
         return totalMarkers.contains { marker in
-            let token = marker.replacingOccurrences(of: " ", with: "")
-            return collapsed == token || collapsed.hasPrefix(token)
+            let markerToken = marker.replacingOccurrences(of: " ", with: "")
+            return token == markerToken || token.hasPrefix(markerToken)
         }
+    }
+
+    private static func unwrapParentheses(_ label: String) -> String {
+        guard isFullyParenthesized(label) else { return label }
+        return String(label.dropFirst().dropLast())
+    }
+
+    /// 改行で割れた同一金額のラベルを1行に戻す（1807 S100YJEE）。
+    static func mergeWrappedRows(_ rows: [BuiltRow]) -> [BuiltRow] {
+        guard rows.count >= 2 else { return rows }
+        var merged: [BuiltRow] = []
+        for row in rows {
+            guard let last = merged.last,
+                  !last.isPartial, !row.isPartial,
+                  last.amount == row.amount, last.amount != 0,
+                  last.rowKind == row.rowKind
+            else {
+                merged.append(row)
+                continue
+            }
+            var combined = last
+            if last.category == nil && row.category == nil {
+                combined.categoryGroup = last.categoryGroup + row.categoryGroup
+            } else {
+                let left = last.category ?? last.categoryGroup
+                let right = row.category ?? row.categoryGroup
+                combined.category = left + right
+            }
+            merged[merged.count - 1] = combined
+        }
+        return merged
+    }
+
+    /// 明細（うちを除く）の合計が、表のどの合計行とも合わないとき。
+    /// 顧客との契約から生じる収益 と 外部顧客への売上高 が違う（その他の収益がある）表では、
+    /// どちらかに合えば足りる。
+    static func tableSumMismatch(
+        rows: [BuiltRow], table: ParsedTable, column: Int
+    ) -> Bool {
+        let full = rows.filter { !$0.isPartial }
+        guard !full.isEmpty else { return false }
+        let amounts = dataAmounts(table: table, column: column)
+        let totalAmounts = table.totals.compactMap { amounts[$0.row] }
+        guard !totalAmounts.isEmpty else { return false }
+        let sum = full.reduce(0.0) { $0 + $1.amount }
+        return !totalAmounts.contains { sumMatches(sum, subtotal: $0, itemCount: full.count) }
     }
 
     static func isContractBalanceTable(_ grid: [[String]]) -> Bool {

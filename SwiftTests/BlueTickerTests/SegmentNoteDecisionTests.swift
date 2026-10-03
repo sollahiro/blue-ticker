@@ -334,6 +334,10 @@ import Testing
         let data = try JSONEncoder().encode(stored)
         let decoded = try JSONDecoder().decode(LLMBreakdownAuditPayload.self, from: data)
         #expect(decoded.jev == audit)
+        let withColumn = LLMBreakdownAuditPayload(
+            sourceTableIndex: 0, periodColumn: "t1_c1", unit: "million_yen", profitDisclosed: false,
+            notes: "n", jev: audit, columnJev: audit)
+        #expect(withColumn.replacingJev(audit).columnJev == audit)
         let legacy = """
         {"sourceTableIndex":0,"periodColumn":"当期","unit":"million_yen","profitDisclosed":false,"notes":"n"}
         """.data(using: .utf8)!

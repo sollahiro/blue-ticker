@@ -7,15 +7,20 @@ actor FakeRevenueRecognitionColumnDecider: RevenueRecognitionColumnDeciding {
     var selected: String?
     var containing: String?
     var confidence: Double
+    var pNone: Double?
+    var probabilities: [String: Double]
     var model: String
 
     init(
         selected: String? = nil, containing: String? = nil, confidence: Double = 0.9,
+        pNone: Double? = nil, probabilities: [String: Double] = [:],
         model: String = "typesafe/jev-1.13"
     ) {
         self.selected = selected
         self.containing = containing
         self.confidence = confidence
+        self.pNone = pNone
+        self.probabilities = probabilities
         self.model = model
     }
 
@@ -30,7 +35,8 @@ actor FakeRevenueRecognitionColumnDecider: RevenueRecognitionColumnDeciding {
             ?? containing.flatMap { Self.keyContaining($0, columns: columns, tables: tables) }
             ?? Self.preferWholeCompany(columns, tables: tables)
         return RevenueRecognitionColumnChoice(
-            selected: pick, confidence: confidence, model: model, options: options)
+            selected: pick, confidence: confidence, pNone: pNone, probabilities: probabilities,
+            model: model, options: options)
     }
 
     /// 実 XBRL 回帰で、既知ラベルを含む分解表の全社列をスタブする。

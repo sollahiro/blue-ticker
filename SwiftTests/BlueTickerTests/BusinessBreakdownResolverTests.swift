@@ -101,7 +101,7 @@ private actor MockChatCompleting: ChatCompleting {
         #expect(segments.tables.first?.heading == "収益認識関係")
         let sales = try #require(try Self.loadSales(code: "6103"))
         let client = MockChatCompleting(responseJSON: nil)
-        let decider = FakeRevenueRecognitionColumnDecider(confidence: 0.5)
+        let decider = FakeRevenueRecognitionColumnDecider(confidence: 0.49)
 
         let (snapshot, source, _) = await BusinessBreakdownResolver.resolve(
             segments: segments, consolidatedSales: sales, client: client, columnDecider: decider
@@ -343,7 +343,8 @@ private actor MockChatCompleting: ChatCompleting {
         let sales = try #require(try Self.loadSales(code: "6103"))
         let client = MockChatCompleting(responseJSON: nil)
         let decider = FakeRevenueRecognitionColumnDecider(
-            selected: RevenueRecognitionColumnNormalizer.noneOfThese, confidence: 0.95)
+            selected: RevenueRecognitionColumnNormalizer.noneOfThese, confidence: 0.95,
+            pNone: 0.9)
 
         let (snapshot, source, audit) = await BusinessBreakdownResolver.resolve(
             segments: segments, consolidatedSales: sales, client: client, columnDecider: decider
@@ -360,7 +361,7 @@ private actor MockChatCompleting: ChatCompleting {
         #expect(segments.tables.first?.heading == "収益認識関係")
         let sales = try #require(try Self.loadSales(code: "6103"))
         let client = MockChatCompleting(responseJSON: nil)
-        let decider = FakeRevenueRecognitionColumnDecider(confidence: 0.5)
+        let decider = FakeRevenueRecognitionColumnDecider(confidence: 0.49)
 
         let (snapshot, source, audit) = await BusinessBreakdownResolver.resolve(
             segments: segments, consolidatedSales: sales, client: client, columnDecider: decider

@@ -829,11 +829,15 @@ enum BreakdownExtractor {
         return (0..<maxRow).map { r in (0..<maxCol).map { c in grid[r]?[c] ?? "" } }
     }
 
-    /// セル内の非空 `<p>` が2つ以上なら、そのテキスト列。Markdown セル内改行にはしない。
+    /// セル内の `<p>` が2つ以上なら、そのテキスト列（空段落も位置合わせのため残す）。
+    /// 6482 は見出し「製品及びサービス別」の金額側が空 `<p>`。落とすと爆発せず、
+    /// 残すと見出し行とロボット行がずれる（旧 7413 型）。
     static func stackedParagraphs(in cell: Element) -> [String]? {
         guard let paragraphs = try? cell.select("p") else { return nil }
-        let texts = paragraphs.array().map { bs4Text($0, strip: true) }.filter { !$0.isEmpty }
-        return texts.count >= 2 ? texts : nil
+        let texts = paragraphs.array().map { bs4Text($0, strip: true) }
+        guard texts.count >= 2 else { return nil }
+        let nonempty = texts.filter { !$0.isEmpty }
+        return nonempty.isEmpty ? nil : texts
     }
 
     /// ラベル列と金額列が同じ段落数で縦積みされている行だけ爆発する。
@@ -850,12 +854,26 @@ enum BreakdownExtractor {
         "―", "－", "-", "−", "—", "─", "‐",
     ]
 
+    private static func isStackedAmountPlaceholder(_ text: String) -> Bool {
+        let compact = text.replacingOccurrences(of: "\u{00a0}", with: "")
+            .replacingOccurrences(of: "\u{3000}", with: "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return compact.isEmpty
+    }
+
+    /// 空段落は見出し行の位置合わせ。実金額／ダッシュが2つ以上あれば金額スタック。
     private static func isStackedAmountParagraphs(_ texts: [String]) -> Bool {
-        let tokens = texts.filter { !$0.isEmpty }
-        guard tokens.count >= 2 else { return false }
-        return tokens.allSatisfy {
-            stackedAmountDashes.contains($0) || XBRLUtils.parseHtmlNumber($0) != nil
+        guard texts.count >= 2 else { return false }
+        var amountCount = 0
+        for text in texts {
+            if XBRLUtils.parseHtmlNumber(text) != nil || stackedAmountDashes.contains(text) {
+                amountCount += 1
+                continue
+            }
+            if isStackedAmountPlaceholder(text) { continue }
+            return false
         }
+        return amountCount >= 2
     }
 
     private static func isStackedLabelParagraphs(_ texts: [String]) -> Bool {

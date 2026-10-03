@@ -289,16 +289,36 @@ import Testing
             method: "html_table",
             tables: BreakdownExtractor.allTablesFromHtml(html, defaultHeading: "収益認識関係"),
             facts: [])
-        let decider = FakeRevenueRecognitionColumnDecider(selected: "t1_c1", confidence: 0.5)
+        let decider = FakeRevenueRecognitionColumnDecider(selected: "t1_c1", confidence: 0.49)
         let (snapshot, audit) = await RevenueRecognitionColumnNormalizer.normalize(
             extracted, consolidatedSales: 7_000, decider: decider,
             fiscalYearEnd: "2026-03-31", docID: "S100LOW")
         let row = try #require(snapshot)
         #expect(row.needsReview)
         #expect(row.warnings.contains(RevenueRecognitionColumnNormalizer.warningLowConfidence))
-        #expect(audit?.jev?.calls.first?.probability == 0.5)
-        #expect(RevenueRecognitionColumnNormalizer.confidenceThreshold == 0.6)
+        #expect(audit?.jev?.calls.first?.probability == 0.49)
+        #expect(audit?.columnJev?.calls.first?.probability == 0.49)
+        #expect(RevenueRecognitionColumnNormalizer.confidenceThreshold == 0.5)
         #expect(RevenueRecognitionColumnNormalizer.confidenceThreshold < 0.75)
+    }
+
+    @Test func atConfidenceThresholdDoesNotSetNeedsReview() async throws {
+        let html = priorAndCurrent(
+            currentCaption: "当連結会計年度（自 2025年4月1日 至 2026年3月31日）",
+            unit: "千円",
+            currentBody: stackedRow(labels: Self.cat7413, amounts: [410_483, 1_592_960, 1_080_049, 259_850, 1_233_827, 118_499, 55_945])
+                + totalRow("顧客との契約から生じる収益", 4_751_616))
+        let extracted = ExtractedBreakdown(
+            method: "html_table",
+            tables: BreakdownExtractor.allTablesFromHtml(html, defaultHeading: "収益認識関係"),
+            facts: [])
+        let decider = FakeRevenueRecognitionColumnDecider(selected: "t1_c1", confidence: 0.5)
+        let (snapshot, _) = await RevenueRecognitionColumnNormalizer.normalize(
+            extracted, consolidatedSales: 4_751_616_000, decider: decider,
+            fiscalYearEnd: "2026-03-31", docID: "S100EDGE")
+        let row = try #require(snapshot)
+        #expect(row.needsReview == false)
+        #expect(!row.warnings.contains(RevenueRecognitionColumnNormalizer.warningLowConfidence))
     }
 
     @Test func noneOfTheseReturnsNoSnapshot() async throws {
@@ -312,7 +332,8 @@ import Testing
             tables: BreakdownExtractor.allTablesFromHtml(html, defaultHeading: "収益認識関係"),
             facts: [])
         let decider = FakeRevenueRecognitionColumnDecider(
-            selected: RevenueRecognitionColumnNormalizer.noneOfThese, confidence: 0.95)
+            selected: RevenueRecognitionColumnNormalizer.noneOfThese, confidence: 0.95,
+            pNone: 0.9)
         let (snapshot, audit) = await RevenueRecognitionColumnNormalizer.normalize(
             extracted, consolidatedSales: 7_000, decider: decider,
             fiscalYearEnd: "2026-03-31", docID: "S100NONE")
@@ -340,6 +361,354 @@ import Testing
         #expect(snapshot.rows[1].category == "うち中国")
         #expect(snapshot.rows[1].label == "うち中国")
         #expect(snapshot.rows[1].amount == 300 * Financial.millionYen)
+    }
+
+    @Test func noneOfTheseLowPNoneTakesBestColumnAndNeedsReview() async throws {
+        let html = priorAndCurrent(
+            currentCaption: "当連結会計年度（自 2025年4月1日 至 2026年3月31日）",
+            unit: "千円",
+            currentBody: stackedRow(labels: Self.cat7413, amounts: [1, 1, 1, 1, 1, 1, 1])
+                + totalRow("顧客との契約から生じる収益", 7))
+        let extracted = ExtractedBreakdown(
+            method: "html_table",
+            tables: BreakdownExtractor.allTablesFromHtml(html, defaultHeading: "収益認識関係"),
+            facts: [])
+        let decider = FakeRevenueRecognitionColumnDecider(
+            selected: RevenueRecognitionColumnNormalizer.noneOfThese, confidence: 0.4,
+            pNone: 0.6)
+        let (snapshot, audit) = await RevenueRecognitionColumnNormalizer.normalize(
+            extracted, consolidatedSales: 7_000, decider: decider,
+            fiscalYearEnd: "2026-03-31", docID: "S100YRWH")
+        let row = try #require(snapshot)
+        #expect(row.needsReview)
+        #expect(row.warnings.contains(RevenueRecognitionColumnNormalizer.warningNoneOfTheseOverridden))
+        #expect(row.rows.isEmpty == false)
+        #expect(audit?.columnJev?.calls.first?.selected != RevenueRecognitionColumnNormalizer.noneOfThese)
+        #expect(audit?.notes.contains("p_none=0.6") == true)
+    }
+
+    @Test func yrwh1436SingleSegmentColumnIsValid() async throws {
+        let html = """
+            <p>前連結会計年度（自 2025年5月1日 至 2026年4月30日）</p>
+            <p>（単位：千円）</p>
+            <table>
+              <tr><td></td><td>報告セグメント</td></tr>
+              <tr><td></td><td>再生可能エネルギー事業</td></tr>
+              <tr><td>不動産及び設備</td><td>9,765,440</td></tr>
+              <tr><td>その他</td><td>1,851,189</td></tr>
+              <tr><td>顧客との契約から生じる収益</td><td>11,616,630</td></tr>
+              <tr><td>外部顧客への売上高</td><td>11,616,630</td></tr>
+            </table>
+            <p>当連結会計年度（自 2025年5月1日 至 2026年4月30日）</p>
+            <p>（単位：千円）</p>
+            <table>
+              <tr><td></td><td>報告セグメント</td></tr>
+              <tr><td></td><td>再生可能エネルギー事業</td></tr>
+              <tr><td>不動産及び設備</td><td>14,672,799</td></tr>
+              <tr><td>その他</td><td>3,685,324</td></tr>
+              <tr><td>顧客との契約から生じる収益</td><td>18,358,123</td></tr>
+              <tr><td>外部顧客への売上高</td><td>18,358,123</td></tr>
+            </table>
+            """
+        let snapshot = try await run(html: html, docID: "S100YRWH", fyEnd: "2026-04-30", pick: "t1_c1")
+        try assertFlatRows(
+            snapshot, groups: ["不動産及び設備", "その他"], amounts: [14_672_799, 3_685_324], unit: 1_000)
+        #expect(snapshot.denominator == 18_358_123 * 1_000)
+        #expect(snapshot.needsReview == false)
+        #expect(!snapshot.rows.contains { $0.label == "顧客との契約から生じる収益" })
+    }
+
+    @Test func yjhn6904GaibuKokyakuNiTaisuruIsTotal() async throws {
+        let html = """
+            <p>当連結会計年度（自 2025年4月1日 至 2026年3月31日）</p>
+            <p>（単位：千円）</p>
+            <table>
+              <tr><td></td><td>日本</td><td>アジア</td><td>北中米</td><td>欧州</td><td>合計</td></tr>
+              <tr><td>製品</td><td>18,508,319</td><td>6,845,303</td><td>12,343,283</td><td>4,466,286</td><td>42,163,192</td></tr>
+              <tr><td>その他</td><td>29,116</td><td>－</td><td>－</td><td>－</td><td>29,116</td></tr>
+              <tr><td>顧客との契約から生じる収益</td><td>18,537,436</td><td>6,845,303</td><td>12,343,283</td><td>4,466,286</td><td>42,192,309</td></tr>
+              <tr><td>その他の収益</td><td>－</td><td>－</td><td>－</td><td>－</td><td>－</td></tr>
+              <tr><td>外部顧客に対する売上高</td><td>18,537,436</td><td>6,845,303</td><td>12,343,283</td><td>4,466,286</td><td>42,192,309</td></tr>
+            </table>
+            """
+        let snapshot = try await run(html: html, docID: "S100YJHN", fyEnd: "2026-03-31", pick: "t0_c5")
+        try assertFlatRows(
+            snapshot, groups: ["製品", "その他"], amounts: [42_163_192, 29_116], unit: 1_000)
+        #expect(snapshot.denominator == 42_192_309 * 1_000)
+        #expect(!snapshot.rows.contains { $0.label == "外部顧客に対する売上高" })
+        #expect(snapshot.needsReview == false)
+        #expect(RevenueRecognitionCandidates.isTotalLabel("外部顧客に対する売上高"))
+        #expect(RevenueRecognitionCandidates.isTotalLabel("外部顧客への収益"))
+        #expect(RevenueRecognitionCandidates.isTotalLabel("小計"))
+        #expect(RevenueRecognitionCandidates.isTotalLabel("売上高"))
+        #expect(RevenueRecognitionCandidates.isTotalLabel("（小計）"))
+    }
+
+    @Test func y9513092ParenthesizedLinesArePartialUnderBusiness() async throws {
+        let html = """
+            <p>当連結会計年度（自 2025年4月1日 至 2026年3月31日）</p>
+            <p>（単位：百万円）</p>
+            <table>
+              <tr><td></td><td>受託商品の販売に係る収益</td><td>仕入商品等の販売に係る収益</td><td>広告事業その他の収益</td><td>合計</td></tr>
+              <tr><td>ZOZOTOWN事業</td><td>134,673</td><td>22,743</td><td>－</td><td>157,416</td></tr>
+              <tr><td>（買取・製造販売）</td><td>－</td><td>2,630</td><td>－</td><td>2,630</td></tr>
+              <tr><td>（受託販売）</td><td>134,673</td><td>－</td><td>－</td><td>134,673</td></tr>
+              <tr><td>（USED販売）</td><td>－</td><td>20,113</td><td>－</td><td>20,113</td></tr>
+              <tr><td>LINEヤフーコマース</td><td>22,003</td><td>2,176</td><td>－</td><td>24,179</td></tr>
+              <tr><td>LYST</td><td>－</td><td>－</td><td>5,776</td><td>5,776</td></tr>
+              <tr><td>BtoB事業</td><td>1,325</td><td>－</td><td>－</td><td>1,325</td></tr>
+              <tr><td>広告事業</td><td>－</td><td>－</td><td>11,884</td><td>11,884</td></tr>
+              <tr><td>その他</td><td>－</td><td>－</td><td>27,791</td><td>27,791</td></tr>
+              <tr><td>顧客との契約から生じる収益</td><td>158,001</td><td>24,919</td><td>45,452</td><td>228,373</td></tr>
+              <tr><td>外部顧客への売上高</td><td>158,001</td><td>24,919</td><td>45,452</td><td>228,373</td></tr>
+            </table>
+            """
+        let snapshot = try await run(html: html, docID: "S100Y951", fyEnd: "2026-03-31", pick: "t0_c4")
+        let segments = snapshot.rows.filter { $0.rowKind == "segment" }
+        #expect(segments.contains { $0.categoryGroup == "ZOZOTOWN事業" && $0.category == nil && $0.amount == 157_416 * Financial.millionYen })
+        #expect(segments.contains { $0.category == "（買取・製造販売）" && $0.amount == 2_630 * Financial.millionYen })
+        #expect(segments.contains { $0.category == "（受託販売）" && $0.amount == 134_673 * Financial.millionYen })
+        #expect(segments.contains { $0.category == "（USED販売）" && $0.amount == 20_113 * Financial.millionYen })
+        #expect(segments.contains { $0.categoryGroup == "LINEヤフーコマース" && $0.category == nil })
+        #expect(!segments.contains { $0.categoryGroup == "（買取・製造販売）" && $0.category == nil })
+        let full = segments.filter { $0.category == nil }
+        #expect(full.reduce(0) { $0 + $1.amount } == (157_416 + 24_179 + 5_776 + 1_325 + 11_884 + 27_791) * Financial.millionYen)
+        #expect(snapshot.denominator == 228_373 * Financial.millionYen)
+        #expect(snapshot.needsReview == false)
+    }
+
+    @Test func yjc56482HeadingParagraphDoesNotTakeRobotAmounts() throws {
+        let html = """
+            <table>
+              <tr>
+                <td></td>
+                <td>日本</td><td>米国</td><td>アジア</td><td>欧州</td><td>合計</td>
+              </tr>
+              <tr>
+                <td>
+                  <p>製品及びサービス別</p>
+                  <p>ロボット</p>
+                  <p>特注機</p>
+                  <p>部品・保守サービス</p>
+                </td>
+                <td>
+                  <p></p>
+                  <p>7,445,494</p>
+                  <p>1,482,554</p>
+                  <p>2,124,545</p>
+                </td>
+                <td>
+                  <p></p>
+                  <p>2,236,732</p>
+                  <p>758,274</p>
+                  <p>1,084,411</p>
+                </td>
+                <td>
+                  <p></p>
+                  <p>4,111,695</p>
+                  <p>202,153</p>
+                  <p>962,796</p>
+                </td>
+                <td>
+                  <p></p>
+                  <p>1,153,399</p>
+                  <p>718,954</p>
+                  <p>820,362</p>
+                </td>
+                <td>
+                  <p></p>
+                  <p>14,947,321</p>
+                  <p>3,161,936</p>
+                  <p>4,992,115</p>
+                </td>
+              </tr>
+              <tr><td>顧客との契約から生じる収益</td><td>11,052,594</td><td>4,079,418</td><td>5,276,645</td><td>2,692,715</td><td>23,101,373</td></tr>
+              <tr><td>外部顧客への売上高</td><td>11,052,594</td><td>4,079,418</td><td>5,276,645</td><td>2,692,715</td><td>23,101,373</td></tr>
+            </table>
+            """
+        let grid = BreakdownExtractor.expandTable(try XBRLTestSupport.parseFirstTable(html))
+        #expect(grid.contains { $0.contains("ロボット") && $0.contains("14,947,321") })
+        #expect(grid.contains { $0.contains("特注機") && $0.contains("3,161,936") })
+        #expect(grid.contains { $0.contains("部品・保守サービス") && $0.contains("4,992,115") })
+        #expect(!grid.contains { $0.contains("製品及びサービス別") && $0.contains("14,947,321") })
+        #expect(!grid.contains { $0.contains("ロボット") && $0.contains("3,161,936") })
+    }
+
+    @Test func yjc56482CandidatesAndRows() async throws {
+        let html = """
+            <p>当連結会計年度（自 2025年4月1日 至 2026年3月31日）</p>
+            <p>（単位：千円）</p>
+            <table>
+              <tr>
+                <td></td>
+                <td>日本</td><td>米国</td><td>アジア</td><td>欧州</td><td>合計</td>
+              </tr>
+              <tr>
+                <td>
+                  <p>製品及びサービス別</p>
+                  <p>ロボット</p>
+                  <p>特注機</p>
+                  <p>部品・保守サービス</p>
+                </td>
+                <td>
+                  <p></p>
+                  <p>7,445,494</p>
+                  <p>1,482,554</p>
+                  <p>2,124,545</p>
+                </td>
+                <td>
+                  <p></p>
+                  <p>2,236,732</p>
+                  <p>758,274</p>
+                  <p>1,084,411</p>
+                </td>
+                <td>
+                  <p></p>
+                  <p>4,111,695</p>
+                  <p>202,153</p>
+                  <p>962,796</p>
+                </td>
+                <td>
+                  <p></p>
+                  <p>1,153,399</p>
+                  <p>718,954</p>
+                  <p>820,362</p>
+                </td>
+                <td>
+                  <p></p>
+                  <p>14,947,321</p>
+                  <p>3,161,936</p>
+                  <p>4,992,115</p>
+                </td>
+              </tr>
+              <tr><td>顧客との契約から生じる収益</td><td>11,052,594</td><td>4,079,418</td><td>5,276,645</td><td>2,692,715</td><td>23,101,373</td></tr>
+              <tr><td>外部顧客への売上高</td><td>11,052,594</td><td>4,079,418</td><td>5,276,645</td><td>2,692,715</td><td>23,101,373</td></tr>
+            </table>
+            """
+        let snapshot = try await run(html: html, docID: "S100YJC5", fyEnd: "2026-03-31", pick: "t0_c5")
+        let segments = snapshot.rows.filter { $0.rowKind == "segment" }
+        #expect(segments.map(\.label) == ["ロボット", "特注機", "部品・保守サービス"])
+        #expect(segments.map(\.categoryGroup) == ["製品及びサービス別", "製品及びサービス別", "製品及びサービス別"])
+        #expect(segments.map(\.category) == ["ロボット", "特注機", "部品・保守サービス"])
+        #expect(segments.map(\.amount) == [14_947_321 * 1_000.0, 3_161_936 * 1_000.0, 4_992_115 * 1_000.0])
+        #expect(snapshot.denominator == 23_101_373 * 1_000)
+        #expect(snapshot.needsReview == false)
+        #expect(!snapshot.rows.contains { $0.label == "製品及びサービス別" })
+    }
+
+    @Test func yljd7416LabelsInSecondColumn() async throws {
+        let html = """
+            <p>当連結会計年度（自 2025年4月1日 至 2026年3月31日）</p>
+            <p>（単位：千円）</p>
+            <table>
+              <tr><td colspan="2"></td><td>報告セグメント</td></tr>
+              <tr><td colspan="2"></td><td>衣料品販売事業</td></tr>
+              <tr><td></td><td>重衣料</td><td>15,047,573</td></tr>
+              <tr><td></td><td>[スーツ・礼服・コート]</td><td></td></tr>
+              <tr><td></td><td>中衣料</td><td>3,453,633</td></tr>
+              <tr><td></td><td>[ジャケット・スラックス]</td><td></td></tr>
+              <tr><td></td><td>軽衣料</td><td>15,795,876</td></tr>
+              <tr><td></td><td>補修加工賃収入</td><td>915,569</td></tr>
+              <tr><td colspan="2">合計</td><td>35,212,653</td></tr>
+            </table>
+            """
+        let snapshot = try await run(html: html, docID: "S100YLJD", fyEnd: "2026-03-31", pick: "t0_c2")
+        let labels = snapshot.rows.filter { $0.rowKind == "segment" }.compactMap(\.label)
+        #expect(labels.contains("重衣料"))
+        #expect(labels.contains("中衣料"))
+        #expect(labels.contains("軽衣料"))
+        #expect(labels.contains("補修加工賃収入"))
+        #expect(snapshot.rows.contains { $0.label == "重衣料" && $0.amount == 15_047_573 * 1_000 })
+        #expect(snapshot.denominator == 35_212_653 * 1_000)
+    }
+
+    @Test func yjee1807WrappedSameAmountRowsMerge() {
+        let merged = RevenueRecognitionCandidates.mergeWrappedRows([
+            .init(categoryGroup: "システムインテグレー", category: nil, amount: 1_000, isPartial: false, rowKind: "segment"),
+            .init(categoryGroup: "ションサービス", category: nil, amount: 1_000, isPartial: false, rowKind: "segment"),
+            .init(categoryGroup: "その他", category: nil, amount: 200, isPartial: false, rowKind: "segment"),
+        ])
+        #expect(merged.count == 2)
+        #expect(merged[0].categoryGroup == "システムインテグレーションサービス")
+        #expect(merged[0].amount == 1_000)
+        #expect(merged[1].categoryGroup == "その他")
+    }
+
+    @Test func tableSumMismatchAgainstOwnTotalSetsNeedsReview() {
+        let table = RevenueRecognitionCandidates.ParsedTable(
+            tableIndex: 0,
+            grid: [
+                ["", "金額"],
+                ["製品", "100"],
+                ["その他", "20"],
+                ["顧客との契約から生じる収益", "150"],
+            ],
+            headerRowCount: 1,
+            columnHeaders: [1: "金額"],
+            precedingCaption: "当連結会計年度",
+            unitCaption: "百万円",
+            items: [
+                .init(group: "", label: "製品", row: 1, isPartial: false),
+                .init(group: "", label: "その他", row: 2, isPartial: false),
+            ],
+            totals: [.init(label: "顧客との契約から生じる収益", row: 3)],
+            groups: []
+        )
+        let (rows, _) = RevenueRecognitionCandidates.buildRows(table: table, column: 1)
+        #expect(RevenueRecognitionCandidates.tableSumMismatch(rows: rows, table: table, column: 1))
+        let total = RevenueRecognitionCandidates.tableTotal(table: table, column: 1)
+        #expect(total?.label == "顧客との契約から生じる収益")
+    }
+
+    @Test func emptyBuiltRowsStillNeedsReviewNotSilentDrop() async throws {
+        let html = """
+            <p>当連結会計年度（自 2025年4月1日 至 2026年3月31日）</p>
+            <p>（単位：百万円）</p>
+            <table>
+              <tr><td></td><td>合計</td></tr>
+              <tr><td>顧客との契約から生じる収益</td><td>100</td></tr>
+              <tr><td>外部顧客への売上高</td><td>100</td></tr>
+            </table>
+            """
+        let extracted = ExtractedBreakdown(
+            method: "html_table",
+            tables: BreakdownExtractor.allTablesFromHtml(html, defaultHeading: "収益認識関係"),
+            facts: [])
+        let decider = FakeRevenueRecognitionColumnDecider(selected: "t0_c1", confidence: 0.9)
+        let (snapshot, _) = await RevenueRecognitionColumnNormalizer.normalize(
+            extracted, consolidatedSales: 100 * Financial.millionYen, decider: decider,
+            fiscalYearEnd: "2026-03-31", docID: "S100YK9A")
+        let row = try #require(snapshot)
+        #expect(row.needsReview)
+        #expect(row.rows.isEmpty)
+        #expect(row.warnings.contains(RevenueRecognitionColumnNormalizer.warningNoCategoryRows))
+    }
+
+    @Test func replacingJevKeepsColumnJev() {
+        let column = SegmentNoteJevAuditPayload(
+            code: "", docID: "S100YKKP", axis: "business", model: "typesafe/jev-1.13",
+            threshold: 0.5, applied: true, needsReview: false, sentences: [],
+            calls: [
+                SegmentNoteJevCallPayload(
+                    question: "col", options: ["t1_c1", "none_of_these"], selected: "t1_c1",
+                    probability: 0.97, sentences: [], applied: true)
+            ])
+        let note = SegmentNoteJevAuditPayload(
+            code: "", docID: "S100YKKP", axis: "business", model: "typesafe/jev-1.13",
+            threshold: 0.9, applied: false, needsReview: false, sentences: [],
+            calls: [
+                SegmentNoteJevCallPayload(
+                    question: "breakdown_table", options: ["0", "none_of_these"], selected: "0",
+                    probability: 0.99, sentences: [], applied: true)
+            ])
+        let audit = LLMBreakdownAuditPayload(
+            sourceTableIndex: 1, periodColumn: "t1_c1", unit: "千円", profitDisclosed: false,
+            notes: "jev_column=t1_c1", jev: column, columnJev: column)
+        let merged = audit.replacingJev(note)
+        #expect(merged.jev == note)
+        #expect(merged.columnJev == column)
+        #expect(merged.columnJev?.calls.first?.selected == "t1_c1")
+        #expect(merged.jsonObject()["column_jev"] != nil)
     }
 
     @Test func shortSumWithoutUchiSetsNeedsReviewAndDoesNotMarkPartial() {

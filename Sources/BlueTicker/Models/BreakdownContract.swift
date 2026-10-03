@@ -544,10 +544,13 @@ public struct LLMBreakdownAuditPayload: Codable, Sendable, Equatable {
     public var profitDisclosed: Bool
     public var notes: String
     public var jev: SegmentNoteJevAuditPayload?
+    /// 収益分解の列選択 Jev。`jev` はセグメント注記判断で上書きされるため別キー。
+    public var columnJev: SegmentNoteJevAuditPayload?
 
     public init(
         sourceTableIndex: Int?, periodColumn: String?, unit: String, profitDisclosed: Bool, notes: String,
-        jev: SegmentNoteJevAuditPayload? = nil
+        jev: SegmentNoteJevAuditPayload? = nil,
+        columnJev: SegmentNoteJevAuditPayload? = nil
     ) {
         self.sourceTableIndex = sourceTableIndex
         self.periodColumn = periodColumn
@@ -555,6 +558,7 @@ public struct LLMBreakdownAuditPayload: Codable, Sendable, Equatable {
         self.profitDisclosed = profitDisclosed
         self.notes = notes
         self.jev = jev
+        self.columnJev = columnJev
     }
 
     /// 正規化監査が無いときの Jev だけの行。
@@ -572,9 +576,17 @@ public struct LLMBreakdownAuditPayload: Codable, Sendable, Equatable {
 
     /// ingest が証券コードを知っているので、空のときだけ埋める。
     public func stamped(code: String) -> LLMBreakdownAuditPayload {
-        guard var jev, jev.code.isEmpty, !code.isEmpty else { return self }
-        jev.code = code
-        return replacingJev(jev)
+        guard !code.isEmpty else { return self }
+        var copy = self
+        if var jev = copy.jev, jev.code.isEmpty {
+            jev.code = code
+            copy.jev = jev
+        }
+        if var columnJev = copy.columnJev, columnJev.code.isEmpty {
+            columnJev.code = code
+            copy.columnJev = columnJev
+        }
+        return copy
     }
 }
 
@@ -671,6 +683,9 @@ public extension LLMBreakdownAuditPayload {
         ]
         if let jev {
             object["jev"] = jev.jsonObject()
+        }
+        if let columnJev {
+            object["column_jev"] = columnJev.jsonObject()
         }
         return object
     }

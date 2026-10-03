@@ -1092,7 +1092,7 @@ private func applyingSegmentNoteDecision(
 private func llmBreakdownAuditPayload(from a: LLMBreakdownAudit) -> LLMBreakdownAuditPayload {
     LLMBreakdownAuditPayload(
         sourceTableIndex: a.sourceTableIndex, periodColumn: a.periodColumn, unit: a.unit,
-        profitDisclosed: a.profitDisclosed, notes: a.notes, jev: a.jev)
+        profitDisclosed: a.profitDisclosed, notes: a.notes, jev: a.jev, columnJev: a.columnJev)
 }
 
 /// 生入力（ExtractedBreakdown + 採用前の consolidatedSales）のみのハッシュ。プロンプト/モデル/

@@ -29,6 +29,8 @@ struct LLMBreakdownAudit {
     var notApplicableReason: String? = nil
     /// 収益分解の列選択など、Jev を使ったときの監査。無い経路は nil。
     var jev: SegmentNoteJevAuditPayload? = nil
+    /// 収益分解の列選択 Jev。`jev` は後段のセグメント注記判断で上書きされる。
+    var columnJev: SegmentNoteJevAuditPayload? = nil
 }
 
 enum GeographyBreakdownLLMNormalizer {
