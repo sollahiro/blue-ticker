@@ -340,7 +340,8 @@ public struct BreakdownRowPayload: Codable, Sendable, Equatable {
     public var labelRaw: String
     // 表示用の解決済みラベル。xbrl_facts 経路は XBRL ラベルリンクベースの日本語ラベル（無ければ
     // labelRaw にフォールバック）、html_table/LLM 経路は元々開示書類のテキストのため labelRaw と同値。
-    // 収益分解は DB に label を残さず、読み出し時に category_group / category から組む。
+    // 収益分解は DB に label を残さず、読み出し時に category があればそれを、
+    // 無ければ category_group をそのまま label にする（括弧連結はしない）。
     public var label: String
     public var amount: Double
     public var profit: Double?
@@ -431,17 +432,8 @@ public struct BreakdownRowPayload: Codable, Sendable, Equatable {
     }
 
     public static func displayLabel(categoryGroup: String, category: String?) -> String {
-        guard let category, !category.isEmpty else { return categoryGroup }
-        return "\(category)（\(stripOwnBrackets(categoryGroup))）"
-    }
-
-    public static func stripOwnBrackets(_ group: String) -> String {
-        var s = group.trimmingCharacters(in: .whitespacesAndNewlines)
-        if (s.hasPrefix("（") && s.hasSuffix("）")) || (s.hasPrefix("(") && s.hasSuffix(")")) {
-            s.removeFirst()
-            s.removeLast()
-        }
-        return s
+        if let category, !category.isEmpty { return category }
+        return categoryGroup
     }
 }
 

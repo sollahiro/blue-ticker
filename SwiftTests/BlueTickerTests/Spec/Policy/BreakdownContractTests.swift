@@ -116,15 +116,15 @@ import Testing
         let row = BreakdownRowPayload(
             labelRaw: "北米", label: "stored", amount: 1, profit: nil, rowKind: "segment",
             categoryGroup: "（海外）", category: "北米")
-        #expect(row.label == "北米（海外）")
+        #expect(row.label == "北米")
         let encoded = try JSONEncoder().encode(row)
         let object = try #require(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
         #expect(object["label"] == nil)
         #expect(object["category_group"] as? String == "（海外）")
         let decoded = try JSONDecoder().decode(BreakdownRowPayload.self, from: encoded)
-        #expect(decoded.label == "北米（海外）")
+        #expect(decoded.label == "北米")
         #expect(decoded.category == "北米")
-        #expect(row.jsonObject()["label"] as? String == "北米（海外）")
+        #expect(row.jsonObject()["label"] as? String == "北米")
         #expect(row.jsonObject()["category"] as? String == "北米")
     }
 }

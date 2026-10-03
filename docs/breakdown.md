@@ -21,7 +21,7 @@
 
 geography は変えない。本邦90％の `not_found` は既存の Jev ゲートだけを通る。専用タグは geography の判定を飛ばさず、置き換えない。キーがあるときは、business を専用タグで確定しても geography の Jev は続ける。
 
-キーが無い、または呼び出しに失敗したときは、専用タグ以外は今日の決定論のまま。失敗で `needs_review` は足さない。専用タグの business はキーが無くても適用する。研究開発費・設備投資はこの省略判定を使わない。公開 reason は `single_segment_disclosed` / `geography_only` / `not_found`。`cache_version` は変えない。専用タグは「セグメント注記の省略」であり、収益分解表が無いことの印ではない。分解表があるときは表ステップへ進み、表が無い（Jev `none_of_these`）ときだけ省略する。`SegmentInfoLLMNormalizer` と `GeographyBreakdownLLMNormalizer` は選ばれた html_table を行・金額・単位へ写す。収益認識の事業別分解は `RevenueRecognitionColumnNormalizer` が Jev に当期の全社金額列だけを選ばせ、行・`category_group` / `category`・金額は決定論で組む。Jev は金額を読まない。
+キーが無い、または呼び出しに失敗したときは、専用タグ以外は今日の決定論のまま。失敗で `needs_review` は足さない。専用タグの business はキーが無くても適用する。研究開発費・設備投資はこの省略判定を使わない。公開 reason は `single_segment_disclosed` / `geography_only` / `not_found`。`cache_version` は変えない。専用タグは「セグメント注記の省略」であり、収益分解表が無いことの印ではない。分解表があるときは表ステップへ進み、表が無い（Jev `none_of_these`）ときだけ省略する。`SegmentInfoLLMNormalizer` と `GeographyBreakdownLLMNormalizer` は選ばれた html_table を行・金額・単位へ写す。収益認識の事業別分解は `RevenueRecognitionColumnNormalizer` が Jev に当期の全社金額列だけを選ばせ、行・`category_group` / `category`・金額は決定論で組む。Jev は金額を読まない。REST/MCP の `label` は `category` があればその文言、無ければ `category_group`（括弧で連結しない）。`category_group` と `category` は別フィールドのまま返す。
 
 設備投資マトリクス（`capex`）で数値タグも該当表も無いときは、`OPENROUTER_DECISION_API_KEY` がある場合だけ別の Choice を出す。対象は `OverviewOfCapitalExpendituresEtcOwnUsedAssetsLEATextBlock` / `OverviewOfCapitalExpendituresEtcTextBlock`。コードが文を切り、円へ換算する。Jev は Role だけ返す。`probabilities[choice]` が 0.9 以上の当期総額がちょうど1文のときだけ Overview セルの会社総額にする。source は `capex_prose`。タグ付きセグメント行があり差額に一致する1文があるときは reconciling を足す。セグメント別セルは埋めない。応答が無いときは行を作らず再試行する。キーが無いときは決定論のまま。
 

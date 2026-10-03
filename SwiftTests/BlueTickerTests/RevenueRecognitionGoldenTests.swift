@@ -338,7 +338,7 @@ import Testing
         #expect(snapshot.rows[0].category == nil)
         #expect(snapshot.rows[0].amount == 1_000 * Financial.millionYen)
         #expect(snapshot.rows[1].category == "うち中国")
-        #expect(snapshot.rows[1].label == "うち中国（海外）")
+        #expect(snapshot.rows[1].label == "うち中国")
         #expect(snapshot.rows[1].amount == 300 * Financial.millionYen)
     }
 
@@ -371,16 +371,19 @@ import Testing
         #expect(RevenueRecognitionCandidates.sumMatches(998, subtotal: 1_000, itemCount: 2))
     }
 
-    @Test func stripNoteMarkerFromTotalAndDisplayLabelDropsGroupBrackets() {
+    @Test func stripNoteMarkerFromTotalAndDisplayLabelIsCategoryOrGroup() {
         #expect(RevenueRecognitionCandidates.stripNoteMarker("その他の収益（注）１") == "その他の収益")
         #expect(RevenueRecognitionCandidates.stripNoteMarker("タイヤ(注１)") == "タイヤ")
         #expect(RevenueRecognitionCandidates.stripNoteMarker("その他(注２)") == "その他")
         #expect(
             RevenueRecognitionCandidates.displayLabel(categoryGroup: "（海外）", category: "北米")
-                == "北米（海外）")
+                == "北米")
         #expect(
             BreakdownRowPayload.displayLabel(categoryGroup: "（ディスカウントストア）", category: "家電製品")
-                == "家電製品（ディスカウントストア）")
+                == "家電製品")
+        #expect(
+            BreakdownRowPayload.displayLabel(categoryGroup: "油脂・乳製品", category: nil)
+                == "油脂・乳製品")
     }
 
     @Test func payloadOmitsStoredLabelAndJsonObjectRebuildsIt() throws {
@@ -393,9 +396,9 @@ import Testing
         #expect(object["category_group"] as? String == "（ディスカウントストア）")
         #expect(object["category"] as? String == "家電製品")
         let decoded = try JSONDecoder().decode(BreakdownRowPayload.self, from: encoded)
-        #expect(decoded.label == "家電製品（ディスカウントストア）")
+        #expect(decoded.label == "家電製品")
         let json = row.jsonObject()
-        #expect(json["label"] as? String == "家電製品（ディスカウントストア）")
+        #expect(json["label"] as? String == "家電製品")
         #expect(json["category_group"] as? String == "（ディスカウントストア）")
         #expect(json["category"] as? String == "家電製品")
     }

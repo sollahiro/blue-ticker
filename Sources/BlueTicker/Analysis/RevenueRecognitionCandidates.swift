@@ -254,19 +254,7 @@ enum RevenueRecognitionCandidates {
     }
 
     static func displayLabel(categoryGroup: String, category: String?) -> String {
-        guard let category, !category.isEmpty else { return categoryGroup }
-        return "\(category)（\(stripOwnBrackets(categoryGroup))）"
-    }
-
-    static func stripOwnBrackets(_ group: String) -> String {
-        var s = group.trimmingCharacters(in: .whitespacesAndNewlines)
-        let pairs: [(Character, Character)] = [("（", "）"), ("(", ")")]
-        for (open, close) in pairs where s.first == open && s.last == close {
-            s.removeFirst()
-            s.removeLast()
-            return s
-        }
-        return s
+        BreakdownRowPayload.displayLabel(categoryGroup: categoryGroup, category: category)
     }
 
     static func stripNoteMarker(_ label: String) -> String {
