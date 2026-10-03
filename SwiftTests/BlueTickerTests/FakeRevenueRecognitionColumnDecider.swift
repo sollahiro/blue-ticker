@@ -5,11 +5,16 @@ import Foundation
 
 actor FakeRevenueRecognitionColumnDecider: RevenueRecognitionColumnDeciding {
     var selected: String?
+    var containing: String?
     var confidence: Double
     var model: String
 
-    init(selected: String? = nil, confidence: Double = 0.9, model: String = "typesafe/jev-1.13") {
+    init(
+        selected: String? = nil, containing: String? = nil, confidence: Double = 0.9,
+        model: String = "typesafe/jev-1.13"
+    ) {
         self.selected = selected
+        self.containing = containing
         self.confidence = confidence
         self.model = model
     }
@@ -21,27 +26,54 @@ actor FakeRevenueRecognitionColumnDecider: RevenueRecognitionColumnDeciding {
         docID: String
     ) async -> RevenueRecognitionColumnChoice {
         let options = columns.map(\.key) + [RevenueRecognitionColumnNormalizer.noneOfThese]
-        let pick = selected ?? Self.preferWholeCompany(columns)
+        let pick = selected
+            ?? containing.flatMap { Self.keyContaining($0, columns: columns, tables: tables) }
+            ?? Self.preferWholeCompany(columns, tables: tables)
         return RevenueRecognitionColumnChoice(
             selected: pick, confidence: confidence, model: model, options: options)
     }
 
-    /// 構成比列を避け、合計 / 連結 / 売上高 / 金額 / 当期 を優先する。
-    static func preferWholeCompany(
-        _ columns: [RevenueRecognitionCandidates.AmountColumn]
+    /// 実 XBRL 回帰で、既知ラベルを含む分解表の全社列をスタブする。
+    static func keyContaining(
+        _ needle: String,
+        columns: [RevenueRecognitionCandidates.AmountColumn],
+        tables: [RevenueRecognitionCandidates.ParsedTable]
     ) -> String? {
+        let indexes = Set(
+            tables.filter { table in
+                table.grid.contains { row in row.contains { $0.contains(needle) } }
+            }.map(\.tableIndex)
+        )
+        let scoped = columns.filter { indexes.contains($0.tableIndex) }
+        return preferWholeCompany(scoped.isEmpty ? columns : scoped, tables: tables)
+    }
+
+    /// 構成比列を避け、顧客契約合計がある表の当期／合計列を優先する。
+    static func preferWholeCompany(
+        _ columns: [RevenueRecognitionCandidates.AmountColumn],
+        tables: [RevenueRecognitionCandidates.ParsedTable] = []
+    ) -> String? {
+        let byIndex = Dictionary(uniqueKeysWithValues: tables.map { ($0.tableIndex, $0) })
         let usable = columns.filter {
             let header = $0.header
             return !header.contains("％") && !header.contains("%") && !header.contains("構成比")
         }
-        if let column = usable.last(where: { $0.header.contains("合計") || $0.header.contains("連結") }) {
-            return column.key
+        func rank(_ column: RevenueRecognitionCandidates.AmountColumn) -> (Int, Int, Int, Int) {
+            let table = byIndex[column.tableIndex]
+            let hasDisaggTotal =
+                table?.totals.contains { total in
+                    RevenueRecognitionCandidates.totalMarkers.contains { total.label.contains($0) }
+                        || total.label.contains("合計")
+                } == true ? 1 : 0
+            let current =
+                column.header.contains("当") || (column.caption?.contains("当") == true) ? 1 : 0
+            let items = table?.items.count ?? 0
+            let headerRank =
+                (column.header.contains("合計") || column.header.contains("連結"))
+                ? 2
+                : (column.header.contains("売上") || column.header.contains("金額") ? 1 : 0)
+            return (hasDisaggTotal, current, items, headerRank)
         }
-        if let column = usable.last(where: {
-            $0.header.contains("当") || $0.header.contains("売上") || $0.header.contains("金額")
-        }) {
-            return column.key
-        }
-        return usable.last?.key ?? columns.last?.key
+        return (usable.max { rank($0) < rank($1) } ?? columns.last)?.key
     }
 }

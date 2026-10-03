@@ -791,7 +791,8 @@ enum BreakdownExtractor {
 
     /// rowspan / colspan を展開してセル文字列の二次元グリッドにする。
     /// 同一 `td`/`th` にカテゴリが `<p>` で縦積みされているとき（7413 / 5237 / 272A）は
-    /// 段落ごとに行へ展開する。積み `<p>` が無い表（geography 等）は従来どおり。
+    /// 段落ごとに行へ展開する。見出しセルだけが積み `<p>` の表（geography 期間＋単位、
+    /// エーザイ「医薬品販売／による収益」）は従来の `bs4Text` 結合のまま。
     static func expandTable(_ table: Element) -> [[String]] {
         var grid: [Int: [Int: String]] = [:]
         var rowIdx = 0
@@ -799,8 +800,7 @@ enum BreakdownExtractor {
         for tr in trs {
             let cells = (try? tr.select("td, th"))?.array() ?? []
             let stacks = cells.map(stackedParagraphs(in:))
-            let explodeCount = stacks.compactMap(\.self).map(\.count).max() ?? 1
-            let slices = explodeCount >= 2 ? explodeCount : 1
+            let slices = stackedExplodeCount(stacks)
             for slice in 0..<slices {
                 var colIdx = 0
                 for (cell, stack) in zip(cells, stacks) {
@@ -834,6 +834,34 @@ enum BreakdownExtractor {
         guard let paragraphs = try? cell.select("p") else { return nil }
         let texts = paragraphs.array().map { bs4Text($0, strip: true) }.filter { !$0.isEmpty }
         return texts.count >= 2 ? texts : nil
+    }
+
+    /// ラベル列と金額列が同じ段落数で縦積みされている行だけ爆発する。
+    static func stackedExplodeCount(_ stacks: [[String]?]) -> Int {
+        let stacked = stacks.compactMap { $0 }
+        guard let amounts = stacked.first(where: isStackedAmountParagraphs),
+              let labels = stacked.first(where: isStackedLabelParagraphs),
+              amounts.count == labels.count, amounts.count >= 2
+        else { return 1 }
+        return amounts.count
+    }
+
+    private static let stackedAmountDashes: Set<String> = [
+        "―", "－", "-", "−", "—", "─", "‐",
+    ]
+
+    private static func isStackedAmountParagraphs(_ texts: [String]) -> Bool {
+        let tokens = texts.filter { !$0.isEmpty }
+        guard tokens.count >= 2 else { return false }
+        return tokens.allSatisfy {
+            stackedAmountDashes.contains($0) || XBRLUtils.parseHtmlNumber($0) != nil
+        }
+    }
+
+    private static func isStackedLabelParagraphs(_ texts: [String]) -> Bool {
+        texts.contains {
+            !$0.isEmpty && XBRLUtils.parseHtmlNumber($0) == nil && !stackedAmountDashes.contains($0)
+        }
     }
 
     /// グリッドを列幅揃えの Markdown テーブル文字列にする。

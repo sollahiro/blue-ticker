@@ -30,6 +30,59 @@ import Testing
         #expect(grid.filter { $0.contains("油脂・乳製品") }.count == 1)
     }
 
+    @Test func headerStackedParagraphsWithoutAmountsStayOneRow() throws {
+        let html = """
+            <table>
+              <tr>
+                <td></td>
+                <td><p>医薬品販売</p><p>による収益</p></td>
+                <td><p>ライセンス供与</p><p>による収益</p></td>
+              </tr>
+              <tr><td>日本</td><td>226,140</td><td>1,725</td></tr>
+            </table>
+            """
+        let grid = BreakdownExtractor.expandTable(try XBRLTestSupport.parseFirstTable(html))
+        #expect(grid.count == 2)
+        #expect(grid[0].contains { $0.contains("医薬品販売による収益") })
+        #expect(!grid.contains { $0.contains("医薬品販売") && !$0.contains("による収益") && $0.contains("226,140") })
+    }
+
+    @Test func periodAndUnitStackedParagraphsDoNotExplodeGeographyHeader() throws {
+        let html = """
+            <table>
+              <tr>
+                <td></td>
+                <td><p>前連結会計年度</p><p>（百万円）</p></td>
+                <td><p>当連結会計年度</p><p>（百万円）</p></td>
+              </tr>
+              <tr><td>日本</td><td>100</td><td>110</td></tr>
+            </table>
+            """
+        let grid = BreakdownExtractor.expandTable(try XBRLTestSupport.parseFirstTable(html))
+        #expect(grid.count == 2)
+        #expect(grid[0].contains { $0.contains("前連結会計年度") && $0.contains("百万円") })
+        #expect(grid[1] == ["日本", "100", "110"])
+    }
+
+    @Test func remainingPerformanceAndContractCostTablesAreSkipped() {
+        let remaining = [
+            ["", "1年以内", "1年超", "合計"],
+            ["残存履行義務", "10", "20", "30"],
+        ]
+        #expect(RevenueRecognitionCandidates.isContractBalanceTable(remaining))
+        let costAsset = [
+            ["", "当期末"],
+            ["契約の履行のためのコストから認識した資産", "1,000"],
+        ]
+        #expect(RevenueRecognitionCandidates.isContractBalanceTable(costAsset))
+        let product = [
+            ["", "金額"],
+            ["油脂・乳製品", "410,483"],
+            ["顧客との契約から生じる収益", "4,751,616"],
+        ]
+        #expect(!RevenueRecognitionCandidates.isContractBalanceTable(product))
+    }
+
     @Test func geographyTableWithoutStackedParagraphsIsUnchanged() throws {
         let html = "<table><tr><td>日本</td><td>100</td></tr><tr><td>アジア</td><td>50</td></tr></table>"
         let table = try XBRLTestSupport.parseFirstTable(html)

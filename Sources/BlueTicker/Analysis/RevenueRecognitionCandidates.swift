@@ -17,6 +17,12 @@ enum RevenueRecognitionCandidates {
 
     static let balanceMarkers = [
         "契約負債", "契約資産", "受取手形", "売掛金", "一時点で認識", "一定期間にわたり",
+        "残存履行義務", "契約の履行のためのコスト", "顧客との契約から生じた債権", "契約残高",
+    ]
+
+    static let remainingPerformanceBuckets = [
+        "1年以内", "１年以内", "1年超", "１年超", "5年以内", "５年以内",
+        "5年超", "５年超", "10年超", "１０年超",
     ]
 
     static let dashCells: Set<String> = ["―", "－", "-", "−", "—", "─", "‐"]
@@ -390,9 +396,11 @@ enum RevenueRecognitionCandidates {
         }
     }
 
-    private static func isContractBalanceTable(_ grid: [[String]]) -> Bool {
+    static func isContractBalanceTable(_ grid: [[String]]) -> Bool {
         let flat = grid.flatMap { $0 }.joined()
-        return balanceMarkers.contains { flat.contains($0) }
+        if balanceMarkers.contains(where: { flat.contains($0) }) { return true }
+        let bucketHits = remainingPerformanceBuckets.filter { flat.contains($0) }
+        return Set(bucketHits).count >= 2
     }
 
     private static func hasAmountColumn(_ grid: [[String]]) -> Bool {

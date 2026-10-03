@@ -66,7 +66,7 @@ import Foundation
 
         let (snapshot, source, audit) = await BusinessBreakdownResolver.resolve(
             segments: segments, consolidatedSales: sales, client: client,
-            columnDecider: FakeRevenueRecognitionColumnDecider()
+            columnDecider: FakeRevenueRecognitionColumnDecider(containing: "タイヤ")
         )
 
         #expect(source == .revenueRecognitionLLM)
@@ -107,7 +107,7 @@ import Foundation
 
         let (snapshot, source, _) = await BusinessBreakdownResolver.resolve(
             segments: segments, consolidatedSales: sales, client: client,
-            columnDecider: FakeRevenueRecognitionColumnDecider()
+            columnDecider: FakeRevenueRecognitionColumnDecider(containing: "サーマルシステム")
         )
 
         #expect(source == .revenueRecognitionLLM)
@@ -142,7 +142,7 @@ import Foundation
         let sales = 436_889_000_000.0
         let (snapshot, source, _) = await BusinessBreakdownResolver.resolve(
             segments: segments, consolidatedSales: sales, client: client,
-            columnDecider: FakeRevenueRecognitionColumnDecider()
+            columnDecider: FakeRevenueRecognitionColumnDecider(containing: "精密加工装置")
         )
         #expect(source == .revenueRecognitionLLM)
         #expect(snapshot?.axis == "business")
@@ -178,7 +178,7 @@ import Foundation
         let sales = 2_443_533_000_000.0
         let (snapshot, source, _) = await BusinessBreakdownResolver.resolve(
             segments: segments, consolidatedSales: sales, client: client,
-            columnDecider: FakeRevenueRecognitionColumnDecider()
+            columnDecider: FakeRevenueRecognitionColumnDecider(containing: "新規装置")
         )
         #expect(source == .revenueRecognitionLLM)
         #expect(snapshot?.axis == "business")
@@ -235,7 +235,8 @@ import Foundation
             xbrlDir: dir, tables: segments.tables)
         let (snapshot, source, _) = await BusinessBreakdownResolver.resolve(
             segments: segments, consolidatedSales: denom.value, client: client,
-            denominatorTag: denom.tag, columnDecider: FakeRevenueRecognitionColumnDecider()
+            denominatorTag: denom.tag,
+            columnDecider: FakeRevenueRecognitionColumnDecider(containing: "地球環境エネルギー")
         )
         #expect(source == .revenueRecognitionLLM)
         #expect(snapshot?.axis == "business")
