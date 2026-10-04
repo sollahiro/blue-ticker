@@ -40,6 +40,12 @@ enum RevenueRecognitionColumnNormalizer {
     static let warningParallelDimensions = "revenue_recognition_parallel_dimensions_unresolved"
     static let warningCategoryRowsDropped = "revenue_recognition_category_rows_dropped"
     static let warningCustomerOrTimingAxis = "revenue_recognition_customer_or_timing_axis_only"
+    static let warningGeographyAxisOnly = "revenue_recognition_geography_axis_only"
+    static let warningDenominatorUndercoverage = "revenue_recognition_denominator_undercoverage"
+    static let warningPriorPeriod = "revenue_recognition_prior_period_table"
+    /// 明細合計が分母の 95% を切ったら不足（表合計が無く連結売上に落ちる 6620）。
+    static let coverageFloor: Double = 0.95
+    static let recognizedOtherRevenueMarkers = ["その他の源泉", "その他の収益", "その他収益"]
 
     static func normalize(
         _ result: ExtractedBreakdown,
@@ -126,10 +132,15 @@ enum RevenueRecognitionColumnNormalizer {
             consolidatedSales: consolidatedSales
         )
         var warnings: [String] = []
-        let axisReview = constraint == .customerOrTimingOnly
+        let selectedAxis = RevenueRecognitionTableStructure.tableAxis(of: table)
+        let customerReview = selectedAxis == .customer || selectedAxis == .timing
+            || constraint == .customerOrTimingOnly
+        let geographyReview = selectedAxis == .geography || constraint == .geographyOnly
+        let priorReview = table.period == "前期" || isPriorOnlyColumn(column, table: table)
         let droppedCategoryRows = built.isEmpty && sourceHadCategoryRows
         var needsReview = belowThreshold || groupSumReview || tableSumReview
-            || resolved.forceReview || built.isEmpty || parallelUnresolved || axisReview
+            || resolved.forceReview || built.isEmpty || parallelUnresolved
+            || customerReview || geographyReview || priorReview
         if belowThreshold { warnings.append(warningLowConfidence) }
         if resolved.forceReview { warnings.append(warningNoneOfTheseOverridden) }
         if groupSumReview && !parallelUnresolved { warnings.append(warningGroupSumMismatch) }
@@ -137,7 +148,9 @@ enum RevenueRecognitionColumnNormalizer {
         if parallelUnresolved { warnings.append(warningParallelDimensions) }
         if built.isEmpty { warnings.append(warningNoCategoryRows) }
         if droppedCategoryRows { warnings.append(warningCategoryRowsDropped) }
-        if axisReview { warnings.append(warningCustomerOrTimingAxis) }
+        if customerReview { warnings.append(warningCustomerOrTimingAxis) }
+        if geographyReview { warnings.append(warningGeographyAxisOnly) }
+        if priorReview { warnings.append(warningPriorPeriod) }
         BreakdownLLMAmountScale.applyPublicFlags(
             scale, needsReview: &needsReview, warnings: &warnings)
         let multiplier = scale.multiplier
@@ -197,6 +210,15 @@ enum RevenueRecognitionColumnNormalizer {
                 categoryGroup: row.categoryGroup,
                 category: row.category
             ))
+        }
+        if !rows.isEmpty, !hasRecognizedOtherRevenue(table) {
+            let emitted = rows.filter { $0.rowKind == "segment" }.reduce(0.0) { $0 + $1.amount }
+            if abs(denominator) > 0, emitted / abs(denominator) < coverageFloor {
+                needsReview = true
+                if !warnings.contains(warningDenominatorUndercoverage) {
+                    warnings.append(warningDenominatorUndercoverage)
+                }
+            }
         }
 
         audit.sourceTableIndex = table.tableIndex
@@ -304,6 +326,31 @@ enum RevenueRecognitionColumnNormalizer {
             return column.header.contains("当")
         }
         return columns.first(where: isCurrent)
+    }
+
+    static func isPriorOnlyColumn(
+        _ column: RevenueRecognitionCandidates.AmountColumn,
+        table: RevenueRecognitionCandidates.ParsedTable
+    ) -> Bool {
+        if table.period == "前期" { return true }
+        let caption = column.caption ?? table.precedingCaption ?? ""
+        let blob = caption + column.header
+        let hasPrior = blob.contains("前連結会計年度") || blob.contains("前事業年度")
+            || blob.contains("前期")
+        let hasCurrent = blob.contains("当連結会計年度") || blob.contains("当事業年度")
+            || blob.contains("当期") || column.header.contains("当")
+        return hasPrior && !hasCurrent
+    }
+
+    static func hasRecognizedOtherRevenue(
+        _ table: RevenueRecognitionCandidates.ParsedTable
+    ) -> Bool {
+        func hit(_ text: String) -> Bool {
+            recognizedOtherRevenueMarkers.contains { text.contains($0) }
+        }
+        if table.totals.contains(where: { hit($0.label) }) { return true }
+        if table.items.contains(where: { hit($0.label) || hit($0.group) }) { return true }
+        return table.grid.contains { row in row.contains(where: hit) }
     }
 
     private static func stampJev(

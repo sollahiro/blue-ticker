@@ -220,11 +220,14 @@ import Testing
         let denominator: Double = snapshot.denominator
         let expectedDenom: Double = yen(7_161_777)
         let needsReview: Bool = snapshot.needsReview
+        let priorWarning: Bool = snapshot.warnings.contains(
+            RevenueRecognitionColumnNormalizer.warningPriorPeriod)
         #expect(other)
         #expect(closerAsRow == false)
         #expect(totalAsRow == false)
         #expect(denominator == expectedDenom)
-        #expect(needsReview == false)
+        #expect(needsReview)
+        #expect(priorWarning)
     }
 
     /// S100Y9T1 当期。自動車分野計 7,391,068 / 非車載事業分野 148,907 / 合計 7,539,975。
@@ -1044,6 +1047,171 @@ import Testing
         #expect(constraint == .customerOrTimingOnly)
         let snapshot = try await run(
             html: html, docID: "S100Z4Q1", fyEnd: "2026-03-31", pick: "t0_c1")
+        let needsReview: Bool = snapshot.needsReview
+        let axisWarning: Bool = snapshot.warnings.contains(
+            RevenueRecognitionColumnNormalizer.warningCustomerOrTimingAxis)
+        #expect(needsReview)
+        #expect(axisWarning)
+    }
+
+    /// 6620 S100R5UA: 付随収入 1 行 7,000 千円 vs 連結売上 1.319e9。表合計が無く
+    /// table_sum_mismatch は沈黙するので、分母カバー不足で needs_review。
+    @Test func r5ua6620UndercoverageVsDenominatorNeedsReview() async throws {
+        let html = """
+            <p>当連結会計年度（自 2025年4月1日 至 2026年3月31日）</p>
+            <p>（単位：千円）</p>
+            <table>
+              <tr><td></td><td>金額</td></tr>
+              <tr><td>不動産賃貸管理事業に付随する収入</td><td>7,000</td></tr>
+            </table>
+            """
+        let extracted = ExtractedBreakdown(
+            method: "html_table",
+            tables: BreakdownExtractor.allTablesFromHtml(html, defaultHeading: "収益認識関係"),
+            facts: [])
+        let decider = FakeRevenueRecognitionColumnDecider(selected: "t0_c1", confidence: 0.9)
+        let (snapshot, _) = await RevenueRecognitionColumnNormalizer.normalize(
+            extracted, consolidatedSales: 1_319_000_000, decider: decider,
+            fiscalYearEnd: "2026-03-31", docID: "S100R5UA")
+        let row = try #require(snapshot)
+        let needsReview: Bool = row.needsReview
+        let undercoverage: Bool = row.warnings.contains(
+            RevenueRecognitionColumnNormalizer.warningDenominatorUndercoverage)
+        let mismatch: Bool = row.warnings.contains(
+            RevenueRecognitionColumnNormalizer.warningTableSumMismatch)
+        let emitted: Double = row.rows.filter { $0.rowKind == "segment" }.reduce(0) { $0 + $1.amount }
+        #expect(needsReview)
+        #expect(undercoverage)
+        #expect(mismatch == false)
+        #expect(emitted == sen(7_000))
+        #expect(row.denominator == 1_319_000_000)
+    }
+
+    /// 6273 S100YLC6: 仕向地別の日本/米国/中国/アジア(中国を除く)/欧州。事業軸に出さない。
+    @Test func ylc66273GeographyOnlyRowsNeedReview() async throws {
+        let html = """
+            <p>当連結会計年度（自 2025年4月1日 至 2026年3月31日）</p>
+            <p>（単位：百万円）</p>
+            <table>
+              <tr><td></td><td>前連結会計年度</td><td>当連結会計年度</td></tr>
+              <tr><td>仕向地別売上高</td><td></td><td></td></tr>
+              <tr><td>日本</td><td>158,116</td><td>158,823</td></tr>
+              <tr><td>米国</td><td>88,937</td><td>83,708</td></tr>
+              <tr><td>中国</td><td>208,690</td><td>234,939</td></tr>
+              <tr><td>アジア(中国を除く)</td><td>151,612</td><td>158,955</td></tr>
+              <tr><td>欧州</td><td>144,414</td><td>162,250</td></tr>
+              <tr><td>その他</td><td>40,336</td><td>43,864</td></tr>
+              <tr><td>顧客との契約から生じる収益</td><td>792,108</td><td>842,541</td></tr>
+            </table>
+            """
+        let extracted = ExtractedBreakdown(
+            method: "html_table",
+            tables: BreakdownExtractor.allTablesFromHtml(html, defaultHeading: "収益認識関係"),
+            facts: [])
+        let parsed = RevenueRecognitionCandidates.parse(tables: extracted.tables)
+        let axis: RevenueRecognitionTableStructure.TableAxis =
+            RevenueRecognitionTableStructure.tableAxis(of: parsed[0])
+        let constraint: RevenueRecognitionTableStructure.AxisConstraint =
+            RevenueRecognitionTableStructure.axisConstraint(tables: parsed)
+        #expect(axis == .geography)
+        #expect(constraint == .geographyOnly)
+        let snapshot = try await run(
+            html: html, docID: "S100YLC6", fyEnd: "2026-03-31", pick: "t0_c2")
+        let needsReview: Bool = snapshot.needsReview
+        let geoWarning: Bool = snapshot.warnings.contains(
+            RevenueRecognitionColumnNormalizer.warningGeographyAxisOnly)
+        #expect(needsReview)
+        #expect(geoWarning)
+    }
+
+    /// 6532 S100VTPA: 金融 / 情報通信・メディア・ハイテクは顧客業種。公開しない。
+    @Test func vtpa6532CustomerIndustryAxisNeedsReview() async throws {
+        let html = """
+            <p>当連結会計年度（自 2024年3月1日 至 2025年2月28日）</p>
+            <p>（単位：百万円）</p>
+            <table>
+              <tr><td></td><td>前事業年度</td><td>当連結会計年度</td></tr>
+              <tr><td>金融(銀行・証券・保険等)</td><td>24,702</td><td>33,870</td></tr>
+              <tr><td>情報通信・メディア・ハイテク</td><td>29,506</td><td>37,127</td></tr>
+              <tr><td>その他</td><td>39,701</td><td>45,059</td></tr>
+              <tr><td>合計</td><td>93,909</td><td>116,056</td></tr>
+            </table>
+            """
+        let extracted = ExtractedBreakdown(
+            method: "html_table",
+            tables: BreakdownExtractor.allTablesFromHtml(html, defaultHeading: "収益認識関係"),
+            facts: [])
+        let parsed = RevenueRecognitionCandidates.parse(tables: extracted.tables)
+        let axis: RevenueRecognitionTableStructure.TableAxis =
+            RevenueRecognitionTableStructure.tableAxis(of: parsed[0])
+        #expect(axis == .customer)
+        let snapshot = try await run(
+            html: html, docID: "S100VTPA", fyEnd: "2025-02-28", pick: "t0_c2")
+        let needsReview: Bool = snapshot.needsReview
+        let axisWarning: Bool = snapshot.warnings.contains(
+            RevenueRecognitionColumnNormalizer.warningCustomerOrTimingAxis)
+        #expect(needsReview)
+        #expect(axisWarning)
+    }
+
+    /// 3538 S100P7P6: 業販と新車/中古車が混在。顧客軸として needs_review（当期未検証でも止める）。
+    @Test func p7p63538MixedChannelProductNeedsReview() async throws {
+        let html = """
+            <p>前連結会計年度（自 2024年4月1日 至 2025年3月31日）</p>
+            <p>（単位：千円）</p>
+            <table>
+              <tr><td></td><td>金額</td></tr>
+              <tr><td>車輌販売</td><td></td></tr>
+              <tr><td>新車</td><td>19,576,333</td></tr>
+              <tr><td>中古車</td><td>11,009,224</td></tr>
+              <tr><td>業販</td><td>3,605,008</td></tr>
+              <tr><td>車輌整備</td><td>5,058,873</td></tr>
+              <tr><td>その他</td><td>446,719</td></tr>
+              <tr><td>合計</td><td>39,696,157</td></tr>
+            </table>
+            """
+        let extracted = ExtractedBreakdown(
+            method: "html_table",
+            tables: BreakdownExtractor.allTablesFromHtml(html, defaultHeading: "収益認識関係"),
+            facts: [])
+        let parsed = RevenueRecognitionCandidates.parse(tables: extracted.tables)
+        let axis: RevenueRecognitionTableStructure.TableAxis =
+            RevenueRecognitionTableStructure.tableAxis(of: parsed[0])
+        #expect(axis == .customer)
+        let snapshot = try await run(
+            html: html, docID: "S100P7P6", fyEnd: "2025-03-31", pick: "t0_c1")
+        let needsReview: Bool = snapshot.needsReview
+        let axisWarning: Bool = snapshot.warnings.contains(
+            RevenueRecognitionColumnNormalizer.warningCustomerOrTimingAxis)
+        let priorWarning: Bool = snapshot.warnings.contains(
+            RevenueRecognitionColumnNormalizer.warningPriorPeriod)
+        #expect(needsReview)
+        #expect(axisWarning)
+        #expect(priorWarning)
+    }
+
+    /// 9517 S100OHPV: 電力小売/卸売は販路。当期表を原本で確認できないときも公開しない。
+    @Test func ohpv9517WholesaleRetailChannelNeedsReview() async throws {
+        let html = """
+            <p>（単位：百万円）</p>
+            <table>
+              <tr><td></td><td>金額</td></tr>
+              <tr><td>電力小売</td><td>93,890</td></tr>
+              <tr><td>電力卸売</td><td>133,308</td></tr>
+              <tr><td>その他</td><td>3,302</td></tr>
+              <tr><td>合計</td><td>230,500</td></tr>
+            </table>
+            """
+        let extracted = ExtractedBreakdown(
+            method: "html_table",
+            tables: BreakdownExtractor.allTablesFromHtml(html, defaultHeading: "収益認識関係"),
+            facts: [])
+        let parsed = RevenueRecognitionCandidates.parse(tables: extracted.tables)
+        let axis: RevenueRecognitionTableStructure.TableAxis =
+            RevenueRecognitionTableStructure.tableAxis(of: parsed[0])
+        #expect(axis == .customer)
+        let snapshot = try await run(
+            html: html, docID: "S100OHPV", fyEnd: "2026-03-31", pick: "t0_c1")
         let needsReview: Bool = snapshot.needsReview
         let axisWarning: Bool = snapshot.warnings.contains(
             RevenueRecognitionColumnNormalizer.warningCustomerOrTimingAxis)
