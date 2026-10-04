@@ -514,5 +514,34 @@ import Testing
             #expect(product == false)
             #expect(heading == false)
         }
+
+        @Test func salesChannelHeaderIsCustomerAxis() {
+            let header: Bool = RevenueRecognitionTableStructure.isCustomerAxisLabel("主たる販売経路")
+            let channel: Bool = RevenueRecognitionTableStructure.isCustomerAxisLabel("販売チャネル")
+            let destination: Bool = RevenueRecognitionTableStructure.isCustomerAxisLabel("販売先")
+            let productSale: Bool = RevenueRecognitionTableStructure.isCustomerAxisLabel("ソフトウェア販売")
+            #expect(header)
+            #expect(channel)
+            #expect(destination)
+            #expect(productSale == false)
+            let html = """
+                <table>
+                  <tr><td>主たる販売経路</td><td>金額（千円）</td></tr>
+                  <tr><td>生活協同組合</td><td>2,471,069</td></tr>
+                  <tr><td>自動販売機オペレーター</td><td>1,844,578</td></tr>
+                  <tr><td>量販店</td><td>980,838</td></tr>
+                  <tr><td>卸問屋</td><td>648,023</td></tr>
+                  <tr><td>その他</td><td>1,379,243</td></tr>
+                  <tr><td>合計</td><td>7,323,751</td></tr>
+                </table>
+                """
+            let parsed = RevenueRecognitionTableStructureTests.parsed(html)
+            let axis: RevenueRecognitionTableStructure.TableAxis =
+                RevenueRecognitionTableStructure.tableAxis(of: parsed)
+            let constraint: RevenueRecognitionTableStructure.AxisConstraint =
+                RevenueRecognitionTableStructure.axisConstraint(tables: [parsed])
+            #expect(axis == .customer)
+            #expect(constraint == .customerOrTimingOnly)
+        }
     }
 }

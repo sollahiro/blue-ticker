@@ -947,6 +947,164 @@ import Testing
         #expect(axisWarning)
     }
 
+    /// 7096 S100YI32: 時期別の区分だけ。表選択の確率を外しても軸チェックで止める。
+    @Test func yi327096TimingOnlyAxisNeedsReview() async throws {
+        let html = """
+            <table><tr><td>（単位：千円）</td></tr></table>
+            <p>当連結会計年度（自 2025年4月1日 至 2026年3月31日）</p>
+            <table>
+              <tr><td></td><td>当期</td></tr>
+              <tr><td>一時点で移転される財又はサービス</td><td>2,269,035</td></tr>
+              <tr><td>一定の期間にわたり移転される財又はサービス</td><td>542,308</td></tr>
+              <tr><td>顧客との契約から生じる収益</td><td>2,811,343</td></tr>
+            </table>
+            """
+        let extracted = ExtractedBreakdown(
+            method: "html_table",
+            tables: BreakdownExtractor.allTablesFromHtml(html, defaultHeading: "収益認識関係"),
+            facts: [])
+        let parsed = RevenueRecognitionCandidates.parse(tables: extracted.tables)
+        let data = try #require(parsed.first { !$0.items.isEmpty } ?? parsed.last)
+        let axis: RevenueRecognitionTableStructure.TableAxis =
+            RevenueRecognitionTableStructure.tableAxis(of: data)
+        let constraint: RevenueRecognitionTableStructure.AxisConstraint =
+            RevenueRecognitionTableStructure.axisConstraint(tables: parsed)
+        #expect(axis == .timing)
+        #expect(constraint == .customerOrTimingOnly)
+        let snapshot = try await run(
+            html: html, docID: "S100YI32", fyEnd: "2026-03-31", pick: "t1_c1")
+        let needsReview: Bool = snapshot.needsReview
+        let axisWarning: Bool = snapshot.warnings.contains(
+            RevenueRecognitionColumnNormalizer.warningCustomerOrTimingAxis)
+        #expect(needsReview)
+        #expect(axisWarning)
+    }
+
+    /// 2224 S100YICN: 販売経路別の行。表選択を外しても顧客軸として残し needs_review。
+    @Test func yicn2224SalesChannelAxisNeedsReview() async throws {
+        let html = """
+            <p>当連結会計年度（自 2025年4月1日 至 2026年3月31日）</p>
+            <table>
+              <tr><td>主たる販売経路</td><td>金額（千円）</td></tr>
+              <tr><td>生活協同組合</td><td>2,471,069</td></tr>
+              <tr><td>自動販売機オペレーター</td><td>1,844,578</td></tr>
+              <tr><td>量販店</td><td>980,838</td></tr>
+              <tr><td>卸問屋</td><td>648,023</td></tr>
+              <tr><td>その他</td><td>1,379,243</td></tr>
+              <tr><td>合計</td><td>7,323,751</td></tr>
+            </table>
+            """
+        let extracted = ExtractedBreakdown(
+            method: "html_table",
+            tables: BreakdownExtractor.allTablesFromHtml(html, defaultHeading: "収益認識関係"),
+            facts: [])
+        let parsed = RevenueRecognitionCandidates.parse(tables: extracted.tables)
+        let axis: RevenueRecognitionTableStructure.TableAxis =
+            RevenueRecognitionTableStructure.tableAxis(of: parsed[0])
+        let constraint: RevenueRecognitionTableStructure.AxisConstraint =
+            RevenueRecognitionTableStructure.axisConstraint(tables: parsed)
+        #expect(axis == .customer)
+        #expect(constraint == .customerOrTimingOnly)
+        let snapshot = try await run(
+            html: html, docID: "S100YICN", fyEnd: "2026-03-31", pick: "t0_c1")
+        let needsReview: Bool = snapshot.needsReview
+        let axisWarning: Bool = snapshot.warnings.contains(
+            RevenueRecognitionColumnNormalizer.warningCustomerOrTimingAxis)
+        #expect(needsReview)
+        #expect(axisWarning)
+    }
+
+    /// 7464 S100YJG0: 品目別 5 行。表選択 0.73 相当でも列選択と合計で出す。
+    @Test func yjg07464ProductRowsAreAdopted() async throws {
+        let cats = ["標識・標示板", "安全機材", "保安警告サイン", "安全防災用品", "その他"]
+        let amounts = [1_377_658, 578_768, 643_259, 832_457, 1_073_255]
+        let html = """
+            <p>当連結会計年度（自 2025年4月1日 至 2026年3月31日）</p>
+            <p>（単位：千円）</p>
+            <table>
+              <tr><td></td><td>金額</td></tr>
+              <tr><td>（品目別）</td><td></td></tr>
+              <tr><td>標識・標示板</td><td>1,377,658</td></tr>
+              <tr><td>安全機材</td><td>578,768</td></tr>
+              <tr><td>保安警告サイン</td><td>643,259</td></tr>
+              <tr><td>安全防災用品</td><td>832,457</td></tr>
+              <tr><td>その他</td><td>1,073,255</td></tr>
+              <tr><td>顧客との契約から生じる収益</td><td>4,505,397</td></tr>
+            </table>
+            """
+        let snapshot = try await run(html: html, docID: "S100YJG0", fyEnd: "2026-03-31", pick: "t0_c1")
+        let segments = snapshot.rows.filter { $0.rowKind == "segment" }
+        let segmentCount: Int = segments.count
+        #expect(segmentCount == 5)
+        for (index, name) in cats.enumerated() {
+            let row = segments[index]
+            let group: String? = row.categoryGroup
+            let category: String? = row.category
+            let amount: Double = row.amount
+            let expectedAmount: Double = sen(amounts[index])
+            #expect(group == "（品目別）")
+            #expect(category == name)
+            #expect(amount == expectedAmount)
+        }
+        let denominator: Double = snapshot.denominator
+        let expectedDenom: Double = sen(4_505_397)
+        let needsReview: Bool = snapshot.needsReview
+        #expect(denominator == expectedDenom)
+        #expect(needsReview == false)
+    }
+
+    /// 332A S100YKM2: 単位スタブ表 + 品目 2 行。表選択 0.88 相当でも出す。
+    @Test func ykm2332AProductRowsAreAdopted() async throws {
+        let html = """
+            <table><tr><td>（単位：千円）</td></tr></table>
+            <p>当連結会計年度（自 2025年4月1日 至 2026年3月31日）</p>
+            <table>
+              <tr><td></td><td>前連結会計年度</td><td>当連結会計年度</td></tr>
+              <tr><td>IoT/DXプラットフォームサービス</td><td>1,800,000</td><td>2,030,053</td></tr>
+              <tr><td>MVNEサービス</td><td>4,800,000</td><td>5,120,400</td></tr>
+              <tr><td>顧客との契約から生じる収益</td><td>6,600,000</td><td>7,150,453</td></tr>
+            </table>
+            """
+        let snapshot = try await run(
+            html: html, docID: "S100YKM2", fyEnd: "2026-03-31", pick: "t1_c2")
+        try assertFlatRows(
+            snapshot,
+            groups: ["IoT/DXプラットフォームサービス", "MVNEサービス"],
+            amounts: [2_030_053, 5_120_400],
+            unit: 1_000)
+        let denominator: Double = snapshot.denominator
+        let expectedDenom: Double = sen(7_150_453)
+        let needsReview: Bool = snapshot.needsReview
+        #expect(denominator == expectedDenom)
+        #expect(needsReview == false)
+    }
+
+    /// 2139 S100YHNL: 金額セル接尾辞の千円。表選択 0.68 相当でも出す。
+    @Test func yhnl2139ProductRowsAreAdopted() async throws {
+        let html = """
+            <p>当連結会計年度（自 2025年4月1日 至 2026年3月31日）</p>
+            <table>
+              <tr><td></td><td>前連結会計年度</td><td>当連結会計年度</td></tr>
+              <tr><td>自社メディア広告</td><td>6,553,546千円</td><td>6,693,644千円</td></tr>
+              <tr><td>セールスプロモーション等</td><td>5,000,000千円</td><td>5,280,268千円</td></tr>
+              <tr><td>その他</td><td>150,000千円</td><td>179,516千円</td></tr>
+              <tr><td>顧客との契約から生じる収益</td><td>11,703,546千円</td><td>12,153,428千円</td></tr>
+            </table>
+            """
+        let snapshot = try await run(
+            html: html, docID: "S100YHNL", fyEnd: "2026-03-31", pick: "t0_c2")
+        try assertFlatRows(
+            snapshot,
+            groups: ["自社メディア広告", "セールスプロモーション等", "その他"],
+            amounts: [6_693_644, 5_280_268, 179_516],
+            unit: 1_000)
+        let denominator: Double = snapshot.denominator
+        let expectedDenom: Double = sen(12_153_428)
+        let needsReview: Bool = snapshot.needsReview
+        #expect(denominator == expectedDenom)
+        #expect(needsReview == false)
+    }
+
     /// 4519 S100XTBJ: 製商品売上高と日本/海外、その他の売上収益とその内訳は親子。子だけ出す。
     @Test func xtbj4519ParentFollowedByChildrenEmitsChildren() async throws {
         let html = """

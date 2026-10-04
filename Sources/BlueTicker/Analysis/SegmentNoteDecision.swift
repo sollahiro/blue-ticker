@@ -114,11 +114,13 @@ enum SegmentNoteDecision {
     /// 専用タグ本文で business を確定した監査。Jev は呼んでいない。公開 reason ではない。
     static let dedicatedTagDecisionSource = "dedicated_single_segment_tag"
 
-    /// 選ばれた選択肢の `probabilities[choice]` がこれ以上のときだけ表の採用か省略を適用する。
+    /// 省略（`none_of_these` のあとの文クラス）だけに使う。表を選んだときは見ない。
     /// `confidence` では代用しない。校正値は PR 本文。誤った省略より needs_review を残す。
     static let applyProbabilityThreshold: Double = 0.9
 
-    /// 表が分析すべき当期の内訳か。違い、かつ省略の種類が軸に合い、確率が閾値以上で、
+    /// 表が分析すべき当期の内訳か。表を選んだときは確率に関係なくその表を残し、
+    /// `needs_review` は列選択 0.5 と合計・軸チェックに任せる。
+    /// `none_of_these` のときは省略の種類が軸に合い、確率が閾値以上で、
     /// 文の種類が食い違わないときだけ今日の経路を変える。
     /// 決定論で既に business / geography が確定しているときは呼ばない前提で、
     /// `hasCleanDeterministicSnapshot` が true ならネットワークに行かない。
@@ -153,11 +155,10 @@ enum SegmentNoteDecision {
                 tableChoice: tableChoice, decider: decider)
         }
         if let selected = tableChoice.selected, let index = Int(selected), tables.indices.contains(index) {
-            let apply = meetsThreshold(tableChoice.probability)
             return finish(
                 axis: axis, code: code, docID: docID, sentences: sentences,
-                action: apply ? .keepTable(index) : .unchanged, needsReview: !apply,
-                calls: [call(tableChoice, sentences: sentences, applied: apply)])
+                action: .keepTable(index), needsReview: false,
+                calls: [call(tableChoice, sentences: sentences, applied: true)])
         }
         return finish(
             axis: axis, code: code, docID: docID, sentences: sentences,

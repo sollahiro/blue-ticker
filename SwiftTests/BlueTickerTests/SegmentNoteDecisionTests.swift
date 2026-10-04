@@ -167,12 +167,13 @@ import Testing
         #expect(kept.needsReview == false)
     }
 
-    @Test func chosenTableIsKeptAndCleanSnapshotSkipsJev() async {
+        @Test func chosenTableIsKeptAndCleanSnapshotSkipsJev() async {
         let decider = FakeSegmentNoteDecider(selection: .table(0), omissionsBySnippet: [:])
         let kept = await SegmentNoteDecision.decide(
             axis: .business, tables: [relatedCustomerTable()], sentences: [singleSegment],
             hasCleanDeterministicSnapshot: false, decider: decider)
         #expect(kept.action == .keepTable(0))
+        #expect(kept.needsReview == false)
 
         let skipped = await SegmentNoteDecision.decide(
             axis: .business, tables: [relatedCustomerTable()], sentences: [singleSegment],
@@ -180,6 +181,24 @@ import Testing
         #expect(skipped.action == .unchanged)
         #expect(skipped.audit == nil)
         #expect(await decider.tableCalls == 1)
+    }
+
+    @Test func tablePickBelowOmissionThresholdIsStillKept() async throws {
+        let low = SegmentNoteDecision.applyProbabilityThreshold - 0.02
+        let decider = FakeSegmentNoteDecider(
+            selection: .table(0), omissionsBySnippet: [:], tableProbability: low)
+        let outcome = await SegmentNoteDecision.decide(
+            axis: .business, docID: "S100YKM2", tables: [relatedCustomerTable()],
+            sentences: [singleSegment], hasCleanDeterministicSnapshot: false, decider: decider)
+        #expect(outcome.action == .keepTable(0))
+        #expect(outcome.needsReview == false)
+        let audit = try #require(outcome.audit)
+        #expect(audit.applied == true)
+        #expect(audit.needsReview == false)
+        let call = try #require(audit.calls.first)
+        #expect(call.selected == "0")
+        #expect(call.probability == low)
+        #expect(call.applied == true)
     }
 
     @Test func missingKeyPathDoesNotCallWhenSentencesOrTablesAreEmpty() async {

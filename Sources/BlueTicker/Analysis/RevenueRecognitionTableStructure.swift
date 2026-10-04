@@ -222,6 +222,9 @@ enum RevenueRecognitionTableStructure {
         if token.contains("顧客別") || token.contains("主要な顧客") || token.contains("主要顧客") {
             return true
         }
+        if token.contains("販売経路") || token.contains("販売チャネル") || token.contains("販売先") {
+            return true
+        }
         if token.contains("グループ向け") { return true }
         if token.contains("向け") {
             if token.contains("サービス") || token.contains("製品") || token.contains("保証") {
@@ -266,6 +269,8 @@ enum RevenueRecognitionTableStructure {
             if isCustomerAxisLabel(token) { customer = true }
             if isProductAxisLabel(token) { product = true }
         }
+        if let caption = table.precedingCaption { consume(caption) }
+        for header in table.columnHeaders.values { consume(header) }
         for row in table.structure.rows {
             if let group = row.categoryGroup { consume(group) }
             if let category = row.category { consume(category) }
