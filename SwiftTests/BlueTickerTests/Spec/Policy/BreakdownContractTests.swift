@@ -30,6 +30,29 @@ import Testing
         #expect(
             isPubliclyServableBreakdown(
                 source: breakdownSourceGeographyLLM, needsReview: false, warnings: []) == true)
+        #expect(
+            isPubliclyInsufficientRevenueRecognition(segmentCount: 1, emittedSum: 7_000_000))
+        #expect(
+            isPubliclyInsufficientRevenueRecognition(segmentCount: 2, emittedSum: 0))
+        #expect(
+            isPubliclyInsufficientRevenueRecognition(segmentCount: 2, emittedSum: 1) == false)
+        let incidental = BreakdownRowPayload(
+            labelRaw: "不動産賃貸管理事業に付随する収入",
+            label: "不動産賃貸管理事業に付随する収入", amount: 7_000_000, profit: nil,
+            rowKind: "segment")
+        #expect(
+            isPubliclyServableBreakdown(
+                source: breakdownSourceRevenueRecognitionLLM, needsReview: false, warnings: [],
+                rows: [incidental]) == false)
+        #expect(
+            isPubliclyServableBreakdown(
+                source: breakdownSourceRevenueRecognitionLLM, needsReview: false, warnings: [],
+                rows: [
+                    incidental,
+                    BreakdownRowPayload(
+                        labelRaw: "その他", label: "その他", amount: 0, profit: nil,
+                        rowKind: "segment"),
+                ]) == false)
     }
 
     @Test func publicServingLeavesXbrlAndNoneRowsUntouched() {

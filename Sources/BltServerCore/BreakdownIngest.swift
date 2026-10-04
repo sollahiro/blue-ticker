@@ -357,7 +357,8 @@ enum BreakdownLoadResult {
 /// （提出日時降順のうち read 可能・会社開示府令の先頭）。特定有価証券府令(030)は選ばない。
 /// read 可否は `isServableBreakdown`（決定論・LLM とも cache_version の床でゲート）。
 /// 公開面はさらに `isPubliclyServableBreakdown`：`needs_review` / `llm_unit_unresolved` の
-/// LLM 行は出さない（千円表の 1000 倍誤り stopgap。fail closed）。残行が 0 なら `.absent`
+/// LLM 行は出さない（千円表の 1000 倍誤り stopgap。fail closed）。`revenue_recognition_llm` は
+/// 単一行または明細合計 0 も出さない。残行が 0 なら `.absent`
 /// （未算出と同じ 404。payload 形は変えない。最新を落としても前年へはフォールバックしない）。
 /// 無い・read 不可・府令対象外・公開除外なら `.absent`（呼び出し側は 404。ライブ解決へはフォールバックしない）。
 func loadStoredBreakdown(
@@ -394,7 +395,8 @@ func loadStoredBreakdown(
     guard isPubliclyServableBreakdown(
         source: row.source,
         needsReview: row.needsReview || row.payload.needsReview,
-        warnings: row.payload.warnings)
+        warnings: row.payload.warnings,
+        rows: row.payload.rows)
     else { return .absent }
 
     if let reason = row.notApplicableReason {
