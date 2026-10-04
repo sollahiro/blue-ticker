@@ -15,10 +15,12 @@ enum RevenueRecognitionTableStructure {
     }
 
     /// 表全体の分解軸。Jev 列選択の前に、製品・事業表を顧客別／時点表より優先する。
+    /// 行ラベルが全て地域の表は列が見出しの製品名でも geography（7202 の国内/海外×車種）。
     enum TableAxis: Equatable {
         case productOrBusiness
         case customer
         case timing
+        case geography
         case unknown
     }
 
@@ -26,6 +28,7 @@ enum RevenueRecognitionTableStructure {
         case unconstrained
         case productOnly
         case customerOrTimingOnly
+        case geographyOnly
     }
 
     enum LabelKind: Equatable {
@@ -183,6 +186,7 @@ enum RevenueRecognitionTableStructure {
         let token = RevenueRecognitionCandidates.compactCell(label)
         if token.isEmpty { return false }
         if token.contains("地理的区分") || token.contains("所在地") { return true }
+        if token.contains("仕向地") { return true }
         if token.contains("地域別") || token.contains("地域") { return true }
         return false
     }
@@ -218,8 +222,12 @@ enum RevenueRecognitionTableStructure {
     static func isCustomerAxisLabel(_ label: String) -> Bool {
         let token = RevenueRecognitionCandidates.compactCell(label)
         if token.isEmpty || RevenueRecognitionCandidates.isTotalLabel(token) { return false }
+        if isGeographyHeading(token) || isBareGeographyLabel(token) { return false }
         if token.contains("外部顧客") { return false }
         if token.contains("顧客別") || token.contains("主要な顧客") || token.contains("主要顧客") {
+            return true
+        }
+        if token.contains("販売経路") || token.contains("販売チャネル") || token.contains("販売先") {
             return true
         }
         if token.contains("グループ向け") { return true }
@@ -229,6 +237,18 @@ enum RevenueRecognitionTableStructure {
             }
             return true
         }
+        if token.contains("官公庁") || token.contains("中央省庁") || token.contains("省庁") {
+            return true
+        }
+        if token.contains("地方自治体") || token.contains("自治体") {
+            return true
+        }
+        if token.contains("民間") || token.contains("公共") || token.contains("政府") {
+            return true
+        }
+        if token.contains("業販") { return true }
+        if token.contains("金融") || token.contains("銀行・証券") { return true }
+        if token.contains("情報通信") { return true }
         return false
     }
 
@@ -251,7 +271,47 @@ enum RevenueRecognitionTableStructure {
         return regions.contains(token)
     }
 
+    /// 地域キーワードを除いたあとに固有の事業語幹が残らないラベル（アジア(中国を除く) / 日本）。
+    /// 国内食料品製造・販売は語幹が残るので地域ではない。
+    static func isBareGeographyLabel(_ label: String) -> Bool {
+        let token = RevenueRecognitionCandidates.compactCell(label)
+        if token.isEmpty || RevenueRecognitionCandidates.isTotalLabel(token) { return false }
+        if isTimingAxisLabel(token) { return false }
+        if isRegionAxisLabel(token) || isGeographyHeading(token) { return true }
+        guard geographyLeftoverStem(token).isEmpty else { return false }
+        return geographyKeywords.contains { token.contains($0) }
+    }
+
+    static func isOtherResidualLabel(_ label: String) -> Bool {
+        let token = RevenueRecognitionCandidates.compactCell(label)
+        return token == "その他" || token == "その他の地域" || token == "その他地域"
+    }
+
+    /// 金額行のラベルが全て地域（その他は残余として可）。列見出しの製品名は見ない（7202）。
+    static func isGeographyOnlyTable(_ table: RevenueRecognitionCandidates.ParsedTable) -> Bool {
+        let labels = segmentLabels(in: table)
+        guard !labels.isEmpty else { return false }
+        let allGeo = labels.allSatisfy { isBareGeographyLabel($0) || isOtherResidualLabel($0) }
+        return allGeo && labels.contains(where: isBareGeographyLabel)
+    }
+
+    /// 電力小売 / 電力卸売 のように、残余以外が小売と卸売だけの表は販路。
+    static func isWholesaleRetailChannelTable(
+        _ table: RevenueRecognitionCandidates.ParsedTable
+    ) -> Bool {
+        let core = segmentLabels(in: table).filter {
+            !isOtherResidualLabel($0) && !RevenueRecognitionCandidates.isTotalLabel($0)
+        }
+        guard core.count >= 2 else { return false }
+        let retail = core.contains { $0.contains("小売") }
+        let wholesale = core.contains { $0.contains("卸売") }
+        return retail && wholesale
+            && core.allSatisfy { $0.contains("小売") || $0.contains("卸売") }
+    }
+
     static func tableAxis(of table: RevenueRecognitionCandidates.ParsedTable) -> TableAxis {
+        if isGeographyOnlyTable(table) { return .geography }
+        if isWholesaleRetailChannelTable(table) { return .customer }
         var product = false
         var customer = false
         var timing = false
@@ -266,10 +326,17 @@ enum RevenueRecognitionTableStructure {
             if isCustomerAxisLabel(token) { customer = true }
             if isProductAxisLabel(token) { product = true }
         }
+        if let caption = table.precedingCaption { consume(caption) }
+        for header in table.columnHeaders.values { consume(header) }
+        for row in table.grid.prefix(table.headerRowCount) {
+            for cell in row { consume(cell) }
+        }
         for row in table.structure.rows {
             if let group = row.categoryGroup { consume(group) }
             if let category = row.category { consume(category) }
         }
+        // 同一表の製品行と顧客行（3538 業販＋新車）は顧客軸として残し公開しない。
+        if product && customer { return .customer }
         if product { return .productOrBusiness }
         if customer { return .customer }
         if timing { return .timing }
@@ -282,8 +349,10 @@ enum RevenueRecognitionTableStructure {
         let axes = tables.map(tableAxis(of:))
         let hasProduct = axes.contains(.productOrBusiness)
         let hasCustomerOrTiming = axes.contains(.customer) || axes.contains(.timing)
-        if hasProduct && hasCustomerOrTiming { return .productOnly }
-        if hasCustomerOrTiming && !hasProduct && !axes.contains(.unknown) {
+        let hasGeography = axes.contains(.geography)
+        if hasProduct && (hasCustomerOrTiming || hasGeography) { return .productOnly }
+        if hasGeography && !hasProduct && !hasCustomerOrTiming { return .geographyOnly }
+        if hasCustomerOrTiming && !hasProduct && !hasGeography && !axes.contains(.unknown) {
             return .customerOrTimingOnly
         }
         return .unconstrained
@@ -401,7 +470,8 @@ enum RevenueRecognitionTableStructure {
         if block.itemRows.isEmpty { return true }
         if labels.isEmpty { return false }
         return labels.allSatisfy {
-            isTimingAxisLabel($0) || isRegionAxisLabel($0) || isGeographyHeading($0)
+            isTimingAxisLabel($0) || isBareGeographyLabel($0) || isGeographyHeading($0)
+                || isOtherResidualLabel($0)
         }
     }
 
@@ -413,7 +483,7 @@ enum RevenueRecognitionTableStructure {
         let labels = itemLabels(of: block, rows: rows)
         if labels.isEmpty { return block.kind }
         if labels.allSatisfy(isTimingAxisLabel) { return .unknown }
-        if labels.allSatisfy({ isRegionAxisLabel($0) || isGeographyHeading($0) }) {
+        if labels.allSatisfy({ isBareGeographyLabel($0) || isGeographyHeading($0) }) {
             return .geography
         }
         if labels.contains(where: isProductAxisLabel) { return .productOrBusiness }
@@ -427,6 +497,28 @@ enum RevenueRecognitionTableStructure {
             let token = row.category ?? row.categoryGroup ?? ""
             return token.isEmpty ? nil : token
         }
+    }
+
+    static func segmentLabels(in table: RevenueRecognitionCandidates.ParsedTable) -> [String] {
+        table.structure.rows.compactMap { row in
+            guard row.amountKind == .segment else { return nil }
+            let token = row.category ?? row.categoryGroup ?? ""
+            return token.isEmpty ? nil : token
+        }
+    }
+
+    static let geographyKeywords: [String] =
+        Xbrl.segmentGeographyLabelKeywordsJa + ["国外", "本邦", "韓国", "台湾", "中南米"]
+
+    static func geographyLeftoverStem(_ label: String) -> String {
+        var stripped = RevenueRecognitionCandidates.compactCell(label)
+        for keyword in geographyKeywords.sorted(by: { $0.count > $1.count }) {
+            stripped = stripped.replacingOccurrences(of: keyword, with: "")
+        }
+        for extra in ["を除く", "を含む", "除く", "及び", "および"] {
+            stripped = stripped.replacingOccurrences(of: extra, with: "")
+        }
+        return stripped.filter { !$0.isWhitespace && !$0.isPunctuation && $0 != "・" && $0 != "、" }
     }
 
     static func labelAreaWidth(rows: [[String]], from firstData: Int) -> Int {

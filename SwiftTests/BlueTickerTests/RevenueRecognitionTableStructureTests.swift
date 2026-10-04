@@ -514,5 +514,123 @@ import Testing
             #expect(product == false)
             #expect(heading == false)
         }
+
+        @Test func salesChannelHeaderIsCustomerAxis() {
+            let header: Bool = RevenueRecognitionTableStructure.isCustomerAxisLabel("主たる販売経路")
+            let channel: Bool = RevenueRecognitionTableStructure.isCustomerAxisLabel("販売チャネル")
+            let destination: Bool = RevenueRecognitionTableStructure.isCustomerAxisLabel("販売先")
+            let productSale: Bool = RevenueRecognitionTableStructure.isCustomerAxisLabel("ソフトウェア販売")
+            #expect(header)
+            #expect(channel)
+            #expect(destination)
+            #expect(productSale == false)
+            let html = """
+                <table>
+                  <tr><td>主たる販売経路</td><td>金額（千円）</td></tr>
+                  <tr><td>生活協同組合</td><td>2,471,069</td></tr>
+                  <tr><td>自動販売機オペレーター</td><td>1,844,578</td></tr>
+                  <tr><td>量販店</td><td>980,838</td></tr>
+                  <tr><td>卸問屋</td><td>648,023</td></tr>
+                  <tr><td>その他</td><td>1,379,243</td></tr>
+                  <tr><td>合計</td><td>7,323,751</td></tr>
+                </table>
+                """
+            let parsed = RevenueRecognitionTableStructureTests.parsed(html)
+            let axis: RevenueRecognitionTableStructure.TableAxis =
+                RevenueRecognitionTableStructure.tableAxis(of: parsed)
+            let constraint: RevenueRecognitionTableStructure.AxisConstraint =
+                RevenueRecognitionTableStructure.axisConstraint(tables: [parsed])
+            #expect(axis == .customer)
+            #expect(constraint == .customerOrTimingOnly)
+        }
+
+        @Test func governmentAndPrivateLabelsAreCustomerAxis() {
+            let ministry: Bool = RevenueRecognitionTableStructure.isCustomerAxisLabel("中央省庁")
+            let local: Bool = RevenueRecognitionTableStructure.isCustomerAxisLabel("地方自治体")
+            let privateOther: Bool = RevenueRecognitionTableStructure.isCustomerAxisLabel("民間その他")
+            let publicSector: Bool = RevenueRecognitionTableStructure.isCustomerAxisLabel("官公庁")
+            let government: Bool = RevenueRecognitionTableStructure.isCustomerAxisLabel("政府")
+            let civic: Bool = RevenueRecognitionTableStructure.isCustomerAxisLabel("公共")
+            let product: Bool = RevenueRecognitionTableStructure.isCustomerAxisLabel("ソフトウェア販売")
+            #expect(ministry)
+            #expect(local)
+            #expect(privateOther)
+            #expect(publicSector)
+            #expect(government)
+            #expect(civic)
+            #expect(product == false)
+        }
+
+        @Test func destinationAndAsiaExChinaAreGeographyOnly() {
+            let heading: Bool = RevenueRecognitionTableStructure.isGeographyHeading("仕向地別売上高")
+            let asia: Bool = RevenueRecognitionTableStructure.isBareGeographyLabel("アジア(中国を除く)")
+            let kikkoman: Bool = RevenueRecognitionTableStructure.isBareGeographyLabel(
+                "国内食料品製造・販売")
+            let leftover: String = RevenueRecognitionTableStructure.geographyLeftoverStem(
+                "アジア(中国を除く)")
+            #expect(heading)
+            #expect(asia)
+            #expect(kikkoman == false)
+            #expect(leftover.isEmpty)
+            let html = """
+                <table>
+                  <tr><td></td><td>大型・中型車</td><td>小型車他</td><td>合計</td></tr>
+                  <tr><td>国内</td><td>332,066</td><td>116,163</td><td>878,486</td></tr>
+                  <tr><td>海外</td><td>394,775</td><td>1,479,463</td><td>2,205,383</td></tr>
+                </table>
+                """
+            let parsed = RevenueRecognitionTableStructureTests.parsed(html)
+            let axis: RevenueRecognitionTableStructure.TableAxis =
+                RevenueRecognitionTableStructure.tableAxis(of: parsed)
+            let constraint: RevenueRecognitionTableStructure.AxisConstraint =
+                RevenueRecognitionTableStructure.axisConstraint(tables: [parsed])
+            #expect(axis == .geography)
+            #expect(constraint == .geographyOnly)
+        }
+
+        @Test func customerIndustryAndGyohanAreCustomerAxis() {
+            let finance: Bool = RevenueRecognitionTableStructure.isCustomerAxisLabel(
+                "金融(銀行・証券・保険等)")
+            let telecom: Bool = RevenueRecognitionTableStructure.isCustomerAxisLabel(
+                "情報通信・メディア・ハイテク")
+            let gyohan: Bool = RevenueRecognitionTableStructure.isCustomerAxisLabel("業販")
+            let guarantee: Bool = RevenueRecognitionTableStructure.isCustomerAxisLabel(
+                "金融法人向け保証サービス")
+            #expect(finance)
+            #expect(telecom)
+            #expect(gyohan)
+            #expect(guarantee == false)
+        }
+
+        @Test func mixedProductAndCustomerOnSameTableIsCustomer() {
+            let html = """
+                <table>
+                  <tr><td></td><td>金額</td></tr>
+                  <tr><td>ソフトウェア製品</td><td>100</td></tr>
+                  <tr><td>業販</td><td>20</td></tr>
+                  <tr><td>合計</td><td>120</td></tr>
+                </table>
+                """
+            let parsed = RevenueRecognitionTableStructureTests.parsed(html)
+            let axis: RevenueRecognitionTableStructure.TableAxis =
+                RevenueRecognitionTableStructure.tableAxis(of: parsed)
+            #expect(axis == .customer)
+        }
+
+        @Test func wholesaleAndRetailPairIsCustomerAxis() {
+            let html = """
+                <table>
+                  <tr><td></td><td>金額</td></tr>
+                  <tr><td>電力小売</td><td>93,890</td></tr>
+                  <tr><td>電力卸売</td><td>133,308</td></tr>
+                  <tr><td>その他</td><td>3,302</td></tr>
+                  <tr><td>合計</td><td>230,500</td></tr>
+                </table>
+                """
+            let parsed = RevenueRecognitionTableStructureTests.parsed(html)
+            let axis: RevenueRecognitionTableStructure.TableAxis =
+                RevenueRecognitionTableStructure.tableAxis(of: parsed)
+            #expect(axis == .customer)
+        }
     }
 }
