@@ -3,7 +3,7 @@
 // 既にオークマ型（axis が geography 判定される場合）を収益認識関係注記へ axis-aware に
 // swap 済みで返す（`isGeographyAxis` 判定＋`extractRevenueRecognitionInfo` フォールバック）。
 // 本リゾルバはその後段として、method に応じてどの正規化器（xbrl_facts の決定的経路 /
-// 収益認識の Jev 列選択 / SegmentInfoLLM）に振り分けるかだけを判断する。
+// 収益認識の Jev 列選択 / セグメント情報の Jev 列・行選択）に振り分けるかだけを判断する。
 //
 // swap 済みの html_table は見出しが `BreakdownExtractor.revenueRecognitionHeading`
 // （`extractRevenueRecognitionInfo` の dedicatedHeading）で判別できる（swap はその
@@ -33,11 +33,13 @@ enum BusinessBreakdownResolver {
         labelsByTag: [String: String] = [:],
         denominatorTag: String? = nil,
         columnDecider: (any RevenueRecognitionColumnDeciding)? = nil,
+        segmentInfoDecider: (any SegmentInfoDeciding)? = nil,
         fiscalYearEnd: String? = nil,
         docID: String = ""
     ) async -> (snapshot: BreakdownSnapshot?, source: BusinessBreakdownSource, audit: LLMBreakdownAudit?) {
         let factsSnapshot = BreakdownNormalizer.normalize(
             segments, consolidatedSales: consolidatedSales, labelsByTag: labelsByTag)
+        _ = client
 
         // 1) xbrl_facts 経路（決定的、LLM不要）。axis が business かつ needs_review が
         //    立っていなければ確信度が高いのでそのまま採用する。
@@ -81,9 +83,12 @@ enum BusinessBreakdownResolver {
                     lastAudit = audit
                     if let snapshot { return (snapshot, .revenueRecognitionLLM, audit) }
                 }
-            } else {
+            } else if let infoDecider = segmentInfoDecider
+                ?? columnDecider.map({ SegmentInfoDeciderFromColumnDecider(columnDecider: $0) })
+            {
                 let (snapshot, audit) = await SegmentInfoLLMNormalizer.normalize(
-                    segments, consolidatedSales: consolidatedSales, client: client,
+                    segments, consolidatedSales: consolidatedSales, decider: infoDecider,
+                    fiscalYearEnd: fiscalYearEnd, docID: docID,
                     salesDenominatorTag: denominatorTag
                 )
                 lastAudit = audit

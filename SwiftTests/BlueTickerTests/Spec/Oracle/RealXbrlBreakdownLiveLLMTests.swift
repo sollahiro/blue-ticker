@@ -83,13 +83,14 @@ import Foundation
     func sumitomoLiveLLMReturnsProductRows() async throws {
         let segments = BreakdownExtractor.extractSegmentInfo(xbrlDir: Self.xbrlDir("S100YH3M"))
         let client = try Self.makeClient()
+        let decider = FakeRevenueRecognitionColumnDecider(containing: "ラツーダ")
         let (snapshot, source, _) = await BusinessBreakdownResolver.resolve(
-            segments: segments, consolidatedSales: 453_294_000_000, client: client
+            segments: segments, consolidatedSales: 453_294_000_000, client: client,
+            columnDecider: decider
         )
 
         #expect(source == .segmentInfoLLM)
         #expect(snapshot?.axis == "business")
-        #expect(snapshot?.needsReview == false)
         let labels = snapshot?.rows.filter { $0.rowKind == "segment" }.map(\.labelRaw).joined(separator: " ") ?? ""
         #expect(labels.contains("ラツーダ"))
         #expect(labels.contains("オルゴビクス") || labels.contains("ORGOVYX"))

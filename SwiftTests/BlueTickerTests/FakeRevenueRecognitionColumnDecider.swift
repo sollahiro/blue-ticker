@@ -124,3 +124,22 @@ actor FakeRevenueRecognitionColumnDecider: RevenueRecognitionColumnDeciding {
         return (usable.max { rank($0) < rank($1) } ?? columns.last)?.key
     }
 }
+
+extension FakeRevenueRecognitionColumnDecider: SegmentInfoDeciding {
+    func choose(
+        columns: [RevenueRecognitionCandidates.AmountColumn],
+        metricRows: [SegmentInfoMetricRow],
+        tables: [RevenueRecognitionCandidates.ParsedTable],
+        fiscalYearEnd: String?,
+        docID: String
+    ) async -> SegmentInfoChoice {
+        let column = await chooseColumn(
+            columns: columns, tables: tables, fiscalYearEnd: fiscalYearEnd, docID: docID)
+        var filled = SegmentInfoLLMNormalizer.choiceByFillingMetricRows(
+            column: column, metricRows: metricRows)
+        if let selected, selected == RevenueRecognitionColumnNormalizer.noneOfThese {
+            filled.column = column
+        }
+        return filled
+    }
+}

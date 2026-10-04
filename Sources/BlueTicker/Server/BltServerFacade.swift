@@ -46,6 +46,8 @@ public struct BltServerContext: Sendable {
     let segmentNoteDecider: (any SegmentNoteDeciding)?
     /// 収益分解の当期列選択。同じキーが無いときは nil（Chat Completions には落とさない）。
     let revenueRecognitionColumnDecider: (any RevenueRecognitionColumnDeciding)?
+    /// セグメント情報 html_table の列・行選択。同じキーが無いときは列デサイダへ落とす。
+    let segmentInfoDecider: (any SegmentInfoDeciding)?
     /// 研究開発費の本文総額。同じキーが無いときは nil（数値タグが無い書類は not_found のまま）。
     let researchAndDevelopmentProseDecider: (any ResearchAndDevelopmentProseDeciding)?
     /// 設備投資マトリクスの本文総額。同じキーが無いときは nil。
@@ -60,6 +62,7 @@ public struct BltServerContext: Sendable {
         overviewModel: String = companyOverviewDefaultModel,
         segmentNoteDecider: (any SegmentNoteDeciding)? = nil,
         revenueRecognitionColumnDecider: (any RevenueRecognitionColumnDeciding)? = nil,
+        segmentInfoDecider: (any SegmentInfoDeciding)? = nil,
         researchAndDevelopmentProseDecider: (any ResearchAndDevelopmentProseDeciding)? = nil,
         capexProseDecider: (any CapexProseDeciding)? = nil
     ) {
@@ -76,6 +79,7 @@ public struct BltServerContext: Sendable {
         self.overviewModel = overviewModel
         self.segmentNoteDecider = segmentNoteDecider
         self.revenueRecognitionColumnDecider = revenueRecognitionColumnDecider
+        self.segmentInfoDecider = segmentInfoDecider
         self.researchAndDevelopmentProseDecider = researchAndDevelopmentProseDecider
         self.capexProseDecider = capexProseDecider
         self.businessSegmentDimensionCache = BusinessSegmentDimensionCache()
@@ -185,6 +189,9 @@ public func makeBltServerContext() async -> BltServerContext? {
         decisionsClient.map {
             OpenRouterRevenueRecognitionColumnDecider(client: $0)
         }
+    let segmentInfoDecider: (any SegmentInfoDeciding)? = decisionsClient.map {
+        OpenRouterSegmentInfoDecider(client: $0)
+    }
     let researchAndDevelopmentProseDecider: (any ResearchAndDevelopmentProseDeciding)? =
         decisionsClient.map {
             OpenRouterResearchAndDevelopmentProseDecider(client: $0)
@@ -198,6 +205,7 @@ public func makeBltServerContext() async -> BltServerContext? {
         overviewModel: overviewEndpoint?.model ?? companyOverviewDefaultModel,
         segmentNoteDecider: segmentNoteDecider,
         revenueRecognitionColumnDecider: revenueRecognitionColumnDecider,
+        segmentInfoDecider: segmentInfoDecider,
         researchAndDevelopmentProseDecider: researchAndDevelopmentProseDecider,
         capexProseDecider: capexProseDecider)
 }
@@ -653,6 +661,7 @@ public extension BltServerContext {
             segments: resolvedSegments, consolidatedSales: consolidatedSales, client: businessChatClient,
             labelsByTag: labelsByTag, denominatorTag: denomItem.tag,
             columnDecider: revenueRecognitionColumnDecider,
+            segmentInfoDecider: segmentInfoDecider,
             fiscalYearEnd: BreakdownExtractor.currentFiscalYearEnd(fromXbrlDir: xbrlDir),
             docID: docID)
         let dedicatedTexts = BreakdownExtractor.dedicatedSingleSegmentDisclosureTexts(xbrlDir: xbrlDir)

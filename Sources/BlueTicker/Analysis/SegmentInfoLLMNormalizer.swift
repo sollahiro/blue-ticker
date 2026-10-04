@@ -1,210 +1,561 @@
-// `segments` キー自体が html_table を返すケース（例: キヤノンの US-GAAP 連結注記23。事業名が
-// 列見出しで指標が行という向きの表が、巨大注記内に直接内包されている）の html_table 結果を
-// LLM で BreakdownSnapshot（axis:"business"）へ正規化する。
-// docs/breakdown.md 参照。GeographyBreakdownLLMNormalizer.swift（geography 用）・
-// 収益認識注記由来（オークマ型）は `RevenueRecognitionColumnNormalizer` が Jev 列選択で担う。対象は
-// `segments` キー自体（オークマ型のような axis-aware swap を経ていない、素の segments 結果）
-// が html_table になっているケース。
-//
-// ライブ read 経路（REST/MCP）や ingest には配線しない（他の LLM 正規化器と同じ理由。
-// concept doc で確定済み: LLM は financials/filing-sections と同じ ingest バッチ経路に置く方針だが、
-// 永続化スキーマ配線自体はで未着手）。
+// `segments` キー自体が html_table を返すケース（キヤノン US-GAAP 注23、事業が列・指標が行）
+// を、決定論の表構造チェック + Jev の列・行選択で BreakdownSnapshot（axis:"business"）へ正規化する。
+// Luna / Chat Completions / `OPENAI_BUSINESS_MODEL` は使わない。
+// 地域別経路（`GeographyBreakdownLLMNormalizer`）は触らない。
+// 表構造は収益認識と同じ 4 段（ラベル列、group/category、subtotal/segment、同じ合計の並行ブロック）。
+// docs/breakdown.md
 
 import Foundation
 
+struct SegmentInfoMetricRow: Equatable, Sendable {
+    var key: String
+    var tableIndex: Int
+    var row: Int
+    var label: String
+}
+
+struct SegmentInfoChoice: Equatable, Sendable {
+    var column: RevenueRecognitionColumnChoice
+    var salesRow: RevenueRecognitionColumnChoice?
+    var profitRow: RevenueRecognitionColumnChoice?
+}
+
+protocol SegmentInfoDeciding: Sendable {
+    func choose(
+        columns: [RevenueRecognitionCandidates.AmountColumn],
+        metricRows: [SegmentInfoMetricRow],
+        tables: [RevenueRecognitionCandidates.ParsedTable],
+        fiscalYearEnd: String?,
+        docID: String
+    ) async -> SegmentInfoChoice
+}
+
+/// 列選択だけを持つ Jev（収益認識と同じ `Fake` / OpenRouter 列デサイダ）を、
+/// 売上・利益行は決定論の優先ラベルで埋めてセグメント情報に渡す。
+struct SegmentInfoDeciderFromColumnDecider: SegmentInfoDeciding {
+    let columnDecider: any RevenueRecognitionColumnDeciding
+
+    func choose(
+        columns: [RevenueRecognitionCandidates.AmountColumn],
+        metricRows: [SegmentInfoMetricRow],
+        tables: [RevenueRecognitionCandidates.ParsedTable],
+        fiscalYearEnd: String?,
+        docID: String
+    ) async -> SegmentInfoChoice {
+        let column = await columnDecider.chooseColumn(
+            columns: columns, tables: tables, fiscalYearEnd: fiscalYearEnd, docID: docID)
+        return SegmentInfoLLMNormalizer.choiceByFillingMetricRows(
+            column: column, metricRows: metricRows)
+    }
+}
+
 enum SegmentInfoLLMNormalizer {
-
-    private static let systemPrompt = """
-    あなたは日本の有価証券報告書の「セグメント情報」注記（US-GAAP連結注記に内包されている場合を含む）および
-    「製品・サービス別情報」（サービス毎の情報を含む）から、
-    事業別・製品別の外部売上（または相当する主要指標）を構造化するアシスタントです。
-
-    入力として、同一書類から抽出された候補テーブル（Markdown形式、見出し・期間ラベル・表インデックス付き）と、
-    連結の外部売上高（円単位、比較の分母）が与えられます。候補テーブルには無関係な表
-    （債権残高・契約負債の期首期末残高など）が混ざっていることもある。
-    分母は一般事業会社では売上高、銀行等では経常収益など売上に代わる指標のことがある。
-
-    ルール:
-    - 候補テーブルが複数ある場合、連結売上高（または分母として与えられた経常収益等）との整合性が最も高い表・期間列（多くは「当期」列）を選ぶこと。売上に関係しない表は無視すること
-    - 「製品及びサービスごとの情報」「製品・サービス別情報」「サービス毎の情報」など製品名・サービス名が行または列にある表がある場合は、地域別の報告セグメント表よりそちらを優先すること
-    - 銀行・信託では次を売上相当として採用してよい: 「外部顧客に対する経常収益」「経常収益」「実質業務粗利益」「連結粗利益」「業務粗利益」。売上総利益だけの表や地域別経常収益表より、事業・サービス別のこれらの指標を優先すること
-    - 事業名・製品名が表の列見出しになっている場合（各列が1事業に対応し、行が売上高・利益等の指標になっている表）は、外部顧客向け売上高（または上記の売上相当行）を選び、各列見出しを行ラベルとして1事業=1行になるよう転置して出力すること。出力行の順序は元表の列の左から右と一致させること。連結・合計を消去・調整より前に動かさないこと（誤例: 「連結」を「消去」の前に出す）
-    - 事業名・製品名が表の行になっている場合（1行=1事業/製品の単純な表）はそのまま行として使うこと。地域名の行（日本／北米等）は製品別表の中にあっても row_kind="segment" の製品行としては使わず、製品行だけを出力すること
-    - 行ラベルは採用した表の列見出しまたは行見出しをそのまま使うこと。表に無い語を括弧書きで足さないこと。脚注マーカー（注1等）は除去してよい。補足は notes に書くこと
-    - 売上と同じ表内に事業別・製品別の営業利益（またはセグメント利益に相当する指標。例:「営業利益」「税引前当期純利益」「実質業務純益」）が並んで開示されている場合は、売上行と同じ転置ルールで対応する profit フィールドに設定し、profit_disclosed を true にすること。該当する利益指標がその表に存在しない場合は profit を null のままにし、profit_disclosed を false にすること。無関係な指標（総資産・減価償却費・固定資産・研究開発費等）を流用してはならない
-    - 同一の事業ラベルが指標ブロックごとに繰り返し、ブロック末尾の「売上高 計」「研究開発費 計」「営業利益 計」等だけが指標名を持つ積み上げ表では、売上は「売上高 計」直前ブロック、profit は「営業利益 計」（またはセグメント利益計）直前ブロックから取ること。研究開発費ブロックを profit に使ってはならない
-    - profit_disclosed は「この表に利益情報が存在するか」の申告であり、rows の profit 値と矛盾させないこと（true なら最低1行は profit を埋めること、false なら全行 null のままにすること）
-    - 前期・当期の両方が1つの表に列として並んでいる場合は当期列を選ぶこと
-    - 行ラベルは事業名・製品名・サービス名であるべきで、地域名ではないこと。事業別のはずが実際には地域別の表（見出しの取り違え）である場合は applicable=false を返すこと
-    - 表の金額単位を判定し、unit フィールドに "yen"（円） / "million_yen"（百万円） / "other" のいずれかを申告すること。各表ヘッダーの unit= および直前の「単位:」行は抽出器が注記から拾った単位である。markdown に単位行が無くてもそれを使うこと
-    - 合計・小計・連結合計を表す行は row_kind="subtotal" とし、純粋な除去・消去・調整だけの行（例:「消去」「調整額」「連結消去」）は row_kind="reconciling" とすること。純粋な事業・製品区分の行は row_kind="segment" とすること
-    - 「その他（消去分を含む）」のように、残りの事業・本社勘定等と消去が一体になった列・行は row_kind="segment" とすること（ラベルに「消去」とあっても、単独の消去行ではない。野村HD等。ユーザー確認 2026-07-25）
-    - 該当する事業別データが候補テーブル群に存在しない場合は applicable=false を返すこと
-    - applicable=false の場合、not_applicable_reason に理由種別を設定すること: 候補が地域別の表のみで
-      事業別・製品別データが存在しないことが理由なら geography_only、それ以外の理由なら other。
-      applicable=true の場合は other のままでよい
-    - notes フィールドに、表選択・期間列選択・転置有無の根拠を短く日本語で記すこと
-    """
-
-    // 中身は文字列・数値・配列・辞書のリテラルのみで実質不変（生成後に変更しない）。
-    // `Any` を含むため Sendable 判定はできないが、共有可変状態は無い。
-    nonisolated(unsafe) private static let jsonSchema: [String: Any] = [
-        "type": "object",
-        "properties": [
-            "applicable": ["type": "boolean"],
-            "unit": ["type": "string", "enum": ["yen", "million_yen", "other"]],
-            "source_table_index": ["type": "integer"],
-            "period_column": ["type": "string"],
-            "profit_disclosed": ["type": "boolean"],
-            "rows": [
-                "type": "array",
-                "items": [
-                    "type": "object",
-                    "properties": [
-                        "label": ["type": "string"],
-                        "amount": ["type": "number"],
-                        "profit": ["type": ["number", "null"]],
-                        "row_kind": ["type": "string", "enum": ["segment", "subtotal", "reconciling"]],
-                    ],
-                    "required": ["label", "amount", "profit", "row_kind"],
-                    "additionalProperties": false,
-                ],
-            ],
-            "not_applicable_reason": ["type": "string", "enum": ["geography_only", "other"]],
-            "notes": ["type": "string"],
-        ],
-        "required": [
-            "applicable", "unit", "source_table_index", "period_column", "profit_disclosed", "rows",
-            "not_applicable_reason", "notes",
-        ],
-        "additionalProperties": false,
-    ]
+    static let salesRowQuestion = "sales_row"
+    static let profitRowQuestion = "profit_row"
+    static let warningLowConfidence = RevenueRecognitionColumnNormalizer.warningLowConfidence
+    static let warningNoneOfTheseOverridden =
+        RevenueRecognitionColumnNormalizer.warningNoneOfTheseOverridden
+    static let warningParallelDimensions =
+        RevenueRecognitionColumnNormalizer.warningParallelDimensions
+    static let warningGeographyTaken = "segment_info_geography_only_taken"
+    static let warningSingleSegment = "segment_info_single_segment_disclosed"
 
     /// 分母整合性チェックの許容範囲。他の LLM 正規化器と同じ許容幅を使う。
     private static let denominatorTolerance = 0.90...1.10
 
-    /// segments の ExtractedBreakdown（html_table）と連結外部売上から BreakdownSnapshot を組み立てる。
-    /// LLM 呼び出し失敗・非該当・パース不能の場合は snapshot=nil。
+    static let salesRowPreferred = [
+        "外部顧客向け", "外部顧客に対する売上高", "外部顧客への売上高", "外部顧客への収益",
+        "外部顧客に対する経常収益", "外部顧客への経常収益",
+        "顧客との契約から生じる収益", "顧客との契約から認識した収益",
+        "実質業務粗利益", "連結粗利益", "業務粗利益", "経常収益",
+    ]
+
+    static let profitRowPreferred = [
+        "営業利益", "セグメント利益", "実質業務純益",
+    ]
+
     static func normalize(
-        _ result: ExtractedBreakdown, consolidatedSales: Double?, client: ChatCompleting,
+        _ result: ExtractedBreakdown,
+        consolidatedSales: Double?,
+        decider: any SegmentInfoDeciding,
+        fiscalYearEnd: String?,
+        docID: String,
         salesDenominatorTag: String? = nil
     ) async -> (snapshot: BreakdownSnapshot?, audit: LLMBreakdownAudit?) {
-        // `method == "xbrl_facts"` でも tables が非空なら試す（facts 優先で method が変わっても
-        // 表フォールバックの手段を残すため。issue調査 2026-07-21、Grok 4.5 レビュー指摘）。
-        guard !result.tables.isEmpty,
-              let consolidatedSales, consolidatedSales != 0 else { return (nil, nil) }
+        guard !result.tables.isEmpty else { return (nil, nil) }
+        let parsed = RevenueRecognitionCandidates.parse(tables: result.tables)
+        let columns = RevenueRecognitionCandidates.amountColumns(in: parsed)
+        guard !columns.isEmpty else { return (nil, nil) }
 
-        let userPrompt = BreakdownExtractor.llmUserPrompt(
-            tables: result.tables, consolidatedSales: consolidatedSales)
-
-        guard let jsonSchemaData = try? JSONSerialization.data(withJSONObject: jsonSchema) else { return (nil, nil) }
-
-        let response: [String: Any]
-        do {
-            let responseData = try await client.complete(
-                system: systemPrompt,
-                user: userPrompt,
-                jsonSchema: jsonSchemaData,
-                schemaName: "segment_info_breakdown"
-            )
-            guard let parsed = try JSONSerialization.jsonObject(with: responseData) as? [String: Any] else {
-                return (nil, nil)
-            }
-            response = parsed
-        } catch {
-            printError("SegmentInfoLLMNormalizer: LLM呼び出し失敗: \(error)\n")
-            return (nil, nil)
+        let constraint = RevenueRecognitionTableStructure.axisConstraint(tables: parsed)
+        let offered = RevenueRecognitionColumnNormalizer.offeredColumns(
+            columns, tables: parsed, constraint: constraint)
+        let offeredTables = parsed.filter { table in
+            offered.contains { $0.tableIndex == table.tableIndex }
         }
+        let metricRows = offeredTables.flatMap(metricRows(in:))
+        let choice = await decider.choose(
+            columns: offered, metricRows: metricRows, tables: offeredTables,
+            fiscalYearEnd: fiscalYearEnd, docID: docID)
+        var resolved = RevenueRecognitionColumnNormalizer.resolveSelection(
+            choice.column, columns: offered)
+        resolved = RevenueRecognitionColumnNormalizer.preferProductAxis(
+            resolved, columns: offered, tables: parsed, constraint: constraint)
 
-        let unit = response["unit"] as? String ?? "other"
-        // キー欠落・型不正は「未開示（確認済み）」ではなく「不明」なので、silent に false 扱いせず
-        // llm_profit_disclosed_unresolved を立てる（unit の "other" フラグ付けと同じ考え方）。
-        let profitDisclosedRaw = response["profit_disclosed"] as? Bool
-        let profitDisclosed = profitDisclosedRaw ?? false
-        // strict JSON schema では not_applicable_reason が applicable=true の応答でも常に埋まって
-        // 返ってくる（プロンプトの「other のままでよい」は forcing ではない）。applicable=false の
-        // ときだけ採用することで、成功応答からの理由を誤って「該当なし」判定に混入させない
-        // （Opus監査 2026-07-26）。
-        let applicable = response["applicable"] as? Bool ?? false
-        let audit = LLMBreakdownAudit(
-            sourceTableIndex: (response["source_table_index"] as? NSNumber)?.intValue,
-            periodColumn: response["period_column"] as? String,
-            unit: unit,
-            profitDisclosed: profitDisclosed,
-            notes: response["notes"] as? String ?? "",
-            notApplicableReason: applicable ? nil : response["not_applicable_reason"] as? String
-        )
+        let columnJev = jevPayload(
+            docID: docID, choice: choice.column, resolvedKey: resolved?.key ?? choice.column.selected,
+            question: RevenueRecognitionColumnNormalizer.question)
+        let pNoneNote = choice.column.pNone.map { String($0) } ?? "nil"
+        var notes =
+            "jev_column=\(choice.column.selected ?? "nil") confidence=\(choice.column.confidence.map { String($0) } ?? "nil") p_none=\(pNoneNote)"
+        if let resolved, resolved.forceReview {
+            notes += " overridden=\(resolved.key)"
+        }
+        if let sales = choice.salesRow?.selected {
+            notes += " sales_row=\(sales)"
+        }
+        if let profit = choice.profitRow?.selected {
+            notes += " profit_row=\(profit)"
+        }
+        var audit = LLMBreakdownAudit(
+            sourceTableIndex: nil, periodColumn: resolved?.key ?? choice.column.selected, unit: "",
+            profitDisclosed: false, notes: notes, jev: columnJev, columnJev: columnJev)
 
-        guard applicable,
-              let rawRows = response["rows"] as? [[String: Any]], !rawRows.isEmpty
+        guard let resolved else { return (nil, audit) }
+        guard let column = columns.first(where: { $0.key == resolved.key }),
+              let table = parsed.first(where: { $0.tableIndex == column.tableIndex })
         else { return (nil, audit) }
+
+        let transposed = isSegmentColumnMatrix(table)
+        let (built, profits, groupSumReview, parallelUnresolved, transposedWhole) =
+            buildSnapshotRows(
+                table: table, column: column, choice: choice, transposed: transposed)
+        if built.isEmpty && constraint == .geographyOnly {
+            audit.notApplicableReason = BusinessBreakdownNotApplicableReason.geographyOnly.rawValue
+            return (nil, audit)
+        }
+
+        let belowThreshold = (choice.column.confidence ?? 0) < RevenueRecognitionColumnNormalizer
+            .confidenceThreshold
         var warnings: [String] = []
-        var needsReview = false
+        var needsReview = belowThreshold || groupSumReview || resolved.forceReview
+            || parallelUnresolved || built.isEmpty
+        if belowThreshold { warnings.append(warningLowConfidence) }
+        if resolved.forceReview { warnings.append(warningNoneOfTheseOverridden) }
+        if parallelUnresolved { warnings.append(warningParallelDimensions) }
 
-        if profitDisclosedRaw == nil {
-            needsReview = true
-            warnings.append("llm_profit_disclosed_unresolved")
-        }
-
-        struct ParsedRow {
-            let label: String
-            let rawAmount: Double
-            let rawProfit: Double?
-            let rowKind: String
-        }
-        var parsed: [ParsedRow] = []
-        for raw in rawRows {
-            guard let label = raw["label"] as? String,
-                  let rawAmount = (raw["amount"] as? NSNumber)?.doubleValue,
-                  let rowKind = raw["row_kind"] as? String
-            else { continue }
-            parsed.append(ParsedRow(
-                label: label,
-                rawAmount: rawAmount,
-                rawProfit: (raw["profit"] as? NSNumber)?.doubleValue,
-                rowKind: rowKind
-            ))
-        }
-        guard !parsed.isEmpty else { return (nil, audit) }
-
+        let tableTotalAmount = RevenueRecognitionCandidates.tableTotal(
+            table: table, column: column.column)?.amount
+        let scaleRef = transposedWhole
+            ?? tableTotalAmount
+            ?? built.filter { $0.rowKind == "segment" || $0.rowKind == "reconciling" }
+                .reduce(0) { $0 + $1.amount }
+        let declaredUnit = inferredDeclaredUnit(
+            tableTotal: scaleRef == 0 ? nil : scaleRef,
+            consolidatedSales: consolidatedSales)
         let scale = BreakdownLLMAmountScale.scaling(
-            declaredUnit: unit,
+            declaredUnit: declaredUnit,
             tables: result.tables,
-            sourceTableIndex: audit.sourceTableIndex,
-            rawAmounts: parsed.map(\.rawAmount),
+            sourceTableIndex: table.tableIndex,
+            rawAmounts: built.isEmpty ? [transposedWhole].compactMap { $0 } : built.map(\.amount),
             consolidatedSales: consolidatedSales
         )
         BreakdownLLMAmountScale.applyPublicFlags(
             scale, needsReview: &needsReview, warnings: &warnings)
-        let unitMultiplier = scale.multiplier
+        let multiplier = scale.multiplier
 
+        let denominator: Double
+        let resolvedDenomTag: String
+        if let transposedWhole, transposedWhole != 0 {
+            denominator = transposedWhole * multiplier
+            resolvedDenomTag = salesDenominatorTag ?? "llm_table_subtotal"
+        } else if let tableTotal = RevenueRecognitionCandidates.tableTotal(
+            table: table, column: column.column)
+        {
+            denominator = tableTotal.amount * multiplier
+            resolvedDenomTag = salesDenominatorTag ?? "llm_table_subtotal"
+        } else if let consolidatedSales, consolidatedSales != 0 {
+            denominator = consolidatedSales
+            resolvedDenomTag = salesDenominatorTag ?? "income_statement.sales"
+        } else {
+            return (nil, audit)
+        }
+        guard denominator != 0 else { return (nil, audit) }
+
+        if isSingleSegmentDisclosure(constraint: constraint, table: table) {
+            audit.notApplicableReason = breakdownNotApplicableSingleSegmentDisclosed
+            stampJev(&audit, applied: !belowThreshold, needsReview: false)
+            return (nil, audit)
+        }
+
+        var denom = denominator
+        var denomTag = resolvedDenomTag
+        let rows = finalizeRows(
+            built: built, profits: profits, multiplier: multiplier,
+            consolidatedSales: consolidatedSales, initialDenominator: denominator,
+            initialDenomTag: resolvedDenomTag,
+            needsReview: &needsReview, warnings: &warnings,
+            denominator: &denom, denominatorTag: &denomTag)
+
+        let profitDisclosed = rows.contains { $0.rowKind == "segment" && $0.profit != nil }
+        if constraint == .geographyOnly {
+            warnings.append(warningGeographyTaken)
+        } else {
+            flagGeographyLabels(rows, needsReview: &needsReview, warnings: &warnings)
+        }
+
+        audit.sourceTableIndex = table.tableIndex
+        audit.periodColumn = column.key
+        audit.unit = scale.headerToken ?? table.unitCaption ?? ""
+        audit.profitDisclosed = profitDisclosed
+        stampJev(&audit, applied: !belowThreshold, needsReview: needsReview)
+
+        let snapshot = BreakdownSnapshot(
+            axis: "business",
+            denominator: denom,
+            denominatorTag: denomTag,
+            rows: rows,
+            sourceKind: "segment_info",
+            needsReview: needsReview,
+            warnings: warnings
+        )
+        return (snapshot, audit)
+    }
+
+    static func choiceByFillingMetricRows(
+        column: RevenueRecognitionColumnChoice,
+        metricRows: [SegmentInfoMetricRow]
+    ) -> SegmentInfoChoice {
+        let sales = preferredSalesRow(in: metricRows)
+        let profit = preferredProfitRow(in: metricRows)
+        func asChoice(_ row: SegmentInfoMetricRow?) -> RevenueRecognitionColumnChoice? {
+            guard let row else { return nil }
+            return RevenueRecognitionColumnChoice(
+                selected: row.key, confidence: column.confidence, pNone: 0,
+                probabilities: [row.key: column.confidence ?? 0],
+                model: column.model, options: metricRows.map(\.key) + [RevenueRecognitionColumnNormalizer.noneOfThese])
+        }
+        return SegmentInfoChoice(
+            column: column, salesRow: asChoice(sales), profitRow: asChoice(profit))
+    }
+
+    static func metricRows(
+        in table: RevenueRecognitionCandidates.ParsedTable
+    ) -> [SegmentInfoMetricRow] {
+        table.structure.rows.compactMap { classified in
+            guard classified.hasAmount else { return nil }
+            let label = classified.category ?? classified.categoryGroup ?? ""
+            let compact = RevenueRecognitionCandidates.compactCell(label)
+            guard !compact.isEmpty else { return nil }
+            guard isMetricRowLabel(compact) else { return nil }
+            return SegmentInfoMetricRow(
+                key: "t\(table.tableIndex)_r\(classified.index)",
+                tableIndex: table.tableIndex, row: classified.index, label: compact)
+        }
+    }
+
+    static func preferredSalesRow(in rows: [SegmentInfoMetricRow]) -> SegmentInfoMetricRow? {
+        for marker in salesRowPreferred {
+            if let hit = rows.first(where: { isSalesLabel($0.label, marker: marker) }) {
+                return hit
+            }
+        }
+        return rows.first { isGenericSalesLabel($0.label) }
+    }
+
+    static func preferredProfitRow(in rows: [SegmentInfoMetricRow]) -> SegmentInfoMetricRow? {
+        for marker in profitRowPreferred {
+            if let hit = rows.first(where: { $0.label.contains(marker) }) {
+                return hit
+            }
+        }
+        return nil
+    }
+
+    /// 列が事業・製品、行が売上高・営業利益などの指標マトリクス（キヤノン注23）。
+    static func isSegmentColumnMatrix(_ table: RevenueRecognitionCandidates.ParsedTable) -> Bool {
+        let named = table.columnHeaders.filter { _, header in
+            let compact = RevenueRecognitionCandidates.compactCell(header)
+            return !compact.isEmpty
+                && !RevenueRecognitionCandidates.isPeriodHeadingLabel(compact)
+                && !isPeriodColumnHeader(compact)
+        }
+        let segmentLike = named.filter { _, header in
+            !isSkippedTotalColumn(header)
+        }
+        guard segmentLike.count >= 2 else { return false }
+        return !metricRows(in: table).isEmpty
+    }
+
+    static func isPeriodColumnHeader(_ header: String) -> Bool {
+        let compact = RevenueRecognitionCandidates.compactCell(header)
+        if compact.contains("当連結会計年度") || compact.contains("前連結会計年度")
+            || compact.contains("当事業年度") || compact.contains("前事業年度")
+        {
+            return true
+        }
+        return compact == "当期" || compact == "前期" || compact == "当年度" || compact == "前年度"
+    }
+
+    /// 「その他（消去分を含む）」「その他及び全社」は残事業バケットなので合計列にしない。
+    static func isSkippedTotalColumn(_ header: String) -> Bool {
+        let compact = RevenueRecognitionCandidates.compactCell(header)
+        if compact.contains("その他") && (compact.contains("消去分を含む") || compact.contains("全社")) {
+            return false
+        }
+        return RevenueRecognitionCandidates.isAggregateColumnHeader(compact)
+    }
+
+    static func isMetricRowLabel(_ label: String) -> Bool {
+        isGenericSalesLabel(label) || isProfitMetricLabel(label)
+            || label.contains("売上原価") || label.contains("売上総利益")
+            || label.contains("研究開発") || label.contains("総資産")
+            || label.contains("減価償却") || label.contains("資本的支出")
+            || label.contains("営業費用") || label.contains("営業外")
+            || label.contains("セグメント間")
+    }
+
+    static func isGenericSalesLabel(_ label: String) -> Bool {
+        if label.contains("売上原価") || label.contains("売上総利益") { return false }
+        if label.contains("セグメント間") { return false }
+        if salesRowPreferred.contains(where: { isSalesLabel(label, marker: $0) }) { return true }
+        return label == "売上高" || label.hasPrefix("売上高")
+    }
+
+    static func isSalesLabel(_ label: String, marker: String) -> Bool {
+        label == marker || label.hasPrefix(marker)
+    }
+
+    static func isProfitMetricLabel(_ label: String) -> Bool {
+        if label.contains("研究開発") { return false }
+        return profitRowPreferred.contains { label.contains($0) }
+            || label.contains("税引前当期純利益")
+    }
+
+    /// ヘッダー単位が無い表（キヤノン注23 の smoke 抽出など）は、表合計と連結売上の比が
+    /// 百万円または円の一方だけに入るときだけその単位を使う。両方・どちらでもなければ
+    /// `other` のまま fail closed（推測百万円は掛けない）。
+    static func inferredDeclaredUnit(
+        tableTotal: Double?,
+        consolidatedSales: Double?
+    ) -> String {
+        guard let total = tableTotal, total != 0,
+              let sales = consolidatedSales, sales != 0
+        else { return "other" }
+        let yenOK = denominatorTolerance.contains(abs(total / sales))
+        let millionOK = denominatorTolerance.contains(
+            abs(total * Financial.millionYen / sales))
+        if millionOK != yenOK {
+            return millionOK ? "million_yen" : "yen"
+        }
+        return "other"
+    }
+
+    static func isSingleSegmentDisclosure(
+        constraint: RevenueRecognitionTableStructure.AxisConstraint,
+        table: RevenueRecognitionCandidates.ParsedTable
+    ) -> Bool {
+        if constraint == .productOnly { return false }
+        if constraint == .geographyOnly { return false }
+        if table.precedingCaption?.contains("製品") == true
+            || table.precedingCaption?.contains("サービス") == true
+        {
+            return false
+        }
+        return (table.precedingCaption ?? "").contains("単一セグメント")
+    }
+
+    private static func buildSnapshotRows(
+        table: RevenueRecognitionCandidates.ParsedTable,
+        column: RevenueRecognitionCandidates.AmountColumn,
+        choice: SegmentInfoChoice,
+        transposed: Bool
+    ) -> (
+        built: [RevenueRecognitionCandidates.BuiltRow],
+        profits: [String: Double],
+        groupSumReview: Bool,
+        parallelUnresolved: Bool,
+        transposedWhole: Double?
+    ) {
+        if transposed {
+            let sales = resolveMetricRow(
+                choice.salesRow, rows: metricRows(in: table), preferred: preferredSalesRow(in:))
+            let profit = resolveMetricRow(
+                choice.profitRow, rows: metricRows(in: table), preferred: preferredProfitRow(in:))
+            let salesRowIndex = sales?.row
+                ?? preferredSalesRow(in: metricRows(in: table))?.row
+            guard let salesRowIndex else {
+                return ([], [:], false, false, nil)
+            }
+            let transposed = transposeSegmentColumns(
+                table: table, salesRow: salesRowIndex,
+                wholeCompanyColumn: column.column, profitRow: profit?.row)
+            return (transposed.rows, transposed.profits, false, false, transposed.wholeCompanyAmount)
+        }
+
+        var (built, groupSumReview) = RevenueRecognitionCandidates.buildRows(
+            table: table, column: column.column)
+        let parallelUnresolved = RevenueRecognitionCandidates.parallelDimensionsUnresolved(
+            table: table, column: column.column)
+        var transposedWhole: Double?
+        if built.isEmpty && !parallelUnresolved {
+            let fallback = RevenueRecognitionCandidates.transposeMetricRow(
+                table: table, wholeCompanyColumn: column.column)
+            built = fallback.rows
+            transposedWhole = fallback.wholeCompanyAmount
+            groupSumReview = false
+        }
+        return (built, [:], groupSumReview, parallelUnresolved, transposedWhole)
+    }
+
+    private static func resolveMetricRow(
+        _ choice: RevenueRecognitionColumnChoice?,
+        rows: [SegmentInfoMetricRow],
+        preferred: ([SegmentInfoMetricRow]) -> SegmentInfoMetricRow?
+    ) -> SegmentInfoMetricRow? {
+        let keys = Set(rows.map(\.key))
+        if let selected = choice?.selected, selected != RevenueRecognitionColumnNormalizer.noneOfThese,
+           let hit = rows.first(where: { $0.key == selected })
+        {
+            return hit
+        }
+        if let selected = choice?.selected, selected == RevenueRecognitionColumnNormalizer.noneOfThese {
+            let confidence = choice?.confidence ?? 0
+            let pNone = choice?.pNone ?? 0
+            if confidence >= RevenueRecognitionColumnNormalizer.noneOfTheseMinConfidence
+                && pNone >= RevenueRecognitionColumnNormalizer.noneOfTheseMinPNone
+            {
+                return nil
+            }
+        }
+        if let selected = choice?.selected, keys.contains(selected),
+           let hit = rows.first(where: { $0.key == selected })
+        {
+            return hit
+        }
+        return preferred(rows)
+    }
+
+    static func transposeSegmentColumns(
+        table: RevenueRecognitionCandidates.ParsedTable,
+        salesRow: Int,
+        wholeCompanyColumn: Int,
+        profitRow: Int?
+    ) -> (rows: [RevenueRecognitionCandidates.BuiltRow], profits: [String: Double], wholeCompanyAmount: Double?) {
+        guard salesRow < table.grid.count else { return ([], [:], nil) }
+        let row = table.grid[salesRow]
+        let wholeCompanyAmount = RevenueRecognitionCandidates.consolidatedWholeCompanyAmount(
+            table: table, row: row, selectedColumn: wholeCompanyColumn)
+        var built: [RevenueRecognitionCandidates.BuiltRow] = []
+        var profits: [String: Double] = [:]
+        let profitCells = profitRow.flatMap { profit in
+            profit < table.grid.count ? table.grid[profit] : nil
+        }
+        for (column, header) in table.columnHeaders.sorted(by: { $0.key < $1.key }) {
+            if column == wholeCompanyColumn { continue }
+            if isSkippedTotalColumn(header) { continue }
+            if isPeriodColumnHeader(header) { continue }
+            if RevenueRecognitionCandidates.isPeriodHeadingLabel(header) { continue }
+            guard column < row.count, let amount = RevenueRecognitionCandidates.parseAmount(row[column])
+            else { continue }
+            let name = RevenueRecognitionCandidates.compactCell(header)
+            guard !name.isEmpty else { continue }
+            let kind: String
+            if name.contains("消去") && !name.contains("その他") {
+                kind = "reconciling"
+            } else if name.contains("調整") && !name.contains("その他") {
+                kind = "reconciling"
+            } else {
+                kind = "segment"
+            }
+            built.append(RevenueRecognitionCandidates.BuiltRow(
+                categoryGroup: name, category: nil, amount: amount,
+                isPartial: false, rowKind: kind))
+            if let profitCells, column < profitCells.count,
+               let profit = RevenueRecognitionCandidates.parseAmount(profitCells[column])
+            {
+                profits[name] = profit
+            }
+        }
+        return (built, profits, wholeCompanyAmount)
+    }
+
+    private static func finalizeRows(
+        built: [RevenueRecognitionCandidates.BuiltRow],
+        profits: [String: Double],
+        multiplier: Double,
+        consolidatedSales: Double?,
+        initialDenominator: Double,
+        initialDenomTag: String,
+        needsReview: inout Bool,
+        warnings: inout [String],
+        denominator: inout Double,
+        denominatorTag: inout String
+    ) -> [BreakdownRow] {
         var rows: [BreakdownRow] = []
-        for row in parsed {
+        for row in built {
+            let yen = row.amount * multiplier
+            let profitYen = profits[row.categoryGroup]
+                ?? row.category.flatMap { profits[$0] }
+            let rawLabel = row.category ?? row.categoryGroup
+            let kind = rowKindForLabel(rawLabel, fallback: row.rowKind)
             rows.append(BreakdownRow(
-                labelRaw: row.label, amount: row.rawAmount * unitMultiplier, share: nil,
-                profit: row.rawProfit.map { $0 * unitMultiplier },
-                rowKind: resolvedRowKind(label: row.label, rowKind: row.rowKind)
+                labelRaw: rawLabel,
+                label: RevenueRecognitionCandidates.displayLabel(
+                    categoryGroup: row.categoryGroup, category: row.category),
+                amount: yen,
+                share: nil,
+                profit: profitYen.map { $0 * multiplier },
+                rowKind: kind,
+                categoryGroup: row.categoryGroup,
+                category: row.category
             ))
         }
-        guard !rows.isEmpty else { return (nil, audit) }
 
-        // profit_disclosed の自己申告と実際の rows の整合性チェック（決定的）。
-        let hasAnySegmentProfit = rows.contains { $0.rowKind == "segment" && $0.profit != nil }
-        if profitDisclosed && !hasAnySegmentProfit {
-            needsReview = true
-            warnings.append("profit_disclosed_but_row_missing")
-        } else if !profitDisclosed && hasAnySegmentProfit {
-            needsReview = true
-            warnings.append("profit_present_despite_not_disclosed")
+        let segmentSum = rows.filter { $0.rowKind == "segment" }.reduce(0.0) { $0 + $1.amount }
+        let reconcilingSum = rows.filter { $0.rowKind == "reconciling" }.reduce(0.0) { $0 + $1.amount }
+        var denom = initialDenominator
+        var denomTag = initialDenomTag
+        if let consolidatedSales, consolidatedSales != 0 {
+            let segmentShare = segmentSum / consolidatedSales
+            if !denominatorTolerance.contains(segmentShare) {
+                let internalSum = segmentSum + reconcilingSum
+                let subtotalCandidates = rows.filter { $0.rowKind == "subtotal" }
+                if let closest = subtotalCandidates.min(by: {
+                    abs($0.amount - internalSum) < abs($1.amount - internalSum)
+                }), closest.amount != 0, abs(closest.amount - internalSum) / abs(closest.amount) <= 0.05 {
+                    denom = closest.amount
+                    denomTag = "llm_table_subtotal"
+                    warnings.append("llm_denominator_from_internal_subtotal")
+                } else if abs(initialDenominator) > 0,
+                    denominatorTolerance.contains(segmentSum / initialDenominator)
+                {
+                    denom = initialDenominator
+                    if denomTag != "income_statement.sales",
+                       !warnings.contains("llm_denominator_from_internal_subtotal")
+                    {
+                        warnings.append("llm_denominator_from_internal_subtotal")
+                    }
+                } else {
+                    needsReview = true
+                    warnings.append("llm_row_sum_mismatch")
+                }
+            } else {
+                denom = consolidatedSales
+            }
         }
+        denominator = denom
+        denominatorTag = denomTag
+        return rows.map { row in
+            var copy = row
+            copy.share = denom == 0 ? nil : copy.amount / denom
+            return copy
+        }
+    }
 
-        // ラベル妥当性チェック（決定的、追加ガード）。全行が地域名に一致するなら、地域別の表を
-        // 誤って business として採用した疑いがある。「その他」「その他の地域」を含むラベルは
-        // 判定から除外する — 事業別表にも「その他及び全社」等の形でほぼ必ず出現するため
-        // （固有の地域名が最低1つ一致することを要求する設計を骨抜きにしないため）。
-        // さらに「国内」「海外」のみの一致では立てない（実データ検証: キッコーマン、
-        // issue調査 2026-07-21。「国内食料品製造・販売」等の事業区分×国内海外クロス集計を
-        // 誤って地域別と誤認していた）。特定の国・地域名が最低1つ一致することを要求する。
+    private static func flagGeographyLabels(
+        _ rows: [BreakdownRow], needsReview: inout Bool, warnings: inout [String]
+    ) {
         let segmentLabels = rows.filter { $0.rowKind == "segment" }.map(\.labelRaw)
         let labelsExcludingOther = segmentLabels.filter { !$0.contains("その他") }
         let allLabelsLookLikeGeography = !labelsExcludingOther.isEmpty && labelsExcludingOther.allSatisfy { label in
@@ -217,62 +568,194 @@ enum SegmentInfoLLMNormalizer {
             needsReview = true
             warnings.append("business_label_looks_like_geography")
         }
-
-        // 分母整合性チェック。証券会社等（例: 野村HD, issue #105）は資金調達費用が大きく、
-        // セグメント表の「収益合計（金融費用控除後）」が連結売上高（総額）の半分以下になり、
-        // consolidatedSales基準では必ず乖離する。この場合、表自身のsubtotal行（「計」等。
-        // segment+reconciling合計と一致するのが通例）を分母として使えないか試す
-        // （xbrl_facts経路の銀行・保険向けnormalizeInternalSubtotalBasisと同型の考え方）。
-        // ガード（5%。xbrl_facts経路と同じ閾値）を通らない場合は表取り違えの疑いが残るため
-        // フォールバックせず、従来どおりneeds_reviewを立てる。
-        let segmentSum = rows.filter { $0.rowKind == "segment" }.reduce(0.0) { $0 + $1.amount }
-        let reconcilingSum = rows.filter { $0.rowKind == "reconciling" }.reduce(0.0) { $0 + $1.amount }
-        let segmentShare = segmentSum / consolidatedSales
-
-        var denominator = consolidatedSales
-        var denominatorTag = salesDenominatorTag ?? "income_statement.sales"
-
-        if !denominatorTolerance.contains(segmentShare) {
-            let internalSum = segmentSum + reconcilingSum
-            let subtotalCandidates = rows.filter { $0.rowKind == "subtotal" }
-            if let closest = subtotalCandidates.min(by: {
-                abs($0.amount - internalSum) < abs($1.amount - internalSum)
-            }), closest.amount != 0, abs(closest.amount - internalSum) / abs(closest.amount) <= 0.05 {
-                denominator = closest.amount
-                denominatorTag = "llm_table_subtotal"
-                warnings.append("llm_denominator_from_internal_subtotal")
-            } else {
-                needsReview = true
-                warnings.append("llm_row_sum_mismatch")
-            }
-        }
-
-        let rowsWithShare = rows.map { row -> BreakdownRow in
-            var r = row
-            r.share = r.amount / denominator
-            return r
-        }
-
-        let snapshot = BreakdownSnapshot(
-            axis: "business",
-            denominator: denominator,
-            denominatorTag: denominatorTag,
-            rows: rowsWithShare,
-            sourceKind: "segment_info",
-            needsReview: needsReview,
-            warnings: warnings
-        )
-        return (snapshot, audit)
     }
 
     /// LLM が「その他（消去分を含む）」を reconciling に誤分類しても、残事業バケットとして
     /// segment に直す（野村HD、ユーザー確認 2026-07-25）。
-    /// 「その他の調整額」「その他の消去」のように消去・調整が本体の行は reconciling のまま
-    /// （Opus 監査 2026-07-25）。
-    private static func resolvedRowKind(label: String, rowKind: String) -> String {
+    static func resolvedRowKind(label: String, rowKind: String) -> String {
         guard rowKind == "reconciling", label.contains("その他") else { return rowKind }
         if label.contains("消去分を含む") || label.contains("全社") { return "segment" }
         if label.contains("消去") || label.contains("調整") { return rowKind }
         return "segment"
+    }
+
+    static func rowKindForLabel(_ label: String, fallback: String) -> String {
+        if RevenueRecognitionCandidates.isTotalLabel(label) { return "subtotal" }
+        if fallback == "reconciling" || fallback == "subtotal" {
+            return resolvedRowKind(label: label, rowKind: fallback)
+        }
+        let compact = RevenueRecognitionCandidates.compactCell(label)
+        if compact.contains("消去") || compact.contains("調整") {
+            return resolvedRowKind(label: compact, rowKind: "reconciling")
+        }
+        return fallback
+    }
+
+    private static func jevPayload(
+        docID: String, choice: RevenueRecognitionColumnChoice, resolvedKey: String?, question: String
+    ) -> SegmentNoteJevAuditPayload {
+        SegmentNoteJevAuditPayload(
+            code: "", docID: docID, axis: breakdownAxisBusiness,
+            model: choice.model, threshold: RevenueRecognitionColumnNormalizer.confidenceThreshold,
+            applied: false, needsReview: false, sentences: [],
+            calls: [
+                SegmentNoteJevCallPayload(
+                    question: question,
+                    options: choice.options,
+                    selected: resolvedKey ?? choice.selected,
+                    probability: choice.confidence,
+                    sentences: [],
+                    applied: false)
+            ])
+    }
+
+    private static func stampJev(
+        _ audit: inout LLMBreakdownAudit, applied: Bool, needsReview: Bool
+    ) {
+        func apply(_ payload: SegmentNoteJevAuditPayload?) -> SegmentNoteJevAuditPayload? {
+            guard var payload else { return nil }
+            payload.applied = applied
+            payload.needsReview = needsReview
+            if !payload.calls.isEmpty {
+                payload.calls[0].applied = applied
+            }
+            return payload
+        }
+        audit.jev = apply(audit.jev)
+        audit.columnJev = apply(audit.columnJev)
+    }
+}
+
+struct OpenRouterSegmentInfoDecider: SegmentInfoDeciding {
+    let client: any DecisionsCompleting
+    var model: String = Api.openrouterDecisionsModel
+
+    func choose(
+        columns: [RevenueRecognitionCandidates.AmountColumn],
+        metricRows: [SegmentInfoMetricRow],
+        tables: [RevenueRecognitionCandidates.ParsedTable],
+        fiscalYearEnd: String?,
+        docID: String
+    ) async -> SegmentInfoChoice {
+        let columnOptions = columns.map(\.key) + [RevenueRecognitionColumnNormalizer.noneOfThese]
+        let unavailable = RevenueRecognitionColumnChoice(
+            selected: nil, confidence: nil, model: model, options: columnOptions)
+        guard let body = Self.requestJSON(
+            model: model, columns: columns, metricRows: metricRows, tables: tables,
+            fiscalYearEnd: fiscalYearEnd, docID: docID)
+        else {
+            return SegmentInfoLLMNormalizer.choiceByFillingMetricRows(
+                column: unavailable, metricRows: metricRows)
+        }
+        do {
+            let data = try await client.decide(requestJSON: body)
+            let answers = OpenRouterDecisionsCodec.answers(from: data)
+            func parsed(_ question: String, options: [String]) -> RevenueRecognitionColumnChoice {
+                let answer = answers[question]
+                let choice = answer?.choice
+                let probabilities = choice?.probabilities ?? [:]
+                let selected = choice?.selected
+                let fromProbabilities = selected.flatMap { probabilities[$0] }
+                return RevenueRecognitionColumnChoice(
+                    selected: selected,
+                    confidence: choice?.confidence ?? fromProbabilities,
+                    pNone: probabilities[RevenueRecognitionColumnNormalizer.noneOfThese],
+                    probabilities: probabilities,
+                    model: model,
+                    options: options)
+            }
+            let column = parsed(RevenueRecognitionColumnNormalizer.question, options: columnOptions)
+            let rowOptions = metricRows.map(\.key) + [RevenueRecognitionColumnNormalizer.noneOfThese]
+            let sales = metricRows.isEmpty
+                ? nil : parsed(SegmentInfoLLMNormalizer.salesRowQuestion, options: rowOptions)
+            let profit = metricRows.isEmpty
+                ? nil : parsed(SegmentInfoLLMNormalizer.profitRowQuestion, options: rowOptions)
+            return SegmentInfoChoice(column: column, salesRow: sales, profitRow: profit)
+        } catch {
+            printError("SegmentInfoLLMNormalizer: Jev呼び出し失敗: \(error)\n")
+            return SegmentInfoLLMNormalizer.choiceByFillingMetricRows(
+                column: unavailable, metricRows: metricRows)
+        }
+    }
+
+    static func requestJSON(
+        model: String,
+        columns: [RevenueRecognitionCandidates.AmountColumn],
+        metricRows: [SegmentInfoMetricRow],
+        tables: [RevenueRecognitionCandidates.ParsedTable],
+        fiscalYearEnd: String?,
+        docID: String
+    ) -> Data? {
+        let fy = fiscalYearEnd ?? "不明"
+        var columnCriteria: [String: String] = [:]
+        for column in columns {
+            let caption = column.caption ?? "none"
+            let header = column.header.isEmpty ? "none" : column.header
+            let unit = column.unit ?? "none"
+            columnCriteria[column.key] = """
+                table t\(column.tableIndex) (caption above the table: \(caption), unit: \(unit)), \
+                column \(column.column) (column header: \(header))
+                """
+        }
+        columnCriteria[RevenueRecognitionColumnNormalizer.noneOfThese] =
+            "No column holds current-fiscal-year whole-company amounts. Do not use this when the only reportable-segment column is the whole company."
+        var tableState: [[String: Any]] = []
+        for table in tables {
+            tableState.append([
+                "table_id": "t\(table.tableIndex)",
+                "caption_above_table": table.precedingCaption ?? "",
+                "unit": table.unitCaption ?? "",
+                "table_markdown": BreakdownExtractor.gridToMarkdown(table.grid),
+            ])
+        }
+        let columnInstructions = """
+            The state lists セグメント情報 and/or 製品・サービス別情報 table(s) from a Japanese \
+            annual securities report (有価証券報告書) for the fiscal year ending \(fy). Which \
+            single column holds the CURRENT fiscal year (当連結会計年度 / 当事業年度, the year \
+            ending \(fy)) amounts for the whole company? If the table's columns are reportable \
+            segments or products (事業 / 製品 names) plus 合計 or 連結, choose that total column, \
+            not a segment column. If rows are products or businesses and columns are 前期 / 当期, \
+            choose the current-year column. Prior-year columns are wrong.
+            """
+        var questions: [String: Any] = [
+            RevenueRecognitionColumnNormalizer.question: OpenRouterDecisionsCodec.choiceQuestion(
+                instructions: columnInstructions, criteria: columnCriteria),
+        ]
+        if !metricRows.isEmpty {
+            var salesCriteria: [String: String] = [:]
+            var profitCriteria: [String: String] = [:]
+            for row in metricRows {
+                salesCriteria[row.key] = "table t\(row.tableIndex) row \(row.row) label: \(row.label)"
+                profitCriteria[row.key] = "table t\(row.tableIndex) row \(row.row) label: \(row.label)"
+            }
+            salesCriteria[RevenueRecognitionColumnNormalizer.noneOfThese] =
+                "No row is external-customer sales / revenue."
+            profitCriteria[RevenueRecognitionColumnNormalizer.noneOfThese] =
+                "Operating / segment profit is not disclosed in this table."
+            questions[SegmentInfoLLMNormalizer.salesRowQuestion] =
+                OpenRouterDecisionsCodec.choiceQuestion(
+                    instructions: """
+                        Which row holds external-customer sales or equivalent revenue \
+                        (外部顧客向け / 外部顧客への売上高 / 経常収益 / 顧客との契約から生じる収益)? \
+                        Do not pick セグメント間取引, 売上原価, 営業利益, 総資産, or 研究開発費.
+                        """,
+                    criteria: salesCriteria)
+            questions[SegmentInfoLLMNormalizer.profitRowQuestion] =
+                OpenRouterDecisionsCodec.choiceQuestion(
+                    instructions: """
+                        Which row holds operating profit or segment profit \
+                        (営業利益 / セグメント利益 / 実質業務純益)? If profit is not in the table, \
+                        choose none_of_these. Do not pick 研究開発費.
+                        """,
+                    criteria: profitCriteria)
+        }
+        return OpenRouterDecisionsCodec.requestJSON(
+            model: model,
+            state: [
+                "doc_id": docID,
+                "fiscal_year_end": fy,
+                "tables": tableState,
+            ],
+            questions: questions)
     }
 }
