@@ -279,13 +279,21 @@ enum RevenueRecognitionColumnNormalizer {
         tables: [RevenueRecognitionCandidates.ParsedTable],
         constraint: RevenueRecognitionTableStructure.AxisConstraint
     ) -> [RevenueRecognitionCandidates.AmountColumn] {
-        guard constraint == .productOnly else { return columns }
-        let productTables = Set(
-            tables.filter {
-                RevenueRecognitionTableStructure.tableAxis(of: $0) == .productOrBusiness
-            }.map(\.tableIndex))
-        let filtered = columns.filter { productTables.contains($0.tableIndex) }
-        return filtered.isEmpty ? columns : filtered
+        var scoped = columns
+        if constraint == .productOnly {
+            let productTables = Set(
+                tables.filter {
+                    RevenueRecognitionTableStructure.tableAxis(of: $0) == .productOrBusiness
+                }.map(\.tableIndex))
+            let filtered = columns.filter { productTables.contains($0.tableIndex) }
+            if !filtered.isEmpty { scoped = filtered }
+        }
+        let byIndex = Dictionary(uniqueKeysWithValues: tables.map { ($0.tableIndex, $0) })
+        let current = scoped.filter { column in
+            guard let table = byIndex[column.tableIndex] else { return true }
+            return !isPriorOnlyColumn(column, table: table)
+        }
+        return current.isEmpty ? scoped : current
     }
 
     static func preferProductAxis(
@@ -313,19 +321,10 @@ enum RevenueRecognitionColumnNormalizer {
         tables: [RevenueRecognitionCandidates.ParsedTable]
     ) -> RevenueRecognitionCandidates.AmountColumn? {
         let byIndex = Dictionary(uniqueKeysWithValues: tables.map { ($0.tableIndex, $0) })
-        func isCurrent(_ column: RevenueRecognitionCandidates.AmountColumn) -> Bool {
-            let caption = column.caption ?? byIndex[column.tableIndex]?.precedingCaption ?? ""
-            if caption.contains("前連結会計年度") || caption.contains("前事業年度") {
-                return false
-            }
-            if caption.contains("当連結会計年度") || caption.contains("当事業年度")
-                || caption.contains("当期")
-            {
-                return true
-            }
-            return column.header.contains("当")
+        return columns.first { column in
+            guard let table = byIndex[column.tableIndex] else { return false }
+            return !isPriorOnlyColumn(column, table: table)
         }
-        return columns.first(where: isCurrent)
     }
 
     static func isPriorOnlyColumn(

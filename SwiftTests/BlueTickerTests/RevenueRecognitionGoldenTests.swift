@@ -286,6 +286,63 @@ import Testing
         #expect(needsReview == false)
     }
 
+    /// オークマ S100W043: 品目表が前期と当期で並ぶ。当期（ＮＣ旋盤 37,366）を選び、前期ホールドは掛けない。
+    @Test func w043OkumaCurrentYearProductTableIsPreferredOverPrior() async throws {
+        let html = """
+            <p>前連結会計年度（自 2024年4月1日 至 2025年3月31日）</p>
+            <p>（単位：百万円）</p>
+            <table>
+              <tr><td></td><td>売上高</td><td>構成比(％)</td></tr>
+              <tr><td>ＮＣ旋盤</td><td>40,571</td><td>17.8</td></tr>
+              <tr><td>マシニングセンタ</td><td>118,480</td><td>52.0</td></tr>
+              <tr><td>複合加工機</td><td>60,753</td><td>26.6</td></tr>
+              <tr><td>ＮＣ研削盤</td><td>3,549</td><td>1.6</td></tr>
+              <tr><td>その他</td><td>4,640</td><td>2.0</td></tr>
+              <tr><td>顧客との契約から生じる収益</td><td>227,994</td><td>100.0</td></tr>
+              <tr><td>その他の収益（注２）</td><td>―</td><td>―</td></tr>
+              <tr><td>外部顧客への売上高</td><td>227,994</td><td>100.0</td></tr>
+            </table>
+            <p>当連結会計年度（自 2025年4月1日 至 2026年3月31日）</p>
+            <p>（単位：百万円）</p>
+            <table>
+              <tr><td></td><td>売上高</td><td>構成比(％)</td></tr>
+              <tr><td>ＮＣ旋盤</td><td>37,366</td><td>18.1</td></tr>
+              <tr><td>マシニングセンタ</td><td>104,235</td><td>50.4</td></tr>
+              <tr><td>複合加工機</td><td>55,653</td><td>26.9</td></tr>
+              <tr><td>ＮＣ研削盤</td><td>2,280</td><td>1.1</td></tr>
+              <tr><td>その他</td><td>7,287</td><td>3.5</td></tr>
+              <tr><td>顧客との契約から生じる収益</td><td>206,822</td><td>100.0</td></tr>
+              <tr><td>その他の収益（注２）</td><td>―</td><td>―</td></tr>
+              <tr><td>外部顧客への売上高</td><td>206,822</td><td>100.0</td></tr>
+            </table>
+            """
+        let extracted = ExtractedBreakdown(
+            method: "html_table",
+            tables: BreakdownExtractor.allTablesFromHtml(html, defaultHeading: "収益認識関係"),
+            facts: [])
+        let parsed = RevenueRecognitionCandidates.parse(tables: extracted.tables)
+        let columns = RevenueRecognitionCandidates.amountColumns(in: parsed)
+        let constraint = RevenueRecognitionTableStructure.axisConstraint(tables: parsed)
+        let offered = RevenueRecognitionColumnNormalizer.offeredColumns(
+            columns, tables: parsed, constraint: constraint)
+        let offeredIndexes: Set<Int> = Set(offered.map(\.tableIndex))
+        #expect(offeredIndexes == [1])
+        let decider = FakeRevenueRecognitionColumnDecider()
+        let (snapshot, _) = await RevenueRecognitionColumnNormalizer.normalize(
+            extracted, consolidatedSales: yen(206_822), decider: decider,
+            fiscalYearEnd: "2025-03-31", docID: "S100W043")
+        let row = try #require(snapshot)
+        let lathe: Bool = hasRow(
+            row.rows.filter { $0.rowKind == "segment" },
+            label: "ＮＣ旋盤", amount: yen(37_366))
+        let needsReview: Bool = row.needsReview
+        let priorWarning: Bool = row.warnings.contains(
+            RevenueRecognitionColumnNormalizer.warningPriorPeriod)
+        #expect(lathe)
+        #expect(needsReview == false)
+        #expect(priorWarning == false)
+    }
+
     /// 製品表と顧客表が両方あるとき、Jev が顧客表を選んでも製品表へ寄せる。
     @Test func y9t1DensoPrefersProductTableOverCustomerAxis() async throws {
         let html = """

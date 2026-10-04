@@ -73,7 +73,7 @@ actor FakeRevenueRecognitionColumnDecider: RevenueRecognitionColumnDeciding {
             let header = $0.header
             return !header.contains("％") && !header.contains("%") && !header.contains("構成比")
         }
-        func rank(_ column: RevenueRecognitionCandidates.AmountColumn) -> (Int, Int, Int, Int) {
+        func rank(_ column: RevenueRecognitionCandidates.AmountColumn) -> (Int, Int, Int, Int, Int) {
             let table = byIndex[column.tableIndex]
             let hasDisaggTotal =
                 table?.totals.contains { total in
@@ -94,6 +94,13 @@ actor FakeRevenueRecognitionColumnDecider: RevenueRecognitionColumnDeciding {
                 current = column.header.contains("当") ? 1 : 0
             }
             let items = table?.items.count ?? 0
+            let periodRank: Int
+            switch table?.period {
+            case "当期": periodRank = 2
+            case "比較": periodRank = 1
+            case "前期": periodRank = 0
+            default: periodRank = current
+            }
             let compactHeader = RevenueRecognitionCandidates.compactCell(column.header)
             let headerRank: Int
             if compactHeader.contains("連結金額") {
@@ -112,7 +119,7 @@ actor FakeRevenueRecognitionColumnDecider: RevenueRecognitionColumnDeciding {
             } else {
                 headerRank = 0
             }
-            return (current, hasDisaggTotal, headerRank, items)
+            return (periodRank, current, hasDisaggTotal, headerRank, items)
         }
         return (usable.max { rank($0) < rank($1) } ?? columns.last)?.key
     }
