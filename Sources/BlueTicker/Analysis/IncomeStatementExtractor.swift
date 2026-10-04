@@ -49,6 +49,7 @@ enum IncomeStatementExtractor {
 
     private static func salesLabelForTag(_ tag: String?) -> String {
         guard let tag = tag else { return "売上高" }
+        if Xbrl.isOperatingRevenueSplitSum(tag) { return "営業収益" }
         if Xbrl.ordinaryRevenueTags.contains(tag) { return "経常収益" }
         if Xbrl.operatingRevenueTags.contains(tag) { return "営業収益" }
         if Xbrl.businessRevenueTags.contains(tag) { return "事業収益" }

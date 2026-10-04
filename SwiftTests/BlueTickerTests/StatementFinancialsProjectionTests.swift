@@ -129,7 +129,7 @@ import Testing
 
     /// 9436 沖縄セルラー / S100Y9T5。本表は電気通信事業 52,291 と附帯事業 34,057 に分かれ、
     /// 連結営業収益合計は `OperatingRevenue1SummaryOfBusinessResults` = 86,348。
-    /// 内訳タグを売上にしない。合算フォールバックは使わない。
+    /// 合計タグがあればそれを使う。内訳タグを売上にしない。
     @Test func okinawaCellularS100Y9T5SummarySalesIsConsolidatedOperatingRevenueTotal() async throws {
         let docID = "S100Y9T5"
         guard let xbrlDir = await ensureCached(docID) else { return }
@@ -206,5 +206,51 @@ import Testing
         #expect(values.sales == 6_328_574_000_000)
         #expect(values.salesLabel == "営業収益")
         #expect(values.operatingProfit == 337_689_000_000)
+    }
+
+    /// 9127 玉井商船 / S100Y90D。本表は海運業収益合計 4,997.823 とその他事業収益 124.204 に分かれ、
+    /// 営業収益合計タグは無い。合算して連結営業収益 5,122.027 百万円にする。
+    @Test func tamaiS100Y90DSummarySalesSumsShippingAndOtherBusinessRevenue() async throws {
+        let docID = "S100Y90D"
+        guard let xbrlDir = await ensureCached(docID) else { return }
+
+        guard case .resolved(let year) = StatementAnalyzer.resolveFromXBRL(
+            xbrlDir: xbrlDir,
+            docID: docID,
+            statementTypes: [.incomeStatement]
+        ) else {
+            Issue.record("resolveFromXBRL failed for \(docID)")
+            return
+        }
+
+        #expect(
+            year.incomeStatement.contains {
+                $0.tag == "ShippingBusinessRevenueWAT" && $0.value == 4_997_823_000
+            })
+        #expect(
+            year.incomeStatement.contains {
+                $0.tag == "OtherBusinessRevenueWAT" && $0.value == 124_204_000
+            })
+        #expect(!year.incomeStatement.contains { $0.tag == "OperatingRevenue1" })
+        #expect(
+            !year.incomeStatement.contains {
+                $0.tag == "ShippingBusinessRevenueAndOtherOperatingRevenueWAT"
+            })
+
+        let values = try #require(StatementFinancialsResolver.resolve(xbrlDir: xbrlDir))
+        #expect(values.sales == 5_122_027_000)
+        #expect(values.salesLabel == "営業収益")
+        #expect(values.operatingProfit == 657_778_000)
+        #expect(values.netProfit == 774_625_000)
+    }
+
+    /// 9107 川崎汽船 / S100YC6B。本表合計 `ShippingBusinessRevenueAndOtherOperatingRevenueWAT` を使う。
+    /// 内訳合算に落とさない。
+    @Test func klineS100YC6BSummarySalesStaysShippingAndOtherOperatingRevenueTotal() async throws {
+        let docID = "S100YC6B"
+        guard let xbrlDir = await ensureCached(docID) else { return }
+        let values = try #require(StatementFinancialsResolver.resolve(xbrlDir: xbrlDir))
+        #expect(values.sales == 1_018_364_000_000)
+        #expect(values.salesLabel == "海運業収益")
     }
 }
