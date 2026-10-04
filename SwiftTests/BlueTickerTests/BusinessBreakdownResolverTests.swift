@@ -47,11 +47,15 @@ private actor MockChatCompleting: ChatCompleting {
         return nil
     }
 
-    private static func segmentsResult(docID: String) throws -> ExtractedBreakdown {
+    private static func extracted(docID: String, key: String = "segments") throws -> ExtractedBreakdown {
         let golden = try loadGolden()
         let entry = try #require(golden[docID])
-        let segDict = try #require(entry["segments"] as? [String: Any])
-        return ExtractedBreakdown(dictionary: segDict)
+        let dict = try #require(entry[key] as? [String: Any])
+        return ExtractedBreakdown(dictionary: dict)
+    }
+
+    private static func segmentsResult(docID: String) throws -> ExtractedBreakdown {
+        try extracted(docID: docID, key: "segments")
     }
 
     /// 味の素（xbrl_facts, axis=business）: 決定的経路のみで解決し、LLM は一切呼ばれない。
@@ -70,23 +74,45 @@ private actor MockChatCompleting: ChatCompleting {
         #expect(await client.timesCalled() == 0)
     }
 
-    /// オークマ（segments は既に収益認識関係へ swap 済み、見出しで振り分けて
-    /// Jev 列選択 + 決定論の行組立で解決する）。
+    /// オークマ最新 S100YFQC: 収益認識の品目表が前期（table 0, 206,822）と当期
+    /// （table 1, 235,888）に分かれ、行は NC旋盤 / マシニングセンタ 等 5 つ＋構成比。
+    /// 地理行は無い。当期表を選んで公開する。
     @Test func okumaSwappedSegmentsResolveViaRevenueRecognitionLLM() async throws {
-        let segments = try Self.segmentsResult(docID: "S100W043")
+        let segments = try Self.extracted(docID: "S100YFQC", key: "revenue_recognition")
         #expect(segments.method == "html_table")
+        #expect(segments.tables.count == 2)
+        #expect(segments.tables[0].period == "前期")
+        #expect(segments.tables[1].period == "当期")
         #expect(segments.tables.first?.heading == "収益認識関係")
-        let sales = try #require(try Self.loadSales(code: "6103"))
+        let parsed = RevenueRecognitionCandidates.parse(tables: segments.tables)
+        #expect(parsed.count == 2)
+        #expect(RevenueRecognitionTableStructure.tableAxis(of: parsed[0]) == .productOrBusiness)
+        #expect(RevenueRecognitionTableStructure.tableAxis(of: parsed[1]) == .productOrBusiness)
+        let priorTotal = RevenueRecognitionCandidates.tableTotal(table: parsed[0], column: 1)
+        let currentTotal = RevenueRecognitionCandidates.tableTotal(table: parsed[1], column: 1)
+        #expect(priorTotal?.amount == 206_822)
+        #expect(currentTotal?.amount == 235_888)
+        let sales: Double = 235_888 * Financial.millionYen
         let client = MockChatCompleting(responseJSON: nil)
         let decider = FakeRevenueRecognitionColumnDecider()
 
         let (snapshot, source, audit) = await BusinessBreakdownResolver.resolve(
-            segments: segments, consolidatedSales: sales, client: client, columnDecider: decider
+            segments: segments, consolidatedSales: sales, client: client, columnDecider: decider,
+            fiscalYearEnd: "2026-03-31", docID: "S100YFQC"
         )
 
+        let needsReview: Bool = snapshot?.needsReview ?? true
+        let denominator: Double = snapshot?.denominator ?? 0
+        let expectedDenom: Double = 235_888 * Financial.millionYen
+        let sourceTable: Int? = audit?.sourceTableIndex
         #expect(source == .revenueRecognitionLLM)
         #expect(snapshot?.axis == "business")
-        #expect(!(snapshot?.needsReview ?? true))
+        #expect(needsReview == false)
+        #expect(denominator == expectedDenom)
+        #expect(sourceTable == 1)
+        let selected = try #require(parsed.first { $0.tableIndex == sourceTable })
+        let selectedTotal = RevenueRecognitionCandidates.tableTotal(table: selected, column: 1)
+        #expect(selectedTotal?.amount == 235_888)
         #expect(audit?.jev?.model == "typesafe/jev-1.13")
         #expect(await client.timesCalled() == 0)
         let labels = Set(snapshot?.rows.map(\.categoryGroup) ?? [])

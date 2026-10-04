@@ -286,23 +286,10 @@ import Testing
         #expect(needsReview == false)
     }
 
-    /// オークマ S100W043: 品目表が前期と当期で並ぶ。当期（ＮＣ旋盤 37,366）を選び、前期ホールドは掛けない。
-    @Test func w043OkumaCurrentYearProductTableIsPreferredOverPrior() async throws {
+    /// オークマ S100YFQC: 品目表が前期（206,822）と当期（235,888）で並ぶ。当期を選ぶ。
+    @Test func yfqc6103CurrentYearProductTableIsPreferredOverPrior() async throws {
         let html = """
             <p>前連結会計年度（自 2024年4月1日 至 2025年3月31日）</p>
-            <p>（単位：百万円）</p>
-            <table>
-              <tr><td></td><td>売上高</td><td>構成比(％)</td></tr>
-              <tr><td>ＮＣ旋盤</td><td>40,571</td><td>17.8</td></tr>
-              <tr><td>マシニングセンタ</td><td>118,480</td><td>52.0</td></tr>
-              <tr><td>複合加工機</td><td>60,753</td><td>26.6</td></tr>
-              <tr><td>ＮＣ研削盤</td><td>3,549</td><td>1.6</td></tr>
-              <tr><td>その他</td><td>4,640</td><td>2.0</td></tr>
-              <tr><td>顧客との契約から生じる収益</td><td>227,994</td><td>100.0</td></tr>
-              <tr><td>その他の収益（注２）</td><td>―</td><td>―</td></tr>
-              <tr><td>外部顧客への売上高</td><td>227,994</td><td>100.0</td></tr>
-            </table>
-            <p>当連結会計年度（自 2025年4月1日 至 2026年3月31日）</p>
             <p>（単位：百万円）</p>
             <table>
               <tr><td></td><td>売上高</td><td>構成比(％)</td></tr>
@@ -312,8 +299,19 @@ import Testing
               <tr><td>ＮＣ研削盤</td><td>2,280</td><td>1.1</td></tr>
               <tr><td>その他</td><td>7,287</td><td>3.5</td></tr>
               <tr><td>顧客との契約から生じる収益</td><td>206,822</td><td>100.0</td></tr>
-              <tr><td>その他の収益（注２）</td><td>―</td><td>―</td></tr>
               <tr><td>外部顧客への売上高</td><td>206,822</td><td>100.0</td></tr>
+            </table>
+            <p>当連結会計年度（自 2025年4月1日 至 2026年3月31日）</p>
+            <p>（単位：百万円）</p>
+            <table>
+              <tr><td></td><td>売上高</td><td>構成比(％)</td></tr>
+              <tr><td>ＮＣ旋盤</td><td>34,304</td><td>14.5</td></tr>
+              <tr><td>マシニングセンタ</td><td>132,309</td><td>56.1</td></tr>
+              <tr><td>複合加工機</td><td>60,763</td><td>25.8</td></tr>
+              <tr><td>ＮＣ研削盤</td><td>2,424</td><td>1.0</td></tr>
+              <tr><td>その他</td><td>6,087</td><td>2.6</td></tr>
+              <tr><td>顧客との契約から生じる収益</td><td>235,888</td><td>100.0</td></tr>
+              <tr><td>外部顧客への売上高</td><td>235,888</td><td>100.0</td></tr>
             </table>
             """
         let extracted = ExtractedBreakdown(
@@ -327,20 +325,28 @@ import Testing
             columns, tables: parsed, constraint: constraint)
         let offeredIndexes: Set<Int> = Set(offered.map(\.tableIndex))
         #expect(offeredIndexes == [1])
+        let selectedTable = try #require(parsed.first { $0.tableIndex == 1 })
+        let selectedColumn = try #require(offered.first { $0.tableIndex == 1 })
+        let selectedTotal = RevenueRecognitionCandidates.tableTotal(
+            table: selectedTable, column: selectedColumn.column)
+        #expect(selectedTotal?.amount == 235_888)
         let decider = FakeRevenueRecognitionColumnDecider()
         let (snapshot, _) = await RevenueRecognitionColumnNormalizer.normalize(
-            extracted, consolidatedSales: yen(206_822), decider: decider,
-            fiscalYearEnd: "2025-03-31", docID: "S100W043")
+            extracted, consolidatedSales: yen(235_888), decider: decider,
+            fiscalYearEnd: "2026-03-31", docID: "S100YFQC")
         let row = try #require(snapshot)
         let lathe: Bool = hasRow(
             row.rows.filter { $0.rowKind == "segment" },
-            label: "ＮＣ旋盤", amount: yen(37_366))
+            label: "ＮＣ旋盤", amount: yen(34_304))
         let needsReview: Bool = row.needsReview
         let priorWarning: Bool = row.warnings.contains(
             RevenueRecognitionColumnNormalizer.warningPriorPeriod)
+        let denominator: Double = row.denominator
+        let expectedDenom: Double = yen(235_888)
         #expect(lathe)
         #expect(needsReview == false)
         #expect(priorWarning == false)
+        #expect(denominator == expectedDenom)
     }
 
     /// 製品表と顧客表が両方あるとき、Jev が顧客表を選んでも製品表へ寄せる。
