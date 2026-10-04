@@ -104,9 +104,12 @@ enum BusinessBreakdownResolver {
     /// 専用タグがあり、選んだ収益分解表にカテゴリ行が無い（合計行だけ）ときは
     /// main と同じ `single_segment_disclosed`。製品行がある表は残す（8771 S100YKOI）。
     /// 並行次元やフィルタで行を落としたあとの空表には使わない（2467 / 5936）。
+    /// 当期の報告セグメント売上 member が 2 以上あるときはタグを信じない（7063 / 1711 / 2321）。
     static func dedicatedSingleSegmentFallback(
-        snapshot: BreakdownSnapshot?, dedicatedTagText: String?
+        snapshot: BreakdownSnapshot?, dedicatedTagText: String?,
+        currentYearReportableSalesMemberCount: Int = 0
     ) -> Bool {
+        if currentYearReportableSalesMemberCount >= 2 { return false }
         let tag = dedicatedTagText?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         guard !tag.isEmpty else { return false }
         if let warnings = snapshot?.warnings,

@@ -164,6 +164,10 @@ public let breakdownDenominatorTagCapexProse = "capex_prose"
 /// セグメントへ配分できない、またはセグメント別の記載をしないため総額のみ、という開示。
 /// `not_applicable_reason` にはしない。404 にすると総額が消える。
 public let breakdownWarningNotAllocatableToSegments = "not_allocatable_to_segments"
+/// 専用タグは単一セグメントと書くが、当期の報告セグメント売上 member が 2 以上ある。
+/// タグは信じず当期 facts / 表経路で内訳を残し、`needs_review` を立てる。
+public let breakdownWarningSingleSegmentTagDisagreesWithCurrentYearReportableSegments =
+    "single_segment_tag_disagrees_with_current_year_reportable_segments"
 /// 全社合計の数値タグがあり、タグ付き行の不足分を本文の1文から足した印。
 /// `needs_review` は合計が再び揃えば外す。404 にはしない。
 public let breakdownWarningResearchAndDevelopmentProseRemainder =
