@@ -271,6 +271,9 @@ enum RevenueRecognitionTableStructure {
         }
         if let caption = table.precedingCaption { consume(caption) }
         for header in table.columnHeaders.values { consume(header) }
+        for row in table.grid.prefix(table.headerRowCount) {
+            for cell in row { consume(cell) }
+        }
         for row in table.structure.rows {
             if let group = row.categoryGroup { consume(group) }
             if let category = row.category { consume(category) }

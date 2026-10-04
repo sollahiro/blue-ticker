@@ -972,7 +972,7 @@ import Testing
         #expect(axis == .timing)
         #expect(constraint == .customerOrTimingOnly)
         let snapshot = try await run(
-            html: html, docID: "S100YI32", fyEnd: "2026-03-31", pick: "t1_c1")
+            html: html, docID: "S100YI32", fyEnd: "2026-03-31", pick: "t0_c1")
         let needsReview: Bool = snapshot.needsReview
         let axisWarning: Bool = snapshot.warnings.contains(
             RevenueRecognitionColumnNormalizer.warningCustomerOrTimingAxis)
@@ -1066,7 +1066,7 @@ import Testing
             </table>
             """
         let snapshot = try await run(
-            html: html, docID: "S100YKM2", fyEnd: "2026-03-31", pick: "t1_c2")
+            html: html, docID: "S100YKM2", fyEnd: "2026-03-31", pick: "t0_c2")
         try assertFlatRows(
             snapshot,
             groups: ["IoT/DXプラットフォームサービス", "MVNEサービス"],
