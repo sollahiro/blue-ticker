@@ -500,26 +500,26 @@ import Testing
             <table>
               <tr>
                 <td></td><td>地球環境エネルギー</td><td>金属資源</td><td>S.L.C.</td>
-                <td>合計</td><td>その他</td><td>調整・消去</td><td>連結金額</td>
+                <td>化学品</td><td>合計</td><td>その他</td><td>調整・消去</td><td>連結金額</td>
               </tr>
               <tr>
                 <td>顧客との契約から認識した収益</td>
                 <td>1,851,642</td><td>1,243,344</td><td>2,513,397</td>
-                <td>13,939,592</td><td>8,539</td><td>△40</td><td>13,948,091</td>
+                <td>8,331,169</td><td>13,939,592</td><td>8,539</td><td>△40</td><td>13,948,091</td>
               </tr>
               <tr>
                 <td>その他の源泉から認識した収益</td>
                 <td>1,415,653</td><td>2,839,985</td><td>746</td>
-                <td>4,967,904</td><td>－</td><td>－</td><td>4,967,904</td>
+                <td>0</td><td>4,967,904</td><td>－</td><td>－</td><td>4,967,904</td>
               </tr>
               <tr>
                 <td>合計</td>
                 <td>3,267,295</td><td>4,083,329</td><td>2,514,143</td>
-                <td>18,907,496</td><td>8,539</td><td>△40</td><td>18,915,995</td>
+                <td>8,331,169</td><td>18,907,496</td><td>8,539</td><td>△40</td><td>18,915,995</td>
               </tr>
             </table>
             """
-        let snapshot = try await run(html: html, docID: "S100YB25", fyEnd: "2026-03-31", pick: "t0_c4")
+        let snapshot = try await run(html: html, docID: "S100YB25", fyEnd: "2026-03-31", pick: "t0_c5")
         let denominator: Double = snapshot.denominator
         let expectedDenom: Double = yen(13_948_091)
         let metal: Bool = hasRow(snapshot.rows, group: "金属資源", amount: yen(1_243_344))
@@ -1148,6 +1148,138 @@ import Testing
         #expect(mismatch == false)
         #expect(emitted == sen(7_000))
         #expect(row.denominator == 1_319_000_000)
+        #expect(row.warnings.contains(RevenueRecognitionColumnNormalizer.warningSingleRowTable))
+        #expect(
+            isPubliclyInsufficientRevenueRecognition(
+                segmentCount: 1, emittedSum: emitted))
+        #expect(
+            isPubliclyServableBreakdown(
+                source: breakdownSourceRevenueRecognitionLLM, needsReview: row.needsReview,
+                warnings: row.warnings)
+                == false)
+    }
+
+    /// 6620 S100YJZT 本番 filing_sections の当期表（表選択後に ColumnNormalizer へ渡る入力）。
+    /// 付随収入 0、その他の収益（注）391、外部顧客 391（百万円）。ゴールデンが closers を
+    /// 落としていたので grid 免除が沈黙し、本番はカバー床を跳ねていた。
+    @Test func yjzt6620ProductionCurrentTableNeedsReview() async throws {
+        let markdown = """
+            |                  | 営業収益 |
+            |------------------|------|
+            | 不動産賃貸管理事業に付随する収入 | 0    |
+            | 顧客との契約から生じる収益    | 0    |
+            | その他の収益（注）        | 391  |
+            | 外部顧客への売上高        | 391  |
+            """
+        let extracted = ExtractedBreakdown(
+            method: "html_table",
+            tables: [
+                BreakdownTable(
+                    heading: BreakdownExtractor.revenueRecognitionHeading,
+                    markdown: markdown, period: "当期", unitCaption: "百万円")
+            ],
+            facts: [])
+        let parsed = try #require(RevenueRecognitionCandidates.parse(tables: extracted.tables).first)
+        #expect(RevenueRecognitionColumnNormalizer.hasRecognizedOtherRevenue(parsed) == false)
+        let itemLabels: [String] = parsed.items.map(\.label)
+        #expect(itemLabels == ["不動産賃貸管理事業に付随する収入"])
+        let decider = FakeRevenueRecognitionColumnDecider(selected: "t0_c1", confidence: 0.85)
+        let (snapshot, _) = await RevenueRecognitionColumnNormalizer.normalize(
+            extracted, consolidatedSales: 391_000_000, decider: decider,
+            fiscalYearEnd: "2026-03-31", docID: "S100YJZT")
+        let row = try #require(snapshot)
+        let needsReview: Bool = row.needsReview
+        let undercoverage: Bool = row.warnings.contains(
+            RevenueRecognitionColumnNormalizer.warningDenominatorUndercoverage)
+        let singleRow: Bool = row.warnings.contains(
+            RevenueRecognitionColumnNormalizer.warningSingleRowTable)
+        let zeroSum: Bool = row.warnings.contains(
+            RevenueRecognitionColumnNormalizer.warningZeroEmittedSum)
+        let emitted: Double = row.rows.filter { $0.rowKind == "segment" }.reduce(0) { $0 + $1.amount }
+        #expect(needsReview)
+        #expect(undercoverage)
+        #expect(singleRow)
+        #expect(zeroSum)
+        #expect(emitted == 0)
+        #expect(row.denominator == 391_000_000)
+        #expect(
+            isPubliclyServableBreakdown(
+                source: breakdownSourceRevenueRecognitionLLM, needsReview: false, warnings: [],
+                rows: [
+                    BreakdownRowPayload(
+                        labelRaw: "不動産賃貸管理事業に付随する収入",
+                        label: "不動産賃貸管理事業に付随する収入", amount: 0, profit: nil,
+                        rowKind: "segment")
+                ]) == false)
+    }
+
+    /// 6620 S100TUOL 相当。W6EQ 前期表として本番に残っている markdown（付随収入 7、外部顧客 1,137）。
+    @Test func tuol6620ProductionShapedTableNeedsReview() async throws {
+        let markdown = """
+            |                  | 営業収益  |
+            |------------------|-------|
+            | 不動産賃貸管理事業に付随する収入 | 7     |
+            | 顧客との契約から生じる収益    | 7     |
+            | その他の収益（注）        | 1,130 |
+            | 外部顧客への売上高        | 1,137 |
+            """
+        let extracted = ExtractedBreakdown(
+            method: "html_table",
+            tables: [
+                BreakdownTable(
+                    heading: BreakdownExtractor.revenueRecognitionHeading,
+                    markdown: markdown, period: "当期", unitCaption: "百万円")
+            ],
+            facts: [])
+        let decider = FakeRevenueRecognitionColumnDecider(selected: "t0_c1", confidence: 0.82)
+        let (snapshot, _) = await RevenueRecognitionColumnNormalizer.normalize(
+            extracted, consolidatedSales: 1_137_000_000, decider: decider,
+            fiscalYearEnd: "2024-03-31", docID: "S100TUOL")
+        let row = try #require(snapshot)
+        let needsReview: Bool = row.needsReview
+        let undercoverage: Bool = row.warnings.contains(
+            RevenueRecognitionColumnNormalizer.warningDenominatorUndercoverage)
+        let singleRow: Bool = row.warnings.contains(
+            RevenueRecognitionColumnNormalizer.warningSingleRowTable)
+        let emitted: Double = row.rows.filter { $0.rowKind == "segment" }.reduce(0) { $0 + $1.amount }
+        #expect(needsReview)
+        #expect(undercoverage)
+        #expect(singleRow)
+        #expect(emitted == yen(7))
+        #expect(row.denominator == yen(1_137))
+    }
+
+    /// 金額 0 の単一行はカバー床が無くても公開しない。
+    @Test func zeroAmountSingleRowTableNeedsReviewAndIsNotPublic() async throws {
+        let html = """
+            <p>当連結会計年度（自 2025年4月1日 至 2026年3月31日）</p>
+            <p>（単位：百万円）</p>
+            <table>
+              <tr><td></td><td>金額</td></tr>
+              <tr><td>不動産賃貸管理事業に付随する収入</td><td>0</td></tr>
+            </table>
+            """
+        let extracted = ExtractedBreakdown(
+            method: "html_table",
+            tables: BreakdownExtractor.allTablesFromHtml(html, defaultHeading: "収益認識関係"),
+            facts: [])
+        let decider = FakeRevenueRecognitionColumnDecider(selected: "t0_c1", confidence: 0.9)
+        let (snapshot, _) = await RevenueRecognitionColumnNormalizer.normalize(
+            extracted, consolidatedSales: 391_000_000, decider: decider,
+            fiscalYearEnd: "2026-03-31", docID: "S100ZERO")
+        let row = try #require(snapshot)
+        let needsReview: Bool = row.needsReview
+        let singleRow: Bool = row.warnings.contains(
+            RevenueRecognitionColumnNormalizer.warningSingleRowTable)
+        let zeroSum: Bool = row.warnings.contains(
+            RevenueRecognitionColumnNormalizer.warningZeroEmittedSum)
+        let emitted: Double = row.rows.filter { $0.rowKind == "segment" }.reduce(0) { $0 + $1.amount }
+        #expect(needsReview)
+        #expect(singleRow)
+        #expect(zeroSum)
+        #expect(emitted == 0)
+        #expect(
+            isPubliclyInsufficientRevenueRecognition(segmentCount: 1, emittedSum: 0))
     }
 
     /// 6273 S100YLC6: 仕向地別の日本/米国/中国/アジア(中国を除く)/欧州。事業軸に出さない。
@@ -1593,7 +1725,11 @@ import Testing
             </table>
             """
         let snapshot = try await run(html: html, docID: "S100UCHI", fyEnd: "2026-03-31", pick: "t0_c1")
-        #expect(snapshot.needsReview == false)
+        let needsReview: Bool = snapshot.needsReview
+        let singleRow: Bool = snapshot.warnings.contains(
+            RevenueRecognitionColumnNormalizer.warningSingleRowTable)
+        #expect(needsReview)
+        #expect(singleRow)
         let segments = snapshot.rows.filter { $0.rowKind == "segment" }
         let segmentCount: Int = segments.count
         #expect(segmentCount == 1)

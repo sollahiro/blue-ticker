@@ -43,8 +43,11 @@ enum RevenueRecognitionColumnNormalizer {
     static let warningGeographyAxisOnly = "revenue_recognition_geography_axis_only"
     static let warningDenominatorUndercoverage = "revenue_recognition_denominator_undercoverage"
     static let warningPriorPeriod = "revenue_recognition_prior_period_table"
+    static let warningSingleRowTable = "revenue_recognition_single_row_table"
+    static let warningZeroEmittedSum = "revenue_recognition_zero_emitted_sum"
     /// 明細合計が分母の 95% を切ったら不足（表合計が無く連結売上に落ちる 6620）。
     static let coverageFloor: Double = 0.95
+    /// カテゴリ行だけ。合計行・グリッドの「その他の収益（注）」ではカバー不足を免除しない。
     static let recognizedOtherRevenueMarkers = ["その他の源泉", "その他の収益", "その他収益"]
 
     static func normalize(
@@ -211,8 +214,20 @@ enum RevenueRecognitionColumnNormalizer {
                 category: row.category
             ))
         }
+        let segments = rows.filter { $0.rowKind == "segment" }
+        let emitted = segments.reduce(0.0) { $0 + $1.amount }
+        if isPubliclyInsufficientRevenueRecognition(
+            segmentCount: segments.count, emittedSum: emitted)
+        {
+            needsReview = true
+            if segments.count <= 1, !warnings.contains(warningSingleRowTable) {
+                warnings.append(warningSingleRowTable)
+            }
+            if emitted == 0, !warnings.contains(warningZeroEmittedSum) {
+                warnings.append(warningZeroEmittedSum)
+            }
+        }
         if !rows.isEmpty, !hasRecognizedOtherRevenue(table) {
-            let emitted = rows.filter { $0.rowKind == "segment" }.reduce(0.0) { $0 + $1.amount }
             if abs(denominator) > 0, emitted / abs(denominator) < coverageFloor {
                 needsReview = true
                 if !warnings.contains(warningDenominatorUndercoverage) {
@@ -341,15 +356,15 @@ enum RevenueRecognitionColumnNormalizer {
         return hasPrior && !hasCurrent
     }
 
+    /// 免除は明細のカテゴリ行だけ。合計行やグリッドに「その他の収益（注）」があっても
+    /// 付随収入 1 行だけではカバー不足を止めない（6620 本番表）。
     static func hasRecognizedOtherRevenue(
         _ table: RevenueRecognitionCandidates.ParsedTable
     ) -> Bool {
         func hit(_ text: String) -> Bool {
             recognizedOtherRevenueMarkers.contains { text.contains($0) }
         }
-        if table.totals.contains(where: { hit($0.label) }) { return true }
-        if table.items.contains(where: { hit($0.label) || hit($0.group) }) { return true }
-        return table.grid.contains { row in row.contains(where: hit) }
+        return table.items.contains { hit($0.label) || hit($0.group) }
     }
 
     private static func stampJev(

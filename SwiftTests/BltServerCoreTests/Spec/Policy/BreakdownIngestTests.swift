@@ -60,14 +60,17 @@ private func seedDoc(
 }
 
 private func fakePayload(
-    axis: String = "business", needsReview: Bool = false, warnings: [String]? = nil
+    axis: String = "business", needsReview: Bool = false, warnings: [String]? = nil,
+    segments: Int = 1
 ) -> BreakdownSnapshotPayload {
-    BreakdownSnapshotPayload(
+    let rows = (0..<max(segments, 1)).map { index in
+        BreakdownRowPayload(
+            labelRaw: "セグメント\(index)", label: "セグメント\(index)",
+            amount: 500_000, profit: nil, rowKind: "segment")
+    }
+    return BreakdownSnapshotPayload(
         axis: axis, denominator: 1_000_000, denominatorTag: "income_statement.sales",
-        rows: [
-            BreakdownRowPayload(
-                labelRaw: "セグメントA", label: "セグメントA", amount: 500_000, profit: nil, rowKind: "segment")
-        ],
+        rows: rows,
         sourceKind: "test", needsReview: needsReview,
         warnings: warnings ?? (needsReview ? ["test_flag"] : []))
 }
@@ -77,12 +80,13 @@ private func seedRow(
     axis: String = breakdownAxisBusiness,
     source: String = breakdownSourceXbrlFacts, cacheVersion: String = businessBreakdownCacheVersion,
     needsReview: Bool = false, contentHash: String = "h0", llmAudit: LLMBreakdownAuditPayload? = nil,
-    notApplicableReason: String? = nil, warnings: [String]? = nil
+    notApplicableReason: String? = nil, warnings: [String]? = nil, segments: Int = 1
 ) async throws {
     let row = CompanyBreakdown(docID: docID, axis: axis)
     row.code = code
     row.submitDateTime = submit
-    row.payload = fakePayload(axis: axis, needsReview: needsReview, warnings: warnings)
+    row.payload = fakePayload(
+        axis: axis, needsReview: needsReview, warnings: warnings, segments: segments)
     row.needsReview = needsReview
     row.source = source
     row.contentHash = contentHash
@@ -838,7 +842,7 @@ extension BreakdownLoadResult {
         try await withMigratedApp { app in
             try await seedRow(
                 "S24", code: "332A", submit: "2025-06-20 09:00", db: app.db,
-                source: breakdownSourceRevenueRecognitionLLM, needsReview: false)
+                source: breakdownSourceRevenueRecognitionLLM, needsReview: false, segments: 2)
             try await seedRow(
                 "S25", code: "332A", submit: "2026-06-20 09:00", db: app.db,
                 source: breakdownSourceRevenueRecognitionLLM, needsReview: true)
@@ -850,6 +854,20 @@ extension BreakdownLoadResult {
             let older = try await loadStoredBreakdown(
                 code: "332A", docId: "S24", axis: breakdownAxisBusiness, db: app.db)
             #expect(older.foundJSON?["doc_id"] as? String == "S24")
+        }
+    }
+
+    /// 収益分解の単一行は needs_review=false でも公開しない（6620 付随収入）。
+    @Test func loadHidesSingleRowRevenueRecognitionEvenWhenClean() async throws {
+        try await withMigratedApp { app in
+            try await seedDoc("S100YJZT", secCode: "66200", db: app.db)
+            try await seedRow(
+                "S100YJZT", code: "6620", submit: "2026-06-25 13:27", db: app.db,
+                source: breakdownSourceRevenueRecognitionLLM, needsReview: false, segments: 1)
+
+            let result = try await loadStoredBreakdown(
+                code: "6620", docId: "S100YJZT", axis: breakdownAxisBusiness, db: app.db)
+            #expect(result.isAbsent)
         }
     }
 

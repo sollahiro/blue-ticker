@@ -288,6 +288,13 @@ public func isLLMBreakdownSource(_ source: String) -> Bool {
 /// 千円表が 1000 倍誤って公開される実害の印。抽出側の文字列と一致させる。
 public let breakdownWarningLLMUnitUnresolved = "llm_unit_unresolved"
 
+/// 収益分解の公開面: 単一行の表、または明細合計 0 は出さない（6620 付随収入だけ / 0 円）。
+public func isPubliclyInsufficientRevenueRecognition(
+    segmentCount: Int, emittedSum: Double
+) -> Bool {
+    segmentCount <= 1 || emittedSum == 0
+}
+
 /// 公開 REST / MCP（iOS Breakdown の backing）が当該格納行を出してよいか。
 /// `needs_review` または `llm_unit_unresolved` の行は出さない（千円単位の 1000 倍誤りの stopgap。
 /// fail closed）。XBRL（`xbrl_facts` / `stacked_segment_pnl`）と `not_applicable`（'none'）、
@@ -295,10 +302,13 @@ public let breakdownWarningLLMUnitUnresolved = "llm_unit_unresolved"
 /// （`capex_prose`）はフラグがあってもそのまま出す。
 /// `not_allocatable_to_segments` は総額行に付く警告であり、404 にしない。
 /// ただし訂正 overlay 回帰（`overlay_regression`）はこれらの行も隠す。
+/// `revenue_recognition_llm` は単一行または明細合計 0 も出さない（`rows` を渡したとき。
+/// 既に格納された 6620 を ingest 前に隠す）。
 /// ingest / status-report の `isServableBreakdown` とは独立（格納行は消さない・書き換えない。
 /// `cache_version` も上げない）。
 public func isPubliclyServableBreakdown(
-    source: String, needsReview: Bool, warnings: [String]
+    source: String, needsReview: Bool, warnings: [String],
+    rows: [BreakdownRowPayload]? = nil
 ) -> Bool {
     if hasOverlayRegressionWarning(warnings) { return false }
     if source == breakdownSourceXbrlFacts
@@ -311,6 +321,15 @@ public func isPubliclyServableBreakdown(
     }
     if needsReview { return false }
     if warnings.contains(breakdownWarningLLMUnitUnresolved) { return false }
+    if source == breakdownSourceRevenueRecognitionLLM, let rows {
+        let segments = rows.filter { $0.rowKind == "segment" }
+        let emitted = segments.reduce(0.0) { $0 + $1.amount }
+        if isPubliclyInsufficientRevenueRecognition(
+            segmentCount: segments.count, emittedSum: emitted)
+        {
+            return false
+        }
+    }
     return true
 }
 

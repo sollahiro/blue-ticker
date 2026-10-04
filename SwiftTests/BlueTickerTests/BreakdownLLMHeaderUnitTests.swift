@@ -107,7 +107,8 @@ import Testing
             <table><tr><td>（単位：百万円）</td></tr></table>
             <table>
               <tr><td>製品A</td><td>10,000</td></tr>
-              <tr><td>合計</td><td>10,000</td></tr>
+              <tr><td>製品B</td><td>5,000</td></tr>
+              <tr><td>合計</td><td>15,000</td></tr>
             </table>
             """
         let extracted = ExtractedBreakdown(
@@ -115,7 +116,7 @@ import Testing
             tables: Self.tables(from: html, heading: "収益認識関係"),
             facts: []
         )
-        let sales = 10_000 * Financial.millionYen
+        let sales = 15_000 * Financial.millionYen
         let snapshot = try #require(await Self.normalizeRR(extracted, sales: sales))
         #expect(snapshot.rows[0].amount == 10_000 * Financial.millionYen)
         #expect(snapshot.needsReview == false)
@@ -215,14 +216,18 @@ import Testing
                     heading: "契約資産", markdown: "| a | 1 |", period: "当期", unitCaption: "千円"),
                 BreakdownTable(
                     heading: BreakdownExtractor.revenueRecognitionHeading,
-                    markdown: "| MVNEサービス | 5,120,400 |\n| 合計 | 5,120,400 |\n",
+                    markdown: """
+                        | MVNEサービス | 5,120,400 |
+                        | その他 | 210,000 |
+                        | 合計 | 5,330,400 |
+                        """,
                     period: "当期"),
             ],
             facts: []
         )
-        let sales = 5_120_400 * BreakdownLLMAmountScale.thousandYen
+        let sales = 5_330_400 * BreakdownLLMAmountScale.thousandYen
         let snapshot = try #require(await Self.normalizeRR(extracted, sales: sales, pick: "t1_c1"))
-        #expect(snapshot.rows[0].amount == sales)
+        #expect(snapshot.rows[0].amount == 5_120_400 * BreakdownLLMAmountScale.thousandYen)
         #expect(!snapshot.warnings.contains("llm_unit_unresolved"))
         #expect(
             Self.publiclyServable(snapshot, source: breakdownSourceRevenueRecognitionLLM) == true)
