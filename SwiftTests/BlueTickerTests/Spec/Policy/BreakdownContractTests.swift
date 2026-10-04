@@ -48,11 +48,22 @@ import Testing
             isPubliclyServableBreakdown(
                 source: breakdownSourceRevenueRecognitionLLM, needsReview: false, warnings: [],
                 rows: [
-                    incidental,
+                    BreakdownRowPayload(
+                        labelRaw: "付随収入", label: "付随収入", amount: 0, profit: nil,
+                        rowKind: "segment"),
                     BreakdownRowPayload(
                         labelRaw: "その他", label: "その他", amount: 0, profit: nil,
                         rowKind: "segment"),
                 ]) == false)
+        #expect(
+            isPubliclyServableBreakdown(
+                source: breakdownSourceRevenueRecognitionLLM, needsReview: false, warnings: [],
+                rows: [
+                    incidental,
+                    BreakdownRowPayload(
+                        labelRaw: "その他", label: "その他", amount: 1_000_000, profit: nil,
+                        rowKind: "segment"),
+                ]))
     }
 
     @Test func publicServingLeavesXbrlAndNoneRowsUntouched() {
