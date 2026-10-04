@@ -500,26 +500,26 @@ import Testing
             <table>
               <tr>
                 <td></td><td>地球環境エネルギー</td><td>金属資源</td><td>S.L.C.</td>
-                <td>合計</td><td>その他</td><td>調整・消去</td><td>連結金額</td>
+                <td>化学品</td><td>合計</td><td>その他</td><td>調整・消去</td><td>連結金額</td>
               </tr>
               <tr>
                 <td>顧客との契約から認識した収益</td>
                 <td>1,851,642</td><td>1,243,344</td><td>2,513,397</td>
-                <td>13,939,592</td><td>8,539</td><td>△40</td><td>13,948,091</td>
+                <td>8,331,169</td><td>13,939,592</td><td>8,539</td><td>△40</td><td>13,948,091</td>
               </tr>
               <tr>
                 <td>その他の源泉から認識した収益</td>
                 <td>1,415,653</td><td>2,839,985</td><td>746</td>
-                <td>4,967,904</td><td>－</td><td>－</td><td>4,967,904</td>
+                <td>0</td><td>4,967,904</td><td>－</td><td>－</td><td>4,967,904</td>
               </tr>
               <tr>
                 <td>合計</td>
                 <td>3,267,295</td><td>4,083,329</td><td>2,514,143</td>
-                <td>18,907,496</td><td>8,539</td><td>△40</td><td>18,915,995</td>
+                <td>8,331,169</td><td>18,907,496</td><td>8,539</td><td>△40</td><td>18,915,995</td>
               </tr>
             </table>
             """
-        let snapshot = try await run(html: html, docID: "S100YB25", fyEnd: "2026-03-31", pick: "t0_c4")
+        let snapshot = try await run(html: html, docID: "S100YB25", fyEnd: "2026-03-31", pick: "t0_c5")
         let denominator: Double = snapshot.denominator
         let expectedDenom: Double = yen(13_948_091)
         let metal: Bool = hasRow(snapshot.rows, group: "金属資源", amount: yen(1_243_344))
@@ -1725,7 +1725,11 @@ import Testing
             </table>
             """
         let snapshot = try await run(html: html, docID: "S100UCHI", fyEnd: "2026-03-31", pick: "t0_c1")
-        #expect(snapshot.needsReview == false)
+        let needsReview: Bool = snapshot.needsReview
+        let singleRow: Bool = snapshot.warnings.contains(
+            RevenueRecognitionColumnNormalizer.warningSingleRowTable)
+        #expect(needsReview)
+        #expect(singleRow)
         let segments = snapshot.rows.filter { $0.rowKind == "segment" }
         let segmentCount: Int = segments.count
         #expect(segmentCount == 1)
