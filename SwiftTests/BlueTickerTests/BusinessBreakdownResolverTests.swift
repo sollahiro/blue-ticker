@@ -86,12 +86,18 @@ private actor MockChatCompleting: ChatCompleting {
         #expect(segments.tables.first?.heading == "収益認識関係")
         let parsed = RevenueRecognitionCandidates.parse(tables: segments.tables)
         #expect(parsed.count == 2)
-        #expect(RevenueRecognitionTableStructure.tableAxis(of: parsed[0]) == .productOrBusiness)
-        #expect(RevenueRecognitionTableStructure.tableAxis(of: parsed[1]) == .productOrBusiness)
+        let priorAxis = RevenueRecognitionTableStructure.tableAxis(of: parsed[0])
+        let currentAxis = RevenueRecognitionTableStructure.tableAxis(of: parsed[1])
+        let priorNotGeoOrCustomer = priorAxis != .geography && priorAxis != .customer
+        let currentNotGeoOrCustomer = currentAxis != .geography && currentAxis != .customer
+        #expect(priorNotGeoOrCustomer)
+        #expect(currentNotGeoOrCustomer)
         let priorTotal = RevenueRecognitionCandidates.tableTotal(table: parsed[0], column: 1)
         let currentTotal = RevenueRecognitionCandidates.tableTotal(table: parsed[1], column: 1)
         #expect(priorTotal?.amount == 206_822)
         #expect(currentTotal?.amount == 235_888)
+        #expect(segments.tables[0].unitCaption == "百万円")
+        #expect(segments.tables[1].unitCaption == "百万円")
         let sales: Double = 235_888 * Financial.millionYen
         let client = MockChatCompleting(responseJSON: nil)
         let decider = FakeRevenueRecognitionColumnDecider()
