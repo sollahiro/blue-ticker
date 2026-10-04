@@ -232,6 +232,15 @@ enum RevenueRecognitionTableStructure {
             }
             return true
         }
+        if token.contains("官公庁") || token.contains("中央省庁") || token.contains("省庁") {
+            return true
+        }
+        if token.contains("地方自治体") || token.contains("自治体") {
+            return true
+        }
+        if token.contains("民間") || token.contains("公共") || token.contains("政府") {
+            return true
+        }
         return false
     }
 

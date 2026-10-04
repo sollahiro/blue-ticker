@@ -543,5 +543,22 @@ import Testing
             #expect(axis == .customer)
             #expect(constraint == .customerOrTimingOnly)
         }
+
+        @Test func governmentAndPrivateLabelsAreCustomerAxis() {
+            let ministry: Bool = RevenueRecognitionTableStructure.isCustomerAxisLabel("中央省庁")
+            let local: Bool = RevenueRecognitionTableStructure.isCustomerAxisLabel("地方自治体")
+            let privateOther: Bool = RevenueRecognitionTableStructure.isCustomerAxisLabel("民間その他")
+            let publicSector: Bool = RevenueRecognitionTableStructure.isCustomerAxisLabel("官公庁")
+            let government: Bool = RevenueRecognitionTableStructure.isCustomerAxisLabel("政府")
+            let civic: Bool = RevenueRecognitionTableStructure.isCustomerAxisLabel("公共")
+            let product: Bool = RevenueRecognitionTableStructure.isCustomerAxisLabel("ソフトウェア販売")
+            #expect(ministry)
+            #expect(local)
+            #expect(privateOther)
+            #expect(publicSector)
+            #expect(government)
+            #expect(civic)
+            #expect(product == false)
+        }
     }
 }

@@ -1014,6 +1014,43 @@ import Testing
         #expect(axisWarning)
     }
 
+    /// 7377 S100Z4Q1: 官公庁・民間の顧客区分。表選択を外しても顧客軸として残し needs_review。
+    @Test func z4q17377GovernmentCustomerAxisNeedsReview() async throws {
+        let html = """
+            <p>当連結会計年度（自 2025年4月1日 至 2026年3月31日）</p>
+            <p>（単位：千円）</p>
+            <table>
+              <tr><td></td><td>金額</td></tr>
+              <tr><td>国内</td><td></td></tr>
+              <tr><td>中央省庁</td><td>13,610,272</td></tr>
+              <tr><td>地方自治体</td><td>12,103,821</td></tr>
+              <tr><td>高速道路会社</td><td>3,047,854</td></tr>
+              <tr><td>電力関連会社</td><td>3,561,442</td></tr>
+              <tr><td>民間その他</td><td>5,481,387</td></tr>
+              <tr><td>海外</td><td>259,495</td></tr>
+              <tr><td>合計</td><td>38,064,271</td></tr>
+            </table>
+            """
+        let extracted = ExtractedBreakdown(
+            method: "html_table",
+            tables: BreakdownExtractor.allTablesFromHtml(html, defaultHeading: "収益認識関係"),
+            facts: [])
+        let parsed = RevenueRecognitionCandidates.parse(tables: extracted.tables)
+        let axis: RevenueRecognitionTableStructure.TableAxis =
+            RevenueRecognitionTableStructure.tableAxis(of: parsed[0])
+        let constraint: RevenueRecognitionTableStructure.AxisConstraint =
+            RevenueRecognitionTableStructure.axisConstraint(tables: parsed)
+        #expect(axis == .customer)
+        #expect(constraint == .customerOrTimingOnly)
+        let snapshot = try await run(
+            html: html, docID: "S100Z4Q1", fyEnd: "2026-03-31", pick: "t0_c1")
+        let needsReview: Bool = snapshot.needsReview
+        let axisWarning: Bool = snapshot.warnings.contains(
+            RevenueRecognitionColumnNormalizer.warningCustomerOrTimingAxis)
+        #expect(needsReview)
+        #expect(axisWarning)
+    }
+
     /// 7464 S100YJG0: 品目別 5 行。表選択 0.73 相当でも列選択と合計で出す。
     @Test func yjg07464ProductRowsAreAdopted() async throws {
         let cats = ["標識・標示板", "安全機材", "保安警告サイン", "安全防災用品", "その他"]
