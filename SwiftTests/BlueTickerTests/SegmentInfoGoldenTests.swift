@@ -149,4 +149,26 @@ import Testing
         #expect(energy.amount == 1_851_642 * Financial.millionYen)
         #expect(!labels.contains(where: { $0.contains("その他の源泉") }))
     }
+
+    /// US-GAAP セグメント情報で行が「セグメント収益」等の指標、列が事業のときも転置する。
+    @Test func type1SegmentRevenueRowTransposesBusinessColumns() async throws {
+        let html = """
+            <p>（単位：百万円）</p>
+            <table>
+              <tr><td></td><td>法人営業</td><td>不動産</td><td>銀行</td><td>連結</td></tr>
+              <tr><td>セグメント収益</td><td>500</td><td>300</td><td>200</td><td>1,000</td></tr>
+              <tr><td>セグメント利益</td><td>50</td><td>30</td><td>20</td><td>100</td></tr>
+            </table>
+            """
+        let sales = 1_000 * Financial.millionYen
+        let (snapshotOrNil, _) = await Self.snapshot(html: html, sales: sales)
+        let snapshot = try #require(snapshotOrNil)
+        let labels: Set<String> = Set(
+            snapshot.rows.filter { $0.rowKind == "segment" }.map { $0.labelRaw })
+        #expect(labels == Set(["法人営業", "不動産", "銀行"]))
+        #expect(!labels.contains("セグメント収益"))
+        let leasing = try #require(snapshot.rows.first { $0.labelRaw == "法人営業" })
+        #expect(leasing.amount == 500 * Financial.millionYen)
+        #expect(leasing.profit == 50 * Financial.millionYen)
+    }
 }

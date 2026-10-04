@@ -67,6 +67,7 @@ enum SegmentInfoLLMNormalizer {
         "外部顧客向け", "外部顧客に対する売上高", "外部顧客への売上高", "外部顧客への収益",
         "外部顧客に対する経常収益", "外部顧客への経常収益",
         "顧客との契約から生じる収益", "顧客との契約から認識した収益",
+        "セグメント収益", "セグメント売上高",
         "実質業務粗利益", "連結粗利益", "業務粗利益", "経常収益",
     ]
 
@@ -312,7 +313,8 @@ enum SegmentInfoLLMNormalizer {
             || label.contains("研究開発") || label.contains("総資産")
             || label.contains("減価償却") || label.contains("資本的支出")
             || label.contains("営業費用") || label.contains("営業外")
-            || label.contains("セグメント間")
+            || label.contains("セグメント間") || label.contains("セグメント資産")
+            || label.contains("金融収益")
     }
 
     static func isGenericSalesLabel(_ label: String) -> Bool {
