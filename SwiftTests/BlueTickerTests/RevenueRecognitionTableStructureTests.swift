@@ -583,12 +583,11 @@ import Testing
             let parsed = RevenueRecognitionTableStructureTests.parsed(html)
             let axis: RevenueRecognitionTableStructure.TableAxis =
                 RevenueRecognitionTableStructure.tableAxis(of: parsed)
-            let constraint: RevenueRecognitionTableStructure.AxisConstraint =
-                RevenueRecognitionTableStructure.axisConstraint(tables: [parsed])
             let expectedAxis: RevenueRecognitionTableStructure.TableAxis = .productOrBusiness
-            let expectedConstraint: RevenueRecognitionTableStructure.AxisConstraint = .productOnly
+            let geographyColumns: Bool =
+                RevenueRecognitionTableStructure.isGeographyOnlyColumnHeaders(parsed)
             #expect(axis == expectedAxis)
-            #expect(constraint == expectedConstraint)
+            #expect(geographyColumns == false)
         }
 
         @Test func timingLabelWinsOverServiceKeyword() {
