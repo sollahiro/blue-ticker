@@ -609,4 +609,24 @@ import Foundation
         #expect(office.amount == 1_437_188 * Financial.millionYen)
         #expect(!snapshot.needsReview)
     }
+
+    /// 期間親見出しが join で落ちても当期の金額列を採る（第一三共 前/当・金額列型）。
+    @Test func currentYearAmountColumnPreferredWhenPeriodParentIsSpanning() async throws {
+        let markdown = """
+            | | 前連結会計年度 | 前連結会計年度 | 当連結会計年度 | 当連結会計年度 |
+            | | 金額 | 構成比（％） | 金額 | 構成比（％） |
+            | 医療用医薬品 | 1,796,974 | 95.3 | 2,029,538 | 95.6 |
+            | ヘルスケア | 86,587 | 4.6 | 90,784 | 4.3 |
+            | その他 | 2,693 | 0.1 | 2,722 | 0.1 |
+            | 合計 | 1,886,256 | 100.0 | 2,123,045 | 100.0 |
+            """
+        let table = BreakdownTable(
+            heading: "セグメント情報", markdown: markdown, period: "当期", unitCaption: "百万円")
+        let sales = 2_123_045 * Financial.millionYen
+        let (snapshotOrNil, _) = await Self.normalize(tables: [table], sales: sales)
+        let snapshot = try #require(snapshotOrNil)
+        let pharma = try #require(snapshot.rows.first { $0.labelRaw.contains("医療用医薬品") })
+        #expect(pharma.amount == 2_029_538 * Financial.millionYen)
+        #expect(!snapshot.needsReview)
+    }
 }
