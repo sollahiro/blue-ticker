@@ -1480,6 +1480,12 @@ enum BreakdownExtractor {
         if isPeriodCueProse(compact) { return false }
         if compact.contains("移行日") { return true }
         if textContainsJapaneseDateRange(compact) { return true }
+        if compact.range(of: #"^第[0-9]+期$"#, options: .regularExpression) != nil {
+            return true
+        }
+        if compact.contains("終了した事業年度") || compact.contains("終了した連結会計年度") {
+            return true
+        }
         return leadingStandalonePeriodKeyword(compact) != nil
     }
 

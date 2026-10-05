@@ -372,6 +372,27 @@ import Foundation
         #expect(BreakdownExtractor.isCaptionLikePeriodText("前期末") == true)
         #expect(BreakdownExtractor.isCaptionLikePeriodText("前期比増減") == false)
         #expect(BreakdownExtractor.isCaptionLikePeriodText("当期純利益") == false)
+        #expect(BreakdownExtractor.isCaptionLikePeriodText("第119期") == true)
+        #expect(BreakdownExtractor.isCaptionLikePeriodText("第120期") == true)
+        #expect(
+            BreakdownExtractor.isCaptionLikePeriodText(
+                "第119期及び第120期におけるセグメント情報は以下のとおりであります。") == false)
+    }
+
+    @Test func consecutiveEraCaptionsStaySeparateTablesWithCaptions() {
+        let html = """
+            <div>
+              <p>第119期</p>
+              \(numericPairTable("100", "50", "150"))
+              <p>第120期</p>
+              \(numericPairTable("120", "60", "180"))
+            </div>
+            """
+        let tables = BreakdownExtractor.allTablesFromHtml(
+            html, defaultHeading: "セグメント情報", fiscalYearEnd: "2020-12-31")
+        #expect(tables.count == 2)
+        #expect(tables[0].precedingCaption?.contains("第119期") == true)
+        #expect(tables[1].precedingCaption?.contains("第120期") == true)
     }
 
     @Test func tableUnderPriorYearChangeCaptionStaysCurrent() {
