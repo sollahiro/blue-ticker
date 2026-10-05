@@ -29,7 +29,7 @@ private func withMigratedApp(_ body: (Application) async throws -> Void) async t
 }
 
 private func fakeSnapshot(
-    axis: String = "business", sourceKind: String = "segment_info", needsReview: Bool = false
+    axis: String = breakdownAxisProductService, sourceKind: String = "segment_info", needsReview: Bool = false
 ) -> BreakdownSnapshotPayload {
     BreakdownSnapshotPayload(
         axis: axis,
@@ -48,26 +48,26 @@ private func fakeSnapshot(
 @Suite struct CompanyBreakdownTests {
 
     @Test func compositeIDJoinsDocIDAndAxisWithSeparator() {
-        #expect(CompanyBreakdown.compositeID(docID: "S100XTLJ", axis: "business") == "S100XTLJ#business")
+        #expect(CompanyBreakdown.compositeID(docID: "S100XTLJ", axis: breakdownAxisProductService) == "S100XTLJ#product_service")
         #expect(CompanyBreakdown.compositeID(docID: "S100XTLJ", axis: "geography") == "S100XTLJ#geography")
     }
 
     @Test func createAndFindRoundTripsPayloadAndOptionalLLMAudit() async throws {
         try await withMigratedApp { app in
-            let row = CompanyBreakdown(docID: "S100XTLJ", axis: "business")
+            let row = CompanyBreakdown(docID: "S100XTLJ", axis: breakdownAxisProductService)
             row.code = "7751"
             row.submitDateTime = "2026-03-25 00:00"
             row.payload = fakeSnapshot()
             row.needsReview = false
             row.source = breakdownSourceSegmentInfoLLM
             row.contentHash = "abc123"
-            row.cacheVersion = businessBreakdownCacheVersion
+            row.cacheVersion = productServiceBreakdownCacheVersion
             row.llmAudit = LLMBreakdownAuditPayload(sourceTableIndex: 1, periodColumn: "当期", unit: "million_yen", profitDisclosed: true, notes: "test")
             try await row.create(on: app.db)
 
-            let found = try #require(try await CompanyBreakdown.find("S100XTLJ#business", on: app.db))
+            let found = try #require(try await CompanyBreakdown.find("S100XTLJ#product_service", on: app.db))
             #expect(found.docID == "S100XTLJ")
-            #expect(found.axis == "business")
+            #expect(found.axis == breakdownAxisProductService)
             #expect(found.code == "7751")
             #expect(found.source == "segment_info_llm")
             #expect(found.needsReview == false)
@@ -80,18 +80,18 @@ private func fakeSnapshot(
 
     @Test func llmAuditIsNilForDeterministicXbrlFactsRows() async throws {
         try await withMigratedApp { app in
-            let row = CompanyBreakdown(docID: "S100VXJA", axis: "business")
+            let row = CompanyBreakdown(docID: "S100VXJA", axis: breakdownAxisProductService)
             row.code = "2802"
             row.submitDateTime = "2025-03-31 00:00"
             row.payload = fakeSnapshot(sourceKind: "xbrl_facts")
             row.needsReview = false
             row.source = breakdownSourceXbrlFacts
             row.contentHash = "def456"
-            row.cacheVersion = businessBreakdownCacheVersion
+            row.cacheVersion = productServiceBreakdownCacheVersion
             row.llmAudit = nil
             try await row.create(on: app.db)
 
-            let found = try #require(try await CompanyBreakdown.find("S100VXJA#business", on: app.db))
+            let found = try #require(try await CompanyBreakdown.find("S100VXJA#product_service", on: app.db))
             #expect(found.llmAudit == nil)
             #expect(found.source == "xbrl_facts")
         }
@@ -103,14 +103,14 @@ private func fakeSnapshot(
     /// throw するため、このテストは合成キー方式が正しく機能して初めて通る（トートロジーではない）。
     @Test func sameDocIDDifferentAxisCoexistAsSeparateRows() async throws {
         try await withMigratedApp { app in
-            let business = CompanyBreakdown(docID: "S100W043", axis: "business")
+            let business = CompanyBreakdown(docID: "S100W043", axis: breakdownAxisProductService)
             business.code = "6103"
             business.submitDateTime = "2025-06-20 00:00"
-            business.payload = fakeSnapshot(axis: "business", sourceKind: "revenue_recognition")
+            business.payload = fakeSnapshot(axis: breakdownAxisProductService, sourceKind: "revenue_recognition")
             business.needsReview = false
             business.source = breakdownSourceRevenueRecognitionLLM
             business.contentHash = "h1"
-            business.cacheVersion = businessBreakdownCacheVersion
+            business.cacheVersion = productServiceBreakdownCacheVersion
             try await business.create(on: app.db)
 
             let geography = CompanyBreakdown(docID: "S100W043", axis: "geography")
@@ -131,18 +131,18 @@ private func fakeSnapshot(
     /// が往復できること。
     @Test func notApplicableReasonRoundTripsAndPayloadStaysNil() async throws {
         try await withMigratedApp { app in
-            let row = CompanyBreakdown(docID: "S100AAAA", axis: "business")
+            let row = CompanyBreakdown(docID: "S100AAAA", axis: breakdownAxisProductService)
             row.code = "9999"
             row.submitDateTime = "2026-03-25 00:00"
             row.payload = fakeSnapshot(sourceKind: breakdownSourceNotApplicable)
             row.needsReview = false
             row.source = breakdownSourceNotApplicable
             row.contentHash = ""
-            row.cacheVersion = businessBreakdownCacheVersion
+            row.cacheVersion = productServiceBreakdownCacheVersion
             row.notApplicableReason = breakdownNotApplicableGeographyOnly
             try await row.create(on: app.db)
 
-            let found = try #require(try await CompanyBreakdown.find("S100AAAA#business", on: app.db))
+            let found = try #require(try await CompanyBreakdown.find("S100AAAA#product_service", on: app.db))
             #expect(found.source == breakdownSourceNotApplicable)
             #expect(found.notApplicableReason == breakdownNotApplicableGeographyOnly)
         }
@@ -151,17 +151,17 @@ private func fakeSnapshot(
     /// 実データ行（source != not_applicable）は notApplicableReason が nil のまま。
     @Test func notApplicableReasonIsNilForRealDataRows() async throws {
         try await withMigratedApp { app in
-            let row = CompanyBreakdown(docID: "S100BBBB", axis: "business")
+            let row = CompanyBreakdown(docID: "S100BBBB", axis: breakdownAxisProductService)
             row.code = "8888"
             row.submitDateTime = "2026-03-25 00:00"
             row.payload = fakeSnapshot()
             row.needsReview = false
             row.source = breakdownSourceXbrlFacts
             row.contentHash = "abc"
-            row.cacheVersion = businessBreakdownCacheVersion
+            row.cacheVersion = productServiceBreakdownCacheVersion
             try await row.create(on: app.db)
 
-            let found = try #require(try await CompanyBreakdown.find("S100BBBB#business", on: app.db))
+            let found = try #require(try await CompanyBreakdown.find("S100BBBB#product_service", on: app.db))
             #expect(found.notApplicableReason == nil)
         }
     }
@@ -173,7 +173,7 @@ private func fakeSnapshot(
     @Test func decodesPreLabelFieldPayloadByFallingBackToLabelRaw() async throws {
         try await withMigratedApp { app in
             let legacyPayloadJSON = """
-                {"axis":"business","denominator":100.0,"denominatorTag":"income_statement.sales",\
+                {"axis":"product_service","denominator":100.0,"denominatorTag":"income_statement.sales",\
                 "rows":[{"labelRaw":"旧行","amount":50.0,"profit":null,"rowKind":"segment"}],\
                 "sourceKind":"xbrl_facts","needsReview":false,"warnings":[]}
                 """
@@ -183,13 +183,13 @@ private func fakeSnapshot(
                 INSERT INTO company_breakdowns
                     (id, doc_id, axis, code, submit_date_time, payload, needs_review, source, content_hash, cache_version)
                 VALUES
-                    ('S100LEGACY#business', 'S100LEGACY', 'business', '0001', '2025-01-01 00:00',
+                    ('S100LEGACY#product_service', 'S100LEGACY', 'product_service', '0001', '2025-01-01 00:00',
                      \(bind: legacyPayloadJSON), false, \(bind: breakdownSourceXbrlFacts), 'h',
-                     \(bind: businessBreakdownCacheVersion))
+                     \(bind: productServiceBreakdownCacheVersion))
                 """
             ).run()
 
-            let found = try #require(try await CompanyBreakdown.find("S100LEGACY#business", on: app.db))
+            let found = try #require(try await CompanyBreakdown.find("S100LEGACY#product_service", on: app.db))
             #expect(found.payload.rows.count == 1)
             #expect(found.payload.rows[0].labelRaw == "旧行")
             #expect(found.payload.rows[0].label == "旧行")
@@ -198,24 +198,24 @@ private func fakeSnapshot(
 
     @Test func needsReviewColumnIsQueryableWithoutTouchingPayload() async throws {
         try await withMigratedApp { app in
-            let clean = CompanyBreakdown(docID: "S1", axis: "business")
+            let clean = CompanyBreakdown(docID: "S1", axis: breakdownAxisProductService)
             clean.code = "1111"
             clean.submitDateTime = "2025-01-01 00:00"
             clean.payload = fakeSnapshot(sourceKind: "xbrl_facts", needsReview: false)
             clean.needsReview = false
             clean.source = breakdownSourceXbrlFacts
             clean.contentHash = "h1"
-            clean.cacheVersion = businessBreakdownCacheVersion
+            clean.cacheVersion = productServiceBreakdownCacheVersion
             try await clean.create(on: app.db)
 
-            let flagged = CompanyBreakdown(docID: "S2", axis: "business")
+            let flagged = CompanyBreakdown(docID: "S2", axis: breakdownAxisProductService)
             flagged.code = "2222"
             flagged.submitDateTime = "2025-01-01 00:00"
             flagged.payload = fakeSnapshot(sourceKind: "segment_info", needsReview: true)
             flagged.needsReview = true
             flagged.source = breakdownSourceSegmentInfoLLM
             flagged.contentHash = "h2"
-            flagged.cacheVersion = businessBreakdownCacheVersion
+            flagged.cacheVersion = productServiceBreakdownCacheVersion
             try await flagged.create(on: app.db)
 
             let needingReview = try await CompanyBreakdown.query(on: app.db)

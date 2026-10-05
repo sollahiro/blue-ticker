@@ -32,7 +32,7 @@ public struct BltServerContext: Sendable {
     let edinetClient: EdinetAPIClient
     let cacheManager: CacheManager
     let cacheDir: URL
-    /// 内訳取り込み business 軸の html_table 正規化（LLM）に使うクライアント。
+    /// 内訳取り込み product_service 軸の html_table 正規化（LLM）に使うクライアント。
     /// `XAI_BUSINESS_*` / `OPENAI_BUSINESS_*` が無いときは `UnavailableChatClient`。
     /// xbrl_facts 経路はこのフィールドに触れない。
     let businessChatClient: ChatCompleting
@@ -602,7 +602,7 @@ public extension BltServerContext {
         {
             switch axis {
             case .business:
-                clean = snapshot.axis == "business" && !snapshot.needsReview
+                clean = snapshot.axis == breakdownAxisProductService && !snapshot.needsReview
             case .geography:
                 clean = snapshot.axis == "geography" && !snapshot.needsReview
             }
@@ -691,7 +691,7 @@ public extension BltServerContext {
         return (copy, outcome)
     }
 
-    /// 内訳取り込み: 書類1件分の business 軸内訳を解決する。xbrl_facts（決定的）/ 収益認識注記 LLM /
+    /// 内訳取り込み: 書類1件分の product_service 軸内訳を解決する。xbrl_facts（決定的）/ 収益認識注記 LLM /
     /// segment_info LLM のいずれかへ `BusinessBreakdownResolver` が振り分ける。LLM 呼び出しは
     /// html_table 経路でのみ発生する（xbrl_facts で解決できれば呼ばない。LLM 費用最小化）。
     /// 売上分母は同一 XBRL パスで `BreakdownFinancialsResolver` が直接解決する（#9 / #10b）。

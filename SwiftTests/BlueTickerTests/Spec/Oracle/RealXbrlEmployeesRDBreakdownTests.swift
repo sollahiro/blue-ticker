@@ -456,7 +456,7 @@ import Foundation
         #expect(healthcare.label == "ヘルスケア等")
     }
 
-    /// business 軸（`normalizeSalesBasis` 経路）でも同じラベル解決が効くこと。
+    /// product_service 軸（`normalizeSalesBasis` 経路）でも同じラベル解決が効くこと。
     /// メンバー名は事業年度で変わりうるため固定文字列にせず、
     /// 「少なくとも1行は生member名と異なる日本語ラベルに解決される」ことだけを検証する。
     @Test func kyoceraBusinessAxisResolvesJapaneseLabels() async throws {
@@ -469,7 +469,7 @@ import Foundation
         let snapshot = try #require(
             BreakdownNormalizer.normalize(
                 segments, consolidatedSales: 1_069_763_000_000, labelsByTag: labelsByTag))
-        #expect(snapshot.axis == "business")
+        #expect(snapshot.axis == breakdownAxisProductService)
         #expect(snapshot.rows.contains { $0.label != nil && $0.label != $0.labelRaw })
     }
 }

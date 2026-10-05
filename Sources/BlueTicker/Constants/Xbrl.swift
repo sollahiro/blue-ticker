@@ -1273,7 +1273,7 @@ enum Xbrl {
         // INPEX旧filings（J-GAAP時代）: 報告セグメントが Americas/AsiaAndOceania/Eurasia/Japan/
         // MiddleEastAndAfrica という純粋な地域区分だった。この2語が無いと地域軸と認識されず、
         // classifyAxis の NXHD 免除条件（裸地域2件以上+非地域事業2件以上）に誤ってヒットし
-        // axis=business, needs_review=false に確定してしまう（実データ検証: S100QH2B、2026-07-25）。
+        // axis=product_service, needs_review=false に確定してしまう（実データ検証: S100QH2B、2026-07-25）。
         "Eurasia",
         "MiddleEastAndAfrica",
     ]

@@ -1,7 +1,7 @@
 // SPEC_ORACLE: セグメント情報 html_table の類型。
 // 1 事業別の報告セグメントはそのまま採る
 // 2 地域別の報告セグメントで製品別もある → 製品を採り、地域は捨て、両方を足さない
-// 3 地域別のみ → business は geography_only（地域は geography 軸。日本/アジアを business に載せない）
+// 3 地域別のみ → product_service は geography_only（地域は geography 軸。日本/アジアを product_service に載せない）
 // 3b 報告セグメントが地域で製品は90％省略（省略文は製品表ではない） → 3 と同じ geography_only
 // 4 単一セグメントと開示 → single_segment_disclosed
 // 並行ブロック（同じ合計を地域と製品で分けた表）は 2。
@@ -78,7 +78,7 @@ import Testing
         #expect(!snapshot.needsReview)
     }
 
-    /// 3b. 報告セグメントが日本/アジアで、製品別は90％省略 → business は geography_only。
+    /// 3b. 報告セグメントが日本/アジアで、製品別は90％省略 → product_service は geography_only。
     @Test func type3bOmittedProductIsGeographyOnlyNotJapanAsiaOnBusiness() async throws {
         let html = """
             <p>当連結会計年度（自 2025年4月1日 至 2026年3月31日）</p>
@@ -103,7 +103,7 @@ import Testing
         #expect(audit?.notApplicableReason == breakdownNotApplicableGeographyOnly)
     }
 
-    /// 3. 地域別のみ → business は geography_only（日本/海外を business に載せない）。
+    /// 3. 地域別のみ → product_service は geography_only（日本/海外を product_service に載せない）。
     @Test func type3GeographyOnlyIsNotApplicable() async throws {
         let html = """
             <p>（単位：百万円）</p>

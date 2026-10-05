@@ -4,7 +4,7 @@
 // content_hash + needs_review でのみ再計算し、cache_version バンプでの全件再計算対象にしない
 // ため（decisive/deterministic 経路と再計算経済性が違う。）。
 //
-// 主キーは "doc_id#axis" の合成文字列（例: "S100XTLJ#business"）。本プロジェクトの既存テーブルは
+// 主キーは "doc_id#axis" の合成文字列（例: "S100XTLJ#product_service"）。本プロジェクトの既存テーブルは
 // すべて単一 String ID の慣習（company_filing_sections 等）のため、複合IDではなくこの合成キーで揃える。
 // axis が not_found（欠測）の場合は行自体を作らない（欠ける軸は出さない）。
 
@@ -23,7 +23,7 @@ final class CompanyBreakdown: Model, @unchecked Sendable {
     @Field(key: "doc_id")
     var docID: String
 
-    /// "business" | "geography"。
+    /// "product_service" | "geography"。
     @Field(key: "axis")
     var axis: String
 
@@ -54,7 +54,7 @@ final class CompanyBreakdown: Model, @unchecked Sendable {
     @Field(key: "content_hash")
     var contentHash: String
 
-    /// 契約スキーマ版（軸別: `businessBreakdownCacheVersion` / `geographyBreakdownCacheVersion`）。
+    /// 契約スキーマ版（軸別: `productServiceBreakdownCacheVersion` / `geographyBreakdownCacheVersion`）。
     /// 当該軸の決定的経路の破壊的変更のときのみバンプする。
     @Field(key: "cache_version")
     var cacheVersion: String
@@ -64,7 +64,7 @@ final class CompanyBreakdown: Model, @unchecked Sendable {
     @OptionalField(key: "llm_audit")
     var llmAudit: LLMBreakdownAuditPayload?
 
-    /// business 軸が解決できなかった理由（`breakdownNotApplicable*`。issue #132）。
+    /// product_service 軸が解決できなかった理由（`breakdownNotApplicable*`。issue #132）。
     /// `source == breakdownSourceNotApplicable` の行にのみ設定され、この場合 `payload` は
     /// プレースホルダ（`denominator=0`・`rows=[]`）で実データを持たない。read 経路はこのフィールドの
     /// 有無で「実データあり」と「notApplicable（reason付き）」を区別する（`loadStoredBreakdown` 参照）。

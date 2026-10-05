@@ -60,7 +60,7 @@ private func seedDoc(
 }
 
 private func fakePayload(
-    axis: String = "business", needsReview: Bool = false, warnings: [String]? = nil,
+    axis: String = breakdownAxisProductService, needsReview: Bool = false, warnings: [String]? = nil,
     segments: Int = 1
 ) -> BreakdownSnapshotPayload {
     let rows = (0..<max(segments, 1)).map { index in
@@ -77,8 +77,8 @@ private func fakePayload(
 
 private func seedRow(
     _ docID: String, code: String, submit: String, db: Database,
-    axis: String = breakdownAxisBusiness,
-    source: String = breakdownSourceXbrlFacts, cacheVersion: String = businessBreakdownCacheVersion,
+    axis: String = breakdownAxisProductService,
+    source: String = breakdownSourceXbrlFacts, cacheVersion: String = productServiceBreakdownCacheVersion,
     needsReview: Bool = false, contentHash: String = "h0", llmAudit: LLMBreakdownAuditPayload? = nil,
     notApplicableReason: String? = nil, warnings: [String]? = nil, segments: Int = 1
 ) async throws {
@@ -127,7 +127,7 @@ extension BreakdownLoadResult {
 
             #expect(summary.attempted == 2)
             #expect(summary.stored == 2)
-            let key1 = CompanyBreakdown.compositeID(docID: "S1", axis: "business")
+            let key1 = CompanyBreakdown.compositeID(docID: "S1", axis: breakdownAxisProductService)
             let row = try #require(try await CompanyBreakdown.find(key1, on: app.db))
             #expect(row.code == "7203")
             #expect(row.source == breakdownSourceXbrlFacts)
@@ -162,7 +162,7 @@ extension BreakdownLoadResult {
             ) { _ in .resolved(payload: fakePayload(), source: breakdownSourceXbrlFacts, contentHash: "h1", audit: nil) }
 
             #expect(summary.attempted == 1)
-            let key2 = CompanyBreakdown.compositeID(docID: "S2", axis: "business")
+            let key2 = CompanyBreakdown.compositeID(docID: "S2", axis: breakdownAxisProductService)
             #expect(try await CompanyBreakdown.find(key2, on: app.db) == nil)
         }
     }
@@ -193,7 +193,7 @@ extension BreakdownLoadResult {
             #expect(summary.attempted == 1)
             #expect(summary.notApplicable == 1)
             #expect(summary.stored == 0)
-            let key = CompanyBreakdown.compositeID(docID: "S1", axis: "business")
+            let key = CompanyBreakdown.compositeID(docID: "S1", axis: breakdownAxisProductService)
             let row = try #require(try await CompanyBreakdown.find(key, on: app.db))
             #expect(row.source == breakdownSourceNotApplicable)
             #expect(row.notApplicableReason == breakdownNotApplicableGeographyOnly)
@@ -210,7 +210,7 @@ extension BreakdownLoadResult {
                 question: "omission", options: ["single_segment", "none"],
                 selected: "single_segment", probability: 0.5, sentences: ["文"], applied: false)
             let jev = SegmentNoteJevAuditPayload(
-                code: "", docID: "S1", axis: "business", model: "typesafe/jev-1.13",
+                code: "", docID: "S1", axis: breakdownAxisProductService, model: "typesafe/jev-1.13",
                 threshold: 0.9, applied: false, needsReview: true, sentences: ["文"], calls: [call])
 
             _ = try await runBreakdownIngest(
@@ -221,7 +221,7 @@ extension BreakdownLoadResult {
                     audit: .segmentNoteJev(jev))
             }
 
-            let key = CompanyBreakdown.compositeID(docID: "S1", axis: "business")
+            let key = CompanyBreakdown.compositeID(docID: "S1", axis: breakdownAxisProductService)
             let row = try #require(try await CompanyBreakdown.find(key, on: app.db))
             #expect(row.notApplicableReason == breakdownNotApplicableSingleSegmentDisclosed)
             #expect(row.needsReview == true)
@@ -243,7 +243,7 @@ extension BreakdownLoadResult {
                 db: app.db, listedCodes: ["7203"], years: 3, limit: nil
             ) { _ in .notApplicable(reason: breakdownNotApplicableUnknown) }
 
-            let key = CompanyBreakdown.compositeID(docID: "S1", axis: "business")
+            let key = CompanyBreakdown.compositeID(docID: "S1", axis: breakdownAxisProductService)
             let row = try #require(try await CompanyBreakdown.find(key, on: app.db))
             #expect(row.needsReview == true)
         }
@@ -260,7 +260,7 @@ extension BreakdownLoadResult {
                 profitDisclosed: true, notes: "test")
             try await seedRow(
                 "S1", code: "7203", submit: "2025-06-20 09:00", db: app.db,
-                source: breakdownSourceSegmentInfoLLM, cacheVersion: businessBreakdownCacheVersion,
+                source: breakdownSourceSegmentInfoLLM, cacheVersion: productServiceBreakdownCacheVersion,
                 needsReview: true, contentHash: "real-hash", llmAudit: audit)
 
             let summary = try await runBreakdownIngest(
@@ -269,7 +269,7 @@ extension BreakdownLoadResult {
 
             #expect(summary.attempted == 1)
             #expect(summary.notApplicable == 1)
-            let key = CompanyBreakdown.compositeID(docID: "S1", axis: "business")
+            let key = CompanyBreakdown.compositeID(docID: "S1", axis: breakdownAxisProductService)
             let row = try #require(try await CompanyBreakdown.find(key, on: app.db))
             // 実データ（LLM経由）が保持されたままであること。
             #expect(row.source == breakdownSourceSegmentInfoLLM)
@@ -293,7 +293,7 @@ extension BreakdownLoadResult {
                 db: app.db, listedCodes: ["7203"], years: 3, limit: nil
             ) { _ in .resolved(payload: fakePayload(), source: breakdownSourceXbrlFacts, contentHash: "h9", audit: nil) }
 
-            let key = CompanyBreakdown.compositeID(docID: "S1", axis: "business")
+            let key = CompanyBreakdown.compositeID(docID: "S1", axis: breakdownAxisProductService)
             let row = try #require(try await CompanyBreakdown.find(key, on: app.db))
             #expect(row.source == breakdownSourceXbrlFacts)
             #expect(row.notApplicableReason == nil)
@@ -324,7 +324,7 @@ extension BreakdownLoadResult {
             try await seedDoc("S1", secCode: "72030", db: app.db)
             try await seedRow(
                 "S1", code: "7203", submit: "2025-06-20 09:00", db: app.db,
-                source: breakdownSourceNotApplicable, cacheVersion: businessBreakdownCacheVersion,
+                source: breakdownSourceNotApplicable, cacheVersion: productServiceBreakdownCacheVersion,
                 notApplicableReason: breakdownNotApplicableSingleSegmentDisclosed)
 
             let summary = try await runBreakdownIngest(
@@ -344,7 +344,7 @@ extension BreakdownLoadResult {
             try await seedDoc("S1", secCode: "72030", db: app.db)
             try await seedRow(
                 "S1", code: "7203", submit: "2025-06-20 09:00", db: app.db,
-                source: breakdownSourceNotApplicable, cacheVersion: businessBreakdownCacheVersion,
+                source: breakdownSourceNotApplicable, cacheVersion: productServiceBreakdownCacheVersion,
                 needsReview: true, notApplicableReason: breakdownNotApplicableUnknown)
 
             let summary = try await runBreakdownIngest(
@@ -427,9 +427,9 @@ extension BreakdownLoadResult {
 
             #expect(summary.attempted == 1)
             #expect(summary.stored == 1)
-            let key = CompanyBreakdown.compositeID(docID: "S1", axis: "business")
+            let key = CompanyBreakdown.compositeID(docID: "S1", axis: breakdownAxisProductService)
             let row = try #require(try await CompanyBreakdown.find(key, on: app.db))
-            #expect(row.cacheVersion == businessBreakdownCacheVersion)
+            #expect(row.cacheVersion == productServiceBreakdownCacheVersion)
         }
     }
 
@@ -454,9 +454,9 @@ extension BreakdownLoadResult {
 
             #expect(summary.attempted == 1)
             #expect(summary.stored == 1)
-            let key = CompanyBreakdown.compositeID(docID: "S1", axis: "business")
+            let key = CompanyBreakdown.compositeID(docID: "S1", axis: breakdownAxisProductService)
             let row = try #require(try await CompanyBreakdown.find(key, on: app.db))
-            #expect(row.cacheVersion == businessBreakdownCacheVersion)
+            #expect(row.cacheVersion == productServiceBreakdownCacheVersion)
             #expect(row.source == breakdownSourceStackedSegmentPnL)
         }
     }
@@ -466,7 +466,7 @@ extension BreakdownLoadResult {
             try await seedDoc("S1", secCode: "72030", db: app.db)
             try await seedRow(
                 "S1", code: "7203", submit: "2025-06-20 09:00", db: app.db,
-                source: breakdownSourceSegmentInfoLLM, cacheVersion: businessBreakdownCacheVersion,
+                source: breakdownSourceSegmentInfoLLM, cacheVersion: productServiceBreakdownCacheVersion,
                 needsReview: true)
 
             let summary = try await runBreakdownIngest(
@@ -475,7 +475,7 @@ extension BreakdownLoadResult {
 
             #expect(summary.attempted == 1)
             #expect(summary.stored == 1)
-            let key = CompanyBreakdown.compositeID(docID: "S1", axis: "business")
+            let key = CompanyBreakdown.compositeID(docID: "S1", axis: breakdownAxisProductService)
             let row = try #require(try await CompanyBreakdown.find(key, on: app.db))
             #expect(row.needsReview == false)
         }
@@ -488,7 +488,7 @@ extension BreakdownLoadResult {
             try await seedDoc("S1", secCode: "72030", db: app.db)
             try await seedRow(
                 "S1", code: "7203", submit: "2025-06-20 09:00", db: app.db,
-                source: breakdownSourceXbrlFacts, cacheVersion: businessBreakdownCacheVersion,
+                source: breakdownSourceXbrlFacts, cacheVersion: productServiceBreakdownCacheVersion,
                 needsReview: true)
 
             let summary = try await runBreakdownIngest(
@@ -521,9 +521,9 @@ extension BreakdownLoadResult {
 
             #expect(summary.attempted == 1)
             #expect(summary.stored == 1)
-            let key = CompanyBreakdown.compositeID(docID: "S1", axis: "business")
+            let key = CompanyBreakdown.compositeID(docID: "S1", axis: breakdownAxisProductService)
             let row = try #require(try await CompanyBreakdown.find(key, on: app.db))
-            #expect(row.cacheVersion == businessBreakdownCacheVersion)
+            #expect(row.cacheVersion == productServiceBreakdownCacheVersion)
             #expect(row.needsReview == true)
         }
     }
@@ -564,7 +564,7 @@ extension BreakdownLoadResult {
             #expect(summary.stored == 1)
             #expect(
                 try await CompanyBreakdown.find(
-                    CompanyBreakdown.compositeID(docID: "S2", axis: "business"), on: app.db) == nil)
+                    CompanyBreakdown.compositeID(docID: "S2", axis: breakdownAxisProductService), on: app.db) == nil)
         }
     }
 
@@ -580,9 +580,9 @@ extension BreakdownLoadResult {
 
             #expect(summary.attempted == 1)
             #expect(try await CompanyBreakdown.find(
-                CompanyBreakdown.compositeID(docID: "S2", axis: "business"), on: app.db) != nil)
+                CompanyBreakdown.compositeID(docID: "S2", axis: breakdownAxisProductService), on: app.db) != nil)
             #expect(try await CompanyBreakdown.find(
-                CompanyBreakdown.compositeID(docID: "S1", axis: "business"), on: app.db) == nil)
+                CompanyBreakdown.compositeID(docID: "S1", axis: breakdownAxisProductService), on: app.db) == nil)
         }
     }
 
@@ -599,11 +599,11 @@ extension BreakdownLoadResult {
 
             #expect(summary.attempted == 2)
             #expect(try await CompanyBreakdown.find(
-                CompanyBreakdown.compositeID(docID: "LATEST7203", axis: "business"), on: app.db) != nil)
+                CompanyBreakdown.compositeID(docID: "LATEST7203", axis: breakdownAxisProductService), on: app.db) != nil)
             #expect(try await CompanyBreakdown.find(
-                CompanyBreakdown.compositeID(docID: "LATEST6758", axis: "business"), on: app.db) != nil)
+                CompanyBreakdown.compositeID(docID: "LATEST6758", axis: breakdownAxisProductService), on: app.db) != nil)
             #expect(try await CompanyBreakdown.find(
-                CompanyBreakdown.compositeID(docID: "PRIOR7203", axis: "business"), on: app.db) == nil)
+                CompanyBreakdown.compositeID(docID: "PRIOR7203", axis: breakdownAxisProductService), on: app.db) == nil)
         }
     }
 
@@ -619,9 +619,9 @@ extension BreakdownLoadResult {
 
             #expect(summary.attempted == 1)
             #expect(try await CompanyBreakdown.find(
-                CompanyBreakdown.compositeID(docID: "S2", axis: "business"), on: app.db) != nil)
+                CompanyBreakdown.compositeID(docID: "S2", axis: breakdownAxisProductService), on: app.db) != nil)
             #expect(try await CompanyBreakdown.find(
-                CompanyBreakdown.compositeID(docID: "S1", axis: "business"), on: app.db) == nil)
+                CompanyBreakdown.compositeID(docID: "S1", axis: breakdownAxisProductService), on: app.db) == nil)
         }
     }
 
@@ -638,7 +638,7 @@ extension BreakdownLoadResult {
             ) { _ in .resolved(payload: fakePayload(), source: breakdownSourceXbrlFacts, contentHash: "h1", audit: nil) }
 
             #expect(summary.purged == 1)
-            let key22 = CompanyBreakdown.compositeID(docID: "S22", axis: "business")
+            let key22 = CompanyBreakdown.compositeID(docID: "S22", axis: breakdownAxisProductService)
             #expect(try await CompanyBreakdown.find(key22, on: app.db) == nil)
         }
     }
@@ -694,13 +694,13 @@ extension BreakdownLoadResult {
             try await seedRow("S25", code: "7203", submit: "2025-06-20 09:00", db: app.db)
 
             let result = try await loadStoredBreakdown(
-                code: "7203", docId: nil, axis: "business", db: app.db)
+                code: "7203", docId: nil, axis: breakdownAxisProductService, db: app.db)
             let json = try #require(result.foundJSON)
             #expect(json["doc_id"] as? String == "S25")
             #expect(json["code"] as? String == "7203")
-            #expect(json["axis"] as? String == "business")
+            #expect(json["axis"] as? String == breakdownAxisProductService)
             let breakdown = try #require(json["breakdown"] as? [String: Any])
-            #expect(breakdown["axis"] as? String == "business")
+            #expect(breakdown["axis"] as? String == breakdownAxisProductService)
         }
     }
 
@@ -717,12 +717,12 @@ extension BreakdownLoadResult {
                 "S100YZ8K", code: "8253", submit: "2026-08-28 16:00", db: app.db)
 
             let result = try await loadStoredBreakdown(
-                code: "8253", docId: nil, axis: "business", db: app.db)
+                code: "8253", docId: nil, axis: breakdownAxisProductService, db: app.db)
             let json = try #require(result.foundJSON)
             #expect(json["doc_id"] as? String == "S100YCDE")
 
             let explicit = try await loadStoredBreakdown(
-                code: "8253", docId: "S100YZ8K", axis: "business", db: app.db)
+                code: "8253", docId: "S100YZ8K", axis: breakdownAxisProductService, db: app.db)
             #expect(explicit.isAbsent)
         }
     }
@@ -733,7 +733,7 @@ extension BreakdownLoadResult {
             try await seedRow("S25", code: "7203", submit: "2025-06-20 09:00", db: app.db)
 
             let result = try await loadStoredBreakdown(
-                code: "7203", docId: "S24", axis: "business", db: app.db)
+                code: "7203", docId: "S24", axis: breakdownAxisProductService, db: app.db)
             let json = try #require(result.foundJSON)
             #expect(json["doc_id"] as? String == "S24")
         }
@@ -743,7 +743,7 @@ extension BreakdownLoadResult {
         try await withMigratedApp { app in
             try await seedRow("S1", code: "7203", submit: "2025-06-20 09:00", db: app.db)
             let result = try await loadStoredBreakdown(
-                code: "6758", docId: "S1", axis: "business", db: app.db)
+                code: "6758", docId: "S1", axis: breakdownAxisProductService, db: app.db)
             #expect(result.isAbsent)
         }
     }
@@ -796,7 +796,7 @@ extension BreakdownLoadResult {
                 source: breakdownSourceXbrlFacts, needsReview: true)
 
             let hiddenReview = try await loadStoredBreakdown(
-                code: "332A", docId: nil, axis: breakdownAxisBusiness, db: app.db)
+                code: "332A", docId: nil, axis: breakdownAxisProductService, db: app.db)
             #expect(hiddenReview.isAbsent)
 
             let hiddenUnit = try await loadStoredBreakdown(
@@ -804,7 +804,7 @@ extension BreakdownLoadResult {
             #expect(hiddenUnit.isAbsent)
 
             let served = try await loadStoredBreakdown(
-                code: "7203", docId: nil, axis: breakdownAxisBusiness, db: app.db)
+                code: "7203", docId: nil, axis: breakdownAxisProductService, db: app.db)
             let json = try #require(served.foundJSON)
             #expect(json["doc_id"] as? String == "S_OK")
             let breakdown = try #require(json["breakdown"] as? [String: Any])
@@ -813,7 +813,7 @@ extension BreakdownLoadResult {
             #expect(rows.count == 1)
 
             let xbrl = try await loadStoredBreakdown(
-                code: "6758", docId: nil, axis: breakdownAxisBusiness, db: app.db)
+                code: "6758", docId: nil, axis: breakdownAxisProductService, db: app.db)
             let xbrlJSON = try #require(xbrl.foundJSON)
             #expect(xbrlJSON["doc_id"] as? String == "S_XBRL")
         }
@@ -829,10 +829,10 @@ extension BreakdownLoadResult {
                 ])
 
             let hidden = try await loadStoredBreakdown(
-                code: "8316", docId: nil, axis: breakdownAxisBusiness, db: app.db)
+                code: "8316", docId: nil, axis: breakdownAxisProductService, db: app.db)
             #expect(hidden.isAbsent)
             let byDoc = try await loadStoredBreakdown(
-                code: "8316", docId: "S100W0S7", axis: breakdownAxisBusiness, db: app.db)
+                code: "8316", docId: "S100W0S7", axis: breakdownAxisProductService, db: app.db)
             #expect(byDoc.isAbsent)
         }
     }
@@ -848,11 +848,11 @@ extension BreakdownLoadResult {
                 source: breakdownSourceRevenueRecognitionLLM, needsReview: true)
 
             let result = try await loadStoredBreakdown(
-                code: "332A", docId: nil, axis: breakdownAxisBusiness, db: app.db)
+                code: "332A", docId: nil, axis: breakdownAxisProductService, db: app.db)
             #expect(result.isAbsent)
 
             let older = try await loadStoredBreakdown(
-                code: "332A", docId: "S24", axis: breakdownAxisBusiness, db: app.db)
+                code: "332A", docId: "S24", axis: breakdownAxisProductService, db: app.db)
             #expect(older.foundJSON?["doc_id"] as? String == "S24")
         }
     }
@@ -866,7 +866,7 @@ extension BreakdownLoadResult {
                 source: breakdownSourceRevenueRecognitionLLM, needsReview: false, segments: 1)
 
             let result = try await loadStoredBreakdown(
-                code: "6620", docId: "S100YJZT", axis: breakdownAxisBusiness, db: app.db)
+                code: "6620", docId: "S100YJZT", axis: breakdownAxisProductService, db: app.db)
             #expect(result.isAbsent)
         }
     }
@@ -893,7 +893,7 @@ extension BreakdownLoadResult {
                 "S1", code: "7203", submit: "2025-06-20 09:00", db: app.db,
                 source: breakdownSourceXbrlFacts, cacheVersion: "breakdown-v0")
             let result = try await loadStoredBreakdown(
-                code: "7203", docId: nil, axis: "business", db: app.db)
+                code: "7203", docId: nil, axis: breakdownAxisProductService, db: app.db)
             #expect(result.isAbsent)
         }
     }
@@ -905,7 +905,7 @@ extension BreakdownLoadResult {
                 "S1", code: "7203", submit: "2025-06-20 09:00", db: app.db,
                 source: breakdownSourceSegmentInfoLLM, cacheVersion: "very-old-version")
             let result = try await loadStoredBreakdown(
-                code: "7203", docId: nil, axis: "business", db: app.db)
+                code: "7203", docId: nil, axis: breakdownAxisProductService, db: app.db)
             #expect(result.isAbsent)
         }
     }
@@ -913,7 +913,7 @@ extension BreakdownLoadResult {
     @Test func loadReturnsNilForUnknownCompany() async throws {
         try await withMigratedApp { app in
             let result = try await loadStoredBreakdown(
-                code: "0000", docId: nil, axis: "business", db: app.db)
+                code: "0000", docId: nil, axis: breakdownAxisProductService, db: app.db)
             #expect(result.isAbsent)
         }
     }
@@ -926,7 +926,7 @@ extension BreakdownLoadResult {
                 "S1", code: "7203", submit: "2025-06-20 09:00", db: app.db,
                 source: breakdownSourceXbrlFacts)
             let result = try await loadStoredBreakdown(
-                code: "7203", docId: nil, axis: "business", db: app.db)
+                code: "7203", docId: nil, axis: breakdownAxisProductService, db: app.db)
             let json = try #require(result.foundJSON)
             #expect(json["llm_audit"] == nil)
         }
@@ -944,7 +944,7 @@ extension BreakdownLoadResult {
                 "S1", code: "8604", submit: "2026-06-22 15:36", db: app.db,
                 source: breakdownSourceSegmentInfoLLM, llmAudit: audit)
             let result = try await loadStoredBreakdown(
-                code: "8604", docId: nil, axis: "business", db: app.db)
+                code: "8604", docId: nil, axis: breakdownAxisProductService, db: app.db)
             let json = try #require(result.foundJSON)
             let llmAuditJson = try #require(json["llm_audit"] as? [String: Any])
             #expect(llmAuditJson["notes"] as? String == "収益合計（金融費用控除後）と税引前当期純利益の行を転置。")
@@ -960,11 +960,11 @@ extension BreakdownLoadResult {
         try await withMigratedApp { app in
             try await seedRow(
                 "S1", code: "7203", submit: "2025-06-20 09:00", db: app.db,
-                source: breakdownSourceNotApplicable, cacheVersion: businessBreakdownCacheVersion,
+                source: breakdownSourceNotApplicable, cacheVersion: productServiceBreakdownCacheVersion,
                 notApplicableReason: breakdownNotApplicableGeographyOnly)
 
             let result = try await loadStoredBreakdown(
-                code: "7203", docId: nil, axis: "business", db: app.db)
+                code: "7203", docId: nil, axis: breakdownAxisProductService, db: app.db)
             #expect(result.notApplicableReason == breakdownNotApplicableGeographyOnly)
             #expect(result.foundJSON == nil)
         }
@@ -980,7 +980,7 @@ extension BreakdownLoadResult {
                 notApplicableReason: breakdownNotApplicableUnknown)
 
             let result = try await loadStoredBreakdown(
-                code: "7203", docId: nil, axis: "business", db: app.db)
+                code: "7203", docId: nil, axis: breakdownAxisProductService, db: app.db)
             #expect(result.isAbsent)
         }
     }
@@ -992,11 +992,11 @@ extension BreakdownLoadResult {
             try await seedRow("S24", code: "7203", submit: "2024-06-20 09:00", db: app.db)
             try await seedRow(
                 "S25", code: "7203", submit: "2025-06-20 09:00", db: app.db,
-                source: breakdownSourceNotApplicable, cacheVersion: businessBreakdownCacheVersion,
+                source: breakdownSourceNotApplicable, cacheVersion: productServiceBreakdownCacheVersion,
                 notApplicableReason: breakdownNotApplicableSingleSegmentDisclosed)
 
             let result = try await loadStoredBreakdown(
-                code: "7203", docId: nil, axis: "business", db: app.db)
+                code: "7203", docId: nil, axis: breakdownAxisProductService, db: app.db)
             #expect(result.notApplicableReason == breakdownNotApplicableSingleSegmentDisclosed)
         }
     }
@@ -1039,7 +1039,7 @@ extension BreakdownLoadResult {
             #expect(summary.attempted == 1)
             #expect(summary.stored == 1)
             let geoKey = CompanyBreakdown.compositeID(docID: "S1", axis: breakdownAxisGeography)
-            let bizKey = CompanyBreakdown.compositeID(docID: "S1", axis: breakdownAxisBusiness)
+            let bizKey = CompanyBreakdown.compositeID(docID: "S1", axis: breakdownAxisProductService)
             let row = try #require(try await CompanyBreakdown.find(geoKey, on: app.db))
             #expect(row.source == breakdownSourceGeographyLLM)
             #expect(row.payload.axis == breakdownAxisGeography)
@@ -1094,7 +1094,7 @@ extension BreakdownLoadResult {
                 axis: breakdownAxisGeography, source: breakdownSourceGeographyLLM)
             try await seedRow(
                 "S24", code: "7203", submit: "2024-06-20 09:00", db: app.db,
-                axis: breakdownAxisBusiness, source: breakdownSourceXbrlFacts)
+                axis: breakdownAxisProductService, source: breakdownSourceXbrlFacts)
 
             let summary = try await runBreakdownIngest(
                 db: app.db, listedCodes: ["7203"], years: 1, limit: nil,
@@ -1107,7 +1107,7 @@ extension BreakdownLoadResult {
 
             #expect(summary.purged == 1)
             let geoOld = CompanyBreakdown.compositeID(docID: "S24", axis: breakdownAxisGeography)
-            let bizOld = CompanyBreakdown.compositeID(docID: "S24", axis: breakdownAxisBusiness)
+            let bizOld = CompanyBreakdown.compositeID(docID: "S24", axis: breakdownAxisProductService)
             #expect(try await CompanyBreakdown.find(geoOld, on: app.db) == nil)
             #expect(try await CompanyBreakdown.find(bizOld, on: app.db) != nil)
         }
@@ -1137,12 +1137,12 @@ extension BreakdownLoadResult {
                 cacheVersion: geographyBreakdownCacheVersion)
             try await seedRow(
                 "S1", code: "7203", submit: "2025-06-20 09:00", db: app.db,
-                axis: breakdownAxisBusiness, source: breakdownSourceXbrlFacts,
+                axis: breakdownAxisProductService, source: breakdownSourceXbrlFacts,
                 cacheVersion: "breakdown-business-v0")
 
             let summary = try await runBreakdownIngest(
                 db: app.db, listedCodes: ["7203"], years: 3, limit: nil,
-                axis: breakdownAxisBusiness
+                axis: breakdownAxisProductService
             ) { _ in
                 .resolved(payload: fakePayload(), source: breakdownSourceXbrlFacts, contentHash: "h-biz", audit: nil)
             }
@@ -1151,9 +1151,9 @@ extension BreakdownLoadResult {
             let geoKey = CompanyBreakdown.compositeID(docID: "S1", axis: breakdownAxisGeography)
             let geoRow = try #require(try await CompanyBreakdown.find(geoKey, on: app.db))
             #expect(geoRow.cacheVersion == geographyBreakdownCacheVersion)
-            let bizKey = CompanyBreakdown.compositeID(docID: "S1", axis: breakdownAxisBusiness)
+            let bizKey = CompanyBreakdown.compositeID(docID: "S1", axis: breakdownAxisProductService)
             let bizRow = try #require(try await CompanyBreakdown.find(bizKey, on: app.db))
-            #expect(bizRow.cacheVersion == businessBreakdownCacheVersion)
+            #expect(bizRow.cacheVersion == productServiceBreakdownCacheVersion)
         }
     }
 
@@ -1163,8 +1163,8 @@ extension BreakdownLoadResult {
             try await seedDoc("S1", secCode: "72030", db: app.db)
             try await seedRow(
                 "S1", code: "7203", submit: "2025-06-20 09:00", db: app.db,
-                axis: breakdownAxisBusiness, source: breakdownSourceXbrlFacts,
-                cacheVersion: businessBreakdownCacheVersion)
+                axis: breakdownAxisProductService, source: breakdownSourceXbrlFacts,
+                cacheVersion: productServiceBreakdownCacheVersion)
             try await seedRow(
                 "S1", code: "7203", submit: "2025-06-20 09:00", db: app.db,
                 axis: breakdownAxisGeography, source: breakdownSourceXbrlFacts,
@@ -1180,9 +1180,9 @@ extension BreakdownLoadResult {
             }
 
             #expect(summary.attempted == 1)
-            let bizKey = CompanyBreakdown.compositeID(docID: "S1", axis: breakdownAxisBusiness)
+            let bizKey = CompanyBreakdown.compositeID(docID: "S1", axis: breakdownAxisProductService)
             let bizRow = try #require(try await CompanyBreakdown.find(bizKey, on: app.db))
-            #expect(bizRow.cacheVersion == businessBreakdownCacheVersion)
+            #expect(bizRow.cacheVersion == productServiceBreakdownCacheVersion)
             let geoKey = CompanyBreakdown.compositeID(docID: "S1", axis: breakdownAxisGeography)
             let geoRow = try #require(try await CompanyBreakdown.find(geoKey, on: app.db))
             #expect(geoRow.cacheVersion == geographyBreakdownCacheVersion)
@@ -1281,6 +1281,21 @@ extension BreakdownLoadResult {
             #expect(breakdown["amount"] == nil)
             #expect(breakdown["denominator"] == nil)
             #expect(breakdown["axis"] as? String == breakdownAxisCapex)
+        }
+    }
+
+    @Test func loadStoredBreakdownDoesNotAliasLegacyBusinessAxis() async throws {
+        try await withMigratedApp { app in
+            try await seedRow(
+                "S1", code: "7203", submit: "2025-06-20 09:00", db: app.db,
+                axis: "business", source: breakdownSourceXbrlFacts,
+                cacheVersion: productServiceBreakdownCacheVersion)
+            let product = try await loadStoredBreakdown(
+                code: "7203", docId: nil, axis: breakdownAxisProductService, db: app.db)
+            #expect(product.isAbsent)
+            let legacy = try await loadStoredBreakdown(
+                code: "7203", docId: nil, axis: "business", db: app.db)
+            #expect(legacy.isAbsent)
         }
     }
 

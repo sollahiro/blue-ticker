@@ -59,7 +59,7 @@ import Foundation
         let sales = 4_624_727 * Financial.millionYen
         let (snapshotOrNil, audit) = await Self.normalize(tables: [table], sales: sales)
         let snapshot = try #require(snapshotOrNil)
-        #expect(snapshot.axis == "business")
+        #expect(snapshot.axis == breakdownAxisProductService)
         #expect(snapshot.sourceKind == "segment_info")
         #expect(audit?.profitDisclosed == true)
         #expect(audit?.columnJev?.model == "typesafe/jev-1.13")

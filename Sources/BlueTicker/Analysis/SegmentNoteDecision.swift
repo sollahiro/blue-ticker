@@ -16,7 +16,7 @@ enum SegmentNoteAxis: Sendable {
 
     var wire: String {
         switch self {
-        case .business: return "business"
+        case .business: return breakdownAxisProductService
         case .geography: return "geography"
         }
     }

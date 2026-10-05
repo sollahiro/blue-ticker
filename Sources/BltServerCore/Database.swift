@@ -60,7 +60,7 @@ func configureDatabase(_ app: Application) async throws {
     app.migrations.add(CreateCompanySegmentBreakdowns())
     // company_segment_breakdowns → company_breakdowns へのテーブル名変更（Breakdown 系命名への統一）。
     app.migrations.add(RenameCompanySegmentBreakdownsToCompanyBreakdowns())
-    // business 軸が解決できなかった理由（E/F/unknown）の永続化列（issue #132）。
+    // product_service 軸が解決できなかった理由（E/F/unknown）の永続化列（issue #132）。
     app.migrations.add(AddNotApplicableReasonToCompanyBreakdowns())
     // Statement 取り込み: BS/PL/CF/SS 完全正規化（company_statements、書類単位 JSONB）。対象は上場全体。
     app.migrations.add(CreateCompanyStatements())

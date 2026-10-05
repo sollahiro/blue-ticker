@@ -3,7 +3,7 @@
 // 2 真の単一セグメント（顧客表だけ）→ single_segment_disclosed のまま
 // 3 空行 LLM は保存せず xbrl_facts へフォールバック（7273）
 // 4 keepTable が組立不能な表でも製品/地域表を残す（3600 / 4324）
-// ネットワークなし。cache_version は breakdown-business-v15 のまま。
+// ネットワークなし。cache_version は軸キー改名で breakdown-product_service-v16。
 
 import Foundation
 import Testing
@@ -242,7 +242,7 @@ import Testing
     }
 
     @Test func cacheVersionStaysBreakdownBusinessV15() {
-        #expect(businessBreakdownCacheVersion == "breakdown-business-v15")
+        #expect(productServiceBreakdownCacheVersion == "breakdown-product_service-v16")
     }
 
     private func productServiceTable() -> BreakdownTable {

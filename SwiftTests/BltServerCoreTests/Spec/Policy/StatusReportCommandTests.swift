@@ -119,7 +119,7 @@ private func seedStatement(
 
 private func fakeBreakdownPayload() -> BreakdownSnapshotPayload {
     BreakdownSnapshotPayload(
-        axis: breakdownAxisBusiness, denominator: 100, denominatorTag: "income_statement.sales",
+        axis: breakdownAxisProductService, denominator: 100, denominatorTag: "income_statement.sales",
         rows: [], sourceKind: "table", needsReview: false, warnings: [])
 }
 
@@ -149,7 +149,7 @@ private func seedBreakdown(
             #expect(report.stages.count == 5)
             #expect(report.stages.map(\.key) == [
                 "financials", "statements", "filing_sections",
-                "breakdown_business", "breakdown_geography",
+                "breakdown_product_service", "breakdown_geography",
             ])
             for stage in report.stages {
                 #expect(stage.companiesCovered == 0)
@@ -289,16 +289,16 @@ private func seedBreakdown(
             try await seedAnnualReportDoc("S2", secCode: "67580", db: app.db)
             // xbrl_facts 経由・旧版 → 現行版ではない。
             try await seedBreakdown(
-                docID: "S1", axis: breakdownAxisBusiness, code: "7203",
+                docID: "S1", axis: breakdownAxisProductService, code: "7203",
                 source: breakdownSourceXbrlFacts, version: "breakdown-business-v1", db: app.db)
             // segment_info_llm 経由・旧版も現行版ではない（version gate 対象）。
             try await seedBreakdown(
-                docID: "S2", axis: breakdownAxisBusiness, code: "6758",
+                docID: "S2", axis: breakdownAxisProductService, code: "6758",
                 source: breakdownSourceSegmentInfoLLM, version: "breakdown-business-v1", db: app.db)
 
             let report = try await buildIngestStatusReport(
                 db: app.db, listedCodes: ["7203", "6758"], priorityCodes: [])
-            let business = try #require(report.stages.first { $0.key == "breakdown_business" })
+            let business = try #require(report.stages.first { $0.key == "breakdown_product_service" })
 
             #expect(business.docsCovered == 2)
             #expect(business.companiesCovered == 2)
@@ -316,17 +316,17 @@ private func seedBreakdown(
             try await seedAnnualReportDoc("S1", secCode: "72030", db: app.db)
             try await seedAnnualReportDoc("S2", secCode: "67580", db: app.db)
             try await seedBreakdown(
-                docID: "S1", axis: breakdownAxisBusiness, code: "7203",
-                source: breakdownSourceXbrlFacts, version: businessBreakdownCacheVersion, db: app.db)
-            // xbrl_facts 経由・旧版だが床（businessBreakdownMinServableVersion=1）以上 →
+                docID: "S1", axis: breakdownAxisProductService, code: "7203",
+                source: breakdownSourceXbrlFacts, version: productServiceBreakdownCacheVersion, db: app.db)
+            // xbrl_facts 経由・旧版だが床（productServiceBreakdownMinServableVersion=1）以上 →
             // current_version_pct には数えないが servable_pct には数える。
             try await seedBreakdown(
-                docID: "S2", axis: breakdownAxisBusiness, code: "6758",
+                docID: "S2", axis: breakdownAxisProductService, code: "6758",
                 source: breakdownSourceXbrlFacts, version: "breakdown-business-v3", db: app.db)
 
             let report = try await buildIngestStatusReport(
                 db: app.db, listedCodes: ["7203", "6758"], priorityCodes: [])
-            let business = try #require(report.stages.first { $0.key == "breakdown_business" })
+            let business = try #require(report.stages.first { $0.key == "breakdown_product_service" })
 
             #expect(business.currentVersionPct == 50.0)  // 現行版(v7)は1件のみ
             #expect(business.servableCovered == 2)  // 床(v1)以上は2件とも該当
@@ -354,12 +354,12 @@ private func seedBreakdown(
         try await withMigratedApp { app in
             try await seedAnnualReportDoc("S1", secCode: "72030", db: app.db)
             try await seedBreakdown(
-                docID: "S1", axis: breakdownAxisBusiness, code: "7203",
-                source: breakdownSourceXbrlFacts, version: businessBreakdownCacheVersion, db: app.db)
+                docID: "S1", axis: breakdownAxisProductService, code: "7203",
+                source: breakdownSourceXbrlFacts, version: productServiceBreakdownCacheVersion, db: app.db)
 
             let report = try await buildIngestStatusReport(
                 db: app.db, listedCodes: ["7203"], priorityCodes: [])
-            let business = try #require(report.stages.first { $0.key == "breakdown_business" })
+            let business = try #require(report.stages.first { $0.key == "breakdown_product_service" })
             let geography = try #require(report.stages.first { $0.key == "breakdown_geography" })
 
             #expect(business.docsCovered == 1)
@@ -375,8 +375,8 @@ private func seedBreakdown(
             try await seedFinancials(code: "7203", version: companyFinancialsCacheVersion, db: app.db)
             try await seedAnnualReportDoc("S1", secCode: "72030", db: app.db)
             try await seedBreakdown(
-                docID: "S1", axis: breakdownAxisBusiness, code: "7203",
-                source: breakdownSourceXbrlFacts, version: businessBreakdownCacheVersion, db: app.db)
+                docID: "S1", axis: breakdownAxisProductService, code: "7203",
+                source: breakdownSourceXbrlFacts, version: productServiceBreakdownCacheVersion, db: app.db)
 
             let report = try await buildIngestStatusReport(
                 db: app.db, listedCodes: [], priorityCodes: [])
@@ -413,15 +413,15 @@ private func seedBreakdown(
             try await seedAnnualReportDoc("S2", secCode: "99990", db: app.db)
             // "7203" は対象（listedCodes）、"9999" は対象外の残存行。
             try await seedBreakdown(
-                docID: "S1", axis: breakdownAxisBusiness, code: "7203",
-                source: breakdownSourceXbrlFacts, version: businessBreakdownCacheVersion, db: app.db)
+                docID: "S1", axis: breakdownAxisProductService, code: "7203",
+                source: breakdownSourceXbrlFacts, version: productServiceBreakdownCacheVersion, db: app.db)
             try await seedBreakdown(
-                docID: "S2", axis: breakdownAxisBusiness, code: "9999",
-                source: breakdownSourceXbrlFacts, version: businessBreakdownCacheVersion, db: app.db)
+                docID: "S2", axis: breakdownAxisProductService, code: "9999",
+                source: breakdownSourceXbrlFacts, version: productServiceBreakdownCacheVersion, db: app.db)
 
             let report = try await buildIngestStatusReport(
                 db: app.db, listedCodes: ["7203"], priorityCodes: [])
-            let business = try #require(report.stages.first { $0.key == "breakdown_business" })
+            let business = try #require(report.stages.first { $0.key == "breakdown_product_service" })
 
             #expect(business.companiesCovered == 1)
             #expect(business.docsCovered == 1)  // "9999" 由来の行は数えない
@@ -435,12 +435,12 @@ private func seedBreakdown(
             // priorityCodes は空だが、既存行はある（優先コード一覧が未配置・空のケースを模す）。
             // filingSectionCandidates の対象コードが空なので docsTarget は 0 になる。
             try await seedBreakdown(
-                docID: "S1", axis: breakdownAxisBusiness, code: "7203",
-                source: breakdownSourceXbrlFacts, version: businessBreakdownCacheVersion, db: app.db)
+                docID: "S1", axis: breakdownAxisProductService, code: "7203",
+                source: breakdownSourceXbrlFacts, version: productServiceBreakdownCacheVersion, db: app.db)
 
             let report = try await buildIngestStatusReport(
                 db: app.db, listedCodes: [], priorityCodes: [])
-            let business = try #require(report.stages.first { $0.key == "breakdown_business" })
+            let business = try #require(report.stages.first { $0.key == "breakdown_product_service" })
 
             #expect(business.docsTarget == 0)
             #expect(business.currentVersionPct == 0.0)  // 修正前は 30800.0 のような暴走値になっていた
@@ -565,12 +565,12 @@ private func seedBreakdown(
             try await seedAnnualReportDoc(
                 "P1", secCode: "72030", submit: "2025-06-20 09:00", db: app.db)
             try await seedBreakdown(
-                docID: "P1", axis: breakdownAxisBusiness, code: "7203",
-                source: breakdownSourceXbrlFacts, version: businessBreakdownCacheVersion, db: app.db)
+                docID: "P1", axis: breakdownAxisProductService, code: "7203",
+                source: breakdownSourceXbrlFacts, version: productServiceBreakdownCacheVersion, db: app.db)
 
             let report = try await buildIngestStatusReport(
                 db: app.db, listedCodes: ["7203"], priorityCodes: [])
-            let business = try #require(report.stages.first { $0.key == "breakdown_business" })
+            let business = try #require(report.stages.first { $0.key == "breakdown_product_service" })
 
             #expect(business.docsCovered == 1)
             #expect(business.companiesCovered == 1)

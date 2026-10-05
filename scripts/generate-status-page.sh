@@ -2,7 +2,7 @@
 # 公開ステータスページの HTML コメントマーカー間を、最新の ingest 状況で書き換える。
 #
 # 手元の定期ジョブ末尾（全ステージ完了後）から呼ばれる想定。5ステージ
-# （financials/statements/filing_sections/breakdown_business/breakdown_geography）の
+# （financials/statements/filing_sections/breakdown_product_service/breakdown_geography）の
 # カバレッジ・鮮度を「blt-server status-report」（DB read-only、銘柄コード一覧そのものは
 # 出力しない）で取得する。notes や unpublished 軸は含めない（本スクリプトは
 # status-report が返すステージのみを反映する）。
@@ -131,9 +131,9 @@ printf '<!-- STATUS_GENERATED_AT -->%s<!-- /STATUS_GENERATED_AT -->' "$generated
 replace_marker "STATUS_GENERATED_AT" "$gen_tmp"
 rm -f "$gen_tmp"
 
-# 固定順（financials / statements / filing_sections / breakdown_business / breakdown_geography）。
+# 固定順（financials / statements / filing_sections / breakdown_product_service / breakdown_geography）。
 # notes 等は status-report に含めない（本表は上場正本の主要ステージのみ）。
-STAGE_KEYS=(financials statements filing_sections breakdown_business breakdown_geography)
+STAGE_KEYS=(financials statements filing_sections breakdown_product_service breakdown_geography)
 
 for key in "${STAGE_KEYS[@]}"; do
   stage_json="$(echo "$report_json" | jq -c --arg k "$key" '.stages[] | select(.key == $k)')"

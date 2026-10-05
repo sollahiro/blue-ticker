@@ -100,8 +100,8 @@ private func send(
             #expect(versions?["company_financials_min_servable"] as? Int == companyFinancialsMinServableVersion)
             #expect(versions?["filing_sections"] as? String == filingSectionsCacheVersion)
             #expect(versions?["filing_sections_min_servable"] as? Int == filingSectionsMinServableVersion)
-            #expect(versions?["breakdown_business"] as? String == businessBreakdownCacheVersion)
-            #expect(versions?["breakdown_business_min_servable"] as? Int == businessBreakdownMinServableVersion)
+            #expect(versions?["breakdown_product_service"] as? String == productServiceBreakdownCacheVersion)
+            #expect(versions?["breakdown_product_service_min_servable"] as? Int == productServiceBreakdownMinServableVersion)
             #expect(versions?["statement"] as? String == statementCacheVersion)
             #expect(versions?["statement_min_servable"] as? Int == statementMinServableVersion)
             #expect(versions?["company_overviews"] as? String == companyOverviewCacheVersion)
@@ -319,36 +319,66 @@ private func send(
         try await withApp(databases: true) { app in
             let (status, json) = try await send(app, "/v1/companies/7203/breakdown")
             #expect(status == .notFound)
-            #expect(json?["error"] as? String == "事業別内訳は未算出です")
+            #expect(json?["error"] as? String == "製品・サービス別内訳は未算出です")
             #expect(json?["reason"] == nil)
         }
     }
 
-    /// issue #132: business 軸が解決できなかった場合、404 のステータスは維持したまま
+    /// issue #132: product_service 軸が解決できなかった場合、404 のステータスは維持したまま
     /// ボディへ E/F/unknown の reason を追加する（エッジ課金はステータス単位でメーターするため）。
     @Test func breakdownReturns404WithReasonWhenNotApplicable() async throws {
         try await withApp(databases: true) { app in
-            let row = CompanyBreakdown(docID: "S1", axis: breakdownAxisBusiness)
+            let row = CompanyBreakdown(docID: "S1", axis: breakdownAxisProductService)
             row.code = "7203"
             row.submitDateTime = "2025-06-20 09:00"
             row.payload = BreakdownSnapshotPayload(
-                axis: "business", denominator: 0, denominatorTag: "", rows: [],
+                axis: breakdownAxisProductService, denominator: 0, denominatorTag: "", rows: [],
                 sourceKind: breakdownSourceNotApplicable, needsReview: false, warnings: [])
             row.needsReview = false
             row.source = breakdownSourceNotApplicable
             row.contentHash = ""
-            row.cacheVersion = businessBreakdownCacheVersion
+            row.cacheVersion = productServiceBreakdownCacheVersion
             row.notApplicableReason = breakdownNotApplicableGeographyOnly
             try await row.create(on: app.db)
 
             let (status, json) = try await send(app, "/v1/companies/7203/breakdown")
             #expect(status == .notFound)
-            #expect(json?["error"] as? String == "事業別内訳は未算出です")
+            #expect(json?["error"] as? String == "製品・サービス別内訳は未算出です")
             #expect(json?["reason"] as? String == "geography_only")
         }
     }
 
-    /// 2026-07-27 品質ゲート通過後、axis=geography も business と同型で格納済みデータを返す。
+    @Test func breakdownDoesNotAliasRetiredBusinessAxis() async throws {
+        try await withApp(databases: true) { app in
+            let row = CompanyBreakdown(docID: "S1", axis: breakdownAxisProductService)
+            row.code = "7203"
+            row.submitDateTime = "2025-06-20 09:00"
+            row.payload = BreakdownSnapshotPayload(
+                axis: breakdownAxisProductService, denominator: 1_000_000,
+                denominatorTag: "income_statement.sales",
+                rows: [
+                    BreakdownRowPayload(
+                        labelRaw: "製品A", label: "製品A", amount: 600_000, profit: nil,
+                        rowKind: "segment")
+                ],
+                sourceKind: breakdownSourceXbrlFacts, needsReview: false, warnings: [])
+            row.needsReview = false
+            row.source = breakdownSourceXbrlFacts
+            row.contentHash = ""
+            row.cacheVersion = productServiceBreakdownCacheVersion
+            try await row.create(on: app.db)
+
+            let (ok, json) = try await send(app, "/v1/companies/7203/breakdown?axis=product_service")
+            #expect(ok == .ok)
+            #expect(json?["axis"] as? String == breakdownAxisProductService)
+
+            let (legacy, legacyJSON) = try await send(app, "/v1/companies/7203/breakdown?axis=business")
+            #expect(legacy == .notFound)
+            #expect(legacyJSON?["axis"] == nil)
+        }
+    }
+
+    /// 2026-07-27 品質ゲート通過後、axis=geography も product_service と同型で格納済みデータを返す。
     @Test func breakdownReturnsGeographyAxisWhenStored() async throws {
         try await withApp(databases: true) { app in
             let row = CompanyBreakdown(docID: "S1", axis: breakdownAxisGeography)
@@ -373,7 +403,7 @@ private func send(
         }
     }
 
-    /// axis=geography 未算出時は business と別文言（「地域別内訳は未算出です」）で 404 になる。
+    /// axis=geography 未算出時は product_service と別文言（「地域別内訳は未算出です」）で 404 になる。
     @Test func breakdownReturns404WithGeographyMessageWhenNotStored() async throws {
         try await withApp(databases: true) { app in
             let (status, json) = try await send(app, "/v1/companies/7203/breakdown?axis=geography")
@@ -410,9 +440,9 @@ private func send(
             }
 
             try await insert(
-                docID: "S_REVIEW", code: "7203", axis: breakdownAxisBusiness,
+                docID: "S_REVIEW", code: "7203", axis: breakdownAxisProductService,
                 source: breakdownSourceRevenueRecognitionLLM,
-                cacheVersion: businessBreakdownCacheVersion, needsReview: true,
+                cacheVersion: productServiceBreakdownCacheVersion, needsReview: true,
                 warnings: ["llm_row_sum_mismatch"])
             try await insert(
                 docID: "S_UNIT", code: "6758", axis: breakdownAxisGeography,
@@ -420,14 +450,14 @@ private func send(
                 cacheVersion: geographyBreakdownCacheVersion, needsReview: false,
                 warnings: [breakdownWarningLLMUnitUnresolved])
             try await insert(
-                docID: "S_OK", code: "9984", axis: breakdownAxisBusiness,
+                docID: "S_OK", code: "9984", axis: breakdownAxisProductService,
                 source: breakdownSourceSegmentInfoLLM,
-                cacheVersion: businessBreakdownCacheVersion, needsReview: false, warnings: [])
+                cacheVersion: productServiceBreakdownCacheVersion, needsReview: false, warnings: [])
 
             let (hiddenReviewStatus, hiddenReview) = try await send(
                 app, "/v1/companies/7203/breakdown")
             #expect(hiddenReviewStatus == .notFound)
-            #expect(hiddenReview?["error"] as? String == "事業別内訳は未算出です")
+            #expect(hiddenReview?["error"] as? String == "製品・サービス別内訳は未算出です")
             #expect(hiddenReview?["reason"] == nil)
 
             let (hiddenUnitStatus, hiddenUnit) = try await send(

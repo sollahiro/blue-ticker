@@ -1,9 +1,9 @@
-// 内訳取り込み: 上場企業の有報について軸別（business / geography 等）の内訳を解決し
+// 内訳取り込み: 上場企業の有報について軸別（product_service / geography 等）の内訳を解決し
 // company_breakdowns へ upsert する。解決は BlueTickerCore のファサード
 // （resolveBusinessBreakdown / resolveGeographyBreakdown）に委譲し、ここでは対象選定・
 // staleness 判定・DB upsert のみを担う（ネットワーク非依存でテスト可能）。
-// 呼び出し元（FactsIngest）が business → geography の順で本関数を呼ぶ。
-// REST/MCP の read（loadStoredBreakdown）は business / geography の両軸を公開する
+// 呼び出し元（FactsIngest）が product_service → geography の順で本関数を呼ぶ。
+// REST/MCP の read（loadStoredBreakdown）は product_service / geography の両軸を公開する
 // （2026-07-27、品質ゲート＝最新有報の needs_review=true・あいまい失敗0を確認のうえ解禁）。
 //
 // 対象母集団は呼び出し元が `listedCodes` に渡す集合。全軸とも上場全体
@@ -35,7 +35,7 @@ public struct BreakdownIngestSummary: Sendable, Equatable {
     /// 書類の取得・抽出自体は成功したが当該軸の内訳が解決できなかった書類数（失敗ではない）。
     public let notApplicable: Int
     /// notApplicable の内訳（issue #130、E/F判定の検知結果明示化）。
-    /// E: 報告セグメントが地域別のみで business 軸への swap が見つからなかった書類数。
+    /// E: 報告セグメントが地域別のみで product_service 軸への swap が見つからなかった書類数。
     public let notApplicableGeographyOnly: Int
     /// F: 単一セグメントのため報告セグメント開示自体が省略されていた書類数。
     public let notApplicableSingleSegmentDisclosed: Int
@@ -66,7 +66,7 @@ func runBreakdownIngest(
     db: Database, listedCodes: Set<String>, years: Int,
     limit: Int?, explicitCodes: Set<String>? = nil, priorityCodes: Set<String> = [],
     cachedDocIDs: Set<String> = [],
-    axis: String = breakdownAxisBusiness,
+    axis: String = breakdownAxisProductService,
     candidateSets: FilingSectionCandidateSets? = nil,
     forceDocIDs: Set<String> = [],
     logger: Logger? = nil,
@@ -337,12 +337,12 @@ func countServableBreakdowns(db: Database) async throws -> (servable: Int, unser
 
 // MARK: - read 経路（REST/MCP breakdown）
 
-/// `loadStoredBreakdown` の結果3値。「行が無い/read不可」と「行はあるが business 軸が
+/// `loadStoredBreakdown` の結果3値。「行が無い/read不可」と「行はあるが product_service 軸が
 /// 解決できなかった（reason付き）」を区別して呼び出し側（REST/MCP）へ伝える（issue #132）。
 enum BreakdownLoadResult {
     /// 実データあり。公開契約 {code, doc_id, axis, breakdown} の JSON。
     case found([String: Any])
-    /// 行はあるが business 軸が解決できなかった（`breakdownNotApplicable*` のいずれか）。
+    /// 行はあるが product_service 軸が解決できなかった（`breakdownNotApplicable*` のいずれか）。
     case notApplicable(reason: String)
     /// 行が無い、または read 不可（バージョン床未満等）。
     case absent

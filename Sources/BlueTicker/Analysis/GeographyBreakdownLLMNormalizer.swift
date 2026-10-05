@@ -4,7 +4,7 @@
 // 表全体（markdown）を LLM に渡して構造化させ、Swift 側は単位変換・分母整合性・
 // 地域ラベル妥当性のみ決定的に検証する（契約検証の増分。ingest/CLI/REST 配線は対象外）。
 //
-// segments（business）軸への適用は今回のスコープ外（smoke 11社中 0社が html_table のため）。
+// segments（product_service）軸への適用は今回のスコープ外（smoke 11社中 0社が html_table のため）。
 // オークマ型（segments キーの axis が geography 判定になるケース）の配線方針は
 // docs/breakdown.mdに記載。ここでは扱わない。
 
@@ -12,7 +12,7 @@ import Foundation
 
 /// LLM がどの表・どの期間列・どの単位を採用したかの監査情報（目視検証用）。
 /// `BreakdownSnapshot` 自体（xbrl_facts 経路と共有する契約型）は汚さず、別チャネルで返す。
-/// business 軸の正規化器（`RevenueRecognitionColumnNormalizer` 等）と共有する型。
+/// product_service 軸の正規化器（`RevenueRecognitionColumnNormalizer` 等）と共有する型。
 struct LLMBreakdownAudit {
     var sourceTableIndex: Int?
     var periodColumn: String?
@@ -22,7 +22,7 @@ struct LLMBreakdownAudit {
     /// geography 軸（本ファイル）は利益比較の対象外のため常に false。
     var profitDisclosed: Bool
     var notes: String
-    /// `applicable=false` のときの理由種別（`geography_only` | `other`）。business 軸の
+    /// `applicable=false` のときの理由種別（`geography_only` | `other`）。product_service 軸の
     /// 正規化器（`SegmentInfoLLMNormalizer`）のみが設定する
     /// （issue #135: html_table経由でLLMが地域別のみと判定したケースをE判定として拾うため）。
     /// `applicable=true` のときは無視されるフィールドのため nil のままでよい。
@@ -212,7 +212,7 @@ enum GeographyBreakdownLLMNormalizer {
         // 分母整合性チェック。金融・カード等（例: クレディセゾン・野村HD）は地域注記の
         // 「営業収益」「収益合計（金融費用控除後）」が損益計算書の売上高（総額）と乖離する。
         // 表自身の subtotal（合計/連結）が segment(+reconciling) 合計と一致するなら注記側に揃える
-        // （business 軸 `SegmentInfoLLMNormalizer` / xbrl_facts の高島屋型と同型）。
+        // （product_service 軸 `SegmentInfoLLMNormalizer` / xbrl_facts の高島屋型と同型）。
         let segmentSum = rows.filter { $0.rowKind == "segment" }.reduce(0.0) { $0 + $1.amount }
         let reconcilingSum = rows.filter { $0.rowKind == "reconciling" }.reduce(0.0) { $0 + $1.amount }
         let segmentShare = segmentSum / consolidatedSales

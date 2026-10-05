@@ -186,7 +186,7 @@ import Testing
         let (snapshot, source, _) = await BusinessBreakdownResolver.resolve(
             segments: kept, consolidatedSales: sales, client: UnavailableChatClient())
         if let snap = snapshot {
-            #expect(snap.axis == "business")
+            #expect(snap.axis == breakdownAxisProductService)
             #expect(snap.rows.filter { $0.rowKind == "segment" }.count >= 2)
             #expect(
                 !BusinessBreakdownResolver.dedicatedSingleSegmentFallback(

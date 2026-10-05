@@ -1,5 +1,5 @@
 // `segments` キー自体が html_table を返すケース（キヤノン US-GAAP 注23、事業が列・指標が行）
-// を、決定論の表構造チェック + Jev の列・行選択で BreakdownSnapshot（axis:"business"）へ正規化する。
+// を、決定論の表構造チェック + Jev の列・行選択で BreakdownSnapshot（axis:"product_service"）へ正規化する。
 // Luna / Chat Completions / `OPENAI_BUSINESS_MODEL` は使わない。
 // 地域別経路（`GeographyBreakdownLLMNormalizer`）は触らない。
 // 表構造は収益認識と同じ 4 段（ラベル列、group/category、subtotal/segment、同じ合計の並行ブロック）。
@@ -240,7 +240,7 @@ enum SegmentInfoLLMNormalizer {
         stampJev(&audit, applied: !belowThreshold, needsReview: needsReview)
 
         let snapshot = BreakdownSnapshot(
-            axis: "business",
+            axis: breakdownAxisProductService,
             denominator: denom,
             denominatorTag: denomTag,
             rows: rows,
@@ -891,7 +891,7 @@ enum SegmentInfoLLMNormalizer {
         docID: String, choice: RevenueRecognitionColumnChoice, resolvedKey: String?, question: String
     ) -> SegmentNoteJevAuditPayload {
         SegmentNoteJevAuditPayload(
-            code: "", docID: docID, axis: breakdownAxisBusiness,
+            code: "", docID: docID, axis: breakdownAxisProductService,
             model: choice.model, threshold: RevenueRecognitionColumnNormalizer.confidenceThreshold,
             applied: false, needsReview: false, sentences: [],
             calls: [

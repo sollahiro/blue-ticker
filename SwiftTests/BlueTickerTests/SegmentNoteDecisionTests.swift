@@ -328,7 +328,7 @@ import Testing
         let audit = try #require(outcome.audit)
         #expect(audit.code == "2321")
         #expect(audit.docID == "S100LS0U")
-        #expect(audit.axis == "business")
+        #expect(audit.axis == breakdownAxisProductService)
         #expect(audit.model == "typesafe/jev-1.13")
         #expect(audit.threshold == SegmentNoteDecision.applyProbabilityThreshold)
         #expect(audit.sentences == [productNinety])
@@ -420,7 +420,7 @@ import Testing
             let extracted = businessFactsWithCustomerTable()
             let snapshot = try #require(
                 BreakdownNormalizer.normalize(extracted, consolidatedSales: 1_000))
-            #expect(snapshot.axis == "business")
+            #expect(snapshot.axis == breakdownAxisProductService)
             #expect(snapshot.needsReview == false)
             let context = noteContext(decider: decider)
             let business = await context.segmentsAfterNoteDecision(

@@ -7,7 +7,7 @@ import Foundation
 // MARK: - 契約型
 
 /// REST skills 応答の `schema_version`。形を破壊的に変えたときのみ +1。
-public let apiSkillsSchemaVersion = 2
+public let apiSkillsSchemaVersion = 3
 
 /// パラメータの置き場所（REST パス変数 / クエリ）。
 public enum ApiSkillParameterLocation: String, Sendable {
@@ -363,13 +363,13 @@ public func apiSkillsCatalog() -> [ApiSkill] {
         ),
         ApiSkill(
             id: "get-breakdown",
-            name: "事業別・地域別売上内訳",
+            name: "製品・サービス別・地域別売上内訳",
             description: """
-                有価証券報告書から事業別/地域別売上高、従業員数、研究開発費、のれん、
+                有価証券報告書から製品・サービス別/地域別売上高、従業員数、研究開発費、のれん、
                 報告セグメント別ののれんの償却額・持分法会計処理される投資、
                 設備投資マトリクス（capex）を取得します（格納済みデータのみ）。
                 対象は取り込み済みの上場企業です。doc_id を省略すると最新の有価証券報告書を使用します。
-                axis は business（既定）/ geography / employees / research_and_development / goodwill /
+                axis は product_service（既定）/ geography / employees / research_and_development / goodwill /
                 goodwill_amortization / equity_method_investments / capex に対応。
                 数値タグとセグメント fact から解決します。合計のみの開示は分母だけの行になります。
                 axis=capex は名前付きセル（segment_assets / flow / capital_expenditures_overview）で、
@@ -385,7 +385,7 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                 capex_prose_remainder と capex_prose_exclusion は 404 にしません。
                 内訳が取得できない場合は 404 とともに reason が返ることがあります（reason 無しの 404 は単に未取り込み）。
                 公開 reason は geography_only / single_segment_disclosed / not_found / unknown のみ。
-                axis=business: geography_only（報告セグメントが地域別のみ。地域は geography 軸。日本/アジアを business に載せない）、
+                axis=product_service: geography_only（報告セグメントが地域別のみ。地域は geography 軸。日本/アジアを product_service に載せない）、
                 single_segment_disclosed（単一セグメントのため報告セグメント開示自体を省略）、
                 unknown（原因未特定・要再調査）。
                 axis=geography: not_found（地域別情報の注記自体が存在しない）、unknown（抽出失敗・要再調査）。
@@ -414,16 +414,16 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                     name: "axis",
                     location: .query,
                     type: .string,
-                    description: "内訳の軸（business / geography / employees / research_and_development / goodwill / goodwill_amortization / equity_method_investments / capex。省略時 business）",
+                    description: "内訳の軸（product_service / geography / employees / research_and_development / goodwill / goodwill_amortization / equity_method_investments / capex。省略時 product_service）",
                     required: false,
-                    defaultValue: .string("business")
+                    defaultValue: .string(breakdownAxisProductService)
                 ),
             ],
             instructions: """
-                Breakdown（事業別/地域別売上、従業員数、研究開発費、のれん、報告セグメント別指標、設備投資マトリクスの構造化）。
+                Breakdown（製品・サービス別/地域別売上、従業員数、研究開発費、のれん、報告セグメント別指標、設備投資マトリクスの構造化）。
                 自由テキストのセグメント記述は get-filing-content の segments。
                 格納済みデータのみ。未算出は 404、DB 非接続は 503。
-                例: GET /v1/companies/6758/breakdown?axis=business
+                例: GET /v1/companies/6758/breakdown?axis=product_service
                 例: GET /v1/companies/6758/breakdown?axis=geography
                 例: GET /v1/companies/6758/breakdown?axis=employees
                 例: GET /v1/companies/6758/breakdown?axis=capex

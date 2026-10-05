@@ -26,7 +26,7 @@ struct BreakdownRow: Equatable {
 }
 
 struct BreakdownSnapshot: Equatable {
-    var axis: String  // "business" | "geography"
+    var axis: String  // "product_service" | "geography"
     var denominator: Double
     // 採用した分母の出所（監査・再現用）。xbrl_facts 経路は実際に使った XBRL タグ名
     // （例: "SalesToExternalCustomersIFRS"）、html_table 経路は XBRL タグが存在しないため
@@ -293,7 +293,7 @@ enum BreakdownNormalizer {
         if let denominatorWarning { warnings.append(denominatorWarning) }
 
         return BreakdownSnapshot(
-            axis: "business",
+            axis: breakdownAxisProductService,
             denominator: denominator,
             denominatorTag: amountTag,
             rows: rows,
@@ -1058,7 +1058,7 @@ enum BreakdownNormalizer {
     /// （学び11、実データ検証: 1802大林組・1812鹿島建設・1808長谷工・2413エムスリー）。
     /// 「国内◯◯事業」「海外◯◯事業」という事業区分名や「海外事業」という単独カテゴリは
     /// Domestic/Overseas のみで一致するが、これらは事業軸の一部であって地域軸との真の混在ではない
-    /// （sum(segment) ≈ denominator で axis=business の正しさを別途確認済み）。
+    /// （sum(segment) ≈ denominator で axis=product_service の正しさを別途確認済み）。
     ///
     /// 特定地域名（Japan 等）が事業・プロジェクト名に埋め込まれているだけの行
     /// （例: INPEX `OilAndGasJapanReportableSegmentMember`＝国内O&G）も、除去後に**固有の**
@@ -1072,14 +1072,14 @@ enum BreakdownNormalizer {
         let segmentMembers = rows
             .filter { $0.rowKind == "segment" && !Xbrl.segmentOtherBusinessMemberNames.contains($0.labelRaw) }
             .map(\.labelRaw)
-        guard !segmentMembers.isEmpty else { return ("business", false) }
+        guard !segmentMembers.isEmpty else { return (breakdownAxisProductService, false) }
 
         if allMembersAreGeography(segmentMembers) { return ("geography", false) }
 
         let geoMatches = segmentMembers.filter { member in
             Xbrl.segmentGeographyMemberKeywords.contains(where: member.contains)
         }
-        if geoMatches.isEmpty { return ("business", false) }
+        if geoMatches.isEmpty { return (breakdownAxisProductService, false) }
 
         // TOTO型: 報告セグメントが「日本住設」＋海外住設の地域内訳（米州/アジア・オセアニア/欧州/
         // 中国大陸）＋「先進セラミック」。海外側 member は Americas / Europe 等の裸の地域名だが、
@@ -1088,7 +1088,7 @@ enum BreakdownNormalizer {
         // 資生堂型の JapanBusiness のみの地域事業ユニット（製品別は記載省略）には HousingEquipment
         // が無いので、この免除は当たらない。
         if segmentMembers.contains(where: { $0.contains("HousingEquipment") }) {
-            return ("business", false)
+            return (breakdownAxisProductService, false)
         }
 
         // 裸の特定地域名（＋汎用 Business ラッパのみ）を混在シグナルにする。
@@ -1097,7 +1097,7 @@ enum BreakdownNormalizer {
             Xbrl.segmentSpecificGeographyMemberKeywords.contains(where: member.contains)
                 && !hasSubstantiveNonGeographyContent(member)
         }
-        if bareSpecificGeoMatches.isEmpty { return ("business", false) }
+        if bareSpecificGeoMatches.isEmpty { return (breakdownAxisProductService, false) }
 
         // NXHD型: ロジスティクスを日本/米州/欧州/東アジア/南アジア・オセアニアに展開し、
         // 警備輸送・重量品建設・物流サポート等の専門事業と同居する。裸の地域行はロジスティクスの
@@ -1110,7 +1110,7 @@ enum BreakdownNormalizer {
         // 非地域の実質事業の最低件数を1件から2件に厳格化する。旧条件（裸地域2件以上 かつ
         // 非地域事業1件以上）は、エーザイ旧filings（Americas/AsiaAndLatinAmerica/China/
         // EMEA/Japanの地域5member + 残余バケツ「OTCAndOthers」1件）にも誤って一致し、
-        // 地域別データが axis=business, needs_review=false のまま確定していた（本番Neon実データ
+        // 地域別データが axis=product_service, needs_review=false のまま確定していた（本番Neon実データ
         // 確認、Opus監査 finding #2、2026-07-25）。裸地域2件以上の要件は維持する（外すと
         // 「Foods + Chemicals + Japan」のような1地域だけの混在まで免除されてしまい、
         // 既存の表取り違え検知回帰が壊れる）。非地域事業を2件以上に上げると、NXHD
@@ -1123,9 +1123,9 @@ enum BreakdownNormalizer {
         }
         let bareGeoWithoutBusinessWrapper = bareSpecificGeoMatches.filter { !$0.contains("Business") }
         if bareGeoWithoutBusinessWrapper.count >= 2, nonGeographyBusinessMembers.count >= 2 {
-            return ("business", false)
+            return (breakdownAxisProductService, false)
         }
-        return ("business", true)
+        return (breakdownAxisProductService, true)
     }
 
     /// member ラベル集合が「全て地域軸相当」かを判定する共通ロジック。`classifyAxis` と

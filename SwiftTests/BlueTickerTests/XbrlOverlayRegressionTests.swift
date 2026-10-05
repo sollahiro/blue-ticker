@@ -259,7 +259,7 @@ import Testing
         let unrelated = breakdownByRecordingOverlayRegressions(
             .resolved(
                 payload: BreakdownSnapshotPayload(
-                    axis: breakdownAxisBusiness, denominator: 1, denominatorTag: "sales",
+                    axis: breakdownAxisProductService, denominator: 1, denominatorTag: "sales",
                     rows: [], sourceKind: breakdownSourceXbrlFacts, needsReview: false,
                     warnings: []),
                 source: breakdownSourceXbrlFacts, contentHash: "h", audit: nil),

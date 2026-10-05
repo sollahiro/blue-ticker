@@ -18,7 +18,7 @@ enum StackedSegmentPnLNormalizer {
         var totalValue: Double?
     }
 
-    /// `html_table` の積み上げセグメント損益表から business 軸スナップショットを組み立てる。
+    /// `html_table` の積み上げセグメント損益表から product_service 軸スナップショットを組み立てる。
     /// パターン非該当・分母不整合・売上/営業利益ブロック欠落時は nil（呼び出し側が LLM へフォールバック）。
     static func normalize(
         _ result: ExtractedBreakdown, consolidatedSales: Double?,
@@ -130,7 +130,7 @@ enum StackedSegmentPnLNormalizer {
         }
 
         return BreakdownSnapshot(
-            axis: "business",
+            axis: breakdownAxisProductService,
             denominator: denominator,
             denominatorTag: denominatorTag,
             rows: rowsWithShare,

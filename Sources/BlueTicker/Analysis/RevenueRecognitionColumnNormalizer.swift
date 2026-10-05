@@ -74,7 +74,7 @@ enum RevenueRecognitionColumnNormalizer {
         resolved = preferProductAxis(
             resolved, columns: offered, tables: parsed, constraint: constraint)
         let jev = SegmentNoteJevAuditPayload(
-            code: "", docID: docID, axis: breakdownAxisBusiness,
+            code: "", docID: docID, axis: breakdownAxisProductService,
             model: choice.model, threshold: confidenceThreshold,
             applied: false, needsReview: false, sentences: [],
             calls: [
@@ -188,7 +188,7 @@ enum RevenueRecognitionColumnNormalizer {
             audit.unit = scale.headerToken ?? table.unitCaption ?? ""
             stampJev(&audit, applied: false, needsReview: true)
             return (BreakdownSnapshot(
-                axis: "business",
+                axis: breakdownAxisProductService,
                 denominator: denominator,
                 denominatorTag: resolvedDenomTag,
                 rows: [],
@@ -246,7 +246,7 @@ enum RevenueRecognitionColumnNormalizer {
         stampJev(&audit, applied: !belowThreshold, needsReview: needsReview)
 
         let snapshot = BreakdownSnapshot(
-            axis: "business",
+            axis: breakdownAxisProductService,
             denominator: denominator,
             denominatorTag: resolvedDenomTag,
             rows: rows,

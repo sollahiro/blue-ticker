@@ -6,8 +6,9 @@
 // 本番適用済みのため凍結: テーブル名は現行モデル（CompanyBreakdown）の schema に依存せず
 // リテラル文字列で固定する（モデル名が変わっても本マイグレーションの意味は変えない）。
 //
-// Database.swift の app.migrations に登録済み（、business/geography 両軸の
-// ingest/CLI/REST/MCP 配線）。axis="business"/"geography" の行が書き込まれる。
+// Database.swift の app.migrations に登録済み（当時 business/geography 両軸の
+// ingest/CLI/REST/MCP 配線）。当時の axis 値は "business"/"geography"。
+// 公開軸 `business` は後に `product_service` へハードカットオーバーした。
 
 import Fluent
 
