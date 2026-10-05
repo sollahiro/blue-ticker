@@ -236,6 +236,10 @@ enum RevenueRecognitionColumnNormalizer {
             }
         }
 
+        SegmentInfoPublishGuards.apply(
+            rows: rows, allTables: parsed, selectedTable: table, selectedColumn: column,
+            fiscalYearEnd: fiscalYearEnd, needsReview: &needsReview, warnings: &warnings)
+
         audit.sourceTableIndex = table.tableIndex
         audit.periodColumn = column.key
         audit.unit = scale.headerToken ?? table.unitCaption ?? ""
@@ -348,12 +352,30 @@ enum RevenueRecognitionColumnNormalizer {
     ) -> Bool {
         if table.period == "前期" { return true }
         let caption = column.caption ?? table.precedingCaption ?? ""
-        let blob = caption + column.header
+        let headerCells = table.grid.prefix(table.headerRowCount).compactMap { row -> String? in
+            guard column.column < row.count else { return nil }
+            let text = RevenueRecognitionCandidates.compactCell(row[column.column])
+            return text.isEmpty ? nil : text
+        }
+        let blob = caption + column.header + headerCells.joined()
         let hasPrior = blob.contains("前連結会計年度") || blob.contains("前事業年度")
             || blob.contains("前期")
         let hasCurrent = blob.contains("当連結会計年度") || blob.contains("当事業年度")
             || blob.contains("当期") || column.header.contains("当")
-        return hasPrior && !hasCurrent
+            || headerCells.contains(where: { $0.contains("当") && !$0.contains("前") })
+        if hasPrior && !hasCurrent { return true }
+        let headerEra = SegmentInfoPublishGuards.eraNumber(in: column.header)
+            ?? headerCells.compactMap { SegmentInfoPublishGuards.eraNumber(in: $0) }.first
+            ?? SegmentInfoPublishGuards.eraNumber(in: caption)
+        let siblingEras = table.columnHeaders.values.compactMap {
+            SegmentInfoPublishGuards.eraNumber(in: $0)
+        } + table.grid.prefix(table.headerRowCount).flatMap { row in
+            row.compactMap { SegmentInfoPublishGuards.eraNumber(in: $0) }
+        }
+        if let headerEra, let maxEra = siblingEras.max(), headerEra < maxEra {
+            return true
+        }
+        return false
     }
 
     /// 免除は明細のカテゴリ行だけ。合計行やグリッドに「その他の収益（注）」があっても

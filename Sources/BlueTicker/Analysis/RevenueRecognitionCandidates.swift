@@ -40,6 +40,7 @@ enum RevenueRecognitionCandidates {
         var precedingCaption: String?
         var unitCaption: String?
         var period: String?
+        var heading: String = ""
         var items: [Item]
         var totals: [Total]
         var groups: [GroupHeader]
@@ -297,13 +298,39 @@ enum RevenueRecognitionCandidates {
     static func isStubAxisHeader(_ label: String) -> Bool {
         let token = compactCell(label)
         if token.isEmpty { return false }
-        return token.hasSuffix("の名称") || token == "名称"
+        if token.hasSuffix("の名称") || token == "名称" { return true }
+        return token == "報告セグメント" || token.hasPrefix("報告セグメント")
     }
 
     static func joinHeaderParts(_ parts: [String]) -> String {
-        let meaningful = parts.filter { !isStubAxisHeader($0) && !isUnitCaptionHeader($0) }
-        if !meaningful.isEmpty { return meaningful.joined(separator: " / ") }
-        return parts.filter { !isUnitCaptionHeader($0) }.joined(separator: " / ")
+        let compact = parts.map(compactCell).filter { !$0.isEmpty }
+        let withoutUnit = compact.filter { !isUnitCaptionHeader($0) }
+        let withoutStub = withoutUnit.filter { !isStubAxisHeader($0) }
+        var source = withoutStub.isEmpty ? withoutUnit : withoutStub
+        source = collapseConsecutiveDuplicates(source)
+        let leaves = source.filter { !isSpanningParentHeader($0) }
+        if !leaves.isEmpty {
+            source = collapseConsecutiveDuplicates(leaves)
+        }
+        return source.joined(separator: " / ")
+    }
+
+    /// 「その他 / その他」のように同一セルがヘッダー行で繰り返された結合を畳む。
+    static func collapseConsecutiveDuplicates(_ parts: [String]) -> [String] {
+        var out: [String] = []
+        for part in parts {
+            if out.last != part { out.append(part) }
+        }
+        return out
+    }
+
+    /// 全列に載る「○○（連結）」や年度見出し、地域グループ。葉の事業名と同居するときだけ落とす。
+    static func isSpanningParentHeader(_ label: String) -> Bool {
+        if isPeriodHeadingLabel(label) { return true }
+        if label.contains("その他") { return false }
+        if isAggregateColumnHeader(label) { return true }
+        return RevenueRecognitionTableStructure.isBareGeographyLabel(label)
+            || RevenueRecognitionTableStructure.isGeographyHeading(label)
     }
 
     /// 列見出しに載った「（単位：百万円）」はカテゴリ名ではない（6140）。
@@ -424,6 +451,7 @@ enum RevenueRecognitionCandidates {
             guard classified.amountKind == .segment else { continue }
             let label = classified.category ?? classified.categoryGroup ?? ""
             if label.isEmpty { continue }
+            if isAmountCell(label) { continue }
             if classified.labelKind == .categoryGroup, classified.category == nil {
                 items.append(Item(group: "", label: label, row: i, isPartial: false))
                 continue
@@ -453,7 +481,7 @@ enum RevenueRecognitionCandidates {
         return ParsedTable(
             tableIndex: index, grid: rows, headerRowCount: firstData, columnHeaders: headers,
             precedingCaption: table.precedingCaption, unitCaption: table.unitCaption,
-            period: table.period,
+            period: table.period, heading: table.heading,
             items: items, totals: totals, groups: groups, structure: structure)
     }
 
@@ -504,6 +532,12 @@ enum RevenueRecognitionCandidates {
         if compact.contains("当連結会計年度") || compact.contains("前連結会計年度")
             || compact.contains("当事業年度") || compact.contains("前事業年度")
         {
+            return true
+        }
+        if compact.contains("終了した事業年度") || compact.contains("終了した連結会計年度") {
+            return true
+        }
+        if compact.range(of: #"^第[0-9]+期$"#, options: .regularExpression) != nil {
             return true
         }
         return BreakdownExtractor.parsePeriodCue(compact) != nil

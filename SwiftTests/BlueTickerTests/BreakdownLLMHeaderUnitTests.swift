@@ -136,19 +136,11 @@ import Testing
             facts: []
         )
         let sales = 1_000_000_000.0
-        let response: [String: Any] = [
-            "applicable": true,
-            "unit": "yen",
-            "source_table_index": 0,
-            "period_column": "当期",
-            "profit_disclosed": false,
-            "rows": [
-                ["label": "事業A", "amount": 1_000_000_000, "profit": NSNull(), "row_kind": "segment"],
-            ],
-            "notes": "円",
-        ]
         let (snapshotOrNil, _) = await SegmentInfoLLMNormalizer.normalize(
-            extracted, consolidatedSales: sales, client: MockChat(response)
+            extracted, consolidatedSales: sales,
+            decider: FakeRevenueRecognitionColumnDecider(),
+            fiscalYearEnd: "2025-03-31",
+            docID: "S-yen"
         )
         let snapshot = try #require(snapshotOrNil)
         #expect(snapshot.rows[0].amount == sales)

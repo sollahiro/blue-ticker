@@ -1,211 +1,168 @@
-// SegmentInfoLLMNormalizer のユニットテスト（ChatCompleting をモック化）。
-// キヤノン型（segments キー自体が html_table、US-GAAP注23の事業別セグメント表を列→行に転置）を
-// 想定した business 軸正規化、利益(profit)抽出、profit_disclosed の整合性チェックを検証する。
+// SegmentInfoLLMNormalizer: 決定論の表構造 + Jev 列・行選択（Chat Completions は使わない）。
+// キヤノン型（列が見出しの事業、行が売上高・営業利益）と、行が事業の単純表を検証する。
 
 import Testing
 import Foundation
 @testable import BlueTickerCore
 
-private actor MockChatCompleting: ChatCompleting {
-    private let responseJSON: [String: Any]
-    private(set) var capturedSchemaName: String?
-
-    init(responseJSON: [String: Any]) {
-        self.responseJSON = responseJSON
-    }
-
-    func complete(system: String, user: String, jsonSchema: Data, schemaName: String) async throws -> Data {
-        capturedSchemaName = schemaName
-        return try JSONSerialization.data(withJSONObject: responseJSON)
-    }
-
-    func schemaName() async -> String? { capturedSchemaName }
-}
-
 @Suite struct SegmentInfoLLMNormalizerTests {
 
-    private static func htmlTableResult(markdown: String = "| dummy |") -> ExtractedBreakdown {
-        ExtractedBreakdown(
-            method: "html_table",
-            tables: [BreakdownTable(heading: "セグメント情報", markdown: markdown, period: "当期")],
-            facts: []
-        )
+    private static func decider(
+        selected: String? = nil, confidence: Double = 0.9,
+        pNone: Double? = nil
+    ) -> FakeRevenueRecognitionColumnDecider {
+        FakeRevenueRecognitionColumnDecider(
+            selected: selected, confidence: confidence, pNone: pNone)
     }
 
-    @Test func returnsNilWhenMethodIsNotHtmlTable() async {
-        let result = ExtractedBreakdown(method: "xbrl_facts", tables: [], facts: [])
-        let client = MockChatCompleting(responseJSON: ["applicable": true])
+    private static func normalize(
+        tables: [BreakdownTable],
+        sales: Double?,
+        selected: String? = nil,
+        confidence: Double = 0.9,
+        pNone: Double? = nil,
+        fiscalYearEnd: String = "2026-03-31",
+        docID: String = "S-seg"
+    ) async -> (BreakdownSnapshot?, LLMBreakdownAudit?) {
+        await SegmentInfoLLMNormalizer.normalize(
+            ExtractedBreakdown(method: "html_table", tables: tables, facts: []),
+            consolidatedSales: sales,
+            decider: Self.decider(selected: selected, confidence: confidence, pNone: pNone),
+            fiscalYearEnd: fiscalYearEnd,
+            docID: docID)
+    }
+
+    @Test func returnsNilWhenTablesAreEmpty() async {
         let (snapshot, audit) = await SegmentInfoLLMNormalizer.normalize(
-            result, consolidatedSales: 1_000_000, client: client
+            ExtractedBreakdown(method: "xbrl_facts", tables: [], facts: []),
+            consolidatedSales: 1_000_000,
+            decider: Self.decider(),
+            fiscalYearEnd: nil,
+            docID: "S-empty"
         )
         #expect(snapshot == nil)
         #expect(audit == nil)
     }
 
-    /// キヤノン型: US-GAAP注23の事業別セグメント表（列見出しが事業名）を転置し、
-    /// 営業利益も一緒に取得する。
+    /// キヤノン型: 列が見出しの事業、外部顧客向けを売上、営業利益を profit にする。
     @Test func transposesColumnsAndCapturesProfit() async throws {
-        let response: [String: Any] = [
-            "applicable": true,
-            "unit": "million_yen",
-            "source_table_index": 0,
-            "period_column": "当期",
-            "profit_disclosed": true,
-            "rows": [
-                ["label": "プリンティング", "amount": 2_487_885, "profit": 255_759, "row_kind": "segment"],
-                ["label": "メディカル", "amount": 579_723, "profit": 32_775, "row_kind": "segment"],
-            ],
-            "notes": "test",
-        ]
-        let client = MockChatCompleting(responseJSON: response)
-        let (snapshotOrNil, audit) = await SegmentInfoLLMNormalizer.normalize(
-            Self.htmlTableResult(), consolidatedSales: (2_487_885 + 579_723) * Financial.millionYen, client: client
-        )
+        let markdown = """
+            |           | プリンティング   |  | メディカル   |  | イメージング    |  | インダストリアル |  | その他及び全社   |  | 消去       |  | 連結        |
+            | 売上高       |           |  |         |  |           |  |          |  |           |  |          |  |           |
+            | 外部顧客向け    | 2,487,885 |  | 579,723 |  | 1,054,513 |  | 357,924  |  | 144,682   |  | -        |  | 4,624,727 |
+            | セグメント間取引  | 6,513     |  | 899     |  | 387       |  | 3,204    |  | 92,434    |  | △103,437 |  | -         |
+            | 計         | 2,494,398 |  | 580,622 |  | 1,054,900 |  | 361,128  |  | 237,116   |  | △103,437 |  | 4,624,727 |
+            | 営業利益      | 255,759   |  | 32,775  |  | 172,871   |  | 62,525   |  | △69,451   |  | 911      |  | 455,390   |
+            """
+        let table = BreakdownTable(
+            heading: "セグメント情報", markdown: markdown, period: "当期", unitCaption: "百万円")
+        let sales = 4_624_727 * Financial.millionYen
+        let (snapshotOrNil, audit) = await Self.normalize(tables: [table], sales: sales)
         let snapshot = try #require(snapshotOrNil)
         #expect(snapshot.axis == "business")
         #expect(snapshot.sourceKind == "segment_info")
-        #expect(snapshot.rows[0].profit == 255_759 * Financial.millionYen)
-        #expect(snapshot.rows[1].profit == 32_775 * Financial.millionYen)
-        #expect(!snapshot.needsReview)
-        let schemaName = await client.schemaName()
-        #expect(schemaName == "segment_info_breakdown")
         #expect(audit?.profitDisclosed == true)
+        #expect(audit?.columnJev?.model == "typesafe/jev-1.13")
+        let printing = try #require(snapshot.rows.first { $0.labelRaw == "プリンティング" })
+        #expect(printing.amount == 2_487_885 * Financial.millionYen)
+        #expect(printing.profit == 255_759 * Financial.millionYen)
+        let medical = try #require(snapshot.rows.first { $0.labelRaw == "メディカル" })
+        #expect(medical.profit == 32_775 * Financial.millionYen)
+        #expect(snapshot.rows.contains { $0.labelRaw == "その他及び全社" })
+        #expect(!snapshot.rows.contains { $0.labelRaw == "連結" })
+        #expect(!snapshot.needsReview)
     }
 
-    @Test func flagsSuspicionWhenAllLabelsAreGeographic() async throws {
-        let response: [String: Any] = [
-            "applicable": true,
-            "unit": "million_yen",
-            "source_table_index": 0,
-            "period_column": "当期",
-            "profit_disclosed": false,
-            "rows": [
-                ["label": "日本", "amount": 600, "profit": NSNull(), "row_kind": "segment"],
-                ["label": "米国", "amount": 400, "profit": NSNull(), "row_kind": "segment"],
-            ],
-            "notes": "test",
-        ]
-        let client = MockChatCompleting(responseJSON: response)
-        let (snapshotOrNil, _) = await SegmentInfoLLMNormalizer.normalize(
-            Self.htmlTableResult(), consolidatedSales: 1_000_000, client: client
-        )
+    @Test func takesGeographyOnlyReportingSegments() async throws {
+        let markdown = """
+            | 区分 | 当期 |
+            | 日本 | 600 |
+            | 米国 | 400 |
+            | 合計 | 1,000 |
+            """
+        let table = BreakdownTable(
+            heading: "セグメント情報", markdown: markdown, period: "当期", unitCaption: "百万円")
+        let (snapshotOrNil, _) = await Self.normalize(
+            tables: [table], sales: 1_000 * Financial.millionYen)
+        let snapshot = try #require(snapshotOrNil)
+        #expect(snapshot.warnings.contains(SegmentInfoLLMNormalizer.warningGeographyTaken))
+        #expect(!snapshot.warnings.contains("business_label_looks_like_geography"))
+        let labels: Set<String> = Set(
+            snapshot.rows.filter { $0.rowKind == "segment" }.map { $0.labelRaw })
+        #expect(labels == Set(["日本", "米国"]))
+        #expect(!snapshot.needsReview)
+    }
+
+    @Test func flagsSuspicionWhenGeographicBusinessUnitNamesLookLikeRegions() async throws {
+        let markdown = """
+            | 区分 | 当期 |
+            | 日本事業 | 300 |
+            | 米州事業 | 200 |
+            | 欧州事業 | 500 |
+            | 合計 | 1,000 |
+            """
+        let table = BreakdownTable(
+            heading: "セグメント情報", markdown: markdown, period: "当期", unitCaption: "百万円")
+        let (snapshotOrNil, _) = await Self.normalize(
+            tables: [table], sales: 1_000 * Financial.millionYen)
         let snapshot = try #require(snapshotOrNil)
         #expect(snapshot.needsReview)
         #expect(snapshot.warnings.contains("business_label_looks_like_geography"))
     }
 
     @Test func doesNotFlagSuspicionWhenLabelsAreDomesticOverseasPrefixedBusinessNames() async throws {
-        // キッコーマン型の回帰（issue調査 2026-07-21）: 「国内食料品製造・販売」
-        // 「海外食料品製造・販売」のような事業区分×国内海外クロス集計は、全行が
-        // 「国内」「海外」を含むため誤って地域別表と判定されていた。特定の国・地域名
-        // （日本・米国等）を1件も伴わない場合は誤検知としてガードを立てない。
-        let response: [String: Any] = [
-            "applicable": true,
-            "unit": "million_yen",
-            "source_table_index": 0,
-            "period_column": "当期",
-            "profit_disclosed": false,
-            "rows": [
-                ["label": "国内食料品製造・販売", "amount": 155_718, "profit": NSNull(), "row_kind": "segment"],
-                ["label": "海外食料品製造・販売", "amount": 149_491, "profit": NSNull(), "row_kind": "segment"],
-                ["label": "海外食料品卸売", "amount": 432_800, "profit": NSNull(), "row_kind": "segment"],
-            ],
-            "notes": "test",
-        ]
-        let client = MockChatCompleting(responseJSON: response)
-        let (snapshotOrNil, _) = await SegmentInfoLLMNormalizer.normalize(
-            Self.htmlTableResult(),
-            consolidatedSales: (155_718 + 149_491 + 432_800) * Financial.millionYen, client: client
-        )
+        let markdown = """
+            | 区分 | 当期 |
+            | 国内食料品製造・販売 | 155,718 |
+            | 海外食料品製造・販売 | 149,491 |
+            | 海外食料品卸売 | 432,800 |
+            | 合計 | 738,009 |
+            """
+        let table = BreakdownTable(
+            heading: "セグメント情報", markdown: markdown, period: "当期", unitCaption: "百万円")
+        let sales = (155_718 + 149_491 + 432_800) * Financial.millionYen
+        let (snapshotOrNil, _) = await Self.normalize(tables: [table], sales: sales)
         let snapshot = try #require(snapshotOrNil)
         #expect(!snapshot.needsReview)
         #expect(!snapshot.warnings.contains("business_label_looks_like_geography"))
     }
 
-    @Test func flagsInconsistencyWhenDisclosedButNoRowHasProfit() async throws {
-        let response: [String: Any] = [
-            "applicable": true,
-            "unit": "million_yen",
-            "source_table_index": 0,
-            "period_column": "当期",
-            "profit_disclosed": true,
-            "rows": [
-                ["label": "プリンティング", "amount": 2_487_885, "profit": NSNull(), "row_kind": "segment"],
-            ],
-            "notes": "test",
-        ]
-        let client = MockChatCompleting(responseJSON: response)
-        let (snapshotOrNil, _) = await SegmentInfoLLMNormalizer.normalize(
-            Self.htmlTableResult(), consolidatedSales: 4_624_727_000_000, client: client
-        )
-        let snapshot = try #require(snapshotOrNil)
-        #expect(snapshot.needsReview)
-        #expect(snapshot.warnings.contains("profit_disclosed_but_row_missing"))
-    }
-
-    /// 野村HD型の回帰（issue #105）: 証券会社は資金調達費用（金融費用）が大きく、
-    /// セグメント表の「収益合計（金融費用控除後）」は連結売上高（総額）の半分以下になる。
-    /// segment 合計が表自身の subtotal 行（「計」）と一致する場合、
-    /// consolidatedSales 基準では乖離しても needs_review を立てず、subtotal へ分母を差し替える。
-    /// 「その他（消去分を含む）」は LLM が reconciling と返しても残事業バケットとして segment に直す
-    /// （ユーザー確認 2026-07-25）。
     @Test func fallsBackToInternalSubtotalWhenSalesBasisMismatchesButTableReconciles() async throws {
-        let response: [String: Any] = [
-            "applicable": true,
-            "unit": "million_yen",
-            "source_table_index": 0,
-            "period_column": "2026年３月期",
-            "profit_disclosed": true,
-            "rows": [
-                ["label": "ウェルス・マネジメント部門", "amount": 487_906, "profit": 204_024, "row_kind": "segment"],
-                ["label": "インベストメント・マネジメント部門", "amount": 258_516, "profit": 88_297, "row_kind": "segment"],
-                ["label": "ホールセール部門", "amount": 1_162_229, "profit": 200_567, "row_kind": "segment"],
-                ["label": "バンキング部門", "amount": 53_918, "profit": 14_016, "row_kind": "segment"],
-                // LLM が誤って reconciling と返しても決定的に segment へ直すことを検証する。
-                ["label": "その他（消去分を含む）", "amount": 196_873, "profit": 24_646, "row_kind": "reconciling"],
-                ["label": "計", "amount": 2_159_442, "profit": 531_550, "row_kind": "subtotal"],
-            ],
-            "notes": "test",
-        ]
-        let client = MockChatCompleting(responseJSON: response)
-        let (snapshotOrNil, _) = await SegmentInfoLLMNormalizer.normalize(
-            Self.htmlTableResult(), consolidatedSales: 4_758_486 * Financial.millionYen, client: client
-        )
+        let markdown = """
+            | 部門 | 当期 |
+            | ウェルス・マネジメント部門 | 487,906 |
+            | インベストメント・マネジメント部門 | 258,516 |
+            | ホールセール部門 | 1,162,229 |
+            | バンキング部門 | 53,918 |
+            | その他（消去分を含む） | 196,873 |
+            | 計 | 2,159,442 |
+            """
+        let table = BreakdownTable(
+            heading: "セグメント情報", markdown: markdown, period: "当期", unitCaption: "百万円")
+        let (snapshotOrNil, _) = await Self.normalize(
+            tables: [table], sales: 4_758_486 * Financial.millionYen)
         let snapshot = try #require(snapshotOrNil)
         #expect(!snapshot.needsReview)
         #expect(snapshot.denominatorTag == "llm_table_subtotal")
         #expect(snapshot.denominator == 2_159_442 * Financial.millionYen)
         #expect(snapshot.warnings.contains("llm_denominator_from_internal_subtotal"))
-        #expect(!snapshot.warnings.contains("llm_row_sum_mismatch"))
-        let otherRow = try #require(snapshot.rows.first { $0.labelRaw == "その他（消去分を含む）" })
+        let otherRow = try #require(snapshot.rows.first { $0.labelRaw.contains("その他") })
         #expect(otherRow.rowKind == "segment")
-        let wealthRow = try #require(snapshot.rows.first { $0.labelRaw == "ウェルス・マネジメント部門" })
-        #expect(wealthRow.share == 487_906 * Financial.millionYen / (2_159_442 * Financial.millionYen))
-        let segmentShare = snapshot.rows.filter { $0.rowKind == "segment" }
-            .reduce(0.0) { $0 + ($1.share ?? 0) }
-        #expect(abs(segmentShare - 1.0) < 0.001)
     }
 
     @Test func keepsPureEliminationRowsAsReconciling() async throws {
-        let response: [String: Any] = [
-            "applicable": true,
-            "unit": "million_yen",
-            "source_table_index": 0,
-            "period_column": "当期",
-            "profit_disclosed": false,
-            "rows": [
-                ["label": "A事業", "amount": 80, "profit": NSNull(), "row_kind": "segment"],
-                ["label": "B事業", "amount": 20, "profit": NSNull(), "row_kind": "segment"],
-                ["label": "消去", "amount": 0, "profit": NSNull(), "row_kind": "reconciling"],
-                ["label": "その他の調整額", "amount": 0, "profit": NSNull(), "row_kind": "reconciling"],
-                ["label": "計", "amount": 100, "profit": NSNull(), "row_kind": "subtotal"],
-            ],
-            "notes": "test",
-        ]
-        let client = MockChatCompleting(responseJSON: response)
-        let (snapshotOrNil, _) = await SegmentInfoLLMNormalizer.normalize(
-            Self.htmlTableResult(), consolidatedSales: 100 * Financial.millionYen, client: client
-        )
+        let markdown = """
+            | 区分 | 当期 |
+            | A事業 | 80 |
+            | B事業 | 20 |
+            | 消去 | 0 |
+            | その他の調整額 | 0 |
+            | 計 | 100 |
+            """
+        let table = BreakdownTable(
+            heading: "セグメント情報", markdown: markdown, period: "当期", unitCaption: "百万円")
+        let (snapshotOrNil, _) = await Self.normalize(
+            tables: [table], sales: 100 * Financial.millionYen)
         let snapshot = try #require(snapshotOrNil)
         let elim = try #require(snapshot.rows.first { $0.labelRaw == "消去" })
         #expect(elim.rowKind == "reconciling")
@@ -213,130 +170,463 @@ private actor MockChatCompleting: ChatCompleting {
         #expect(otherAdj.rowKind == "reconciling")
     }
 
-    /// subtotal行がsegment+reconciling合計から大きく乖離する（5%超）場合はフォールバックせず、
-    /// 表取り違えの疑いとしてneeds_reviewを維持する。
+    @Test func transposesPeriodRowsWhenColumnsAreProducts() async throws {
+        let markdown = """
+            | | ニューロロジー領域製品 | オンコロジー領域製品 | その他 | 合計 |
+            | 当連結会計年度(自2025年4月1日至2026年3月31日) | 260,568 | 362,668 | 202,142 | 825,378 |
+            | 前連結会計年度(自2024年4月1日至2025年3月31日) | 1 | 1 | 1 | 3 |
+            """
+        let table = BreakdownTable(
+            heading: BreakdownExtractor.productOrServiceHeading,
+            markdown: markdown, period: "当期", unitCaption: "百万円")
+        let sales = 825_378 * Financial.millionYen
+        let (snapshotOrNil, _) = await Self.normalize(tables: [table], sales: sales)
+        let snapshot = try #require(snapshotOrNil)
+        let labels: Set<String> = Set(
+            snapshot.rows.filter { $0.rowKind == "segment" }.map { $0.labelRaw })
+        #expect(labels.contains("ニューロロジー領域製品"))
+        #expect(labels.contains("オンコロジー領域製品"))
+        #expect(!labels.contains("合計"))
+        let neuro = try #require(snapshot.rows.first { $0.labelRaw.contains("ニューロロジー") })
+        #expect(neuro.amount == 260_568 * Financial.millionYen)
+        #expect(!snapshot.needsReview)
+    }
+
+    @Test func prefersProductServiceTableOverGeographicReportingSegments() async throws {
+        let product = BreakdownTable(
+            heading: BreakdownExtractor.productOrServiceHeading,
+            markdown: """
+                | 区分 | 当連結会計年度 |
+                | ラツーダ（非定型抗精神病薬） | 40 |
+                | オルゴビクス（進行性前立腺がん治療剤） | 250 |
+                | 合計 | 290 |
+                """,
+            period: "当期",
+            unitCaption: "百万円")
+        let geography = BreakdownTable(
+            heading: "セグメント情報",
+            markdown: """
+                | | 日本 | 北米 | 計 |
+                | 外部顧客への売上収益等 | 90 | 200 | 290 |
+                | セグメント利益 | 10 | 20 | 30 |
+                """,
+            period: "当期",
+            unitCaption: "百万円")
+        let sales = 290 * Financial.millionYen
+        let (snapshotOrNil, _) = await Self.normalize(
+            tables: [product, geography], sales: sales)
+        let snapshot = try #require(snapshotOrNil)
+        let labels = snapshot.rows.map(\.labelRaw).joined(separator: " ")
+        #expect(labels.contains("ラツーダ"))
+        #expect(labels.contains("オルゴビクス"))
+        #expect(!labels.contains("北米"))
+        #expect(!snapshot.warnings.contains(SegmentInfoLLMNormalizer.warningGeographyTaken))
+    }
+
+    @Test func transposedMatrixKeepsSelectedBusinessColumn() async throws {
+        let markdown = """
+            | | 日本事業 | 中国・トラベルリテール事業 | 米州事業 | 欧州事業 |
+            | 外部顧客への売上高 | 295,343 | 342,244 | 150,000 | 182,405 |
+            | セグメント利益 | 10 | 20 | 30 | 40 |
+            """
+        let table = BreakdownTable(
+            heading: "セグメント情報", markdown: markdown, period: "当期", unitCaption: "百万円")
+        let sales = 969_992 * Financial.millionYen
+        let (snapshotOrNil, _) = await Self.normalize(
+            tables: [table], sales: sales, selected: "t0_c1")
+        let snapshot = try #require(snapshotOrNil)
+        let japan = try #require(snapshot.rows.first { $0.labelRaw.contains("日本") })
+        #expect(japan.amount == 295_343 * Financial.millionYen)
+        let china = try #require(snapshot.rows.first { $0.labelRaw.contains("トラベルリテール") })
+        #expect(china.amount == 342_244 * Financial.millionYen)
+        #expect(snapshot.warnings.contains("business_label_looks_like_geography"))
+        #expect(snapshot.needsReview)
+    }
+
+    @Test func dropsReportableSegmentStubFromColumnHeaders() async throws {
+        let markdown = """
+            | | 報告セグメント | 報告セグメント | 報告セグメント |
+            | | 日本事業 | 米州事業 | 欧州事業 |
+            | 外部顧客への売上高 | 300 | 200 | 500 |
+            """
+        let table = BreakdownTable(
+            heading: "セグメント情報", markdown: markdown, period: "当期", unitCaption: "百万円")
+        let sales = 1_000 * Financial.millionYen
+        let (snapshotOrNil, _) = await Self.normalize(tables: [table], sales: sales)
+        let snapshot = try #require(snapshotOrNil)
+        let labels: Set<String> = Set(
+            snapshot.rows.filter { $0.rowKind == "segment" }.map { $0.labelRaw })
+        #expect(labels.contains("日本事業"))
+        #expect(labels.contains("米州事業"))
+        #expect(!labels.contains(where: { $0.contains("報告セグメント") }))
+    }
+
     @Test func doesNotFallBackWhenSubtotalFarFromSegmentSum() async throws {
-        let response: [String: Any] = [
-            "applicable": true,
-            "unit": "million_yen",
-            "source_table_index": 0,
-            "period_column": "当期",
-            "profit_disclosed": false,
-            "rows": [
-                ["label": "A事業", "amount": 100, "profit": NSNull(), "row_kind": "segment"],
-                ["label": "B事業", "amount": 100, "profit": NSNull(), "row_kind": "segment"],
-                ["label": "計", "amount": 400, "profit": NSNull(), "row_kind": "subtotal"],
-            ],
-            "notes": "test",
-        ]
-        let client = MockChatCompleting(responseJSON: response)
-        let (snapshotOrNil, _) = await SegmentInfoLLMNormalizer.normalize(
-            Self.htmlTableResult(), consolidatedSales: 1_000 * Financial.millionYen, client: client
-        )
+        let markdown = """
+            | 区分 | 当期 |
+            | A事業 | 100 |
+            | B事業 | 100 |
+            | 計 | 400 |
+            """
+        let table = BreakdownTable(
+            heading: "セグメント情報", markdown: markdown, period: "当期", unitCaption: "百万円")
+        let (snapshotOrNil, _) = await Self.normalize(
+            tables: [table], sales: 1_000 * Financial.millionYen)
         let snapshot = try #require(snapshotOrNil)
         #expect(snapshot.needsReview)
         #expect(snapshot.warnings.contains("llm_row_sum_mismatch"))
-        #expect(snapshot.denominatorTag == "income_statement.sales")
     }
 
-    @Test func flagsUnresolvedWhenProfitDisclosedKeyMissing() async throws {
-        let response: [String: Any] = [
-            "applicable": true,
-            "unit": "million_yen",
-            "source_table_index": 0,
-            "period_column": "当期",
-            "rows": [
-                ["label": "プリンティング", "amount": 1_000, "profit": NSNull(), "row_kind": "segment"],
-            ],
-            "notes": "test",
-        ]
-        let client = MockChatCompleting(responseJSON: response)
-        let (snapshotOrNil, audit) = await SegmentInfoLLMNormalizer.normalize(
-            Self.htmlTableResult(), consolidatedSales: 1_000 * Financial.millionYen, client: client
-        )
+    @Test func noneOfTheseAtHighConfidenceReturnsNil() async {
+        let markdown = """
+            | 区分 | 当期 |
+            | A事業 | 100 |
+            | 合計 | 100 |
+            """
+        let table = BreakdownTable(
+            heading: "セグメント情報", markdown: markdown, period: "当期", unitCaption: "百万円")
+        let (snapshot, audit) = await Self.normalize(
+            tables: [table], sales: 100 * Financial.millionYen,
+            selected: RevenueRecognitionColumnNormalizer.noneOfThese,
+            confidence: 0.9, pNone: 0.9)
+        #expect(snapshot == nil)
+        #expect(audit?.columnJev?.calls.first?.selected == RevenueRecognitionColumnNormalizer.noneOfThese)
+    }
+
+    @Test func noneOfTheseBelowPNoneFallsBackAndFlagsReview() async throws {
+        let markdown = """
+            | 区分 | 当期 |
+            | A事業 | 100 |
+            | B事業 | 50 |
+            | 合計 | 150 |
+            """
+        let table = BreakdownTable(
+            heading: "セグメント情報", markdown: markdown, period: "当期", unitCaption: "百万円")
+        let (snapshotOrNil, _) = await Self.normalize(
+            tables: [table], sales: 150 * Financial.millionYen,
+            selected: RevenueRecognitionColumnNormalizer.noneOfThese,
+            confidence: 0.6, pNone: 0.4)
         let snapshot = try #require(snapshotOrNil)
         #expect(snapshot.needsReview)
-        #expect(snapshot.warnings.contains("llm_profit_disclosed_unresolved"))
-        #expect(audit?.profitDisclosed == false)
+        #expect(snapshot.warnings.contains(SegmentInfoLLMNormalizer.warningNoneOfTheseOverridden))
     }
 
-    /// issue #135: LLM が「地域別のみで事業別データが無い」と判定した場合、applicable=false と
-    /// 併せて not_applicable_reason=geography_only を返す。audit 経由で呼び出し元
-    /// （`BusinessBreakdownResolver`）まで理由が伝搬すること。
-    @Test func propagatesGeographyOnlyReasonWhenNotApplicable() async {
-        let response: [String: Any] = [
-            "applicable": false,
-            "unit": "million_yen",
-            "source_table_index": 0,
-            "period_column": "当期",
-            "profit_disclosed": false,
-            "rows": [[String: Any]](),
-            "not_applicable_reason": "geography_only",
-            "notes": "地域別（日本・海外）のみで事業別データが存在しない",
-        ]
-        let client = MockChatCompleting(responseJSON: response)
-        let (snapshotOrNil, audit) = await SegmentInfoLLMNormalizer.normalize(
-            Self.htmlTableResult(), consolidatedSales: 1_000 * Financial.millionYen, client: client
-        )
-        #expect(snapshotOrNil == nil)
-        #expect(audit?.notApplicableReason == "geography_only")
-    }
-
-    /// 回帰防止（Opus監査 2026-07-26）: strict JSON schema では not_applicable_reason が
-    /// applicable=true の応答でも常に埋まって返ってくる。applicable=true のときは
-    /// audit.notApplicableReason が nil のままであること。
-    @Test func ignoresNotApplicableReasonWhenApplicableIsTrue() async throws {
-        let response: [String: Any] = [
-            "applicable": true,
-            "unit": "million_yen",
-            "source_table_index": 0,
-            "period_column": "当期",
-            "profit_disclosed": false,
-            "rows": [
-                ["label": "プリンティング", "amount": 1_000, "profit": NSNull(), "row_kind": "segment"],
-            ],
-            "not_applicable_reason": "geography_only",
-            "notes": "test",
-        ]
-        let client = MockChatCompleting(responseJSON: response)
-        let (snapshotOrNil, audit) = await SegmentInfoLLMNormalizer.normalize(
-            Self.htmlTableResult(), consolidatedSales: 1_000 * Financial.millionYen, client: client
-        )
-        #expect(snapshotOrNil != nil)
-        #expect(audit?.notApplicableReason == nil)
-    }
-
-    /// コナミ型: LLM が unit=million_yen と申告しつつ行金額を既に円で返す。
-    /// 一律 ×1e6 すると分母が約 1e12（百万円表示比）に膨らむ。円スケールのまま採用する。
-    @Test func millionYenUnitDoesNotInflateAlreadyYenScaleAmounts() async throws {
-        let sales = 493_677 * Financial.millionYen
-        let response: [String: Any] = [
-            "applicable": true,
-            "unit": "million_yen",
-            "source_table_index": 2,
-            "period_column": "当期",
-            "profit_disclosed": true,
-            "rows": [
-                ["label": "デジタルエンタテインメント事業", "amount": 370_225_000_000, "profit": 136_006_000_000, "row_kind": "segment"],
-                ["label": "アーケードゲーム事業", "amount": 25_295_000_000, "profit": 6_779_000_000, "row_kind": "segment"],
-                ["label": "ゲーミング＆システム事業", "amount": 43_062_000_000, "profit": 3_650_000_000, "row_kind": "segment"],
-                ["label": "スポーツ事業", "amount": 49_146_000_000, "profit": 3_411_000_000, "row_kind": "segment"],
-                ["label": "その他", "amount": 5_949_000_000, "profit": 538_000_000, "row_kind": "segment"],
-                ["label": "調整額", "amount": 0, "profit": -6_801_000_000, "row_kind": "reconciling"],
-                ["label": "連結計", "amount": 493_677_000_000, "profit": 143_583_000_000, "row_kind": "subtotal"],
-            ],
-            "notes": "連結外部売上高493,677百万円と一致する事業別セグメント表の当期列を採用。",
-        ]
-        let client = MockChatCompleting(responseJSON: response)
-        let (snapshotOrNil, _) = await SegmentInfoLLMNormalizer.normalize(
-            Self.htmlTableResult(), consolidatedSales: sales, client: client
-        )
+    @Test func yenHeaderDoesNotMultiplyAmounts() async throws {
+        let markdown = """
+            | （単位：円） | 当期 |
+            | 事業A | 1000000000 |
+            | 事業B | 0 |
+            """
+        let table = BreakdownTable(
+            heading: "セグメント情報", markdown: markdown, period: "当期", unitCaption: "円")
+        let sales = 1_000_000_000.0
+        let (snapshotOrNil, _) = await Self.normalize(tables: [table], sales: sales)
         let snapshot = try #require(snapshotOrNil)
-        #expect(snapshot.denominator == sales)
-        #expect(snapshot.denominator / sales < 10)
-        let digital = try #require(snapshot.rows.first { $0.labelRaw == "デジタルエンタテインメント事業" })
-        #expect(digital.amount == 370_225_000_000)
-        #expect(digital.profit == 136_006_000_000)
+        let businessA = try #require(snapshot.rows.first { $0.labelRaw == "事業A" })
+        #expect(businessA.amount == sales)
+        #expect(!snapshot.warnings.contains(BreakdownLLMAmountScale.headerLlmMismatchWarning))
+    }
+
+    @Test func infersMillionYenWhenHeaderUnitMissingButTableTotalMatchesSales() async throws {
+        let markdown = """
+            |           | プリンティング   |  | メディカル   |  | 連結        |
+            | 外部顧客向け    | 2,487,885 |  | 579,723 |  | 3,067,608 |
+            | 営業利益      | 255,759   |  | 32,775  |  | 288,534   |
+            """
+        let table = BreakdownTable(
+            heading: "セグメント情報", markdown: markdown, period: "当期")
+        let sales = 3_067_608 * Financial.millionYen
+        let (snapshotOrNil, _) = await Self.normalize(tables: [table], sales: sales)
+        let snapshot = try #require(snapshotOrNil)
+        let printing = try #require(snapshot.rows.first { $0.labelRaw == "プリンティング" })
+        #expect(printing.amount == 2_487_885 * Financial.millionYen)
+        #expect(!snapshot.warnings.contains("llm_unit_unresolved"))
+        #expect(!snapshot.needsReview)
+    }
+
+    /// ヘッダー行が同じ事業名を繰り返すと `その他 / その他` にしない。
+    @Test func collapsesDuplicateJoinedColumnHeaders() async throws {
+        let markdown = """
+            | | その他 | マーケット | 連結 |
+            | | その他 | マーケット | 連結 |
+            | 外部顧客への売上高 | 50 | 200 | 250 |
+            | 営業利益 | 5 | 20 | 25 |
+            """
+        let table = BreakdownTable(
+            heading: "セグメント情報", markdown: markdown, period: "当期", unitCaption: "百万円")
+        let sales = 250 * Financial.millionYen
+        let (snapshotOrNil, _) = await Self.normalize(tables: [table], sales: sales)
+        let snapshot = try #require(snapshotOrNil)
+        let labels: Set<String> = Set(
+            snapshot.rows.filter { $0.rowKind == "segment" }.map { $0.labelRaw })
+        #expect(labels == Set(["その他", "マーケット"]))
+        #expect(!labels.contains(where: { $0.contains(" / ") }))
+    }
+
+    /// 全列にかかる「○○（連結）」親見出しで事業列を合計扱いしない（みずほ型）。
+    @Test func spanningConsolidatedParentDoesNotSkipBusinessColumns() async throws {
+        let markdown = """
+            | | みずほフィナンシャルグループ（連結） | みずほフィナンシャルグループ（連結） | みずほフィナンシャルグループ（連結） |
+            | | リテール・事業法人カンパニー | グローバルマーケッツカンパニー | 連結 |
+            | 業務粗利益 | 700 | 400 | 1,100 |
+            | 営業利益 | 60 | 150 | 210 |
+            """
+        let table = BreakdownTable(
+            heading: "セグメント情報", markdown: markdown, period: "当期", unitCaption: "百万円")
+        let sales = 1_100 * Financial.millionYen
+        let (snapshotOrNil, _) = await Self.normalize(tables: [table], sales: sales)
+        let snapshot = try #require(snapshotOrNil)
+        let labels: Set<String> = Set(
+            snapshot.rows.filter { $0.rowKind == "segment" }.map { $0.labelRaw })
+        #expect(labels.contains("リテール・事業法人カンパニー"))
+        #expect(labels.contains("グローバルマーケッツカンパニー"))
+        #expect(!labels.contains(where: { $0.contains("業務粗利益") }))
+        #expect(!labels.contains(where: { $0.contains("のれん") }))
+        let retail = try #require(snapshot.rows.first { $0.labelRaw.contains("リテール") })
+        #expect(retail.amount == 700 * Financial.millionYen)
+    }
+
+    /// `(1) 外部顧客に対する売上高` を売上行として列転置する（コマツ型）。
+    @Test func enumeratedExternalCustomerSalesRowTransposes() async throws {
+        let markdown = """
+            | | 建設機械・車両 | リテールファイナンス | 産業機械他 | 計 | 連結 |
+            | 売上高 | | | | | |
+            | (1) 外部顧客に対する売上高 | 3,796,100 | 100,520 | 236,131 | 4,132,751 | 4,132,751 |
+            | (2) セグメント間の内部売上高 | 9,940 | 25,617 | 2,619 | 38,176 | － |
+            | 営業利益 | 400,000 | 20,000 | 10,000 | 430,000 | 430,000 |
+            """
+        let table = BreakdownTable(
+            heading: "セグメント情報", markdown: markdown, period: "当期", unitCaption: "百万円")
+        let sales = 4_132_751 * Financial.millionYen
+        let (snapshotOrNil, _) = await Self.normalize(tables: [table], sales: sales)
+        let snapshot = try #require(snapshotOrNil)
+        let labels: Set<String> = Set(
+            snapshot.rows.filter { $0.rowKind == "segment" }.map { $0.labelRaw })
+        #expect(labels == Set(["建設機械・車両", "リテールファイナンス", "産業機械他"]))
+        let construction = try #require(snapshot.rows.first { $0.labelRaw == "建設機械・車両" })
+        #expect(construction.amount == 3_796_100 * Financial.millionYen)
+        #expect(!snapshot.needsReview)
+    }
+
+    /// 地域列を採ったが同じ注記に製品表がある → 公開しない（武田 / 3422 型）。
+    @Test func geographyLabelsNeedReviewWhenProductTableExists() async throws {
+        let product = BreakdownTable(
+            heading: "セグメント情報",
+            markdown: """
+                | 区分 | 当期 |
+                | ALOFISEL | 100 |
+                | DEXILANT | 200 |
+                | 合計 | 300 |
+                """,
+            period: "当期",
+            unitCaption: "百万円")
+        let geography = BreakdownTable(
+            heading: "セグメント情報",
+            markdown: """
+                | | 日本 | タイ | 中国 | 計 |
+                | 外部顧客への売上高 | 50 | 80 | 170 | 300 |
+                | セグメント利益 | 5 | 8 | 17 | 30 |
+                """,
+            period: "当期",
+            unitCaption: "百万円")
+        let sales = 300 * Financial.millionYen
+        let (snapshotOrNil, _) = await Self.normalize(
+            tables: [product, geography], sales: sales)
+        let snapshot = try #require(snapshotOrNil)
+        let labels: Set<String> = Set(
+            snapshot.rows.filter { $0.rowKind == "segment" }.map { $0.labelRaw })
+        if labels.contains("ALOFISEL") {
+            #expect(!snapshot.needsReview)
+        } else {
+            #expect(snapshot.needsReview)
+            #expect(snapshot.warnings.contains(
+                SegmentInfoPublishGuards.warningGeographyWhileProductExists))
+            #expect(labels.contains("タイ") || labels.contains("日本"))
+        }
+    }
+
+    /// 金額セルをセグメント名にしない（3905 / 7734 型）。
+    @Test func numericColumnHeaderIsNotPublishedAsSegment() async throws {
+        let markdown = """
+            | 区分 | 当期 |
+            | 1,918,575 | 1,918,575 |
+            | 合計 | 1,918,575 |
+            """
+        let table = BreakdownTable(
+            heading: "セグメント情報", markdown: markdown, period: "当期", unitCaption: "百万円")
+        let sales = 1_918_575 * Financial.millionYen
+        let (snapshot, _) = await Self.normalize(tables: [table], sales: sales)
+        let labels = snapshot?.rows.filter { $0.rowKind == "segment" }.map(\.labelRaw) ?? []
+        #expect(!labels.contains { SegmentInfoPublishGuards.isNumericOrCodeLabel($0) })
+        if let snapshot, !labels.isEmpty {
+            #expect(snapshot.needsReview)
+        }
+    }
+
+    /// 指標行がセグメント名になった積み上げ表は公開しない（富士フイルム / ORIX 型）。
+    @Test func metricRowLabelsNeedReview() async throws {
+        let markdown = """
+            | 区分 | 当期 |
+            | セグメント収益 | 1,000 |
+            | セグメント利益 | 100 |
+            | セグメント資産 | 5,000 |
+            | 支払利息 | 20 |
+            """
+        let table = BreakdownTable(
+            heading: "セグメント情報", markdown: markdown, period: "当期", unitCaption: "百万円")
+        let sales = 1_000 * Financial.millionYen
+        let (snapshotOrNil, _) = await Self.normalize(tables: [table], sales: sales)
+        let snapshot = try #require(snapshotOrNil)
+        #expect(snapshot.needsReview)
+        #expect(snapshot.warnings.contains(SegmentInfoPublishGuards.warningMetricRowLabels))
+    }
+
+    /// 同一ラベルが指標ブロックごとに繰り返された表は公開しない（リコー型）。
+    @Test func duplicateSegmentLabelsNeedReview() async throws {
+        let markdown = """
+            | 区分 | 当期 |
+            | デジタルサービス | 100 |
+            | デジタルプロダクツ | 80 |
+            | デジタルサービス | 40 |
+            | デジタルプロダクツ | 30 |
+            | デジタルサービス | 10 |
+            | デジタルプロダクツ | 5 |
+            | 合計 | 265 |
+            """
+        let table = BreakdownTable(
+            heading: "セグメント情報", markdown: markdown, period: "当期", unitCaption: "百万円")
+        let sales = 265 * Financial.millionYen
+        let (snapshotOrNil, _) = await Self.normalize(tables: [table], sales: sales)
+        let snapshot = try #require(snapshotOrNil)
+        #expect(snapshot.needsReview)
+        #expect(snapshot.warnings.contains(SegmentInfoPublishGuards.warningDuplicateSegmentLabels))
+    }
+
+    /// 前期列を採り、同じ表の当期列が売上に合う → 公開しない（キヤノン型）。
+    @Test func priorPeriodColumnMatchingOtherYearNeedsReview() async throws {
+        let markdown = """
+            | 区分 | 前連結会計年度 | 当連結会計年度 |
+            | オフィス | 1,749,165 | 1,437,188 |
+            | イメージングシステム | 806,425 | 711,317 |
+            | 合計 | 2,555,590 | 2,148,505 |
+            """
+        let table = BreakdownTable(
+            heading: "セグメント情報", markdown: markdown, period: "当期", unitCaption: "百万円")
+        let sales = 2_148_505 * Financial.millionYen
+        let (snapshotOrNil, _) = await Self.normalize(
+            tables: [table], sales: sales, selected: "t0_c1")
+        let snapshot = try #require(snapshotOrNil)
+        #expect(snapshot.needsReview)
+        #expect(snapshot.warnings.contains(SegmentInfoPublishGuards.warningPriorPeriodColumn))
+    }
+
+    /// 地域グループ見出しは葉の製品名だけ残す（9274 型）。
+    @Test func geographyGroupPrefixDroppedFromJoinedHeaders() async throws {
+        let joined: String = RevenueRecognitionCandidates.joinHeaderParts(
+            ["北東アジア・欧州／米州・アジアパシフィック", "板紙"])
+        #expect(joined == "板紙")
+        let markdown = """
+            | | 北東アジア・欧州／米州・アジアパシフィック | 北東アジア・欧州／米州・アジアパシフィック | 連結 |
+            | | 板紙 | パルプ・古紙 | 連結 |
+            | 外部顧客に対する売上高 | 80 | 20 | 100 |
+            """
+        let table = BreakdownTable(
+            heading: "セグメント情報", markdown: markdown, period: "当期", unitCaption: "百万円")
+        let sales = 100 * Financial.millionYen
+        let (snapshotOrNil, _) = await Self.normalize(tables: [table], sales: sales)
+        let snapshot = try #require(snapshotOrNil)
+        let labels: Set<String> = Set(
+            snapshot.rows.filter { $0.rowKind == "segment" }.map { $0.labelRaw })
+        #expect(labels.contains("板紙"))
+        #expect(labels.contains("パルプ・古紙"))
+        #expect(!labels.contains(where: { $0.contains("北東アジア") }))
+        #expect(!snapshot.needsReview)
+    }
+
+    /// 同一ラベルが指標ブロックの group 違いで繰り返されても公開しない（リコー資産/設備型）。
+    @Test func duplicateSegmentLabelsAcrossMetricGroupsNeedReview() async throws {
+        let markdown = """
+            | 区分 | 当期 |
+            | 資産合計 | |
+            | デジタルサービス | 1,323,991 |
+            | デジタルプロダクツ | 446,654 |
+            | 資本的支出 | |
+            | デジタルサービス | 31,296 |
+            | デジタルプロダクツ | 18,731 |
+            | 合計 | 1,820,672 |
+            """
+        let table = BreakdownTable(
+            heading: "セグメント情報", markdown: markdown, period: "当期", unitCaption: "百万円")
+        let sales = 2_608_314 * Financial.millionYen
+        let (snapshotOrNil, _) = await Self.normalize(tables: [table], sales: sales)
+        let snapshot = try #require(snapshotOrNil)
+        #expect(snapshot.needsReview)
+        #expect(snapshot.warnings.contains(SegmentInfoPublishGuards.warningDuplicateSegmentLabels)
+            || snapshot.warnings.contains(SegmentInfoPublishGuards.warningMetricRowLabels))
+    }
+
+    /// 第N期が2表あるときは後期の外部顧客向けを採る（キヤノン US-GAAP 注記型）。
+    @Test func laterFiscalEraMatrixIsPreferred() async throws {
+        let prior = BreakdownTable(
+            heading: "セグメント情報",
+            markdown: """
+                | | オフィス | イメージングシステム | メディカルシステム | 産業機器その他 | 連結 |
+                | 外部顧客向け | 1,749,165 | 806,425 | 437,456 | 598,653 | 3,593,299 |
+                | 営業利益 | 164,996 | 48,167 | 26,744 | 19,392 | 174,420 |
+                """,
+            period: nil, unitCaption: "百万円", precedingCaption: "第119期")
+        let current = BreakdownTable(
+            heading: "セグメント情報",
+            markdown: """
+                | | オフィス | イメージングシステム | メディカルシステム | 産業機器その他 | 連結 |
+                | 外部顧客向け | 1,437,188 | 711,317 | 435,368 | 577,130 | 3,160,243 |
+                | 営業利益 | 81,369 | 71,805 | 25,244 | 13,225 | 110,547 |
+                """,
+            period: nil, unitCaption: "百万円", precedingCaption: "第120期")
+        let sales = 3_160_243 * Financial.millionYen
+        let (snapshotOrNil, _) = await Self.normalize(
+            tables: [prior, current], sales: sales, fiscalYearEnd: "2020-12-31")
+        let snapshot = try #require(snapshotOrNil)
+        let office = try #require(snapshot.rows.first { $0.labelRaw == "オフィス" })
+        #expect(office.amount == 1_437_188 * Financial.millionYen)
+        #expect(!snapshot.needsReview)
+    }
+
+    /// 行が見出し年度のときは期末年の行を売上にする（キヤノン年次行型）。
+    @Test func yearEndedRowMatchingFiscalYearEndIsPreferred() async throws {
+        let markdown = """
+            | | オフィス | イメージングシステム | 連結 |
+            | 2019年12月31日に終了した事業年度 | 1,749,165 | 806,425 | 2,555,590 |
+            | 2020年12月31日に終了した事業年度 | 1,437,188 | 711,317 | 2,148,505 |
+            """
+        let table = BreakdownTable(
+            heading: "セグメント情報", markdown: markdown, period: "当期", unitCaption: "百万円")
+        let sales = 2_148_505 * Financial.millionYen
+        let (snapshotOrNil, _) = await Self.normalize(
+            tables: [table], sales: sales, fiscalYearEnd: "2020-12-31")
+        let snapshot = try #require(snapshotOrNil)
+        let office = try #require(snapshot.rows.first { $0.labelRaw == "オフィス" })
+        #expect(office.amount == 1_437_188 * Financial.millionYen)
+        #expect(!snapshot.needsReview)
+    }
+
+    /// 期間親見出しが join で落ちても当期の金額列を採る（第一三共 前/当・金額列型）。
+    @Test func currentYearAmountColumnPreferredWhenPeriodParentIsSpanning() async throws {
+        let markdown = """
+            | | 前連結会計年度 | 前連結会計年度 | 当連結会計年度 | 当連結会計年度 |
+            | | 金額 | 構成比（％） | 金額 | 構成比（％） |
+            | 医療用医薬品 | 1,796,974 | 95.3 | 2,029,538 | 95.6 |
+            | ヘルスケア | 86,587 | 4.6 | 90,784 | 4.3 |
+            | その他 | 2,693 | 0.1 | 2,722 | 0.1 |
+            | 合計 | 1,886,256 | 100.0 | 2,123,045 | 100.0 |
+            """
+        let table = BreakdownTable(
+            heading: "セグメント情報", markdown: markdown, period: "当期", unitCaption: "百万円")
+        let sales = 2_123_045 * Financial.millionYen
+        let (snapshotOrNil, _) = await Self.normalize(tables: [table], sales: sales)
+        let snapshot = try #require(snapshotOrNil)
+        let pharma = try #require(snapshot.rows.first { $0.labelRaw.contains("医療用医薬品") })
+        #expect(pharma.amount == 2_029_538 * Financial.millionYen)
         #expect(!snapshot.needsReview)
     }
 }

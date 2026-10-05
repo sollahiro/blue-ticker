@@ -836,6 +836,7 @@ enum BreakdownExtractor {
             // 「ライセンス収入」だけに頼ると表本文だけの抽出時に種類分解と判定できず、
             // 製品別表（ニューロロジー/オンコロジー）を失う（実データ検証: S100YB05、2026-07-25）。
             "医薬品販売による収益", "ライセンス供与による収益",
+            "医薬品の販売", "プロフィットシェア収入", "プロフィットシェア",
         ]
         guard revenueTypeMarkers.contains(where: { joined.contains($0) }) else { return false }
         // 事業・製品の具体名が併記されていれば種類分解ではない（ブリヂストン: タイヤ、デンソー: サーマル…）
@@ -1479,6 +1480,12 @@ enum BreakdownExtractor {
         if isPeriodCueProse(compact) { return false }
         if compact.contains("移行日") { return true }
         if textContainsJapaneseDateRange(compact) { return true }
+        if compact.range(of: #"^第[0-9]+期$"#, options: .regularExpression) != nil {
+            return true
+        }
+        if compact.contains("終了した事業年度") || compact.contains("終了した連結会計年度") {
+            return true
+        }
         return leadingStandalonePeriodKeyword(compact) != nil
     }
 
