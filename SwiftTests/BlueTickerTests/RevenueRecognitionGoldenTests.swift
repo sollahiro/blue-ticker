@@ -2179,6 +2179,8 @@ import Testing
             ["業界の名称", "電子・半導体"])
         #expect(header == "電子・半導体")
         #expect(RevenueRecognitionCandidates.isStubAxisHeader("業界の名称"))
+        #expect(RevenueRecognitionCandidates.isStubAxisHeader("報告セグメント"))
+        #expect(RevenueRecognitionCandidates.joinHeaderParts(["報告セグメント", "日本事業"]) == "日本事業")
         let unitHeader: String = RevenueRecognitionCandidates.joinHeaderParts(
             ["(単位：百万円)", "その他"])
         #expect(unitHeader == "その他")

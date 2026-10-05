@@ -242,6 +242,24 @@ import Foundation
         #expect(snapshot.needsReview)
     }
 
+    @Test func dropsReportableSegmentStubFromColumnHeaders() async throws {
+        let markdown = """
+            | | 報告セグメント | 報告セグメント | 報告セグメント |
+            | | 日本事業 | 米州事業 | 欧州事業 |
+            | 外部顧客への売上高 | 300 | 200 | 500 |
+            """
+        let table = BreakdownTable(
+            heading: "セグメント情報", markdown: markdown, period: "当期", unitCaption: "百万円")
+        let sales = 1_000 * Financial.millionYen
+        let (snapshotOrNil, _) = await Self.normalize(tables: [table], sales: sales)
+        let snapshot = try #require(snapshotOrNil)
+        let labels: Set<String> = Set(
+            snapshot.rows.filter { $0.rowKind == "segment" }.map { $0.labelRaw })
+        #expect(labels.contains("日本事業"))
+        #expect(labels.contains("米州事業"))
+        #expect(!labels.contains(where: { $0.contains("報告セグメント") }))
+    }
+
     @Test func doesNotFallBackWhenSubtotalFarFromSegmentSum() async throws {
         let markdown = """
             | 区分 | 当期 |

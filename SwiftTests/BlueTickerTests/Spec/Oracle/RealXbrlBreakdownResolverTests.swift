@@ -344,6 +344,7 @@ import Foundation
         #expect(snapshot?.needsReview == true)
         #expect(snapshot?.warnings.contains("business_label_looks_like_geography") == true)
         let japan = try #require(snapshot?.rows.first { $0.labelRaw.contains("日本") })
+        #expect(japan.labelRaw == "日本事業")
         #expect(japan.amount == 295_343_000_000)
         let china = try #require(snapshot?.rows.first { $0.labelRaw.contains("トラベルリテール") })
         #expect(china.amount == 342_244_000_000)

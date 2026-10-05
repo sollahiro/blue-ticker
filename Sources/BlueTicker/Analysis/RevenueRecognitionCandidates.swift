@@ -298,7 +298,8 @@ enum RevenueRecognitionCandidates {
     static func isStubAxisHeader(_ label: String) -> Bool {
         let token = compactCell(label)
         if token.isEmpty { return false }
-        return token.hasSuffix("の名称") || token == "名称"
+        if token.hasSuffix("の名称") || token == "名称" { return true }
+        return token == "報告セグメント"
     }
 
     static func joinHeaderParts(_ parts: [String]) -> String {
