@@ -84,3 +84,67 @@
 | 9171 | low_vis_no_source | 2026-09-28 | 栗林商船。OGP は横長ロックアップ |
 | 9216 | needs_link | 2026-09-28 | ビーウィズ。採用サイトは別名ドメイン。公式正方形なし |
 | 9767 | low_vis_no_source | 2026-09-28 | 日建工学。横長 logo |
+| 1381 | tls | 2026-10-05 | アクシーズ。www.axyz-grp.co.jp handshake hang |
+| 1443 | needs_link | 2026-10-05 | 技研HD。公式 origin 未確定 |
+| 1724 | low_vis_no_source | 2026-10-05 | シンクレイヤ。OGP 600×314 カード画像 |
+| 2180 | needs_link | 2026-10-05 | サニーサイドアップ。公式 origin 未確定 |
+| 2673 | needs_link | 2026-10-05 | 夢みつけ隊。公式 origin 未確定 |
+| 2693 | low_vis_no_source | 2026-10-05 | YKT。OGP はトップコラージュ |
+| 2806 | low_vis_no_source | 2026-10-05 | ユタカフーズ。favicon 32×32 のみ |
+| 2876 | low_vis_no_source | 2026-10-05 | デルソーレ。favicon 180×127 |
+| 288A | low_vis_no_source | 2026-10-05 | ラクサス。先頭 favicon は SNS の X。logo は横長ワードマーク |
+| 3066 | low_vis_no_source | 2026-10-05 | JBイレブン。usable 正方形なし |
+| 3075 | blocked | 2026-10-05 | 銚子丸。origin 403 |
+| 3442 | needs_link | 2026-10-05 | MIE。公式 origin 未確定 |
+| 3467 | low_vis_no_source | 2026-10-05 | アグレ。apple-touch が単色矩形。OGP はワードマーク |
+| 3739 | low_vis_no_source | 2026-10-05 | コムシード。OGP 横長ワードマーク |
+| 3753 | low_vis_no_source | 2026-10-05 | フライト。横長 logo |
+| 3779 | low_vis_no_source | 2026-10-05 | Jエスコム。正方形 OGP が社名テキストのみ |
+| 3807 | low_vis_no_source | 2026-10-05 | フィスコ。usable 正方形なし |
+| 3892 | low_vis_no_source | 2026-10-05 | 岡山製紙。favicon 64×64 |
+| 4054 | low_vis_no_source | 2026-10-05 | 日本情報クリエイト。認証ロゴのみ |
+| 4171 | needs_link | 2026-10-05 | グローバルインフォメーション。公式 origin 未確定 |
+| 4274 | low_vis_no_source | 2026-10-05 | 細谷火工。薄色マークで白地消滅 |
+| 4366 | blocked | 2026-10-05 | ダイトーケミックス。origin 403 |
+| 4429 | low_vis_no_source | 2026-10-05 | リックソフト。OGP はアイキャッチ写真 |
+| 4480 | low_vis_no_source | 2026-10-05 | メドレー。OGP ワードマーク＋スローガン |
+| 4714 | low_vis_no_source | 2026-10-05 | リソー教育。横長 logo |
+| 4720 | low_vis_no_source | 2026-10-05 | 城南進学。縦長 banner |
+| 5015 | needs_link | 2026-10-05 | BPカストロール。取れるのはグローバル BP マークのみ |
+| 5381 | low_vis_no_source | 2026-10-05 | マイポックス。usable 正方形なし |
+| 5867 | low_vis_no_source | 2026-10-05 | エスネットワークス。OGP 横長 |
+| 5950 | low_vis_no_source | 2026-10-05 | 日本パワーファスニング。横長 logo |
+| 5983 | tls | 2026-10-05 | イワブチ。証明書検証不能 |
+| 6182 | low_vis_no_source | 2026-10-05 | メタリアル。OGP 横長 |
+| 6343 | low_vis_no_source | 2026-10-05 | フリージア・マクロス。favicon 32×32 |
+| 6577 | low_vis_no_source | 2026-10-05 | ベストワン。TSE ロゴ画像 |
+| 6635 | low_vis_no_source | 2026-10-05 | 大日光。favicon 93×93 |
+| 6655 | low_vis_no_source | 2026-10-05 | 東洋電機。横長 footer logo |
+| 6777 | low_vis_no_source | 2026-10-05 | santec HD。横長 logo |
+| 6834 | low_vis_no_source | 2026-10-05 | 精工技研。横長 header logo |
+| 6907 | low_vis_no_source | 2026-10-05 | ジオマテック。OGP ワードマークのみ |
+| 6919 | low_vis_no_source | 2026-10-05 | ケル。横長 logo |
+| 6927 | low_vis_no_source | 2026-10-05 | ヘリオス。横長 header logo |
+| 7271 | low_vis_no_source | 2026-10-05 | 安永。Pronexus。横長 GIF logo |
+| 7487 | low_vis_no_source | 2026-10-05 | 小津産業。横長 header logo |
+| 7506 | low_vis_no_source | 2026-10-05 | ハウス オブ ローゼ。横長 logo |
+| 7515 | needs_link | 2026-10-05 | マルヨシセンター。公式 origin 未確定 |
+| 7839 | low_vis_no_source | 2026-10-05 | SHOEI。OGP 600×351 |
+| 7859 | low_vis_no_source | 2026-10-05 | アルメディオ。favicon 16×16 |
+| 7868 | low_vis_no_source | 2026-10-05 | 広済堂HD。favicon が単色青矩形。OGP は横長ロックアップ |
+| 7894 | low_vis_no_source | 2026-10-05 | 丸東産業。製品 logo |
+| 7902 | low_vis_no_source | 2026-10-05 | ソノコム。usable 正方形なし |
+| 8123 | low_vis_no_source | 2026-10-05 | 川辺。横長 logo |
+| 8383 | low_vis_no_source | 2026-10-05 | 鳥取銀行。favicon 32×32 |
+| 8559 | low_vis_no_source | 2026-10-05 | 豊和銀行。usable 正方形なし |
+| 9073 | low_vis_no_source | 2026-10-05 | 京極運輸。favicon 74×74 |
+| 9362 | low_vis_no_source | 2026-10-05 | 兵機海運。OGP 横長 |
+| 9363 | needs_link | 2026-10-05 | 大運。公式 origin 未確定 |
+| 9376 | low_vis_no_source | 2026-10-05 | ユーラシア旅行社。協会 logo のみ |
+| 9407 | low_vis_no_source | 2026-10-05 | RKB毎日HD。OGP が noimage |
+| 9514 | low_vis_no_source | 2026-10-05 | エフオン。横長 footer logo |
+| 9664 | low_vis_no_source | 2026-10-05 | 御園座。横長 header logo |
+| 9760 | low_vis_no_source | 2026-10-05 | 進学会HD。横長 logo |
+| 9818 | low_vis_no_source | 2026-10-05 | 大丸エナウィン。OGP はビル写真 |
+| 9850 | low_vis_no_source | 2026-10-05 | グルメ杵屋。事業アイコンであり HD マークではない |
+| 9976 | low_vis_no_source | 2026-10-05 | セキチュー。横長 header GIF |

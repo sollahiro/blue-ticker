@@ -83,6 +83,8 @@ enum CompanyIconOriginOverride {
     /// 中央マークのある OGP。Jetpack CDN・横長ワードマーク OGP は載せない。
     /// 9445: コーポレート origin が timeout のため自社 DX サービス apple-touch。
     /// 2195 / 2894 / 6203 / 7265: ユーザー指定のワンオフ 512 白地クロップを R2 CDN へ。
+    /// 2026-10-05 weekly: 公告紙面／URL無し／Pronexus の欠行。公式 apple-touch / 正方形 /
+    /// 中央マークのある OGP。単色矩形・SNS の X・横長ワードマーク OGP は載せない。
     static let manualSources: [String: CompanyIconManualSource] = [
         "7203": .homepageOrigin("https://toyota.jp"),
         "9267": .homepageOrigin("https://www.genky.co.jp"),
@@ -271,6 +273,63 @@ enum CompanyIconOriginOverride {
             "https://www.kitazawasangyo.co.jp/image/common/apple-touch-icon.png"),
         "9445": .imageURL(
             "https://www.collabo-one.jp/wp-content/themes/collaboone/images/common/webclip.png"),
+        "1992": .imageURL("https://www.kandt.co.jp/favicon.ico"),
+        "2435": .imageURL("https://www.cedar-group.co.jp/media/images/common/apple-touch-icon.png"),
+        "2776": .imageURL("https://www.shintohd.co.jp/wp-content/uploads/fbrfg/apple-touch-icon.png"),
+        "2917": .imageURL(
+            "https://ohmoriya-inc.co.jp/wp-content/uploads/2024/06/cropped-logo512-180x180.png"),
+        "3021": .imageURL("https://www.prins.co.jp/favicon.ico"),
+        "3063": .imageURL("https://www.jgroup.jp/wp/wp-content/uploads/cropped-favicon-180x180.png"),
+        "3140": .imageURL("https://bruno-inc.com/apple-touch-icon.png"),
+        "3323": .imageURL("https://www.recomm.co.jp/apple-touch-icon.png"),
+        "3399": .imageURL("https://www.yamaokaya.com/images/apple-touch-icon.png"),
+        "3421": .imageURL("https://www.inaba-ss.co.jp/assets/favicon/apple-touch-icon.png"),
+        "3439": .imageURL("https://www.mitsuchi.co.jp/wp-content/themes/mituchi/img/icons/touch.png"),
+        "3441": .imageURL("https://www.sanno.co.jp/assets/images/favicon.png"),
+        "3913": .imageURL("https://www.greenbee.co.jp/apple-touch-icon.png"),
+        "3948": .imageURL("https://hikaribf.co.jp/wordpress/wp-content/themes/hbf/img/favicon.png"),
+        "4094": .imageURL("https://www.nihonkagakusangyo.co.jp/apple-touch-icon.png"),
+        "4345": .imageURL("https://www.cts-h.co.jp/apple-touch-icon.png"),
+        "4645": .imageURL(
+            "https://ir.ichishin.co.jp/wp/wp-content/uploads/2025/07/cropped-favicon-180x180.png"),
+        "4684": .imageURL("https://www.obic.co.jp/app-files/img/symbol/apple-touch-icon.png"),
+        "4762": .imageURL("https://www.xnet.co.jp/apple-touch-icon.png"),
+        "4772": .imageURL("https://smej.co.jp/apple-touch-icon-precomposed.png"),
+        "5284": .imageURL("https://www.yamau-holdings.co.jp/img/apple-touch-icon.png"),
+        "6050": .imageURL("https://www.e-guardian.co.jp/resources/img/ogp2.png"),
+        "6076": .imageURL("https://www.az-hotels.co.jp/apple-touch-icon.png"),
+        "6091": .imageURL("https://www.wescohd.co.jp/wp-content/uploads/2023/10/favicon.png"),
+        "6291": .imageURL("https://www.airtech.co.jp/assets/img/common/apple-touch-icon.png"),
+        "6298": .imageURL("https://www.yac.co.jp/resources/apple-touch-icon.png"),
+        "6342": .imageURL(
+            "https://www.taihei-ss.co.jp/wp/wp-content/uploads/2024/07/cropped-taihei_favicom_240723-180x180.png"),
+        "6360": .imageURL("https://www.tam-tokyo.co.jp/apple-touch-icon.png"),
+        "6400": .imageURL(
+            "https://www.fujiseiki.com/wp-content/themes/fujiseiki2025/assets/apple-touch-icon.png"),
+        "6469": .imageURL("https://www.hsk.co.jp/resources/apple-touch-icon.png"),
+        "6538": .imageURL("https://disruptors.co.jp/apple-touch-icon.png"),
+        "7477": .imageURL("https://muraki.jp/mu-db103/wp-content/uploads/2024/04/cropped-muraki-180x180.gif"),
+        "7819": .imageURL("https://www.shobido-corp.co.jp/assets/img/common/logo@144.png"),
+        "7849": .imageURL("https://starts-pub.jp/wp-content/uploads/2021/10/cropped-fabicon-180x180.png"),
+        "7872": .imageURL(
+            "https://www.estelle.co.jp/wp_manager/wp-content/uploads/2023/11/cropped-estelle-1-180x180.png"),
+        "7878": .imageURL("https://www.kohsai-qq.co.jp/assets/image/common/icon_180x180.png"),
+        "7887": .imageURL("https://www.nankaiplywood.co.jp/image/common/favicon.ico"),
+        "7908": .imageURL("https://www.kimoto.co.jp/application/files/3117/4704/5415/sp_icon.png"),
+        "8013": .imageURL(
+            "https://www.naigai.co.jp/core_sys/images/others/favicon/apple-touch-icon-180x180.png"),
+        "8254": .imageURL("https://p3.ssl-cdn.jp/var/data/u/c9/43e4ad62220/img/webclip.png"),
+        "8927": .imageURL(
+            "https://meiho-est.com/meiho-wp/wp-content/themes/meiho-est/assets/img/common/app_icon.png"),
+        "8944": .imageURL("https://www.lbca.co.jp/img/common/apple-touch-icon.png"),
+        "9034": .imageURL("https://www.nanso.co.jp/apple-touch-icon.png"),
+        "9367": .imageURL(
+            "https://www.daito-koun.co.jp/cms/wp-content/uploads/2025/08/cropped-favicon-180x180.png"),
+        "9610": .imageURL("https://japan.wilsonlearning.com/apple-touch-icon.png"),
+        "9643": .imageURL("https://www.nakanihonkogyo.co.jp/img/icon/apple-touch-icon.png"),
+        "9679": .imageURL("https://www.horai-kk.co.jp/assets/img/common/apple-touch-icon-precomposed.png"),
+        "9778": .imageURL("https://www.subaru-net.com/wp-content/themes/subaru-net/images/apple-touch-icon.png"),
+        "9820": .imageURL("https://www.mt-genex.co.jp/assets/images/common/apple-touch-icon.png"),
     ]
 
     static func manualSource(for code: String) -> CompanyIconManualSource? {
