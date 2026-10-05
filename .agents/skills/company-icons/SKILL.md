@@ -132,7 +132,7 @@ icons weekly 専用。次の **5 条件がすべて揃ったときだけ**、Aut
 
 ## 公式 origin / 画像 URL
 
-origin: (1) ユーザー指定のコンシューマサイト (2) 有報「公告掲載方法」が自社なら scheme+host のみ (3) Pronexus なら有報本文の公式 URL、無ければトップで社名照合 (4) 公告に URL 無しなら Web 検索と IR。Pronexus / frameset / 紙面は favicon 取得先にしない。
+origin: (1) ユーザー指定のコンシューマサイト (2) 有報「公告掲載方法」が自社なら scheme+host のみ (3) Pronexus なら有報本文の公式 URL、無ければトップで社名照合 (4) 公告に URL 無しなら Web 検索と IR。Pronexus / frameset / 紙面は favicon 取得先にしない。株探の「会社サイト」は origin 発見だけに使い、マップには書かない。英数字コードは株探に無いので Web 検索する。
 
 有報本文から公式 origin を拾うときは IR 配信ホスト・大学・省庁ホストを捨てる。Jetpack CDN は first-party の同一パスが取れるならそちら。同一上場会社の自社製品／コンシューマサイト（7203 / 581A 型）はコーポレート origin が取れないときに採用してよい。別法人ホストは禁止のまま。
 
@@ -258,6 +258,11 @@ DATABASE_URL="$BLT_NEON_WRITE_DATABASE_URL" ./.build/release/blt-server ingest -
 - **Jetpack CDN。** 公式 WP 画像のミラー。同一パスの first-party が GET できるならそちらをマップする
 - **自社製品／コンシューマサイト。** 同一上場会社のサービス origin はコーポレートが timeout / 低視認のとき採用してよい（7203 / 581A / 9445 型）。別法人ホストは禁止のまま
 - **Before/After。** ラベルは HTML の UTF-8。アイコン画像に文字を焼き込まない（ビューア側のフォントで豆腐になる）
+- **単色矩形。** apple-touch / favicon が塗りつぶしだけの PNG は会社マークではない（広済堂HD・アグレ型）
+- **株探。** 「会社サイト」列は origin 発見用。マップにもテストにも株探 URL を書かない
+- **英数字コード。** 株探の `?code=` に無い。公式 origin は Web 検索
+- **動的ラッパ。** `topics_file?img=/img/...` は実パスへ正規化してからマップする
+- **SNS の X。** 先頭 favicon が旧 Twitter マークの置き換え画像なら棄てる（ラクサス型）
 
 ## 完了条件
 
