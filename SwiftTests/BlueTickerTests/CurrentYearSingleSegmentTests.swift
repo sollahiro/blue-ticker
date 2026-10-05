@@ -234,8 +234,8 @@ import Testing
         }
     }
 
-    @Test func cacheVersionStaysBreakdownBusinessV15() {
-        #expect(productServiceBreakdownCacheVersion == "breakdown-product_service-v16")
+    @Test func cacheVersionStartsProductServiceV1() {
+        #expect(productServiceBreakdownCacheVersion == "breakdown-product_service-v1")
         #expect(
             breakdownWarningSingleSegmentTagDisagreesWithCurrentYearReportableSegments
                 == "single_segment_tag_disagrees_with_current_year_reportable_segments")

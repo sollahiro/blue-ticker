@@ -86,20 +86,12 @@ public func isSupportedBreakdownAxis(_ axis: String) -> Bool {
 ///
 /// 形式: `breakdown-product_service-vN` / `breakdown-geography-vN`（旧共通 `breakdown-vN` も read 時は受理）。
 /// 旧公開キー `business` のスタンプ `breakdown-business-vN` は世代番号のパースだけ残し、軸としては読まない。
-/// v10: 積み上げセグメント損益表の決定論寄せ（研究開発費→profit 誤寄せを構造側で防止）。
-/// v11: 単位のみ表を捨てて dedicated contextRef の period を通し、うち列を抽出時に落とす
-/// （`allTablesFromHtml` / `keywordTablesFromHtml` の共有決定論経路。geography と同じ変更）。
-/// v12: うち列ドロップを geography 軸＋地域親/兄弟に限定（うち輸出高等の事業指標列を残す）。
-/// v13: statement sales が null のとき product_service 分母を収益認識の顧客契約連結→未マスク売上相当へ
-/// フォールバックし、由来タグを偽の `income_statement.sales` にしない。
-/// Summary が本表 `Revenue2IFRS`「収益」を sales に載せても、収益認識表の分母は顧客契約のまま
-/// （`fin-v21`。金額比較では切り替えない）。
-/// v14: ingest 時に jpcrp 標準 member の日本語ラベルを補完（生 `*Member` 表示の誤表示）。
-/// v15: 収益分解を Jev 列選択 + 決定論 2 段（category_group / category）に切り替え。
-/// 格納 JSON の意味が変わるためバンプする。Luna 経路の誤行を現行版 skip で残さない。
-/// v16: 公開軸キー `business` → `product_service` のハードカットオーバー。応答・主キー・
-/// payload.axis の契約が変わるためバンプする。金額の再計算はしない（マージ後にキー書き換え）。
-public let productServiceBreakdownCacheVersion = "breakdown-product_service-v16"
+/// 新軸系列は v1 から（旧 `breakdown-business-v15` の番号は引き継がない。capex と同じ）。
+/// 旧 business 系列の v10–v15（積み上げ PnL、うち列、分母フォールバック、member ラベル、
+/// Jev 列選択）は `breakdown-business-vN` 側の履歴であり、本スタンプの N ではない。
+/// v1: 公開軸キー `business` → `product_service` のハードカットオーバー。応答・主キー・
+/// payload.axis の契約が変わる。金額の再計算はしない（マージ後にキー書き換え）。
+public let productServiceBreakdownCacheVersion = "breakdown-product_service-v1"
 /// v11: 単位のみ表を捨てて dedicated contextRef の period を通し、うち列を抽出時に落とす。
 /// v12: うち列ドロップの決定論を精緻化（1段うち豪州、地域コンテキスト、軸ゲート）。
 /// v13: ingest 時に jpcrp 標準 member の日本語ラベルを補完（生 `*Member` 表示の誤表示）。
