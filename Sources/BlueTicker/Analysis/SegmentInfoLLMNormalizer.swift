@@ -98,19 +98,17 @@ enum SegmentInfoLLMNormalizer {
         }
         let tablesForChoice = scopedTables.isEmpty ? parsed : scopedTables
         let columnsForChoice = scopedColumns.isEmpty ? columns : scopedColumns
-        let currentYearTables = dropPriorEraTables(
-            parsed, among: parsed, fiscalYearEnd: fiscalYearEnd)
-        let tablesForNA = currentYearTables.isEmpty ? parsed : currentYearTables
+        let constraint = RevenueRecognitionTableStructure.axisConstraint(tables: tablesForChoice)
         // 報告セグメントが地域のみで、使える製品・事業表が無い（製品90％省略の文は製品表ではない）。
+        // 製品表は preferredTables が先に残す。日本事業などの事業ユニットは対象外。
         // business に日本/アジアを載せない。地域は geography 軸。
-        if RevenueRecognitionTableStructure.axisConstraint(tables: tablesForNA) == .geographyOnly {
+        if constraint == .geographyOnly {
             var audit = LLMBreakdownAudit(
                 sourceTableIndex: nil, periodColumn: nil, unit: "",
                 profitDisclosed: false, notes: "axis_constraint=geography_only")
             audit.notApplicableReason = BusinessBreakdownNotApplicableReason.geographyOnly.rawValue
             return (nil, audit)
         }
-        let constraint = RevenueRecognitionTableStructure.axisConstraint(tables: tablesForChoice)
         let offered = RevenueRecognitionColumnNormalizer.offeredColumns(
             columnsForChoice, tables: tablesForChoice, constraint: constraint)
         let offeredTables = tablesForChoice.filter { table in
