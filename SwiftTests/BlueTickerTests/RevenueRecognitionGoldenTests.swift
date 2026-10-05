@@ -1319,6 +1319,58 @@ import Testing
         #expect(geoWarning)
     }
 
+    /// FANUC 型: 「アジア（中国以外）」が地域ラベルとして残る。事業軸に出さない。
+    @Test func asiaExcludingChinaWithIgaiIsGeographyAxis() async throws {
+        let html = """
+            <p>当連結会計年度（自 2025年4月1日 至 2026年3月31日）</p>
+            <p>（単位：百万円）</p>
+            <table>
+              <tr><td></td><td>当連結会計年度</td></tr>
+              <tr><td>国内</td><td>110,782</td></tr>
+              <tr><td>中国</td><td>171,598</td></tr>
+              <tr><td>アジア（中国以外）</td><td>80,000</td></tr>
+              <tr><td>米州</td><td>199,448</td></tr>
+              <tr><td>欧州</td><td>152,371</td></tr>
+              <tr><td>その他</td><td>10,000</td></tr>
+              <tr><td>顧客との契約から生じる収益</td><td>724,199</td></tr>
+            </table>
+            """
+        let extracted = ExtractedBreakdown(
+            method: "html_table",
+            tables: BreakdownExtractor.allTablesFromHtml(html, defaultHeading: "収益認識関係"),
+            facts: [])
+        let parsed = RevenueRecognitionCandidates.parse(tables: extracted.tables)
+        let axis: RevenueRecognitionTableStructure.TableAxis =
+            RevenueRecognitionTableStructure.tableAxis(of: parsed[0])
+        #expect(axis == .geography)
+        let snapshot = try await run(
+            html: html, docID: "S100YG3Q", fyEnd: "2026-03-31", pick: "t0_c1")
+        #expect(snapshot.needsReview)
+        #expect(
+            snapshot.warnings.contains(RevenueRecognitionColumnNormalizer.warningGeographyAxisOnly)
+                || snapshot.warnings.contains(
+                    SegmentInfoPublishGuards.warningGeographyWhileProductExists))
+    }
+
+    /// アステラス型: 収益の種類（医薬品の販売 / プロフィットシェア）を事業内訳にしない。
+    @Test func revenueTypeCategoriesNeedReview() async throws {
+        let html = """
+            <p>当連結会計年度（自 2025年4月1日 至 2026年3月31日）</p>
+            <p>（単位：百万円）</p>
+            <table>
+              <tr><td></td><td>当連結会計年度</td></tr>
+              <tr><td>医薬品の販売</td><td>1,800,000</td></tr>
+              <tr><td>プロフィットシェア収入</td><td>109,487</td></tr>
+              <tr><td>その他</td><td>50,000</td></tr>
+              <tr><td>合計</td><td>1,959,487</td></tr>
+            </table>
+            """
+        let snapshot = try await run(
+            html: html, docID: "S100YBPK", fyEnd: "2026-03-31", pick: "t0_c1")
+        #expect(snapshot.needsReview)
+        #expect(snapshot.warnings.contains(SegmentInfoPublishGuards.warningRevenueTypeCategories))
+    }
+
     /// 6532 S100VTPA: 金融 / 情報通信・メディア・ハイテクは顧客業種。公開しない。
     @Test func vtpa6532CustomerIndustryAxisNeedsReview() async throws {
         let html = """
@@ -2179,6 +2231,22 @@ import Testing
             ["業界の名称", "電子・半導体"])
         #expect(header == "電子・半導体")
         #expect(RevenueRecognitionCandidates.isStubAxisHeader("業界の名称"))
+        #expect(RevenueRecognitionCandidates.isStubAxisHeader("報告セグメント"))
+        #expect(RevenueRecognitionCandidates.isStubAxisHeader("報告セグメント（耐火物関連事業）"))
+        #expect(RevenueRecognitionCandidates.joinHeaderParts(["報告セグメント", "日本事業"]) == "日本事業")
+        #expect(RevenueRecognitionCandidates.joinHeaderParts(["その他", "その他"]) == "その他")
+        #expect(
+            RevenueRecognitionCandidates.joinHeaderParts(
+                ["みずほフィナンシャルグループ（連結）", "リテール・事業法人カンパニー"])
+                == "リテール・事業法人カンパニー")
+        #expect(
+            RevenueRecognitionCandidates.joinHeaderParts(
+                ["当連結会計年度", "建設機械・車両"])
+                == "建設機械・車両")
+        #expect(
+            RevenueRecognitionCandidates.joinHeaderParts(
+                ["北東アジア・欧州／米州・アジアパシフィック", "板紙"])
+                == "板紙")
         let unitHeader: String = RevenueRecognitionCandidates.joinHeaderParts(
             ["(単位：百万円)", "その他"])
         #expect(unitHeader == "その他")

@@ -267,6 +267,7 @@ enum RevenueRecognitionTableStructure {
         let regions = [
             "日本", "海外", "国内", "国外", "本邦", "北米", "米州", "中南米", "欧州",
             "アジア", "オセアニア", "中国", "韓国", "台湾", "米国", "アメリカ", "その他の地域",
+            "タイ", "ロシア", "カナダ", "豪州", "CIS",
         ]
         return regions.contains(token)
     }
@@ -508,14 +509,19 @@ enum RevenueRecognitionTableStructure {
     }
 
     static let geographyKeywords: [String] =
-        Xbrl.segmentGeographyLabelKeywordsJa + ["国外", "本邦", "韓国", "台湾", "中南米"]
+        Xbrl.segmentGeographyLabelKeywordsJa + [
+            "国外", "本邦", "韓国", "台湾", "中南米", "タイ", "ロシア", "カナダ", "豪州", "CIS",
+        ]
 
     static func geographyLeftoverStem(_ label: String) -> String {
         var stripped = RevenueRecognitionCandidates.compactCell(label)
         for keyword in geographyKeywords.sorted(by: { $0.count > $1.count }) {
             stripped = stripped.replacingOccurrences(of: keyword, with: "")
         }
-        for extra in ["を除く", "を含む", "除く", "及び", "および"] {
+        for extra in [
+            "を除く", "を含む", "除く", "以外", "及び", "および",
+            "北東", "南西", "東南", "西北",
+        ] {
             stripped = stripped.replacingOccurrences(of: extra, with: "")
         }
         return stripped.filter { !$0.isWhitespace && !$0.isPunctuation && $0 != "・" && $0 != "、" }

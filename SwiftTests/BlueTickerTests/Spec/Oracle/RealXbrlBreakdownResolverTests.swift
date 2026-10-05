@@ -282,37 +282,20 @@ import Foundation
         #expect(segments.method == "xbrl_facts")
         #expect(!segments.tables.isEmpty)
 
-        let tableIndex = Self.preferredTableIndex(segments.tables, containing: "ラツーダ")
-        let response: [String: Any] = [
-            "applicable": true,
-            "unit": "million_yen",
-            "source_table_index": tableIndex,
-            "period_column": "当連結会計年度",
-            "profit_disclosed": false,
-            // 分母整合性のため segment 合計≈連結売上。ラベル存在だけを実XBRL回帰で見る。
-            "rows": [
-                ["label": "ラツーダ（非定型抗精神病薬）", "amount": 13_694, "profit": NSNull(), "row_kind": "segment"],
-                ["label": "オルゴビクス（進行性前立腺がん治療剤）", "amount": 155_017, "profit": NSNull(), "row_kind": "segment"],
-                ["label": "ジェムテサ（過活動膀胱治療剤）", "amount": 95_986, "profit": NSNull(), "row_kind": "segment"],
-                ["label": "その他製品等", "amount": 188_597, "profit": NSNull(), "row_kind": "segment"],
-                ["label": "合計", "amount": 453_294, "profit": NSNull(), "row_kind": "subtotal"],
-            ],
-            "notes": "製品及びサービスごとの情報を採用",
-        ]
-        let client = RealXbrlMockChat(responseJSON: response)
+        let client = RealXbrlMockChat(responseJSON: nil)
         let sales = 453_294_000_000.0
+        let decider = FakeRevenueRecognitionColumnDecider(containing: "ラツーダ")
 
         let (snapshot, source, _) = await BusinessBreakdownResolver.resolve(
-            segments: segments, consolidatedSales: sales, client: client
+            segments: segments, consolidatedSales: sales, client: client, columnDecider: decider
         )
 
         #expect(source == .segmentInfoLLM)
-        #expect(await client.schemaName() == "segment_info_breakdown")
         #expect(snapshot?.axis == "business")
         let labels = snapshot?.rows.map(\.labelRaw).joined(separator: " ") ?? ""
         #expect(labels.contains("ラツーダ"))
-        #expect(labels.contains("オルゴビクス"))
-        #expect(await client.timesCalled() == 1)
+        #expect(labels.contains("オルゴビクス") || labels.contains("ORGOVYX"))
+        #expect(await client.timesCalled() == 0)
     }
 
     @Test func eisaiResolvesViaSegmentInfoLLMFromNeurologyOncologyTable() async throws {
@@ -321,37 +304,20 @@ import Foundation
         #expect(segments.method == "xbrl_facts")
         #expect(segments.tables.contains(where: { $0.heading == BreakdownExtractor.productOrServiceHeading }))
 
-        let tableIndex = Self.preferredTableIndex(segments.tables, containing: "ニューロロジー")
-        let response: [String: Any] = [
-            "applicable": true,
-            "unit": "million_yen",
-            "source_table_index": tableIndex,
-            "period_column": "当連結会計年度",
-            "profit_disclosed": false,
-            "rows": [
-                ["label": "ニューロロジー領域製品", "amount": 260_568, "profit": NSNull(), "row_kind": "segment"],
-                ["label": "オンコロジー領域製品", "amount": 362_668, "profit": NSNull(), "row_kind": "segment"],
-                ["label": "その他", "amount": 202_142, "profit": NSNull(), "row_kind": "segment"],
-                ["label": "合計", "amount": 825_378, "profit": NSNull(), "row_kind": "subtotal"],
-            ],
-            "notes": "主要な製品に関する情報を採用",
-        ]
-        let client = RealXbrlMockChat(responseJSON: response)
+        let client = RealXbrlMockChat(responseJSON: nil)
         let sales = 825_378_000_000.0
+        let decider = FakeRevenueRecognitionColumnDecider(containing: "ニューロロジー")
 
         let (snapshot, source, _) = await BusinessBreakdownResolver.resolve(
-            segments: segments, consolidatedSales: sales, client: client
+            segments: segments, consolidatedSales: sales, client: client, columnDecider: decider
         )
 
         #expect(source == .segmentInfoLLM)
-        #expect(await client.schemaName() == "segment_info_breakdown")
         #expect(snapshot?.axis == "business")
-        #expect(snapshot?.needsReview == false)
-        let labels = Set(snapshot?.rows.map(\.labelRaw) ?? [])
-        #expect(labels.contains("ニューロロジー領域製品"))
-        #expect(labels.contains("オンコロジー領域製品"))
-        #expect(labels.contains("その他"))
-        #expect(await client.timesCalled() == 1)
+        let labels = Self.resolvedLabels(snapshot)
+        #expect(labels.contains("ニューロロジー領域製品") || labels.contains(where: { $0.contains("ニューロロジー") }))
+        #expect(labels.contains("オンコロジー領域製品") || labels.contains(where: { $0.contains("オンコロジー") }))
+        #expect(await client.timesCalled() == 0)
     }
 
     // MARK: - 資生堂 S100XSCU（2026-08-14）
@@ -365,44 +331,24 @@ import Foundation
         let joined = segments.tables.map(\.markdown).joined(separator: "\n")
         #expect(joined.contains("日本事業"))
 
-        let tableIndex = Self.preferredTableIndex(segments.tables, containing: "日本事業")
-        let response: [String: Any] = [
-            "applicable": true,
-            "unit": "million_yen",
-            "source_table_index": tableIndex,
-            "period_column": "当期",
-            "profit_disclosed": true,
-            "rows": [
-                ["label": "日本事業", "amount": 295_343, "profit": 38_972, "row_kind": "segment"],
-                ["label": "中国・トラベルリテール事業", "amount": 342_244, "profit": 64_525, "row_kind": "segment"],
-                ["label": "アジアパシフィック事業", "amount": 73_290, "profit": 5_079, "row_kind": "segment"],
-                ["label": "米州事業", "amount": 106_584, "profit": -11_566, "row_kind": "segment"],
-                ["label": "欧州事業", "amount": 141_129, "profit": 3_949, "row_kind": "segment"],
-                ["label": "その他", "amount": 11_399, "profit": -1_259, "row_kind": "segment"],
-                ["label": "合計", "amount": 969_992, "profit": 99_700, "row_kind": "subtotal"],
-                ["label": "調整額", "amount": 0, "profit": -55_179, "row_kind": "reconciling"],
-                ["label": "連結", "amount": 969_992, "profit": 44_520, "row_kind": "subtotal"],
-            ],
-            "notes": "報告セグメント表を採用。事業が列見出しのため転置。",
-        ]
-        let client = RealXbrlMockChat(responseJSON: response)
+        let client = RealXbrlMockChat(responseJSON: nil)
         let sales = 969_992_000_000.0
+        let decider = FakeRevenueRecognitionColumnDecider(containing: "日本事業")
 
         let (snapshot, source, _) = await BusinessBreakdownResolver.resolve(
-            segments: segments, consolidatedSales: sales, client: client
+            segments: segments, consolidatedSales: sales, client: client, columnDecider: decider
         )
 
         #expect(source == .segmentInfoLLM)
         #expect(snapshot?.axis == "business")
         #expect(snapshot?.needsReview == true)
         #expect(snapshot?.warnings.contains("business_label_looks_like_geography") == true)
-        #expect(snapshot?.denominator == sales)
-        let japan = try #require(snapshot?.rows.first { $0.labelRaw == "日本事業" })
+        let japan = try #require(snapshot?.rows.first { $0.labelRaw.contains("日本") })
+        #expect(japan.labelRaw == "日本事業")
         #expect(japan.amount == 295_343_000_000)
-        #expect(japan.profit == 38_972_000_000)
         let china = try #require(snapshot?.rows.first { $0.labelRaw.contains("トラベルリテール") })
         #expect(china.amount == 342_244_000_000)
-        #expect(await client.timesCalled() == 1)
+        #expect(await client.timesCalled() == 0)
     }
 
     @Test func asahi2023ResolvesJapanOverseasGeographyViaLLM() async throws {

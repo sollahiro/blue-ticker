@@ -157,32 +157,27 @@ private actor MockChatCompleting: ChatCompleting {
         )
         let table = BreakdownTable(
             heading: "セグメント情報",
-            markdown: "| 事業A | 事業B |\n|---|---|\n| 600 | 400 |",
-            period: "当期"
+            markdown: """
+            | 区分 | 当期 |
+            | 事業A | 600 |
+            | 事業B | 400 |
+            | 合計 | 1,000 |
+            """,
+            period: "当期",
+            unitCaption: "百万円"
         )
         let segments = ExtractedBreakdown(method: "xbrl_facts", tables: [table], facts: [unresolvableFact])
-
-        let response: [String: Any] = [
-            "applicable": true,
-            "unit": "million_yen",
-            "source_table_index": 0,
-            "period_column": "当期",
-            "profit_disclosed": false,
-            "rows": [
-                ["label": "事業A", "amount": 600, "profit": NSNull(), "row_kind": "segment"],
-                ["label": "事業B", "amount": 400, "profit": NSNull(), "row_kind": "segment"],
-            ],
-            "notes": "test",
-        ]
-        let client = MockChatCompleting(responseJSON: response)
+        let client = MockChatCompleting(responseJSON: nil)
+        let decider = FakeRevenueRecognitionColumnDecider()
 
         let (snapshot, source, _) = await BusinessBreakdownResolver.resolve(
-            segments: segments, consolidatedSales: 1_000_000_000, client: client
+            segments: segments, consolidatedSales: 1_000 * Financial.millionYen, client: client,
+            columnDecider: decider
         )
 
         #expect(source == .segmentInfoLLM)
         #expect(snapshot?.axis == "business")
-        #expect(await client.timesCalled() == 1)
+        #expect(await client.timesCalled() == 0)
     }
 
     /// 富士フイルム（積み上げセグメント損益表）: 決定論寄せで解決し、LLM を呼ばない。
@@ -220,33 +215,22 @@ private actor MockChatCompleting: ChatCompleting {
         #expect(segments.method == "html_table")
         #expect(segments.tables.first?.heading != "収益認識関係")
         let sales = try #require(try Self.loadSales(code: "7751"))
-
-        let response: [String: Any] = [
-            "applicable": true,
-            "unit": "million_yen",
-            "source_table_index": 1,
-            "period_column": "当期",
-            "profit_disclosed": true,
-            "rows": [
-                ["label": "プリンティング", "amount": 2_487_885, "profit": 255_759, "row_kind": "segment"],
-                ["label": "メディカル", "amount": 579_723, "profit": 32_775, "row_kind": "segment"],
-                ["label": "イメージング", "amount": 1_054_513, "profit": 172_871, "row_kind": "segment"],
-                ["label": "インダストリアル", "amount": 357_924, "profit": 62_525, "row_kind": "segment"],
-                ["label": "その他及び全社", "amount": 144_682, "profit": -69_451, "row_kind": "segment"],
-            ],
-            "notes": "test",
-        ]
-        let client = MockChatCompleting(responseJSON: response)
+        let client = MockChatCompleting(responseJSON: nil)
+        let decider = FakeRevenueRecognitionColumnDecider()
 
         let (snapshot, source, audit) = await BusinessBreakdownResolver.resolve(
-            segments: segments, consolidatedSales: sales, client: client
+            segments: segments, consolidatedSales: sales, client: client, columnDecider: decider
         )
 
         #expect(source == .segmentInfoLLM)
         #expect(snapshot?.axis == "business")
         #expect(!(snapshot?.needsReview ?? true))
         #expect(audit?.profitDisclosed == true)
-        #expect(await client.timesCalled() == 1)
+        #expect(audit?.columnJev?.model == "typesafe/jev-1.13")
+        let labels = Set(snapshot?.rows.map(\.labelRaw) ?? [])
+        #expect(labels.contains("プリンティング"))
+        #expect(labels.contains("メディカル"))
+        #expect(await client.timesCalled() == 0)
     }
 
     /// swap 対象の収益認識関係注記が見つからず `BreakdownExtractor` 側のフォールバックで
@@ -315,57 +299,51 @@ private actor MockChatCompleting: ChatCompleting {
                 ),
             ]
         )
-        let response: [String: Any] = [
-            "applicable": true,
-            "unit": "million_yen",
-            "source_table_index": 0,
-            "period_column": "当連結会計年度",
-            "profit_disclosed": false,
-            "rows": [
-                ["label": "ラツーダ", "amount": 13_694, "profit": NSNull(), "row_kind": "segment"],
-                ["label": "ツイミーグ", "amount": 10_581, "profit": NSNull(), "row_kind": "segment"],
-            ],
-            "notes": "製品及びサービスごとの情報を採用",
-        ]
-        let client = MockChatCompleting(responseJSON: response)
+        let client = MockChatCompleting(responseJSON: nil)
+        let decider = FakeRevenueRecognitionColumnDecider()
 
         let (snapshot, source, _) = await BusinessBreakdownResolver.resolve(
-            segments: segments, consolidatedSales: 453_294_000_000, client: client
+            segments: segments, consolidatedSales: 453_294_000_000, client: client,
+            columnDecider: decider
         )
 
         #expect(source == .segmentInfoLLM)
         #expect(snapshot?.axis == "business")
-        #expect(await client.timesCalled() == 1)
+        let labels = Set(snapshot?.rows.map(\.labelRaw) ?? [])
+        #expect(labels.contains("ラツーダ"))
+        #expect(await client.timesCalled() == 0)
     }
 
-    /// issue #135: LLM が applicable=false・not_applicable_reason=geography_only を返した場合、
-    /// resolve() は not_found を返しつつ、その audit（理由込み）を呼び出し元へ持ち帰ること
-    /// （`BltServerFacade.resolveBusinessBreakdown` が `classifyNotApplicableReason` の
-    /// llmHint に使う）。以前は notFound 確定時に audit を nil で握り潰していた。
-    @Test func propagatesAuditWithGeographyOnlyReasonWhenLlmSaysNotApplicable() async throws {
-        let segments = try Self.segmentsResult(docID: "S100XTLJ")
-        #expect(segments.method == "html_table")
-        let sales = try #require(try Self.loadSales(code: "7751"))
-
-        let response: [String: Any] = [
-            "applicable": false,
-            "unit": "million_yen",
-            "source_table_index": 0,
-            "period_column": "当期",
-            "profit_disclosed": false,
-            "rows": [[String: Any]](),
-            "not_applicable_reason": "geography_only",
-            "notes": "地域別のみで事業別データが存在しない",
-        ]
-        let client = MockChatCompleting(responseJSON: response)
+    /// 地域別のみのセグメント情報表は事業軸として地域を採り、audit を持ち帰る。
+    @Test func geographyOnlySegmentInfoTableIsTakenNotDropped() async throws {
+        let segments = ExtractedBreakdown(
+            method: "html_table",
+            tables: [
+                BreakdownTable(
+                    heading: "セグメント情報",
+                    markdown: """
+                    | 区分 | 当期 |
+                    | 日本 | 600 |
+                    | 米国 | 400 |
+                    | 合計 | 1,000 |
+                    """,
+                    period: "当期",
+                    unitCaption: "百万円")
+            ],
+            facts: []
+        )
+        let client = MockChatCompleting(responseJSON: nil)
+        let decider = FakeRevenueRecognitionColumnDecider()
 
         let (snapshot, source, audit) = await BusinessBreakdownResolver.resolve(
-            segments: segments, consolidatedSales: sales, client: client
+            segments: segments, consolidatedSales: 1_000 * Financial.millionYen, client: client,
+            columnDecider: decider
         )
 
-        #expect(snapshot == nil)
-        #expect(source == .notFound)
-        #expect(audit?.notApplicableReason == "geography_only")
+        #expect(source == .segmentInfoLLM)
+        #expect(snapshot?.warnings.contains(SegmentInfoLLMNormalizer.warningGeographyTaken) == true)
+        #expect(audit?.columnJev != nil)
+        #expect(await client.timesCalled() == 0)
     }
 
     /// Jev が none_of_these のとき snapshot は無く、列選択の audit は持ち帰る。
