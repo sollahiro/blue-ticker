@@ -335,15 +335,27 @@ import Foundation
         #expect(result.salesLabel == "営業収益")
     }
 
-    /// 合算フォールバックはしない。合計タグが無ければ先勝ちの内訳のまま。
-    @Test func testTelecomBusinessComponentsAreNotSummedWhenNoTotal() {
+    /// 合計タグが無ければ業種別内訳を合算する（電気通信 + 附帯）。
+    @Test func testTelecomBusinessComponentsAreSummedWhenNoTotal() {
         let fs = makeFieldSet(
             ("OperatingRevenueOILTelecommunications", 52_291_000_000.0, 50_695_000_000.0),
             ("OperatingRevenueIncidentalELC", 34_057_000_000.0, 33_619_000_000.0)
         )
         let result = IncomeStatementExtractor.extract(fieldSet: fs, accountingStandard: "J-GAAP")
-        #expect(result.sales == 52_291_000_000.0)
-        #expect(result.salesPrior == 50_695_000_000.0)
+        #expect(result.sales == 86_348_000_000.0)
+        #expect(result.salesPrior == 84_314_000_000.0)
+        #expect(result.salesLabel == "営業収益")
+    }
+
+    /// 9127 玉井商船: 海運業収益合計 + その他事業収益。合計タグは無い。
+    @Test func testShippingAndOtherBusinessRevenueAreSummedWhenNoTotal() {
+        let fs = makeFieldSet(
+            ("ShippingBusinessRevenueWAT", 4_997_823_000.0, 5_273_015_000.0),
+            ("OtherBusinessRevenueWAT", 124_204_000.0, 116_037_000.0)
+        )
+        let result = IncomeStatementExtractor.extract(fieldSet: fs, accountingStandard: "J-GAAP")
+        #expect(result.sales == 5_122_027_000.0)
+        #expect(result.salesPrior == 5_389_052_000.0)
         #expect(result.salesLabel == "営業収益")
     }
 

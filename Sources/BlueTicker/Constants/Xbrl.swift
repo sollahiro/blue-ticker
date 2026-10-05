@@ -148,15 +148,37 @@ enum Xbrl {
 
     /// 本表が事業別に分割され合計行が無いときの連結営業収益合計（主要な経営指標等）。
     /// 9436 沖縄セルラー S100Y9T5: `jpcrp_cor:OperatingRevenue1SummaryOfBusinessResults`。
-    /// Statement 組立の売上 FieldSet にだけ載せる。合算フォールバックはしない。
+    /// Statement 組立の売上 FieldSet にだけ載せる。合計タグがあればそれを優先し、
+    /// 無いときだけ `operatingRevenueSplitGroups` の内訳を合算する。
     static let statementSalesSummaryTotalTags: [String] = [
         "OperatingRevenue1SummaryOfBusinessResults",
     ]
 
-    /// 本表の事業別内訳。合計タグが無いときの先勝ち候補であり、会社全体合計ではない。
-    static let operatingRevenueSplitComponentTags: Set<String> = [
-        "OperatingRevenueOILTelecommunications",
+    /// 本表の業種別営業収益内訳。同一グループ内のタグは会社全体合計ではなく兄弟内訳。
+    /// 合計タグ（`ShippingBusinessRevenueAndOtherOperatingRevenueWAT` /
+    /// `OperatingRevenue1SummaryOfBusinessResults` 等）があればそちらを優先する。
+    /// 合計が無く、グループ内に2つ以上の当期または前期値があるときだけ合算する。
+    /// 9127 玉井商船 S100Y90D: 海運業収益合計 + その他事業収益。
+    /// 9436 沖縄セルラー: 電気通信事業 + 附帯事業（合計タグがあれば合算しない）。
+    static let operatingRevenueSplitGroups: [[String]] = [
+        ["ShippingBusinessRevenueWAT", "OtherBusinessRevenueWAT"],
+        ["OperatingRevenueOILTelecommunications", "OperatingRevenueIncidentalELC"],
     ]
+
+    /// `operatingRevenueSplitGroups` の平坦化。先勝ちがここに当たるとき、合計タグ overlay
+    /// またはグループ合算の対象になる。
+    static let operatingRevenueSplitComponentTags: Set<String> = [
+        "ShippingBusinessRevenueWAT",
+        "OtherBusinessRevenueWAT",
+        "OperatingRevenueOILTelecommunications",
+        "OperatingRevenueIncidentalELC",
+    ]
+
+    /// 合算結果の由来タグ（`ShippingBusinessRevenueWAT+OtherBusinessRevenueWAT`）。
+    static func isOperatingRevenueSplitSum(_ tag: String) -> Bool {
+        let parts = tag.split(separator: "+", omittingEmptySubsequences: true).map(String.init)
+        return parts.count >= 2 && parts.allSatisfy { operatingRevenueSplitComponentTags.contains($0) }
+    }
 
     /// 保険売上（J-GAAP 経常収益 / IFRS 保険収益）。業種名では切らず、FieldSet に
     /// これらのタグがある filing を保険とみなす。

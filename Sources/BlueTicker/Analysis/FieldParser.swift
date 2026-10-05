@@ -310,9 +310,21 @@ func resolveItemPreferCurrent(_ fieldSet: FieldSet, tags: [String]) -> ResolvedI
     return fallback ?? ResolvedItem(tag: nil, current: nil, prior: nil)
 }
 
-/// Summary 売上。`netSalesTags` の先勝ち。事業別内訳の合算はしない。
+/// Summary 売上。`netSalesTags` の先勝ち。合計タグがあればそれを使う。
+/// 先勝ちが業種別内訳で、同一グループに2つ以上の値があるときだけ合算する。
 func resolveNetSales(_ fieldSet: FieldSet) -> ResolvedItem {
-    resolveItemPreferCurrent(fieldSet, tags: Xbrl.netSalesTags)
+    let current = resolveItemPreferCurrent(fieldSet, tags: Xbrl.netSalesTags)
+    guard let tag = current.tag,
+        let group = Xbrl.operatingRevenueSplitGroups.first(where: { $0.contains(tag) })
+    else {
+        return current
+    }
+    let currentCount = group.filter { fieldSet[$0]?.current != nil }.count
+    let priorCount = group.filter { fieldSet[$0]?.prior != nil }.count
+    guard currentCount >= 2 || priorCount >= 2 else {
+        return current
+    }
+    return resolveAggregate(fieldSet, componentTagLists: group.map { [$0] })
 }
 
 /// 複数コンポーネントを積み上げ合算する。

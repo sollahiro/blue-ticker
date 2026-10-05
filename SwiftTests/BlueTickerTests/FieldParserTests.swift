@@ -87,15 +87,44 @@ import Foundation
         #expect(result.current == 86_348.0)
     }
 
-    @Test func testResolveNetSalesDoesNotSumComponentsWhenNoTotal() {
+    @Test func testResolveNetSalesSumsComponentsWhenNoTotal() {
         let fs = makeFieldSet(
             ("OperatingRevenueOILTelecommunications", 52_291.0, 50_695.0),
             ("OperatingRevenueIncidentalELC", 34_057.0, 33_619.0)
         )
         let result = resolveNetSales(fs)
-        #expect(result.tag == "OperatingRevenueOILTelecommunications")
-        #expect(result.current == 52_291.0)
-        #expect(result.prior == 50_695.0)
+        #expect(result.tag == "OperatingRevenueOILTelecommunications+OperatingRevenueIncidentalELC")
+        #expect(result.current == 86_348.0)
+        #expect(result.prior == 84_314.0)
+    }
+
+    @Test func testResolveNetSalesSumsShippingAndOtherBusinessWhenNoTotal() {
+        let fs = makeFieldSet(
+            ("ShippingBusinessRevenueWAT", 4_997_823_000.0, 5_273_015_000.0),
+            ("OtherBusinessRevenueWAT", 124_204_000.0, 116_037_000.0)
+        )
+        let result = resolveNetSales(fs)
+        #expect(result.tag == "ShippingBusinessRevenueWAT+OtherBusinessRevenueWAT")
+        #expect(result.current == 5_122_027_000.0)
+        #expect(result.prior == 5_389_052_000.0)
+    }
+
+    @Test func testResolveNetSalesDoesNotSumSingleShippingComponent() {
+        let fs = makeFieldSet(("ShippingBusinessRevenueWAT", 15_509_566_000.0, nil))
+        let result = resolveNetSales(fs)
+        #expect(result.tag == "ShippingBusinessRevenueWAT")
+        #expect(result.current == 15_509_566_000.0)
+    }
+
+    @Test func testResolveNetSalesPrefersWatCombinedTotalOverComponents() {
+        let fs = makeFieldSet(
+            ("ShippingBusinessRevenueAndOtherOperatingRevenueWAT", 1_018_364_000_000.0, nil),
+            ("ShippingBusinessRevenueWAT", 900_000_000_000.0, nil),
+            ("OtherBusinessRevenueWAT", 118_364_000_000.0, nil)
+        )
+        let result = resolveNetSales(fs)
+        #expect(result.tag == "ShippingBusinessRevenueAndOtherOperatingRevenueWAT")
+        #expect(result.current == 1_018_364_000_000.0)
     }
 
     @Test func testResolveNetSalesLeavesNetSalesUnchanged() {

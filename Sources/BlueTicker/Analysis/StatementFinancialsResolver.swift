@@ -43,8 +43,9 @@ enum StatementFinancialsResolver {
     /// US-GAAP は HTML Statement 行のラベルから仮想タグ FieldSet を組み立て、既存 Extractor へ渡す。
     /// J-GAAP / IFRS は Statement が採用したタグだけを許可した FieldSet で Extractor を回す
     /// （SummaryOfBusinessResults 等の本表外タグは混ぜない。コンテキストは元 fact を保持）。
-    /// 例外: 本表が事業別に分割され合計行が無い会社（9436 S100Y9T5）は、
-    /// `statementSalesSummaryTotalTags` だけを売上 FieldSet へ載せる。
+    /// 例外: 本表が業種別営業収益に分割され合計行が無い会社は、
+    /// `statementSalesSummaryTotalTags` を売上 FieldSet へ載せる。それも無ければ
+    /// `operatingRevenueSplitGroups` の内訳を合算する（9127 S100Y90D）。
     static func resolve(xbrlDir: URL) -> StatementFinancialsValues? {
         let tagElements = XBRLUtils.collectAllNumericElements(in: xbrlDir, nilAsZero: false)
         guard !tagElements.isEmpty else { return nil }
@@ -99,6 +100,7 @@ enum StatementFinancialsResolver {
         overlayStatementLineCurrents(&equityDurationFS, lines: year.changesInEquity)
 
         // 売上だけ、本表に合計行が無いときの連結営業収益合計（主要な経営指標等）を載せる。
+        // 合計タグが無ければ resolveNetSales が業種別内訳を合算する。
         // OP/GP など他 Extractor の durationFS には混ぜない。
         var salesFS = durationFS
         overlayStatementSalesSummaryTotals(&salesFS, tagElements: tagElements)
@@ -508,7 +510,8 @@ enum StatementFinancialsResolver {
 
     /// 本表に連結営業収益合計行が無いときの明示合計（`statementSalesSummaryTotalTags`）。
     /// 本表が既に NetSales / RWY / ELE 等の合計を採っている会社には載せない。
-    /// 連結 CurrentYearDuration を売上 FieldSet へ載せる。合算はしない。
+    /// 連結 CurrentYearDuration を売上 FieldSet へ載せる。合計タグが無ければ
+    /// `resolveNetSales` が同一グループの業種別内訳を合算する。
     static func overlayStatementSalesSummaryTotals(
         _ fieldSet: inout FieldSet, tagElements: XbrlTagElements
     ) {
