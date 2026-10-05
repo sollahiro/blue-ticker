@@ -1,7 +1,6 @@
 // `segments` キー自体が html_table を返すケース（キヤノン US-GAAP 注23、事業が列・指標が行）
 // を、決定論の表構造チェック + Jev の列・行選択で BreakdownSnapshot（axis:"product_service"）へ正規化する。
-// Luna / Chat Completions / `OPENAI_BUSINESS_MODEL` は使わない。
-// 地域別経路（`GeographyBreakdownLLMNormalizer`）は触らない。
+// Chat Completions は使わない。地域別も同じ Jev 列選択（`GeographyBreakdownLLMNormalizer`）。
 // 表構造は収益認識と同じ 4 段（ラベル列、group/category、subtotal/segment、同じ合計の並行ブロック）。
 // docs/breakdown.md
 

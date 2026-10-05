@@ -15,11 +15,8 @@ import Vapor
 private func makeMcpContext() -> BltServerContext {
     let dir = FileManager.default.temporaryDirectory
         .appendingPathComponent("blt-mcp-route-tests-\(UUID().uuidString)", isDirectory: true)
-    let chatClient = ChatCompletionClient(
-        endpoint: ChatCompletionEndpoint(baseURL: "", apiKey: "", model: ""))
     return BltServerContext(
-        apiKey: "test-key", cacheDir: dir, businessChatClient: chatClient,
-        geographyChatClient: chatClient)
+        apiKey: "test-key", cacheDir: dir)
 }
 
 private func withMcpApp(

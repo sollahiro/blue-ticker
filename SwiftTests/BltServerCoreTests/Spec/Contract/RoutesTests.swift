@@ -20,11 +20,8 @@ import Vapor
 private func makeContext() -> BltServerContext {
     let dir = FileManager.default.temporaryDirectory
         .appendingPathComponent("blt-routes-tests-\(UUID().uuidString)", isDirectory: true)
-    let chatClient = ChatCompletionClient(
-        endpoint: ChatCompletionEndpoint(baseURL: "", apiKey: "", model: ""))
     return BltServerContext(
-        apiKey: "test-key", cacheDir: dir, businessChatClient: chatClient,
-        geographyChatClient: chatClient)
+        apiKey: "test-key", cacheDir: dir)
 }
 
 /// ルート登録済みの Application を作って body を実行する。

@@ -746,7 +746,7 @@ enum RevenueRecognitionCandidates {
         }
     }
 
-    private static func dataAmounts(table: ParsedTable, column: Int) -> [Int: Double] {
+    static func dataAmounts(table: ParsedTable, column: Int) -> [Int: Double] {
         var amounts: [Int: Double] = [:]
         for (index, row) in table.grid.enumerated() where index >= table.headerRowCount {
             guard column < row.count, let value = parseAmount(row[column]) else { continue }

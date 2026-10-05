@@ -244,8 +244,6 @@ import Testing
     private func noteContext(decider: (any SegmentNoteDeciding)?) -> BltServerContext {
         BltServerContext(
             apiKey: "test", cacheDir: URL(fileURLWithPath: NSTemporaryDirectory()),
-            businessChatClient: UnavailableChatClient(),
-            geographyChatClient: UnavailableChatClient(),
             segmentNoteDecider: decider)
     }
 

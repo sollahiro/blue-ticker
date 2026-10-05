@@ -102,7 +102,6 @@ import Testing
         let (snapshot, source, _) = await BusinessBreakdownResolver.resolve(
             segments: extracted,
             consolidatedSales: 100 * Financial.millionYen,
-            client: UnavailableChatClient(),
             segmentInfoDecider: FakeRevenueRecognitionColumnDecider())
         let snap = try #require(snapshot)
         #expect(source == .xbrlFacts)
@@ -269,8 +268,6 @@ import Testing
     private func noteContext(decider: (any SegmentNoteDeciding)?) -> BltServerContext {
         BltServerContext(
             apiKey: "test", cacheDir: URL(fileURLWithPath: NSTemporaryDirectory()),
-            businessChatClient: UnavailableChatClient(),
-            geographyChatClient: UnavailableChatClient(),
             segmentNoteDecider: decider)
     }
 }

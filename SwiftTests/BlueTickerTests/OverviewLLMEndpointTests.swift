@@ -65,7 +65,4 @@ import Testing
         #expect(endpoint.baseURL == Api.openrouterBaseURL)
     }
 
-    @Test func breakdownProviderEnvDoesNotAcceptOpenRouter() {
-        #expect(LLMProvider.fromEnv(["LLM_PROVIDER": "openrouter"]) == nil)
-    }
 }

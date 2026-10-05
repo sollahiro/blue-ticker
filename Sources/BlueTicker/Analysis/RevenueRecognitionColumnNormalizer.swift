@@ -1,6 +1,6 @@
 // 収益認識関係注記の html_table を、Jev の列選択 + 決定論の行組立で BreakdownSnapshot にする。
-// Jev は当期の全社金額列（セグメント列があるときは合計列）だけを選ぶ。行・ラベル・金額は書かない。
-// Luna / Chat Completions は使わない。
+// Jev は当期の全社金額列（セグメント列があるときは合計列）だけを選ぶ。
+// 行・ラベル・金額は決定論。Chat Completions は使わない。
 
 import Foundation
 

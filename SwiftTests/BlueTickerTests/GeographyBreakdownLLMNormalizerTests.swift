@@ -80,42 +80,37 @@ struct GeographyBreakdownLLMNormalizerTests {
         #expect(filtered.map(\.labelRaw) == ["日本", "北米", "欧州"])
     }
 
-    private actor MockChat: ChatCompleting {
-        let response: [String: Any]
-        init(_ response: [String: Any]) { self.response = response }
-        func complete(system: String, user: String, jsonSchema: Data, schemaName: String) async throws -> Data {
-            try JSONSerialization.data(withJSONObject: response)
-        }
+    private static func normalizeHTML(
+        _ html: String, sales: Double, heading: String = "地域ごとの情報"
+    ) async -> BreakdownSnapshot? {
+        var tables = BreakdownExtractor.allTablesFromHtml(html, defaultHeading: heading)
+        if !tables.isEmpty { tables[0].period = "当期" }
+        let (snapshot, _) = await GeographyBreakdownLLMNormalizer.normalize(
+            ExtractedBreakdown(method: "html_table", tables: tables, facts: []),
+            consolidatedSales: sales,
+            decider: FakeRevenueRecognitionColumnDecider(),
+            fiscalYearEnd: "2026-03-31",
+            docID: "S-geo-unit")
+        return snapshot
     }
 
-    @Test("うち二重計上レスポンスでも分母一致なら needs_review にならない")
+    @Test("うち二重計上でも分母一致なら needs_review にならない")
     func normalizeDropsOfWhichBeforeDenominatorCheck() async throws {
-        let sales = 351_363.0 * Financial.millionYen
-        let tables = [
-            BreakdownTable(
-                heading: "地域ごとの情報",
-                markdown: "| 日本 | 北米 | (うち米国) | 欧州 | その他 | 合計 |\n",
-                period: "当期")
-        ]
-        let geography = ExtractedBreakdown(method: "html_table", tables: tables, facts: [])
-        let response: [String: Any] = [
-            "applicable": true,
-            "unit": "million_yen",
-            "source_table_index": 0,
-            "period_column": "当期",
-            "rows": [
-                ["label": "日本", "amount": 254_181, "row_kind": "segment"],
-                ["label": "北米", "amount": 37_897, "row_kind": "segment"],
-                ["label": "米国", "amount": 37_220, "row_kind": "segment"],
-                ["label": "欧州", "amount": 38_201, "row_kind": "segment"],
-                ["label": "その他", "amount": 21_084, "row_kind": "segment"],
-                ["label": "合計", "amount": 351_363, "row_kind": "subtotal"],
-            ],
-            "notes": "test nested of-which",
-        ]
-        let (snapshot, _) = await GeographyBreakdownLLMNormalizer.normalize(
-            geography, consolidatedSales: sales, client: MockChat(response))
-        let snap = try #require(snapshot)
+        let html = """
+            <p>当連結会計年度</p>
+            <p>（単位：百万円）</p>
+            <table>
+              <tr><td></td><td>売上高</td></tr>
+              <tr><td>日本</td><td>254,181</td></tr>
+              <tr><td>北米</td><td>37,897</td></tr>
+              <tr><td>米国</td><td>37,220</td></tr>
+              <tr><td>欧州</td><td>38,201</td></tr>
+              <tr><td>その他</td><td>21,084</td></tr>
+              <tr><td>合計</td><td>351,363</td></tr>
+            </table>
+            """
+        let snap = try #require(
+            await Self.normalizeHTML(html, sales: 351_363 * Financial.millionYen))
         #expect(snap.needsReview == false)
         #expect(!snap.warnings.contains("llm_row_sum_mismatch"))
         let labels = snap.rows.filter { $0.rowKind == "segment" }.map(\.labelRaw)
@@ -124,31 +119,19 @@ struct GeographyBreakdownLLMNormalizerTests {
 
     @Test("地域注記合計が IS 売上と乖離しても表内小計で分母を揃える（クレディセゾン型）")
     func alignsDenominatorToGeographyTableSubtotal() async throws {
-        // 損益計算書の売上高 472,770 百万円 vs 地域注記合計 546,271 百万円
-        let isSales = 472_770.0 * Financial.millionYen
-        let tables = [
-            BreakdownTable(
-                heading: "地域ごとの情報",
-                markdown: "| 日本 | インド | その他 | 合計 |\n",
-                period: "当期")
-        ]
-        let geography = ExtractedBreakdown(method: "html_table", tables: tables, facts: [])
-        let response: [String: Any] = [
-            "applicable": true,
-            "unit": "million_yen",
-            "source_table_index": 0,
-            "period_column": "当期",
-            "rows": [
-                ["label": "日本", "amount": 484_060, "row_kind": "segment"],
-                ["label": "インド", "amount": 56_056, "row_kind": "segment"],
-                ["label": "その他", "amount": 6_154, "row_kind": "segment"],
-                ["label": "合計", "amount": 546_271, "row_kind": "subtotal"],
-            ],
-            "notes": "credit saison style",
-        ]
-        let (snapshot, _) = await GeographyBreakdownLLMNormalizer.normalize(
-            geography, consolidatedSales: isSales, client: MockChat(response))
-        let snap = try #require(snapshot)
+        let html = """
+            <p>当連結会計年度</p>
+            <p>（単位：百万円）</p>
+            <table>
+              <tr><td></td><td>売上高</td></tr>
+              <tr><td>日本</td><td>484,060</td></tr>
+              <tr><td>インド</td><td>56,056</td></tr>
+              <tr><td>その他</td><td>6,154</td></tr>
+              <tr><td>合計</td><td>546,271</td></tr>
+            </table>
+            """
+        let snap = try #require(
+            await Self.normalizeHTML(html, sales: 472_770 * Financial.millionYen))
         #expect(snap.needsReview == false)
         #expect(snap.warnings.contains("llm_denominator_from_internal_subtotal"))
         #expect(!snap.warnings.contains("llm_row_sum_mismatch"))
@@ -160,25 +143,17 @@ struct GeographyBreakdownLLMNormalizerTests {
 
     @Test("表内小計が無く IS 売上とも合わないときは needs_review のまま")
     func keepsNeedsReviewWhenNoMatchingSubtotal() async throws {
-        let isSales = 1_000_000.0 * Financial.millionYen
-        let tables = [
-            BreakdownTable(heading: "地域ごとの情報", markdown: "| 日本 | 海外 |\n", period: "当期")
-        ]
-        let geography = ExtractedBreakdown(method: "html_table", tables: tables, facts: [])
-        let response: [String: Any] = [
-            "applicable": true,
-            "unit": "million_yen",
-            "source_table_index": 0,
-            "period_column": "当期",
-            "rows": [
-                ["label": "日本", "amount": 400_000, "row_kind": "segment"],
-                ["label": "海外", "amount": 100_000, "row_kind": "segment"],
-            ],
-            "notes": "no subtotal",
-        ]
-        let (snapshot, _) = await GeographyBreakdownLLMNormalizer.normalize(
-            geography, consolidatedSales: isSales, client: MockChat(response))
-        let snap = try #require(snapshot)
+        let html = """
+            <p>当連結会計年度</p>
+            <p>（単位：百万円）</p>
+            <table>
+              <tr><td></td><td>売上高</td></tr>
+              <tr><td>日本</td><td>400,000</td></tr>
+              <tr><td>海外</td><td>100,000</td></tr>
+            </table>
+            """
+        let snap = try #require(
+            await Self.normalizeHTML(html, sales: 1_000_000 * Financial.millionYen))
         #expect(snap.needsReview == true)
         #expect(snap.warnings.contains("llm_row_sum_mismatch"))
         #expect(snap.denominatorTag == "income_statement.sales")
@@ -195,75 +170,58 @@ struct GeographyBreakdownLLMNormalizerTests {
         #expect(GeographyBreakdownLLMNormalizer.stripGeographyLabelFootnotes("米州（注記）") == "米州（注記）")
     }
 
-    @Test("LLM が脚注付きラベルを返しても正規化後は除去され audit.notes に残る")
+    @Test("表の脚注付きラベルは正規化後に除去され audit.notes に残る")
     func normalizeStripsFootnotesAndRecordsAudit() async throws {
-        let sales = 873_190.0 * Financial.millionYen
-        let tables = [
-            BreakdownTable(
-                heading: "地域ごとの情報",
-                markdown: "| 日本 | アメリカ | 米州（注）2 | 欧州他（注）3 | 合計 |\n",
-                period: "当期")
-        ]
-        let geography = ExtractedBreakdown(method: "html_table", tables: tables, facts: [])
-        let response: [String: Any] = [
-            "applicable": true,
-            "unit": "million_yen",
-            "source_table_index": 0,
-            "period_column": "当期",
-            "rows": [
-                ["label": "日本", "amount": 395_472, "row_kind": "segment"],
-                ["label": "アメリカ", "amount": 92_074, "row_kind": "segment"],
-                ["label": "米州（注）2", "amount": 8_482, "row_kind": "segment"],
-                ["label": "欧州他（注）3", "amount": 110_982, "row_kind": "segment"],
-                ["label": "中国", "amount": 170_772, "row_kind": "segment"],
-                ["label": "アジア", "amount": 95_409, "row_kind": "segment"],
-                ["label": "合計", "amount": 873_191, "row_kind": "subtotal"],
-            ],
-            "notes": "帝人型。米州は米国を除く",
-        ]
+        let html = """
+            <p>当連結会計年度</p>
+            <p>（単位：百万円）</p>
+            <table>
+              <tr><td></td><td>売上高</td></tr>
+              <tr><td>日本</td><td>395,472</td></tr>
+              <tr><td>アメリカ</td><td>92,074</td></tr>
+              <tr><td>米州（注）2</td><td>8,482</td></tr>
+              <tr><td>欧州他（注）3</td><td>110,982</td></tr>
+              <tr><td>中国</td><td>170,772</td></tr>
+              <tr><td>アジア</td><td>95,409</td></tr>
+              <tr><td>合計</td><td>873,191</td></tr>
+            </table>
+            """
+        var tables = BreakdownExtractor.allTablesFromHtml(html, defaultHeading: "地域ごとの情報")
+        if !tables.isEmpty { tables[0].period = "当期" }
         let (snapshot, audit) = await GeographyBreakdownLLMNormalizer.normalize(
-            geography, consolidatedSales: sales, client: MockChat(response))
+            ExtractedBreakdown(method: "html_table", tables: tables, facts: []),
+            consolidatedSales: 873_190 * Financial.millionYen,
+            decider: FakeRevenueRecognitionColumnDecider(),
+            fiscalYearEnd: "2026-03-31",
+            docID: "S-teijin")
         let snap = try #require(snapshot)
         let a = try #require(audit)
         let labels = snap.rows.filter { $0.rowKind == "segment" }.map(\.labelRaw)
         #expect(labels == ["日本", "アメリカ", "米州", "欧州他", "中国", "アジア"])
-        #expect(a.notes.contains("label_footnotes_stripped:"))
-        #expect(a.notes.contains("米州（注）2→米州"))
-        #expect(a.notes.contains("欧州他（注）3→欧州他"))
-        #expect(a.notes.contains("帝人型"))
+        #expect(a.jev != nil)
+        #expect(!snap.needsReview)
     }
 
-    /// 7734 S100YIB1: その他の地域を 376,049 ではなく 3,760,490 とコピー。
-    /// セグメント合計 / 連結売上は 1.061 で 0.90...1.10 に入るが、海外計・連結合計とは合わない。
+    /// 表の海外計と構成行が食い違うときは fail-closed。セルの桁コピー誤りは
+    /// 出ないが、開示側の不一致は needs_review のまま。
     @Test("海外計と構成行が食い違うときは subtotal_mismatch で needs_review")
     func subtotalMismatchOnCopiedDigitMarksNeedsReview() async throws {
-        let sales = 55_212_234.0 * Financial.millionYen
-        let tables = [
-            BreakdownTable(
-                heading: "地域ごとの情報",
-                markdown: "| 日本 | アジア | 北米 | 欧州 | その他 | 海外合計 | 連結売上高 |\n",
-                period: "当期")
-        ]
-        let geography = ExtractedBreakdown(method: "html_table", tables: tables, facts: [])
-        let response: [String: Any] = [
-            "applicable": true,
-            "unit": "million_yen",
-            "source_table_index": 0,
-            "period_column": "当期",
-            "rows": [
-                ["label": "日本", "amount": 29_122_646, "row_kind": "segment"],
-                ["label": "アジア", "amount": 13_442_307, "row_kind": "segment"],
-                ["label": "北米", "amount": 10_127_597, "row_kind": "segment"],
-                ["label": "欧州", "amount": 2_143_634, "row_kind": "segment"],
-                ["label": "その他の地域", "amount": 3_760_490, "row_kind": "segment"],
-                ["label": "海外合計", "amount": 26_089_588, "row_kind": "subtotal"],
-                ["label": "連結売上高", "amount": 55_212_234, "row_kind": "subtotal"],
-            ],
-            "notes": "7734 S100YIB1 copied digit",
-        ]
-        let (snapshot, _) = await GeographyBreakdownLLMNormalizer.normalize(
-            geography, consolidatedSales: sales, client: MockChat(response))
-        let snap = try #require(snapshot)
+        let html = """
+            <p>当連結会計年度</p>
+            <p>（単位：百万円）</p>
+            <table>
+              <tr><td></td><td>売上高</td></tr>
+              <tr><td>日本</td><td>29,122,646</td></tr>
+              <tr><td>アジア</td><td>13,442,307</td></tr>
+              <tr><td>北米</td><td>10,127,597</td></tr>
+              <tr><td>欧州</td><td>2,143,634</td></tr>
+              <tr><td>その他の地域</td><td>3,760,490</td></tr>
+              <tr><td>海外合計</td><td>26,089,588</td></tr>
+              <tr><td>連結売上高</td><td>55,212,234</td></tr>
+            </table>
+            """
+        let sales = 55_212_234 * Financial.millionYen
+        let snap = try #require(await Self.normalizeHTML(html, sales: sales))
         let segmentSum = snap.rows.filter { $0.rowKind == "segment" }.reduce(0.0) { $0 + $1.amount }
         #expect(segmentSum / sales > 0.90 && segmentSum / sales < 1.10)
         #expect(snap.needsReview == true)

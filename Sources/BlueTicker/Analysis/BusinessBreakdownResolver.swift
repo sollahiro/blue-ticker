@@ -29,7 +29,7 @@ enum BusinessBreakdownResolver {
     /// product_service 軸の BreakdownSnapshot を解決する。LLM 呼び出しは html_table 経路でのみ発生し、
     /// xbrl_facts で business 判定できた場合は呼び出さない（決定的経路を優先し LLM 費用を最小化）。
     static func resolve(
-        segments: ExtractedBreakdown, consolidatedSales: Double?, client: ChatCompleting,
+        segments: ExtractedBreakdown, consolidatedSales: Double?,
         labelsByTag: [String: String] = [:],
         denominatorTag: String? = nil,
         columnDecider: (any RevenueRecognitionColumnDeciding)? = nil,
@@ -40,7 +40,6 @@ enum BusinessBreakdownResolver {
         let factsSnapshot = BreakdownNormalizer.normalize(
             ExtractedBreakdown(method: "xbrl_facts", tables: [], facts: segments.facts),
             consolidatedSales: consolidatedSales, labelsByTag: labelsByTag)
-        _ = client
 
         // 1) xbrl_facts 経路（決定的、LLM不要）。axis が product_service かつ needs_review が
         //    立っていなければ確信度が高いのでそのまま採用する。
@@ -66,7 +65,7 @@ enum BusinessBreakdownResolver {
         //    「segments 自体が html_table（例: キヤノン注23）」かを振り分ける。
         // `method == "xbrl_facts"` でも tables が非空なら試す（facts 優先で method が
         // xbrl_facts になった会社が、facts の正規化失敗時に表スクレイピングへ
-        // フォールバックできるようにするため。issue調査 2026-07-21、Grok 4.5 レビュー指摘）。
+        // フォールバックできるようにするため）。
         // axis=product_service だが needs_review（表取り違えの疑い）の場合も同じ tables 経路を試す
         // （エーザイ旧filings型: 地域別 facts が誤って product_service と確定していたが、
         // classifyAxis 修正で needs_review=true になった後も、実際には製品別の html_table が
