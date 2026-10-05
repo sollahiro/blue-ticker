@@ -408,6 +408,23 @@ import Foundation
         #expect(!snapshot.needsReview)
     }
 
+    /// `収益(注)１` を売上行として列転置する（4324 型）。
+    @Test func parentheticalRevenueRowTransposes() async throws {
+        let markdown = """
+            | | 広告業 | 情報サービス業 | その他の事業 | 計 |
+            | 収益(注)１ | 800 | 300 | 143 | 1,243 |
+            | セグメント利益 | 10 | 5 | 1 | 16 |
+            """
+        let table = BreakdownTable(
+            heading: "セグメント情報", markdown: markdown, period: "当期", unitCaption: "百万円")
+        let sales = 1_243 * Financial.millionYen
+        let (snapshotOrNil, _) = await Self.normalize(tables: [table], sales: sales)
+        let snapshot = try #require(snapshotOrNil)
+        let ads = try #require(snapshot.rows.first { $0.labelRaw == "広告業" })
+        #expect(ads.amount == 800 * Financial.millionYen)
+        #expect(!snapshot.needsReview)
+    }
+
     /// 地域列を採ったが同じ注記に製品表がある → 公開しない（武田 / 3422 型）。
     @Test func geographyLabelsNeedReviewWhenProductTableExists() async throws {
         let product = BreakdownTable(

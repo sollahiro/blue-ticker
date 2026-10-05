@@ -431,16 +431,20 @@ import Testing
             #expect(business.outcome.needsReview == false)
             #expect(business.outcome.omissionReason == breakdownNotApplicableSingleSegmentDisclosed)
             let audit = try #require(business.outcome.audit)
-            #expect(audit.calls.isEmpty)
             #expect(audit.model == "")
             #expect(audit.applied == true)
             #expect(audit.decisionSource == SegmentNoteDecision.dedicatedTagDecisionSource)
             #expect(audit.sentences == [tagText])
+            let reviewCall = audit.calls.first {
+                $0.question == OpenRouterSegmentNoteDecider.reviewDecisionQuestion
+            }
+            #expect(reviewCall?.selected == OpenRouterSegmentNoteDecider.reviewKeep)
+            #expect(reviewCall?.applied == false)
             let json = LLMBreakdownAuditPayload.segmentNoteJev(audit).jsonObject()
             let jev = try #require(json["jev"] as? [String: Any])
             #expect(jev["decision_source"] as? String == SegmentNoteDecision.dedicatedTagDecisionSource)
-            #expect((jev["calls"] as? [Any])?.isEmpty == true)
             #expect(await decider.tableCalls == 0)
+            #expect(await decider.reviewCalls == 1)
 
             let withoutKey = await noteContext(decider: nil).segmentsAfterNoteDecision(
                 axis: .business, docID: "S100LS0U", extracted: extracted, xbrlDir: dir,
@@ -480,6 +484,7 @@ import Testing
             #expect(business.outcome.omissionReason == breakdownNotApplicableSingleSegmentDisclosed)
             #expect(business.outcome.audit?.decisionSource == SegmentNoteDecision.dedicatedTagDecisionSource)
             #expect(await decider.tableCalls == 0)
+            #expect(await decider.reviewCalls == 1)
         }
     }
 
@@ -628,19 +633,26 @@ import Testing
 
 private actor FakeSegmentNoteDecider: SegmentNoteDeciding {
     private(set) var tableCalls = 0
+    private(set) var reviewCalls = 0
     let selection: SegmentNoteTableSelection
     let tableProbability: Double?
     let omissionsBySnippet: [String: SegmentNoteOmission]
     let omissionProbability: Double?
+    let reviewSelected: String
+    let reviewProbability: Double?
 
     init(
         selection: SegmentNoteTableSelection, omissionsBySnippet: [String: SegmentNoteOmission],
-        tableProbability: Double? = 1, omissionProbability: Double? = 1
+        tableProbability: Double? = 1, omissionProbability: Double? = 1,
+        reviewSelected: String = OpenRouterSegmentNoteDecider.reviewKeep,
+        reviewProbability: Double? = 1
     ) {
         self.selection = selection
         self.tableProbability = tableProbability
         self.omissionsBySnippet = omissionsBySnippet
         self.omissionProbability = omissionProbability
+        self.reviewSelected = reviewSelected
+        self.reviewProbability = reviewProbability
     }
 
     func selectBreakdownTable(
@@ -667,6 +679,20 @@ private actor FakeSegmentNoteDecider: SegmentNoteDeciding {
             probability: omissionProbability,
             options: OpenRouterSegmentNoteDecider.omissionOptionKeys,
             sentences: [sentence])
+    }
+
+    func reviewDecision(
+        proposal: SegmentNoteReviewProposal,
+        tables: [SegmentNoteTableCandidate],
+        sentences: [String]
+    ) async -> SegmentNoteConsultedChoice {
+        reviewCalls += 1
+        return SegmentNoteConsultedChoice(
+            question: OpenRouterSegmentNoteDecider.reviewDecisionQuestion,
+            selected: reviewSelected,
+            probability: reviewProbability,
+            options: tables.map { "\($0.index)" } + [OpenRouterSegmentNoteDecider.reviewKeep],
+            sentences: sentences)
     }
 }
 

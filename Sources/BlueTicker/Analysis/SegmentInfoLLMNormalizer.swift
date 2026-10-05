@@ -131,17 +131,35 @@ enum SegmentInfoLLMNormalizer {
             profitDisclosed: false, notes: notes, jev: columnJev, columnJev: columnJev)
 
         guard let resolved else { return (nil, audit) }
-        guard let column = columns.first(where: { $0.key == resolved.key }),
-              let table = parsed.first(where: { $0.tableIndex == column.tableIndex })
+        guard let selectedColumn = columns.first(where: { $0.key == resolved.key }),
+              let selectedTable = parsed.first(where: { $0.tableIndex == selectedColumn.tableIndex })
         else { return (nil, audit) }
-
-        let transposed = isSegmentColumnMatrix(table)
-        let (built, profits, groupSumReview, parallelUnresolved, transposedWhole) =
-            buildSnapshotRows(
-                table: table, column: column, choice: choice, transposed: transposed,
-                fiscalYearEnd: fiscalYearEnd)
+        var column = selectedColumn
+        var table = selectedTable
+        let assembled = assembleRowsRecoveringOtherTables(
+            selectedTable: table, selectedColumn: column, choice: choice,
+            parsed: parsed, columns: columns, fiscalYearEnd: fiscalYearEnd)
+        table = assembled.table
+        column = assembled.column
+        let built = assembled.built
+        let profits = assembled.profits
+        let groupSumReview = assembled.groupSumReview
+        let parallelUnresolved = assembled.parallelUnresolved
+        let transposedWhole = assembled.transposedWhole
+        if assembled.recovered {
+            notes += " recovered_table=\(table.tableIndex)"
+            audit.notes = notes
+        }
         if built.isEmpty && constraint == .geographyOnly {
             audit.notApplicableReason = BusinessBreakdownNotApplicableReason.geographyOnly.rawValue
+            return (nil, audit)
+        }
+        if isSingleSegmentDisclosure(constraint: constraint, table: table) {
+            audit.notApplicableReason = breakdownNotApplicableSingleSegmentDisclosed
+            stampJev(&audit, applied: true, needsReview: false)
+            return (nil, audit)
+        }
+        if built.isEmpty {
             return (nil, audit)
         }
 
@@ -149,7 +167,7 @@ enum SegmentInfoLLMNormalizer {
             .confidenceThreshold
         var warnings: [String] = []
         var needsReview = belowThreshold || groupSumReview || resolved.forceReview
-            || parallelUnresolved || built.isEmpty
+            || parallelUnresolved
         if belowThreshold { warnings.append(warningLowConfidence) }
         if resolved.forceReview { warnings.append(warningNoneOfTheseOverridden) }
         if parallelUnresolved { warnings.append(warningParallelDimensions) }
@@ -191,12 +209,6 @@ enum SegmentInfoLLMNormalizer {
             return (nil, audit)
         }
         guard denominator != 0 else { return (nil, audit) }
-
-        if isSingleSegmentDisclosure(constraint: constraint, table: table) {
-            audit.notApplicableReason = breakdownNotApplicableSingleSegmentDisclosed
-            stampJev(&audit, applied: !belowThreshold, needsReview: false)
-            return (nil, audit)
-        }
 
         var denom = denominator
         var denomTag = resolvedDenomTag
@@ -300,6 +312,9 @@ enum SegmentInfoLLMNormalizer {
             isCurrentPeriodRowLabel($0, among: rows, fiscalYearEnd: fiscalYearEnd)
         }) {
             return current
+        }
+        if let revenue = rows.first(where: { isBareRevenueSalesLabel($0.label) }) {
+            return revenue
         }
         return rows.first { isGenericSalesLabel($0.label) }
     }
@@ -416,7 +431,16 @@ enum SegmentInfoLLMNormalizer {
         if stripped.contains("売上原価") || stripped.contains("売上総利益") { return false }
         if stripped.contains("セグメント間") { return false }
         if salesRowPreferred.contains(where: { isSalesLabel(stripped, marker: $0) }) { return true }
+        if isBareRevenueSalesLabel(stripped) { return true }
         return stripped == "売上高" || stripped.hasPrefix("売上高")
+    }
+
+    /// 4324 の「収益(注)１」など、売上行マーカーが「収益」だけの注記付きラベル。
+    /// `収益認識` や `その他の源泉から認識した収益` は採らない。
+    static func isBareRevenueSalesLabel(_ label: String) -> Bool {
+        let stripped = stripLeadingEnumeration(label)
+        if stripped == "収益" { return true }
+        return stripped.hasPrefix("収益(") || stripped.hasPrefix("収益（")
     }
 
     static func isSalesLabel(_ label: String, marker: String) -> Bool {
@@ -544,6 +568,127 @@ enum SegmentInfoLLMNormalizer {
             groupSumReview = false
         }
         return (built, [:], groupSumReview, parallelUnresolved, transposedWhole)
+    }
+
+    /// 選んだ表が空行なら、製品表・他のマトリクスから組める行を探す。
+    /// それでも空なら呼び出し側がスナップショットを作らない（空 LLM で facts を隠さない）。
+    private static func assembleRowsRecoveringOtherTables(
+        selectedTable: RevenueRecognitionCandidates.ParsedTable,
+        selectedColumn: RevenueRecognitionCandidates.AmountColumn,
+        choice: SegmentInfoChoice,
+        parsed: [RevenueRecognitionCandidates.ParsedTable],
+        columns: [RevenueRecognitionCandidates.AmountColumn],
+        fiscalYearEnd: String?
+    ) -> (
+        table: RevenueRecognitionCandidates.ParsedTable,
+        column: RevenueRecognitionCandidates.AmountColumn,
+        built: [RevenueRecognitionCandidates.BuiltRow],
+        profits: [String: Double],
+        groupSumReview: Bool,
+        parallelUnresolved: Bool,
+        transposedWhole: Double?,
+        recovered: Bool
+    ) {
+        func assemble(
+            table: RevenueRecognitionCandidates.ParsedTable,
+            column: RevenueRecognitionCandidates.AmountColumn
+        ) -> (
+            built: [RevenueRecognitionCandidates.BuiltRow],
+            profits: [String: Double],
+            groupSumReview: Bool,
+            parallelUnresolved: Bool,
+            transposedWhole: Double?
+        ) {
+            return buildSnapshotRows(
+                table: table, column: column, choice: choice,
+                transposed: isSegmentColumnMatrix(table), fiscalYearEnd: fiscalYearEnd)
+        }
+
+        let first = assemble(table: selectedTable, column: selectedColumn)
+        if !first.built.isEmpty {
+            return (
+                selectedTable, selectedColumn, first.built, first.profits,
+                first.groupSumReview, first.parallelUnresolved, first.transposedWhole, false)
+        }
+
+        var seen: Set<Int> = [selectedTable.tableIndex]
+        let recovery = preferredTables(parsed) + parsed
+        for candidate in recovery where !seen.contains(candidate.tableIndex) {
+            seen.insert(candidate.tableIndex)
+            guard let recoveryColumn = amountColumn(for: candidate, among: columns) else { continue }
+            let next = assemble(table: candidate, column: recoveryColumn)
+            if !next.built.isEmpty {
+                return (
+                    candidate, recoveryColumn, next.built, next.profits,
+                    next.groupSumReview, next.parallelUnresolved, next.transposedWhole, true)
+            }
+        }
+        return (
+            selectedTable, selectedColumn, first.built, first.profits,
+            first.groupSumReview, first.parallelUnresolved, first.transposedWhole, false)
+    }
+
+    static func amountColumn(
+        for table: RevenueRecognitionCandidates.ParsedTable,
+        among columns: [RevenueRecognitionCandidates.AmountColumn]
+    ) -> RevenueRecognitionCandidates.AmountColumn? {
+        let scoped = columns.filter { $0.tableIndex == table.tableIndex }
+        guard !scoped.isEmpty else { return nil }
+        let current = scoped.filter {
+            let header = RevenueRecognitionCandidates.compactCell($0.header)
+            return header.contains("当") || header.contains("合計") || header.contains("連結")
+        }
+        return current.last ?? scoped.last
+    }
+
+    /// 専用タグ省略の前に、製品・サービス別（または事業別）の組立可能表があるか。
+    static func hasUsableProductOrBusinessTable(_ tables: [BreakdownTable]) -> Bool {
+        if tables.contains(where: { $0.heading == BreakdownExtractor.productOrServiceHeading }) {
+            return true
+        }
+        let parsed = RevenueRecognitionCandidates.parse(tables: tables)
+        return parsed.contains(where: isDedicatedProductTable)
+    }
+
+    /// Jev が選んだ1表に閉じると、空行・前期・非製品表で製品表が見えなくなる。
+    /// 組立不能・前期（当期あり）・製品表があるのに選んだ表が製品でないときは閉じない。
+    static func shouldIsolateKeptTable(
+        index: Int,
+        tables: [BreakdownTable],
+        fiscalYearEnd: String?
+    ) -> Bool {
+        guard tables.indices.contains(index) else { return false }
+        let parsed = RevenueRecognitionCandidates.parse(tables: tables)
+        guard let selected = parsed.first(where: { $0.tableIndex == index }) else { return false }
+        if SegmentInfoPublishGuards.isPriorEraTable(
+            selected, among: parsed, fiscalYearEnd: fiscalYearEnd)
+        {
+            let current = parsed.contains {
+                $0.tableIndex != selected.tableIndex
+                    && !SegmentInfoPublishGuards.isPriorEraTable(
+                        $0, among: parsed, fiscalYearEnd: fiscalYearEnd)
+            }
+            if current { return false }
+        }
+        if hasUsableProductOrBusinessTable(tables), !isDedicatedProductTable(selected) {
+            return false
+        }
+        return canAssembleBusinessRows(selected)
+    }
+
+    static func canAssembleBusinessRows(
+        _ table: RevenueRecognitionCandidates.ParsedTable
+    ) -> Bool {
+        if isDedicatedProductTable(table) { return true }
+        if isSegmentColumnMatrix(table) {
+            return preferredSalesRow(in: metricRows(in: table)) != nil
+        }
+        let columns = table.columnHeaders.keys.sorted()
+        for column in columns {
+            let (built, _) = RevenueRecognitionCandidates.buildRows(table: table, column: column)
+            if !built.isEmpty { return true }
+        }
+        return false
     }
 
     private static func resolveMetricRow(

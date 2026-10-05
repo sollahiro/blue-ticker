@@ -246,20 +246,25 @@ enum BreakdownNormalizer {
         let subtotalCandidates = perMember.keys.filter { kinds[$0] == "subtotal" }
         let segmentSum = perMember.keys.filter { kinds[$0] == "segment" }
             .reduce(0.0) { $0 + perMember[$1]!.value }
+        let reconcilingSum = perMember.keys.filter { kinds[$0] == "reconciling" }
+            .reduce(0.0) { $0 + perMember[$1]!.value }
+        // 本社勘定等の reconciling を除くと、報告セグメント小計との距離が 5% を超えて
+        // 誤って needs_review になる（8316 S100LU5N）。分母照合は内部合計で見る。
+        let internalSum = segmentSum + reconcilingSum
         let denominator: Double
         var denominatorWarning: String?
-        if let closestToSegmentSum = subtotalCandidates.min(by: {
-            abs(perMember[$0]!.value - segmentSum) < abs(perMember[$1]!.value - segmentSum)
+        if let closestToInternalSum = subtotalCandidates.min(by: {
+            abs(perMember[$0]!.value - internalSum) < abs(perMember[$1]!.value - internalSum)
         }) {
-            denominator = perMember[closestToSegmentSum]!.value
+            denominator = perMember[closestToInternalSum]!.value
             // Grok 4.5 レビュー指摘: 小計候補が1件しかない場合（例: 全社合計タグが名称未収載で
             // 部分合計しか無い）、距離チェックそのものがスキップされ needsReview が立たない穴が
-            // あった。segment 行合計と大きく乖離する小計を採用したときは要確認とする。
-            if abs(denominator) > 0, abs(denominator - segmentSum) / abs(denominator) > 0.05 {
+            // あった。内部合計と大きく乖離する小計を採用したときは要確認とする。
+            if abs(denominator) > 0, abs(denominator - internalSum) / abs(denominator) > 0.05 {
                 denominatorWarning = "\(warningPrefix)_denominator_far_from_segment_sum"
             }
         } else {
-            denominator = segmentSum
+            denominator = internalSum != 0 ? internalSum : segmentSum
             denominatorWarning = "\(warningPrefix)_denominator_derived_from_segment_sum"
         }
         guard denominator != 0 else { return nil }

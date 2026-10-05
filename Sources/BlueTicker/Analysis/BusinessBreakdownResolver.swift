@@ -38,7 +38,8 @@ enum BusinessBreakdownResolver {
         docID: String = ""
     ) async -> (snapshot: BreakdownSnapshot?, source: BusinessBreakdownSource, audit: LLMBreakdownAudit?) {
         let factsSnapshot = BreakdownNormalizer.normalize(
-            segments, consolidatedSales: consolidatedSales, labelsByTag: labelsByTag)
+            ExtractedBreakdown(method: "xbrl_facts", tables: [], facts: segments.facts),
+            consolidatedSales: consolidatedSales, labelsByTag: labelsByTag)
         _ = client
 
         // 1) xbrl_facts 経路（決定的、LLM不要）。axis が business かつ needs_review が
@@ -81,7 +82,9 @@ enum BusinessBreakdownResolver {
                         segments, consolidatedSales: consolidatedSales, decider: columnDecider,
                         fiscalYearEnd: fiscalYearEnd, docID: docID, denominatorTag: denominatorTag)
                     lastAudit = audit
-                    if let snapshot { return (snapshot, .revenueRecognitionLLM, audit) }
+                    if let snapshot, hasUsableSegmentRows(snapshot) {
+                        return (snapshot, .revenueRecognitionLLM, audit)
+                    }
                 }
             } else if let infoDecider = segmentInfoDecider
                 ?? columnDecider.map({ SegmentInfoDeciderFromColumnDecider(columnDecider: $0) })
@@ -92,7 +95,9 @@ enum BusinessBreakdownResolver {
                     salesDenominatorTag: denominatorTag
                 )
                 lastAudit = audit
-                if let snapshot { return (snapshot, .segmentInfoLLM, audit) }
+                if let snapshot, hasUsableSegmentRows(snapshot) {
+                    return (snapshot, .segmentInfoLLM, audit)
+                }
             }
         }
 
@@ -104,6 +109,11 @@ enum BusinessBreakdownResolver {
         }
 
         return (nil, .notFound, lastAudit)
+    }
+
+    /// 空行の LLM スナップショットは `xbrl_facts` を隠すので採用しない（7273 S100YLTN）。
+    static func hasUsableSegmentRows(_ snapshot: BreakdownSnapshot) -> Bool {
+        snapshot.rows.contains { $0.rowKind == "segment" }
     }
 
     /// 専用タグがあり、選んだ収益分解表にカテゴリ行が無い（合計行だけ）ときは

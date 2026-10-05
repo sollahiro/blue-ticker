@@ -363,4 +363,17 @@ private actor FakeCurrentYearSegmentNoteDecider: SegmentNoteDeciding {
             options: OpenRouterSegmentNoteDecider.omissionOptionKeys,
             sentences: [sentence])
     }
+
+    func reviewDecision(
+        proposal: SegmentNoteReviewProposal,
+        tables: [SegmentNoteTableCandidate],
+        sentences: [String]
+    ) async -> SegmentNoteConsultedChoice {
+        SegmentNoteConsultedChoice(
+            question: OpenRouterSegmentNoteDecider.reviewDecisionQuestion,
+            selected: OpenRouterSegmentNoteDecider.reviewKeep,
+            probability: 1,
+            options: tables.map { "\($0.index)" } + [OpenRouterSegmentNoteDecider.reviewKeep],
+            sentences: sentences)
+    }
 }
