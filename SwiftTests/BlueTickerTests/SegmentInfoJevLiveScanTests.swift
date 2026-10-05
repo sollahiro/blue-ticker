@@ -51,7 +51,7 @@ struct SegmentInfoProdBreakdownRow: Codable {
 
     @Test(
         .enabled(if: enabled, "BLT_SEGMENT_INFO_SCAN=1, R2 XBRL, OPENROUTER_DECISION_API_KEY required"),
-        .timeLimit(.minutes(30))
+        .timeLimit(.minutes(60))
     )
     func rescanSegmentInfoLLMRowsWithJev() async throws {
         let env = ProcessInfo.processInfo.environment
@@ -72,7 +72,10 @@ struct SegmentInfoProdBreakdownRow: Codable {
                 .appendingPathComponent("blt-seginfo-scan-\(UUID().uuidString)", isDirectory: true)
             try FileManager.default.createDirectory(at: workDir, withIntermediateDirectories: true)
         }
-        let store = EdinetCacheStore(cacheDir: workDir)
+        // Default XBRL cache cap is 2 GB. A 278-doc scan exceeds it, so later
+        // downloads evict earlier trees and extractSegmentInfo sees an empty
+        // directory (counted as not_found). The scan must not evict.
+        let store = EdinetCacheStore(cacheDir: workDir, maxXbrlBytes: nil)
         let client = EdinetAPIClient(
             apiKey: nil, cacheStore: store, xbrlObjectStore: R2XbrlObjectStore(config: config))
         let useFake = env["BLT_SEGMENT_INFO_SCAN_FAKE"] == "1"
@@ -94,7 +97,13 @@ struct SegmentInfoProdBreakdownRow: Codable {
         for row in rows {
             if seen.contains(row.docID) { continue }
             seen.insert(row.docID)
-            if let dir = await client.downloadDocument(row.docID, saveDir: workDir) {
+            if store.hasXbrlDir(row.docID, saveDir: workDir) {
+                xbrlDirs[row.docID] = store.xbrlDir(row.docID, saveDir: workDir)
+                continue
+            }
+            if let dir = await client.downloadDocument(row.docID, saveDir: workDir),
+               store.hasXbrlDir(row.docID, saveDir: workDir)
+            {
                 xbrlDirs[row.docID] = dir
             } else {
                 missingXbrl.append(row.docID)
@@ -128,6 +137,22 @@ struct SegmentInfoProdBreakdownRow: Codable {
             comparison.record["extract_method"] = segments.method
             comparison.record["table_count"] = segments.tables.count
             comparison.record["headings"] = segments.tables.map { $0.heading }
+            if let denom = row.denominator {
+                comparison.record["prod_denominator"] = denom
+            }
+            if let denom = snapshot?.denominator {
+                comparison.record["new_denominator"] = denom
+            }
+            if let reason = audit?.notApplicableReason {
+                comparison.record["not_applicable"] = reason
+            }
+            if !store.hasXbrlDir(row.docID, saveDir: workDir) {
+                comparison.record["xbrl_status"] = "missing_on_disk"
+            } else if segments.method == "not_found" && segments.tables.isEmpty {
+                comparison.record["xbrl_status"] = "extract_empty"
+            } else {
+                comparison.record["xbrl_status"] = "ok"
+            }
             switch comparison.bucket {
             case "same":
                 same.append(comparison.record)
@@ -154,6 +179,15 @@ struct SegmentInfoProdBreakdownRow: Codable {
             let heads = (item["headings"] as? [String] ?? []).joined(separator: ",")
             headingCounts[heads.isEmpty ? "(none)" : heads, default: 0] += 1
         }
+        var xbrlStatusCounts: [String: Int] = [:]
+        for item in same + changed + errors {
+            let status = item["xbrl_status"] as? String ?? "unknown"
+            xbrlStatusCounts[status, default: 0] += 1
+        }
+        let newlyClean = (same + changed).filter {
+            ($0["prod_needs_review"] as? Bool) == true
+                && ($0["new_needs_review"] as? Bool) == false
+        }
         let artifact: [String: Any] = [
             "prod_row_count": rows.count,
             "companies": Set(rows.map(\.code)).count,
@@ -162,6 +196,10 @@ struct SegmentInfoProdBreakdownRow: Codable {
             "now_needs_review": nowNeedsReview.count,
             "errors": errors.count,
             "missing_xbrl": missingXbrl,
+            "missing_xbrl_count": missingXbrl.count,
+            "xbrl_status_counts": xbrlStatusCounts,
+            "newly_clean_count": newlyClean.count,
+            "newly_clean": newlyClean,
             "why_counts": whyCounts,
             "changed_source_counts": sourceCounts,
             "changed_heading_counts": headingCounts,
@@ -259,6 +297,10 @@ struct SegmentInfoProdBreakdownRow: Codable {
             "warnings": snapshot.warnings,
             "why": reasons.joined(separator: " | "),
         ]
+        if let denom = prod.denominator {
+            record["prod_denominator"] = denom
+        }
+        record["new_denominator"] = snapshot.denominator
         if reasons.isEmpty {
             return ("same", record)
         }
