@@ -169,6 +169,79 @@ import Foundation
         #expect(otherAdj.rowKind == "reconciling")
     }
 
+    @Test func transposesPeriodRowsWhenColumnsAreProducts() async throws {
+        let markdown = """
+            | | ニューロロジー領域製品 | オンコロジー領域製品 | その他 | 合計 |
+            | 当連結会計年度(自2025年4月1日至2026年3月31日) | 260,568 | 362,668 | 202,142 | 825,378 |
+            | 前連結会計年度(自2024年4月1日至2025年3月31日) | 1 | 1 | 1 | 3 |
+            """
+        let table = BreakdownTable(
+            heading: BreakdownExtractor.productOrServiceHeading,
+            markdown: markdown, period: "当期", unitCaption: "百万円")
+        let sales = 825_378 * Financial.millionYen
+        let (snapshotOrNil, _) = await Self.normalize(tables: [table], sales: sales)
+        let snapshot = try #require(snapshotOrNil)
+        let labels: Set<String> = Set(
+            snapshot.rows.filter { $0.rowKind == "segment" }.map { $0.labelRaw })
+        #expect(labels.contains("ニューロロジー領域製品"))
+        #expect(labels.contains("オンコロジー領域製品"))
+        #expect(!labels.contains("合計"))
+        let neuro = try #require(snapshot.rows.first { $0.labelRaw.contains("ニューロロジー") })
+        #expect(neuro.amount == 260_568 * Financial.millionYen)
+        #expect(!snapshot.needsReview)
+    }
+
+    @Test func prefersProductServiceTableOverGeographicReportingSegments() async throws {
+        let product = BreakdownTable(
+            heading: BreakdownExtractor.productOrServiceHeading,
+            markdown: """
+                | 区分 | 当連結会計年度 |
+                | ラツーダ（非定型抗精神病薬） | 40 |
+                | オルゴビクス（進行性前立腺がん治療剤） | 250 |
+                | 合計 | 290 |
+                """,
+            period: "当期",
+            unitCaption: "百万円")
+        let geography = BreakdownTable(
+            heading: "セグメント情報",
+            markdown: """
+                | | 日本 | 北米 | 計 |
+                | 外部顧客への売上収益等 | 90 | 200 | 290 |
+                | セグメント利益 | 10 | 20 | 30 |
+                """,
+            period: "当期",
+            unitCaption: "百万円")
+        let sales = 290 * Financial.millionYen
+        let (snapshotOrNil, _) = await Self.normalize(
+            tables: [product, geography], sales: sales)
+        let snapshot = try #require(snapshotOrNil)
+        let labels = snapshot.rows.map(\.labelRaw).joined(separator: " ")
+        #expect(labels.contains("ラツーダ"))
+        #expect(labels.contains("オルゴビクス"))
+        #expect(!labels.contains("北米"))
+        #expect(!snapshot.warnings.contains(SegmentInfoLLMNormalizer.warningGeographyTaken))
+    }
+
+    @Test func transposedMatrixKeepsSelectedBusinessColumn() async throws {
+        let markdown = """
+            | | 日本事業 | 中国・トラベルリテール事業 | 米州事業 | 欧州事業 |
+            | 外部顧客への売上高 | 295,343 | 342,244 | 150,000 | 182,405 |
+            | セグメント利益 | 10 | 20 | 30 | 40 |
+            """
+        let table = BreakdownTable(
+            heading: "セグメント情報", markdown: markdown, period: "当期", unitCaption: "百万円")
+        let sales = 969_992 * Financial.millionYen
+        let (snapshotOrNil, _) = await Self.normalize(
+            tables: [table], sales: sales, selected: "t0_c1")
+        let snapshot = try #require(snapshotOrNil)
+        let japan = try #require(snapshot.rows.first { $0.labelRaw.contains("日本") })
+        #expect(japan.amount == 295_343 * Financial.millionYen)
+        let china = try #require(snapshot.rows.first { $0.labelRaw.contains("トラベルリテール") })
+        #expect(china.amount == 342_244 * Financial.millionYen)
+        #expect(snapshot.warnings.contains("business_label_looks_like_geography"))
+        #expect(snapshot.needsReview)
+    }
+
     @Test func doesNotFallBackWhenSubtotalFarFromSegmentSum() async throws {
         let markdown = """
             | 区分 | 当期 |

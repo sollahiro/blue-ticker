@@ -40,6 +40,7 @@ enum RevenueRecognitionCandidates {
         var precedingCaption: String?
         var unitCaption: String?
         var period: String?
+        var heading: String = ""
         var items: [Item]
         var totals: [Total]
         var groups: [GroupHeader]
@@ -453,7 +454,7 @@ enum RevenueRecognitionCandidates {
         return ParsedTable(
             tableIndex: index, grid: rows, headerRowCount: firstData, columnHeaders: headers,
             precedingCaption: table.precedingCaption, unitCaption: table.unitCaption,
-            period: table.period,
+            period: table.period, heading: table.heading,
             items: items, totals: totals, groups: groups, structure: structure)
     }
 

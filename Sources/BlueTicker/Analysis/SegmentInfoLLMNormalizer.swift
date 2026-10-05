@@ -65,6 +65,7 @@ enum SegmentInfoLLMNormalizer {
 
     static let salesRowPreferred = [
         "外部顧客向け", "外部顧客に対する売上高", "外部顧客への売上高", "外部顧客への収益",
+        "外部顧客への売上収益", "外部顧客に対するもの",
         "外部顧客に対する経常収益", "外部顧客への経常収益",
         "顧客との契約から生じる収益", "顧客との契約から認識した収益",
         "セグメント収益", "セグメント売上高",
@@ -88,10 +89,16 @@ enum SegmentInfoLLMNormalizer {
         let columns = RevenueRecognitionCandidates.amountColumns(in: parsed)
         guard !columns.isEmpty else { return (nil, nil) }
 
-        let constraint = RevenueRecognitionTableStructure.axisConstraint(tables: parsed)
+        let scopedTables = preferredTables(parsed)
+        let scopedColumns = columns.filter { column in
+            scopedTables.contains { $0.tableIndex == column.tableIndex }
+        }
+        let tablesForChoice = scopedTables.isEmpty ? parsed : scopedTables
+        let columnsForChoice = scopedColumns.isEmpty ? columns : scopedColumns
+        let constraint = RevenueRecognitionTableStructure.axisConstraint(tables: tablesForChoice)
         let offered = RevenueRecognitionColumnNormalizer.offeredColumns(
-            columns, tables: parsed, constraint: constraint)
-        let offeredTables = parsed.filter { table in
+            columnsForChoice, tables: tablesForChoice, constraint: constraint)
+        let offeredTables = tablesForChoice.filter { table in
             offered.contains { $0.tableIndex == table.tableIndex }
         }
         let metricRows = offeredTables.flatMap(metricRows(in:))
@@ -101,7 +108,7 @@ enum SegmentInfoLLMNormalizer {
         var resolved = RevenueRecognitionColumnNormalizer.resolveSelection(
             choice.column, columns: offered)
         resolved = RevenueRecognitionColumnNormalizer.preferProductAxis(
-            resolved, columns: offered, tables: parsed, constraint: constraint)
+            resolved, columns: offered, tables: tablesForChoice, constraint: constraint)
 
         let columnJev = jevPayload(
             docID: docID, choice: choice.column, resolvedKey: resolved?.key ?? choice.column.selected,
@@ -243,7 +250,7 @@ enum SegmentInfoLLMNormalizer {
     static func metricRows(
         in table: RevenueRecognitionCandidates.ParsedTable
     ) -> [SegmentInfoMetricRow] {
-        table.structure.rows.compactMap { classified in
+        let fromStructure = table.structure.rows.compactMap { classified -> SegmentInfoMetricRow? in
             guard classified.hasAmount else { return nil }
             let label = classified.category ?? classified.categoryGroup ?? ""
             let compact = RevenueRecognitionCandidates.compactCell(label)
@@ -253,6 +260,26 @@ enum SegmentInfoLLMNormalizer {
                 key: "t\(table.tableIndex)_r\(classified.index)",
                 tableIndex: table.tableIndex, row: classified.index, label: compact)
         }
+        if !fromStructure.isEmpty { return fromStructure }
+        return periodAmountRows(in: table)
+    }
+
+    /// 列が製品・事業、行が当連結会計年度／前連結会計年度のマトリクス（エーザイ製品別）。
+    /// 構造分類は期間行を飛ばすので、グリッドから当期行を指標として拾う。
+    static func periodAmountRows(
+        in table: RevenueRecognitionCandidates.ParsedTable
+    ) -> [SegmentInfoMetricRow] {
+        var rows: [SegmentInfoMetricRow] = []
+        for (index, row) in table.grid.enumerated() where index >= table.headerRowCount {
+            let label = RevenueRecognitionCandidates.compactCell(row.first ?? "")
+            guard RevenueRecognitionCandidates.isPeriodHeadingLabel(label) else { continue }
+            let hasAmount = row.dropFirst().contains { RevenueRecognitionCandidates.isAmountCell($0) }
+            guard hasAmount else { continue }
+            rows.append(SegmentInfoMetricRow(
+                key: "t\(table.tableIndex)_r\(index)",
+                tableIndex: table.tableIndex, row: index, label: label))
+        }
+        return rows
     }
 
     static func preferredSalesRow(in rows: [SegmentInfoMetricRow]) -> SegmentInfoMetricRow? {
@@ -261,7 +288,18 @@ enum SegmentInfoLLMNormalizer {
                 return hit
             }
         }
+        if let current = rows.first(where: isCurrentPeriodRowLabel) {
+            return current
+        }
         return rows.first { isGenericSalesLabel($0.label) }
+    }
+
+    static func isCurrentPeriodRowLabel(_ row: SegmentInfoMetricRow) -> Bool {
+        let label = row.label
+        return RevenueRecognitionCandidates.isPeriodHeadingLabel(label)
+            && (label.contains("当連結会計年度") || label.contains("当事業年度")
+                || label.contains("当年度") || label.contains("当期"))
+            && !label.contains("前連結会計年度") && !label.contains("前事業年度")
     }
 
     static func preferredProfitRow(in rows: [SegmentInfoMetricRow]) -> SegmentInfoMetricRow? {
@@ -367,6 +405,30 @@ enum SegmentInfoLLMNormalizer {
         return (table.precedingCaption ?? "").contains("単一セグメント")
     }
 
+    /// 製品・サービス別表、報告セグメントの列マトリクス、地域のみ、の順で Jev に出す。
+    /// セグメント注記は製品表・報告セグメント・所在地表が混在するので、全体の axisConstraint
+    /// をそのまま使うと製品表が geography_only で落ちる。
+    static func preferredTables(
+        _ tables: [RevenueRecognitionCandidates.ParsedTable]
+    ) -> [RevenueRecognitionCandidates.ParsedTable] {
+        let product = tables.filter(isDedicatedProductTable)
+        if !product.isEmpty { return product }
+        let matrices = tables.filter { isSegmentColumnMatrix($0) }
+        if !matrices.isEmpty { return matrices }
+        let geography = tables.filter {
+            RevenueRecognitionTableStructure.tableAxis(of: $0) == .geography
+        }
+        if !geography.isEmpty { return geography }
+        return tables
+    }
+
+    static func isDedicatedProductTable(
+        _ table: RevenueRecognitionCandidates.ParsedTable
+    ) -> Bool {
+        if table.heading == BreakdownExtractor.productOrServiceHeading { return true }
+        return RevenueRecognitionTableStructure.tableAxis(of: table) == .productOrBusiness
+    }
+
     private static func buildSnapshotRows(
         table: RevenueRecognitionCandidates.ParsedTable,
         column: RevenueRecognitionCandidates.AmountColumn,
@@ -454,7 +516,7 @@ enum SegmentInfoLLMNormalizer {
             profit < table.grid.count ? table.grid[profit] : nil
         }
         for (column, header) in table.columnHeaders.sorted(by: { $0.key < $1.key }) {
-            if column == wholeCompanyColumn { continue }
+            if column == wholeCompanyColumn, isSkippedTotalColumn(header) { continue }
             if isSkippedTotalColumn(header) { continue }
             if isPeriodColumnHeader(header) { continue }
             if RevenueRecognitionCandidates.isPeriodHeadingLabel(header) { continue }
