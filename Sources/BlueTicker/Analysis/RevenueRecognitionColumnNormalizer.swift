@@ -357,7 +357,16 @@ enum RevenueRecognitionColumnNormalizer {
             || blob.contains("前期")
         let hasCurrent = blob.contains("当連結会計年度") || blob.contains("当事業年度")
             || blob.contains("当期") || column.header.contains("当")
-        return hasPrior && !hasCurrent
+        if hasPrior && !hasCurrent { return true }
+        let headerEra = SegmentInfoPublishGuards.eraNumber(in: column.header)
+            ?? SegmentInfoPublishGuards.eraNumber(in: caption)
+        let siblingEras = table.columnHeaders.values.compactMap {
+            SegmentInfoPublishGuards.eraNumber(in: $0)
+        }
+        if let headerEra, let maxEra = siblingEras.max(), headerEra < maxEra {
+            return true
+        }
+        return false
     }
 
     /// 免除は明細のカテゴリ行だけ。合計行やグリッドに「その他の収益（注）」があっても

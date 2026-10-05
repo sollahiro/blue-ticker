@@ -45,7 +45,7 @@ struct SegmentInfoDeciderFromColumnDecider: SegmentInfoDeciding {
         let column = await columnDecider.chooseColumn(
             columns: columns, tables: tables, fiscalYearEnd: fiscalYearEnd, docID: docID)
         return SegmentInfoLLMNormalizer.choiceByFillingMetricRows(
-            column: column, metricRows: metricRows)
+            column: column, metricRows: metricRows, fiscalYearEnd: fiscalYearEnd)
     }
 }
 
@@ -89,7 +89,8 @@ enum SegmentInfoLLMNormalizer {
         let columns = RevenueRecognitionCandidates.amountColumns(in: parsed)
         guard !columns.isEmpty else { return (nil, nil) }
 
-        let scopedTables = preferredTables(parsed)
+        let scopedTables = dropPriorEraTables(
+            preferredTables(parsed), among: parsed, fiscalYearEnd: fiscalYearEnd)
         let scopedColumns = columns.filter { column in
             scopedTables.contains { $0.tableIndex == column.tableIndex }
         }
@@ -137,7 +138,8 @@ enum SegmentInfoLLMNormalizer {
         let transposed = isSegmentColumnMatrix(table)
         let (built, profits, groupSumReview, parallelUnresolved, transposedWhole) =
             buildSnapshotRows(
-                table: table, column: column, choice: choice, transposed: transposed)
+                table: table, column: column, choice: choice, transposed: transposed,
+                fiscalYearEnd: fiscalYearEnd)
         if built.isEmpty && constraint == .geographyOnly {
             audit.notApplicableReason = BusinessBreakdownNotApplicableReason.geographyOnly.rawValue
             return (nil, audit)
@@ -235,9 +237,10 @@ enum SegmentInfoLLMNormalizer {
 
     static func choiceByFillingMetricRows(
         column: RevenueRecognitionColumnChoice,
-        metricRows: [SegmentInfoMetricRow]
+        metricRows: [SegmentInfoMetricRow],
+        fiscalYearEnd: String? = nil
     ) -> SegmentInfoChoice {
-        let sales = preferredSalesRow(in: metricRows)
+        let sales = preferredSalesRow(in: metricRows, fiscalYearEnd: fiscalYearEnd)
         let profit = preferredProfitRow(in: metricRows)
         func asChoice(_ row: SegmentInfoMetricRow?) -> RevenueRecognitionColumnChoice? {
             guard let row else { return nil }
@@ -285,24 +288,52 @@ enum SegmentInfoLLMNormalizer {
         return rows
     }
 
-    static func preferredSalesRow(in rows: [SegmentInfoMetricRow]) -> SegmentInfoMetricRow? {
+    static func preferredSalesRow(
+        in rows: [SegmentInfoMetricRow], fiscalYearEnd: String? = nil
+    ) -> SegmentInfoMetricRow? {
         for marker in salesRowPreferred {
             if let hit = rows.first(where: { isSalesLabel($0.label, marker: marker) }) {
                 return hit
             }
         }
-        if let current = rows.first(where: isCurrentPeriodRowLabel) {
+        if let current = rows.first(where: {
+            isCurrentPeriodRowLabel($0, among: rows, fiscalYearEnd: fiscalYearEnd)
+        }) {
             return current
         }
         return rows.first { isGenericSalesLabel($0.label) }
     }
 
     static func isCurrentPeriodRowLabel(_ row: SegmentInfoMetricRow) -> Bool {
+        isCurrentPeriodRowLabel(row, among: [], fiscalYearEnd: nil)
+    }
+
+    static func isCurrentPeriodRowLabel(
+        _ row: SegmentInfoMetricRow,
+        among rows: [SegmentInfoMetricRow],
+        fiscalYearEnd: String?
+    ) -> Bool {
         let label = row.label
-        return RevenueRecognitionCandidates.isPeriodHeadingLabel(label)
+        if label.contains("前連結会計年度") || label.contains("前事業年度") {
+            return false
+        }
+        if RevenueRecognitionCandidates.isPeriodHeadingLabel(label)
             && (label.contains("当連結会計年度") || label.contains("当事業年度")
                 || label.contains("当年度") || label.contains("当期"))
-            && !label.contains("前連結会計年度") && !label.contains("前事業年度")
+        {
+            return true
+        }
+        if let fyYear = fiscalYearEnd.flatMap({ Int($0.prefix(4)) }) {
+            let years = SegmentInfoPublishGuards.years(in: label)
+            if years.contains(fyYear) { return true }
+        }
+        if let era = SegmentInfoPublishGuards.eraNumber(in: label) {
+            let siblingEras = rows.compactMap { SegmentInfoPublishGuards.eraNumber(in: $0.label) }
+            if let maxEra = siblingEras.max(), era == maxEra, siblingEras.contains(where: { $0 < era }) {
+                return true
+            }
+        }
+        return false
     }
 
     static func preferredProfitRow(in rows: [SegmentInfoMetricRow]) -> SegmentInfoMetricRow? {
@@ -337,6 +368,19 @@ enum SegmentInfoLLMNormalizer {
             return true
         }
         return compact == "当期" || compact == "前期" || compact == "当年度" || compact == "前年度"
+            || RevenueRecognitionCandidates.isPeriodHeadingLabel(compact)
+    }
+
+    static func dropPriorEraTables(
+        _ tables: [RevenueRecognitionCandidates.ParsedTable],
+        among all: [RevenueRecognitionCandidates.ParsedTable],
+        fiscalYearEnd: String?
+    ) -> [RevenueRecognitionCandidates.ParsedTable] {
+        let pool = tables.isEmpty ? all : tables
+        let current = pool.filter {
+            !SegmentInfoPublishGuards.isPriorEraTable($0, among: pool, fiscalYearEnd: fiscalYearEnd)
+        }
+        return current.isEmpty ? pool : current
     }
 
     /// 「その他（消去分を含む）」「その他及び全社」は残事業バケットなので合計列にしない。
@@ -461,7 +505,8 @@ enum SegmentInfoLLMNormalizer {
         table: RevenueRecognitionCandidates.ParsedTable,
         column: RevenueRecognitionCandidates.AmountColumn,
         choice: SegmentInfoChoice,
-        transposed: Bool
+        transposed: Bool,
+        fiscalYearEnd: String?
     ) -> (
         built: [RevenueRecognitionCandidates.BuiltRow],
         profits: [String: Double],
@@ -471,11 +516,12 @@ enum SegmentInfoLLMNormalizer {
     ) {
         if transposed {
             let sales = resolveMetricRow(
-                choice.salesRow, rows: metricRows(in: table), preferred: preferredSalesRow(in:))
+                choice.salesRow, rows: metricRows(in: table),
+                preferred: { preferredSalesRow(in: $0, fiscalYearEnd: fiscalYearEnd) })
             let profit = resolveMetricRow(
                 choice.profitRow, rows: metricRows(in: table), preferred: preferredProfitRow(in:))
             let salesRowIndex = sales?.row
-                ?? preferredSalesRow(in: metricRows(in: table))?.row
+                ?? preferredSalesRow(in: metricRows(in: table), fiscalYearEnd: fiscalYearEnd)?.row
             guard let salesRowIndex else {
                 return ([], [:], false, false, nil)
             }
@@ -738,7 +784,7 @@ struct OpenRouterSegmentInfoDecider: SegmentInfoDeciding {
             fiscalYearEnd: fiscalYearEnd, docID: docID)
         else {
             return SegmentInfoLLMNormalizer.choiceByFillingMetricRows(
-                column: unavailable, metricRows: metricRows)
+                column: unavailable, metricRows: metricRows, fiscalYearEnd: fiscalYearEnd)
         }
         do {
             let data = try await client.decide(requestJSON: body)
@@ -767,7 +813,7 @@ struct OpenRouterSegmentInfoDecider: SegmentInfoDeciding {
         } catch {
             printError("SegmentInfoLLMNormalizer: Jev呼び出し失敗: \(error)\n")
             return SegmentInfoLLMNormalizer.choiceByFillingMetricRows(
-                column: unavailable, metricRows: metricRows)
+                column: unavailable, metricRows: metricRows, fiscalYearEnd: fiscalYearEnd)
         }
     }
 

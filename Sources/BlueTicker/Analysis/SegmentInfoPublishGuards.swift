@@ -17,7 +17,8 @@ enum SegmentInfoPublishGuards {
     private static let extraMetricMarkers = [
         "セグメント収益", "セグメント利益", "セグメント資産", "バーゲン",
         "支払利息", "信用損失", "持分法", "保険契約債務", "長期性資産",
-        "外部顧客に対するもの",
+        "外部顧客に対するもの", "資産合計", "資本的支出", "減価償却",
+        "構造改革",
     ]
     private static let revenueTypeMarkers = [
         "医薬品の販売", "製商品の販売", "物品の販売", "プロフィットシェア",
@@ -60,7 +61,7 @@ enum SegmentInfoPublishGuards {
         }
         if isPriorPeriodSelection(
             selectedColumn: selectedColumn, selectedTable: selectedTable,
-            fiscalYearEnd: fiscalYearEnd)
+            allTables: allTables, fiscalYearEnd: fiscalYearEnd)
         {
             flag(&needsReview, &warnings, warningPriorPeriodColumn)
         }
@@ -91,14 +92,22 @@ enum SegmentInfoPublishGuards {
     }
 
     private static func hasDuplicateSegmentLabels(_ segments: [BreakdownRow]) -> Bool {
-        var seen: [String: Int] = [:]
+        var groupsByLabel: [String: [String]] = [:]
         for row in segments {
             let label = RevenueRecognitionCandidates.compactCell(row.labelRaw)
             guard !label.isEmpty else { continue }
             let group = RevenueRecognitionCandidates.compactCell(row.categoryGroup ?? "")
-            let key = group + "\u{1e}" + label
-            seen[key, default: 0] += 1
-            if seen[key]! >= 2 { return true }
+            groupsByLabel[label, default: []].append(group)
+        }
+        for (label, groups) in groupsByLabel {
+            guard groups.count >= 2 else { continue }
+            let unique = Set(groups)
+            if unique.count <= 1 { return true }
+            if unique.contains(where: {
+                $0.isEmpty || $0 == label || isMetricAsSegmentLabel($0)
+            }) {
+                return true
+            }
         }
         return false
     }
@@ -201,9 +210,61 @@ enum SegmentInfoPublishGuards {
         return labels
     }
 
+    static func isPriorEraTable(
+        _ table: RevenueRecognitionCandidates.ParsedTable,
+        among tables: [RevenueRecognitionCandidates.ParsedTable],
+        fiscalYearEnd: String?
+    ) -> Bool {
+        if tables.contains(where: { $0.period == "当期" }) && table.period == "前期" {
+            return true
+        }
+        let selectedEra = eraNumber(in: table.precedingCaption ?? "")
+            ?? eraNumber(in: table.columnHeaders.values.joined(separator: " "))
+        let siblingEras = tables.compactMap { candidate -> Int? in
+            eraNumber(in: candidate.precedingCaption ?? "")
+                ?? eraNumber(in: candidate.columnHeaders.values.joined(separator: " "))
+        }
+        if let selectedEra, let maxEra = siblingEras.max(), selectedEra < maxEra {
+            return true
+        }
+        guard let fyYear = fiscalYearEnd.flatMap({ Int($0.prefix(4)) }) else { return false }
+        let captionYears = years(in: table.precedingCaption ?? "")
+        if !captionYears.isEmpty && captionYears.allSatisfy({ $0 < fyYear }) {
+            let siblingHasCurrent = tables.contains { candidate in
+                let other = years(in: candidate.precedingCaption ?? "")
+                return other.contains(fyYear)
+            }
+            return siblingHasCurrent
+        }
+        return false
+    }
+
+    static func eraNumber(in text: String) -> Int? {
+        let compact = RevenueRecognitionCandidates.compactCell(text)
+        guard !compact.isEmpty else { return nil }
+        guard let eraRegex = try? NSRegularExpression(pattern: #"第([0-9]+)期"#) else {
+            return nil
+        }
+        let ns = compact as NSString
+        let range = NSRange(location: 0, length: ns.length)
+        let eras = eraRegex.matches(in: compact, range: range).compactMap { match -> Int? in
+            Int(ns.substring(with: match.range(at: 1)))
+        }
+        if eras.count == 1 { return eras[0] }
+        if eras.count >= 2 { return nil }
+        let foundYears = years(in: compact)
+        if foundYears.count == 1,
+           compact.contains("終了した") || compact.contains("年度") || compact.contains("事業年度")
+        {
+            return foundYears[0]
+        }
+        return nil
+    }
+
     private static func isPriorPeriodSelection(
         selectedColumn: RevenueRecognitionCandidates.AmountColumn?,
         selectedTable: RevenueRecognitionCandidates.ParsedTable?,
+        allTables: [RevenueRecognitionCandidates.ParsedTable],
         fiscalYearEnd: String?
     ) -> Bool {
         guard let selectedColumn, let selectedTable else { return false }
@@ -212,12 +273,27 @@ enum SegmentInfoPublishGuards {
         {
             return true
         }
+        if isPriorEraTable(selectedTable, among: allTables, fiscalYearEnd: fiscalYearEnd) {
+            return true
+        }
+        let blob = selectedColumn.header + (selectedColumn.caption ?? "")
+            + (selectedTable.precedingCaption ?? "")
+        if let selectedEra = eraNumber(in: blob) {
+            let siblingEras = allTables.flatMap { table -> [Int] in
+                let captionEra = eraNumber(in: table.precedingCaption ?? "")
+                let headerEras = table.columnHeaders.values.compactMap { eraNumber(in: $0) }
+                return (captionEra.map { [$0] } ?? []) + headerEras
+            }
+            if let maxEra = siblingEras.max(), selectedEra < maxEra {
+                return true
+            }
+        }
         guard let fyYear = fiscalYearEnd.flatMap({ Int($0.prefix(4)) }) else { return false }
-        let years = years(in: selectedColumn.header + (selectedColumn.caption ?? ""))
-        return !years.isEmpty && years.allSatisfy { $0 < fyYear }
+        let foundYears = years(in: blob)
+        return !foundYears.isEmpty && foundYears.allSatisfy { $0 < fyYear }
     }
 
-    private static func years(in text: String) -> [Int] {
+    static func years(in text: String) -> [Int] {
         let compact = RevenueRecognitionCandidates.compactCell(text)
         guard let regex = try? NSRegularExpression(pattern: #"((?:19|20)\d{2})"#) else {
             return []

@@ -21,13 +21,14 @@ import Foundation
         selected: String? = nil,
         confidence: Double = 0.9,
         pNone: Double? = nil,
+        fiscalYearEnd: String = "2026-03-31",
         docID: String = "S-seg"
     ) async -> (BreakdownSnapshot?, LLMBreakdownAudit?) {
         await SegmentInfoLLMNormalizer.normalize(
             ExtractedBreakdown(method: "html_table", tables: tables, facts: []),
             consolidatedSales: sales,
             decider: Self.decider(selected: selected, confidence: confidence, pNone: pNone),
-            fiscalYearEnd: "2026-03-31",
+            fiscalYearEnd: fiscalYearEnd,
             docID: docID)
     }
 
@@ -539,6 +540,73 @@ import Foundation
         #expect(labels.contains("板紙"))
         #expect(labels.contains("パルプ・古紙"))
         #expect(!labels.contains(where: { $0.contains("北東アジア") }))
+        #expect(!snapshot.needsReview)
+    }
+
+    /// 同一ラベルが指標ブロックの group 違いで繰り返されても公開しない（リコー資産/設備型）。
+    @Test func duplicateSegmentLabelsAcrossMetricGroupsNeedReview() async throws {
+        let markdown = """
+            | 区分 | 当期 |
+            | 資産合計 | |
+            | デジタルサービス | 1,323,991 |
+            | デジタルプロダクツ | 446,654 |
+            | 資本的支出 | |
+            | デジタルサービス | 31,296 |
+            | デジタルプロダクツ | 18,731 |
+            | 合計 | 1,820,672 |
+            """
+        let table = BreakdownTable(
+            heading: "セグメント情報", markdown: markdown, period: "当期", unitCaption: "百万円")
+        let sales = 2_608_314 * Financial.millionYen
+        let (snapshotOrNil, _) = await Self.normalize(tables: [table], sales: sales)
+        let snapshot = try #require(snapshotOrNil)
+        #expect(snapshot.needsReview)
+        #expect(snapshot.warnings.contains(SegmentInfoPublishGuards.warningDuplicateSegmentLabels)
+            || snapshot.warnings.contains(SegmentInfoPublishGuards.warningMetricRowLabels))
+    }
+
+    /// 第N期が2表あるときは後期の外部顧客向けを採る（キヤノン US-GAAP 注記型）。
+    @Test func laterFiscalEraMatrixIsPreferred() async throws {
+        let prior = BreakdownTable(
+            heading: "セグメント情報",
+            markdown: """
+                | | オフィス | イメージングシステム | メディカルシステム | 産業機器その他 | 連結 |
+                | 外部顧客向け | 1,749,165 | 806,425 | 437,456 | 598,653 | 3,593,299 |
+                | 営業利益 | 164,996 | 48,167 | 26,744 | 19,392 | 174,420 |
+                """,
+            period: nil, unitCaption: "百万円", precedingCaption: "第119期")
+        let current = BreakdownTable(
+            heading: "セグメント情報",
+            markdown: """
+                | | オフィス | イメージングシステム | メディカルシステム | 産業機器その他 | 連結 |
+                | 外部顧客向け | 1,437,188 | 711,317 | 435,368 | 577,130 | 3,160,243 |
+                | 営業利益 | 81,369 | 71,805 | 25,244 | 13,225 | 110,547 |
+                """,
+            period: nil, unitCaption: "百万円", precedingCaption: "第120期")
+        let sales = 3_160_243 * Financial.millionYen
+        let (snapshotOrNil, _) = await Self.normalize(
+            tables: [prior, current], sales: sales, fiscalYearEnd: "2020-12-31")
+        let snapshot = try #require(snapshotOrNil)
+        let office = try #require(snapshot.rows.first { $0.labelRaw == "オフィス" })
+        #expect(office.amount == 1_437_188 * Financial.millionYen)
+        #expect(!snapshot.needsReview)
+    }
+
+    /// 行が見出し年度のときは期末年の行を売上にする（キヤノン年次行型）。
+    @Test func yearEndedRowMatchingFiscalYearEndIsPreferred() async throws {
+        let markdown = """
+            | | オフィス | イメージングシステム | 連結 |
+            | 2019年12月31日に終了した事業年度 | 1,749,165 | 806,425 | 2,555,590 |
+            | 2020年12月31日に終了した事業年度 | 1,437,188 | 711,317 | 2,148,505 |
+            """
+        let table = BreakdownTable(
+            heading: "セグメント情報", markdown: markdown, period: "当期", unitCaption: "百万円")
+        let sales = 2_148_505 * Financial.millionYen
+        let (snapshotOrNil, _) = await Self.normalize(
+            tables: [table], sales: sales, fiscalYearEnd: "2020-12-31")
+        let snapshot = try #require(snapshotOrNil)
+        let office = try #require(snapshot.rows.first { $0.labelRaw == "オフィス" })
+        #expect(office.amount == 1_437_188 * Financial.millionYen)
         #expect(!snapshot.needsReview)
     }
 }

@@ -136,7 +136,7 @@ extension FakeRevenueRecognitionColumnDecider: SegmentInfoDeciding {
         let column = await chooseColumn(
             columns: columns, tables: tables, fiscalYearEnd: fiscalYearEnd, docID: docID)
         var filled = SegmentInfoLLMNormalizer.choiceByFillingMetricRows(
-            column: column, metricRows: metricRows)
+            column: column, metricRows: metricRows, fiscalYearEnd: fiscalYearEnd)
         if let selected, selected == RevenueRecognitionColumnNormalizer.noneOfThese {
             filled.column = column
         }
