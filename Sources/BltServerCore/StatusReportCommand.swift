@@ -1,5 +1,5 @@
 // `blt-server status-report`: 5 ステージ（financials / statements / filing_sections /
-// breakdown_business / breakdown_geography）のカバレッジ・鮮度・最新有報スライスを集計し、
+// breakdown_product_service / breakdown_geography）のカバレッジ・鮮度・最新有報スライスを集計し、
 // JSON を stdout へ出す。notes 等は含めない（上場正本の主要ステージのみ。全 ingest ではない）。
 // 出力は静的公開ページ（`scripts/generate-status-page.sh`、パスは `BLT_STATUS_HTML`）
 // が読む契約。ここでは日経225構成銘柄の実コードは一切
@@ -314,7 +314,7 @@ private func buildDocumentLevelStage(
 }
 
 /// 5 ステージ分の集計結果を組み立てる。`now` はテスト用に注入できる（既定は現在時刻）。
-/// `listedCodes` は financials/statements/filing_sections/breakdown_business/breakdown_geography
+/// `listedCodes` は financials/statements/filing_sections/breakdown_product_service/breakdown_geography
 /// の対象母集団。`priorityCodes`（`assets/nikkei225.csv`）は処理順の優先に使い、母集団そのものではない。
 public func buildIngestStatusReport(
     db: Database, listedCodes: Set<String>, priorityCodes: Set<String>, now: Date = Date()
@@ -366,20 +366,20 @@ public func buildIngestStatusReport(
         },
         targetCodes: listedCodes, docsTarget: docsTarget, latestDocs: latestDocs, now: now)
 
-    // breakdown_business / breakdown_geography（対象母集団: listedCodes＝上場全体。
+    // breakdown_product_service / breakdown_geography（対象母集団: listedCodes＝上場全体。
     // 候補集合は filing_sections と同じ keep 窓）。
     let businessRows = try await CompanyBreakdownStatusProjection.query(on: db)
-        .filter(\.$axis == breakdownAxisBusiness)
+        .filter(\.$axis == breakdownAxisProductService)
         .all()
     let breakdownBusiness = buildDocumentLevelStage(
-        key: "breakdown_business", label: "事業別の売上内訳",
+        key: "breakdown_product_service", label: "製品・サービス別の売上内訳",
         rows: businessRows.map { row in
             // version-gated source（決定論・LLM）は cache_version 一致で「現行」判定。
             let isCurrent =
                 !isVersionGatedBreakdownSource(row.source)
-                || row.cacheVersion == breakdownCacheVersion(forAxis: breakdownAxisBusiness)
+                || row.cacheVersion == breakdownCacheVersion(forAxis: breakdownAxisProductService)
             let isServable = isServableBreakdown(
-                source: row.source, cacheVersion: row.cacheVersion, axis: breakdownAxisBusiness)
+                source: row.source, cacheVersion: row.cacheVersion, axis: breakdownAxisProductService)
             return StatusRow(
                 code: row.code, docID: row.docID, isCurrentVersion: isCurrent, isServable: isServable,
                 updatedAt: row.updatedAt, highWater: nil)

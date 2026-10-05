@@ -42,7 +42,7 @@ import Foundation
             StackedSegmentPnLNormalizer.normalizeMarkdown(
                 Self.yibhMarkdown, consolidatedSales: sales))
 
-        #expect(snapshot.axis == "business")
+        #expect(snapshot.axis == breakdownAxisProductService)
         #expect(snapshot.sourceKind == "stacked_segment_pnl")
         #expect(snapshot.needsReview == false)
 

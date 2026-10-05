@@ -1,6 +1,6 @@
 {
   "S100VU4O" : {
-    "axis" : "business",
+    "axis" : "product_service",
     "code" : "3490",
     "denominator" : 12430301000,
     "denominator_tag" : "RevenuesFromExternalCustomers",
@@ -34,7 +34,7 @@
     "warnings" : []
   },
   "S100VXJA" : {
-    "axis" : "business",
+    "axis" : "product_service",
     "code" : "2802",
     "denominator" : 1530556000000,
     "denominator_tag" : "SalesToExternalCustomersIFRS",
@@ -75,7 +75,7 @@
     "warnings" : []
   },
   "S100VYA0" : {
-    "axis" : "business",
+    "axis" : "product_service",
     "code" : "2871",
     "denominator" : 702080000000,
     "denominator_tag" : "RevenuesFromExternalCustomers",
@@ -130,7 +130,7 @@
     "warnings" : []
   },
   "S100W0S7" : {
-    "axis" : "business",
+    "axis" : "product_service",
     "code" : "8316",
     "denominator" : 4126746000000,
     "denominator_tag" : "ConsolidatedGrossProfit",
@@ -184,7 +184,7 @@
     ]
   },
   "S100W4FB" : {
-    "axis" : "business",
+    "axis" : "product_service",
     "code" : "8306",
     "denominator" : 4810535000000,
     "denominator_tag" : "NetRevenue",
@@ -253,7 +253,7 @@
     "warnings" : []
   },
   "S100W4MT" : {
-    "axis" : "business",
+    "axis" : "product_service",
     "code" : "7269",
     "denominator" : 5825161000000,
     "denominator_tag" : "RevenueFromExternalCustomersIFRS",
@@ -317,7 +317,7 @@
     ]
   },
   "S100XR0M" : {
-    "axis" : "business",
+    "axis" : "product_service",
     "code" : "6326",
     "denominator" : 3018891000000,
     "denominator_tag" : "SalesToExternalCustomersIFRS",
@@ -351,7 +351,7 @@
     "warnings" : []
   },
   "S100XRD8" : {
-    "axis" : "business",
+    "axis" : "product_service",
     "code" : "7422",
     "denominator" : 4547599000,
     "denominator_tag" : "RevenuesFromExternalCustomers",
@@ -396,7 +396,7 @@
     ]
   },
   "S100YIBH" : {
-    "axis" : "business",
+    "axis" : "product_service",
     "code" : "4901",
     "denominator" : 3356969000000.0,
     "denominator_tag" : "income_statement.sales",

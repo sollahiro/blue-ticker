@@ -58,7 +58,7 @@ private actor MockChatCompleting: ChatCompleting {
         try extracted(docID: docID, key: "segments")
     }
 
-    /// 味の素（xbrl_facts, axis=business）: 決定的経路のみで解決し、LLM は一切呼ばれない。
+    /// 味の素（xbrl_facts, axis=product_service）: 決定的経路のみで解決し、LLM は一切呼ばれない。
     @Test func xbrlFactsBusinessAxisResolvesWithoutCallingLLM() async throws {
         let segments = try Self.segmentsResult(docID: "S100VXJA")
         let sales = try #require(try Self.loadSales(code: "2802"))
@@ -69,7 +69,7 @@ private actor MockChatCompleting: ChatCompleting {
         )
 
         #expect(source == .xbrlFacts)
-        #expect(snapshot?.axis == "business")
+        #expect(snapshot?.axis == breakdownAxisProductService)
         #expect(audit == nil)
         #expect(await client.timesCalled() == 0)
     }
@@ -112,7 +112,7 @@ private actor MockChatCompleting: ChatCompleting {
         let expectedDenom: Double = 235_888 * Financial.millionYen
         let sourceTable: Int? = audit?.sourceTableIndex
         #expect(source == .revenueRecognitionLLM)
-        #expect(snapshot?.axis == "business")
+        #expect(snapshot?.axis == breakdownAxisProductService)
         #expect(needsReview == false)
         #expect(denominator == expectedDenom)
         #expect(sourceTable == 1)
@@ -176,7 +176,7 @@ private actor MockChatCompleting: ChatCompleting {
         )
 
         #expect(source == .segmentInfoLLM)
-        #expect(snapshot?.axis == "business")
+        #expect(snapshot?.axis == breakdownAxisProductService)
         #expect(await client.timesCalled() == 0)
     }
 
@@ -223,7 +223,7 @@ private actor MockChatCompleting: ChatCompleting {
         )
 
         #expect(source == .segmentInfoLLM)
-        #expect(snapshot?.axis == "business")
+        #expect(snapshot?.axis == breakdownAxisProductService)
         #expect(!(snapshot?.needsReview ?? true))
         #expect(audit?.profitDisclosed == true)
         #expect(audit?.columnJev?.model == "typesafe/jev-1.13")
@@ -308,7 +308,7 @@ private actor MockChatCompleting: ChatCompleting {
         )
 
         #expect(source == .segmentInfoLLM)
-        #expect(snapshot?.axis == "business")
+        #expect(snapshot?.axis == breakdownAxisProductService)
         let labels = Set(snapshot?.rows.map(\.labelRaw) ?? [])
         #expect(labels.contains("ラツーダ"))
         #expect(await client.timesCalled() == 0)

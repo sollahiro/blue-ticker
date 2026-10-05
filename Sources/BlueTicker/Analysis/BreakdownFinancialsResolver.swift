@@ -11,18 +11,18 @@ enum BreakdownFinancialsResolver {
     }
 
     /// geography 軸と Summary の売上分母。正本は statement PL の連結売上（`StatementFinancialsResolver`）。
-    /// 三菱商事等の本表 `Revenue2IFRS`「収益」も含む。business 軸は
+    /// 三菱商事等の本表 `Revenue2IFRS`「収益」も含む。product_service 軸は
     /// `breakdownBusinessSalesDenominatorItem`（収益認識表なら顧客契約）。
     static func financialsCanonicalSales(xbrlDir: URL) -> Double? {
         StatementFinancialsResolver.resolve(xbrlDir: xbrlDir)?.sales
     }
 
-    /// business 軸の売上分母。`breakdownBusinessSalesDenominatorItem` の値だけ。
+    /// product_service 軸の売上分母。`breakdownBusinessSalesDenominatorItem` の値だけ。
     static func breakdownBusinessSalesDenominator(xbrlDir: URL) -> Double? {
         breakdownBusinessSalesDenominatorItem(xbrlDir: xbrlDir).value
     }
 
-    /// business 軸の分母と由来タグ。収益認識へ swap した表は顧客契約連結（`llm_table_subtotal`）。
+    /// product_service 軸の分母と由来タグ。収益認識へ swap した表は顧客契約連結（`llm_table_subtotal`）。
     /// 三菱商事: セグメント表が顧客契約ベース。PL「収益」はその他源泉込みで Summary とは分母が違う。
     /// 報告セグメント表のままなら Summary sales（`income_statement.sales`）。無ければ顧客契約、
     /// さらに無ければ未マスク FieldSet の売上相当タグ。偽の `income_statement.sales` は出さない。

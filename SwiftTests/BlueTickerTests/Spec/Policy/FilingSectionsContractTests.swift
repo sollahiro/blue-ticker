@@ -34,8 +34,9 @@ import Testing
         #expect(sectionsN == 8)
         #expect(try #require(filingSectionsCacheVersionNumber("sections-v7")) < sectionsN)
         #expect(filingSectionsCacheVersion == "sections-v8")
-        // breakdown of-which refinements already at v12; this bump is filing-sections specials only.
+        // breakdown of-which refinements already at geography v13; product_service is a
+        // new axis series at v1 after the public axis-key hard cutover.
         #expect(geographyBreakdownCacheVersion == "breakdown-geography-v13")
-        #expect(businessBreakdownCacheVersion == "breakdown-business-v15")
+        #expect(productServiceBreakdownCacheVersion == "breakdown-product_service-v1")
     }
 }

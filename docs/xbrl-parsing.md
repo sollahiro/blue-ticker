@@ -87,7 +87,7 @@ XBRL の `contextRef` 属性は財務諸表の種別・期間・連結区分を�
 smoke/
   smoke_expected/         # 年次期待値 JSON（{code}_{fy_end}.json）
   breakdown_extraction_expected.json   # セグメント・地域別抽出の期待値（有報=通期のみ、書類ID別）
-  breakdown_business_oracle_expected.json   # business 軸 smoke 床（xbrl_facts 行 / llm_input 表）
+  breakdown_product_service_oracle_expected.json   # product_service 軸 smoke 床（xbrl_facts 行 / llm_input 表）
   breakdown_geography_oracle_expected.json  # geography 軸 smoke 床（llm_input 表 / not_found）
   smoke-field-values.md   # フィールド一覧とスモークテストの仕様説明
 ```
@@ -96,7 +96,7 @@ smoke/
 |---|---|---|
 | 年次スモーク | `SwiftTests/BlueTickerTests/Spec/Oracle/SmokeTests.swift` `testSmokeAll` | `smoke_expected/` |
 | セグメントパリティ | `SwiftTests/BlueTickerTests/Spec/Oracle/SegmentParityTests.swift` | `breakdown_extraction_expected.json`（有報=通期のみ。半期/四半期 q2r は対象外） |
-| 内訳(business/geography)外出しオラクル | `SwiftTests/BlueTickerTests/Spec/Oracle/BreakdownBusinessGeographyOracleFormatTests.swift` | `smoke/breakdown_{business,geography}_oracle_expected.json`（smoke固定11社。`path=xbrl_facts`は決定論行実額、`path=llm_input`はLLM渡す前のtables、`path=not_found`は欠測。LLM正規化後の金額は床に含めない） |
+| 内訳(product_service/geography)外出しオラクル | `SwiftTests/BlueTickerTests/Spec/Oracle/BreakdownBusinessGeographyOracleFormatTests.swift` | `smoke/breakdown_{product_service,geography}_oracle_expected.json`（smoke固定11社。`path=xbrl_facts`は決定論行実額、`path=llm_input`はLLM渡す前のtables、`path=not_found`は欠測。LLM正規化後の金額は床に含めない） |
 | 内訳(breakdown)実データ回帰 | `SwiftTests/BlueTickerTests/Spec/Oracle/RealXbrlBreakdown*Tests.swift`（Extraction / EmployeesRD / Capex / Resolver / LiveLLM / Goodwill。共有は `RealXbrlBreakdownSupport.swift`） | `smoke/` 配下は使わない。対象企業は各 `@Test` 関数にハードコード（一覧は各ファイル参照） |
 | Statement（本体 BS/PL/CF/SS）実データ回帰 | `SwiftTests/BlueTickerTests/Spec/Oracle/RealXbrlStatementTests.swift` | トヨタ/デンソー/任天堂＋smoke 固定11社のうち US-GAAP2社を除く9社。BS/PL/CF は最上位合計と `smoke_expected` 突合。SS（`changes_in_equity`）は合計列の期首/期末値・order・連結 stray `ProfitLoss` 除外。US-GAAP HTML は富士フイルム/キヤノンに加え野村（連結資本勘定変動表の全行＋`section` 見出し）・オムロン（BS 45行 / PL 21行 / CF 50行 / SS 11行）・小松（BS 39行 / PL 21行 / CF 31行 / SS 12行）・オリックス（BS 39行 / PL 28行 / CF 51行 / SS 18行）。詳細は `docs/statement.md` / `.agents/skills/xbrl-development/SKILL.md`（Spec 層） |
 | 注記(statement-notes)実データ回帰 | `SwiftTests/BlueTickerTests/Spec/Oracle/RealXbrlStatementNotesTests.swift`（`golden*` 関数群） | `smoke/` 配下は使わない。対象企業は各 `@Test` 関数にハードコード |
@@ -114,7 +114,7 @@ smoke/
 
 **golden回帰とsmokeの役割の違い**: 2つは同じ「実データ回帰」でも軸が異なる。
 
-- **smoke（年次スモーク）**: 会計基準（J-GAAP/IFRS/US-GAAP）・決算期の移行境界・連結有無など、抽出ロジックが分岐する「次元」を意図して選んだ固定企業セット（§3.2）で、既存ロジック全体の最低品質を継続的に守る**床**。対象は基本財務諸表抽出器（BS/PL/CF/GP/IBD）と **`per_share_information`・`issued_shares_and_capital`・`borrowings_schedule`・`goodwill_and_intangibles`・`property_plant_equipment_schedule`・`lease_liabilities` note_type**（公開）、および実装済み・未公開の **`sga_expense_breakdown`**、さらに **breakdown の `business` / `geography` 軸**（各 `*OracleFormatTests` + 外出しJSON。ingest は同一 FY の訂正 130 を fact overlay し、格納 identity は原本。breakdown の LLM 経路は渡す前の tables を突合し、正規化後金額は床に含めない）。公開 note_type はいずれも床に載済み。`statement`（Statement 本体）は `SmokeTests.swift` 自体は通らないが、同固定セットの golden を `RealXbrlStatementTests.swift` に持つ（BS/PL/CF/SS）
+- **smoke（年次スモーク）**: 会計基準（J-GAAP/IFRS/US-GAAP）・決算期の移行境界・連結有無など、抽出ロジックが分岐する「次元」を意図して選んだ固定企業セット（§3.2）で、既存ロジック全体の最低品質を継続的に守る**床**。対象は基本財務諸表抽出器（BS/PL/CF/GP/IBD）と **`per_share_information`・`issued_shares_and_capital`・`borrowings_schedule`・`goodwill_and_intangibles`・`property_plant_equipment_schedule`・`lease_liabilities` note_type**（公開）、および実装済み・未公開の **`sga_expense_breakdown`**、さらに **breakdown の `product_service` / `geography` 軸**（各 `*OracleFormatTests` + 外出しJSON。ingest は同一 FY の訂正 130 を fact overlay し、格納 identity は原本。breakdown の LLM 経路は渡す前の tables を突合し、正規化後金額は床に含めない）。公開 note_type はいずれも床に載済み。`statement`（Statement 本体）は `SmokeTests.swift` 自体は通らないが、同固定セットの golden を `RealXbrlStatementTests.swift` に持つ（BS/PL/CF/SS）
 - **golden回帰**（年次スモーク以外）: 個別ロジックの実装・改善時に見つけたエッジケースを持つ企業をその都度追加する**深さ**方向の蓄積型で、対象企業の選定基準は「そのロジック分岐を踏む」ことのみ（次元の網羅性は保証しない）
 
 原則としては note_type の決定論ロジックもこの床でカバーされるべきだが、公開 note_type はいずれも固定11社の外出しオラクル床に載済み。golden側でエッジケースは踏んでいても、smokeが意図的にカバーする次元（銀行・US-GAAP・小規模企業など）での確認を後追いで足す余地は、新規 note_type 追加時に残る。
@@ -147,7 +147,7 @@ CI では `swift-macos` / `swift-linux` ジョブの `Test` ステップに repo
 
 ### 3.3 訂正有報(130) の XBRL overlay
 
-有報の行 identity（`company_statement_notes.doc_id`、statements / breakdowns / filing-sections の `doc_id`、financials の年度帰属、公開 `doc_id`）は**原本 120** のままにする。同一会社・同一期間（`edinetCode` + 期末。期末は `periodEnd`、無ければ概要文の西暦）の訂正 130 を、提出が古い順に原本 XBRL へ重ねる。`parentDocID` / `parent_doc_id` は同期メタであり照合には使わない。overlay パッケージから作る通期成果物は financials（Summary / `screen_index` の入力）、statements、statement-notes（`per_share_information` を含む）、breakdowns（business / geography / 収益認識ほか全軸）、filing-sections、overviews、icons。
+有報の行 identity（`company_statement_notes.doc_id`、statements / breakdowns / filing-sections の `doc_id`、financials の年度帰属、公開 `doc_id`）は**原本 120** のままにする。同一会社・同一期間（`edinetCode` + 期末。期末は `periodEnd`、無ければ概要文の西暦）の訂正 130 を、提出が古い順に原本 XBRL へ重ねる。`parentDocID` / `parent_doc_id` は同期メタであり照合には使わない。overlay パッケージから作る通期成果物は financials（Summary / `screen_index` の入力）、statements、statement-notes（`per_share_information` を含む）、breakdowns（product_service / geography / 収益認識ほか全軸）、filing-sections、overviews、icons。
 
 - **数値 fact**: キーは element + contextRef。訂正に無い項目は原本の値。
 - **行メンバー表**（`Row{N}Member`）: 訂正がその表を含めば行ごと置換（セル混在しない）。

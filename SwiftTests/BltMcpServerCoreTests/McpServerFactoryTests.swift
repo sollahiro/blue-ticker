@@ -172,8 +172,8 @@ private func valueJSONObject(_ value: Value) -> [String: Any]? {
         let axis = try #require(
             breakdown.inputSchema.objectValue?["properties"]?.objectValue?["axis"]?.objectValue)
         #expect(axis["type"]?.stringValue == "string")
-        // サーバー省略時 business と一致。旧 schema に無かった default を意図的に明示している。
-        #expect(axis["default"]?.stringValue == "business")
+        // サーバー省略時 product_service と一致。旧 schema に無かった default を意図的に明示している。
+        #expect(axis["default"]?.stringValue == breakdownAxisProductService)
     }
 
     /// ChatGPT plugin Phase 1: 全ツールに title / annotations / outputSchema が付与される。

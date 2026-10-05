@@ -119,7 +119,7 @@ extension ExtractedBreakdown {
 /// rawValue は `breakdownNotApplicable*`（`Models/BreakdownContract.swift`、公開文字列定数）と揃える
 /// （`BusinessBreakdownSource` と `breakdownSource*` の関係と同じパターン）。
 enum BusinessBreakdownNotApplicableReason: String, Equatable {
-    /// E: 報告セグメントが地域別のみで、business 軸への swap が見つからなかった（良品計画型）。
+    /// E: 報告セグメントが地域別のみで、product_service 軸への swap が見つからなかった（良品計画型）。
     /// マツダは地域別セグメントを持つが、単一セグメント開示省略の文言（F）も併せ持つため
     /// singleSegmentDisclosed が優先される（2026-07-26、資生堂型対応）。
     case geographyOnly = "geography_only"
@@ -518,7 +518,7 @@ enum BreakdownExtractor {
         sentences.append(trimmed)
     }
 
-    /// `BusinessBreakdownResolver.resolve` が business 軸を解決できなかった（snapshot == nil）ときの
+    /// `BusinessBreakdownResolver.resolve` が product_service 軸を解決できなかった（snapshot == nil）ときの
     /// 理由を推定する（診断用、issue #130）。単一セグメント開示（F）は表が無いときだけ確定する
     /// （製品別 html_table がある東京エレクトロン型を F にすると再試行されない）。表が無い資生堂型は
     /// 地域軸 facts（E）より F を優先する。専用タグ本文がある business の省略は
@@ -675,7 +675,7 @@ enum BreakdownExtractor {
     ///
     /// 電通型（issue #163）: 地域専用注記は重要国の文章開示＋非流動資産表のみで売上表が残らず、
     /// GeographicArea dimension も無い。報告セグメント自体が日本/Americas/EMEA/APAC の地域軸なら
-    /// OperatingSegments の売上 facts を geography として採用する（business 軸は既に
+    /// OperatingSegments の売上 facts を geography として採用する（product_service 軸は既に
     /// `shouldPreferRevenueRecognition` で製品・サービス表へ swap する相補関係）。
     static func extractGeographyInfo(xbrlDir: URL) -> ExtractedBreakdown {
         let dedicated = Xbrl.geographyTextBlockTags.subtracting(Xbrl.geographyMixedTextBlockTags)

@@ -7,7 +7,7 @@
 //                     [--codes 7203,6758] [--doc-ids S100W0S7]
 //                     [--note-types per_share_information,borrowings_schedule,...]
 //                                                            対象を DB へ取り込み（--stages で選択、既定は全て）。
-//                                                            breakdowns: business/geography は上場全体（--limit 適用）、
+//                                                            breakdowns: product_service/geography は上場全体（--limit 適用）、
 //                                                            employees/rd/goodwill 等の決定論指標軸も上場全体
 //                                                            （1ジョブ 30。日経225は処理順の優先のみ）。
 //                                                            statements は上場全体（日経225は処理順の優先のみ）。
@@ -31,7 +31,7 @@
 //                                                            （Screen 検索用 Read Model）を再生成。
 //                                                            --limit は走査件数上限（部分実行では孤児削除なし）
 //   blt-server status-report                                5 ステージ（financials/statements/
-//                                                            filing_sections/breakdown_business/
+//                                                            filing_sections/breakdown_product_service/
 //                                                            breakdown_geography）のカバレッジ・鮮度・
 //                                                            最新有報スライスを JSON で stdout へ出力
 //                                                            （DB read-only。notes 等は含めない）。

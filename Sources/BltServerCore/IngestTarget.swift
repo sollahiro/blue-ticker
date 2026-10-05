@@ -10,7 +10,7 @@ public enum IngestTarget: String, CaseIterable, Sendable {
     case financials
     /// 有報セクション本文（company_filing_sections）。
     case filingSections = "filing-sections"
-    /// 事業別・地域別内訳・決定論指標軸（company_breakdowns）。ingest は business→geography→...。
+    /// 事業別・地域別内訳・決定論指標軸（company_breakdowns）。ingest は product_service→geography→...。
     /// 対象は上場全体（日経225は処理順の優先のみ）。REST/MCP read は全軸公開。
     case breakdowns
     /// BS/PL/CF/SS 完全正規化（company_statements）。対象は上場全体（日経225は処理順の優先のみ）。

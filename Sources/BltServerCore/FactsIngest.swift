@@ -157,12 +157,12 @@ final class EdinetXbrlFactsCacheVersionOnly: Model, @unchecked Sendable {
 let financialsIngestYears = 6
 
 /// 報告セグメント別の決定論指標軸の1ジョブ上限。対象母集団は上場全体（日経225は処理順の先頭寄せ）。
-/// business / geography の `--limit`（定期ジョブ既定 50）とは独立。`--codes` 時は無視して全件。
+/// product_service / geography の `--limit`（定期ジョブ既定 50）とは独立。`--codes` 時は無視して全件。
 let unpublishedBreakdownIngestLimit = 30
 
 /// `blt-server ingest` の本体。Application を一時起動して DB を配線し、
 /// 財務取り込み（計算済み財務サマリ）→ 半期財務取り込み（半期）→ 有報セクション取り込み（有報セクション）→
-/// 内訳取り込み（business/geography・決定論指標軸ともに上場全体。日経225は処理順の先頭寄せ）を取り込む。
+/// 内訳取り込み（product_service/geography・決定論指標軸ともに上場全体。日経225は処理順の先頭寄せ）を取り込む。
 ///
 /// 数値 fact 取り込み（`edinet_xbrl_facts`）は **閉じた**。生 XBRL の R2 L2 から
 /// 再導出できるパース済み投影で、配信も他 stage も読まない。全件投影は Neon 512MB を超える。
@@ -183,7 +183,7 @@ let unpublishedBreakdownIngestLimit = 30
 /// バグ修正確認後などに特定銘柄だけを手動・単発で先に再計算したいケース向け（定期 launchd drain には
 /// 使わない）。指定時は `limit` を無視して該当コードを全件処理する（対象自体が小さいため）。
 /// 数値 fact 取り込みは `codes` の対象外（doc 単位のため、コードへの紐付けは別スコープ）。
-/// 内訳取り込み: business/geography・決定論指標軸ともに `listed`（上場全体。日経225=`priority`は
+/// 内訳取り込み: product_service/geography・決定論指標軸ともに `listed`（上場全体。日経225=`priority`は
 /// 処理順の先頭寄せのみ）。`--codes` 指定時は全軸その集合。
 /// DATABASE_URL 未設定なら databaseUnavailable、EDINET キー未設定なら apiKeyMissing を投げる。
 public func runFactsIngestCommand(
@@ -390,12 +390,12 @@ public func runFactsIngestCommand(
                 servable: coverage?.servable, unservable: coverage?.unservable, purged: s5.purged)
         }
         if targets.contains(.breakdowns) {
-            // 内訳取り込み: business/geography・決定論指標軸ともに上場全体（`listed`。日経225=
+            // 内訳取り込み: product_service/geography・決定論指標軸ともに上場全体（`listed`。日経225=
             // `priority` は処理順の先頭寄せのみ）。`--codes` 時は全軸その集合。
-            // `--limit` は business/geography に適用。決定論指標軸は `unpublishedBreakdownIngestLimit`。
+            // `--limit` は product_service/geography に適用。決定論指標軸は `unpublishedBreakdownIngestLimit`。
             if publicBreakdownListed.isEmpty {
                 app.logger.warning(
-                    "内訳取り込み listed codes empty (listed universe empty and no --codes); skipping business/geography",
+                    "内訳取り込み listed codes empty (listed universe empty and no --codes); skipping product_service/geography",
                     metadata: ["event": "ingest_skipped", "target": "breakdowns", "reason": "empty_listed_codes"])
             }
             if deterministicMetricsListed.isEmpty {
@@ -419,7 +419,7 @@ public func runFactsIngestCommand(
             }
             let stages: [BreakdownStage] = [
                 BreakdownStage(
-                    axis: breakdownAxisBusiness, target: "breakdowns",
+                    axis: breakdownAxisProductService, target: "breakdowns",
                     listedCodes: publicBreakdownListed, limit: stageLimit,
                     candidateSets: publicBreakdownSets
                 ) { docID in

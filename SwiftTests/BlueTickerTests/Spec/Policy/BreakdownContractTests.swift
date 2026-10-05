@@ -4,13 +4,14 @@ import Testing
 @testable import BlueTickerCore
 
 @Suite struct BreakdownContractTests {
-    @Test func htmlExtractorSharedPathBumpsBusinessWithGeography() throws {
-        let businessN = try #require(breakdownCacheVersionNumber(businessBreakdownCacheVersion))
+    @Test func htmlExtractorSharedPathBumpsProductServiceWithGeography() throws {
+        let productServiceN = try #require(breakdownCacheVersionNumber(productServiceBreakdownCacheVersion))
         let geographyN = try #require(breakdownCacheVersionNumber(geographyBreakdownCacheVersion))
-        #expect(businessN == 15)
+        #expect(productServiceN == 1)
         #expect(geographyN == 13)
-        #expect(try #require(breakdownCacheVersionNumber("breakdown-business-v14")) < businessN)
         #expect(try #require(breakdownCacheVersionNumber("breakdown-geography-v12")) < geographyN)
+        #expect(productServiceBreakdownCacheVersion == "breakdown-product_service-v1")
+        #expect(breakdownCacheVersionNumber("breakdown-business-v15") == 15)
         // fact-only axes do not share allTablesFromHtml / keywordTablesFromHtml.
         #expect(employeesBreakdownCacheVersion == "breakdown-employees-v2")
         #expect(researchAndDevelopmentBreakdownCacheVersion == "breakdown-research-and-development-v2")
@@ -128,6 +129,10 @@ import Testing
             #expect(isSupportedBreakdownAxis(axis) == false)
             #expect(!breakdownSegmentMetricAxes.contains(axis))
         }
+        #expect(isSupportedBreakdownAxis(breakdownAxisProductService))
+        #expect(isSupportedBreakdownAxis("business") == false)
+        #expect(retiredBreakdownAxes.contains("business"))
+        #expect(breakdownAxisProductService == "product_service")
         #expect(!breakdownSegmentMetricAxes.contains(breakdownAxisSegmentAssets)
             || breakdownAxisSegmentAssets == capexCellSegmentAssets)
         #expect(breakdownSegmentMetricAxes.contains(breakdownAxisCapex))

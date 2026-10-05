@@ -9,7 +9,8 @@
 import Foundation
 
 /// company_breakdowns.axis の公開定数（BltServerCore / REST / MCP / ingest で共用）。
-public let breakdownAxisBusiness = "business"
+/// 製品・サービス別（報告セグメントの製品的内訳を含む）。旧公開キー `business` は廃止。
+public let breakdownAxisProductService = "product_service"
 public let breakdownAxisGeography = "geography"
 /// 従業員数のセグメント別内訳軸（2026-08-01追加）。決定論のみ（LLMフォールバックなし）。
 public let breakdownAxisEmployees = "employees"
@@ -51,15 +52,17 @@ public let breakdownAxisCapitalExpenditures = capexFlowMetricCapitalExpenditures
 public let breakdownAxisCapitalExpendituresOverview = capexCellCapitalExpendituresOverview
 public let breakdownAxisNoncurrentAssetAdditions = capexFlowMetricNoncurrentAssetAdditions
 
-/// 旧 4 軸。REST / MCP は 404（`.absent`）。
+/// 旧公開軸。REST / MCP は 404（`.absent`）。`business` は `product_service` への
+/// ハードカットオーバーで廃止（互換エイリアスなし）。
 public let retiredBreakdownAxes = [
     breakdownAxisSegmentAssets,
     breakdownAxisCapitalExpenditures,
     breakdownAxisCapitalExpendituresOverview,
     breakdownAxisNoncurrentAssetAdditions,
+    "business",
 ]
 
-/// business / geography を除く、報告セグメント別の決定論指標軸。
+/// product_service / geography を除く、報告セグメント別の決定論指標軸。
 public let breakdownSegmentMetricAxes = [
     breakdownAxisEmployees,
     breakdownAxisResearchAndDevelopment,
@@ -71,31 +74,24 @@ public let breakdownSegmentMetricAxes = [
 
 /// `company_breakdowns.axis` として実装済みの軸か。
 public func isSupportedBreakdownAxis(_ axis: String) -> Bool {
-    axis == breakdownAxisBusiness || axis == breakdownAxisGeography
+    axis == breakdownAxisProductService || axis == breakdownAxisGeography
         || breakdownSegmentMetricAxes.contains(axis)
 }
 
 /// Neon 内訳取り込み キャッシュ（company_breakdowns.cache_version）の契約スキーマバージョン。
-/// **軸別に独立**（business / geography）。片軸の決定的ロジック変更で他軸の全件再計算を起こさない。
+/// **軸別に独立**（product_service / geography）。片軸の決定的ロジック変更で他軸の全件再計算を起こさない。
 /// blueTickerVersion 非連動。
 /// 決定論・LLM とも、`needs_review` だけでは再計算せず、本バージョンのバンプ（または欠測・行削除）
 /// で再計算する。clean な `segment_info_llm` がバンプを無視すると、誤った profit が再 ingest でも残る。
 ///
-/// 形式: `breakdown-business-vN` / `breakdown-geography-vN`（旧共通 `breakdown-vN` も read 時は受理）。
-/// v10: 積み上げセグメント損益表の決定論寄せ（研究開発費→profit 誤寄せを構造側で防止）。
-/// v11: 単位のみ表を捨てて dedicated contextRef の period を通し、うち列を抽出時に落とす
-/// （`allTablesFromHtml` / `keywordTablesFromHtml` の共有決定論経路。geography と同じ変更）。
-/// v12: うち列ドロップを geography 軸＋地域親/兄弟に限定（うち輸出高等の事業指標列を残す）。
-/// v13: statement sales が null のとき business 分母を収益認識の顧客契約連結→未マスク売上相当へ
-/// フォールバックし、由来タグを偽の `income_statement.sales` にしない。
-/// Summary が本表 `Revenue2IFRS`「収益」を sales に載せても、収益認識表の分母は顧客契約のまま
-/// （`fin-v21`。金額比較では切り替えない）。
-/// v14: ingest 時に jpcrp 標準 member の日本語ラベルを補完（生 `*Member` 表示の誤表示）。
-/// v15: 収益分解を Jev 列選択 + 決定論 2 段（category_group / category）に切り替え。
-/// 格納 JSON の意味が変わるためバンプする。Luna 経路の誤行を現行版 skip で残さない。
-/// `company_breakdowns.payload` は JSONB のため DDL は無い。本番への適用はマージ後の
-/// v15 再計算（別承認）で行う。
-public let businessBreakdownCacheVersion = "breakdown-business-v15"
+/// 形式: `breakdown-product_service-vN` / `breakdown-geography-vN`（旧共通 `breakdown-vN` も read 時は受理）。
+/// 旧公開キー `business` のスタンプ `breakdown-business-vN` は世代番号のパースだけ残し、軸としては読まない。
+/// 新軸系列は v1 から（旧 `breakdown-business-v15` の番号は引き継がない。capex と同じ）。
+/// 旧 business 系列の v10–v15（積み上げ PnL、うち列、分母フォールバック、member ラベル、
+/// Jev 列選択）は `breakdown-business-vN` 側の履歴であり、本スタンプの N ではない。
+/// v1: 公開軸キー `business` → `product_service` のハードカットオーバー。応答・主キー・
+/// payload.axis の契約が変わる。金額の再計算はしない（マージ後にキー書き換え）。
+public let productServiceBreakdownCacheVersion = "breakdown-product_service-v1"
 /// v11: 単位のみ表を捨てて dedicated contextRef の period を通し、うち列を抽出時に落とす。
 /// v12: うち列ドロップの決定論を精緻化（1段うち豪州、地域コンテキスト、軸ゲート）。
 /// v13: ingest 時に jpcrp 標準 member の日本語ラベルを補完（生 `*Member` 表示の誤表示）。
@@ -121,7 +117,7 @@ public let noncurrentAssetAdditionsBreakdownCacheVersion = "breakdown-noncurrent
 /// 設備投資マトリクス。破壊的な新軸のため v1 から。
 public let capexBreakdownCacheVersion = "breakdown-capex-v1"
 
-/// 軸に対応する現行 cache_version 文字列。未知の軸は business 扱い（安全側に決定的バンプ対象へ）。
+/// 軸に対応する現行 cache_version 文字列。未知の軸は product_service 扱い（安全側に決定的バンプ対象へ）。
 public func breakdownCacheVersion(forAxis axis: String) -> String {
     switch axis {
     case breakdownAxisGeography: return geographyBreakdownCacheVersion
@@ -131,11 +127,11 @@ public func breakdownCacheVersion(forAxis axis: String) -> String {
     case breakdownAxisCapex: return capexBreakdownCacheVersion
     case breakdownAxisGoodwillAmortization: return goodwillAmortizationBreakdownCacheVersion
     case breakdownAxisEquityMethodInvestments: return equityMethodInvestmentsBreakdownCacheVersion
-    default: return businessBreakdownCacheVersion
+    default: return productServiceBreakdownCacheVersion
     }
 }
 
-/// business 軸は `BusinessBreakdownResolver` が、geography 軸は呼び出し側が
+/// product_service 軸は `BusinessBreakdownResolver` が、geography 軸は呼び出し側が
 /// `GeographyBreakdownLLMNormalizer`（html_table）または xbrl_facts 経路（`BreakdownNormalizer`）で
 /// 解決した経路。監査・再計算方針の判断に使う。決定論・LLM とも `cache_version` バンプで
 /// 再計算する（clean な `segment_info_llm` がバンプを無視すると誤 profit が残る）。
@@ -148,7 +144,7 @@ public let breakdownSourceRevenueRecognitionLLM = "revenue_recognition_llm"
 public let breakdownSourceSegmentInfoLLM = "segment_info_llm"
 /// geography 軸を `GeographyBreakdownLLMNormalizer`（html_table）経由で解決した行の source。
 public let breakdownSourceGeographyLLM = "geography_llm"
-/// business 軸の内訳が解決できなかった（E/F/unknown）ことを表す行の source（issue #132）。
+/// product_service 軸の内訳が解決できなかった（E/F/unknown）ことを表す行の source（issue #132）。
 /// `BreakdownExtractor.classifyNotApplicableReason` による決定的判定のため、xbrl_facts と同様
 /// `cache_version` 世代でゲートする（`isVersionGatedBreakdownSource` 参照）。
 public let breakdownSourceNotApplicable = "not_applicable"
@@ -179,11 +175,11 @@ public let breakdownWarningResearchAndDevelopmentProseExclusion =
 public let breakdownWarningCapexProseRemainder = "capex_prose_remainder"
 public let breakdownWarningCapexProseExclusion = "capex_prose_exclusion"
 
-/// business breakdown が解決できなかった理由（issue #130、E/F判定の検知結果明示化）。
+/// product_service breakdown が解決できなかった理由（issue #130、E/F判定の検知結果明示化）。
 /// `BreakdownExtractor.BusinessBreakdownNotApplicableReason`（internal 型）の rawValue と揃える
 /// 公開文字列定数（`breakdownSource*` と同じ「internal enum ⇔ public 文字列定数」パターン）。
 /// `CompanyBreakdown.notApplicableReason` に永続化され、REST/MCP の 404 応答へ反映される（issue #132）。
-/// E: 報告セグメントが地域別のみで、business 軸への swap（収益認識注記等）が見つからなかった。
+/// E: 報告セグメントが地域別のみで、product_service 軸への swap（収益認識注記等）が見つからなかった。
 public let breakdownNotApplicableGeographyOnly = "geography_only"
 /// F: 単一セグメントのため報告セグメント開示自体が省略されていた
 /// （`DescriptionOfFactThatCompanysBusinessComprisesSingleSegment` タグで確認）。
@@ -194,11 +190,11 @@ public let breakdownNotApplicableSingleSegmentDisclosed = "single_segment_disclo
 public let breakdownNotApplicableUnknown = "unknown"
 /// geography 軸: 地域注記自体が無い（`BreakdownExtractor.extractGeographyInfo` の
 /// `method == "not_found"`）。正当欠測として `needsReview=false` で永続化し、無駄な再 LLM を止める
-/// （business の E/F と同型の決定的 not_applicable。REST/MCP の geography 公開は別途）。
+/// （product_service の E/F と同型の決定的 not_applicable。REST/MCP の geography 公開は別途）。
 public let breakdownNotApplicableNotFound = "not_found"
 
 /// not_applicable 行のうち、決定的判定のため `needs_review=false` にする reason か。
-/// E/F（business）と geography の正当欠測（`not_found`）が該当。`unknown` は
+/// E/F（product_service）と geography の正当欠測（`not_found`）が該当。`unknown` は
 /// `needs_review=true` で残すが、決定論のため再計算は `cache_version` バンプ（または行削除）。
 /// LLM 失敗の `needs_review=true` だけが通常巡回の再処理キューに載る。
 public func isDeterministicBreakdownNotApplicableReason(_ reason: String) -> Bool {
@@ -210,7 +206,7 @@ public func isDeterministicBreakdownNotApplicableReason(_ reason: String) -> Boo
 /// breakdown read（REST/MCP）が適用する最低スキーマバージョン番号（軸別 `…-vN` の N）。
 /// **明示指定**。決定論・LLM とも `isServableBreakdown` でこの床を見る（パース不能な
 /// cache_version は非 servable）。不変条件: 各軸の床 ≤ その軸の現行 `…-vN` の N。
-public let businessBreakdownMinServableVersion = 1
+public let productServiceBreakdownMinServableVersion = 1
 public let geographyBreakdownMinServableVersion = 1
 public let employeesBreakdownMinServableVersion = 1
 public let researchAndDevelopmentBreakdownMinServableVersion = 1
@@ -223,7 +219,7 @@ public let capitalExpendituresOverviewBreakdownMinServableVersion = 1
 public let noncurrentAssetAdditionsBreakdownMinServableVersion = 1
 public let capexBreakdownMinServableVersion = 1
 
-/// 軸に対応する read 床。未知の軸は business 床。
+/// 軸に対応する read 床。未知の軸は product_service 床。
 public func breakdownMinServableVersion(forAxis axis: String) -> Int {
     switch axis {
     case breakdownAxisGeography: return geographyBreakdownMinServableVersion
@@ -233,16 +229,17 @@ public func breakdownMinServableVersion(forAxis axis: String) -> Int {
     case breakdownAxisCapex: return capexBreakdownMinServableVersion
     case breakdownAxisGoodwillAmortization: return goodwillAmortizationBreakdownMinServableVersion
     case breakdownAxisEquityMethodInvestments: return equityMethodInvestmentsBreakdownMinServableVersion
-    default: return businessBreakdownMinServableVersion
+    default: return productServiceBreakdownMinServableVersion
     }
 }
 
-/// `breakdown-business-vN` / `breakdown-geography-vN` / `breakdown-employees-vN` /
+/// `breakdown-product_service-vN` / `breakdown-geography-vN` / `breakdown-employees-vN` /
 /// `breakdown-research-and-development-vN` / `breakdown-goodwill-vN` / 旧 `breakdown-vN` から世代番号 N を取り出す。
 /// パース不能なら nil（非 servable 扱い）。
 public func breakdownCacheVersionNumber(_ version: String) -> Int? {
     let prefixes = [
-        "breakdown-business-v", "breakdown-geography-v", "breakdown-employees-v",
+        "breakdown-product_service-v", "breakdown-business-v", "breakdown-geography-v",
+        "breakdown-employees-v",
         "breakdown-research-and-development-v", "breakdown-goodwill-v",
         "breakdown-segment-assets-v",
         "breakdown-goodwill-amortization-v",
@@ -335,9 +332,11 @@ public func isPubliclyServableBreakdown(
 
 /// 格納行が read 可能か。version-gated な source は cache_version が当該軸の床以上のときのみ。
 /// パース不能な cache_version は非 servable（誤った clean LLM 行を古い版のまま出し続けない）。
-/// `axis` 省略時は business（現行 REST/MCP 公開軸）。公開面の `needs_review` /
+/// `axis` 省略時は product_service（現行 REST/MCP 公開軸）。公開面の `needs_review` /
 /// `llm_unit_unresolved` 除外は `isPubliclyServableBreakdown`（この関数は ingest 床専用）。
-public func isServableBreakdown(source: String, cacheVersion: String, axis: String = "business") -> Bool {
+public func isServableBreakdown(
+    source: String, cacheVersion: String, axis: String = breakdownAxisProductService
+) -> Bool {
     guard isVersionGatedBreakdownSource(source) else { return true }
     guard let n = breakdownCacheVersionNumber(cacheVersion) else { return false }
     return n >= breakdownMinServableVersion(forAxis: axis)
@@ -532,7 +531,7 @@ public struct SegmentNoteJevAuditPayload: Codable, Sendable, Equatable {
     public var calls: [SegmentNoteJevCallPayload]
     /// 製品90％を省略にしなかった理由。公開 reason ではない。無い行は nil。
     public var withheldReason: String?
-    /// business を専用タグ本文で確定したとき `dedicated_single_segment_tag`。Jev 呼び出しは無い。
+    /// product_service を専用タグ本文で確定したとき `dedicated_single_segment_tag`。Jev 呼び出しは無い。
     /// 公開 reason ではない。無い行は nil。
     public var decisionSource: String?
 

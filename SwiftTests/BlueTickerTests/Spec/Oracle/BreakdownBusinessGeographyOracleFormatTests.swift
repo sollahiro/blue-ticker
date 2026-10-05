@@ -111,7 +111,7 @@ enum BreakdownSmokeOracleSupport {
 
 @Suite struct BreakdownBusinessOracleFormatTests {
     private static let expectedFileURL = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
-        .appendingPathComponent("smoke/breakdown_business_oracle_expected.json")
+        .appendingPathComponent("smoke/breakdown_product_service_oracle_expected.json")
 
     private func assertMatchesOracle(docID: String, code: String, xbrlDir: URL) throws {
         let expected = try BreakdownSmokeOracleSupport.loadExpectedEntry(
@@ -135,7 +135,7 @@ enum BreakdownSmokeOracleSupport {
                 BreakdownNormalizer.normalize(
                     segments, consolidatedSales: sales, labelsByTag: labelsByTag),
                 "\(docID): expected xbrl_facts snapshot")
-            #expect(snap.axis == "business")
+            #expect(snap.axis == breakdownAxisProductService)
             try BreakdownSmokeOracleSupport.assertXbrlFactsRowsMatch(
                 expectedEntry: expected, snapshot: snap, label: "\(docID).business")
         case "stacked_segment_pnl":
@@ -148,7 +148,7 @@ enum BreakdownSmokeOracleSupport {
                 StackedSegmentPnLNormalizer.normalize(
                     segments, consolidatedSales: consolidated),
                 "\(docID): expected stacked_segment_pnl snapshot")
-            #expect(snap.axis == "business")
+            #expect(snap.axis == breakdownAxisProductService)
             #expect(snap.sourceKind == "stacked_segment_pnl")
             try BreakdownSmokeOracleSupport.assertXbrlFactsRowsMatch(
                 expectedEntry: expected, snapshot: snap, label: "\(docID).business")

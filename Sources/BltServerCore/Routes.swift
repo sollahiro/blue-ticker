@@ -40,8 +40,8 @@ func registerRoutes(
                 "company_financials_min_servable": companyFinancialsMinServableVersion,
                 "filing_sections": filingSectionsCacheVersion,
                 "filing_sections_min_servable": filingSectionsMinServableVersion,
-                "breakdown_business": businessBreakdownCacheVersion,
-                "breakdown_business_min_servable": businessBreakdownMinServableVersion,
+                "breakdown_product_service": productServiceBreakdownCacheVersion,
+                "breakdown_product_service_min_servable": productServiceBreakdownMinServableVersion,
                 "breakdown_geography": geographyBreakdownCacheVersion,
                 "breakdown_geography_min_servable": geographyBreakdownMinServableVersion,
                 "statement": statementCacheVersion,
@@ -185,16 +185,16 @@ func registerRoutes(
             notFoundMessage: "書類本文は未抽出です")
     }
 
-    // GET /v1/companies/{code}/breakdown?axis=business&doc_id=...
+    // GET /v1/companies/{code}/breakdown?axis=product_service&doc_id=...
     // DB（内訳取り込み company_breakdowns）の格納済み内訳のみを返す。
-    // axis は business / geography / 決定論指標軸（省略時 business）。
+    // axis は product_service / geography / 決定論指標軸（省略時 product_service）。
     // 内訳取り込み: 全軸とも上場全体（日経225は処理順の先頭寄せのみ。docs/breakdown.md）。
     // 公開面は needs_review / llm_unit_unresolved の LLM 行を出さない（同 docs）。
     v1.get("companies", ":code", "breakdown") { req async -> Response in
         let code = req.parameters.get("code") ?? ""
         recordFeedTrend(req.application, surface: "rest", tool: "get_breakdown", code: code)
         let docId = req.query[String.self, at: "doc_id"]
-        let axis = req.query[String.self, at: "axis"] ?? breakdownAxisBusiness
+        let axis = req.query[String.self, at: "axis"] ?? breakdownAxisProductService
         return makeReasonedResponse(
             await serveStoredBreakdown(
                 code: code, docId: docId, axis: axis, db: dbAvailable ? req.db : nil,
@@ -529,7 +529,7 @@ func breakdownNotFoundMessage(axis: String) -> String {
     case breakdownAxisGoodwillAmortization: return "のれんの償却額の内訳は未算出です"
     case breakdownAxisEquityMethodInvestments: return "持分法会計処理される投資の内訳は未算出です"
     case breakdownAxisCapex: return "設備投資の内訳は未算出です"
-    default: return "事業別内訳は未算出です"
+    default: return "製品・サービス別内訳は未算出です"
     }
 }
 

@@ -26,7 +26,7 @@ enum BusinessBreakdownSource: String {
 enum BusinessBreakdownResolver {
 
     /// segments（事業別セグメント情報。swap 済みの可能性あり）の ExtractedBreakdown から
-    /// business 軸の BreakdownSnapshot を解決する。LLM 呼び出しは html_table 経路でのみ発生し、
+    /// product_service 軸の BreakdownSnapshot を解決する。LLM 呼び出しは html_table 経路でのみ発生し、
     /// xbrl_facts で business 判定できた場合は呼び出さない（決定的経路を優先し LLM 費用を最小化）。
     static func resolve(
         segments: ExtractedBreakdown, consolidatedSales: Double?, client: ChatCompleting,
@@ -42,13 +42,13 @@ enum BusinessBreakdownResolver {
             consolidatedSales: consolidatedSales, labelsByTag: labelsByTag)
         _ = client
 
-        // 1) xbrl_facts 経路（決定的、LLM不要）。axis が business かつ needs_review が
+        // 1) xbrl_facts 経路（決定的、LLM不要）。axis が product_service かつ needs_review が
         //    立っていなければ確信度が高いのでそのまま採用する。
         //    geography のままなのは swap 対象の収益認識/IFRS売上収益注記が見つからなかった
-        //    （または収益種類だけの分解で意図的に swap しなかった）ケース。business としては
+        //    （または収益種類だけの分解で意図的に swap しなかった）ケース。product_service としては
         //    採用せず、下の tables 経路へフォールバックする（住友ファーマ: 製品別表が
         //    セグメント注記 tables 側に残っている。実データ検証 2026-07-24）。
-        if let factsSnapshot, factsSnapshot.axis == "business", !factsSnapshot.needsReview {
+        if let factsSnapshot, factsSnapshot.axis == breakdownAxisProductService, !factsSnapshot.needsReview {
             return (factsSnapshot, .xbrlFacts, nil)
         }
 
@@ -67,8 +67,8 @@ enum BusinessBreakdownResolver {
         // `method == "xbrl_facts"` でも tables が非空なら試す（facts 優先で method が
         // xbrl_facts になった会社が、facts の正規化失敗時に表スクレイピングへ
         // フォールバックできるようにするため。issue調査 2026-07-21、Grok 4.5 レビュー指摘）。
-        // axis=business だが needs_review（表取り違えの疑い）の場合も同じ tables 経路を試す
-        // （エーザイ旧filings型: 地域別 facts が誤って business と確定していたが、
+        // axis=product_service だが needs_review（表取り違えの疑い）の場合も同じ tables 経路を試す
+        // （エーザイ旧filings型: 地域別 facts が誤って product_service と確定していたが、
         // classifyAxis 修正で needs_review=true になった後も、実際には製品別の html_table が
         // 別途存在する。Opus監査 finding #2 フォローアップ、2026-07-25）。
         // LLM が resolve せず終わった場合でも、audit（`notApplicableReason` 等）は呼び出し元へ
@@ -106,10 +106,10 @@ enum BusinessBreakdownResolver {
             }
         }
 
-        // 4) LLM 経路が無い・失敗した場合、xbrl_facts の axis=business スナップショットが
+        // 4) LLM 経路が無い・失敗した場合、xbrl_facts の axis=product_service スナップショットが
         //    あれば（needs_review=true でも）何もないよりはマシなのでフォールバックする
         //    （INPEX旧filings型: tables が無く LLM 経路自体を試せない会社の挙動を変えない）。
-        if let factsSnapshot, factsSnapshot.axis == "business" {
+        if let factsSnapshot, factsSnapshot.axis == breakdownAxisProductService {
             return (factsSnapshot, .xbrlFacts, nil)
         }
 

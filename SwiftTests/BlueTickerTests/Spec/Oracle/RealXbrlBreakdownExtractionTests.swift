@@ -251,7 +251,7 @@ import Foundation
         // 事業グループが列の収益表が改ページで左右に割れる。左（地球環境…食品）と
         // 右（S.L.C. / 電力 / 合計 / 連結金額）を1表に結合し、LLM に半分だけ選ばせない。
         // 当期は 2025-04-01〜2026-03-31。合計行の連結金額が PL 収益 18,915,995 百万円。
-        // 顧客との契約行の連結金額は 13,948,091 百万円（business 分母の正本）。
+        // 顧客との契約行の連結金額は 13,948,091 百万円（product_service 分母の正本）。
         let result = BreakdownExtractor.extractSegmentInfo(xbrlDir: Self.xbrlDir("S100YB25"))
         #expect(result.method == "html_table")
         #expect(result.tables.first?.heading == BreakdownExtractor.revenueRecognitionHeading)
@@ -271,7 +271,7 @@ import Foundation
         #expect(current.contains("モビリティ"))
         #expect(current.contains("食品産業"))
         #expect(current.contains("電力ソリューション"))
-        // 顧客との契約行の連結金額（PDF 顧客との契約。business 分母）。
+        // 顧客との契約行の連結金額（PDF 顧客との契約。product_service 分母）。
         #expect(containsAmount(current, "1,851,642"))
         #expect(containsAmount(current, "1,243,344"))
         #expect(containsAmount(current, "13,948,091"))
@@ -407,7 +407,7 @@ import Foundation
         let result = BreakdownExtractor.extractSegmentInfo(xbrlDir: Self.xbrlDir("S100VZZW"))
         #expect(result.method == "xbrl_facts")
         let snap = try #require(BreakdownNormalizer.normalize(result, consolidatedSales: nil))
-        #expect(snap.axis == "business")
+        #expect(snap.axis == breakdownAxisProductService)
         #expect(snap.sourceKind == "xbrl_facts")
         #expect(snap.rows.contains {
             $0.labelRaw.contains("DomesticInsurance") && $0.amount == 7_708_824_000_000

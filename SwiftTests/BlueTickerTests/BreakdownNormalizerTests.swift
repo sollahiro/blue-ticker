@@ -181,7 +181,7 @@ import Foundation
     /// 学び11（`docs/breakdown.md`）の回帰テスト。実データ検証（2026-07-20）:
     /// 1802大林組・1812鹿島建設・1808長谷工・2413エムスリーはいずれも Domestic/Overseas を
     /// 含む事業区分名（「国内建築」「海外事業」等）の混在で誤って needs_review=true になっていた。
-    /// axis=business の正しさは sum(segment)≈denominator でユーザーが確認済み。
+    /// axis=product_service の正しさは sum(segment)≈denominator でユーザーが確認済み。
     @Test func domesticOverseasPrefixedBusinessSegmentsDoNotTriggerNeedsReview() throws {
         let cases: [(name: String, rows: [(String, Double)])] = [
             ("大林組(1802)", [
@@ -214,7 +214,7 @@ import Foundation
 
         for testCase in cases {
             let snap = try #require(Self.snapshot(labelsAndValues: testCase.rows), "\(testCase.name): snapshot が nil")
-            #expect(snap.axis == "business", "\(testCase.name): expected business axis, got \(snap.axis)")
+            #expect(snap.axis == breakdownAxisProductService, "\(testCase.name): expected business axis, got \(snap.axis)")
             #expect(snap.needsReview == false, "\(testCase.name): expected needsReview=false")
         }
     }
@@ -230,7 +230,7 @@ import Foundation
             ("OverseasFoodsManufacturingAndSalesReportableSegmentMember", 149_491_000_000),
             ("OverseasFoodsWholesaleReportableSegmentMember", 432_800_000_000),
         ]))
-        #expect(snap.axis == "business")
+        #expect(snap.axis == breakdownAxisProductService)
         #expect(snap.needsReview == false)
     }
 
@@ -329,7 +329,7 @@ import Foundation
     /// INPEX旧filings型（J-GAAP時代）の回帰: 報告セグメントが Americas/AsiaAndOceania/
     /// Eurasia/Japan/MiddleEastAndAfrica という純粋な地域区分。`Eurasia`/`MiddleEastAndAfrica`
     /// が `segmentGeographyMemberKeywords` に無いと NXHD 免除条件（裸地域2件以上+非地域事業2件
-    /// 以上）に誤ってヒットし axis=business, needs_review=false に確定してしまう
+    /// 以上）に誤ってヒットし axis=product_service, needs_review=false に確定してしまう
     /// （実データ検証: S100QH2B、2026-07-25）。
     @Test func inpexLegacyFilingPureRegionalSegmentsClassifyAsGeography() throws {
         #expect(
@@ -355,7 +355,7 @@ import Foundation
     /// （Americas/AsiaAndLatinAmerica/China/EMEA/Japan）+ 残余バケツ「OTCAndOthers」1件という
     /// 構成（実データ: S100LKNM/S100O9U7/S100R09Z、`segmentOtherBusinessMemberNames` 未収録の
     /// 残余名）。旧 NXHD 免除条件（裸地域2件以上 かつ 非地域事業1件以上）はこの構成にも誤って
-    /// 一致し、地域別データが axis=business, needs_review=false のまま確定していた。
+    /// 一致し、地域別データが axis=product_service, needs_review=false のまま確定していた。
     /// 非地域事業の最低件数を2件に上げたことで、残余バケツ1件だけでは免除が外れ
     /// needs_review が正しく立つことを確認する。
     @Test func eisaiLegacyFilingWithSingleResidualBucketStillTriggersNeedsReview() throws {
@@ -367,7 +367,7 @@ import Foundation
             ("JapanReportableSegmentMember", 220_000_000_000),
             ("OTCAndOthersReportableSegmentMember", 40_000_000_000),
         ]))
-        #expect(snap.axis == "business")
+        #expect(snap.axis == breakdownAxisProductService)
         #expect(snap.needsReview == true)
     }
 
@@ -388,7 +388,7 @@ import Foundation
             ("ChemicalsBusinessMember", 30_000_000_000),
             ("JapanReportableSegmentMember", 30_000_000_000),
         ]))
-        #expect(snap.axis == "business")
+        #expect(snap.axis == breakdownAxisProductService)
         #expect(snap.needsReview == true)
     }
 
@@ -403,7 +403,7 @@ import Foundation
             ("AsiaPacificBusinessReportableSegmentMember", 80_000_000_000),
             ("TravelRetailBusinessReportableSegmentMember", 70_000_000_000),
         ]))
-        #expect(snap.axis == "business")
+        #expect(snap.axis == breakdownAxisProductService)
         #expect(snap.needsReview == true)
         #expect(snap.warnings.contains("axis_ambiguous"))
     }
@@ -447,7 +447,7 @@ import Foundation
         let result = ExtractedBreakdown(method: "xbrl_facts", tables: [], facts: facts)
         let snap = try #require(
             BreakdownNormalizer.normalize(result, consolidatedSales: 2_574_826_000_000))
-        #expect(snap.axis == "business")
+        #expect(snap.axis == breakdownAxisProductService)
         #expect(snap.needsReview == false)
         #expect(!snap.warnings.contains("axis_ambiguous"))
         #expect(snap.rows.contains {
@@ -477,7 +477,7 @@ import Foundation
             ("ChemicalsBusinessMember", 30_000_000_000),
             ("JapanBusinessMember", 30_000_000_000),
         ]))
-        #expect(snap.axis == "business")
+        #expect(snap.axis == breakdownAxisProductService)
         #expect(snap.needsReview == true)
     }
 
@@ -505,7 +505,7 @@ import Foundation
         ]
         let result = ExtractedBreakdown(method: "xbrl_facts", tables: [], facts: facts)
         let snap = try #require(BreakdownNormalizer.normalize(result, consolidatedSales: 2_011_351_000_000))
-        #expect(snap.axis == "business")
+        #expect(snap.axis == breakdownAxisProductService)
         #expect(snap.needsReview == false)
         #expect(!snap.warnings.contains("axis_ambiguous"))
         #expect(
@@ -523,7 +523,7 @@ import Foundation
         }
         for (code, docID, name) in businessCodes {
             let snap = try #require(try Self.snapshot(code: code, docID: docID), "\(name): snapshot が nil")
-            #expect(snap.axis == "business", "\(name): expected business axis, got \(snap.axis)")
+            #expect(snap.axis == breakdownAxisProductService, "\(name): expected business axis, got \(snap.axis)")
         }
     }
 
@@ -541,7 +541,7 @@ import Foundation
         // 概念を持たないため通常経路では nil になっていたが、粗利益/営業純益基準で解決できる。
         let mufg = try #require(try Self.snapshot(code: "8306", docID: "S100W4FB"))
         #expect(mufg.denominatorTag == "NetRevenue")
-        #expect(mufg.axis == "business")
+        #expect(mufg.axis == breakdownAxisProductService)
         #expect(mufg.needsReview == false)
         #expect(mufg.rows.contains { $0.labelRaw == "RetailAndDigitalBusinessGroupMember" && $0.rowKind == "segment" })
         #expect(mufg.rows.contains { $0.labelRaw == "GlobalMarketsBusinessGroupMember" && $0.rowKind == "segment" })
@@ -550,7 +550,7 @@ import Foundation
 
         let smfg = try #require(try Self.snapshot(code: "8316", docID: "S100W0S7"))
         #expect(smfg.denominatorTag == "ConsolidatedGrossProfit")
-        #expect(smfg.axis == "business")
+        #expect(smfg.axis == breakdownAxisProductService)
         #expect(smfg.needsReview == false)
         #expect(smfg.rows.contains { $0.labelRaw == "WholesaleBusinessUnitReportableSegmentMember" && $0.rowKind == "segment" })
         #expect(smfg.rows.contains { $0.labelRaw == "RetailBusinessUnitReportableSegmentMember" && $0.rowKind == "segment" })
@@ -586,7 +586,7 @@ import Foundation
         let result = ExtractedBreakdown(method: "xbrl_facts", tables: [], facts: facts)
         let snap = try #require(BreakdownNormalizer.normalize(result, consolidatedSales: nil))
         #expect(snap.denominatorTag == grossProfitTag)
-        #expect(snap.axis == "business")
+        #expect(snap.axis == breakdownAxisProductService)
         #expect(snap.needsReview == false)
         #expect(snap.rows.contains { $0.labelRaw == "OtherReportableSegmentsMember" && $0.rowKind == "segment" })
         #expect(snap.rows.first { $0.labelRaw == "RBCReportableSegmentMember" }?.profit == 237_515_000_000)
@@ -617,7 +617,7 @@ import Foundation
         let result = ExtractedBreakdown(method: "xbrl_facts", tables: [], facts: facts)
         let snap = try #require(BreakdownNormalizer.normalize(result, consolidatedSales: nil))
         #expect(snap.denominatorTag == "InsuranceRevenueIFRS")
-        #expect(snap.axis == "business")
+        #expect(snap.axis == breakdownAxisProductService)
         #expect(snap.needsReview == false)
         #expect(snap.rows.first { $0.labelRaw == "JapanPCBusinessReportableSegmentMember" }?.profit == 257_461_000_000)
         #expect(snap.rows.first { $0.labelRaw == "ReconcilingItemsMember" }?.rowKind == "reconciling")
@@ -647,7 +647,7 @@ import Foundation
         let result = ExtractedBreakdown(method: "xbrl_facts", tables: [], facts: facts)
         let snap = try #require(BreakdownNormalizer.normalize(result, consolidatedSales: nil))
         #expect(snap.denominatorTag == "RevenuesFromExternalCustomers")
-        #expect(snap.axis == "business")
+        #expect(snap.axis == breakdownAxisProductService)
         #expect(snap.denominator == 359_371_000_000)
         #expect(
             snap.rows.first { $0.labelRaw == "FilmBusinessReportableSegmentsMember" }?.profit
@@ -737,7 +737,7 @@ import Foundation
         #expect(snap.denominator == 492_370_000_000)
         #expect(snap.warnings.contains("sales_denominator_aligned_to_segment_total"))
         #expect(snap.needsReview == false)
-        #expect(snap.axis == "business")
+        #expect(snap.axis == breakdownAxisProductService)
         let segmentShare = snap.rows.filter { $0.rowKind == "segment" }
             .reduce(0.0) { $0 + ($1.share ?? 0) }
         #expect(abs(segmentShare - 1.0) < 0.001)
@@ -1015,7 +1015,7 @@ import Foundation
 
         let global = try #require(snap.rows.first { $0.labelRaw == "GlobalHousingEquipmentBusinessReportableSegmentMember" })
         #expect(global.rowKind == "subtotal")
-        #expect(snap.axis == "business")
+        #expect(snap.axis == breakdownAxisProductService)
         #expect(snap.needsReview == false)
         #expect(!snap.warnings.contains("axis_ambiguous"))
         let segmentShare = snap.rows.filter { $0.rowKind == "segment" }.reduce(0.0) { $0 + ($1.share ?? 0) }
@@ -1067,7 +1067,7 @@ import Foundation
         let global = try #require(
             snap.rows.first { $0.labelRaw == "GlobalHousingEquipmentBusinessReportableSegmentsMember" })
         #expect(global.rowKind == "subtotal")
-        #expect(snap.axis == "business")
+        #expect(snap.axis == breakdownAxisProductService)
         let segmentShare = snap.rows.filter { $0.rowKind == "segment" }.reduce(0.0) { $0 + ($1.share ?? 0) }
         #expect(abs(segmentShare - 1.0) < 0.02)
         // 米州/アジア等は地域名＋Business ラッパだけだが、日本住設（HousingEquipment）と同居する
@@ -1098,7 +1098,7 @@ import Foundation
         let snap = try #require(BreakdownNormalizer.normalize(result, consolidatedSales: 276_862_000_000))
 
         #expect(snap.denominatorTag == "RevenueFromExternalCustomers")
-        #expect(snap.axis == "business")
+        #expect(snap.axis == breakdownAxisProductService)
         #expect(snap.needsReview == false)
         #expect(snap.warnings.isEmpty)
         #expect(snap.rows.contains { $0.labelRaw == "FinTechReportableSegmentMember" && $0.rowKind == "segment" })
@@ -1143,7 +1143,7 @@ import Foundation
         let snap = try #require(BreakdownNormalizer.normalize(result, consolidatedSales: 493_677_000_000))
 
         #expect(snap.denominatorTag == external)
-        #expect(snap.axis == "business")
+        #expect(snap.axis == breakdownAxisProductService)
         #expect(snap.needsReview == false)
         #expect(!snap.warnings.contains("denominator_tag_ambiguous"))
         #expect(snap.denominator == 493_677_000_000)

@@ -23,7 +23,8 @@ enum LLMProvider: String, Sendable {
         }
     }
 
-    /// `business` / `geography` → `OPENAI_BUSINESS` または `XAI_BUSINESS` など。
+    /// LLM 軸 `business` / `geography` → `OPENAI_BUSINESS` または `XAI_BUSINESS` など。
+    /// 公開 breakdown 軸キー `product_service` とは別（env プレフィックスは変えない）。
     func envPrefix(axis: String) -> String {
         let axisPart = axis.uppercased()
         switch self {

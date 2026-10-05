@@ -142,16 +142,16 @@ private func toolCallBody(name: String, arguments: [String: Any]) -> [String: An
     /// issue #132: REST の 404 ボディ拡張と同じ意味論を MCP エラーテキストにも反映する。
     @Test func getBreakdownReturnsReasonWhenNotApplicable() async throws {
         try await withMcpApp(databases: true) { app in
-            let row = CompanyBreakdown(docID: "S1", axis: breakdownAxisBusiness)
+            let row = CompanyBreakdown(docID: "S1", axis: breakdownAxisProductService)
             row.code = "7203"
             row.submitDateTime = "2025-06-20 09:00"
             row.payload = BreakdownSnapshotPayload(
-                axis: "business", denominator: 0, denominatorTag: "", rows: [],
+                axis: breakdownAxisProductService, denominator: 0, denominatorTag: "", rows: [],
                 sourceKind: breakdownSourceNotApplicable, needsReview: false, warnings: [])
             row.needsReview = false
             row.source = breakdownSourceNotApplicable
             row.contentHash = ""
-            row.cacheVersion = businessBreakdownCacheVersion
+            row.cacheVersion = productServiceBreakdownCacheVersion
             row.notApplicableReason = breakdownNotApplicableSingleSegmentDisclosed
             try await row.create(on: app.db)
 

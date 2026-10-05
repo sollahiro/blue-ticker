@@ -49,7 +49,7 @@ import Testing
             #expect(extracted.method == "xbrl_facts")
             let snapshot = try #require(
                 BreakdownNormalizer.normalize(extracted, consolidatedSales: 3_368_000_000))
-            #expect(snapshot.axis == "business")
+            #expect(snapshot.axis == breakdownAxisProductService)
             let labels = Set(snapshot.rows.filter { $0.rowKind == "segment" }.map(\.labelRaw))
             #expect(labels == ["MXMember", "EXMember"])
             let warned = BreakdownExtractor.applyingDedicatedTagDisagreementWarning(to: snapshot)
@@ -234,8 +234,8 @@ import Testing
         }
     }
 
-    @Test func cacheVersionStaysBreakdownBusinessV15() {
-        #expect(businessBreakdownCacheVersion == "breakdown-business-v15")
+    @Test func cacheVersionStartsProductServiceV1() {
+        #expect(productServiceBreakdownCacheVersion == "breakdown-product_service-v1")
         #expect(
             breakdownWarningSingleSegmentTagDisagreesWithCurrentYearReportableSegments
                 == "single_segment_tag_disagrees_with_current_year_reportable_segments")

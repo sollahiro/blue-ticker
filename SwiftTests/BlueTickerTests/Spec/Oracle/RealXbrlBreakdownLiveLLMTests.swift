@@ -46,7 +46,7 @@ import Foundation
         )
 
         #expect(source == .revenueRecognitionLLM)
-        #expect(snapshot?.axis == "business")
+        #expect(snapshot?.axis == breakdownAxisProductService)
         #expect(snapshot?.needsReview == false)
         let labels = Set(snapshot?.rows.filter { $0.rowKind == "segment" }.map(\.labelRaw) ?? [])
         #expect(labels.contains("タイヤ"))
@@ -68,7 +68,7 @@ import Foundation
         )
 
         #expect(source == .revenueRecognitionLLM)
-        #expect(snapshot?.axis == "business")
+        #expect(snapshot?.axis == breakdownAxisProductService)
         #expect(snapshot?.needsReview == false)
         let labels = Set(snapshot?.rows.filter { $0.rowKind == "segment" }.map(\.labelRaw) ?? [])
         #expect(labels.contains(where: { $0.contains("サーマル") }))
@@ -90,7 +90,7 @@ import Foundation
         )
 
         #expect(source == .segmentInfoLLM)
-        #expect(snapshot?.axis == "business")
+        #expect(snapshot?.axis == breakdownAxisProductService)
         let labels = snapshot?.rows.filter { $0.rowKind == "segment" }.map(\.labelRaw).joined(separator: " ") ?? ""
         #expect(labels.contains("ラツーダ"))
         #expect(labels.contains("オルゴビクス") || labels.contains("ORGOVYX"))

@@ -806,7 +806,7 @@ import Testing
             #expect(!BusinessBreakdownResolver.dedicatedSingleSegmentFallback(
                 snapshot: snapshot, dedicatedTagText: nil))
             let dropped = BreakdownSnapshot(
-                axis: "business", denominator: 102 * Financial.millionYen,
+                axis: breakdownAxisProductService, denominator: 102 * Financial.millionYen,
                 denominatorTag: "llm_table_subtotal", rows: [], sourceKind: "revenue_recognition",
                 needsReview: true,
                 warnings: [
@@ -2162,7 +2162,7 @@ import Testing
 
     @Test func replacingJevKeepsColumnJev() {
         let column = SegmentNoteJevAuditPayload(
-            code: "", docID: "S100YKKP", axis: "business", model: "typesafe/jev-1.13",
+            code: "", docID: "S100YKKP", axis: breakdownAxisProductService, model: "typesafe/jev-1.13",
             threshold: 0.5, applied: true, needsReview: false, sentences: [],
             calls: [
                 SegmentNoteJevCallPayload(
@@ -2170,7 +2170,7 @@ import Testing
                     probability: 0.97, sentences: [], applied: true)
             ])
         let note = SegmentNoteJevAuditPayload(
-            code: "", docID: "S100YKKP", axis: "business", model: "typesafe/jev-1.13",
+            code: "", docID: "S100YKKP", axis: breakdownAxisProductService, model: "typesafe/jev-1.13",
             threshold: 0.9, applied: false, needsReview: false, sentences: [],
             calls: [
                 SegmentNoteJevCallPayload(

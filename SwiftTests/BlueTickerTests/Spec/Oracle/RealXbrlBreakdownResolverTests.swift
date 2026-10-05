@@ -77,7 +77,7 @@ import Foundation
         )
 
         #expect(source == .revenueRecognitionLLM)
-        #expect(snapshot?.axis == "business")
+        #expect(snapshot?.axis == breakdownAxisProductService)
         let labels = Self.resolvedLabels(snapshot)
         #expect(labels.contains("タイヤ"))
         #expect(labels.contains("その他"))
@@ -118,7 +118,7 @@ import Foundation
         )
 
         #expect(source == .revenueRecognitionLLM)
-        #expect(snapshot?.axis == "business")
+        #expect(snapshot?.axis == breakdownAxisProductService)
         let labels = Self.resolvedLabels(snapshot)
         #expect(labels.contains("サーマルシステム"))
         #expect(labels.contains("パワトレインシステム"))
@@ -152,7 +152,7 @@ import Foundation
             columnDecider: FakeRevenueRecognitionColumnDecider(containing: "精密加工装置")
         )
         #expect(source == .revenueRecognitionLLM)
-        #expect(snapshot?.axis == "business")
+        #expect(snapshot?.axis == breakdownAxisProductService)
         let labels = Self.resolvedLabels(snapshot)
         #expect(labels.contains("精密加工装置"))
         #expect(labels.contains("精密加工ツール"))
@@ -189,7 +189,7 @@ import Foundation
             columnDecider: FakeRevenueRecognitionColumnDecider(containing: "新規装置")
         )
         #expect(source == .revenueRecognitionLLM)
-        #expect(snapshot?.axis == "business")
+        #expect(snapshot?.axis == breakdownAxisProductService)
         let labels = Self.resolvedLabels(snapshot)
         #expect(labels.contains("新規装置"))
         #expect(labels.contains("フィールドソリューション他"))
@@ -215,7 +215,7 @@ import Foundation
         // NotesRevenue2 当期表（単位：百万円）。顧客との契約から認識した収益:
         //   合計列 13,939,592（報告セグメント小計）≠ 連結金額列 13,948,091。
         // その他の源泉から認識した収益 連結金額 4,967,904。合計行 連結金額 18,915,995。
-        // business 分母は顧客との契約の連結金額 13,948,091。その他の源泉は含めない。
+        // product_service 分母は顧客との契約の連結金額 13,948,091。その他の源泉は含めない。
         let denom = BreakdownFinancialsResolver.breakdownBusinessSalesDenominatorItem(xbrlDir: dir)
         #expect(denom.value == 13_948_091_000_000)
         #expect(denom.tag == "llm_table_subtotal")
@@ -258,7 +258,7 @@ import Foundation
             columnDecider: FakeRevenueRecognitionColumnDecider(containing: "地球環境エネルギー")
         )
         #expect(source == .revenueRecognitionLLM)
-        #expect(snapshot?.axis == "business")
+        #expect(snapshot?.axis == breakdownAxisProductService)
         // 顧客との契約から認識した収益 × 連結金額。合計列 13,939,592 ではない。
         #expect(snapshot?.denominator == 13_948_091_000_000)
         #expect(snapshot?.denominatorTag == "llm_table_subtotal")
@@ -291,7 +291,7 @@ import Foundation
         )
 
         #expect(source == .segmentInfoLLM)
-        #expect(snapshot?.axis == "business")
+        #expect(snapshot?.axis == breakdownAxisProductService)
         let labels = snapshot?.rows.map(\.labelRaw).joined(separator: " ") ?? ""
         #expect(labels.contains("ラツーダ"))
         #expect(labels.contains("オルゴビクス") || labels.contains("ORGOVYX"))
@@ -313,7 +313,7 @@ import Foundation
         )
 
         #expect(source == .segmentInfoLLM)
-        #expect(snapshot?.axis == "business")
+        #expect(snapshot?.axis == breakdownAxisProductService)
         let labels = Self.resolvedLabels(snapshot)
         #expect(labels.contains("ニューロロジー領域製品") || labels.contains(where: { $0.contains("ニューロロジー") }))
         #expect(labels.contains("オンコロジー領域製品") || labels.contains(where: { $0.contains("オンコロジー") }))
@@ -340,7 +340,7 @@ import Foundation
         )
 
         #expect(source == .segmentInfoLLM)
-        #expect(snapshot?.axis == "business")
+        #expect(snapshot?.axis == breakdownAxisProductService)
         #expect(snapshot?.needsReview == true)
         #expect(snapshot?.warnings.contains("business_label_looks_like_geography") == true)
         let japan = try #require(snapshot?.rows.first { $0.labelRaw.contains("日本") })
@@ -401,7 +401,7 @@ import Foundation
         #expect(audit == nil)
         #expect(await client.timesCalled() == 0)
         let snap = try #require(snapshot)
-        #expect(snap.axis == "business")
+        #expect(snap.axis == breakdownAxisProductService)
         #expect(snap.denominatorTag == "NetSalesAndOperatingRevenueFromExternalCustomersIFRS")
         #expect(snap.denominator == sales)
         #expect(snap.denominator / sales < 10)
@@ -414,7 +414,7 @@ import Foundation
     }
 
     /// フジックス S100YHMW: 報告セグメントは日本/アジア。製品別は90％省略で表が無い。
-    /// business は geography_only。日本/アジアを business に載せない。
+    /// business は geography_only。日本/アジアを product_service に載せない。
     @Test func fujixResolvesBusinessAsGeographyOnly() async throws {
         guard await Self.ensureAvailable("S100YHMW") else { return }
         let segments = BreakdownExtractor.extractSegmentInfo(xbrlDir: Self.xbrlDir("S100YHMW"))
