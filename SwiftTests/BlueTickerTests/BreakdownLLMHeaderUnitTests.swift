@@ -141,16 +141,17 @@ import Testing
     }
 
     @Test func noHeaderInfersMillionFromConsolidatedSalesForGeography() async throws {
-        let extracted = ExtractedBreakdown(
-            method: "html_table",
-            tables: [
-                BreakdownTable(
-                    heading: "地域ごとの情報",
-                    markdown: "| 日本 | 合計 |\n| 100 | 100 |\n",
-                    period: "当期")
-            ],
-            facts: []
-        )
+        let html = """
+            <p>当連結会計年度</p>
+            <table>
+              <tr><td></td><td>売上高</td></tr>
+              <tr><td>日本</td><td>100</td></tr>
+              <tr><td>合計</td><td>100</td></tr>
+            </table>
+            """
+        var tables = Self.tables(from: html, heading: "地域ごとの情報")
+        if !tables.isEmpty { tables[0].period = "当期" }
+        let extracted = ExtractedBreakdown(method: "html_table", tables: tables, facts: [])
         let sales = 100 * Financial.millionYen
         let (snapshotOrNil, _) = await GeographyBreakdownLLMNormalizer.normalize(
             extracted, consolidatedSales: sales,
