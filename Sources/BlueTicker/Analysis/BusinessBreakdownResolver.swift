@@ -95,6 +95,11 @@ enum BusinessBreakdownResolver {
                     salesDenominatorTag: denominatorTag
                 )
                 lastAudit = audit
+                if audit?.notApplicableReason
+                    == BusinessBreakdownNotApplicableReason.geographyOnly.rawValue
+                {
+                    return (nil, .notFound, audit)
+                }
                 if let snapshot, hasUsableSegmentRows(snapshot) {
                     return (snapshot, .segmentInfoLLM, audit)
                 }

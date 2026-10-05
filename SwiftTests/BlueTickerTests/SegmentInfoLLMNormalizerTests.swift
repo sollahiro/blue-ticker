@@ -73,7 +73,7 @@ import Foundation
         #expect(!snapshot.needsReview)
     }
 
-    @Test func takesGeographyOnlyReportingSegments() async throws {
+    @Test func geographyOnlyReportingSegmentsAreNotApplicable() async throws {
         let markdown = """
             | 区分 | 当期 |
             | 日本 | 600 |
@@ -82,15 +82,10 @@ import Foundation
             """
         let table = BreakdownTable(
             heading: "セグメント情報", markdown: markdown, period: "当期", unitCaption: "百万円")
-        let (snapshotOrNil, _) = await Self.normalize(
+        let (snapshot, audit) = await Self.normalize(
             tables: [table], sales: 1_000 * Financial.millionYen)
-        let snapshot = try #require(snapshotOrNil)
-        #expect(snapshot.warnings.contains(SegmentInfoLLMNormalizer.warningGeographyTaken))
-        #expect(!snapshot.warnings.contains("business_label_looks_like_geography"))
-        let labels: Set<String> = Set(
-            snapshot.rows.filter { $0.rowKind == "segment" }.map { $0.labelRaw })
-        #expect(labels == Set(["日本", "米国"]))
-        #expect(!snapshot.needsReview)
+        #expect(snapshot == nil)
+        #expect(audit?.notApplicableReason == breakdownNotApplicableGeographyOnly)
     }
 
     @Test func flagsSuspicionWhenGeographicBusinessUnitNamesLookLikeRegions() async throws {
