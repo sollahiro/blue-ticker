@@ -1,7 +1,9 @@
 // セグメント注記（business / geography の省略）だけを Jev に判定させる。
 // コードが候補の文と表を切り出す。Jev は Choice だけを返す。
-// business の専用タグに本文があるときは、収益認識の分解表が無い場合だけ
-// Jev を呼ばず `single_segment_disclosed`。分解表があるときは表ステップへ進む。
+// business の専用タグに本文があるときは、収益認識の分解表も製品・サービス別表も無く、
+// 当期の報告セグメント売上 member が 1 以下なら `single_segment_disclosed`。
+// 製品・サービス別表があるときは専用タグで短絡せず表ステップへ進む。
+// 決定論が単一セグメントまたは LLM の NR にしたあとは Jev 第二パスで妥当性を聞く。
 // その本文が無いとき、`OPENROUTER_DECISION_API_KEY` が無ければ今日の決定論のまま。
 // 研究開発費・設備投資・減損の省略判定は対象外。公開 reason は既存の文字列だけを使う。
 // 研究開発費の本文総額は ResearchAndDevelopmentProseTotal が別の Choice で扱う。
@@ -85,12 +87,39 @@ enum SegmentNoteOmission: Equatable, Sendable {
     }
 }
 
+enum SegmentNoteReviewProposal: Equatable, Sendable {
+    case singleSegment(reason: String)
+    case needsReview(reason: String)
+
+    var kindKey: String {
+        switch self {
+        case .singleSegment: return "single_segment_disclosed"
+        case .needsReview: return "needs_review"
+        }
+    }
+
+    var reason: String {
+        switch self {
+        case .singleSegment(let reason), .needsReview(let reason):
+            return reason
+        }
+    }
+}
+
 protocol SegmentNoteDeciding: Sendable {
     func selectBreakdownTable(
         tables: [SegmentNoteTableCandidate], sentences: [String]
     ) async -> SegmentNoteConsultedChoice
 
     func classifyOmission(sentence: String) async -> SegmentNoteConsultedChoice
+
+    /// 決定論が単一セグメント省略または needs_review にしたあと、その判断がまだ妥当か。
+    /// 高信頼で表インデックスを返したときだけカバレッジを回復する（fail-closed）。
+    func reviewDecision(
+        proposal: SegmentNoteReviewProposal,
+        tables: [SegmentNoteTableCandidate],
+        sentences: [String]
+    ) async -> SegmentNoteConsultedChoice
 }
 
 struct SegmentNoteDecisionOutcome: Equatable, Sendable {
@@ -113,6 +142,9 @@ enum SegmentNoteDecision {
 
     /// 専用タグ本文で business を確定した監査。Jev は呼んでいない。公開 reason ではない。
     static let dedicatedTagDecisionSource = "dedicated_single_segment_tag"
+
+    /// 単一セグメント / NR の第二パスで表を回復した監査。公開 reason ではない。
+    static let reviewDecisionSource = "jev_review_decision"
 
     /// 省略（`none_of_these` のあとの文クラス）だけに使う。表を選んだときは見ない。
     /// `confidence` では代用しない。校正値は PR 本文。誤った省略より needs_review を残す。
@@ -222,6 +254,60 @@ enum SegmentNoteDecision {
             axis: axis, code: code, docID: docID, sentences: sentences,
             action: action, needsReview: needsReview, calls: calls,
             appliedOmission: canOmit ? agreed : nil)
+    }
+
+    /// 決定論の単一セグメント / NR が、使える製品・事業表を見落としていないか Jev に聞く。
+    /// 確率 0.9 未満・keep・欠測は提案を維持する。表インデックスが高信頼のときだけ keepTable。
+    /// 空行の捏造はしない（呼び出し側が組立不能ならスナップショットを作らない）。
+    static func review(
+        proposal: SegmentNoteReviewProposal,
+        axis: SegmentNoteAxis = .business,
+        code: String = "",
+        docID: String = "",
+        tables: [BreakdownTable],
+        sentences: [String],
+        existing: SegmentNoteDecisionOutcome,
+        decider: any SegmentNoteDeciding
+    ) async -> SegmentNoteDecisionOutcome {
+        guard !tables.isEmpty else { return existing }
+        let candidates = tables.enumerated().map { index, table in
+            SegmentNoteTableCandidate(
+                index: index, heading: table.heading, period: table.period, markdown: table.markdown)
+        }
+        let choice = await decider.reviewDecision(
+            proposal: proposal, tables: candidates, sentences: sentences)
+        let recoveredIndex: Int?
+        if let selected = choice.selected,
+           selected != OpenRouterSegmentNoteDecider.reviewKeep,
+           let index = Int(selected),
+           tables.indices.contains(index),
+           meetsThreshold(choice.probability)
+        {
+            recoveredIndex = index
+        } else {
+            recoveredIndex = nil
+        }
+        let reviewCall = call(choice, sentences: sentences, applied: recoveredIndex != nil)
+        var audit = existing.audit ?? SegmentNoteJevAuditPayload(
+            code: code, docID: docID, axis: axis.wire, model: Api.openrouterDecisionsModel,
+            threshold: applyProbabilityThreshold, applied: existing.action != .unchanged,
+            needsReview: existing.needsReview, sentences: sentences, calls: [],
+            decisionSource: existing.audit?.decisionSource)
+        audit.calls.append(reviewCall)
+        if let recoveredIndex {
+            audit.applied = true
+            audit.needsReview = false
+            audit.decisionSource = reviewDecisionSource
+            if audit.model.isEmpty {
+                audit.model = Api.openrouterDecisionsModel
+            }
+            return SegmentNoteDecisionOutcome(
+                action: .keepTable(recoveredIndex), needsReview: false, audit: audit,
+                omissionReason: nil, appliedOmission: nil)
+        }
+        return SegmentNoteDecisionOutcome(
+            action: existing.action, needsReview: existing.needsReview, audit: audit,
+            omissionReason: existing.omissionReason, appliedOmission: existing.appliedOmission)
     }
 
     /// 専用タグの本文だけで business を `single_segment_disclosed` にする。Jev は呼ばない。
@@ -334,6 +420,8 @@ struct OpenRouterSegmentNoteDecider: SegmentNoteDeciding {
 
     static let breakdownTableQuestion = "breakdown_table"
     static let omissionQuestion = "omission"
+    static let reviewDecisionQuestion = "review_decision"
+    static let reviewKeep = "keep"
     static let noneOfThese = "none_of_these"
     static let omissionOptionKeys = [
         "single_segment",
@@ -374,6 +462,30 @@ struct OpenRouterSegmentNoteDecider: SegmentNoteDeciding {
             return Self.consultedChoice(
                 from: data, question: Self.omissionQuestion, options: Self.omissionOptionKeys,
                 sentences: [sentence])
+        } catch {
+            return unavailable
+        }
+    }
+
+    func reviewDecision(
+        proposal: SegmentNoteReviewProposal,
+        tables: [SegmentNoteTableCandidate],
+        sentences: [String]
+    ) async -> SegmentNoteConsultedChoice {
+        let options = tables.map { "\($0.index)" } + [Self.reviewKeep]
+        let unavailable = SegmentNoteConsultedChoice(
+            question: Self.reviewDecisionQuestion, selected: nil, probability: nil,
+            options: options, sentences: sentences)
+        guard let body = Self.reviewRequestJSON(
+            model: model, proposal: proposal, tables: tables, sentences: sentences)
+        else {
+            return unavailable
+        }
+        do {
+            let data = try await client.decide(requestJSON: body)
+            return Self.consultedChoice(
+                from: data, question: Self.reviewDecisionQuestion, options: options,
+                sentences: sentences)
         } catch {
             return unavailable
         }
@@ -439,6 +551,53 @@ struct OpenRouterSegmentNoteDecider: SegmentNoteDeciding {
         return OpenRouterDecisionsCodec.requestJSON(
             model: model,
             state: ["sentence": sentence],
+            questions: questions)
+    }
+
+    static func reviewRequestJSON(
+        model: String,
+        proposal: SegmentNoteReviewProposal,
+        tables: [SegmentNoteTableCandidate],
+        sentences: [String]
+    ) -> Data? {
+        var criteria: [String: String] = [
+            reviewKeep: """
+                提案どおりでよい。使える当期の製品・サービス別または事業別の内訳表は無い。 \
+                単一セグメント省略または needs_review を維持する。表から行を捏造してはいけない。
+                """,
+        ]
+        var tableState: [[String: String]] = []
+        for table in tables {
+            let period = table.period ?? "不明"
+            criteria["\(table.index)"] = """
+                表\(table.index)（期間: \(period)、見出し: \(table.heading)）は、当期の使える \
+                製品・サービス別または事業別の内訳である。単一セグメントタグや省略文があっても、 \
+                この表から公開可能な行を組める。顧客表・前期のみ・合計行だけの表は選ばない。
+                """
+            tableState.append([
+                "index": "\(table.index)",
+                "period": period,
+                "heading": table.heading,
+                "markdown": String(table.markdown.prefix(markdownLimit)),
+            ])
+        }
+        let questions: [String: Any] = [
+            reviewDecisionQuestion: OpenRouterDecisionsCodec.choiceQuestion(
+                instructions: """
+                    決定論は \(proposal.kindKey)（理由: \(proposal.reason)）とした。 \
+                    その判断は、与えた表と文を見てまだ妥当か。使える製品・事業の内訳表があれば \
+                    その表番号、無ければ keep。自信が無いときは keep。
+                    """,
+                criteria: criteria),
+        ]
+        return OpenRouterDecisionsCodec.requestJSON(
+            model: model,
+            state: [
+                "proposal": proposal.kindKey,
+                "proposal_reason": proposal.reason,
+                "sentences": sentences,
+                "tables": tableState,
+            ],
             questions: questions)
     }
 

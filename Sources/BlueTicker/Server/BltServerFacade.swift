@@ -559,16 +559,20 @@ public extension BltServerContext {
     }
 
     /// セグメント注記の Jev。`extracted == nil` は省略確定（呼び出し側が not_applicable にする）。
-    /// business の専用タグに**当期**本文があるとき、収益認識の分解表が無く、かつ当期の
-    /// 報告セグメント売上 member が 1 以下なら `single_segment_disclosed`。当期 member が
-    /// 2 以上ならタグを信じず表ステップへ進む。分解表があるときは表ステップへ進む。
+    /// business の専用タグに**当期**本文があるとき、収益認識の分解表も製品・サービス別表も無く、
+    /// かつ当期の報告セグメント売上 member が 1 以下なら `single_segment_disclosed`。
+    /// 製品・サービス別表があるときは専用タグで短絡せず表ステップへ進む（475A S100YJX2）。
+    /// 当期 member が 2 以上ならタグを信じず表ステップへ進む。分解表があるときは表ステップへ進む。
     /// 選んだ表が合計行だけでカテゴリが無いときは専用タグへ戻す（8771）。
     /// 顧客表・製品90％・本邦90％はその省略を取り消さない。
     /// 専用タグは geography を飛ばさない。キーがある geography は Jev のまま。
     /// キーが無いとき、応答が無いときは、専用タグ以外は抽出結果をそのまま返す。
     /// 呼び出し失敗では `needsReview` を足さない。
-    /// 表を選んだときは確率に関係なくその表を残す。`none_of_these` の確率が閾値未満のときは
+    /// 表を選んだときは確率に関係なくその表を残す。ただし組立不能・前期・非製品（製品表あり）
+    /// の keepTable は1表に閉じない。`none_of_these` の確率が閾値未満のときは
     /// 抽出結果を変えず、`needsReview` を立てる。
+    /// 決定論が単一セグメントまたは LLM の NR にしたあとは Jev 第二パスで妥当性を聞く。
+    /// 低信頼は提案を維持する（published-wrong=0）。
     internal func segmentsAfterNoteDecision(
         axis: SegmentNoteAxis, docID: String, extracted: ExtractedBreakdown, xbrlDir: URL,
         consolidatedSales: Double?, labelsByTag: [String: String]
@@ -576,13 +580,19 @@ public extension BltServerContext {
         let pass = (extracted: extracted as ExtractedBreakdown?, outcome: SegmentNoteDecisionOutcome.unchanged)
         let currentYearReportableCount =
             BreakdownExtractor.currentYearReportableOperatingSegmentSalesMemberCount(xbrlDir: xbrlDir)
+        let fiscalYearEnd = BreakdownExtractor.currentFiscalYearEnd(fromXbrlDir: xbrlDir)
+        let sentences = BreakdownExtractor.segmentNoteOmissionSentences(xbrlDir: xbrlDir)
         if axis == .business,
             let tagText = BreakdownExtractor.dedicatedSingleSegmentTagTrustedForOmission(xbrlDir: xbrlDir),
             !extracted.tables.contains(where: {
                 $0.heading == BreakdownExtractor.revenueRecognitionHeading
-            })
+            }),
+            !SegmentInfoLLMNormalizer.hasUsableProductOrBusinessTable(extracted.tables)
         {
-            return (nil, SegmentNoteDecision.dedicatedTagBusinessOutcome(docID: docID, tagText: tagText))
+            let omitted = SegmentNoteDecision.dedicatedTagBusinessOutcome(docID: docID, tagText: tagText)
+            return await applyingReviewedOmission(
+                omitted, axis: axis, docID: docID, extracted: extracted, sentences: sentences,
+                fiscalYearEnd: fiscalYearEnd)
         }
         guard let decider = segmentNoteDecider else { return pass }
         guard !extracted.tables.isEmpty else { return pass }
@@ -601,7 +611,7 @@ public extension BltServerContext {
         }
         let outcome = await SegmentNoteDecision.decide(
             axis: axis, docID: docID, tables: extracted.tables,
-            sentences: BreakdownExtractor.segmentNoteOmissionSentences(xbrlDir: xbrlDir),
+            sentences: sentences,
             hasCleanDeterministicSnapshot: clean, decider: decider)
         switch outcome.action {
         case .unchanged:
@@ -619,15 +629,66 @@ public extension BltServerContext {
                 outcome,
                 reportedSegmentsAreGeographic: BreakdownExtractor.reportedOperatingSegmentsAreGeographic(
                     xbrlDir: xbrlDir))
-            return (resolved.action == .omitBusiness ? nil : extracted, resolved)
+            if resolved.action == .omitBusiness {
+                if SegmentInfoLLMNormalizer.hasUsableProductOrBusinessTable(extracted.tables) {
+                    var kept = resolved
+                    kept.action = .unchanged
+                    kept.omissionReason = nil
+                    return (extracted, kept)
+                }
+                return await applyingReviewedOmission(
+                    resolved, axis: axis, docID: docID, extracted: extracted, sentences: sentences,
+                    fiscalYearEnd: fiscalYearEnd)
+            }
+            return (extracted, resolved)
         case .omitGeography:
             return (axis == .geography ? nil : extracted, outcome)
         case .keepTable(let index):
-            guard extracted.tables.indices.contains(index) else { return (extracted, outcome) }
-            var copy = extracted
-            copy.tables = [extracted.tables[index]]
-            return (copy, outcome)
+            return isolatingKeptTableIfSafe(
+                extracted, index: index, outcome: outcome, fiscalYearEnd: fiscalYearEnd)
         }
+    }
+
+    /// 単一セグメント提案を Jev 第二パスで確認する。表が高信頼なら keepTable。
+    /// キー無し・表無しは提案のまま省略する。
+    private func applyingReviewedOmission(
+        _ omitted: SegmentNoteDecisionOutcome,
+        axis: SegmentNoteAxis,
+        docID: String,
+        extracted: ExtractedBreakdown,
+        sentences: [String],
+        fiscalYearEnd: String?
+    ) async -> (extracted: ExtractedBreakdown?, outcome: SegmentNoteDecisionOutcome) {
+        guard let decider = segmentNoteDecider, !extracted.tables.isEmpty else {
+            return (nil, omitted)
+        }
+        let reviewed = await SegmentNoteDecision.review(
+            proposal: .singleSegment(
+                reason: omitted.audit?.decisionSource ?? breakdownNotApplicableSingleSegmentDisclosed),
+            axis: axis, docID: docID, tables: extracted.tables, sentences: sentences,
+            existing: omitted, decider: decider)
+        if case .keepTable(let index) = reviewed.action {
+            return isolatingKeptTableIfSafe(
+                extracted, index: index, outcome: reviewed, fiscalYearEnd: fiscalYearEnd)
+        }
+        return (nil, reviewed)
+    }
+
+    private func isolatingKeptTableIfSafe(
+        _ extracted: ExtractedBreakdown,
+        index: Int,
+        outcome: SegmentNoteDecisionOutcome,
+        fiscalYearEnd: String?
+    ) -> (extracted: ExtractedBreakdown?, outcome: SegmentNoteDecisionOutcome) {
+        guard extracted.tables.indices.contains(index) else { return (extracted, outcome) }
+        guard SegmentInfoLLMNormalizer.shouldIsolateKeptTable(
+            index: index, tables: extracted.tables, fiscalYearEnd: fiscalYearEnd)
+        else {
+            return (extracted, outcome)
+        }
+        var copy = extracted
+        copy.tables = [extracted.tables[index]]
+        return (copy, outcome)
     }
 
     /// 内訳取り込み: 書類1件分の business 軸内訳を解決する。xbrl_facts（決定的）/ 収益認識注記 LLM /
@@ -676,7 +737,34 @@ public extension BltServerContext {
         {
             let outcome = SegmentNoteDecision.dedicatedTagBusinessOutcome(
                 docID: docID, tagText: dedicatedTag)
-            var audit = outcome.audit.map(LLMBreakdownAuditPayload.segmentNoteJev)
+            let reviewed = await applyingReviewedOmission(
+                outcome, axis: .business, docID: docID, extracted: segments,
+                sentences: BreakdownExtractor.segmentNoteOmissionSentences(xbrlDir: xbrlDir),
+                fiscalYearEnd: BreakdownExtractor.currentFiscalYearEnd(fromXbrlDir: xbrlDir))
+            if let recoveredExtracted = reviewed.extracted {
+                let retry = await BusinessBreakdownResolver.resolve(
+                    segments: recoveredExtracted, consolidatedSales: consolidatedSales,
+                    client: businessChatClient, labelsByTag: labelsByTag,
+                    denominatorTag: denomItem.tag,
+                    columnDecider: revenueRecognitionColumnDecider,
+                    segmentInfoDecider: segmentInfoDecider,
+                    fiscalYearEnd: BreakdownExtractor.currentFiscalYearEnd(fromXbrlDir: xbrlDir),
+                    docID: docID)
+                if let recovered = retry.snapshot,
+                   BusinessBreakdownResolver.hasUsableSegmentRows(recovered)
+                {
+                    return applyingSegmentNoteDecision(
+                        reviewed.outcome,
+                        to: breakdownByRecordingOverlayRegressions(
+                            .resolved(
+                                payload: breakdownSnapshotPayload(from: recovered),
+                                source: retry.source.rawValue,
+                                contentHash: hash,
+                                audit: retry.audit.map(llmBreakdownAuditPayload(from:))),
+                            xbrlDir: xbrlDir))
+                }
+            }
+            var audit = reviewed.outcome.audit.map(LLMBreakdownAuditPayload.segmentNoteJev)
             if let column = result.audit {
                 let columnPayload = llmBreakdownAuditPayload(from: column)
                 audit?.columnJev = columnPayload.columnJev ?? columnPayload.jev
@@ -699,6 +787,48 @@ public extension BltServerContext {
                 to: .notApplicable(
                     reason: reason.rawValue,
                     audit: result.audit.map(llmBreakdownAuditPayload(from:))))
+        }
+        if shouldReviewLLMNeedsReview(snapshot, source: result.source),
+           let decider = segmentNoteDecider,
+           !segments.tables.isEmpty
+        {
+            let reviewed = await SegmentNoteDecision.review(
+                proposal: .needsReview(reason: snapshot.warnings.first ?? "needs_review"),
+                axis: .business, docID: docID, tables: segments.tables,
+                sentences: BreakdownExtractor.segmentNoteOmissionSentences(xbrlDir: xbrlDir),
+                existing: gate.outcome, decider: decider)
+            if case .keepTable(let index) = reviewed.action, segments.tables.indices.contains(index) {
+                var copy = segments
+                copy.tables = [segments.tables[index]]
+                let retry = await BusinessBreakdownResolver.resolve(
+                    segments: copy, consolidatedSales: consolidatedSales,
+                    client: businessChatClient, labelsByTag: labelsByTag,
+                    denominatorTag: denomItem.tag,
+                    columnDecider: revenueRecognitionColumnDecider,
+                    segmentInfoDecider: segmentInfoDecider,
+                    fiscalYearEnd: BreakdownExtractor.currentFiscalYearEnd(fromXbrlDir: xbrlDir),
+                    docID: docID)
+                if let recovered = retry.snapshot,
+                   BusinessBreakdownResolver.hasUsableSegmentRows(recovered)
+                {
+                    snapshot = recovered
+                    if BreakdownExtractor.dedicatedTagDisagreesWithCurrentYearReportableSegments(
+                        xbrlDir: xbrlDir)
+                    {
+                        snapshot = BreakdownExtractor.applyingDedicatedTagDisagreementWarning(
+                            to: snapshot)
+                    }
+                    return applyingSegmentNoteDecision(
+                        reviewed,
+                        to: breakdownByRecordingOverlayRegressions(
+                            .resolved(
+                                payload: breakdownSnapshotPayload(from: snapshot),
+                                source: retry.source.rawValue,
+                                contentHash: hash,
+                                audit: retry.audit.map(llmBreakdownAuditPayload(from:))),
+                            xbrlDir: xbrlDir))
+                }
+            }
         }
         if BreakdownExtractor.dedicatedTagDisagreesWithCurrentYearReportableSegments(xbrlDir: xbrlDir) {
             snapshot = BreakdownExtractor.applyingDedicatedTagDisagreementWarning(to: snapshot)
@@ -1120,6 +1250,22 @@ private func breakdownSnapshotPayload(from s: BreakdownSnapshot) -> BreakdownSna
                 categoryGroup: $0.categoryGroup, category: $0.category)
         },
         sourceKind: s.sourceKind, needsReview: s.needsReview, warnings: s.warnings)
+}
+
+/// LLM が空行・取り違え表で NR にしたときだけ第二パス対象。xbrl_facts（8316 の距離など）は見ない。
+private func shouldReviewLLMNeedsReview(
+    _ snapshot: BreakdownSnapshot, source: BusinessBreakdownSource
+) -> Bool {
+    guard source == .segmentInfoLLM || source == .revenueRecognitionLLM else { return false }
+    guard snapshot.needsReview else { return false }
+    if !BusinessBreakdownResolver.hasUsableSegmentRows(snapshot) { return true }
+    let wrongTable = [
+        SegmentInfoPublishGuards.warningGeographyWhileProductExists,
+        SegmentInfoPublishGuards.warningPriorPeriodColumn,
+        SegmentInfoPublishGuards.warningMetricRowLabels,
+        SegmentInfoPublishGuards.warningNumericOrCodeLabels,
+    ]
+    return snapshot.warnings.contains(where: { wrongTable.contains($0) })
 }
 
 /// 相談した Jev 判断を結果へ載せる。適用しなかったときは needs_review を立て、決定論の中身は変えない。

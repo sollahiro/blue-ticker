@@ -827,6 +827,33 @@ import Foundation
         #expect(snap.warnings.contains("bank_denominator_far_from_segment_sum"))
     }
 
+    @Test func bankDenominatorDistanceIncludesReconcilingHeadOffice() throws {
+        // 8316 S100LU5N: 事業合計 2,946.7B に本社勘定 −140.513B を足すと報告セグメント小計
+        // 2,806.187B に一致する。reconciling を距離から外すと 5.007% で誤 NR になる。
+        func fact(_ member: String, _ value: Double) -> BreakdownFact {
+            BreakdownFact(
+                tag: "ConsolidatedGrossProfit", contextRef: "CurrentYearDuration_\(member)",
+                dimensions: ["OperatingSegmentsAxis": member],
+                value: value, label: nil, unitRef: "JPY", decimals: "-6")
+        }
+        let facts = [
+            fact("WholesaleBusinessUnitReportableSegmentMember", 634_900_000_000),
+            fact("RetailBusinessUnitReportableSegmentMember", 1_127_400_000_000),
+            fact("GlobalBusinessUnitReportableSegmentMember", 723_700_000_000),
+            fact("MarketsBusinessUnitReportableSegmentMember", 460_700_000_000),
+            fact("HeadOfficeAccountsEtcReportableSegmentMember", -140_513_000_000),
+            fact("ReportableSegmentsMember", 2_806_187_000_000),
+        ]
+        let result = ExtractedBreakdown(method: "xbrl_facts", tables: [], facts: facts)
+        let snap = try #require(BreakdownNormalizer.normalize(result, consolidatedSales: nil))
+        #expect(snap.denominator == 2_806_187_000_000)
+        #expect(snap.needsReview == false)
+        #expect(!snap.warnings.contains("bank_denominator_far_from_segment_sum"))
+        #expect(snap.rows.contains {
+            $0.labelRaw == "HeadOfficeAccountsEtcReportableSegmentMember" && $0.rowKind == "reconciling"
+        })
+    }
+
     // MARK: - ホワイトリスト外タグのカバレッジ/金額整合性フォールバック（issue調査 2026-07-21）
     //
     // NTT の TransactionsWithExternalCustomersIFRS・ファーストリテイリングの RevenueIFRS は
