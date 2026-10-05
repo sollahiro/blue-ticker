@@ -466,6 +466,7 @@ enum SegmentInfoLLMNormalizer {
         if label.contains("研究開発") { return false }
         return profitRowPreferred.contains { label.contains($0) }
             || label.contains("税引前当期純利益")
+            || label.contains("セグメント損失") || label.contains("営業損失")
     }
 
     /// ヘッダー単位が無い表（キヤノン注23 の smoke 抽出など）は、表合計と連結売上の比が
@@ -521,7 +522,7 @@ enum SegmentInfoLLMNormalizer {
     static func isDedicatedProductTable(
         _ table: RevenueRecognitionCandidates.ParsedTable
     ) -> Bool {
-        if table.heading == BreakdownExtractor.productOrServiceHeading { return true }
+        if SegmentInfoPublishGuards.hasProductOrBusinessLabels(table) { return true }
         return RevenueRecognitionTableStructure.tableAxis(of: table) == .productOrBusiness
     }
 
@@ -671,6 +672,13 @@ enum SegmentInfoLLMNormalizer {
             if current { return false }
         }
         if hasUsableProductOrBusinessTable(tables), !isDedicatedProductTable(selected) {
+            return false
+        }
+        if !isSegmentColumnMatrix(selected),
+           parsed.contains(where: {
+               $0.tableIndex != selected.tableIndex && isSegmentColumnMatrix($0)
+           })
+        {
             return false
         }
         return canAssembleBusinessRows(selected)

@@ -425,8 +425,8 @@ import Foundation
         #expect(!snapshot.needsReview)
     }
 
-    /// 地域列を採ったが同じ注記に製品表がある → 公開しない（武田 / 3422 型）。
-    @Test func geographyLabelsNeedReviewWhenProductTableExists() async throws {
+    /// 製品表と地域表が両方ある → 製品を採る（武田 / 3422 型）。
+    @Test func prefersProductTableWhenGeographyAlsoExists() async throws {
         let product = BreakdownTable(
             heading: "セグメント情報",
             markdown: """
@@ -452,14 +452,99 @@ import Foundation
         let snapshot = try #require(snapshotOrNil)
         let labels: Set<String> = Set(
             snapshot.rows.filter { $0.rowKind == "segment" }.map { $0.labelRaw })
-        if labels.contains("ALOFISEL") {
-            #expect(!snapshot.needsReview)
-        } else {
-            #expect(snapshot.needsReview)
-            #expect(snapshot.warnings.contains(
-                SegmentInfoPublishGuards.warningGeographyWhileProductExists))
-            #expect(labels.contains("タイ") || labels.contains("日本"))
+        #expect(labels == Set(["ALOFISEL", "DEXILANT"]))
+        #expect(!snapshot.needsReview)
+        #expect(!snapshot.warnings.contains(
+            SegmentInfoPublishGuards.warningGeographyWhileProductExists))
+    }
+
+    /// 製品表があるのに地域列を採った場合は公開しない（武田 / 3422 型のガード）。
+    @Test func geographyLabelsNeedReviewWhenProductTableExists() {
+        let parsed = RevenueRecognitionCandidates.parse(
+            tables: [
+                BreakdownTable(
+                    heading: "セグメント情報",
+                    markdown: """
+                        | 区分 | 当期 |
+                        | ALOFISEL | 100 |
+                        | DEXILANT | 200 |
+                        | 合計 | 300 |
+                        """,
+                    period: "当期"),
+                BreakdownTable(
+                    heading: "セグメント情報",
+                    markdown: """
+                        | | 日本 | タイ | 中国 | 計 |
+                        | 外部顧客への売上高 | 50 | 80 | 170 | 300 |
+                        | セグメント利益 | 5 | 8 | 17 | 30 |
+                        """,
+                    period: "当期"),
+            ])
+        let geography = parsed.first { table in
+            table.columnHeaders.values.contains { $0.contains("タイ") }
         }
+        var needsReview = false
+        var warnings: [String] = []
+        SegmentInfoPublishGuards.apply(
+            rows: [
+                BreakdownRow(labelRaw: "日本", amount: 50, share: nil, profit: 5, rowKind: "segment"),
+                BreakdownRow(labelRaw: "タイ", amount: 80, share: nil, profit: 8, rowKind: "segment"),
+                BreakdownRow(labelRaw: "中国", amount: 170, share: nil, profit: 17, rowKind: "segment"),
+            ],
+            allTables: parsed, selectedTable: geography, selectedColumn: nil,
+            fiscalYearEnd: "2026-03-31", needsReview: &needsReview, warnings: &warnings)
+        #expect(needsReview)
+        #expect(warnings.contains(SegmentInfoPublishGuards.warningGeographyWhileProductExists))
+    }
+
+    /// 前期と当期の日本/アジア報告セグメント表だけなら、地域を採っても製品表警告は出さない。
+    @Test func priorYearJapanAsiaMatrixIsNotAProductTable() {
+        let parsed = RevenueRecognitionCandidates.parse(
+            tables: [
+                BreakdownTable(
+                    heading: "セグメント情報",
+                    markdown: """
+                        | | 報告セグメント | 報告セグメント | 計 | 調整額 | 連結財務諸表計上額 |
+                        | | 日本 | アジア | | | |
+                        | 顧客との契約から生じる収益 | 4,376,916 | 1,269,509 | 5,646,425 | - | 5,646,425 |
+                        | 外部顧客に対する売上高 | 4,376,916 | 1,269,509 | 5,646,425 | - | 5,646,425 |
+                        | セグメント損失 | -180,207 | -42,256 | -222,464 | 26,630 | -195,833 |
+                        | 有形固定資産及び無形固定資産の増加額 | 92,383 | 1,919 | 94,303 | - | 94,303 |
+                        """,
+                    period: "前期",
+                    unitCaption: "千円"),
+                BreakdownTable(
+                    heading: "セグメント情報",
+                    markdown: """
+                        | | 報告セグメント | 報告セグメント | 計 | 調整額 | 連結財務諸表計上額 |
+                        | | 日本 | アジア | | | |
+                        | 顧客との契約から生じる収益 | 4,333,990 | 1,140,562 | 5,474,552 | - | 5,474,552 |
+                        | 外部顧客に対する売上高 | 4,333,990 | 1,140,562 | 5,474,552 | - | 5,474,552 |
+                        | セグメント損失 | -192,662 | -30,708 | -223,371 | 1,246 | -222,124 |
+                        | 有形固定資産及び無形固定資産の増加額 | 33,072 | 25,188 | 58,261 | - | 58,261 |
+                        """,
+                    period: "当期",
+                    unitCaption: "千円"),
+            ])
+        let current = parsed.first { $0.period == "当期" }
+        let currentIsProduct: Bool = current.map {
+            SegmentInfoPublishGuards.hasProductOrBusinessLabels($0)
+        } ?? true
+        #expect(currentIsProduct == false)
+        var needsReview = false
+        var warnings: [String] = []
+        SegmentInfoPublishGuards.apply(
+            rows: [
+                BreakdownRow(labelRaw: "日本", amount: 4_333_990, share: nil, profit: nil, rowKind: "segment"),
+                BreakdownRow(labelRaw: "アジア", amount: 1_140_562, share: nil, profit: nil, rowKind: "segment"),
+            ],
+            allTables: parsed, selectedTable: current, selectedColumn: nil,
+            fiscalYearEnd: "2026-03-31", needsReview: &needsReview, warnings: &warnings)
+        let flagged: Bool = needsReview
+        let productWarning: Bool = warnings.contains(
+            SegmentInfoPublishGuards.warningGeographyWhileProductExists)
+        #expect(flagged == false)
+        #expect(productWarning == false)
     }
 
     /// 金額セルをセグメント名にしない（3905 / 7734 型）。

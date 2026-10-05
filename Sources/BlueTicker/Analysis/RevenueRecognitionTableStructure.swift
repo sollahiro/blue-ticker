@@ -195,16 +195,19 @@ enum RevenueRecognitionTableStructure {
         let token = RevenueRecognitionCandidates.compactCell(label)
         if token.isEmpty || isGeographyHeading(token) { return false }
         if isTimingAxisLabel(token) { return false }
+        if isDisclosureOmissionProse(token) { return false }
         return token.contains("製品") || token.contains("サービス") || token.contains("事業")
             || token.contains("品種") || token.contains("品目")
     }
 
     /// 表レベルの製品・事業軸。`事業` 単体は顧客行（市販・非車載事業）にも出るので使わない。
     /// 時点ラベル（一時点で移転される財又はサービス）はサービス / 財より先に時点へ倒す。
+    /// 「製品90％のため記載を省略」の散文は軸ラベルではない。
     static func isProductAxisLabel(_ label: String) -> Bool {
         let token = RevenueRecognitionCandidates.compactCell(label)
         if token.isEmpty || isGeographyHeading(token) { return false }
         if isTimingAxisLabel(token) { return false }
+        if isDisclosureOmissionProse(token) { return false }
         if token.contains("品種別") || token.contains("品目別") || token.contains("製品別")
             || token.contains("事業別") || token.contains("サービス別")
         {
@@ -296,6 +299,56 @@ enum RevenueRecognitionTableStructure {
         return allGeo && labels.contains(where: isBareGeographyLabel)
     }
 
+    /// 列が見出しの地域（日本 / アジア / 計）で行が売上・利益の報告セグメントマトリクス。
+    /// 行ラベル経路の `isGeographyOnlyTable` では拾えない。
+    /// 製品行 × 地域列（yjc56482 ロボット/特注機 × 日本/米国）は製品軸のまま残す。
+    static func isGeographyOnlyColumnHeaders(
+        _ table: RevenueRecognitionCandidates.ParsedTable
+    ) -> Bool {
+        let labels = columnHeaderLeaves(in: table)
+        guard !labels.isEmpty else { return false }
+        let allGeo = labels.allSatisfy { isBareGeographyLabel($0) || isOtherResidualLabel($0) }
+        guard allGeo && labels.filter(isBareGeographyLabel).count >= 2 else { return false }
+        return !hasProductAxisRowLabels(table)
+    }
+
+    /// 行の見出し・品目が製品／サービス軸（「製品及びサービス別」＋ロボット等）。
+    static func hasProductAxisRowLabels(
+        _ table: RevenueRecognitionCandidates.ParsedTable
+    ) -> Bool {
+        for row in table.structure.rows {
+            let tokens = [row.categoryGroup, row.category].compactMap { $0 }
+            if tokens.contains(where: { isProductAxisLabel($0) || isProductOrBusinessHeading($0) }) {
+                return true
+            }
+        }
+        return false
+    }
+
+    /// 製品90％・単一セグメントなどの記載省略文。見出しや品目ラベルではない。
+    static func isDisclosureOmissionProse(_ label: String) -> Bool {
+        let token = RevenueRecognitionCandidates.compactCell(label)
+        return token.contains("記載を省略")
+    }
+
+    static func columnHeaderLeaves(
+        in table: RevenueRecognitionCandidates.ParsedTable
+    ) -> [String] {
+        var labels: [String] = []
+        for header in table.columnHeaders.values {
+            let token = RevenueRecognitionCandidates.compactCell(header)
+            let leaf = token.components(separatedBy: " / ").last ?? token
+            guard !leaf.isEmpty else { continue }
+            if RevenueRecognitionCandidates.isTotalLabel(leaf) { continue }
+            if RevenueRecognitionCandidates.isAggregateColumnHeader(leaf) { continue }
+            if RevenueRecognitionCandidates.isStubAxisHeader(leaf) { continue }
+            if RevenueRecognitionCandidates.isPeriodHeadingLabel(leaf) { continue }
+            if RevenueRecognitionCandidates.isUnitCaptionHeader(leaf) { continue }
+            labels.append(leaf)
+        }
+        return labels
+    }
+
     /// 電力小売 / 電力卸売 のように、残余以外が小売と卸売だけの表は販路。
     static func isWholesaleRetailChannelTable(
         _ table: RevenueRecognitionCandidates.ParsedTable
@@ -312,6 +365,7 @@ enum RevenueRecognitionTableStructure {
 
     static func tableAxis(of table: RevenueRecognitionCandidates.ParsedTable) -> TableAxis {
         if isGeographyOnlyTable(table) { return .geography }
+        if isGeographyOnlyColumnHeaders(table) { return .geography }
         if isWholesaleRetailChannelTable(table) { return .customer }
         var product = false
         var customer = false

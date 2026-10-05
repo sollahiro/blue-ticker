@@ -15,10 +15,10 @@ enum SegmentInfoPublishGuards {
     static let warningRevenueTypeCategories = "segment_info_revenue_type_categories"
 
     private static let extraMetricMarkers = [
-        "セグメント収益", "セグメント利益", "セグメント資産", "バーゲン",
+        "セグメント収益", "セグメント利益", "セグメント損失", "セグメント資産", "バーゲン",
         "支払利息", "信用損失", "持分法", "保険契約債務", "長期性資産",
         "外部顧客に対するもの", "資産合計", "資本的支出", "減価償却",
-        "構造改革",
+        "構造改革", "有形固定資産", "無形固定資産",
     ]
     private static let revenueTypeMarkers = [
         "医薬品の販売", "製商品の販売", "物品の販売", "プロフィットシェア",
@@ -171,13 +171,21 @@ enum SegmentInfoPublishGuards {
         besides selected: RevenueRecognitionCandidates.ParsedTable?
     ) -> Bool {
         tables.contains { table in
-            if table.heading == BreakdownExtractor.productOrServiceHeading { return true }
-            if RevenueRecognitionTableStructure.tableAxis(of: table) == .productOrBusiness {
-                return true
-            }
             if table.tableIndex == selected?.tableIndex { return false }
-            return businessLikeLabels(in: table).count >= 2
+            // 前期の日本/アジア報告セグメント表は製品表ではない（3600 S100YHMW）。
+            if RevenueRecognitionTableStructure.tableAxis(of: table) == .geography {
+                return false
+            }
+            return hasProductOrBusinessLabels(table)
         }
+    }
+
+    static func hasProductOrBusinessLabels(
+        _ table: RevenueRecognitionCandidates.ParsedTable
+    ) -> Bool {
+        let labels = businessLikeLabels(in: table)
+        if labels.count >= 2 { return true }
+        return table.heading == BreakdownExtractor.productOrServiceHeading && !labels.isEmpty
     }
 
     private static func businessLikeLabels(
@@ -192,6 +200,8 @@ enum SegmentInfoPublishGuards {
             if isGeographyLikeLabel(token) { continue }
             if isMetricAsSegmentLabel(token) { continue }
             if isNumericOrCodeLabel(token) { continue }
+            if RevenueRecognitionCandidates.isStubAxisHeader(token) { continue }
+            if RevenueRecognitionTableStructure.isDisclosureOmissionProse(token) { continue }
             labels.append(token)
         }
         if !labels.isEmpty { return labels }
@@ -205,6 +215,8 @@ enum SegmentInfoPublishGuards {
             if isMetricAsSegmentLabel(leaf) { continue }
             if isNumericOrCodeLabel(leaf) { continue }
             if RevenueRecognitionCandidates.isPeriodHeadingLabel(leaf) { continue }
+            if RevenueRecognitionCandidates.isStubAxisHeader(leaf) { continue }
+            if RevenueRecognitionTableStructure.isDisclosureOmissionProse(leaf) { continue }
             labels.append(leaf)
         }
         return labels
