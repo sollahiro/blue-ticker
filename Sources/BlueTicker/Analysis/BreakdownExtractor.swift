@@ -540,10 +540,14 @@ enum BreakdownExtractor {
         {
             return .singleSegmentDisclosed
         }
-        if reportedSegmentsAreGeographic(segments: segments, consolidatedSales: consolidatedSales) {
+        if reportedSegmentsAreGeographic(segments: segments, consolidatedSales: consolidatedSales),
+           !SegmentInfoLLMNormalizer.hasUsableGeographicReportingTable(segments.tables)
+        {
             return .geographyOnly
         }
-        if llmHint == BusinessBreakdownNotApplicableReason.geographyOnly.rawValue {
+        if llmHint == BusinessBreakdownNotApplicableReason.geographyOnly.rawValue,
+           !SegmentInfoLLMNormalizer.hasUsableGeographicReportingTable(segments.tables)
+        {
             return .geographyOnly
         }
         return .unknown

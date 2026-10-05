@@ -2938,6 +2938,24 @@ import Foundation
         }
     }
 
+    @Test func classifyNotApplicableReasonKeepsJapanAsiaReportingTables() {
+        let table = BreakdownTable(
+            heading: "セグメント情報",
+            markdown: """
+                | | 日本 | アジア | 計 |
+                | 外部顧客に対する売上高 | 4,796,938 | 1,033,357 | 5,830,295 |
+                """,
+            period: "当期",
+            unitCaption: "千円")
+        let segments = ExtractedBreakdown(method: "html_table", tables: [table], facts: [])
+        XBRLTestSupport.withXbrlDir(nil) { dir in
+            let reason = BreakdownExtractor.classifyNotApplicableReason(
+                segments: segments, consolidatedSales: 5_830_296_000, xbrlDir: dir,
+                llmHint: "geography_only")
+            #expect(reason != .geographyOnly)
+        }
+    }
+
     /// llmHint が geography_only 以外（"other" 等）のときは既存の判定（今回は unknown）へ
     /// フォールバックする。LLM の "other" 判定を無条件に geographyOnly 扱いしないことの回帰防止。
     @Test func classifyNotApplicableReasonIgnoresNonGeographyLlmHint() {

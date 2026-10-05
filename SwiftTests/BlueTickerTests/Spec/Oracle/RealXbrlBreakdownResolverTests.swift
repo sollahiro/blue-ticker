@@ -450,5 +450,42 @@ import Foundation
         #expect(asia.amount == 1_140_562_000)
         #expect(await client.timesCalled() == 0)
     }
+
+    /// フジックス S100LRPS（FY2021）: 製品90％省略 + 日本/アジア報告セグメント。
+    /// Jev が none_of_these でも geography_only NA にせず日本/アジアを載せる。
+    @Test func fujixFY2021TakesJapanAsiaEvenIfJevRejectsColumns() async throws {
+        guard await Self.ensureAvailable("S100LRPS") else { return }
+        let segments = BreakdownExtractor.extractSegmentInfo(xbrlDir: Self.xbrlDir("S100LRPS"))
+        let joined = segments.tables.map(\.markdown).joined(separator: "\n")
+        #expect(joined.contains("4,796,938") || joined.contains("4796938"))
+        #expect(BreakdownExtractor.reportedOperatingSegmentsAreGeographic(
+            xbrlDir: Self.xbrlDir("S100LRPS")))
+
+        let client = RealXbrlMockChat(responseJSON: nil)
+        let sales = 5_830_296_000.0
+        let (snapshot, source, _) = await BusinessBreakdownResolver.resolve(
+            segments: segments, consolidatedSales: sales, client: client,
+            columnDecider: FakeRevenueRecognitionColumnDecider(
+                selected: RevenueRecognitionColumnNormalizer.noneOfThese,
+                confidence: 0.95, pNone: 0.9),
+            fiscalYearEnd: "2021-03-31",
+            docID: "S100LRPS"
+        )
+
+        #expect(source == .segmentInfoLLM)
+        let snap = try #require(snapshot)
+        #expect(snap.axis == "business")
+        #expect(snap.needsReview == false)
+        #expect(!snap.warnings.contains(
+            SegmentInfoPublishGuards.warningGeographyWhileProductExists))
+        let labels: Set<String> = Set(
+            snap.rows.filter { $0.rowKind == "segment" }.map(\.labelRaw))
+        #expect(labels == Set(["日本", "アジア"]))
+        let japan = try #require(snap.rows.first { $0.labelRaw == "日本" })
+        #expect(japan.amount == 4_796_938_000)
+        let asia = try #require(snap.rows.first { $0.labelRaw == "アジア" })
+        #expect(asia.amount == 1_033_357_000)
+        #expect(await client.timesCalled() == 0)
+    }
 }
 

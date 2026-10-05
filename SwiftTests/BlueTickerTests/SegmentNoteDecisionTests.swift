@@ -385,6 +385,36 @@ import Testing
         #expect(outcome.audit?.withheldReason == nil)
     }
 
+    @Test func productNinetyWithGeographicReportingTableKeepsJapanAsia() async throws {
+        let japanAsia = BreakdownTable(
+            heading: "セグメント情報",
+            markdown: """
+                | | 日本 | アジア | 計 | 連結財務諸表計上額 |
+                | 外部顧客に対する売上高 | 4,796,938 | 1,033,357 | 5,830,295 | 5,830,296 |
+                | セグメント損失 | △10 | △20 | △30 | △29 |
+                """,
+            period: "当期",
+            unitCaption: "千円")
+        #expect(SegmentInfoLLMNormalizer.hasUsableGeographicReportingTable([japanAsia]))
+        let xml = XBRLTestSupport.makeXbrlDuration(
+            """
+            <jpcrp_cor:SegmentInformationTextBlock contextRef="CurrentYearDuration">\(productNinety)</jpcrp_cor:SegmentInformationTextBlock>
+            """)
+        let decider = FakeSegmentNoteDecider(
+            selection: .noneOfThese,
+            omissionsBySnippet: ["製品": .productOrServiceExternalSalesOver90])
+        try await XBRLTestSupport.withXbrlDir(xml) { dir in
+            let extracted = ExtractedBreakdown(
+                method: "html_table", tables: [japanAsia], facts: [])
+            let gate = await noteContext(decider: decider).segmentsAfterNoteDecision(
+                axis: .business, docID: "S100LRPS", extracted: extracted, xbrlDir: dir,
+                consolidatedSales: 5_830_296_000, labelsByTag: [:])
+            #expect(gate.extracted != nil)
+            #expect(gate.outcome.omissionReason == nil)
+            #expect(gate.outcome.action == .unchanged)
+        }
+    }
+
     @Test func jevSingleSegmentClassUsesSingleSegmentDisclosed() async throws {
         let fromSentence = SegmentNoteDecision.resolveBusinessOmissionReason(
             await singleSegmentOmission(),

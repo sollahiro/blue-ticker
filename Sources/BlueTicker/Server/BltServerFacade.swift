@@ -630,7 +630,9 @@ public extension BltServerContext {
                 reportedSegmentsAreGeographic: BreakdownExtractor.reportedOperatingSegmentsAreGeographic(
                     xbrlDir: xbrlDir))
             if resolved.action == .omitBusiness {
-                if SegmentInfoLLMNormalizer.hasUsableProductOrBusinessTable(extracted.tables) {
+                if SegmentInfoLLMNormalizer.hasUsableProductOrBusinessTable(extracted.tables)
+                    || SegmentInfoLLMNormalizer.hasUsableGeographicReportingTable(extracted.tables)
+                {
                     var kept = resolved
                     kept.action = .unchanged
                     kept.omissionReason = nil

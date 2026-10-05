@@ -113,6 +113,86 @@ import Testing
         #expect(!snapshot.needsReview)
     }
 
+    /// Jev が none_of_these でも、日本/アジアの報告セグメント表は事業軸に載せる（3600 S100LRPS）。
+    @Test func type3bNoneOfTheseStillTakesJapanAsiaReportingSegments() async throws {
+        let html = """
+            <p>当連結会計年度（自 2020年4月1日 至 2021年3月31日）</p>
+            <p>（単位：千円）</p>
+            <table>
+              <tr><td></td><td>報告セグメント</td><td>報告セグメント</td><td>報告セグメント</td><td>調整額</td><td>連結財務諸表計上額</td></tr>
+              <tr><td></td><td>日本</td><td>アジア</td><td>計</td><td></td><td></td></tr>
+              <tr><td>外部顧客に対する売上高</td><td>4,796,938</td><td>1,033,357</td><td>5,830,295</td><td>-</td><td>5,830,296</td></tr>
+              <tr><td>セグメント損失</td><td>△10</td><td>△20</td><td>△30</td><td>1</td><td>△29</td></tr>
+            </table>
+            <p>１．製品及びサービスごとの情報 単一の製品・サービスの区分の外部顧客への売上高が連結損益計算書の売上高の90％を超えるため、記載を省略しております。</p>
+            """
+        let sales = 5_830_296_000.0
+        var tables = BreakdownExtractor.allTablesFromHtml(html, defaultHeading: "セグメント情報")
+        if !tables.isEmpty { tables[0].period = "当期" }
+        let (snapshotOrNil, _) = await SegmentInfoLLMNormalizer.normalize(
+            ExtractedBreakdown(method: "html_table", tables: tables, facts: []),
+            consolidatedSales: sales,
+            decider: FakeRevenueRecognitionColumnDecider(
+                selected: RevenueRecognitionColumnNormalizer.noneOfThese,
+                confidence: 0.95, pNone: 0.9),
+            fiscalYearEnd: "2021-03-31",
+            docID: "S100LRPS")
+        let snapshot = try #require(snapshotOrNil)
+        let labels: Set<String> = Set(
+            snapshot.rows.filter { $0.rowKind == "segment" }.map(\.labelRaw))
+        #expect(labels == Set(["日本", "アジア"]))
+        #expect(!snapshot.needsReview)
+        #expect(snapshot.warnings.contains(SegmentInfoLLMNormalizer.warningGeographyTaken))
+        #expect(!snapshot.warnings.contains(
+            SegmentInfoPublishGuards.warningGeographyWhileProductExists))
+        let japan = try #require(snapshot.rows.first { $0.labelRaw == "日本" })
+        #expect(japan.amount == 4_796_938_000)
+    }
+
+    /// 減損・償却の日本/アジア表が先にあっても、外部顧客売上の報告表を採る。
+    @Test func type3bPrefersSalesMatrixOverAmortizationGeographyTable() async throws {
+        let html = """
+            <p>当連結会計年度（自 2020年4月1日 至 2021年3月31日）</p>
+            <p>（単位：千円）</p>
+            <table>
+              <tr><td></td><td>報告セグメント</td><td>報告セグメント</td><td>報告セグメント</td><td>全社・消去</td><td>合計</td></tr>
+              <tr><td></td><td>日本</td><td>アジア</td><td>計</td><td></td><td></td></tr>
+              <tr><td>当期償却額</td><td>2,043</td><td>-</td><td>2,043</td><td>-</td><td>2,043</td></tr>
+              <tr><td>当期末残高</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>
+            </table>
+            <table>
+              <tr><td></td><td>報告セグメント</td><td>報告セグメント</td><td>報告セグメント</td><td>調整額</td><td>連結財務諸表計上額</td></tr>
+              <tr><td></td><td>日本</td><td>アジア</td><td>計</td><td></td><td></td></tr>
+              <tr><td>外部顧客に対する売上高</td><td>4,796,938</td><td>1,033,357</td><td>5,830,295</td><td>-</td><td>5,830,296</td></tr>
+              <tr><td>セグメント損失</td><td>△10</td><td>△20</td><td>△30</td><td>1</td><td>△29</td></tr>
+            </table>
+            """
+        let sales = 5_830_296_000.0
+        var tables = BreakdownExtractor.allTablesFromHtml(html, defaultHeading: "セグメント情報")
+        for i in tables.indices { tables[i].period = "当期" }
+        #expect(tables.count >= 2)
+        #expect(!SegmentInfoLLMNormalizer.hasUsableGeographicReportingTable(
+            [tables[0]]))
+        #expect(SegmentInfoLLMNormalizer.hasUsableGeographicReportingTable(tables))
+        let (snapshotOrNil, _) = await SegmentInfoLLMNormalizer.normalize(
+            ExtractedBreakdown(method: "html_table", tables: tables, facts: []),
+            consolidatedSales: sales,
+            decider: FakeRevenueRecognitionColumnDecider(
+                selected: RevenueRecognitionColumnNormalizer.noneOfThese,
+                confidence: 0.95, pNone: 0.9),
+            fiscalYearEnd: "2021-03-31",
+            docID: "S100LRPS")
+        let snapshot = try #require(snapshotOrNil)
+        let labels: Set<String> = Set(
+            snapshot.rows.filter { $0.rowKind == "segment" }.map(\.labelRaw))
+        #expect(labels == Set(["日本", "アジア"]))
+        #expect(!labels.contains("当期償却額"))
+        #expect(!labels.contains("当期末残高"))
+        #expect(!snapshot.needsReview)
+        let japan = try #require(snapshot.rows.first { $0.labelRaw == "日本" })
+        #expect(japan.amount == 4_796_938_000)
+    }
+
     /// 3. 地域別のみ → 地域を採る（両方を足さない対象が無い）。
     @Test func type3GeographyOnlyTakesGeography() async throws {
         let html = """

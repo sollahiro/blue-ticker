@@ -110,6 +110,17 @@ enum SegmentInfoLLMNormalizer {
             choice.column, columns: offered)
         resolved = RevenueRecognitionColumnNormalizer.preferProductAxis(
             resolved, columns: offered, tables: tablesForChoice, constraint: constraint)
+        // 製品90％省略で報告セグメントが日本/アジアだけのとき、Jev が none_of_these でも
+        // 組立可能な地域報告表を捨てて geography_only NA にしない（3600 S100LRPS）。
+        var recoveredGeographyColumn = false
+        if resolved == nil, constraint == .geographyOnly,
+           let recovered = recoverGeographyReportingColumn(
+            parsed: parsed, columns: columns, fiscalYearEnd: fiscalYearEnd)
+        {
+            resolved = RevenueRecognitionColumnNormalizer.ResolvedColumn(
+                key: recovered.key, forceReview: false)
+            recoveredGeographyColumn = true
+        }
 
         let columnJev = jevPayload(
             docID: docID, choice: choice.column, resolvedKey: resolved?.key ?? choice.column.selected,
@@ -119,6 +130,9 @@ enum SegmentInfoLLMNormalizer {
             "jev_column=\(choice.column.selected ?? "nil") confidence=\(choice.column.confidence.map { String($0) } ?? "nil") p_none=\(pNoneNote)"
         if let resolved, resolved.forceReview {
             notes += " overridden=\(resolved.key)"
+        }
+        if recoveredGeographyColumn, let recoveredKey = resolved?.key {
+            notes += " geography_reporting_recovered=\(recoveredKey)"
         }
         if let sales = choice.salesRow?.selected {
             notes += " sales_row=\(sales)"
@@ -136,9 +150,15 @@ enum SegmentInfoLLMNormalizer {
         else { return (nil, audit) }
         var column = selectedColumn
         var table = selectedTable
+        var assembleChoice = choice
+        if recoveredGeographyColumn {
+            assembleChoice.salesRow = nil
+            assembleChoice.profitRow = nil
+        }
         let assembled = assembleRowsRecoveringOtherTables(
-            selectedTable: table, selectedColumn: column, choice: choice,
-            parsed: parsed, columns: columns, fiscalYearEnd: fiscalYearEnd)
+            selectedTable: table, selectedColumn: column, choice: assembleChoice,
+            parsed: parsed, columns: columns, fiscalYearEnd: fiscalYearEnd,
+            preferReportingSalesMatrices: recoveredGeographyColumn)
         table = assembled.table
         column = assembled.column
         let built = assembled.built
@@ -303,15 +323,18 @@ enum SegmentInfoLLMNormalizer {
     static func preferredSalesRow(
         in rows: [SegmentInfoMetricRow], fiscalYearEnd: String? = nil
     ) -> SegmentInfoMetricRow? {
+        if let sales = reportingSalesRow(in: rows) { return sales }
+        return rows.first {
+            isCurrentPeriodRowLabel($0, among: rows, fiscalYearEnd: fiscalYearEnd)
+        }
+    }
+
+    /// 売上・収益の指標行だけ。期間行や償却・残高行は含めない。
+    static func reportingSalesRow(in rows: [SegmentInfoMetricRow]) -> SegmentInfoMetricRow? {
         for marker in salesRowPreferred {
             if let hit = rows.first(where: { isSalesLabel($0.label, marker: marker) }) {
                 return hit
             }
-        }
-        if let current = rows.first(where: {
-            isCurrentPeriodRowLabel($0, among: rows, fiscalYearEnd: fiscalYearEnd)
-        }) {
-            return current
         }
         if let revenue = rows.first(where: { isBareRevenueSalesLabel($0.label) }) {
             return revenue
@@ -579,7 +602,8 @@ enum SegmentInfoLLMNormalizer {
         choice: SegmentInfoChoice,
         parsed: [RevenueRecognitionCandidates.ParsedTable],
         columns: [RevenueRecognitionCandidates.AmountColumn],
-        fiscalYearEnd: String?
+        fiscalYearEnd: String?,
+        preferReportingSalesMatrices: Bool = false
     ) -> (
         table: RevenueRecognitionCandidates.ParsedTable,
         column: RevenueRecognitionCandidates.AmountColumn,
@@ -606,16 +630,21 @@ enum SegmentInfoLLMNormalizer {
         }
 
         let first = assemble(table: selectedTable, column: selectedColumn)
-        if !first.built.isEmpty {
+        let firstIsUsable = !first.built.isEmpty
+            && (!preferReportingSalesMatrices || isReportingSalesMatrix(selectedTable))
+        if firstIsUsable {
             return (
                 selectedTable, selectedColumn, first.built, first.profits,
                 first.groupSumReview, first.parallelUnresolved, first.transposedWhole, false)
         }
 
         var seen: Set<Int> = [selectedTable.tableIndex]
-        let recovery = preferredTables(parsed) + parsed
+        let recovery = preferReportingSalesMatrices
+            ? parsed.filter(isReportingSalesMatrix) + preferredTables(parsed) + parsed
+            : preferredTables(parsed) + parsed
         for candidate in recovery where !seen.contains(candidate.tableIndex) {
             seen.insert(candidate.tableIndex)
+            if preferReportingSalesMatrices, !isReportingSalesMatrix(candidate) { continue }
             guard let recoveryColumn = amountColumn(for: candidate, among: columns) else { continue }
             let next = assemble(table: candidate, column: recoveryColumn)
             if !next.built.isEmpty {
@@ -649,6 +678,60 @@ enum SegmentInfoLLMNormalizer {
         }
         let parsed = RevenueRecognitionCandidates.parse(tables: tables)
         return parsed.contains(where: isDedicatedProductTable)
+    }
+
+    /// 製品90％省略でも、日本/アジアのような報告セグメント表があれば事業軸に載せる。
+    /// 償却・残高・所在地の関連表は組めても報告売上ではないので数えない。
+    static func hasUsableGeographicReportingTable(_ tables: [BreakdownTable]) -> Bool {
+        let parsed = RevenueRecognitionCandidates.parse(tables: tables)
+        if parsed.contains(where: isReportingSalesMatrix) { return true }
+        return parsed.contains {
+            RevenueRecognitionTableStructure.tableAxis(of: $0) == .geography
+                && canAssembleGeographicSegmentRows($0)
+        }
+    }
+
+    /// 列が地域・行が外部顧客売上の報告セグメントマトリクス。
+    static func isReportingSalesMatrix(
+        _ table: RevenueRecognitionCandidates.ParsedTable
+    ) -> Bool {
+        isSegmentColumnMatrix(table) && reportingSalesRow(in: metricRows(in: table)) != nil
+    }
+
+    /// 行が日本/アジアなどの地域ラベルとして組める表。指標行をセグメント扱いしない。
+    static func canAssembleGeographicSegmentRows(
+        _ table: RevenueRecognitionCandidates.ParsedTable
+    ) -> Bool {
+        if isReportingSalesMatrix(table) { return true }
+        if isSegmentColumnMatrix(table) { return false }
+        guard canAssembleBusinessRows(table) else { return false }
+        for column in table.columnHeaders.keys.sorted() {
+            let (built, _) = RevenueRecognitionCandidates.buildRows(table: table, column: column)
+            let labels = built.filter { $0.rowKind == "segment" }.map {
+                $0.category ?? $0.categoryGroup
+            }
+            if SegmentInfoPublishGuards.looksLikeGeographyLabels(labels) {
+                return true
+            }
+        }
+        return false
+    }
+
+    /// Jev が列を捨てたあとに、当期の地域報告セグメント表の全社列を決める。
+    /// 売上行があるマトリクスだけを採り、減損・償却の日本/アジア表は捨てる。
+    static func recoverGeographyReportingColumn(
+        parsed: [RevenueRecognitionCandidates.ParsedTable],
+        columns: [RevenueRecognitionCandidates.AmountColumn],
+        fiscalYearEnd: String?
+    ) -> RevenueRecognitionCandidates.AmountColumn? {
+        let preferred = dropPriorEraTables(
+            parsed.filter(isReportingSalesMatrix), among: parsed, fiscalYearEnd: fiscalYearEnd)
+        for table in preferred {
+            if let column = amountColumn(for: table, among: columns) {
+                return column
+            }
+        }
+        return nil
     }
 
     /// Jev が選んだ1表に閉じると、空行・前期・非製品表で製品表が見えなくなる。
