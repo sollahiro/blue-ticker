@@ -532,6 +532,65 @@ import Testing
             #expect(constraint == .geographyOnly)
         }
 
+        @Test func productRowsByGeographyColumnsStayProductAxis() {
+            let html = """
+                <table>
+                  <tr>
+                    <td></td>
+                    <td>日本</td><td>米国</td><td>アジア</td><td>欧州</td><td>合計</td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <p>製品及びサービス別</p>
+                      <p>ロボット</p>
+                      <p>特注機</p>
+                      <p>部品・保守サービス</p>
+                    </td>
+                    <td>
+                      <p></p>
+                      <p>7,445,494</p>
+                      <p>1,482,554</p>
+                      <p>2,124,545</p>
+                    </td>
+                    <td>
+                      <p></p>
+                      <p>2,236,732</p>
+                      <p>758,274</p>
+                      <p>1,084,411</p>
+                    </td>
+                    <td>
+                      <p></p>
+                      <p>4,111,695</p>
+                      <p>202,153</p>
+                      <p>962,796</p>
+                    </td>
+                    <td>
+                      <p></p>
+                      <p>1,153,399</p>
+                      <p>718,954</p>
+                      <p>820,362</p>
+                    </td>
+                    <td>
+                      <p></p>
+                      <p>14,947,321</p>
+                      <p>3,161,936</p>
+                      <p>4,992,115</p>
+                    </td>
+                  </tr>
+                  <tr><td>顧客との契約から生じる収益</td><td>11,052,594</td><td>4,079,418</td><td>5,276,645</td><td>2,692,715</td><td>23,101,373</td></tr>
+                </table>
+                """
+            let parsed = RevenueRecognitionTableStructureTests.parsed(html)
+            let axis: RevenueRecognitionTableStructure.TableAxis =
+                RevenueRecognitionTableStructure.tableAxis(of: parsed)
+            let constraint: RevenueRecognitionTableStructure.AxisConstraint =
+                RevenueRecognitionTableStructure.axisConstraint(tables: [parsed])
+            let expectedAxis: RevenueRecognitionTableStructure.TableAxis = .productOrBusiness
+            let expectedConstraint: RevenueRecognitionTableStructure.AxisConstraint = .productOnly
+            #expect(axis == expectedAxis)
+            #expect(constraint == expectedConstraint)
+        }
+
         @Test func timingLabelWinsOverServiceKeyword() {
             let timing: Bool = RevenueRecognitionTableStructure.isTimingAxisLabel(
                 "一時点で移転される財又はサービス")

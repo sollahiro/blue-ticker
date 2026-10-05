@@ -15,10 +15,10 @@ enum SegmentInfoPublishGuards {
     static let warningRevenueTypeCategories = "segment_info_revenue_type_categories"
 
     private static let extraMetricMarkers = [
-        "セグメント収益", "セグメント利益", "セグメント資産", "バーゲン",
+        "セグメント収益", "セグメント利益", "セグメント損失", "セグメント資産", "バーゲン",
         "支払利息", "信用損失", "持分法", "保険契約債務", "長期性資産",
         "外部顧客に対するもの", "資産合計", "資本的支出", "減価償却",
-        "構造改革",
+        "構造改革", "有形固定資産", "無形固定資産",
     ]
     private static let revenueTypeMarkers = [
         "医薬品の販売", "製商品の販売", "物品の販売", "プロフィットシェア",
@@ -172,6 +172,10 @@ enum SegmentInfoPublishGuards {
     ) -> Bool {
         tables.contains { table in
             if table.tableIndex == selected?.tableIndex { return false }
+            // 前期の日本/アジア報告セグメント表は製品表ではない（3600 S100YHMW）。
+            if RevenueRecognitionTableStructure.tableAxis(of: table) == .geography {
+                return false
+            }
             return hasProductOrBusinessLabels(table)
         }
     }

@@ -301,13 +301,28 @@ enum RevenueRecognitionTableStructure {
 
     /// 列が見出しの地域（日本 / アジア / 計）で行が売上・利益の報告セグメントマトリクス。
     /// 行ラベル経路の `isGeographyOnlyTable` では拾えない。
+    /// 製品行 × 地域列（yjc56482 ロボット/特注機 × 日本/米国）は製品軸のまま残す。
     static func isGeographyOnlyColumnHeaders(
         _ table: RevenueRecognitionCandidates.ParsedTable
     ) -> Bool {
         let labels = columnHeaderLeaves(in: table)
         guard !labels.isEmpty else { return false }
         let allGeo = labels.allSatisfy { isBareGeographyLabel($0) || isOtherResidualLabel($0) }
-        return allGeo && labels.filter(isBareGeographyLabel).count >= 2
+        guard allGeo && labels.filter(isBareGeographyLabel).count >= 2 else { return false }
+        return !hasProductAxisRowLabels(table)
+    }
+
+    /// 行の見出し・品目が製品／サービス軸（「製品及びサービス別」＋ロボット等）。
+    static func hasProductAxisRowLabels(
+        _ table: RevenueRecognitionCandidates.ParsedTable
+    ) -> Bool {
+        for row in table.structure.rows {
+            let tokens = [row.categoryGroup, row.category].compactMap { $0 }
+            if tokens.contains(where: { isProductAxisLabel($0) || isProductOrBusinessHeading($0) }) {
+                return true
+            }
+        }
+        return false
     }
 
     /// 製品90％・単一セグメントなどの記載省略文。見出しや品目ラベルではない。

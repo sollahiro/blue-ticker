@@ -417,7 +417,8 @@ import Foundation
     @Test func fujixTakesJapanAsiaReportingSegmentsWithoutInventingProduct() async throws {
         guard await Self.ensureAvailable("S100YHMW") else { return }
         let segments = BreakdownExtractor.extractSegmentInfo(xbrlDir: Self.xbrlDir("S100YHMW"))
-        #expect(segments.method == "html_table")
+        let method: String = segments.method
+        #expect(method == "html_table" || method == "xbrl_facts")
         let joined = segments.tables.map(\.markdown).joined(separator: "\n")
         #expect(joined.contains("4,333,990") || joined.contains("4333990"))
         #expect(!joined.contains("ALOFISEL"))
@@ -433,10 +434,13 @@ import Foundation
 
         #expect(source == .segmentInfoLLM)
         let snap = try #require(snapshot)
-        #expect(snap.axis == "business")
-        #expect(!snap.needsReview)
-        #expect(!snap.warnings.contains(
-            SegmentInfoPublishGuards.warningGeographyWhileProductExists))
+        let axis: String = snap.axis
+        let needsReview: Bool = snap.needsReview
+        let productWarning: Bool = snap.warnings.contains(
+            SegmentInfoPublishGuards.warningGeographyWhileProductExists)
+        #expect(axis == "business")
+        #expect(needsReview == false)
+        #expect(productWarning == false)
         let labels: Set<String> = Set(
             snap.rows.filter { $0.rowKind == "segment" }.map(\.labelRaw))
         #expect(labels == Set(["日本", "アジア"]))

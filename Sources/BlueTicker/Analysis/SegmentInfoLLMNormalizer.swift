@@ -466,6 +466,7 @@ enum SegmentInfoLLMNormalizer {
         if label.contains("研究開発") { return false }
         return profitRowPreferred.contains { label.contains($0) }
             || label.contains("税引前当期純利益")
+            || label.contains("セグメント損失") || label.contains("営業損失")
     }
 
     /// ヘッダー単位が無い表（キヤノン注23 の smoke 抽出など）は、表合計と連結売上の比が
