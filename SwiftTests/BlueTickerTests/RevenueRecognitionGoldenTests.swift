@@ -2180,7 +2180,17 @@ import Testing
         #expect(header == "電子・半導体")
         #expect(RevenueRecognitionCandidates.isStubAxisHeader("業界の名称"))
         #expect(RevenueRecognitionCandidates.isStubAxisHeader("報告セグメント"))
+        #expect(RevenueRecognitionCandidates.isStubAxisHeader("報告セグメント（耐火物関連事業）"))
         #expect(RevenueRecognitionCandidates.joinHeaderParts(["報告セグメント", "日本事業"]) == "日本事業")
+        #expect(RevenueRecognitionCandidates.joinHeaderParts(["その他", "その他"]) == "その他")
+        #expect(
+            RevenueRecognitionCandidates.joinHeaderParts(
+                ["みずほフィナンシャルグループ（連結）", "リテール・事業法人カンパニー"])
+                == "リテール・事業法人カンパニー")
+        #expect(
+            RevenueRecognitionCandidates.joinHeaderParts(
+                ["当連結会計年度", "建設機械・車両"])
+                == "建設機械・車両")
         let unitHeader: String = RevenueRecognitionCandidates.joinHeaderParts(
             ["(単位：百万円)", "その他"])
         #expect(unitHeader == "その他")

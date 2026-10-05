@@ -342,4 +342,68 @@ import Foundation
         #expect(!snapshot.warnings.contains("llm_unit_unresolved"))
         #expect(!snapshot.needsReview)
     }
+
+    /// ヘッダー行が同じ事業名を繰り返すと `その他 / その他` にしない。
+    @Test func collapsesDuplicateJoinedColumnHeaders() async throws {
+        let markdown = """
+            | | その他 | マーケット | 連結 |
+            | | その他 | マーケット | 連結 |
+            | 外部顧客への売上高 | 50 | 200 | 250 |
+            | 営業利益 | 5 | 20 | 25 |
+            """
+        let table = BreakdownTable(
+            heading: "セグメント情報", markdown: markdown, period: "当期", unitCaption: "百万円")
+        let sales = 250 * Financial.millionYen
+        let (snapshotOrNil, _) = await Self.normalize(tables: [table], sales: sales)
+        let snapshot = try #require(snapshotOrNil)
+        let labels: Set<String> = Set(
+            snapshot.rows.filter { $0.rowKind == "segment" }.map { $0.labelRaw })
+        #expect(labels == Set(["その他", "マーケット"]))
+        #expect(!labels.contains(where: { $0.contains(" / ") }))
+    }
+
+    /// 全列にかかる「○○（連結）」親見出しで事業列を合計扱いしない（みずほ型）。
+    @Test func spanningConsolidatedParentDoesNotSkipBusinessColumns() async throws {
+        let markdown = """
+            | | みずほフィナンシャルグループ（連結） | みずほフィナンシャルグループ（連結） | みずほフィナンシャルグループ（連結） |
+            | | リテール・事業法人カンパニー | グローバルマーケッツカンパニー | 連結 |
+            | 業務粗利益 | 700 | 400 | 1,100 |
+            | 営業利益 | 60 | 150 | 210 |
+            """
+        let table = BreakdownTable(
+            heading: "セグメント情報", markdown: markdown, period: "当期", unitCaption: "百万円")
+        let sales = 1_100 * Financial.millionYen
+        let (snapshotOrNil, _) = await Self.normalize(tables: [table], sales: sales)
+        let snapshot = try #require(snapshotOrNil)
+        let labels: Set<String> = Set(
+            snapshot.rows.filter { $0.rowKind == "segment" }.map { $0.labelRaw })
+        #expect(labels.contains("リテール・事業法人カンパニー"))
+        #expect(labels.contains("グローバルマーケッツカンパニー"))
+        #expect(!labels.contains(where: { $0.contains("業務粗利益") }))
+        #expect(!labels.contains(where: { $0.contains("のれん") }))
+        let retail = try #require(snapshot.rows.first { $0.labelRaw.contains("リテール") })
+        #expect(retail.amount == 700 * Financial.millionYen)
+    }
+
+    /// `(1) 外部顧客に対する売上高` を売上行として列転置する（コマツ型）。
+    @Test func enumeratedExternalCustomerSalesRowTransposes() async throws {
+        let markdown = """
+            | | 建設機械・車両 | リテールファイナンス | 産業機械他 | 計 | 連結 |
+            | 売上高 | | | | | |
+            | (1) 外部顧客に対する売上高 | 3,796,100 | 100,520 | 236,131 | 4,132,751 | 4,132,751 |
+            | (2) セグメント間の内部売上高 | 9,940 | 25,617 | 2,619 | 38,176 | － |
+            | 営業利益 | 400,000 | 20,000 | 10,000 | 430,000 | 430,000 |
+            """
+        let table = BreakdownTable(
+            heading: "セグメント情報", markdown: markdown, period: "当期", unitCaption: "百万円")
+        let sales = 4_132_751 * Financial.millionYen
+        let (snapshotOrNil, _) = await Self.normalize(tables: [table], sales: sales)
+        let snapshot = try #require(snapshotOrNil)
+        let labels: Set<String> = Set(
+            snapshot.rows.filter { $0.rowKind == "segment" }.map { $0.labelRaw })
+        #expect(labels == Set(["建設機械・車両", "リテールファイナンス", "産業機械他"]))
+        let construction = try #require(snapshot.rows.first { $0.labelRaw == "建設機械・車両" })
+        #expect(construction.amount == 3_796_100 * Financial.millionYen)
+        #expect(!snapshot.needsReview)
+    }
 }

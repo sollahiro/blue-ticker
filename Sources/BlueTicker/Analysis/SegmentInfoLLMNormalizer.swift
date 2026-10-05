@@ -337,12 +337,21 @@ enum SegmentInfoLLMNormalizer {
     }
 
     /// 「その他（消去分を含む）」「その他及び全社」は残事業バケットなので合計列にしない。
+    /// 結合見出しは葉だけ見る（「みずほFG（連結） / リテール」の連結で全列スキップしない）。
     static func isSkippedTotalColumn(_ header: String) -> Bool {
-        let compact = RevenueRecognitionCandidates.compactCell(header)
-        if compact.contains("その他") && (compact.contains("消去分を含む") || compact.contains("全社")) {
+        let leaf = headerLeaf(header)
+        if leaf.contains("その他") && (leaf.contains("消去分を含む") || leaf.contains("全社")) {
             return false
         }
-        return RevenueRecognitionCandidates.isAggregateColumnHeader(compact)
+        return RevenueRecognitionCandidates.isAggregateColumnHeader(leaf)
+    }
+
+    static func headerLeaf(_ header: String) -> String {
+        let compact = RevenueRecognitionCandidates.compactCell(header)
+        let parts = compact.components(separatedBy: " / ")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        return parts.last ?? compact
     }
 
     static func isMetricRowLabel(_ label: String) -> Bool {
@@ -356,14 +365,30 @@ enum SegmentInfoLLMNormalizer {
     }
 
     static func isGenericSalesLabel(_ label: String) -> Bool {
-        if label.contains("売上原価") || label.contains("売上総利益") { return false }
-        if label.contains("セグメント間") { return false }
-        if salesRowPreferred.contains(where: { isSalesLabel(label, marker: $0) }) { return true }
-        return label == "売上高" || label.hasPrefix("売上高")
+        let stripped = stripLeadingEnumeration(label)
+        if stripped.contains("売上原価") || stripped.contains("売上総利益") { return false }
+        if stripped.contains("セグメント間") { return false }
+        if salesRowPreferred.contains(where: { isSalesLabel(stripped, marker: $0) }) { return true }
+        return stripped == "売上高" || stripped.hasPrefix("売上高")
     }
 
     static func isSalesLabel(_ label: String, marker: String) -> Bool {
-        label == marker || label.hasPrefix(marker)
+        let stripped = stripLeadingEnumeration(label)
+        return stripped == marker || stripped.hasPrefix(marker)
+            || label == marker || label.hasPrefix(marker)
+    }
+
+    /// `(1) 外部顧客に対する売上高` の番号を落として売上行マーカーと照合する。
+    static func stripLeadingEnumeration(_ label: String) -> String {
+        let compact = RevenueRecognitionCandidates.compactCell(label)
+        guard let first = compact.first, first == "(" || first == "（" else {
+            return compact
+        }
+        guard let close = compact.firstIndex(where: { $0 == ")" || $0 == "）" }) else {
+            return compact
+        }
+        return compact[compact.index(after: close)...]
+            .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     static func isProfitMetricLabel(_ label: String) -> Bool {

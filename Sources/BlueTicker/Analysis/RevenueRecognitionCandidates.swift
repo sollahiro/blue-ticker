@@ -299,13 +299,36 @@ enum RevenueRecognitionCandidates {
         let token = compactCell(label)
         if token.isEmpty { return false }
         if token.hasSuffix("の名称") || token == "名称" { return true }
-        return token == "報告セグメント"
+        return token == "報告セグメント" || token.hasPrefix("報告セグメント")
     }
 
     static func joinHeaderParts(_ parts: [String]) -> String {
-        let meaningful = parts.filter { !isStubAxisHeader($0) && !isUnitCaptionHeader($0) }
-        if !meaningful.isEmpty { return meaningful.joined(separator: " / ") }
-        return parts.filter { !isUnitCaptionHeader($0) }.joined(separator: " / ")
+        let compact = parts.map(compactCell).filter { !$0.isEmpty }
+        let withoutUnit = compact.filter { !isUnitCaptionHeader($0) }
+        let withoutStub = withoutUnit.filter { !isStubAxisHeader($0) }
+        var source = withoutStub.isEmpty ? withoutUnit : withoutStub
+        source = collapseConsecutiveDuplicates(source)
+        let leaves = source.filter { !isSpanningParentHeader($0) }
+        if !leaves.isEmpty {
+            source = collapseConsecutiveDuplicates(leaves)
+        }
+        return source.joined(separator: " / ")
+    }
+
+    /// 「その他 / その他」のように同一セルがヘッダー行で繰り返された結合を畳む。
+    static func collapseConsecutiveDuplicates(_ parts: [String]) -> [String] {
+        var out: [String] = []
+        for part in parts {
+            if out.last != part { out.append(part) }
+        }
+        return out
+    }
+
+    /// 全列に載る「○○（連結）」や年度見出し。葉の事業名と同居するときだけ落とす。
+    static func isSpanningParentHeader(_ label: String) -> Bool {
+        if isPeriodHeadingLabel(label) { return true }
+        if label.contains("その他") { return false }
+        return isAggregateColumnHeader(label)
     }
 
     /// 列見出しに載った「（単位：百万円）」はカテゴリ名ではない（6140）。
