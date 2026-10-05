@@ -286,7 +286,7 @@ struct SegmentInfoProdBreakdownRow: Codable {
             reasons.append("geography_only_taken")
         }
 
-        let record: [String: Any] = [
+        var record: [String: Any] = [
             "code": prod.code,
             "doc_id": prod.docID,
             "source": source.rawValue,
