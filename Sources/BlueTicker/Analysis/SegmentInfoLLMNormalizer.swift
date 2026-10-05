@@ -57,6 +57,8 @@ enum SegmentInfoLLMNormalizer {
         RevenueRecognitionColumnNormalizer.warningNoneOfTheseOverridden
     static let warningParallelDimensions =
         RevenueRecognitionColumnNormalizer.warningParallelDimensions
+    /// 旧: 地域のみの報告セグメントを business に載せるときの warning。
+    /// 現行: その形は `not_applicable` / `geography_only`。公開経路には使わない。
     static let warningGeographyTaken = "segment_info_geography_only_taken"
     static let warningSingleSegment = "segment_info_single_segment_disclosed"
 
@@ -97,6 +99,16 @@ enum SegmentInfoLLMNormalizer {
         let tablesForChoice = scopedTables.isEmpty ? parsed : scopedTables
         let columnsForChoice = scopedColumns.isEmpty ? columns : scopedColumns
         let constraint = RevenueRecognitionTableStructure.axisConstraint(tables: tablesForChoice)
+        // 報告セグメントが地域のみで、使える製品・事業表が無い（製品90％省略の文は製品表ではない）。
+        // 製品表は preferredTables が先に残す。日本事業などの事業ユニットは対象外。
+        // business に日本/アジアを載せない。地域は geography 軸。
+        if constraint == .geographyOnly {
+            var audit = LLMBreakdownAudit(
+                sourceTableIndex: nil, periodColumn: nil, unit: "",
+                profitDisclosed: false, notes: "axis_constraint=geography_only")
+            audit.notApplicableReason = BusinessBreakdownNotApplicableReason.geographyOnly.rawValue
+            return (nil, audit)
+        }
         let offered = RevenueRecognitionColumnNormalizer.offeredColumns(
             columnsForChoice, tables: tablesForChoice, constraint: constraint)
         let offeredTables = tablesForChoice.filter { table in
@@ -149,10 +161,6 @@ enum SegmentInfoLLMNormalizer {
         if assembled.recovered {
             notes += " recovered_table=\(table.tableIndex)"
             audit.notes = notes
-        }
-        if built.isEmpty && constraint == .geographyOnly {
-            audit.notApplicableReason = BusinessBreakdownNotApplicableReason.geographyOnly.rawValue
-            return (nil, audit)
         }
         if isSingleSegmentDisclosure(constraint: constraint, table: table) {
             audit.notApplicableReason = breakdownNotApplicableSingleSegmentDisclosed
@@ -220,11 +228,7 @@ enum SegmentInfoLLMNormalizer {
             denominator: &denom, denominatorTag: &denomTag)
 
         let profitDisclosed = rows.contains { $0.rowKind == "segment" && $0.profit != nil }
-        if constraint == .geographyOnly {
-            warnings.append(warningGeographyTaken)
-        } else {
-            flagGeographyLabels(rows, needsReview: &needsReview, warnings: &warnings)
-        }
+        flagGeographyLabels(rows, needsReview: &needsReview, warnings: &warnings)
         SegmentInfoPublishGuards.apply(
             rows: rows, allTables: parsed, selectedTable: table, selectedColumn: column,
             fiscalYearEnd: fiscalYearEnd, needsReview: &needsReview, warnings: &warnings)

@@ -176,7 +176,7 @@ import Testing
         #expect(!labels.contains("国内"))
     }
 
-    @Test func japanAsiaMatrixRecoversWhenSelectedTableIsEmpty() async throws {
+    @Test func japanAsiaMatrixIsGeographyOnlyNotPublishedOnBusiness() async throws {
         let junk = BreakdownTable(
             heading: "セグメント情報",
             markdown: "| 注記 | 内容 |\n| 省略 | 記載を省略しております |",
@@ -191,21 +191,14 @@ import Testing
             period: "当期",
             unitCaption: "千円")
         let sales = 5_474_552_000.0
-        let (snapshotOrNil, _) = await SegmentInfoLLMNormalizer.normalize(
+        let (snapshot, audit) = await SegmentInfoLLMNormalizer.normalize(
             ExtractedBreakdown(method: "html_table", tables: [junk, japanAsia], facts: []),
             consolidatedSales: sales,
             decider: FakeRevenueRecognitionColumnDecider(),
             fiscalYearEnd: "2026-03-31",
             docID: "S100YHMW")
-        let snapshot = try #require(snapshotOrNil)
-        let labels: Set<String> = Set(
-            snapshot.rows.filter { $0.rowKind == "segment" }.map(\.labelRaw))
-        #expect(labels.contains("日本"))
-        #expect(labels.contains("アジア"))
-        #expect(!snapshot.needsReview)
-        #expect(!snapshot.warnings.contains(
-            SegmentInfoPublishGuards.warningGeographyWhileProductExists))
-        #expect(snapshot.warnings.contains(SegmentInfoLLMNormalizer.warningGeographyTaken))
+        #expect(snapshot == nil)
+        #expect(audit?.notApplicableReason == breakdownNotApplicableGeographyOnly)
     }
 
     @Test func reviewRecoversProductTableAtHighConfidence() async {

@@ -314,8 +314,8 @@ private actor MockChatCompleting: ChatCompleting {
         #expect(await client.timesCalled() == 0)
     }
 
-    /// 地域別のみのセグメント情報表は事業軸として地域を採り、audit を持ち帰る。
-    @Test func geographyOnlySegmentInfoTableIsTakenNotDropped() async throws {
+    /// 地域別のみのセグメント情報表は business に載せない。audit の geography_only を持ち帰る。
+    @Test func geographyOnlySegmentInfoTableIsNotApplicable() async throws {
         let segments = ExtractedBreakdown(
             method: "html_table",
             tables: [
@@ -340,9 +340,9 @@ private actor MockChatCompleting: ChatCompleting {
             columnDecider: decider
         )
 
-        #expect(source == .segmentInfoLLM)
-        #expect(snapshot?.warnings.contains(SegmentInfoLLMNormalizer.warningGeographyTaken) == true)
-        #expect(audit?.columnJev != nil)
+        #expect(snapshot == nil)
+        #expect(source == .notFound)
+        #expect(audit?.notApplicableReason == breakdownNotApplicableGeographyOnly)
         #expect(await client.timesCalled() == 0)
     }
 

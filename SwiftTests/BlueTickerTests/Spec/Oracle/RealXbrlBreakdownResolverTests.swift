@@ -414,7 +414,8 @@ import Foundation
     }
 
     /// フジックス S100YHMW: 報告セグメントは日本/アジア。製品別は90％省略で表が無い。
-    @Test func fujixTakesJapanAsiaReportingSegmentsWithoutInventingProduct() async throws {
+    /// business は geography_only。日本/アジアを business に載せない。
+    @Test func fujixResolvesBusinessAsGeographyOnly() async throws {
         guard await Self.ensureAvailable("S100YHMW") else { return }
         let segments = BreakdownExtractor.extractSegmentInfo(xbrlDir: Self.xbrlDir("S100YHMW"))
         let method: String = segments.method
@@ -425,29 +426,40 @@ import Foundation
 
         let client = RealXbrlMockChat(responseJSON: nil)
         let sales = 5_474_552_000.0
-        let (snapshot, source, _) = await BusinessBreakdownResolver.resolve(
+        let (snapshot, source, audit) = await BusinessBreakdownResolver.resolve(
             segments: segments, consolidatedSales: sales, client: client,
             columnDecider: FakeRevenueRecognitionColumnDecider(containing: "セグメント損失"),
             fiscalYearEnd: "2026-03-31",
             docID: "S100YHMW"
         )
 
-        #expect(source == .segmentInfoLLM)
-        let snap = try #require(snapshot)
-        let axis: String = snap.axis
-        let needsReview: Bool = snap.needsReview
-        let productWarning: Bool = snap.warnings.contains(
-            SegmentInfoPublishGuards.warningGeographyWhileProductExists)
-        #expect(axis == "business")
-        #expect(needsReview == false)
-        #expect(productWarning == false)
-        let labels: Set<String> = Set(
-            snap.rows.filter { $0.rowKind == "segment" }.map(\.labelRaw))
-        #expect(labels == Set(["日本", "アジア"]))
-        let japan = try #require(snap.rows.first { $0.labelRaw == "日本" })
-        #expect(japan.amount == 4_333_990_000)
-        let asia = try #require(snap.rows.first { $0.labelRaw == "アジア" })
-        #expect(asia.amount == 1_140_562_000)
+        #expect(snapshot == nil)
+        #expect(source == .notFound)
+        #expect(audit?.notApplicableReason == breakdownNotApplicableGeographyOnly)
+        let reason = BreakdownExtractor.classifyNotApplicableReason(
+            segments: segments, consolidatedSales: sales, xbrlDir: Self.xbrlDir("S100YHMW"),
+            llmHint: audit?.notApplicableReason)
+        #expect(reason == .geographyOnly)
+        #expect(await client.timesCalled() == 0)
+    }
+
+    /// フジックス S100LRPS（FY2021）: 同じ geo-only + 製品省略。sales-matrix 回復はしない。
+    @Test func fujixFY2021ResolvesBusinessAsGeographyOnly() async throws {
+        guard await Self.ensureAvailable("S100LRPS") else { return }
+        let segments = BreakdownExtractor.extractSegmentInfo(xbrlDir: Self.xbrlDir("S100LRPS"))
+        let client = RealXbrlMockChat(responseJSON: nil)
+        let (snapshot, source, audit) = await BusinessBreakdownResolver.resolve(
+            segments: segments, consolidatedSales: 5_830_295_000.0, client: client,
+            columnDecider: FakeRevenueRecognitionColumnDecider(),
+            fiscalYearEnd: "2022-03-31",
+            docID: "S100LRPS"
+        )
+        #expect(snapshot == nil)
+        #expect(source == .notFound)
+        let reason = BreakdownExtractor.classifyNotApplicableReason(
+            segments: segments, consolidatedSales: 5_830_295_000.0,
+            xbrlDir: Self.xbrlDir("S100LRPS"), llmHint: audit?.notApplicableReason)
+        #expect(reason == .geographyOnly)
         #expect(await client.timesCalled() == 0)
     }
 }
