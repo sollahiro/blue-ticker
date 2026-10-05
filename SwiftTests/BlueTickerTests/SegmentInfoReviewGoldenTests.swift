@@ -141,6 +141,27 @@ import Testing
         #expect(
             !SegmentInfoLLMNormalizer.shouldIsolateKeptTable(
                 index: 1, tables: [geography, junk], fiscalYearEnd: "2026-03-31"))
+        let reportable = BreakdownTable(
+            heading: "セグメント情報",
+            markdown: """
+                | | 日本 | アジア | 計 |
+                | 外部顧客に対する売上高 | 4,334 | 1,141 | 5,475 |
+                | セグメント損失 | △193 | △31 | △224 |
+                """,
+            period: "当期",
+            unitCaption: "百万円")
+        let relatedGeography = BreakdownTable(
+            heading: "セグメント情報",
+            markdown: """
+                | 日本 | 中国 | アジア(中国除く) | その他の地域 | 合計 |
+                | 4,249 | 743 | 442 | 41 | 5,475 |
+                """,
+            period: "当期",
+            unitCaption: "百万円",
+            precedingCaption: "単一の製品・サービスの区分の外部顧客への売上高が連結損益計算書の売上高の90％を超えるため、記載を省略しております。")
+        #expect(
+            !SegmentInfoLLMNormalizer.shouldIsolateKeptTable(
+                index: 1, tables: [reportable, relatedGeography], fiscalYearEnd: "2026-03-31"))
 
         let sales = 1_243 * Financial.millionYen
         let (snapshotOrNil, _) = await SegmentInfoLLMNormalizer.normalize(
@@ -181,6 +202,10 @@ import Testing
             snapshot.rows.filter { $0.rowKind == "segment" }.map(\.labelRaw))
         #expect(labels.contains("日本"))
         #expect(labels.contains("アジア"))
+        #expect(!snapshot.needsReview)
+        #expect(!snapshot.warnings.contains(
+            SegmentInfoPublishGuards.warningGeographyWhileProductExists))
+        #expect(snapshot.warnings.contains(SegmentInfoLLMNormalizer.warningGeographyTaken))
     }
 
     @Test func reviewRecoversProductTableAtHighConfidence() async {

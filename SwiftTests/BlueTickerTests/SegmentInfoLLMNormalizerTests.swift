@@ -425,8 +425,8 @@ import Foundation
         #expect(!snapshot.needsReview)
     }
 
-    /// 地域列を採ったが同じ注記に製品表がある → 公開しない（武田 / 3422 型）。
-    @Test func geographyLabelsNeedReviewWhenProductTableExists() async throws {
+    /// 製品表と地域表が両方ある → 製品を採る（武田 / 3422 型）。
+    @Test func prefersProductTableWhenGeographyAlsoExists() async throws {
         let product = BreakdownTable(
             heading: "セグメント情報",
             markdown: """
@@ -452,14 +452,49 @@ import Foundation
         let snapshot = try #require(snapshotOrNil)
         let labels: Set<String> = Set(
             snapshot.rows.filter { $0.rowKind == "segment" }.map { $0.labelRaw })
-        if labels.contains("ALOFISEL") {
-            #expect(!snapshot.needsReview)
-        } else {
-            #expect(snapshot.needsReview)
-            #expect(snapshot.warnings.contains(
-                SegmentInfoPublishGuards.warningGeographyWhileProductExists))
-            #expect(labels.contains("タイ") || labels.contains("日本"))
+        #expect(labels == Set(["ALOFISEL", "DEXILANT"]))
+        #expect(!snapshot.needsReview)
+        #expect(!snapshot.warnings.contains(
+            SegmentInfoPublishGuards.warningGeographyWhileProductExists))
+    }
+
+    /// 製品表があるのに地域列を採った場合は公開しない（武田 / 3422 型のガード）。
+    @Test func geographyLabelsNeedReviewWhenProductTableExists() {
+        let parsed = RevenueRecognitionCandidates.parse(
+            tables: [
+                BreakdownTable(
+                    heading: "セグメント情報",
+                    markdown: """
+                        | 区分 | 当期 |
+                        | ALOFISEL | 100 |
+                        | DEXILANT | 200 |
+                        | 合計 | 300 |
+                        """,
+                    period: "当期"),
+                BreakdownTable(
+                    heading: "セグメント情報",
+                    markdown: """
+                        | | 日本 | タイ | 中国 | 計 |
+                        | 外部顧客への売上高 | 50 | 80 | 170 | 300 |
+                        | セグメント利益 | 5 | 8 | 17 | 30 |
+                        """,
+                    period: "当期"),
+            ])
+        let geography = parsed.first { table in
+            table.columnHeaders.values.contains { $0.contains("タイ") }
         }
+        var needsReview = false
+        var warnings: [String] = []
+        SegmentInfoPublishGuards.apply(
+            rows: [
+                BreakdownRow(labelRaw: "日本", amount: 50, share: nil, profit: 5, rowKind: "segment"),
+                BreakdownRow(labelRaw: "タイ", amount: 80, share: nil, profit: 8, rowKind: "segment"),
+                BreakdownRow(labelRaw: "中国", amount: 170, share: nil, profit: 17, rowKind: "segment"),
+            ],
+            allTables: parsed, selectedTable: geography, selectedColumn: nil,
+            fiscalYearEnd: "2026-03-31", needsReview: &needsReview, warnings: &warnings)
+        #expect(needsReview)
+        #expect(warnings.contains(SegmentInfoPublishGuards.warningGeographyWhileProductExists))
     }
 
     /// 金額セルをセグメント名にしない（3905 / 7734 型）。

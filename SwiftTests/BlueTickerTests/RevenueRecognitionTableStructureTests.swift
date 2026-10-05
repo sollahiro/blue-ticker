@@ -503,6 +503,35 @@ import Testing
             #expect(unresolved == false)
         }
 
+        @Test func productOmissionProseIsNotAProductAxisLabel() {
+            let omitted: Bool = RevenueRecognitionTableStructure.isDisclosureOmissionProse(
+                "単一の製品・サービスの区分の外部顧客への売上高が連結損益計算書の売上高の90％を超えるため、記載を省略しております。")
+            let axis: Bool = RevenueRecognitionTableStructure.isProductAxisLabel(
+                "単一の製品・サービスの区分の外部顧客への売上高が連結損益計算書の売上高の90％を超えるため、記載を省略しております。")
+            let heading: Bool = RevenueRecognitionTableStructure.isProductOrBusinessHeading(
+                "製品及びサービスごとの情報")
+            #expect(omitted)
+            #expect(axis == false)
+            #expect(heading)
+        }
+
+        @Test func geographicReportingSegmentColumnsAreGeographyAxis() {
+            let html = """
+                <table>
+                  <tr><td></td><td>報告セグメント</td><td>報告セグメント</td><td>報告セグメント</td><td>調整額</td><td>連結財務諸表計上額</td></tr>
+                  <tr><td></td><td>日本</td><td>アジア</td><td>計</td><td></td><td></td></tr>
+                  <tr><td>外部顧客に対する売上高</td><td>4,334</td><td>1,141</td><td>5,475</td><td>-</td><td>5,475</td></tr>
+                </table>
+                """
+            let parsed = RevenueRecognitionTableStructureTests.parsed(html)
+            let axis: RevenueRecognitionTableStructure.TableAxis =
+                RevenueRecognitionTableStructure.tableAxis(of: parsed)
+            let constraint: RevenueRecognitionTableStructure.AxisConstraint =
+                RevenueRecognitionTableStructure.axisConstraint(tables: [parsed])
+            #expect(axis == .geography)
+            #expect(constraint == .geographyOnly)
+        }
+
         @Test func timingLabelWinsOverServiceKeyword() {
             let timing: Bool = RevenueRecognitionTableStructure.isTimingAxisLabel(
                 "一時点で移転される財又はサービス")

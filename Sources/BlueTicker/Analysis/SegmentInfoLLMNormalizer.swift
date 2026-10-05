@@ -521,7 +521,7 @@ enum SegmentInfoLLMNormalizer {
     static func isDedicatedProductTable(
         _ table: RevenueRecognitionCandidates.ParsedTable
     ) -> Bool {
-        if table.heading == BreakdownExtractor.productOrServiceHeading { return true }
+        if SegmentInfoPublishGuards.hasProductOrBusinessLabels(table) { return true }
         return RevenueRecognitionTableStructure.tableAxis(of: table) == .productOrBusiness
     }
 
@@ -671,6 +671,13 @@ enum SegmentInfoLLMNormalizer {
             if current { return false }
         }
         if hasUsableProductOrBusinessTable(tables), !isDedicatedProductTable(selected) {
+            return false
+        }
+        if !isSegmentColumnMatrix(selected),
+           parsed.contains(where: {
+               $0.tableIndex != selected.tableIndex && isSegmentColumnMatrix($0)
+           })
+        {
             return false
         }
         return canAssembleBusinessRows(selected)

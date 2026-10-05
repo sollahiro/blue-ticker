@@ -412,5 +412,39 @@ import Foundation
         #expect(digital.amount == 370_225_000_000)
         #expect(digital.rowKind == "segment")
     }
+
+    /// フジックス S100YHMW: 報告セグメントは日本/アジア。製品別は90％省略で表が無い。
+    @Test func fujixTakesJapanAsiaReportingSegmentsWithoutInventingProduct() async throws {
+        guard await Self.ensureAvailable("S100YHMW") else { return }
+        let segments = BreakdownExtractor.extractSegmentInfo(xbrlDir: Self.xbrlDir("S100YHMW"))
+        #expect(segments.method == "html_table")
+        let joined = segments.tables.map(\.markdown).joined(separator: "\n")
+        #expect(joined.contains("4,333,990") || joined.contains("4333990"))
+        #expect(!joined.contains("ALOFISEL"))
+
+        let client = RealXbrlMockChat(responseJSON: nil)
+        let sales = 5_474_552_000.0
+        let (snapshot, source, _) = await BusinessBreakdownResolver.resolve(
+            segments: segments, consolidatedSales: sales, client: client,
+            columnDecider: FakeRevenueRecognitionColumnDecider(containing: "セグメント損失"),
+            fiscalYearEnd: "2026-03-31",
+            docID: "S100YHMW"
+        )
+
+        #expect(source == .segmentInfoLLM)
+        let snap = try #require(snapshot)
+        #expect(snap.axis == "business")
+        #expect(!snap.needsReview)
+        #expect(!snap.warnings.contains(
+            SegmentInfoPublishGuards.warningGeographyWhileProductExists))
+        let labels: Set<String> = Set(
+            snap.rows.filter { $0.rowKind == "segment" }.map(\.labelRaw))
+        #expect(labels == Set(["日本", "アジア"]))
+        let japan = try #require(snap.rows.first { $0.labelRaw == "日本" })
+        #expect(japan.amount == 4_333_990_000)
+        let asia = try #require(snap.rows.first { $0.labelRaw == "アジア" })
+        #expect(asia.amount == 1_140_562_000)
+        #expect(await client.timesCalled() == 0)
+    }
 }
 

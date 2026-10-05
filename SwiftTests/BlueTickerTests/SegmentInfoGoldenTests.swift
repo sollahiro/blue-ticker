@@ -1,7 +1,8 @@
-// SPEC_ORACLE: セグメント情報 html_table の 4 類型。
+// SPEC_ORACLE: セグメント情報 html_table の類型。
 // 1 事業別の報告セグメントはそのまま採る
 // 2 地域別の報告セグメントで製品別もある → 製品を採り、地域は捨て、両方を足さない
 // 3 地域別のみ → 地域を採る
+// 3b 報告セグメントが地域で製品は90％省略 → 地域を採り、製品行は作らない
 // 4 単一セグメントと開示 → single_segment_disclosed
 // 並行ブロック（同じ合計を地域と製品で分けた表）は 2。
 // デンソー / 三菱商事 / 東京エレクトロン型がセグメント情報見出しで出たときも同じ規則。
@@ -74,6 +75,41 @@ import Testing
         let equipment = try #require(
             snapshot.rows.first { $0.labelRaw.contains("新規装置") || $0.categoryGroup?.contains("新規装置") == true })
         #expect(equipment.amount == 1_817_250 * Financial.millionYen)
+        #expect(!snapshot.needsReview)
+    }
+
+    /// 3b. 報告セグメントが日本/アジアで、製品別は90％省略 → 地域を採り、製品行は作らない。
+    @Test func type3GeographicReportingSegmentsWithOmittedProductTakesGeography() async throws {
+        let html = """
+            <p>当連結会計年度（自 2025年4月1日 至 2026年3月31日）</p>
+            <p>（単位：百万円）</p>
+            <table>
+              <tr><td></td><td>報告セグメント</td><td>報告セグメント</td><td>報告セグメント</td><td>調整額</td><td>連結財務諸表計上額</td></tr>
+              <tr><td></td><td>日本</td><td>アジア</td><td>計</td><td></td><td></td></tr>
+              <tr><td>外部顧客に対する売上高</td><td>4,334</td><td>1,141</td><td>5,475</td><td>-</td><td>5,475</td></tr>
+              <tr><td>セグメント損失</td><td>△193</td><td>△31</td><td>△224</td><td>1</td><td>△222</td></tr>
+            </table>
+            <p>１．製品及びサービスごとの情報 単一の製品・サービスの区分の外部顧客への売上高が連結損益計算書の売上高の90％を超えるため、記載を省略しております。</p>
+            <p>２．地域ごとの情報</p>
+            <table>
+              <tr><td>日本</td><td>中国</td><td>アジア(中国除く)</td><td>その他の地域</td><td>合計</td></tr>
+              <tr><td>4,249</td><td>743</td><td>442</td><td>41</td><td>5,475</td></tr>
+            </table>
+            """
+        let sales = 5_475 * Financial.millionYen
+        let (snapshotOrNil, _) = await Self.snapshot(
+            html: html, sales: sales, heading: "セグメント情報")
+        let snapshot = try #require(snapshotOrNil)
+        let labels: Set<String> = Set(
+            snapshot.rows.filter { $0.rowKind == "segment" }.map { $0.labelRaw })
+        #expect(labels == Set(["日本", "アジア"]))
+        #expect(!labels.contains("中国"))
+        #expect(!labels.contains("ALOFISEL"))
+        let japan = try #require(snapshot.rows.first { $0.labelRaw == "日本" })
+        #expect(japan.amount == 4_334 * Financial.millionYen)
+        #expect(snapshot.warnings.contains(SegmentInfoLLMNormalizer.warningGeographyTaken))
+        #expect(!snapshot.warnings.contains(
+            SegmentInfoPublishGuards.warningGeographyWhileProductExists))
         #expect(!snapshot.needsReview)
     }
 

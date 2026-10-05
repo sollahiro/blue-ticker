@@ -171,13 +171,17 @@ enum SegmentInfoPublishGuards {
         besides selected: RevenueRecognitionCandidates.ParsedTable?
     ) -> Bool {
         tables.contains { table in
-            if table.heading == BreakdownExtractor.productOrServiceHeading { return true }
-            if RevenueRecognitionTableStructure.tableAxis(of: table) == .productOrBusiness {
-                return true
-            }
             if table.tableIndex == selected?.tableIndex { return false }
-            return businessLikeLabels(in: table).count >= 2
+            return hasProductOrBusinessLabels(table)
         }
+    }
+
+    static func hasProductOrBusinessLabels(
+        _ table: RevenueRecognitionCandidates.ParsedTable
+    ) -> Bool {
+        let labels = businessLikeLabels(in: table)
+        if labels.count >= 2 { return true }
+        return table.heading == BreakdownExtractor.productOrServiceHeading && !labels.isEmpty
     }
 
     private static func businessLikeLabels(
@@ -192,6 +196,8 @@ enum SegmentInfoPublishGuards {
             if isGeographyLikeLabel(token) { continue }
             if isMetricAsSegmentLabel(token) { continue }
             if isNumericOrCodeLabel(token) { continue }
+            if RevenueRecognitionCandidates.isStubAxisHeader(token) { continue }
+            if RevenueRecognitionTableStructure.isDisclosureOmissionProse(token) { continue }
             labels.append(token)
         }
         if !labels.isEmpty { return labels }
@@ -205,6 +211,8 @@ enum SegmentInfoPublishGuards {
             if isMetricAsSegmentLabel(leaf) { continue }
             if isNumericOrCodeLabel(leaf) { continue }
             if RevenueRecognitionCandidates.isPeriodHeadingLabel(leaf) { continue }
+            if RevenueRecognitionCandidates.isStubAxisHeader(leaf) { continue }
+            if RevenueRecognitionTableStructure.isDisclosureOmissionProse(leaf) { continue }
             labels.append(leaf)
         }
         return labels
