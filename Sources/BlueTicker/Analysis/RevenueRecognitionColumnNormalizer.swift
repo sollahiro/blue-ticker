@@ -236,6 +236,10 @@ enum RevenueRecognitionColumnNormalizer {
             }
         }
 
+        SegmentInfoPublishGuards.apply(
+            rows: rows, allTables: parsed, selectedTable: table, selectedColumn: column,
+            fiscalYearEnd: fiscalYearEnd, needsReview: &needsReview, warnings: &warnings)
+
         audit.sourceTableIndex = table.tableIndex
         audit.periodColumn = column.key
         audit.unit = scale.headerToken ?? table.unitCaption ?? ""

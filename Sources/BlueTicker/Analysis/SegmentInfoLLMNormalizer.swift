@@ -211,6 +211,9 @@ enum SegmentInfoLLMNormalizer {
         } else {
             flagGeographyLabels(rows, needsReview: &needsReview, warnings: &warnings)
         }
+        SegmentInfoPublishGuards.apply(
+            rows: rows, allTables: parsed, selectedTable: table, selectedColumn: column,
+            fiscalYearEnd: fiscalYearEnd, needsReview: &needsReview, warnings: &warnings)
 
         audit.sourceTableIndex = table.tableIndex
         audit.periodColumn = column.key
@@ -549,6 +552,7 @@ enum SegmentInfoLLMNormalizer {
             else { continue }
             let name = RevenueRecognitionCandidates.compactCell(header)
             guard !name.isEmpty else { continue }
+            if SegmentInfoPublishGuards.isNumericOrCodeLabel(name) { continue }
             let kind: String
             if name.contains("消去") && !name.contains("その他") {
                 kind = "reconciling"

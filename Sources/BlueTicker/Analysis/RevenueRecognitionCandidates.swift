@@ -324,11 +324,13 @@ enum RevenueRecognitionCandidates {
         return out
     }
 
-    /// 全列に載る「○○（連結）」や年度見出し。葉の事業名と同居するときだけ落とす。
+    /// 全列に載る「○○（連結）」や年度見出し、地域グループ。葉の事業名と同居するときだけ落とす。
     static func isSpanningParentHeader(_ label: String) -> Bool {
         if isPeriodHeadingLabel(label) { return true }
         if label.contains("その他") { return false }
-        return isAggregateColumnHeader(label)
+        if isAggregateColumnHeader(label) { return true }
+        return RevenueRecognitionTableStructure.isBareGeographyLabel(label)
+            || RevenueRecognitionTableStructure.isGeographyHeading(label)
     }
 
     /// 列見出しに載った「（単位：百万円）」はカテゴリ名ではない（6140）。
@@ -449,6 +451,7 @@ enum RevenueRecognitionCandidates {
             guard classified.amountKind == .segment else { continue }
             let label = classified.category ?? classified.categoryGroup ?? ""
             if label.isEmpty { continue }
+            if isAmountCell(label) { continue }
             if classified.labelKind == .categoryGroup, classified.category == nil {
                 items.append(Item(group: "", label: label, row: i, isPartial: false))
                 continue

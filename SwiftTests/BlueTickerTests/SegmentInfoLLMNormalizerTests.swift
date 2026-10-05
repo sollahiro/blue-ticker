@@ -406,4 +406,139 @@ import Foundation
         #expect(construction.amount == 3_796_100 * Financial.millionYen)
         #expect(!snapshot.needsReview)
     }
+
+    /// 地域列を採ったが同じ注記に製品表がある → 公開しない（武田 / 3422 型）。
+    @Test func geographyLabelsNeedReviewWhenProductTableExists() async throws {
+        let product = BreakdownTable(
+            heading: "セグメント情報",
+            markdown: """
+                | 区分 | 当期 |
+                | ALOFISEL | 100 |
+                | DEXILANT | 200 |
+                | 合計 | 300 |
+                """,
+            period: "当期",
+            unitCaption: "百万円")
+        let geography = BreakdownTable(
+            heading: "セグメント情報",
+            markdown: """
+                | | 日本 | タイ | 中国 | 計 |
+                | 外部顧客への売上高 | 50 | 80 | 170 | 300 |
+                | セグメント利益 | 5 | 8 | 17 | 30 |
+                """,
+            period: "当期",
+            unitCaption: "百万円")
+        let sales = 300 * Financial.millionYen
+        let (snapshotOrNil, _) = await Self.normalize(
+            tables: [product, geography], sales: sales)
+        let snapshot = try #require(snapshotOrNil)
+        let labels: Set<String> = Set(
+            snapshot.rows.filter { $0.rowKind == "segment" }.map { $0.labelRaw })
+        if labels.contains("ALOFISEL") {
+            #expect(!snapshot.needsReview)
+        } else {
+            #expect(snapshot.needsReview)
+            #expect(snapshot.warnings.contains(
+                SegmentInfoPublishGuards.warningGeographyWhileProductExists))
+            #expect(labels.contains("タイ") || labels.contains("日本"))
+        }
+    }
+
+    /// 金額セルをセグメント名にしない（3905 / 7734 型）。
+    @Test func numericColumnHeaderIsNotPublishedAsSegment() async throws {
+        let markdown = """
+            | 区分 | 当期 |
+            | 1,918,575 | 1,918,575 |
+            | 合計 | 1,918,575 |
+            """
+        let table = BreakdownTable(
+            heading: "セグメント情報", markdown: markdown, period: "当期", unitCaption: "百万円")
+        let sales = 1_918_575 * Financial.millionYen
+        let (snapshot, _) = await Self.normalize(tables: [table], sales: sales)
+        let labels = snapshot?.rows.filter { $0.rowKind == "segment" }.map(\.labelRaw) ?? []
+        #expect(!labels.contains { SegmentInfoPublishGuards.isNumericOrCodeLabel($0) })
+        if let snapshot, !labels.isEmpty {
+            #expect(snapshot.needsReview)
+        }
+    }
+
+    /// 指標行がセグメント名になった積み上げ表は公開しない（富士フイルム / ORIX 型）。
+    @Test func metricRowLabelsNeedReview() async throws {
+        let markdown = """
+            | 区分 | 当期 |
+            | セグメント収益 | 1,000 |
+            | セグメント利益 | 100 |
+            | セグメント資産 | 5,000 |
+            | 支払利息 | 20 |
+            """
+        let table = BreakdownTable(
+            heading: "セグメント情報", markdown: markdown, period: "当期", unitCaption: "百万円")
+        let sales = 1_000 * Financial.millionYen
+        let (snapshotOrNil, _) = await Self.normalize(tables: [table], sales: sales)
+        let snapshot = try #require(snapshotOrNil)
+        #expect(snapshot.needsReview)
+        #expect(snapshot.warnings.contains(SegmentInfoPublishGuards.warningMetricRowLabels))
+    }
+
+    /// 同一ラベルが指標ブロックごとに繰り返された表は公開しない（リコー型）。
+    @Test func duplicateSegmentLabelsNeedReview() async throws {
+        let markdown = """
+            | 区分 | 当期 |
+            | デジタルサービス | 100 |
+            | デジタルプロダクツ | 80 |
+            | デジタルサービス | 40 |
+            | デジタルプロダクツ | 30 |
+            | デジタルサービス | 10 |
+            | デジタルプロダクツ | 5 |
+            | 合計 | 265 |
+            """
+        let table = BreakdownTable(
+            heading: "セグメント情報", markdown: markdown, period: "当期", unitCaption: "百万円")
+        let sales = 265 * Financial.millionYen
+        let (snapshotOrNil, _) = await Self.normalize(tables: [table], sales: sales)
+        let snapshot = try #require(snapshotOrNil)
+        #expect(snapshot.needsReview)
+        #expect(snapshot.warnings.contains(SegmentInfoPublishGuards.warningDuplicateSegmentLabels))
+    }
+
+    /// 前期列を採り、同じ表の当期列が売上に合う → 公開しない（キヤノン型）。
+    @Test func priorPeriodColumnMatchingOtherYearNeedsReview() async throws {
+        let markdown = """
+            | 区分 | 前連結会計年度 | 当連結会計年度 |
+            | オフィス | 1,749,165 | 1,437,188 |
+            | イメージングシステム | 806,425 | 711,317 |
+            | 合計 | 2,555,590 | 2,148,505 |
+            """
+        let table = BreakdownTable(
+            heading: "セグメント情報", markdown: markdown, period: "当期", unitCaption: "百万円")
+        let sales = 2_148_505 * Financial.millionYen
+        let (snapshotOrNil, _) = await Self.normalize(
+            tables: [table], sales: sales, selected: "t0_c1")
+        let snapshot = try #require(snapshotOrNil)
+        #expect(snapshot.needsReview)
+        #expect(snapshot.warnings.contains(SegmentInfoPublishGuards.warningPriorPeriodColumn))
+    }
+
+    /// 地域グループ見出しは葉の製品名だけ残す（9274 型）。
+    @Test func geographyGroupPrefixDroppedFromJoinedHeaders() async throws {
+        let joined: String = RevenueRecognitionCandidates.joinHeaderParts(
+            ["北東アジア・欧州／米州・アジアパシフィック", "板紙"])
+        #expect(joined == "板紙")
+        let markdown = """
+            | | 北東アジア・欧州／米州・アジアパシフィック | 北東アジア・欧州／米州・アジアパシフィック | 連結 |
+            | | 板紙 | パルプ・古紙 | 連結 |
+            | 外部顧客に対する売上高 | 80 | 20 | 100 |
+            """
+        let table = BreakdownTable(
+            heading: "セグメント情報", markdown: markdown, period: "当期", unitCaption: "百万円")
+        let sales = 100 * Financial.millionYen
+        let (snapshotOrNil, _) = await Self.normalize(tables: [table], sales: sales)
+        let snapshot = try #require(snapshotOrNil)
+        let labels: Set<String> = Set(
+            snapshot.rows.filter { $0.rowKind == "segment" }.map { $0.labelRaw })
+        #expect(labels.contains("板紙"))
+        #expect(labels.contains("パルプ・古紙"))
+        #expect(!labels.contains(where: { $0.contains("北東アジア") }))
+        #expect(!snapshot.needsReview)
+    }
 }
