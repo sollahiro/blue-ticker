@@ -87,12 +87,14 @@ enum GeographyBreakdownLLMNormalizer {
         else { return (nil, audit) }
 
         var (built, _) = RevenueRecognitionCandidates.buildRows(
-            table: selectedTable, column: selectedColumn.column)
+            table: selectedTable, column: selectedColumn.column, applyParallelDimension: false)
+        built = dropNonGeographyMetricRows(built)
         var transposedWhole: Double?
         if built.isEmpty {
             let transposed = RevenueRecognitionCandidates.transposeMetricRow(
-                table: selectedTable, wholeCompanyColumn: selectedColumn.column)
-            built = transposed.rows
+                table: selectedTable, wholeCompanyColumn: selectedColumn.column,
+                geographySales: true)
+            built = dropNonGeographyMetricRows(transposed.rows)
             transposedWhole = transposed.wholeCompanyAmount
         }
         if built.isEmpty {
@@ -245,14 +247,58 @@ enum GeographyBreakdownLLMNormalizer {
             }
             return true
         }
-        return usable.isEmpty ? columns : usable
+        var preferred: [RevenueRecognitionCandidates.AmountColumn] = []
+        for table in tables {
+            let tableCols = usable.filter { $0.tableIndex == table.tableIndex }
+            let regionHeaders = table.columnHeaders.values.filter { header in
+                Xbrl.segmentGeographyLabelKeywordsJa.contains {
+                    RevenueRecognitionCandidates.compactCell(header).contains($0)
+                }
+            }
+            if regionHeaders.count >= 2 {
+                let totals = tableCols.filter { column in
+                    let header = RevenueRecognitionCandidates.compactCell(column.header)
+                    return header.contains("合計") || header.contains("連結") || header == "計"
+                }
+                preferred.append(contentsOf: totals.isEmpty ? tableCols : totals)
+            } else {
+                preferred.append(contentsOf: tableCols)
+            }
+        }
+        return preferred.isEmpty ? (usable.isEmpty ? columns : usable) : preferred
     }
 
     static func dropAssetTables(
         _ tables: [RevenueRecognitionCandidates.ParsedTable]
     ) -> [RevenueRecognitionCandidates.ParsedTable] {
-        let sales = tables.filter { !isAssetMetricTable($0) }
+        let sales = tables.filter { !isAssetMetricTable($0) && !isUnitStubTable($0) }
         return sales.isEmpty ? tables : sales
+    }
+
+    static func dropNonGeographyMetricRows(
+        _ rows: [RevenueRecognitionCandidates.BuiltRow]
+    ) -> [RevenueRecognitionCandidates.BuiltRow] {
+        rows.filter { row in
+            let label = RevenueRecognitionCandidates.displayLabel(
+                categoryGroup: row.categoryGroup, category: row.category)
+            if RevenueRecognitionCandidates.isAssetMetricLabel(label) { return false }
+            if RevenueRecognitionCandidates.isPeriodHeadingLabel(label) { return false }
+            if RevenueRecognitionCandidates.isPercentMetricLabel(label) { return false }
+            if label.contains("単位") || label.hasPrefix("Ⅰ") || label.hasPrefix("Ⅱ")
+                || label.hasPrefix("I．") || label.hasPrefix("I.")
+            {
+                return false
+            }
+            if RevenueRecognitionCandidates.isGeographySalesMetricLabel(label),
+               !Xbrl.segmentGeographyLabelKeywordsJa.contains(where: { label.contains($0) })
+            {
+                return false
+            }
+            if label.contains("セグメント損失") || label.contains("セグメント利益") {
+                return false
+            }
+            return true
+        }
     }
 
     static func isAssetMetricTable(_ table: RevenueRecognitionCandidates.ParsedTable) -> Bool {
@@ -260,8 +306,29 @@ enum GeographyBreakdownLLMNormalizer {
             table.heading,
             table.precedingCaption ?? "",
             table.columnHeaders.values.joined(separator: " "),
+            table.items.map(\.label).joined(separator: " "),
+            table.totals.map(\.label).joined(separator: " "),
         ].joined(separator: " ")
-        return blob.contains("固定資産") || blob.contains("非流動資産") || blob.contains("長期性資産")
+        if blob.contains("固定資産") || blob.contains("非流動資産") || blob.contains("長期性資産") {
+            let hasSales = blob.contains("売上") || blob.contains("外部顧客") || blob.contains("収益")
+            if !hasSales { return true }
+        }
+        return false
+    }
+
+    static func isUnitStubTable(_ table: RevenueRecognitionCandidates.ParsedTable) -> Bool {
+        let labels = table.items.map(\.label) + table.totals.map(\.label)
+            + Array(table.columnHeaders.values)
+        let stub = labels.contains { label in
+            let compact = RevenueRecognitionCandidates.compactCell(label)
+            return compact.contains("単位") || compact.hasPrefix("Ⅰ") || compact.hasPrefix("I．")
+                || compact.hasPrefix("I.")
+        }
+        if !stub { return false }
+        let geo = labels.contains { label in
+            Xbrl.segmentGeographyLabelKeywordsJa.contains { label.contains($0) }
+        }
+        return !geo
     }
 
     /// 親地域の内数（「うち」）として重複計上されている segment 行を除く。

@@ -119,10 +119,14 @@ enum RevenueRecognitionCandidates {
     }
 
     /// 選んだ列のセルから行を組む。Jev は呼ばない。
-    static func buildRows(table: ParsedTable, column: Int) -> (rows: [BuiltRow], needsReview: Bool) {
+    /// `applyParallelDimension` は収益認識の並行次元（製品 vs 顧客/時点）用。geography は
+    /// 売上高と固定資産が同じ合計で並ぶ表を wipe してしまうので切る。
+    static func buildRows(
+        table: ParsedTable, column: Int, applyParallelDimension: Bool = true
+    ) -> (rows: [BuiltRow], needsReview: Bool) {
         var table = table
         var needsReview = false
-        if applyBusinessDimension(&table, column: column) {
+        if applyParallelDimension, applyBusinessDimension(&table, column: column) {
             needsReview = true
         }
         let amounts = dataAmounts(table: table, column: column)
@@ -241,23 +245,54 @@ enum RevenueRecognitionCandidates {
 
     /// 行が指標・列が事業のマトリクス（三菱商事 / ファナック）。明細行が無いときだけ、
     /// 選んだ全社列で表を特定し、合計行の他列を category_group にする。
+    /// geography の仕向地表も同じ形（行=外部顧客への売上高、列=地域）。固定資産行は選ばない。
+    /// 7734 型の「Ⅰ売上高」や 1887 型の前期/当期行も、geography では指標行として読む。
     static func transposeMetricRow(
-        table: ParsedTable, wholeCompanyColumn: Int
+        table: ParsedTable, wholeCompanyColumn: Int, geographySales: Bool = false
     ) -> (rows: [BuiltRow], wholeCompanyAmount: Double?) {
-        guard table.items.isEmpty else { return ([], nil) }
-        let preferred = [
-            "顧客との契約から生じる収益", "顧客との契約から認識した収益",
-            "外部顧客への売上高", "外部顧客に対する売上高", "外部顧客への収益", "外部収益合計",
-        ]
-        let total = preferred.compactMap { marker in
-            table.totals.first { $0.label == marker || $0.label.hasPrefix(marker) }
-        }.first ?? table.totals.first
-        guard let total, total.row < table.grid.count else { return ([], nil) }
-        let row = table.grid[total.row]
+        if !table.items.isEmpty, !geographySales { return ([], nil) }
+        if !table.items.isEmpty, geographySales,
+           !itemsLookLikeMetrics(table.items), !itemsLookLikePeriodRows(table.items)
+        {
+            return ([], nil)
+        }
+        let metricRowIndex: Int?
+        if geographySales {
+            metricRowIndex = geographySalesMetricRowIndex(table)
+        } else {
+            let preferred = [
+                "顧客との契約から生じる収益", "顧客との契約から認識した収益",
+                "外部顧客への売上高", "外部顧客に対する売上高", "外部顧客への収益", "外部収益合計",
+                "売上高", "売上収益",
+            ]
+            let total = preferred.compactMap { marker in
+                table.totals.first {
+                    let label = compactCell($0.label)
+                    return label == marker || label.hasPrefix(marker)
+                }
+            }.first ?? table.totals.first { total in
+                let label = compactCell(total.label)
+                return !isAssetMetricLabel(label) && !label.contains("単位")
+                    && !label.hasPrefix("Ⅰ")
+            }
+            metricRowIndex = total?.row
+        }
+        guard let metricRowIndex, metricRowIndex < table.grid.count else { return ([], nil) }
+        let row = table.grid[metricRowIndex]
         let wholeCompanyAmount = consolidatedWholeCompanyAmount(
             table: table, row: row, selectedColumn: wholeCompanyColumn)
         var built: [BuiltRow] = []
-        for (column, header) in table.columnHeaders.sorted(by: { $0.key < $1.key }) {
+        var headers = table.columnHeaders
+        if geographySales, headers[0] == nil, table.headerRowCount > 0 {
+            let parts = table.grid.prefix(table.headerRowCount).compactMap { headerRow -> String? in
+                guard !headerRow.isEmpty else { return nil }
+                let text = compactCell(headerRow[0])
+                return text.isEmpty ? nil : text
+            }
+            let joined = joinHeaderParts(parts)
+            if !joined.isEmpty { headers[0] = joined }
+        }
+        for (column, header) in headers.sorted(by: { $0.key < $1.key }) {
             if column == wholeCompanyColumn { continue }
             if isAggregateColumnHeader(header) { continue }
             if isPeriodHeadingLabel(header) { continue }
@@ -269,6 +304,98 @@ enum RevenueRecognitionCandidates {
                 isPartial: false, rowKind: "segment"))
         }
         return (built, wholeCompanyAmount)
+    }
+
+    static func unlabeledMetricRowIndex(_ table: ParsedTable) -> Int? {
+        unlabeledMetricRowIndex(table, geographySales: false)
+    }
+
+    static func unlabeledMetricRowIndex(
+        _ table: ParsedTable, geographySales: Bool
+    ) -> Int? {
+        let data = table.grid.enumerated().dropFirst(table.headerRowCount)
+        let hits = data.compactMap { index, row -> (Int, Int, Bool)? in
+            let label = compactCell(row.first ?? "")
+            if geographySales, isPercentMetricLabel(label) { return nil }
+            let amounts = row.enumerated().filter { column, cell in
+                column > 0 && isAmountCell(cell)
+            }
+            guard amounts.count >= 2 else { return nil }
+            let current = isCurrentPeriodHeading(label)
+            return (index, amounts.count, current)
+        }
+        if geographySales, let current = hits.first(where: { $0.2 }) {
+            return current.0
+        }
+        guard hits.count == 1 else { return hits.max(by: { $0.1 < $1.1 })?.0 }
+        return hits[0].0
+    }
+
+    /// 7734 の「Ⅰ売上高（千円）」や Canon の「売上高」、1887 の当期行。
+    static func geographySalesMetricRowIndex(_ table: ParsedTable) -> Int? {
+        let labeled = table.totals.map { ($0.row, $0.label) }
+            + table.items.map { ($0.row, $0.label) }
+        if let hit = labeled.first(where: { isGeographySalesMetricLabel($0.1) }) {
+            return hit.0
+        }
+        let current = table.items.filter { isCurrentPeriodHeading($0.label) }
+        if let row = current.last { return row.row }
+        return unlabeledMetricRowIndex(table, geographySales: true)
+    }
+
+    static func isPercentMetricLabel(_ label: String) -> Bool {
+        let compact = compactCell(label)
+        return compact.contains("％") || compact.contains("%")
+            || compact.contains("割合") || compact.contains("構成比")
+    }
+
+    static func isGeographySalesMetricLabel(_ label: String) -> Bool {
+        if isPercentMetricLabel(label) { return false }
+        if isAssetMetricLabel(label) { return false }
+        let stripped = stripSectionMarker(compactCell(label))
+        if stripped.contains("単位") && !stripped.contains("売上") { return false }
+        return stripped.contains("売上") || stripped.contains("収益")
+            || stripped.contains("外部顧客")
+    }
+
+    static func stripSectionMarker(_ label: String) -> String {
+        var token = compactCell(label)
+        let prefixes = ["Ⅰ", "Ⅱ", "III", "I．", "I.", "II．", "II.", "(1)", "（1）", "1.", "１."]
+        for prefix in prefixes where token.hasPrefix(prefix) {
+            token = String(token.dropFirst(prefix.count))
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            break
+        }
+        return token
+    }
+
+    static func itemsLookLikePeriodRows(_ items: [Item]) -> Bool {
+        guard !items.isEmpty else { return false }
+        return items.allSatisfy { isPeriodHeadingLabel($0.label) }
+    }
+
+    static func isCurrentPeriodHeading(_ label: String) -> Bool {
+        let compact = compactCell(label)
+        guard isPeriodHeadingLabel(compact) else { return false }
+        return compact.contains("当") && !compact.contains("前")
+    }
+
+    static func isAssetMetricLabel(_ label: String) -> Bool {
+        let compact = compactCell(label)
+        return compact.contains("固定資産") || compact.contains("非流動資産")
+            || compact.contains("長期性資産") || compact.contains("有形固定資産")
+            || compact == "セグメント資産" || compact.contains("非流動資産合計")
+    }
+
+    static func itemsLookLikeMetrics(_ items: [Item]) -> Bool {
+        let labels = items.map { compactCell($0.label) }
+        guard !labels.isEmpty else { return true }
+        let metric = labels.filter { label in
+            label.contains("売上") || label.contains("収益") || isAssetMetricLabel(label)
+                || label.contains("利益") || label.contains("損失") || label.contains("単位")
+                || label.hasPrefix("Ⅰ") || label.hasPrefix("I．") || label.hasPrefix("I.")
+        }
+        return metric.count * 2 >= labels.count
     }
 
     static func isAggregateColumnHeader(_ header: String) -> Bool {
@@ -308,11 +435,67 @@ enum RevenueRecognitionCandidates {
         let withoutStub = withoutUnit.filter { !isStubAxisHeader($0) }
         var source = withoutStub.isEmpty ? withoutUnit : withoutStub
         source = collapseConsecutiveDuplicates(source)
+        if let nested = nestedGeographyLeafLabel(source) {
+            return nested
+        }
         let leaves = source.filter { !isSpanningParentHeader($0) }
         if !leaves.isEmpty {
             source = collapseConsecutiveDuplicates(leaves)
         }
         return source.joined(separator: " / ")
+    }
+
+    /// 入れ子の地域見出し。海外売上高/アジアは葉のアジア、アジア/タイはアジアタイ。
+    /// 「その他」だけ親とつなげる（その他の地域その他）。事業名の葉があるときは使わない。
+    static func nestedGeographyLeafLabel(_ parts: [String]) -> String? {
+        guard parts.count >= 2, parts.allSatisfy(isGeographyRelatedHeader) else { return nil }
+        let parent = compactCell(parts[parts.count - 2])
+        let child = compactCell(parts[parts.count - 1])
+        if isPeriodHeadingLabel(parent) { return child }
+        if isAggregateColumnHeader(child) { return child }
+        if isCoarseGeographyGroupHeader(parent)
+            || parent.contains("その他の地域") || parent.hasSuffix("の地域")
+        {
+            if isOtherResidualChild(child) { return parent + child }
+            return child
+        }
+        if isOtherResidualChild(child) { return parent + child }
+        return parent + child
+    }
+
+    static func isGeographyRelatedHeader(_ label: String) -> Bool {
+        let token = compactCell(label)
+        if token.isEmpty { return false }
+        if isPeriodHeadingLabel(token) || isAggregateColumnHeader(token) { return true }
+        if isCoarseGeographyGroupHeader(token) { return true }
+        if token.contains("その他") { return true }
+        return RevenueRecognitionTableStructure.isBareGeographyLabel(token)
+            || RevenueRecognitionTableStructure.isGeographyHeading(token)
+            || token.contains("海外")
+    }
+
+    static func isOtherResidualChild(_ label: String) -> Bool {
+        let token = compactCell(label)
+        return token == "その他" || token == "その他地域"
+    }
+
+    static func isCoarseGeographyGroupHeader(_ label: String) -> Bool {
+        let token = compactCell(label)
+        if token == "海外" || token == "国内" || token == "国外" || token == "本邦" {
+            return true
+        }
+        if token.contains("海外売上") || token == "連結売上高" { return true }
+        let stripped = stripSalesMetricSuffix(token)
+        return stripped == "海外" || stripped == "国内" || stripped == "国外" || stripped == "本邦"
+    }
+
+    static func stripSalesMetricSuffix(_ label: String) -> String {
+        var token = compactCell(label)
+        for suffix in ["売上高", "売上収益", "収益", "売上"] where token.hasSuffix(suffix) {
+            token = String(token.dropLast(suffix.count))
+            break
+        }
+        return token
     }
 
     /// 「その他 / その他」のように同一セルがヘッダー行で繰り返された結合を畳む。
@@ -329,6 +512,13 @@ enum RevenueRecognitionCandidates {
         if isPeriodHeadingLabel(label) { return true }
         if label.contains("その他") { return false }
         if isAggregateColumnHeader(label) { return true }
+        if isCoarseGeographyGroupHeader(label) { return true }
+        let stripped = stripSalesMetricSuffix(compactCell(label))
+        if stripped != compactCell(label),
+           RevenueRecognitionTableStructure.isBareGeographyLabel(stripped)
+        {
+            return true
+        }
         return RevenueRecognitionTableStructure.isBareGeographyLabel(label)
             || RevenueRecognitionTableStructure.isGeographyHeading(label)
     }
@@ -564,7 +754,8 @@ enum RevenueRecognitionCandidates {
         let token = totalToken(label)
         if token == "合計" || token == "売上高合計" || token == "連結合計"
             || token == "連結計" || token == "連結金額" || token == "売上高" || token == "小計"
-            || token == "計"
+            || token == "計" || token == "海外合計" || token == "海外計" || token == "連結売上高"
+            || token == "連結売上"
         {
             return true
         }

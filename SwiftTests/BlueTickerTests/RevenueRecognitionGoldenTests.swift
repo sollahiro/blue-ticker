@@ -2246,6 +2246,17 @@ import Testing
         let unitHeader: String = RevenueRecognitionCandidates.joinHeaderParts(
             ["(単位：百万円)", "その他"])
         #expect(unitHeader == "その他")
+        #expect(
+            RevenueRecognitionCandidates.joinHeaderParts(["海外売上高", "アジア"]) == "アジア")
+        #expect(
+            RevenueRecognitionCandidates.joinHeaderParts(["海外", "アジア"]) == "アジア")
+        #expect(
+            RevenueRecognitionCandidates.joinHeaderParts(["アジア", "タイ"]) == "アジアタイ")
+        #expect(
+            RevenueRecognitionCandidates.joinHeaderParts(["その他の地域", "豪州"]) == "豪州")
+        #expect(
+            RevenueRecognitionCandidates.joinHeaderParts(["その他の地域", "その他"])
+                == "その他の地域その他")
         let north: String = RevenueRecognitionCandidates.displayLabel(
             categoryGroup: "（海外）", category: "北米")
         let appliance: String = BreakdownRowPayload.displayLabel(

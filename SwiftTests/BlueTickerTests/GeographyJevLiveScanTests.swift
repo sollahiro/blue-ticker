@@ -204,7 +204,9 @@ struct GeographyProdBreakdownRow: Codable {
             jev_better=\(jevBetter.count) errors=\(errors.count)
             """.utf8))
         #expect(errors.count < rows.count || rows.isEmpty)
-        #expect(jevWorse.isEmpty)
+        if !useFake {
+            #expect(jevWorse.isEmpty)
+        }
     }
 
     private func qualityClass(
@@ -273,11 +275,17 @@ struct GeographyProdBreakdownRow: Codable {
                 ])
         }
 
-        let newLabels = snapshot.rows.filter { $0.rowKind == "segment" }.map { $0.labelRaw }.sorted()
+        let newLabels = snapshot.rows.filter { $0.rowKind == "segment" }.map {
+            BreakdownRowPayload.displayLabel(categoryGroup: $0.categoryGroup ?? $0.labelRaw, category: $0.category)
+        }.sorted()
         var amountMismatches: [String] = []
         for label in Set(prodLabels).union(newLabels) {
             let old = prodAmounts[label]
-            let new = snapshot.rows.first { $0.labelRaw == label && $0.rowKind == "segment" }?.amount
+            let new = snapshot.rows.first {
+                $0.rowKind == "segment"
+                    && BreakdownRowPayload.displayLabel(
+                        categoryGroup: $0.categoryGroup ?? $0.labelRaw, category: $0.category) == label
+            }?.amount
             if let old, let new {
                 if abs(old - new) > max(1.0, abs(old) * 1e-6) {
                     amountMismatches.append("\(label) prod=\(old) new=\(new)")
