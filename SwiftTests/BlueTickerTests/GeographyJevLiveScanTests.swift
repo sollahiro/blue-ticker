@@ -132,7 +132,8 @@ struct GeographyProdBreakdownRow: Codable {
                 columnDecider: columnDecider,
                 labelsByTag: XBRLUtils.loadLabelsByTag(in: xbrlDir),
                 fiscalYearEnd: BreakdownExtractor.currentFiscalYearEnd(fromXbrlDir: xbrlDir),
-                docID: row.docID, salesLabel: financials?.salesLabel)
+                docID: row.docID,
+                salesLabel: financials?.geographyCoverageSalesLabel ?? financials?.salesLabel)
 
             var comparison = compare(prod: row, snapshot: snapshot, source: source, audit: audit)
             comparison.record["extract_method"] = geography.method

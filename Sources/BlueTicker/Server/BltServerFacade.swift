@@ -862,7 +862,8 @@ public extension BltServerContext {
             geography: resolvedGeography, consolidatedSales: consolidatedSales,
             columnDecider: geographyColumnDecider, labelsByTag: labelsByTag,
             fiscalYearEnd: BreakdownExtractor.currentFiscalYearEnd(fromXbrlDir: xbrlDir),
-            docID: docID, salesLabel: financials?.salesLabel)
+            docID: docID,
+            salesLabel: financials?.geographyCoverageSalesLabel ?? financials?.salesLabel)
         guard let snapshot = result.snapshot else {
             // Resolver の notFound は「地域注記なし」または列が無い／none_of_these。
             // audit があれば Jev が明示的に非該当と答えた正当欠測。audit 無しで表だけある場合は

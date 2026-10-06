@@ -304,6 +304,14 @@ struct GeographyBreakdownLLMNormalizerTests {
             GeographyBreakdownLLMNormalizer.coverageCheckAnchor(
                 table: salesTable, consolidatedSales: 10, tableGrandTotal: 12,
                 salesLabel: "営業収益") == 12)
+        #expect(
+            GeographyBreakdownLLMNormalizer.coverageCheckAnchor(
+                table: salesTable, consolidatedSales: 8_893_693, tableGrandTotal: 10_430_269,
+                salesLabel: "売上高") == 8_893_693)
+        #expect(
+            GeographyBreakdownLLMNormalizer.coverageCheckAnchor(
+                table: salesTable, consolidatedSales: 8_893_693, tableGrandTotal: 10_430_269,
+                salesLabel: "営業収益") == 10_430_269)
     }
 
     @Test("PL が営業収益のときは表に売上高と書いてあっても表の総合計をアンカーにする")

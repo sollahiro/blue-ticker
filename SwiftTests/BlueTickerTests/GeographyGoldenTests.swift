@@ -39,7 +39,8 @@ import Testing
         reviewSelected: String? = nil,
         reviewProbability: Double? = nil,
         docID: String = "S-geo-golden",
-        assignCurrentPeriod: Bool = true
+        assignCurrentPeriod: Bool = true,
+        salesLabel: String? = nil
     ) async -> (BreakdownSnapshot?, LLMBreakdownAudit?) {
         var tables = BreakdownExtractor.allTablesFromHtml(html, defaultHeading: heading)
         if assignCurrentPeriod, !tables.isEmpty {
@@ -53,7 +54,8 @@ import Testing
                 probabilities: probabilities,
                 reviewSelected: reviewSelected, reviewProbability: reviewProbability),
             fiscalYearEnd: "2026-03-31",
-            docID: docID)
+            docID: docID,
+            salesLabel: salesLabel)
     }
 
     /// 1. 通常の複数地域（行=地域）。公開形は日本/北米/欧州/その他。
@@ -206,6 +208,44 @@ import Testing
             """
         let (snapshotOrNil, _) = await normalize(
             html: html, sales: yen(10_430_269), docID: "S100Y4VB")
+        let snapshot = try #require(snapshotOrNil)
+        #expect(Set(segmentLabels(snapshot)) == Set(["日本", "北米", "その他の地域"]))
+        #expect(snapshot.rows.first { $0.labelRaw == "北米" }?.amount == yen(7_960_998))
+        #expect(!segmentLabels(snapshot).contains { $0.contains("うち") })
+        #expect(!snapshot.needsReview)
+        #expect(!snapshot.warnings.contains("llm_row_sum_mismatch"))
+        #expect(publiclyServable(snapshot))
+    }
+
+    /// 3382 型: PL に営業収益（計）と売上高が並ぶ。カバー判定はトップラインの営業収益
+    /// （表の総合計）を使い、Summary の売上高では NR にしない。
+    @Test func operatingRevenueBesideNetSalesUsesTopLineAnchor() async throws {
+        let html = """
+            <p>当連結会計年度</p>
+            <p>（単位：百万円）</p>
+            <table>
+              <tr>
+                <td></td><td></td><td></td><td>（単位：百万円）</td>
+              </tr>
+              <tr>
+                <td>日本</td>
+                <td><p>北米</p><p>（うち米国）</p></td>
+                <td>その他の地域</td>
+                <td>計</td>
+              </tr>
+              <tr>
+                <td rowspan="2">1,844,286</td>
+                <td>7,960,998</td>
+                <td rowspan="2">624,984</td>
+                <td rowspan="2">10,430,269</td>
+              </tr>
+              <tr>
+                <td>(7,624,333)</td>
+              </tr>
+            </table>
+            """
+        let (snapshotOrNil, _) = await normalize(
+            html: html, sales: yen(8_893_693), salesLabel: "営業収益", docID: "S100Y4VB")
         let snapshot = try #require(snapshotOrNil)
         #expect(Set(segmentLabels(snapshot)) == Set(["日本", "北米", "その他の地域"]))
         #expect(snapshot.rows.first { $0.labelRaw == "北米" }?.amount == yen(7_960_998))

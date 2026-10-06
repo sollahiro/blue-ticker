@@ -329,7 +329,7 @@ enum GeographyBreakdownLLMNormalizer {
         }
 
         // 既存の分母整合。アンカーは損益計算書売上、無ければ表の総合計。
-        // 銀行・保険の経常収益／営業収益表は表の総合計をアンカーにする。
+        // 経常収益／営業収益／保険収益（売上高と並ぶ営業収益トップラインを含む）は表の総合計。
         if let anchor = coverageCheckAnchor(
             table: selectedTable, consolidatedSales: consolidatedSales,
             tableGrandTotal: tableGrandTotal, salesLabel: salesLabel), anchor != 0
@@ -453,7 +453,8 @@ enum GeographyBreakdownLLMNormalizer {
     }
 
     /// 分母整合のアンカー。損益計算書売上があればそれ、無ければ表の総合計。
-    /// 経常収益／営業収益／保険収益の表は表の総合計を先に使う。
+    /// 経常収益／営業収益／保険収益の表、および PL ラベルがそれら（売上高と営業収益が
+    /// 並ぶときはトップラインの営業収益）のときは表の総合計を先に使う。
     static func coverageCheckAnchor(
         table: RevenueRecognitionCandidates.ParsedTable,
         consolidatedSales: Double,

@@ -35,6 +35,10 @@ struct StatementFinancialsValues {
     var interestExpense: Double?
     var cfTreasuryStock: Double?
     var buyback: Double?
+    /// geography カバー判定に渡すラベル。Summary `sales_label` は変えない。
+    /// 本表に売上高（NetSales*）と営業収益（OperatingRevenue*）が並ぶときは営業収益
+    /// （既存の `isNonSalesRevenueLabel` → 表の総合計アンカー）。
+    var geographyCoverageSalesLabel: String? = nil
 }
 
 enum StatementFinancialsResolver {
@@ -177,7 +181,9 @@ enum StatementFinancialsResolver {
             dividendSS: remaining.dividendSS,
             interestExpense: remaining.interestExpense,
             cfTreasuryStock: remaining.cfTreasuryStock,
-            buyback: remaining.buyback
+            buyback: remaining.buyback,
+            geographyCoverageSalesLabel: geographyCoverageSalesLabel(
+                summaryLabel: salesLabel, fieldSet: salesFS)
         )
     }
 
@@ -274,9 +280,10 @@ enum StatementFinancialsResolver {
             nonCurrent = ta - ca
         }
 
+        let resolvedSalesLabel = salesLabelOverride ?? is_.salesLabel ?? "売上高"
         return StatementFinancialsValues(
             sales: is_.sales,
-            salesLabel: salesLabelOverride ?? is_.salesLabel ?? "売上高",
+            salesLabel: resolvedSalesLabel,
             operatingProfit: op.operatingProfit ?? is_.operatingProfit,
             operatingProfitLabel: op.operatingProfit != nil ? op.label : nil,
             netProfit: resolveParentAttributableNetProfit(
@@ -315,7 +322,9 @@ enum StatementFinancialsResolver {
             interestExpense: resolveUSGAAPInterestExpense(year.incomeStatement),
             cfTreasuryStock: resolveUSGAAPTreasuryPurchase(year.cashFlow),
             buyback: resolveUSGAAPTreasuryPurchase(year.changesInEquity)
-                ?? resolveUSGAAPTreasuryPurchase(year.cashFlow)
+                ?? resolveUSGAAPTreasuryPurchase(year.cashFlow),
+            geographyCoverageSalesLabel: geographyCoverageSalesLabel(
+                summaryLabel: resolvedSalesLabel, fieldSet: durationFS)
         )
     }
 
@@ -538,6 +547,37 @@ enum StatementFinancialsResolver {
         for (tag, fv) in overlay {
             fieldSet[tag] = fv
         }
+    }
+
+    /// geography カバー判定用の売上ラベル。Summary `sales_label` は変えない。
+    /// 本表 FieldSet に売上高（NetSales*）と営業収益（OperatingRevenue*）が別タグであるときは
+    /// PL トップラインの営業収益を返し、既存の `isNonSalesRevenueLabel` 経路で表の総合計を
+    /// アンカーにする（3382 / 8233 / 8267。売上高は小計行）。
+    static func geographyCoverageSalesLabel(
+        summaryLabel: String?,
+        fieldSet: FieldSet
+    ) -> String? {
+        if fieldSetHasDistinctNetSalesAndOperatingRevenue(fieldSet) {
+            return "営業収益"
+        }
+        return summaryLabel
+    }
+
+    /// 売上高タグと営業収益タグが両方、当期値付きで載っている。
+    static func fieldSetHasDistinctNetSalesAndOperatingRevenue(_ fieldSet: FieldSet) -> Bool {
+        var hasNetSales = false
+        var hasOperatingRevenue = false
+        for (tag, value) in fieldSet {
+            guard value.current != nil else { continue }
+            if tag.hasPrefix("NetSales") { hasNetSales = true }
+            if isGeographyOperatingRevenueTag(tag) { hasOperatingRevenue = true }
+            if hasNetSales && hasOperatingRevenue { return true }
+        }
+        return false
+    }
+
+    private static func isGeographyOperatingRevenueTag(_ tag: String) -> Bool {
+        tag.hasPrefix("OperatingRevenue") || Xbrl.operatingRevenueTags.contains(tag)
     }
 
     /// Summary `net_profit` は親会社株主に帰属する当期純利益を正とする。
