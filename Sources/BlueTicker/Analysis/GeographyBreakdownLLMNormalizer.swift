@@ -363,6 +363,7 @@ enum GeographyBreakdownLLMNormalizer {
     }
 
     /// 選んだ列に同じラベルがあるのに金額が違うとき（7272 本番 137,712 vs 当期 155,330）。
+    /// 同一ラベルが売上と資産で二度出る表は、どれか1つの出現に一致すれば足りる。
     static func extractedMismatchesSelectedColumn(
         rows: [BreakdownRow],
         table: RevenueRecognitionCandidates.ParsedTable,
@@ -371,13 +372,15 @@ enum GeographyBreakdownLLMNormalizer {
     ) -> Bool {
         let segments = rows.filter { $0.rowKind == "segment" }
         guard !segments.isEmpty else { return false }
-        let map = amountsByCompactLabel(
+        let map = allAmountsByCompactLabel(
             table: table, column: selectedColumn.column, multiplier: multiplier)
-        let comparable = segments.filter { map[compactGeographyLabel($0.labelRaw)] != nil }
+        let comparable = segments.filter { !(map[compactGeographyLabel($0.labelRaw)] ?? []).isEmpty }
         guard !comparable.isEmpty else { return false }
         return comparable.contains { row in
-            guard let expected = map[compactGeographyLabel(row.labelRaw)] else { return false }
-            return abs(expected - row.amount) > max(1.0, abs(expected) * subtotalRelativeTolerance)
+            let candidates = map[compactGeographyLabel(row.labelRaw)] ?? []
+            return candidates.allSatisfy { expected in
+                abs(expected - row.amount) > max(1.0, abs(expected) * subtotalRelativeTolerance)
+            }
         }
     }
 
@@ -387,27 +390,29 @@ enum GeographyBreakdownLLMNormalizer {
         column: Int,
         multiplier: Double
     ) -> Bool {
-        let map = amountsByCompactLabel(table: table, column: column, multiplier: multiplier)
+        let map = allAmountsByCompactLabel(table: table, column: column, multiplier: multiplier)
         return segments.allSatisfy { row in
-            guard let expected = map[compactGeographyLabel(row.labelRaw)] else { return false }
-            return abs(expected - row.amount) <= max(1.0, abs(expected) * subtotalRelativeTolerance)
+            let candidates = map[compactGeographyLabel(row.labelRaw)] ?? []
+            return candidates.contains { expected in
+                abs(expected - row.amount) <= max(1.0, abs(expected) * subtotalRelativeTolerance)
+            }
         }
     }
 
-    private static func amountsByCompactLabel(
+    private static func allAmountsByCompactLabel(
         table: RevenueRecognitionCandidates.ParsedTable,
         column: Int,
         multiplier: Double
-    ) -> [String: Double] {
+    ) -> [String: [Double]] {
         let amounts = RevenueRecognitionCandidates.dataAmounts(table: table, column: column)
-        var map: [String: Double] = [:]
+        var map: [String: [Double]] = [:]
         for item in table.items {
             guard let value = amounts[item.row] else { continue }
-            map[compactGeographyLabel(item.label)] = value * multiplier
+            map[compactGeographyLabel(item.label), default: []].append(value * multiplier)
         }
         for total in table.totals {
             guard let value = amounts[total.row] else { continue }
-            map[compactGeographyLabel(total.label)] = value * multiplier
+            map[compactGeographyLabel(total.label), default: []].append(value * multiplier)
         }
         return map
     }

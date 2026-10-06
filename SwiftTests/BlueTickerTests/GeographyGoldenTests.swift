@@ -1027,7 +1027,7 @@ import Testing
 
     /// 7272: キャプションに 当 があっても前期列は候補から外す。
     @Test func yamahaPriorYearColumnIsNotOffered() throws {
-        var tables = BreakdownExtractor.allTablesFromHtml(
+        let tables = BreakdownExtractor.allTablesFromHtml(
             Self.yamahaGeographyHTML, defaultHeading: "地域ごとの情報")
         #expect(!tables.isEmpty)
         let parsed = RevenueRecognitionCandidates.parse(tables: tables)
@@ -1081,7 +1081,7 @@ import Testing
 
     /// 7272 本番 137,712: 当期列 155,330 とも前期列 162,636 とも違う金額は NR。
     @Test func yamahaStaleAmountsMismatchSelectedColumn() throws {
-        var tables = BreakdownExtractor.allTablesFromHtml(
+        let tables = BreakdownExtractor.allTablesFromHtml(
             Self.yamahaGeographyHTML, defaultHeading: "地域ごとの情報")
         let parsed = RevenueRecognitionCandidates.parse(tables: tables)
         let table = try #require(parsed.first)
