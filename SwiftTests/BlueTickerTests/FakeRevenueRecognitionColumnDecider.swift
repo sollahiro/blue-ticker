@@ -80,9 +80,19 @@ actor FakeRevenueRecognitionColumnDecider: RevenueRecognitionColumnDeciding {
                     RevenueRecognitionCandidates.totalMarkers.contains { total.label.contains($0) }
                         || total.label.contains("合計")
                 } == true ? 1 : 0
+            let compactHeader = RevenueRecognitionCandidates.compactCell(column.header)
+            let headerPrior = compactHeader.contains("前連結会計年度")
+                || compactHeader.contains("前事業年度") || compactHeader.contains("前期")
+            let headerCurrent = compactHeader.contains("当連結会計年度")
+                || compactHeader.contains("当事業年度") || compactHeader.contains("当期")
+                || (compactHeader.contains("当") && !compactHeader.contains("前"))
             let caption = column.caption ?? table?.precedingCaption
             let current: Int
-            if let caption, caption.contains("前連結会計年度") || caption.contains("前事業年度")
+            if headerPrior && !headerCurrent {
+                current = 0
+            } else if headerCurrent {
+                current = 1
+            } else if let caption, caption.contains("前連結会計年度") || caption.contains("前事業年度")
                 || caption.contains("前年度")
             {
                 current = 0
@@ -101,7 +111,6 @@ actor FakeRevenueRecognitionColumnDecider: RevenueRecognitionColumnDeciding {
             case "前期": periodRank = 0
             default: periodRank = current
             }
-            let compactHeader = RevenueRecognitionCandidates.compactCell(column.header)
             let headerRank: Int
             if compactHeader.contains("連結金額") {
                 headerRank = 4

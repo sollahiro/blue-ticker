@@ -284,5 +284,83 @@ struct GeographyBreakdownLLMNormalizerTests {
         #expect(RevenueRecognitionCandidates.collapsedCell("日 本") == "日本")
         #expect(RevenueRecognitionCandidates.isAggregateColumnHeader("合 計"))
         #expect(RevenueRecognitionCandidates.isOfWhichColumnHeader("内、米国"))
+        #expect(RevenueRecognitionCandidates.parseAmount("(37,220)") == 37_220)
+        #expect(RevenueRecognitionCandidates.parseAmount("（37,220）") == 37_220)
+        #expect(RevenueRecognitionCandidates.parseAmount("(1)") == nil)
+        #expect(RevenueRecognitionCandidates.isAmountCell("(37,220)"))
+    }
+
+    @Test("その他はうち米国の後でも segment として残る")
+    func otherResidualStaysAfterOfWhichUnitedStates() {
+        let html = """
+            <table>
+              <tr><td></td><td>前連結会計年度</td><td>当連結会計年度</td></tr>
+              <tr><td>日本</td><td>195,870</td><td>254,181</td></tr>
+              <tr><td>北米</td><td>37,970</td><td>37,897</td></tr>
+              <tr><td>(うち米国)</td><td>(37,182)</td><td>(37,220)</td></tr>
+              <tr><td>欧州</td><td>33,692</td><td>38,201</td></tr>
+              <tr><td>その他</td><td>17,368</td><td>21,084</td></tr>
+              <tr><td>合計</td><td>284,900</td><td>351,363</td></tr>
+            </table>
+            """
+        let tables = BreakdownExtractor.allTablesFromHtml(html, defaultHeading: "地域ごとの情報")
+        let parsed = RevenueRecognitionCandidates.parse(tables: tables)
+        let table = parsed[0]
+        let itemLabels = table.items.map(\.label)
+        let totalLabels = table.totals.map(\.label)
+        #expect(itemLabels.contains("その他"))
+        #expect(totalLabels.contains("合計"))
+        let (built, _) = RevenueRecognitionCandidates.buildRows(
+            table: table, column: 2, applyParallelDimension: false)
+        let builtLabels = built.map {
+            RevenueRecognitionCandidates.displayLabel(
+                categoryGroup: $0.categoryGroup, category: $0.category)
+        }
+        #expect(builtLabels.contains("その他"))
+        let dropped = GeographyBreakdownLLMNormalizer.dropNonGeographyMetricRows(built)
+        let droppedLabels = dropped.map {
+            RevenueRecognitionCandidates.displayLabel(
+                categoryGroup: $0.categoryGroup, category: $0.category)
+        }
+        #expect(droppedLabels.contains("その他"))
+        var published: [BreakdownRow] = dropped.map { row in
+            let label = GeographyBreakdownLLMNormalizer.geographyPublishedLabel(row)
+            return BreakdownRow(
+                labelRaw: label, amount: row.amount, share: nil, profit: nil,
+                rowKind: row.rowKind)
+        }
+        published = GeographyBreakdownLLMNormalizer.dropOfWhichSubsetSegments(published)
+        let publishedLabels = published.filter { $0.rowKind == "segment" }.map(\.labelRaw)
+        #expect(publishedLabels.contains("その他"))
+        #expect(Set(publishedLabels) == Set(["日本", "北米", "欧州", "その他"]))
+    }
+
+    @Test("うち米国があっても正規化後にその他が残る")
+    func otherResidualSurvivesNormalize() async throws {
+        let html = """
+            <p>当連結会計年度</p>
+            <p>（単位：百万円）</p>
+            <table>
+              <tr><td></td><td>前連結会計年度</td><td>当連結会計年度</td></tr>
+              <tr><td>日本</td><td>195,870</td><td>254,181</td></tr>
+              <tr><td>北米</td><td>37,970</td><td>37,897</td></tr>
+              <tr><td>(うち米国)</td><td>(37,182)</td><td>(37,220)</td></tr>
+              <tr><td>欧州</td><td>33,692</td><td>38,201</td></tr>
+              <tr><td>その他</td><td>17,368</td><td>21,084</td></tr>
+              <tr><td>合計</td><td>284,900</td><td>351,363</td></tr>
+            </table>
+            """
+        var tables = BreakdownExtractor.allTablesFromHtml(html, defaultHeading: "地域ごとの情報")
+        if !tables.isEmpty { tables[0].period = "当期" }
+        let (snapshotOrNil, _) = await GeographyBreakdownLLMNormalizer.normalize(
+            ExtractedBreakdown(method: "html_table", tables: tables, facts: []),
+            consolidatedSales: 351_363 * Financial.millionYen,
+            decider: FakeRevenueRecognitionColumnDecider(),
+            fiscalYearEnd: "2026-03-31",
+            docID: "S100YJ25")
+        let snapshot = try #require(snapshotOrNil)
+        let labels = snapshot.rows.filter { $0.rowKind == "segment" }.map(\.labelRaw)
+        #expect(labels.contains("その他"))
+        #expect(Set(labels) == Set(["日本", "北米", "欧州", "その他"]))
     }
 }

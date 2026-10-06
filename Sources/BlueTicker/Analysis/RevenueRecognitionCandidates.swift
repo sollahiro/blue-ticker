@@ -647,13 +647,24 @@ enum RevenueRecognitionCandidates {
     static func isAmountCell(_ raw: String) -> Bool {
         let text = compactCell(raw)
         if dashCells.contains(text) { return true }
-        return XBRLUtils.parseHtmlNumber(text) != nil
+        return parseAmount(text) != nil
     }
 
     static func parseAmount(_ raw: String) -> Double? {
         let text = compactCell(raw)
         if dashCells.contains(text) { return 0 }
-        return XBRLUtils.parseHtmlNumber(text)
+        if let value = XBRLUtils.parseHtmlNumber(text) { return value }
+        return parseParenthesizedAmount(text)
+    }
+
+    /// 注記の内数行は金額を括弧で囲む（2413 の `(37,220)`）。脚注番号 `(1)` は採らない。
+    static func parseParenthesizedAmount(_ text: String) -> Double? {
+        let compact = compactCell(text)
+        guard isFullyParenthesized(compact) else { return nil }
+        let inner = String(compact.dropFirst().dropLast())
+        let digits = inner.filter(\.isNumber)
+        guard digits.count >= 3 else { return nil }
+        return XBRLUtils.parseHtmlNumber(inner)
     }
 
     /// |sum - subtotal| <= 項目数 × 表の 1 単位。パターン3でグループに小計があるときだけ。

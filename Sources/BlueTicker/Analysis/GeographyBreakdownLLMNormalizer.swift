@@ -261,7 +261,9 @@ enum GeographyBreakdownLLMNormalizer {
             }
             return true
         }
-        let regionColumnTables = tables.filter { regionColumnCount($0) >= 2 }
+        let regionColumnTables = tables.filter {
+            regionColumnCount($0) >= 2 && tableHasGeographySalesMetric($0)
+        }
         let tablesForOffer = regionColumnTables.isEmpty ? tables : regionColumnTables
         var preferred: [RevenueRecognitionCandidates.AmountColumn] = []
         for table in tablesForOffer {
@@ -310,6 +312,18 @@ enum GeographyBreakdownLLMNormalizer {
         return Xbrl.segmentGeographyLabelKeywordsJa.contains { compact.contains($0) }
     }
 
+    static func tableHasGeographySalesMetric(
+        _ table: RevenueRecognitionCandidates.ParsedTable
+    ) -> Bool {
+        let labels = table.items.map(\.label) + table.totals.map(\.label)
+            + table.grid.prefix(6).compactMap(\.first)
+        if labels.contains(where: { $0.contains("政府債") || $0.contains("有価証券") }) {
+            return false
+        }
+        return labels.contains { RevenueRecognitionCandidates.isGeographySalesMetricLabel($0) }
+            || RevenueRecognitionCandidates.geographySalesMetricRowIndex(table) != nil
+    }
+
     static func dropAssetTables(
         _ tables: [RevenueRecognitionCandidates.ParsedTable]
     ) -> [RevenueRecognitionCandidates.ParsedTable] {
@@ -352,7 +366,12 @@ enum GeographyBreakdownLLMNormalizer {
         rows.filter { row in
             let label = RevenueRecognitionCandidates.displayLabel(
                 categoryGroup: row.categoryGroup, category: row.category)
-            if RevenueRecognitionCandidates.isAssetMetricLabel(label) { return false }
+            let group = row.categoryGroup
+            if RevenueRecognitionCandidates.isAssetMetricLabel(label)
+                || RevenueRecognitionCandidates.isAssetMetricLabel(group)
+            {
+                return false
+            }
             if RevenueRecognitionCandidates.isPeriodHeadingLabel(label) { return false }
             if RevenueRecognitionCandidates.isPercentMetricLabel(label) { return false }
             if label.contains("単位") || label.hasPrefix("Ⅰ") || label.hasPrefix("Ⅱ")
@@ -361,13 +380,15 @@ enum GeographyBreakdownLLMNormalizer {
                 return false
             }
             if RevenueRecognitionCandidates.isGeographySalesMetricLabel(label),
-               !Xbrl.segmentGeographyLabelKeywordsJa.contains(where: { label.contains($0) })
+               !looksLikeGeographyLabel(label)
+                && !label.contains("その他の地域") && !label.contains("その他地域")
             {
                 return false
             }
             if label.contains("セグメント損失") || label.contains("セグメント利益") {
                 return false
             }
+            if group.contains("政府債") || label.contains("政府債") { return false }
             return true
         }
     }
@@ -464,10 +485,21 @@ enum GeographyBreakdownLLMNormalizer {
     ) -> String {
         let group = compactGeographyLabel(row.categoryGroup)
         if let category = row.category.map(compactGeographyLabel), !category.isEmpty {
+            if isOfWhichGeographyLabel(category) {
+                if group.isEmpty || isOfWhichGeographyLabel(group) { return category }
+                return group
+            }
             if RevenueRecognitionCandidates.isOtherResidualChild(category),
-               !group.isEmpty, group != category
+               !group.isEmpty, group != category,
+               !RevenueRecognitionCandidates.isGeographySalesMetricLabel(group),
+               !isOfWhichGeographyLabel(group)
             {
                 return group + category
+            }
+            if RevenueRecognitionCandidates.isGeographySalesMetricLabel(group)
+                || RevenueRecognitionCandidates.isAssetMetricLabel(group)
+            {
+                return category
             }
             return category
         }
@@ -526,12 +558,16 @@ enum GeographyBreakdownLLMNormalizer {
         return found
     }
 
+    static func isOfWhichGeographyLabel(_ label: String) -> Bool {
+        let compact = RevenueRecognitionCandidates.collapsedCell(label)
+        return compact.contains("うち") || compact.hasPrefix("内、") || compact.hasPrefix("内,")
+            || (compact.hasPrefix("(") && (compact.contains("うち") || compact.contains("米国")))
+    }
+
     private static func isLikelyOfWhichChild(parent: BreakdownRow, child: BreakdownRow) -> Bool {
         guard child.amount > 0, parent.amount > 0 else { return false }
         guard child.amount <= parent.amount * 1.001 else { return false }
-        if child.labelRaw.contains("うち") || child.labelRaw.hasPrefix("内、")
-            || child.labelRaw.hasPrefix("内,")
-        {
+        if isOfWhichGeographyLabel(child.labelRaw) {
             return true
         }
         guard child.amount >= parent.amount * 0.80 else { return false }

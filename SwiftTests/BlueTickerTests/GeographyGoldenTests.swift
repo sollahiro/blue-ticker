@@ -859,4 +859,93 @@ import Testing
         #expect(!snapshot.needsReview)
         #expect(publiclyServable(snapshot))
     }
+
+    /// 2413 型: (うち米国) を落としても その他 は残す。
+    @Test func ofWhichUnitedStatesKeepsOtherResidual() async throws {
+        let html = """
+            <p>当連結会計年度</p>
+            <p>（単位：百万円）</p>
+            <table>
+              <tr>
+                <td></td>
+                <td>前連結会計年度</td>
+                <td>当連結会計年度</td>
+              </tr>
+              <tr><td>日本</td><td>195,870</td><td>254,181</td></tr>
+              <tr><td>北米</td><td>37,970</td><td>37,897</td></tr>
+              <tr><td>(うち米国)</td><td>(37,182)</td><td>(37,220)</td></tr>
+              <tr><td>欧州</td><td>33,692</td><td>38,201</td></tr>
+              <tr><td>その他</td><td>17,368</td><td>21,084</td></tr>
+              <tr><td>合計</td><td>284,900</td><td>351,363</td></tr>
+            </table>
+            """
+        let (snapshotOrNil, _) = await normalize(
+            html: html, sales: yen(351_363), docID: "S100YJ25")
+        let snapshot = try #require(snapshotOrNil)
+        #expect(Set(segmentLabels(snapshot)) == Set(["日本", "北米", "欧州", "その他"]))
+        #expect(snapshot.rows.first { $0.labelRaw == "その他" }?.amount == yen(21_084))
+        #expect(!segmentLabels(snapshot).contains { $0.contains("米国") })
+        #expect(!snapshot.needsReview)
+        #expect(publiclyServable(snapshot))
+    }
+
+    /// 4507 型: 北米とうちアメリカが同額でも北米を残す。
+    @Test func ofWhichAmericaEqualToNorthAmericaKeepsParent() async throws {
+        let html = """
+            <p>当連結会計年度</p>
+            <table>
+              <tr>
+                <td></td>
+                <td>前連結会計年度</td>
+                <td>当連結会計年度</td>
+              </tr>
+              <tr><td>日本</td><td>130,003</td><td>152,107</td></tr>
+              <tr><td>欧州</td><td>265,673</td><td>298,810</td></tr>
+              <tr><td>うち、イギリス</td><td>245,512</td><td>266,860</td></tr>
+              <tr><td>北米</td><td>23,437</td><td>33,088</td></tr>
+              <tr><td>うち、アメリカ</td><td>23,437</td><td>33,088</td></tr>
+              <tr><td>その他</td><td>19,154</td><td>15,670</td></tr>
+              <tr><td>合計</td><td>438,268</td><td>499,677</td></tr>
+            </table>
+            """
+        let (snapshotOrNil, _) = await normalize(
+            html: html, sales: yen(499_677), docID: "S100YF57")
+        let snapshot = try #require(snapshotOrNil)
+        #expect(Set(segmentLabels(snapshot)) == Set(["日本", "欧州", "北米", "その他"]))
+        #expect(snapshot.rows.first { $0.labelRaw == "北米" }?.amount == yen(33_088))
+        #expect(!snapshot.needsReview)
+        #expect(publiclyServable(snapshot))
+    }
+
+    /// 7752 型: 同じ表の非流動資産ブロックを落とす。
+    @Test func salesBlockPreferredOverTrailingNoncurrentAssets() async throws {
+        let html = """
+            <p>当連結会計年度</p>
+            <table>
+              <tr>
+                <td></td><td></td>
+                <td>前連結会計年度</td><td></td>
+                <td>当連結会計年度</td>
+              </tr>
+              <tr><td>売上高：</td><td></td><td></td><td></td><td></td></tr>
+              <tr><td>日本</td><td></td><td>963,276</td><td></td><td>1,051,655</td></tr>
+              <tr><td>米州</td><td></td><td>687,066</td><td></td><td>654,677</td></tr>
+              <tr><td>欧州・中東・アフリカ</td><td></td><td>648,071</td><td></td><td>672,620</td></tr>
+              <tr><td>その他地域</td><td></td><td>229,463</td><td></td><td>229,362</td></tr>
+              <tr><td>合計</td><td></td><td>2,527,876</td><td></td><td>2,608,314</td></tr>
+              <tr><td>非流動資産：</td><td></td><td></td><td></td><td></td></tr>
+              <tr><td>日本</td><td></td><td>400,000</td><td></td><td>410,000</td></tr>
+              <tr><td>米州</td><td></td><td>50,000</td><td></td><td>51,000</td></tr>
+              <tr><td>その他地域</td><td></td><td>60,000</td><td></td><td>61,468</td></tr>
+            </table>
+            """
+        let (snapshotOrNil, _) = await normalize(
+            html: html, sales: yen(2_608_314), docID: "S100YBFF")
+        let snapshot = try #require(snapshotOrNil)
+        #expect(Set(segmentLabels(snapshot)) == Set(["日本", "米州", "欧州・中東・アフリカ", "その他地域"]))
+        #expect(snapshot.rows.first { $0.labelRaw == "日本" }?.amount == yen(1_051_655))
+        #expect(!segmentLabels(snapshot).contains { $0.contains("非流動資産") })
+        #expect(!snapshot.needsReview)
+        #expect(publiclyServable(snapshot))
+    }
 }
