@@ -53,7 +53,9 @@ enum GeographyBreakdownLLMNormalizer {
         guard !columns.isEmpty else { return (nil, nil) }
 
         let scopedTables = dropAssetTables(
-            SegmentInfoLLMNormalizer.dropPriorEraTables(parsed, among: parsed, fiscalYearEnd: fiscalYearEnd)
+            dropNonGeographyTables(
+                SegmentInfoLLMNormalizer.dropPriorEraTables(parsed, among: parsed, fiscalYearEnd: fiscalYearEnd)
+            )
         )
         let scopedColumns = columns.filter { column in
             scopedTables.contains { $0.tableIndex == column.tableIndex }
@@ -134,8 +136,7 @@ enum GeographyBreakdownLLMNormalizer {
         var strippedFootnotes: [String] = []
         var rows: [BreakdownRow] = []
         for row in built {
-            let rawLabel = RevenueRecognitionCandidates.displayLabel(
-                categoryGroup: row.categoryGroup, category: row.category)
+            let rawLabel = geographyPublishedLabel(row)
             let label = stripGeographyLabelFootnotes(rawLabel)
             if label != rawLabel {
                 strippedFootnotes.append("\(rawLabel)→\(label)")
@@ -283,6 +284,29 @@ enum GeographyBreakdownLLMNormalizer {
         return sales.isEmpty ? tables : sales
     }
 
+    /// 顧客別表など、地域ラベルが無い表は列候補から外す（4575 の主要顧客表）。
+    static func dropNonGeographyTables(
+        _ tables: [RevenueRecognitionCandidates.ParsedTable]
+    ) -> [RevenueRecognitionCandidates.ParsedTable] {
+        let geo = tables.filter(isGeographyContentTable)
+        return geo.isEmpty ? tables : geo
+    }
+
+    static func isGeographyContentTable(
+        _ table: RevenueRecognitionCandidates.ParsedTable
+    ) -> Bool {
+        var labels = [table.precedingCaption ?? ""]
+            + Array(table.columnHeaders.values)
+            + table.items.map(\.label) + table.totals.map(\.label)
+        if table.headerRowCount > 0 {
+            labels.append(contentsOf: table.grid.prefix(table.headerRowCount).flatMap { $0 })
+        }
+        return labels.contains { label in
+            Xbrl.segmentGeographyLabelKeywordsJa.contains { label.contains($0) }
+                || label.contains("その他の地域") || label.contains("その他地域")
+        }
+    }
+
     static func dropNonGeographyMetricRows(
         _ rows: [RevenueRecognitionCandidates.BuiltRow]
     ) -> [RevenueRecognitionCandidates.BuiltRow] {
@@ -368,6 +392,29 @@ enum GeographyBreakdownLLMNormalizer {
         try! NSRegularExpression(pattern: #"[\s　]*[（(]\s*注\s*[）)]$"#),
         try! NSRegularExpression(pattern: #"[\s　]*[※＊*]\s*[0-9０-９]+$"#),
     ]
+
+    static func compactGeographyLabel(_ label: String) -> String {
+        RevenueRecognitionCandidates.compactCell(label)
+            .replacingOccurrences(of: " ", with: "")
+            .replacingOccurrences(of: "\u{3000}", with: "")
+            .replacingOccurrences(of: "（", with: "(")
+            .replacingOccurrences(of: "）", with: ")")
+    }
+
+    static func geographyPublishedLabel(
+        _ row: RevenueRecognitionCandidates.BuiltRow
+    ) -> String {
+        let group = compactGeographyLabel(row.categoryGroup)
+        if let category = row.category.map(compactGeographyLabel), !category.isEmpty {
+            if RevenueRecognitionCandidates.isOtherResidualChild(category),
+               !group.isEmpty, group != category
+            {
+                return group + category
+            }
+            return category
+        }
+        return group
+    }
 
     static func stripGeographyLabelFootnotes(_ label: String) -> String {
         var s = label.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -455,8 +502,9 @@ enum GeographyBreakdownLLMNormalizer {
         // 連結売上高 / 海外合計 は表の合計・グループ小計。segment に残すと分母が二重になる（7734）。
         if RevenueRecognitionCandidates.isTotalLabel(label)
             || RevenueRecognitionCandidates.isGroupSubtotalLabel(label)
-            || label.contains("連結売上")
+            || label.contains("連結売上") || label == "連結" || label.contains("連結合計")
             || label == "海外計" || label == "海外合計" || label.hasSuffix("合計")
+            || label.contains("海外売上収益") || label.contains("海外売上高")
         {
             return "subtotal"
         }

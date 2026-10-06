@@ -2257,6 +2257,8 @@ import Testing
         #expect(
             RevenueRecognitionCandidates.joinHeaderParts(["その他の地域", "その他"])
                 == "その他の地域その他")
+        #expect(
+            RevenueRecognitionCandidates.joinHeaderParts(["(1) 売上高", "日本"]) == "日本")
         let north: String = RevenueRecognitionCandidates.displayLabel(
             categoryGroup: "（海外）", category: "北米")
         let appliance: String = BreakdownRowPayload.displayLabel(

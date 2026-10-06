@@ -583,4 +583,48 @@ import Testing
         #expect(!snapshot.needsReview)
         #expect(publiclyServable(snapshot))
     }
+
+    /// 6875 型: 先頭行が「(1) 売上高」の単位見出し。列0の日本を落とさない。
+    @Test func sectionSalesHeaderKeepsJapanColumn() async throws {
+        let html = """
+            <p>当連結会計年度</p>
+            <table>
+              <tr><td>(1) 売上高</td><td></td><td></td><td>（単位：千円）</td></tr>
+              <tr><td>日本</td><td>台湾</td><td>その他</td><td>合計</td></tr>
+              <tr>
+                <td>70,611,521</td><td>9,577,883</td><td>3,625,381</td><td>83,814,786</td>
+              </tr>
+            </table>
+            """
+        let (snapshotOrNil, _) = await normalize(
+            html: html, sales: 83_814_786 * 1_000, docID: "S100O9OH")
+        let snapshot = try #require(snapshotOrNil)
+        #expect(Set(segmentLabels(snapshot)) == Set(["日本", "台湾", "その他"]))
+        #expect(snapshot.rows.first { $0.labelRaw == "日本" }?.amount == 70_611_521_000.0)
+        #expect(!snapshot.needsReview)
+        #expect(publiclyServable(snapshot))
+    }
+
+    /// 4575 型: 米国のみの転置表のあとに主要顧客表があっても地域表を使う。
+    @Test func singleUnitedStatesTableIgnoresFollowingCustomerTable() async throws {
+        let html = """
+            <p>当連結会計年度</p>
+            <p>（単位：千円）</p>
+            <table>
+              <tr><td>米国</td><td>合計</td></tr>
+              <tr><td>108,945</td><td>108,945</td></tr>
+            </table>
+            <table>
+              <tr><td>顧客の氏名または名称</td><td>売上高</td><td>関連するセグメント名</td></tr>
+              <tr><td>Stemline Therapeutics, Inc.</td><td>108,945</td><td>医薬品事業</td></tr>
+            </table>
+            """
+        let (snapshotOrNil, _) = await normalize(
+            html: html, sales: 108_945 * 1_000, docID: "S100MHTV")
+        let snapshot = try #require(snapshotOrNil)
+        #expect(segmentLabels(snapshot) == ["米国"])
+        #expect(snapshot.rows.first { $0.labelRaw == "米国" }?.amount == 108_945_000.0)
+        #expect(!snapshot.needsReview)
+        #expect(publiclyServable(snapshot))
+    }
 }

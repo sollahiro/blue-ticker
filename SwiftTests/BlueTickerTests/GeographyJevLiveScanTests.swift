@@ -238,10 +238,26 @@ struct GeographyProdBreakdownRow: Codable {
         }
         if !prodPublic && newPublic { return "jev_better" }
         if labelsOnlyOfWhich { return "jev_better" }
+        if let snapshot, prodPublic && newPublic,
+           amountsMatchIgnoringLabels(prod: prod, snapshot: snapshot)
+        {
+            return "equivalent"
+        }
         if why.contains("amounts") {
             return prodPublic && newPublic ? "jev_worse" : "changed"
         }
         return "equivalent"
+    }
+
+    private func amountsMatchIgnoringLabels(
+        prod: GeographyProdRow, snapshot: BreakdownSnapshot
+    ) -> Bool {
+        let prodVals = prod.rows.filter { $0.rowKind == "segment" }.compactMap(\.amount).sorted()
+        let newVals = snapshot.rows.filter { $0.rowKind == "segment" }.map(\.amount).sorted()
+        guard prodVals.count == newVals.count, prodVals.count >= 1 else { return false }
+        return zip(prodVals, newVals).allSatisfy { old, new in
+            abs(old - new) <= max(1.0, abs(old) * 1e-6)
+        }
     }
 
     private func compare(

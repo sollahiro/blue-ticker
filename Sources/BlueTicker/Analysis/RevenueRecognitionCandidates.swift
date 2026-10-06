@@ -318,7 +318,7 @@ enum RevenueRecognitionCandidates {
             let label = compactCell(row.first ?? "")
             if geographySales, isPercentMetricLabel(label) { return nil }
             let amounts = row.enumerated().filter { column, cell in
-                column > 0 && isAmountCell(cell)
+                (geographySales || column > 0) && isAmountCell(cell)
             }
             guard amounts.count >= 2 else { return nil }
             let current = isCurrentPeriodHeading(label)
@@ -452,6 +452,7 @@ enum RevenueRecognitionCandidates {
         let parent = compactCell(parts[parts.count - 2])
         let child = compactCell(parts[parts.count - 1])
         if isPeriodHeadingLabel(parent) { return child }
+        if isGeographySalesMetricLabel(parent) { return child }
         if isAggregateColumnHeader(child) { return child }
         if isCoarseGeographyGroupHeader(parent)
             || parent.contains("その他の地域") || parent.hasSuffix("の地域")
@@ -467,6 +468,7 @@ enum RevenueRecognitionCandidates {
         let token = compactCell(label)
         if token.isEmpty { return false }
         if isPeriodHeadingLabel(token) || isAggregateColumnHeader(token) { return true }
+        if isGeographySalesMetricLabel(token) { return true }
         if isCoarseGeographyGroupHeader(token) { return true }
         if token.contains("その他") { return true }
         return RevenueRecognitionTableStructure.isBareGeographyLabel(token)
@@ -510,6 +512,7 @@ enum RevenueRecognitionCandidates {
     /// 全列に載る「○○（連結）」や年度見出し、地域グループ。葉の事業名と同居するときだけ落とす。
     static func isSpanningParentHeader(_ label: String) -> Bool {
         if isPeriodHeadingLabel(label) { return true }
+        if isGeographySalesMetricLabel(label) { return true }
         if label.contains("その他") { return false }
         if isAggregateColumnHeader(label) { return true }
         if isCoarseGeographyGroupHeader(label) { return true }
