@@ -155,6 +155,8 @@ func runBreakdownIngest(
             let versionGated = isVersionGatedBreakdownSource(row.source)
             if versionGated, row.cacheVersion == currentCacheVersion {
                 // 現行版の決定論は skip。LLM の needs_review は再試行する。
+                // content_hash は見ない。clean な geography_llm は --codes でも skip する。
+                // Luna→Jev の差し替えは対象行 DELETE（または --doc-ids）が必要。バンプしない。
                 if !(isLLMBreakdownSource(row.source) && row.needsReview) {
                     skipped += 1
                     continue

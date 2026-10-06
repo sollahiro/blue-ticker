@@ -1,6 +1,8 @@
 // 本番 geography_llm 行を R2 GET + Jev 新経路で再計算して比較する。CI では走らない。
 // `BLT_GEOGRAPHY_SCAN=1`、R2 XBRL 資格、`OPENROUTER_DECISION_API_KEY` が必要。
 // R2 GET のみ。DB へは書かない。EDINET フォールバックもしない（apiKey=nil）。
+// 訂正 130 overlay は掛けない（ingest の `resolveAnnualXbrlDirectory` とは非対称）。
+// 7272 は原本 S100XRTH が 155,330、訂正 S100YTNF overlay 後が 137,712。
 
 import Foundation
 import Testing
@@ -58,7 +60,15 @@ struct GeographyProdBreakdownRow: Codable {
         let outPath = env["BLT_GEOGRAPHY_SCAN_OUTPUT"]
             ?? "/opt/cursor/artifacts/geography-jev-scan.json"
         let data = try Data(contentsOf: URL(fileURLWithPath: listPath))
-        let rows = try JSONDecoder().decode([GeographyProdRow].self, from: data)
+        let decoded = try JSONDecoder().decode([GeographyProdRow].self, from: data)
+        let codesRaw = env["BLT_GEOGRAPHY_SCAN_CODES"] ?? ""
+        let wantedCodes = Set(
+            codesRaw.split { $0 == "," || $0 == " " || $0 == "\n" }
+                .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty })
+        let rows = wantedCodes.isEmpty
+            ? decoded
+            : decoded.filter { wantedCodes.contains($0.code) }
         let config = try #require(R2StorageConfig.resolveXbrlFromEnvironment())
         let endpoint = try #require(resolveOpenRouterDecisionsEndpoint())
         let cacheOverride = env["BLT_GEOGRAPHY_SCAN_CACHE"]
@@ -127,9 +137,29 @@ struct GeographyProdBreakdownRow: Codable {
             comparison.record["extract_method"] = geography.method
             comparison.record["table_count"] = geography.tables.count
             comparison.record["headings"] = geography.tables.map { $0.heading }
+            comparison.record["table_periods"] = geography.tables.map { $0.period ?? "" }
             if let sales { comparison.record["consolidated_sales"] = sales }
             if let notes = audit?.notes { comparison.record["audit_notes"] = notes }
             if let selected = audit?.periodColumn { comparison.record["jev_column"] = selected }
+            if let review = audit?.jev?.calls.last(where: {
+                $0.question == OpenRouterSegmentNoteDecider.reviewDecisionQuestion
+            }) {
+                comparison.record["review_selected"] = review.selected ?? ""
+                if let probability = review.probability {
+                    comparison.record["review_probability"] = probability
+                }
+                comparison.record["review_applied"] = review.applied
+                if review.applied, review.selected == GeographyBreakdownLLMNormalizer.reviewWrong {
+                    comparison.record["review_action"] = "demote"
+                } else if review.applied, review.selected == GeographyBreakdownLLMNormalizer.reviewCorrect {
+                    comparison.record["review_action"] = "recover"
+                } else {
+                    comparison.record["review_action"] = "keep"
+                }
+            }
+            if let source = audit?.jev?.decisionSource {
+                comparison.record["decision_source"] = source
+            }
             comparison.record["quality"] = qualityClass(prod: row, snapshot: snapshot, record: comparison.record)
             if !store.hasXbrlDir(row.docID, saveDir: workDir) {
                 comparison.record["xbrl_status"] = "missing_on_disk"
@@ -168,6 +198,16 @@ struct GeographyProdBreakdownRow: Codable {
             ($0["prod_needs_review"] as? Bool) == true
                 && ($0["new_needs_review"] as? Bool) == false
         }
+        let demoted = (same + changed + nowNeedsReview).filter {
+            ($0["review_action"] as? String) == "demote"
+        }
+        let recovered = (same + changed).filter {
+            ($0["review_action"] as? String) == "recover"
+        }
+        let uniqueDemoted = Dictionary(grouping: demoted, by: { $0["code"] as? String ?? "" })
+            .values.compactMap(\.first)
+        let uniqueRecovered = Dictionary(grouping: recovered, by: { $0["code"] as? String ?? "" })
+            .values.compactMap(\.first)
         let artifact: [String: Any] = [
             "prod_row_count": rows.count,
             "companies": Set(rows.map(\.code)).count,
@@ -182,6 +222,10 @@ struct GeographyProdBreakdownRow: Codable {
             "missing_xbrl_count": missingXbrl.count,
             "newly_clean_count": newlyClean.count,
             "newly_clean": newlyClean,
+            "demoted_count": uniqueDemoted.count,
+            "demoted": uniqueDemoted,
+            "recovered_count": uniqueRecovered.count,
+            "recovered": uniqueRecovered,
             "why_counts": whyCounts,
             "sample_changed": Array(changed.prefix(25)),
             "changed_records": changed,
@@ -201,7 +245,8 @@ struct GeographyProdBreakdownRow: Codable {
             """
             geography Jev scan same=\(same.count) changed=\(changed.count) \
             now_needs_review=\(nowNeedsReview.count) jev_worse=\(jevWorse.count) \
-            jev_better=\(jevBetter.count) errors=\(errors.count)
+            jev_better=\(jevBetter.count) demoted=\(uniqueDemoted.count) \
+            recovered=\(uniqueRecovered.count) errors=\(errors.count)
             """.utf8))
         #expect(errors.count < rows.count || rows.isEmpty)
         if !useFake {
@@ -234,7 +279,14 @@ struct GeographyProdBreakdownRow: Codable {
                 || warnings.contains("geography_label_mismatch")
                 || warnings.contains(RevenueRecognitionColumnNormalizer.warningLowConfidence)
                 || warnings.contains(RevenueRecognitionColumnNormalizer.warningNoneOfTheseOverridden)
+                || warnings.contains(GeographyBreakdownLLMNormalizer.warningFinalReviewWrong)
+                || warnings.contains(GeographyBreakdownLLMNormalizer.warningColumnSampleDisagreement)
+                || warnings.contains(GeographyBreakdownLLMNormalizer.warningColumnSampleInsufficient)
             {
+                return "fail_closed"
+            }
+            let periods = record["table_periods"] as? [String] ?? []
+            if snapshot == nil, !periods.isEmpty, periods.allSatisfy({ $0 == "前期" }) {
                 return "fail_closed"
             }
             return "jev_worse"

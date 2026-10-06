@@ -708,6 +708,15 @@ enum BreakdownExtractor {
                 tables = revenueDecomp
             }
         }
+        // 前期 TextBlock だけが残るとき（2146 S100YKK1 / 1968 S100TU63）は当期の地域表が無い。
+        // Prior コンテキストの比較表に当期行がある場合（1887 / 4568）は html を残す。
+        // html_table の前期だけを公開せず、報告セグメントが地域軸なら facts へ落とす。
+        if !tables.isEmpty, tables.allSatisfy({ $0.period == "前期" }),
+           !tables.contains(where: htmlTableHasCurrentPeriodRow),
+           let segmentGeography = extractGeographyFromReportableSegments(xbrlDir: xbrlDir)
+        {
+            return segmentGeography
+        }
         let result = buildResult(
             xbrlDir: xbrlDir, tables: tables, dimensionKeywords: Xbrl.geographyDimensionKeywords)
         if result.method == "not_found",
@@ -742,6 +751,12 @@ enum BreakdownExtractor {
             Xbrl.segmentSpecificGeographyLabelKeywordsJa.contains(where: label.contains)
         }
         return hits.count >= 2
+    }
+
+    /// Prior コンテキストの比較表に「当連結会計年度」行があるか（1887 / 4568）。
+    static func htmlTableHasCurrentPeriodRow(_ table: BreakdownTable) -> Bool {
+        table.markdown.contains("当連結会計年度") || table.markdown.contains("当事業年度")
+            || table.heading.contains("当連結会計年度")
     }
 
     private static let dedicatedGeographyTextBlockTags: Set<String> =
