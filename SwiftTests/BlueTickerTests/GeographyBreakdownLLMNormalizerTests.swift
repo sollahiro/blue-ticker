@@ -80,6 +80,29 @@ struct GeographyBreakdownLLMNormalizerTests {
         #expect(filtered.map(\.labelRaw) == ["日本", "北米", "欧州"])
     }
 
+    @Test("細目があるとき親の海外行を落とす")
+    func dropsCoarseOverseasWhenAsiaExists() {
+        let rows: [BreakdownRow] = [
+            .init(labelRaw: "日本", amount: 1_000, share: nil, profit: nil, rowKind: "segment"),
+            .init(labelRaw: "アジア", amount: 2_000, share: nil, profit: nil, rowKind: "segment"),
+            .init(labelRaw: "北米", amount: 1_500, share: nil, profit: nil, rowKind: "segment"),
+            .init(labelRaw: "その他", amount: 500, share: nil, profit: nil, rowKind: "segment"),
+            .init(labelRaw: "海外", amount: 4_000, share: nil, profit: nil, rowKind: "segment"),
+        ]
+        let filtered = GeographyBreakdownLLMNormalizer.dropCoarseOverseasWhenFinerRegionsExist(rows)
+        #expect(filtered.map(\.labelRaw) == ["日本", "アジア", "北米", "その他"])
+    }
+
+    @Test("日本/海外の2区分では海外を残す")
+    func keepsOverseasWhenItIsTheOnlyForeignBucket() {
+        let rows: [BreakdownRow] = [
+            .init(labelRaw: "日本", amount: 1_000, share: nil, profit: nil, rowKind: "segment"),
+            .init(labelRaw: "海外", amount: 800, share: nil, profit: nil, rowKind: "segment"),
+        ]
+        let filtered = GeographyBreakdownLLMNormalizer.dropCoarseOverseasWhenFinerRegionsExist(rows)
+        #expect(filtered.map(\.labelRaw) == ["日本", "海外"])
+    }
+
     private static func normalizeHTML(
         _ html: String, sales: Double, heading: String = "地域ごとの情報"
     ) async -> BreakdownSnapshot? {

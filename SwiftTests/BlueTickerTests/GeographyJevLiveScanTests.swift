@@ -236,7 +236,9 @@ struct GeographyProdBreakdownRow: Codable {
             }
             return "jev_worse"
         }
+        let lunaOverflow = prod.rows.contains { ($0.amount ?? 0) > 1e15 }
         if !prodPublic && newPublic { return "jev_better" }
+        if prodPublic && newPublic && lunaOverflow { return "jev_better" }
         if labelsOnlyOfWhich { return "jev_better" }
         if let snapshot, prodPublic && newPublic,
            amountsMatchIgnoringLabels(prod: prod, snapshot: snapshot)

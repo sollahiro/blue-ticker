@@ -426,7 +426,9 @@ enum RevenueRecognitionCandidates {
         let token = compactCell(label)
         if token.isEmpty { return false }
         if token.hasSuffix("の名称") || token == "名称" { return true }
-        return token == "報告セグメント" || token.hasPrefix("報告セグメント")
+        if token == "報告セグメント" || token.hasPrefix("報告セグメント") { return true }
+        if token == "主な地域市場" || token.hasPrefix("主な地域") { return true }
+        return false
     }
 
     static func joinHeaderParts(_ parts: [String]) -> String {

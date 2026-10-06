@@ -160,6 +160,7 @@ enum GeographyBreakdownLLMNormalizer {
         }
 
         rows = dropOfWhichSubsetSegments(rows)
+        rows = dropCoarseOverseasWhenFinerRegionsExist(rows)
 
         if extractedSubtotalsMismatch(rows) {
             needsReview = true
@@ -301,6 +302,12 @@ enum GeographyBreakdownLLMNormalizer {
         if table.headerRowCount > 0 {
             labels.append(contentsOf: table.grid.prefix(table.headerRowCount).flatMap { $0 })
         }
+        if labels.contains(where: {
+            $0.contains("期日内") || $0.contains("30日") || $0.contains("90日")
+                || $0.contains("税引前当期純利益")
+        }) {
+            return false
+        }
         return labels.contains { label in
             Xbrl.segmentGeographyLabelKeywordsJa.contains { label.contains($0) }
                 || label.contains("その他の地域") || label.contains("その他地域")
@@ -381,6 +388,21 @@ enum GeographyBreakdownLLMNormalizer {
         }
         guard !drop.isEmpty else { return rows }
         return rows.enumerated().compactMap { drop.contains($0.offset) ? nil : $0.element }
+    }
+
+    /// アジア/北米等の細目があるとき、親の「海外」行は小計であり segment に残すと分母が二重になる（5401）。
+    /// 日本/海外の2区分（アサヒ型）は細目が無いので残す。
+    static func dropCoarseOverseasWhenFinerRegionsExist(
+        _ rows: [BreakdownRow]
+    ) -> [BreakdownRow] {
+        let fine = ["アジア", "北米", "欧州", "米州", "中国", "米国", "オセアニア"]
+        let hasFine = rows.contains { row in
+            row.rowKind == "segment" && fine.contains { row.labelRaw.contains($0) }
+        }
+        guard hasFine else { return rows }
+        return rows.filter { row in
+            !(row.rowKind == "segment" && (row.labelRaw == "海外" || row.labelRaw == "国外"))
+        }
     }
 
     /// 地域ラベル末尾の脚注マーカーを決定的に除去する。
