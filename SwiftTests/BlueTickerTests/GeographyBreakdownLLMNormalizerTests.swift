@@ -87,6 +87,22 @@ struct GeographyBreakdownLLMNormalizerTests {
         #expect(filtered.map(\.labelRaw) == ["日本", "北米", "欧州"])
     }
 
+    @Test("その他欧州はドイツの親大陸ではない")
+    func otherEuropeIsNotParentOfGermany() {
+        let rows: [BreakdownRow] = [
+            .init(labelRaw: "日本", amount: 76_547, share: nil, profit: nil, rowKind: "segment"),
+            .init(labelRaw: "チェコ", amount: 7_012, share: nil, profit: nil, rowKind: "segment"),
+            .init(labelRaw: "ドイツ", amount: 6_836, share: nil, profit: nil, rowKind: "segment"),
+            .init(labelRaw: "その他欧州", amount: 7_716, share: nil, profit: nil, rowKind: "segment"),
+            .init(labelRaw: "アジア", amount: 10_340, share: nil, profit: nil, rowKind: "segment"),
+            .init(labelRaw: "その他", amount: 5_481, share: nil, profit: nil, rowKind: "segment"),
+        ]
+        let filtered = GeographyBreakdownLLMNormalizer.keepOfWhichSubsetAsSubtotals(rows)
+        let labels = filtered.filter { $0.rowKind == "segment" }.map(\.labelRaw)
+        #expect(labels == ["日本", "チェコ", "ドイツ", "その他欧州", "アジア", "その他"])
+        #expect(!filtered.contains { $0.category == "ドイツ" && $0.rowKind == "subtotal" })
+    }
+
     @Test("細目があるとき親の海外行を落とす")
     func dropsCoarseOverseasWhenAsiaExists() {
         let rows: [BreakdownRow] = [

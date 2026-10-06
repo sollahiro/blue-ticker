@@ -2077,6 +2077,18 @@ enum BreakdownExtractor {
                     tables[i].periodBasis = .pair
                     i += 2
                     continue
+                case ("当期", "当期"):
+                    // 同一ブロックの比較2表がどちらも CurrentYearDuration / 当期キャプション
+                    // のとき（1963）。レイアウトが同じなら先が前期。売上と固定資産は組まない。
+                    if markdownLooksLikeAssetTable(a.markdown) != markdownLooksLikeAssetTable(b.markdown)
+                    {
+                        break
+                    }
+                    tables[i].period = "前期"
+                    tables[i].periodBasis = .pair
+                    tables[i + 1].periodBasis = .pair
+                    i += 2
+                    continue
                 default:
                     break
                 }
@@ -2100,6 +2112,12 @@ enum BreakdownExtractor {
             }
         }
         return true
+    }
+
+    /// 売上高表と有形固定資産表が同じ地域見出しでも、当期×当期の対にしない。
+    private static func markdownLooksLikeAssetTable(_ markdown: String) -> Bool {
+        markdown.contains("固定資産") || markdown.contains("非流動資産")
+            || markdown.contains("長期性資産")
     }
 
     private static func isIgnorablePeriodLayoutAmount(_ cell: String) -> Bool {

@@ -319,7 +319,9 @@ enum RevenueRecognitionCandidates {
                 return text.isEmpty ? nil : text
             }
             let joined = joinHeaderParts(parts)
-            if !joined.isEmpty { headers[0] = joined }
+            if !joined.isEmpty, isGeographyRegionColumnHeader(joined) {
+                headers[0] = joined
+            }
         }
         for (column, header) in headers.sorted(by: { $0.key < $1.key }) {
             if column == wholeCompanyColumn { continue }
@@ -587,7 +589,13 @@ enum RevenueRecognitionCandidates {
         guard parts.count >= 2, parts.allSatisfy(isGeographyRelatedHeader) else { return nil }
         let parent = compactCell(parts[parts.count - 2])
         let child = compactCell(parts[parts.count - 1])
-        if isPeriodHeadingLabel(parent) { return child }
+        if isPeriodHeadingLabel(parent) {
+            // YYYY年度 は年スライス。葉だけ返すと 2021日本 が当期地域列になる（6762）。
+            if parent.range(of: #"[0-9０-９]{4}年度"#, options: .regularExpression) != nil {
+                return nil
+            }
+            return child
+        }
         if isGeographySalesMetricLabel(parent) { return child }
         if isAggregateColumnHeader(child) { return child }
         if isCoarseGeographyGroupHeader(parent)
@@ -878,12 +886,18 @@ enum RevenueRecognitionCandidates {
         let structure = RevenueRecognitionTableStructure.inspect(grid: rows)
         let firstData = structure.headerRowCount
         var headers: [Int: String] = [:]
-        for column in 1..<ncol {
+        for column in 0..<ncol {
             let parts = rows.prefix(firstData).compactMap { row -> String? in
+                guard column < row.count else { return nil }
                 let text = compactCell(row[column])
                 return text.isEmpty ? nil : text
             }
-            headers[column] = joinHeaderParts(parts)
+            let joined = joinHeaderParts(parts)
+            if joined.isEmpty { continue }
+            // 列0はラベル域（項目・売上高）のことが多いが、横並び地域表では
+            // 日本 / その他 自体が金額列。stub 前提で飛ばすと 合計だけが候補になる。
+            if column == 0, !isGeographyRegionColumnHeader(joined) { continue }
+            headers[column] = joined
         }
 
         var items: [Item] = []
@@ -994,6 +1008,7 @@ enum RevenueRecognitionCandidates {
     }
 
     /// 期間見出しか。`自` 接頭辞だけでは期間にしない（自社メディア広告）。
+    /// `2021年度` は fiscalYearEnd が無くても年度列（6762 の年ラベルを地域にしない）。
     static func isPeriodHeadingLabel(_ label: String) -> Bool {
         let compact = compactCell(label)
         if compact.hasPrefix("自") && !compact.contains("当") && !compact.contains("前")
@@ -1015,8 +1030,28 @@ enum RevenueRecognitionCandidates {
         if compact.range(of: #"^第[0-9]+期$"#, options: .regularExpression) != nil {
             return true
         }
+        if compact.range(of: #"[0-9０-９]{4}年度"#, options: .regularExpression) != nil {
+            return true
+        }
         return BreakdownExtractor.parsePeriodCue(compact) != nil
             && (compact.contains("連結") || compact.contains("事業年度") || compact.contains("年度"))
+    }
+
+    /// 横並び地域表の列見出し（日本 / その他）。項目・売上高・年度は含めない。
+    static func isGeographyRegionColumnHeader(_ label: String) -> Bool {
+        let token = collapsedCell(label)
+        if token.isEmpty { return false }
+        if isStubAxisHeader(token) || isPeriodHeadingLabel(token) { return false }
+        if isUnitCaptionHeader(token) { return false }
+        if isAggregateColumnHeader(token) { return false }
+        if isGeographySalesMetricLabel(token),
+           !RevenueRecognitionTableStructure.isBareGeographyLabel(token)
+        {
+            return false
+        }
+        return RevenueRecognitionTableStructure.isBareGeographyLabel(token)
+            || RevenueRecognitionTableStructure.isOtherResidualLabel(token)
+            || Xbrl.segmentGeographyLabelKeywordsJa.contains { token.contains($0) }
     }
 
     static func isPartialItem(_ label: String) -> Bool {

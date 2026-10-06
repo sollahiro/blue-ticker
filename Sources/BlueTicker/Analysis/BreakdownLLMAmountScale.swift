@@ -16,7 +16,7 @@ enum BreakdownLLMAmountScale {
     static let headerLlmMismatchWarning = "unit_header_llm_mismatch"
 
     struct Resolution: Equatable {
-        /// 行金額に掛ける円換算倍率。単位が一つも決まらないときは 1（推測スケールは掛けない）。
+        /// 行金額に掛ける円換算倍率。単位が一つも決まらず分母帯にも一意に入らないときは 1。
         var multiplier: Double
         /// ヘッダーにも LLM にも信頼できる単位が無い。格納してよいが trusted ではない。
         var unresolved: Bool
@@ -62,7 +62,8 @@ enum BreakdownLLMAmountScale {
     /// 表ヘッダーの単位を優先し、無ければ LLM 申告。食い違い時は
     /// {ヘッダー倍率, LLM 申告倍率, ×1} のうち分母比が 0.90...1.10 に入り 1 に最も近いものを選ぶ。
     /// 分母が無い・許容内に入らない・同距離ならヘッダー倍率。mismatch フラグは立てる。
-    /// どちらからも円倍率が決まらなければ fail closed（unresolved、倍率 1）。
+    /// どちらからも円倍率が決まらなければ、円 / 千円 / 百万円の一意の分母帯一致を使い、
+    /// それも無ければ fail closed（unresolved、倍率 1）。
     static func resolve(
         headerToken: String?,
         declaredUnit: String,
@@ -118,6 +119,21 @@ enum BreakdownLLMAmountScale {
                     rawAmounts: rawAmounts,
                     consolidatedSales: consolidatedSales
                 ),
+                unresolved: false,
+                headerLlmMismatch: false,
+                headerToken: nil,
+                headerBorrowed: false
+            )
+        }
+        // ヘッダーも LLM も無いとき、円 / 千円 / 百万円のどれか1つだけが分母帯に入るならそれを使う
+        // （千円表を million_yen と誤認して ×1e6 する 1000 倍を、推測 million フォールバックより先に止める）。
+        if let inferred = uniqueScaleAgainstDenominator(
+            candidates: [1, thousandYen, Financial.millionYen],
+            rawAmounts: rawAmounts,
+            consolidatedSales: consolidatedSales
+        ) {
+            return Resolution(
+                multiplier: inferred,
                 unresolved: false,
                 headerLlmMismatch: false,
                 headerToken: nil,
@@ -269,6 +285,9 @@ enum BreakdownLLMAmountScale {
                 known: true,
                 nominal: Financial.millionYen
             )
+        case "thousand_yen":
+            return DeclaredScale(
+                multiplier: thousandYen, known: true, nominal: thousandYen)
         default:
             return DeclaredScale(multiplier: 1, known: false, nominal: nil)
         }
@@ -293,9 +312,20 @@ enum BreakdownLLMAmountScale {
         rawAmounts: [Double],
         consolidatedSales: Double?
     ) -> Double {
-        guard let sales = consolidatedSales, sales != 0 else { return defaultMultiplier }
+        uniqueScaleAgainstDenominator(
+            candidates: candidates, rawAmounts: rawAmounts, consolidatedSales: consolidatedSales)
+            ?? defaultMultiplier
+    }
+
+    /// 分母帯に一意に入る倍率。該当なし・同距離は nil（推測しない）。
+    private static func uniqueScaleAgainstDenominator(
+        candidates: [Double],
+        rawAmounts: [Double],
+        consolidatedSales: Double?
+    ) -> Double? {
+        guard let sales = consolidatedSales, sales != 0 else { return nil }
         let rawRef = rawAmounts.map { abs($0) }.max() ?? 0
-        guard rawRef != 0 else { return defaultMultiplier }
+        guard rawRef != 0 else { return nil }
 
         struct Scored {
             var multiplier: Double
@@ -308,32 +338,38 @@ enum BreakdownLLMAmountScale {
             guard denominatorRatioTolerance.contains(ratio) else { continue }
             scored.append(Scored(multiplier: multiplier, distance: logDistanceFromUnity(ratio)))
         }
-        guard let bestDistance = scored.map(\.distance).min() else {
-            return defaultMultiplier
-        }
+        guard let bestDistance = scored.map(\.distance).min() else { return nil }
         let tied = scored.filter { abs($0.distance - bestDistance) < 1e-12 }
-        if tied.count != 1 {
-            return defaultMultiplier
-        }
+        guard tied.count == 1 else { return nil }
         return tied[0].multiplier
     }
 
     /// 提案倍率を掛けたほうが分母に近いか、既に円スケールか。
+    /// asIs と asScaled がどちらも帯の外のときは円 / 千円 / 百万円を分母で一意選択する
+    /// （log(1000)=log(0.001) で千円表に百万円を残すのをやめる）。
     private static func scaleTowardYen(
         proposed: Double,
         rawAmounts: [Double],
         consolidatedSales: Double?
     ) -> Double {
-        if proposed == 1 { return 1 }
         guard let sales = consolidatedSales, sales != 0 else { return proposed }
         let rawRef = rawAmounts.map { abs($0) }.max() ?? 0
         guard rawRef != 0 else { return proposed }
         let asIs = rawRef / abs(sales)
-        let asScaled = rawRef * proposed / abs(sales)
-        if closerToUnity(asIs, than: asScaled) {
-            return 1
+        let asScaled = proposed == 1 ? asIs : rawRef * proposed / abs(sales)
+        let asIsIn = denominatorRatioTolerance.contains(asIs)
+        let asScaledIn = denominatorRatioTolerance.contains(asScaled)
+        if asIsIn != asScaledIn {
+            return asIsIn ? 1 : proposed
         }
-        return proposed
+        if asIsIn && asScaledIn {
+            return closerToUnity(asIs, than: asScaled) ? 1 : proposed
+        }
+        return uniqueScaleAgainstDenominator(
+            candidates: [1, thousandYen, Financial.millionYen, proposed],
+            rawAmounts: rawAmounts,
+            consolidatedSales: consolidatedSales
+        ) ?? proposed
     }
 
     private static func closerToUnity(_ a: Double, than b: Double) -> Bool {
