@@ -1089,4 +1089,31 @@ import Testing
         #expect(!snapshot.needsReview)
         #expect(publiclyServable(snapshot))
     }
+
+    /// 8604 型: 同じ地域ラベルが売上と資産で二度出るときは先の売上だけ残す。
+    @Test func duplicateRegionLabelsKeepFirstSalesBlock() async throws {
+        let html = """
+            <p>当連結会計年度</p>
+            <table>
+              <tr><td></td><td>前連結会計年度</td><td>当連結会計年度</td></tr>
+              <tr><td>日本</td><td>1,000,000</td><td>1,087,778</td></tr>
+              <tr><td>米州</td><td>600,000</td><td>669,998</td></tr>
+              <tr><td>欧州</td><td>240,000</td><td>261,522</td></tr>
+              <tr><td>アジア・オセアニア</td><td>140,000</td><td>148,415</td></tr>
+              <tr><td>合計</td><td>1,980,000</td><td>2,167,713</td></tr>
+              <tr><td>日本</td><td>800,000</td><td>820,000</td></tr>
+              <tr><td>米州</td><td>100,000</td><td>110,000</td></tr>
+              <tr><td>欧州</td><td>50,000</td><td>55,000</td></tr>
+              <tr><td>アジア・オセアニア</td><td>40,000</td><td>42,000</td></tr>
+            </table>
+            """
+        let (snapshotOrNil, _) = await normalize(
+            html: html, sales: yen(2_167_713), docID: "S100YC5C")
+        let snapshot = try #require(snapshotOrNil)
+        #expect(Set(segmentLabels(snapshot)) == Set(["日本", "米州", "欧州", "アジア・オセアニア"]))
+        #expect(snapshot.rows.filter { $0.labelRaw == "日本" && $0.rowKind == "segment" }.count == 1)
+        #expect(snapshot.rows.first { $0.labelRaw == "日本" }?.amount == yen(1_087_778))
+        #expect(!snapshot.needsReview)
+        #expect(publiclyServable(snapshot))
+    }
 }

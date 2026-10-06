@@ -185,6 +185,7 @@ enum GeographyBreakdownLLMNormalizer {
             }
             return true
         }
+        rows = dropDuplicateSegmentLabels(rows)
 
         if extractedSubtotalsMismatch(rows) {
             needsReview = true
@@ -462,8 +463,15 @@ enum GeographyBreakdownLLMNormalizer {
         return rows.enumerated().compactMap { drop.contains($0.offset) ? nil : $0.element }
     }
 
-    /// アジア/北米等の細目があるとき、親の「海外」行は小計であり segment に残すと分母が二重になる（5401）。
-    /// 日本/海外の2区分（アサヒ型）は細目が無いので残す。
+    /// 同一地域ラベルの二回目以降は売上ブロックのあとに続く PPE / 重複表（8604）。
+    static func dropDuplicateSegmentLabels(_ rows: [BreakdownRow]) -> [BreakdownRow] {
+        var seen = Set<String>()
+        return rows.filter { row in
+            guard row.rowKind == "segment" else { return true }
+            let key = compactGeographyLabel(row.labelRaw)
+            return seen.insert(key).inserted
+        }
+    }
     static func dropCoarseOverseasWhenFinerRegionsExist(
         _ rows: [BreakdownRow]
     ) -> [BreakdownRow] {
