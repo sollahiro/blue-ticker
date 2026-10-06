@@ -2,7 +2,7 @@
 // BreakdownSnapshot へ正規化する。Chat Completions は使わない。
 // 表構造は収益認識と同じ候補列。Jev は当期の全社（または合計）金額列だけを選ぶ。
 // 行・単位・うち内数・脚注はコードが組む。
-// 親地域に（うち〜）が重なった列は親を残す。
+// 親地域に（うち〜）が重なった列は親を segment として残し、うちは subtotal 明細にする。
 // 列 Choice と最終判定は N 回並列（JevChoiceAggregate）。一致は confident（生 confidence
 // の 0.5 ゲートは使わない）。不一致・成功不足は needs_review（公開面 fail-closed）。
 // 行を組んだあと Jev 第二パスで最終判定する。一致した confident wrong は NR。
@@ -162,7 +162,8 @@ enum GeographyBreakdownLLMNormalizer {
             transposedWhole = transposed.wholeCompanyAmount
         } else {
             (built, _) = RevenueRecognitionCandidates.buildRows(
-                table: selectedTable, column: wholeCompanyColumn, applyParallelDimension: false)
+                table: selectedTable, column: wholeCompanyColumn, applyParallelDimension: false,
+                keepOfWhichPartials: true)
             built = dropNonGeographyMetricRows(built)
             if built.isEmpty {
                 let transposed = RevenueRecognitionCandidates.transposeMetricRow(
@@ -220,6 +221,21 @@ enum GeographyBreakdownLLMNormalizer {
         var strippedFootnotes: [String] = []
         var rows: [BreakdownRow] = []
         for row in built {
+            if row.rowKind == "subtotal", let category = row.category, !category.isEmpty {
+                let group = stripGeographyLabelFootnotes(
+                    stripStackedOfWhichAnnotation(row.categoryGroup))
+                let child = stripGeographyLabelFootnotes(category)
+                rows.append(BreakdownRow(
+                    labelRaw: child,
+                    amount: row.amount * unitMultiplier,
+                    share: nil,
+                    profit: nil,
+                    rowKind: "subtotal",
+                    categoryGroup: group,
+                    category: child
+                ))
+                continue
+            }
             let rawLabel = geographyPublishedLabel(row)
             let label = stripGeographyLabelFootnotes(rawLabel)
             if label != rawLabel {
@@ -243,7 +259,7 @@ enum GeographyBreakdownLLMNormalizer {
             audit.notes = notes
         }
 
-        rows = dropOfWhichSubsetSegments(rows)
+        rows = keepOfWhichSubsetAsSubtotals(rows)
         rows = dropCoarseOverseasWhenFinerRegionsExist(rows)
         rows = rows.filter { row in
             guard row.rowKind == "segment" else { return true }
@@ -861,24 +877,40 @@ enum GeographyBreakdownLLMNormalizer {
         return !geo
     }
 
-    /// 親地域の内数（「うち」）として重複計上されている segment 行を除く。
-    /// 親を残し内数を落とす（注記の加算構造に合わせる。内数は親金額の内訳開示）。
-    static func dropOfWhichSubsetSegments(_ rows: [BreakdownRow]) -> [BreakdownRow] {
+    /// 親地域の内数（「うち」）を segment から外し、親の subtotal 明細として残す。
+    /// 親は加算対象のまま。child は category_group=親 / category=子。
+    static func keepOfWhichSubsetAsSubtotals(_ rows: [BreakdownRow]) -> [BreakdownRow] {
         let segmentIndices = rows.indices.filter { rows[$0].rowKind == "segment" }
         guard segmentIndices.count >= 2 else { return rows }
-        var drop = Set<Int>()
+        var childToParent: [Int: Int] = [:]
         for childIdx in segmentIndices {
             let child = rows[childIdx]
-            for parentIdx in segmentIndices where parentIdx != childIdx && !drop.contains(parentIdx) {
+            if child.categoryGroup != nil { continue }
+            for parentIdx in segmentIndices where parentIdx != childIdx {
                 let parent = rows[parentIdx]
                 if isLikelyOfWhichChild(parent: parent, child: child) {
-                    drop.insert(childIdx)
+                    childToParent[childIdx] = parentIdx
                     break
                 }
             }
         }
-        guard !drop.isEmpty else { return rows }
-        return rows.enumerated().compactMap { drop.contains($0.offset) ? nil : $0.element }
+        guard !childToParent.isEmpty else { return rows }
+        return rows.enumerated().map { idx, row in
+            guard let parentIdx = childToParent[idx] else { return row }
+            let parentLabel = stripStackedOfWhichAnnotation(rows[parentIdx].labelRaw)
+            let childLabel = RevenueRecognitionCandidates.strippedOfWhichDetailName(row.labelRaw)
+            var copy = row
+            copy.rowKind = "subtotal"
+            copy.categoryGroup = parentLabel
+            copy.category = childLabel
+            copy.labelRaw = childLabel
+            return copy
+        }
+    }
+
+    /// 旧名。親を残し内数を subtotal 明細にする。
+    static func dropOfWhichSubsetSegments(_ rows: [BreakdownRow]) -> [BreakdownRow] {
+        keepOfWhichSubsetAsSubtotals(rows)
     }
 
     /// 同一地域ラベルの二回目以降は売上ブロックのあとに続く PPE / 重複表（8604）。
@@ -996,13 +1028,22 @@ enum GeographyBreakdownLLMNormalizer {
     }
 
     /// 抽出された subtotal 行それぞれについて、構成行の部分集合和が
-    /// 丸め許容内で一致しなければ true。subtotal が無ければ検査しない。
+    /// 丸め許容内で一致しなければ true。うち内数（category_group 付き）は加算対象外なので
+    /// 親金額以下であることだけ見る。subtotal が無ければ検査しない。
     static func extractedSubtotalsMismatch(_ rows: [BreakdownRow]) -> Bool {
+        for child in rows where isOfWhichDetailRow(child) {
+            let group = compactGeographyLabel(child.categoryGroup ?? "")
+            let parent = rows.first {
+                $0.rowKind == "segment" && compactGeographyLabel($0.labelRaw) == group
+            }
+            guard let parent, child.amount <= parent.amount * 1.001 else { return true }
+        }
         let components = rows.compactMap { row -> Double? in
             (row.rowKind == "segment" || row.rowKind == "reconciling") ? row.amount : nil
         }
         let subtotals = rows.compactMap { row -> Double? in
-            row.rowKind == "subtotal" && row.amount != 0 ? row.amount : nil
+            row.rowKind == "subtotal" && row.amount != 0 && !isOfWhichDetailRow(row)
+                ? row.amount : nil
         }
         guard !subtotals.isEmpty, !components.isEmpty else { return false }
         guard components.count <= 20 else { return false }
@@ -1012,6 +1053,10 @@ enum GeographyBreakdownLLMNormalizer {
             }
         }
         return false
+    }
+
+    static func isOfWhichDetailRow(_ row: BreakdownRow) -> Bool {
+        row.rowKind == "subtotal" && row.categoryGroup != nil
     }
 
     private static func subsetSums(to target: Double, among amounts: [Double]) -> Bool {
@@ -1431,12 +1476,13 @@ struct OpenRouterGeographyColumnDecider: RevenueRecognitionColumnDeciding, Geogr
         let criteria: [String: String] = [
             GeographyBreakdownLLMNormalizer.reviewCorrect: """
                 抽出された行は、当期の全社（合計／連結）列から組んだ仕向地または地域ごとの \
-                外部顧客売上高の内訳である。日本のみ・単一地域も正しい。うち内数を落としているのは正しい。 \
+                外部顧客売上高の内訳である。日本のみ・単一地域も正しい。うち内数は親の \
+                subtotal（非加算）として残してよい。 \
                 有形固定資産・長期性資産・事業別・顧客別ではない。前期列の金額ではない。
                 """,
             GeographyBreakdownLLMNormalizer.reviewWrong: """
                 抽出された行は正しくない。前期列の金額、有形固定資産／長期性資産、事業別、顧客別、 \
-                うち内数の独立行、合計や列の取り違えなど、当期・全社の地域別売上ではない。 \
+                うち内数を加算対象の segment にしたこと、合計や列の取り違えなど、当期・全社の地域別売上ではない。 \
                 period_columns の prior_only=true の金額と抽出行が一致するなら wrong。 \
                 表にある地域が抽出から欠け、合計が consolidated_sales_million_yen より明らかに足りないなら wrong。
                 """,

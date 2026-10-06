@@ -109,6 +109,8 @@ import Foundation
         #expect(pharma.rowKind == "segment")
         #expect(pharma.amount == 9_832)
         #expect(pharma.label == "医薬品事業")
+        #expect(pharma.categoryGroup == nil)
+        #expect(pharma.category == nil)
         let other = try #require(
             emp.rows.first {
                 $0.labelRaw
@@ -130,6 +132,8 @@ import Foundation
         let parent = try #require(
             emp.rows.first { $0.labelRaw == "GlobalConsumerCareBusinessReportableSegmentMember" })
         #expect(parent.rowKind == "subtotal")
+        #expect(parent.categoryGroup == nil)
+        #expect(parent.category == nil)
         let reconciled = emp.rows.filter { $0.rowKind == "segment" || $0.rowKind == "reconciling" }
             .map(\.amount).reduce(0, +)
         #expect(reconciled == 31_514)
@@ -151,20 +155,26 @@ import Foundation
         #expect(emp.needsReview == false)
         #expect(emp.warnings.isEmpty)
         #expect(emp.denominator == 11_567)
+        let product = try #require(
+            emp.rows.first { $0.labelRaw == "ProductTransportBusinessReportableSegmentsMember" })
+        #expect(product.rowKind == "segment")
+        #expect(product.categoryGroup == nil)
+        let wellbeing = try #require(
+            emp.rows.first { $0.labelRaw == "WellbeingAndLifestyleBusinessReportableSegmentsMember" })
+        #expect(wellbeing.rowKind == "segment")
+        #expect(wellbeing.categoryGroup == nil)
         let containerships = try #require(
             emp.rows.first { $0.labelRaw == "ContainershipsReportableSegmentsMember" })
         #expect(containerships.rowKind == "subtotal")
         #expect(containerships.amount == 57)
+        #expect(containerships.categoryGroup == (product.label ?? product.labelRaw))
+        #expect(containerships.category == containerships.label ?? containerships.labelRaw)
         let realEstate = try #require(
             emp.rows.first { $0.labelRaw == "RealEstateBusinessReportableSegmentsMember" })
         #expect(realEstate.rowKind == "subtotal")
         #expect(realEstate.amount == 1_255)
-        let product = try #require(
-            emp.rows.first { $0.labelRaw == "ProductTransportBusinessReportableSegmentsMember" })
-        #expect(product.rowKind == "segment")
-        let wellbeing = try #require(
-            emp.rows.first { $0.labelRaw == "WellbeingAndLifestyleBusinessReportableSegmentsMember" })
-        #expect(wellbeing.rowKind == "segment")
+        #expect(realEstate.categoryGroup == (wellbeing.label ?? wellbeing.labelRaw))
+        #expect(realEstate.category == realEstate.label ?? realEstate.labelRaw)
         let reconciled = emp.rows.filter { $0.rowKind == "segment" || $0.rowKind == "reconciling" }
             .map(\.amount).reduce(0, +)
         #expect(reconciled == 11_567)
@@ -188,6 +198,8 @@ import Foundation
             })
         #expect(bank.rowKind == "subtotal")
         #expect(bank.amount == 22_024)
+        #expect(bank.categoryGroup == nil)
+        #expect(bank.category == nil)
         #expect(emp.rows.contains { $0.labelRaw.lowercased().contains("assetmanagement") } == false)
         #expect(emp.rows.contains { $0.label?.contains("運用") == true } == false)
         let ident = emp.rows.filter { $0.rowKind == "segment" || $0.rowKind == "reconciling" }

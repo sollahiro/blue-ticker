@@ -24,6 +24,14 @@ import Testing
             warnings: snapshot.warnings)
     }
 
+    private func ofWhichDetail(
+        _ snapshot: BreakdownSnapshot, group: String, category: String
+    ) -> BreakdownRow? {
+        snapshot.rows.first {
+            $0.rowKind == "subtotal" && $0.categoryGroup == group && $0.category == category
+        }
+    }
+
     private func segmentLabels(_ snapshot: BreakdownSnapshot) -> [String] {
         snapshot.rows.filter { $0.rowKind == "segment" }.map(\.labelRaw)
     }
@@ -158,8 +166,8 @@ import Testing
         #expect(publiclyServable(geo))
     }
 
-    /// 4. うち内数は親だけ公開。米国は北米の内数。
-    @Test func ofWhichChildIsDroppedFromPublishedRows() async throws {
+    /// 4. うち内数は親 segment の下に subtotal 明細として残す。
+    @Test func ofWhichChildIsKeptAsSubtotalDetail() async throws {
         let html = """
             <p>当連結会計年度</p>
             <p>（単位：百万円）</p>
@@ -176,11 +184,13 @@ import Testing
         let (snapshotOrNil, _) = await normalize(html: html, sales: yen(351_363))
         let snapshot = try #require(snapshotOrNil)
         #expect(segmentLabels(snapshot) == ["日本", "北米", "欧州", "その他"])
+        let us = try #require(ofWhichDetail(snapshot, group: "北米", category: "米国"))
+        #expect(us.amount == yen(37_220))
         #expect(!snapshot.needsReview)
         #expect(publiclyServable(snapshot))
     }
 
-    /// 3382 型: 北米見出しに（うち米国）が縦積み。北米は残しうち行だけ落とす。
+    /// 3382 型: 北米見出しに（うち米国）が縦積み。北米は segment、米国は subtotal 明細。
     @Test func stackedOfWhichUnitedStatesKeepsNorthAmericaParent() async throws {
         let html = """
             <p>当連結会計年度</p>
@@ -211,6 +221,9 @@ import Testing
         let snapshot = try #require(snapshotOrNil)
         #expect(Set(segmentLabels(snapshot)) == Set(["日本", "北米", "その他の地域"]))
         #expect(snapshot.rows.first { $0.labelRaw == "北米" }?.amount == yen(7_960_998))
+        #expect(snapshot.rows.first { $0.labelRaw == "北米" }?.rowKind == "segment")
+        let us = try #require(ofWhichDetail(snapshot, group: "北米", category: "米国"))
+        #expect(us.amount == yen(7_624_333))
         #expect(!segmentLabels(snapshot).contains { $0.contains("うち") })
         #expect(!snapshot.needsReview)
         #expect(!snapshot.warnings.contains("llm_row_sum_mismatch"))
@@ -249,13 +262,15 @@ import Testing
         let snapshot = try #require(snapshotOrNil)
         #expect(Set(segmentLabels(snapshot)) == Set(["日本", "北米", "その他の地域"]))
         #expect(snapshot.rows.first { $0.labelRaw == "北米" }?.amount == yen(7_960_998))
+        let us = try #require(ofWhichDetail(snapshot, group: "北米", category: "米国"))
+        #expect(us.amount == yen(7_624_333))
         #expect(!segmentLabels(snapshot).contains { $0.contains("うち") })
         #expect(!snapshot.needsReview)
         #expect(!snapshot.warnings.contains("llm_row_sum_mismatch"))
         #expect(publiclyServable(snapshot))
     }
 
-    /// 4005 型: 北米(うち、米国) の見出しと金額が同一セル。北米の親金額を残す。
+    /// 4005 型: 北米(うち、米国) の見出しと金額が同一セル。北米は親、米国は内数。
     @Test func stackedOfWhichInSameCellKeepsNorthAmericaParent() async throws {
         let html = """
             <p>当連結会計年度</p>
@@ -286,6 +301,8 @@ import Testing
         let snapshot = try #require(snapshotOrNil)
         #expect(Set(segmentLabels(snapshot)) == Set(["日本", "中国", "北米", "東南アジア", "その他"]))
         #expect(snapshot.rows.first { $0.labelRaw == "北米" }?.amount == yen(490_399))
+        let us = try #require(ofWhichDetail(snapshot, group: "北米", category: "米国"))
+        #expect(us.amount == yen(474_795))
         #expect(!segmentLabels(snapshot).contains { $0.contains("うち") })
         #expect(!snapshot.needsReview)
         #expect(publiclyServable(snapshot))
@@ -1095,6 +1112,8 @@ import Testing
         let snapshot = try #require(snapshotOrNil)
         #expect(Set(segmentLabels(snapshot)) == Set(["日本", "北米", "欧州", "その他"]))
         #expect(snapshot.rows.first { $0.labelRaw == "その他" }?.amount == yen(21_084))
+        let us = try #require(ofWhichDetail(snapshot, group: "北米", category: "米国"))
+        #expect(us.amount == yen(37_220))
         #expect(!segmentLabels(snapshot).contains { $0.contains("米国") })
         #expect(!snapshot.needsReview)
         #expect(publiclyServable(snapshot))
@@ -1124,6 +1143,10 @@ import Testing
         let snapshot = try #require(snapshotOrNil)
         #expect(Set(segmentLabels(snapshot)) == Set(["日本", "欧州", "北米", "その他"]))
         #expect(snapshot.rows.first { $0.labelRaw == "北米" }?.amount == yen(33_088))
+        let america = try #require(ofWhichDetail(snapshot, group: "北米", category: "アメリカ"))
+        #expect(america.amount == yen(33_088))
+        let uk = try #require(ofWhichDetail(snapshot, group: "欧州", category: "イギリス"))
+        #expect(uk.amount == yen(266_860))
         #expect(!snapshot.needsReview)
         #expect(publiclyServable(snapshot))
     }
@@ -1162,8 +1185,8 @@ import Testing
         #expect(publiclyServable(snapshot))
     }
 
-    /// 7752 実表: 売上高ブロック末尾の「上記米州のうち米国」を落とし、非流動資産も落とす。
-    @Test func ofWhichUnitedStatesUnderSalesHeadingIsDropped() async throws {
+    /// 7752 実表: 売上高ブロック末尾の「上記米州のうち米国」は米州の subtotal。非流動資産は落とす。
+    @Test func ofWhichUnitedStatesUnderSalesHeadingIsKeptAsSubtotal() async throws {
         let html = """
             <p>当連結会計年度</p>
             <table>
@@ -1189,6 +1212,8 @@ import Testing
         let snapshot = try #require(snapshotOrNil)
         #expect(Set(segmentLabels(snapshot)) == Set(["日本", "米州", "欧州・中東・アフリカ", "その他地域"]))
         #expect(snapshot.rows.first { $0.labelRaw == "日本" }?.amount == yen(1_051_655))
+        let us = try #require(ofWhichDetail(snapshot, group: "米州", category: "米国"))
+        #expect(us.amount == yen(579_188))
         #expect(!segmentLabels(snapshot).contains { $0.contains("米国") })
         #expect(!segmentLabels(snapshot).contains("カナダ"))
         #expect(!snapshot.needsReview)
@@ -1214,7 +1239,7 @@ import Testing
             </table>
             """
 
-    /// 7272 型: 当期列と（うち米国）（うちインドネシア）を落として その他 を残す。
+    /// 7272 型: 当期列を取り、（うち米国）（うちインドネシア）は親の subtotal。その他は残す。
     @Test func yamahaOfWhichKeepsOtherAndCurrentYear() async throws {
         let (snapshotOrNil, _) = await normalize(
             html: Self.yamahaGeographyHTML, sales: yen(2_534_203), docID: "S100XRTH",
@@ -1224,6 +1249,10 @@ import Testing
         #expect(snapshot.rows.first { $0.labelRaw == "日本" }?.amount == yen(155_330))
         #expect(snapshot.rows.first { $0.labelRaw == "日本" }?.amount != yen(137_712))
         #expect(snapshot.rows.first { $0.labelRaw == "その他" }?.amount == yen(469_686))
+        let us = try #require(ofWhichDetail(snapshot, group: "北米", category: "米国"))
+        #expect(us.amount == yen(504_009))
+        let indonesia = try #require(ofWhichDetail(snapshot, group: "アジア", category: "インドネシア"))
+        #expect(indonesia.amount == yen(309_462))
         #expect(!segmentLabels(snapshot).contains { $0.contains("米国") })
         #expect(!segmentLabels(snapshot).contains { $0.contains("インドネシア") })
         #expect(!snapshot.needsReview)
@@ -1349,6 +1378,10 @@ import Testing
         #expect(snapshot.rows.first { $0.labelRaw == "日本" }?.amount == yen(137_712))
         #expect(snapshot.rows.first { $0.labelRaw == "北米" }?.amount == yen(579_929))
         #expect(snapshot.rows.first { $0.labelRaw == "その他" }?.amount == yen(468_976))
+        let us = try #require(ofWhichDetail(snapshot, group: "北米", category: "米国"))
+        #expect(us.amount == yen(527_812))
+        let indonesia = try #require(ofWhichDetail(snapshot, group: "アジア", category: "インドネシア"))
+        #expect(indonesia.amount == yen(309_462))
         #expect(!segmentLabels(snapshot).contains { $0.contains("米国") })
         #expect(!snapshot.needsReview)
         #expect(publiclyServable(snapshot))

@@ -374,9 +374,9 @@ public struct BreakdownRowPayload: Codable, Sendable, Equatable {
     public var segmentAssets: Double?
     public var flow: Double?
     public var capitalExpendituresOverview: Double?
-    /// 収益分解の親区分。他軸・旧行は nil。
+    /// 収益分解・うち内数の親区分。無い行は nil。
     public var categoryGroup: String?
-    /// 収益分解の明細。フラット表では nil。
+    /// 収益分解・うち内数の明細。フラット表・加算行は nil。
     public var category: String?
 
     private enum CodingKeys: String, CodingKey {

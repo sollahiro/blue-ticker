@@ -8,8 +8,8 @@ import Testing
 @Suite("GeographyBreakdownLLMNormalizer")
 struct GeographyBreakdownLLMNormalizerTests {
 
-    @Test("親地域とうち内数の二重計上を内数側だけ落とす")
-    func dropsOfWhichSubsetSegments() {
+    @Test("親地域とうち内数は親を segment、内数を subtotal 明細にする")
+    func keepsOfWhichSubsetAsSubtotalDetails() throws {
         let rows: [BreakdownRow] = [
             .init(labelRaw: "日本", amount: 254_181, share: nil, profit: nil, rowKind: "segment"),
             .init(labelRaw: "北米", amount: 37_897, share: nil, profit: nil, rowKind: "segment"),
@@ -18,14 +18,18 @@ struct GeographyBreakdownLLMNormalizerTests {
             .init(labelRaw: "その他", amount: 21_084, share: nil, profit: nil, rowKind: "segment"),
             .init(labelRaw: "合計", amount: 351_363, share: nil, profit: nil, rowKind: "subtotal"),
         ]
-        let filtered = GeographyBreakdownLLMNormalizer.dropOfWhichSubsetSegments(rows)
+        let filtered = GeographyBreakdownLLMNormalizer.keepOfWhichSubsetAsSubtotals(rows)
         let labels = filtered.filter { $0.rowKind == "segment" }.map(\.labelRaw)
         #expect(labels == ["日本", "北米", "欧州", "その他"])
-        #expect(filtered.contains { $0.rowKind == "subtotal" })
+        let us = try #require(filtered.first { $0.category == "米国" })
+        #expect(us.rowKind == "subtotal")
+        #expect(us.categoryGroup == "北米")
+        #expect(us.amount == 37_220)
+        #expect(filtered.contains { $0.rowKind == "subtotal" && $0.labelRaw == "合計" })
     }
 
-    @Test("うちラベルは比率が低くても内数として落とす")
-    func dropsUchiLabeledChildEvenWhenRatioIsLow() {
+    @Test("うちラベルは比率が低くても内数 subtotal にする")
+    func keepsUchiLabeledChildAsSubtotalEvenWhenRatioIsLow() throws {
         let rows: [BreakdownRow] = [
             .init(labelRaw: "日本", amount: 38_840, share: nil, profit: nil, rowKind: "segment"),
             .init(labelRaw: "アジア", amount: 14_246, share: nil, profit: nil, rowKind: "segment"),
@@ -33,13 +37,16 @@ struct GeographyBreakdownLLMNormalizerTests {
             .init(labelRaw: "その他", amount: 6_391, share: nil, profit: nil, rowKind: "segment"),
             .init(labelRaw: "合計", amount: 59_479, share: nil, profit: nil, rowKind: "subtotal"),
         ]
-        let filtered = GeographyBreakdownLLMNormalizer.dropOfWhichSubsetSegments(rows)
+        let filtered = GeographyBreakdownLLMNormalizer.keepOfWhichSubsetAsSubtotals(rows)
         let labels = filtered.filter { $0.rowKind == "segment" }.map(\.labelRaw)
         #expect(labels == ["日本", "アジア", "その他"])
+        let china = try #require(filtered.first { $0.category == "中国" })
+        #expect(china.rowKind == "subtotal")
+        #expect(china.categoryGroup == "アジア")
     }
 
-    @Test("北米のうち米国（高比率）だけ落とし、並列の中国はそのまま残す")
-    func dropsOnlyHighRatioAmericasSubset() {
+    @Test("北米のうち米国（高比率）だけ subtotal にし、並列の中国はそのまま残す")
+    func demotesOnlyHighRatioAmericasSubset() {
         let rows: [BreakdownRow] = [
             .init(labelRaw: "日本", amount: 84_769, share: nil, profit: nil, rowKind: "segment"),
             .init(labelRaw: "北米", amount: 322_540, share: nil, profit: nil, rowKind: "segment"),
@@ -48,10 +55,10 @@ struct GeographyBreakdownLLMNormalizerTests {
             .init(labelRaw: "中国", amount: 19_341, share: nil, profit: nil, rowKind: "segment"),
             .init(labelRaw: "合計", amount: 453_294, share: nil, profit: nil, rowKind: "subtotal"),
         ]
-        let filtered = GeographyBreakdownLLMNormalizer.dropOfWhichSubsetSegments(rows)
+        let filtered = GeographyBreakdownLLMNormalizer.keepOfWhichSubsetAsSubtotals(rows)
         let labels = Set(filtered.filter { $0.rowKind == "segment" }.map(\.labelRaw))
-        // 米国は北米の内数（比率≈99%）。中国はその他の並列地域なので残す（プロンプト側でうち除外）。
         #expect(labels == ["日本", "北米", "その他", "中国"])
+        #expect(filtered.contains { $0.category == "米国" && $0.categoryGroup == "北米" })
     }
 
     @Test("アジア他と中国が並列のときは中国を落とさない（テルモ型）")
@@ -449,6 +456,26 @@ struct GeographyBreakdownLLMNormalizerTests {
         #expect(GeographyBreakdownLLMNormalizer.extractedSubtotalsMismatch(wrong) == true)
     }
 
+    @Test("うち内数 subtotal は親以下なら mismatch にしない")
+    func ofWhichSubtotalDoesNotFlagRegularMismatch() {
+        let rows: [BreakdownRow] = [
+            .init(labelRaw: "日本", amount: 254_181, share: nil, profit: nil, rowKind: "segment"),
+            .init(labelRaw: "北米", amount: 37_897, share: nil, profit: nil, rowKind: "segment"),
+            .init(
+                labelRaw: "米国", amount: 37_220, share: nil, profit: nil, rowKind: "subtotal",
+                categoryGroup: "北米", category: "米国"),
+            .init(labelRaw: "欧州", amount: 38_201, share: nil, profit: nil, rowKind: "segment"),
+            .init(labelRaw: "その他", amount: 21_084, share: nil, profit: nil, rowKind: "segment"),
+            .init(labelRaw: "合計", amount: 351_363, share: nil, profit: nil, rowKind: "subtotal"),
+        ]
+        #expect(GeographyBreakdownLLMNormalizer.extractedSubtotalsMismatch(rows) == false)
+        var over = rows
+        over[2] = .init(
+            labelRaw: "米国", amount: 40_000, share: nil, profit: nil, rowKind: "subtotal",
+            categoryGroup: "北米", category: "米国")
+        #expect(GeographyBreakdownLLMNormalizer.extractedSubtotalsMismatch(over) == true)
+    }
+
     @Test("日本（百万円）は単位見出しではなく地域名として残す")
     func japanWithYenUnitIsNotUnitCaption() {
         #expect(RevenueRecognitionCandidates.isUnitCaptionHeader("（単位：百万円）"))
@@ -465,7 +492,13 @@ struct GeographyBreakdownLLMNormalizerTests {
         #expect(RevenueRecognitionCandidates.parseAmount("（37,220）") == 37_220)
         #expect(RevenueRecognitionCandidates.parseAmount("(1)") == nil)
         #expect(RevenueRecognitionCandidates.parseAmount("490,399(474,795)") == 490_399)
+        #expect(RevenueRecognitionCandidates.parseTrailingParentheticalAmount("490,399(474,795)") == 474_795)
         #expect(RevenueRecognitionCandidates.parseAmount("7,960,998（7,624,333）") == 7_960_998)
+        #expect(RevenueRecognitionCandidates.parseTrailingParentheticalAmount("7,960,998（7,624,333）") == 7_624_333)
+        #expect(RevenueRecognitionCandidates.ofWhichChildDetailName("北米（うち米国）") == "米国")
+        #expect(RevenueRecognitionCandidates.ofWhichChildDetailName("（うち米国）") == "米国")
+        #expect(RevenueRecognitionCandidates.ofWhichChildDetailName("上記米州のうち米国") == "米国")
+        #expect(RevenueRecognitionCandidates.ofWhichChildDetailName("うち、アメリカ") == "アメリカ")
         #expect(RevenueRecognitionCandidates.isAmountCell("(37,220)"))
     }
 
@@ -490,7 +523,8 @@ struct GeographyBreakdownLLMNormalizerTests {
         #expect(itemLabels.contains("その他"))
         #expect(totalLabels.contains("合計"))
         let (built, _) = RevenueRecognitionCandidates.buildRows(
-            table: table, column: 2, applyParallelDimension: false)
+            table: table, column: 2, applyParallelDimension: false,
+            keepOfWhichPartials: true)
         let builtLabels = built.map {
             RevenueRecognitionCandidates.displayLabel(
                 categoryGroup: $0.categoryGroup, category: $0.category)
@@ -503,15 +537,21 @@ struct GeographyBreakdownLLMNormalizerTests {
         }
         #expect(droppedLabels.contains("その他"))
         var published: [BreakdownRow] = dropped.map { row in
+            if row.rowKind == "subtotal", let category = row.category, !category.isEmpty {
+                return BreakdownRow(
+                    labelRaw: category, amount: row.amount, share: nil, profit: nil,
+                    rowKind: "subtotal", categoryGroup: row.categoryGroup, category: category)
+            }
             let label = GeographyBreakdownLLMNormalizer.geographyPublishedLabel(row)
             return BreakdownRow(
                 labelRaw: label, amount: row.amount, share: nil, profit: nil,
                 rowKind: row.rowKind)
         }
-        published = GeographyBreakdownLLMNormalizer.dropOfWhichSubsetSegments(published)
+        published = GeographyBreakdownLLMNormalizer.keepOfWhichSubsetAsSubtotals(published)
         let publishedLabels = published.filter { $0.rowKind == "segment" }.map(\.labelRaw)
         #expect(publishedLabels.contains("その他"))
         #expect(Set(publishedLabels) == Set(["日本", "北米", "欧州", "その他"]))
+        #expect(published.contains { $0.category == "米国" && $0.categoryGroup == "北米" })
     }
 
     @Test("うち米国があっても正規化後にその他が残る")
@@ -541,6 +581,9 @@ struct GeographyBreakdownLLMNormalizerTests {
         let labels = snapshot.rows.filter { $0.rowKind == "segment" }.map(\.labelRaw)
         #expect(labels.contains("その他"))
         #expect(Set(labels) == Set(["日本", "北米", "欧州", "その他"]))
+        #expect(snapshot.rows.contains {
+            $0.rowKind == "subtotal" && $0.categoryGroup == "北米" && $0.category == "米国"
+        })
     }
 
     @Test("キャプションの当連結会計年度で前期列を残さない")

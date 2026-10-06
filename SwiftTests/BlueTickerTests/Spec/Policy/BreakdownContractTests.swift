@@ -166,4 +166,19 @@ import Testing
         #expect(row.jsonObject()["label"] as? String == "北米")
         #expect(row.jsonObject()["category"] as? String == "北米")
     }
+
+    @Test func geographyOfWhichRowExposesCategoryKeysOnRestObject() {
+        let row = BreakdownRowPayload(
+            labelRaw: "米国", label: "米国", amount: 7_624_333, profit: nil, rowKind: "subtotal",
+            categoryGroup: "北米", category: "米国")
+        let object = row.jsonObject()
+        #expect(object["row_kind"] as? String == "subtotal")
+        #expect(object["label"] as? String == "米国")
+        #expect(object["category_group"] as? String == "北米")
+        #expect(object["category"] as? String == "米国")
+        let parent = BreakdownRowPayload(
+            labelRaw: "北米", label: "北米", amount: 7_960_998, profit: nil, rowKind: "segment")
+        #expect(parent.jsonObject()["category_group"] == nil)
+        #expect(parent.jsonObject()["category"] == nil)
+    }
 }
