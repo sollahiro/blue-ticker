@@ -19,9 +19,9 @@ struct BreakdownRow: Equatable {
     var rowKind: String  // "segment" | "subtotal" | "reconciling"
     /// notes「設備投資等の概要」の設備内容・目的。その他の軸は nil。
     var description: String? = nil
-    /// 収益分解の親区分。他軸は nil。DB には `label` ではなくこちらを残す。
+    /// 収益分解・うち内数の親区分。他軸の加算行は nil。
     var categoryGroup: String? = nil
-    /// 収益分解の明細。フラット表では nil。
+    /// 収益分解・うち内数の明細。フラット表・加算行は nil。
     var category: String? = nil
 }
 
@@ -657,8 +657,9 @@ enum BreakdownNormalizer {
             amounts[member] = fact.value
         }
         demoteRedundantParentSegments(kinds: &kinds, amounts: amounts, total: total)
+        var ofWhichMembers: Set<String> = []
         if applyOfWhichNestedChildDemotion {
-            demotePartialNestedChildren(
+            ofWhichMembers = demotePartialNestedChildren(
                 kinds: &kinds, amounts: amounts, total: total, memberParents: memberParents)
         }
         applyEliminationSign(amounts: &amounts, kinds: kinds, total: total)
@@ -709,10 +710,21 @@ enum BreakdownNormalizer {
 
         let rows = amounts.keys.sorted().map { member -> BreakdownRow in
             let amount = amounts[member]!
+            var categoryGroup: String? = nil
+            var category: String? = nil
+            if ofWhichMembers.contains(member),
+                member != countBasisReportableSegmentsMemberName,
+                let parent = memberParents[member],
+                parent != countBasisReportableSegmentsMemberName
+            {
+                categoryGroup = labelsByTag[parent] ?? parent
+                category = labelsByTag[member] ?? member
+            }
             return BreakdownRow(
                 labelRaw: member, label: labelsByTag[member], amount: amount,
                 share: denominator > 0 ? amount / denominator : nil, profit: nil,
-                rowKind: kinds[member]!)
+                rowKind: kinds[member]!,
+                categoryGroup: categoryGroup, category: category)
         }
 
         return BreakdownSnapshot(
@@ -758,13 +770,14 @@ enum BreakdownNormalizer {
     /// 花王型（子合計≈親 → 親を落とす）の逆。ラッパ（`ReportableSegmentsMember` 等）は
     /// `memberParents` 側で既に除いてある。含めても分母から 5% 超ずれ、まとめて外すと
     /// ±5% に収まるときだけ採用する（数値の偶然一致だけで個別に落とさない）。
+    /// 落とした子 member を返す（category_group/category のスタンプ対象）。
     private static func demotePartialNestedChildren(
         kinds: inout [String: String], amounts: [String: Double], total: Double?,
         memberParents: [String: String]
-    ) {
-        guard let total, total > 0, !memberParents.isEmpty else { return }
+    ) -> Set<String> {
+        guard let total, total > 0, !memberParents.isEmpty else { return [] }
         let included = reconciledAmount(kinds: kinds, amounts: amounts)
-        guard included > 0, abs(included - total) / total > 0.05 else { return }
+        guard included > 0, abs(included - total) / total > 0.05 else { return [] }
 
         var ofWhich: [String] = []
         var childrenByParent: [String: [String]] = [:]
@@ -782,13 +795,14 @@ enum BreakdownNormalizer {
             if abs(childSum - parentAmount) / parentAmount <= 0.05 { continue }
             ofWhich.append(contentsOf: children)
         }
-        guard !ofWhich.isEmpty else { return }
+        guard !ofWhich.isEmpty else { return [] }
 
         var trial = kinds
         for child in ofWhich { trial[child] = "subtotal" }
         let sum = reconciledAmount(kinds: trial, amounts: amounts)
-        guard sum > 0, abs(sum - total) / total <= 0.05 else { return }
+        guard sum > 0, abs(sum - total) / total <= 0.05 else { return [] }
         kinds = trial
+        return Set(ofWhich)
     }
 
     /// タグ付き member の人数が分母と整数一致し、他の正の segment/reconciling があるとき

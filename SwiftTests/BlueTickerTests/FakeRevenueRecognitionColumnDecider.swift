@@ -77,7 +77,8 @@ actor FakeRevenueRecognitionColumnDecider: RevenueRecognitionColumnDeciding, Geo
         needsReview: Bool,
         periodColumns: [GeographyReviewPeriodColumn],
         tableTruncated: Bool,
-        docID: String
+        docID: String,
+        consolidatedSalesMillionYen: Double?
     ) async -> SegmentNoteConsultedChoice {
         lastReviewTableTruncated = tableTruncated
         lastReviewTableMarkdown = tableMarkdown

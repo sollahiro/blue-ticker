@@ -122,7 +122,8 @@ enum RevenueRecognitionCandidates {
     /// `applyParallelDimension` は収益認識の並行次元（製品 vs 顧客/時点）用。geography は
     /// 売上高と固定資産が同じ合計で並ぶ表を wipe してしまうので切る。
     static func buildRows(
-        table: ParsedTable, column: Int, applyParallelDimension: Bool = true
+        table: ParsedTable, column: Int, applyParallelDimension: Bool = true,
+        keepOfWhichPartials: Bool = false
     ) -> (rows: [BuiltRow], needsReview: Bool) {
         var table = table
         var needsReview = false
@@ -159,19 +160,36 @@ enum RevenueRecognitionCandidates {
                             isPartial: false, rowKind: "segment"))
                     }
                 case .groupPlusPartial:
-                    let childSum = partialItems.reduce(0.0) { $0 + (amounts[$1.row] ?? 0) }
-                    if let groupAmount,
-                       sumMatches(childSum, subtotal: groupAmount, itemCount: partialItems.count)
-                    {
-                        for item in partialItems {
+                    if keepOfWhichPartials {
+                        if let groupAmount {
                             built.append(BuiltRow(
-                                categoryGroup: group, category: item.label,
-                                amount: amounts[item.row] ?? 0, isPartial: false, rowKind: "segment"))
+                                categoryGroup: group, category: nil, amount: groupAmount,
+                                isPartial: false, rowKind: "segment"))
                         }
-                    } else if let groupAmount {
-                        built.append(BuiltRow(
-                            categoryGroup: group, category: nil, amount: groupAmount,
-                            isPartial: false, rowKind: "segment"))
+                        for item in partialItems {
+                            let childName = ofWhichChildDetailName(item.label)
+                                ?? strippedOfWhichDetailName(item.label)
+                            let parentName = ofWhichImpliedParent(item.label) ?? group
+                            built.append(BuiltRow(
+                                categoryGroup: parentName, category: childName,
+                                amount: amounts[item.row] ?? 0, isPartial: true,
+                                rowKind: "subtotal"))
+                        }
+                    } else {
+                        let childSum = partialItems.reduce(0.0) { $0 + (amounts[$1.row] ?? 0) }
+                        if let groupAmount,
+                           sumMatches(childSum, subtotal: groupAmount, itemCount: partialItems.count)
+                        {
+                            for item in partialItems {
+                                built.append(BuiltRow(
+                                    categoryGroup: group, category: item.label,
+                                    amount: amounts[item.row] ?? 0, isPartial: false, rowKind: "segment"))
+                            }
+                        } else if let groupAmount {
+                            built.append(BuiltRow(
+                                categoryGroup: group, category: nil, amount: groupAmount,
+                                isPartial: false, rowKind: "segment"))
+                        }
                     }
                 case .groupPlusExhaustive:
                     if let groupAmount {
@@ -192,9 +210,19 @@ enum RevenueRecognitionCandidates {
                         }
                     }
                     for item in partialItems {
-                        built.append(BuiltRow(
-                            categoryGroup: group, category: item.label,
-                            amount: amounts[item.row] ?? 0, isPartial: true, rowKind: "segment"))
+                        if keepOfWhichPartials {
+                            let childName = ofWhichChildDetailName(item.label)
+                                ?? strippedOfWhichDetailName(item.label)
+                            let parentName = ofWhichImpliedParent(item.label) ?? group
+                            built.append(BuiltRow(
+                                categoryGroup: parentName, category: childName,
+                                amount: amounts[item.row] ?? 0, isPartial: true,
+                                rowKind: "subtotal"))
+                        } else {
+                            built.append(BuiltRow(
+                                categoryGroup: group, category: item.label,
+                                amount: amounts[item.row] ?? 0, isPartial: true, rowKind: "segment"))
+                        }
                     }
                 case .shortSumWithoutUchi:
                     needsReview = true
@@ -301,9 +329,19 @@ enum RevenueRecognitionCandidates {
             guard column < row.count, let amount = parseAmount(row[column]) else { continue }
             let name = compactCell(header)
             guard !name.isEmpty else { continue }
+            let parentName = geographyParentBeforeOfWhichAnnotation(header) ?? name
             built.append(BuiltRow(
-                categoryGroup: name, category: nil, amount: amount,
+                categoryGroup: parentName, category: nil, amount: amount,
                 isPartial: false, rowKind: "segment"))
+            if let childName = ofWhichChildDetailName(header),
+                let childAmount = ofWhichAmountInColumn(
+                    table: table, column: column, metricRow: metricRowIndex,
+                    parentAmount: amount)
+            {
+                built.append(BuiltRow(
+                    categoryGroup: parentName, category: childName, amount: childAmount,
+                    isPartial: true, rowKind: "subtotal"))
+            }
         }
         return (built, wholeCompanyAmount)
     }
@@ -471,7 +509,33 @@ enum RevenueRecognitionCandidates {
 
     static func isOfWhichColumnHeader(_ header: String) -> Bool {
         let compact = collapsedCell(header)
-        return compact.contains("うち") || compact.contains("内、") || compact.hasPrefix("内,")
+        guard compact.contains("うち") || compact.contains("内、") || compact.hasPrefix("内,") else {
+            return false
+        }
+        // 北米（うち米国）は親地域列。うち列ではない（3382 / 4005）。
+        if geographyParentBeforeOfWhichAnnotation(header) != nil { return false }
+        return true
+    }
+
+    /// 親地域＋括弧の「うち」注記（`北米（うち米国）` / `北米(うち、米国)`）。
+    /// 内数だけのラベル（`（うち米国）` / `上記米州のうち米国`）は nil。
+    static func geographyParentBeforeOfWhichAnnotation(_ label: String) -> String? {
+        let compact = collapsedCell(label)
+            .replacingOccurrences(of: " ", with: "")
+            .replacingOccurrences(of: "\u{3000}", with: "")
+            .replacingOccurrences(of: "、", with: "")
+            .replacingOccurrences(of: ",", with: "")
+        let pattern = try! NSRegularExpression(pattern: #"^(.+?)[（(]うち[^）)]*[）)]?$"#)
+        let ns = compact as NSString
+        let range = NSRange(location: 0, length: ns.length)
+        guard let match = pattern.firstMatch(in: compact, options: [], range: range),
+            match.numberOfRanges >= 2
+        else { return nil }
+        let prefix = ns.substring(with: match.range(at: 1))
+        guard !prefix.contains("うち"),
+            Xbrl.segmentGeographyLabelKeywordsJa.contains(where: prefix.contains)
+        else { return nil }
+        return prefix
     }
 
     static func displayLabel(categoryGroup: String, category: String?) -> String {
@@ -661,7 +725,112 @@ enum RevenueRecognitionCandidates {
         let text = compactCell(raw)
         if dashCells.contains(text) { return 0 }
         if let value = XBRLUtils.parseHtmlNumber(text) { return value }
-        return parseParenthesizedAmount(text)
+        if let value = parseParenthesizedAmount(text) { return value }
+        return parseLeadingAmountBeforeParenthetical(text)
+    }
+
+    /// 同一セルに親金額と（うち）金額が並ぶとき（4005 `490,399(474,795)`）は先頭だけ取る。
+    static func parseLeadingAmountBeforeParenthetical(_ text: String) -> Double? {
+        trailingParentheticalAmountMatch(text).map(\.leading)
+    }
+
+    /// 同一セルの括弧内数（4005 の 474,795）。無ければ nil。
+    static func parseTrailingParentheticalAmount(_ text: String) -> Double? {
+        trailingParentheticalAmountMatch(text).map(\.trailing)
+    }
+
+    private static func trailingParentheticalAmountMatch(
+        _ text: String
+    ) -> (leading: Double, trailing: Double)? {
+        let compact = compactCell(text)
+        let pattern = try! NSRegularExpression(
+            pattern: #"^([△▲\-−]?\d[\d,]*)\s*[（(]([△▲\-−]?\d[\d,]*)[）)]$"#)
+        let ns = compact as NSString
+        let range = NSRange(location: 0, length: ns.length)
+        guard let match = pattern.firstMatch(in: compact, options: [], range: range),
+            match.numberOfRanges >= 3,
+            let leading = XBRLUtils.parseHtmlNumber(ns.substring(with: match.range(at: 1))),
+            let trailing = XBRLUtils.parseHtmlNumber(ns.substring(with: match.range(at: 2)))
+        else { return nil }
+        return (leading, trailing)
+    }
+
+    /// 親地域列の内数金額。同一セルの括弧、または直後行の括弧金額。
+    static func ofWhichAmountInColumn(
+        table: ParsedTable, column: Int, metricRow: Int, parentAmount: Double
+    ) -> Double? {
+        guard column >= 0, metricRow >= 0, metricRow < table.grid.count,
+            column < table.grid[metricRow].count
+        else { return nil }
+        if let trailing = parseTrailingParentheticalAmount(table.grid[metricRow][column]),
+            trailing > 0, trailing <= parentAmount * 1.001,
+            abs(trailing - parentAmount) > 0.5
+        {
+            return trailing
+        }
+        for rowIdx in (metricRow + 1)..<table.grid.count {
+            let row = table.grid[rowIdx]
+            let label = compactCell(row.first ?? "")
+            if isAssetMetricLabel(label) { break }
+            guard column < row.count else { continue }
+            let cell = row[column]
+            guard let value = parseParenthesizedAmount(cell) else { continue }
+            if value > 0, value <= parentAmount * 1.001, abs(value - parentAmount) > 0.5 {
+                return value
+            }
+        }
+        return nil
+    }
+
+    /// `北米（うち米国）` / `（うち米国）` / `上記米州のうち米国` → `米国`。うちが無ければ nil。
+    static func ofWhichChildDetailName(_ label: String) -> String? {
+        let compact = collapsedCell(label)
+            .replacingOccurrences(of: "、", with: "")
+            .replacingOccurrences(of: ",", with: "")
+        if let range = compact.range(of: "のうち") {
+            let rest = stripWrappingParens(String(compact[range.upperBound...]))
+            return rest.isEmpty ? nil : rest
+        }
+        if let range = compact.range(of: "うち") {
+            let rest = stripWrappingParens(String(compact[range.upperBound...]))
+            return rest.isEmpty ? nil : rest
+        }
+        return nil
+    }
+
+    /// `上記米州のうち米国` → `米州`。ラベルから親が読めないときは nil。
+    static func ofWhichImpliedParent(_ label: String) -> String? {
+        let compact = collapsedCell(label)
+            .replacingOccurrences(of: "、", with: "")
+            .replacingOccurrences(of: ",", with: "")
+        guard let range = compact.range(of: "のうち") else { return nil }
+        var prefix = String(compact[..<range.lowerBound])
+        if prefix.hasPrefix("上記") {
+            prefix = String(prefix.dropFirst(2))
+        }
+        prefix = stripWrappingParens(prefix)
+        return prefix.isEmpty ? nil : prefix
+    }
+
+    static func strippedOfWhichDetailName(_ label: String) -> String {
+        if let detail = ofWhichChildDetailName(label) { return detail }
+        return stripWrappingParens(collapsedCell(label))
+    }
+
+    private static func stripWrappingParens(_ text: String) -> String {
+        var token = compactCell(text)
+        while token.hasPrefix("（") || token.hasPrefix("(")
+            || token.hasSuffix("）") || token.hasSuffix(")")
+        {
+            if token.hasPrefix("（") || token.hasPrefix("(") {
+                token = String(token.dropFirst())
+            }
+            if token.hasSuffix("）") || token.hasSuffix(")") {
+                token = String(token.dropLast())
+            }
+            token = compactCell(token)
+        }
+        return token
     }
 
     /// 注記の内数行は金額を括弧で囲む（2413 の `(37,220)`）。脚注番号 `(1)` は採らない。

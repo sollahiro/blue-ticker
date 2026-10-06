@@ -125,13 +125,15 @@ struct GeographyProdBreakdownRow: Codable {
                 continue
             }
             let geography = BreakdownExtractor.extractGeographyInfo(xbrlDir: xbrlDir)
-            let sales = BreakdownFinancialsResolver.financialsCanonicalSales(xbrlDir: xbrlDir)
+            let financials = StatementFinancialsResolver.resolve(xbrlDir: xbrlDir)
+            let sales = financials?.sales
             let (snapshot, source, audit) = await GeographyBreakdownResolver.resolve(
                 geography: geography, consolidatedSales: sales,
                 columnDecider: columnDecider,
                 labelsByTag: XBRLUtils.loadLabelsByTag(in: xbrlDir),
                 fiscalYearEnd: BreakdownExtractor.currentFiscalYearEnd(fromXbrlDir: xbrlDir),
-                docID: row.docID)
+                docID: row.docID,
+                salesLabel: financials?.geographyCoverageSalesLabel ?? financials?.salesLabel)
 
             var comparison = compare(prod: row, snapshot: snapshot, source: source, audit: audit)
             comparison.record["extract_method"] = geography.method
@@ -295,6 +297,9 @@ struct GeographyProdBreakdownRow: Codable {
         if !prodPublic && newPublic { return "jev_better" }
         if prodPublic && newPublic && lunaOverflow { return "jev_better" }
         if labelsOnlyOfWhich { return "jev_better" }
+        if prodPublic && newPublic, recoveredMissingRegions(prod: prod, snapshot: snapshot) {
+            return "jev_better"
+        }
         if let snapshot, prodPublic && newPublic,
            amountsMatchIgnoringLabels(prod: prod, snapshot: snapshot)
         {
@@ -313,6 +318,21 @@ struct GeographyProdBreakdownRow: Codable {
             return "changed"
         }
         return "equivalent"
+    }
+
+    private func recoveredMissingRegions(
+        prod: GeographyProdRow, snapshot: BreakdownSnapshot?
+    ) -> Bool {
+        guard let snapshot else { return false }
+        let prodSum = prod.rows.filter { $0.rowKind == "segment" }.compactMap(\.amount).reduce(0, +)
+        let newSum = snapshot.rows.filter { $0.rowKind == "segment" }.map(\.amount).reduce(0, +)
+        let denom = snapshot.denominator
+        guard denom != 0 else { return false }
+        let prodDenom = prod.denominator ?? denom
+        guard prodDenom != 0 else { return false }
+        let prodCoverage = prodSum / prodDenom
+        let newCoverage = newSum / denom
+        return newCoverage > prodCoverage + 0.01 && newCoverage <= 1.05
     }
 
     private func amountsMatchIgnoringLabels(

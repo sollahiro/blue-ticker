@@ -253,4 +253,29 @@ import Testing
         #expect(values.sales == 1_018_364_000_000)
         #expect(values.salesLabel == "海運業収益")
     }
+
+    /// 3382 型: 本表に売上高と営業収益が並ぶ。Summary `sales_label` は売上高のまま、
+    /// geography カバー判定だけトップラインの営業収益を使う。
+    @Test func geographyCoverageLabelPrefersOperatingRevenueWhenNetSalesAlsoPresent() {
+        var both: FieldSet = [:]
+        both["NetSales"] = FieldValue(current: 8_893_693, prior: nil)
+        both["OperatingRevenue1"] = FieldValue(current: 10_430_269, prior: nil)
+        #expect(
+            StatementFinancialsResolver.geographyCoverageSalesLabel(
+                summaryLabel: "売上高", fieldSet: both) == "営業収益")
+        #expect(
+            StatementFinancialsResolver.fieldSetHasDistinctNetSalesAndOperatingRevenue(both))
+
+        var onlySales: FieldSet = [:]
+        onlySales["NetSales"] = FieldValue(current: 8_893_693, prior: nil)
+        #expect(
+            StatementFinancialsResolver.geographyCoverageSalesLabel(
+                summaryLabel: "売上高", fieldSet: onlySales) == "売上高")
+
+        var onlyOperating: FieldSet = [:]
+        onlyOperating["OperatingRevenue1"] = FieldValue(current: 10_430_269, prior: nil)
+        #expect(
+            StatementFinancialsResolver.geographyCoverageSalesLabel(
+                summaryLabel: "営業収益", fieldSet: onlyOperating) == "営業収益")
+    }
 }

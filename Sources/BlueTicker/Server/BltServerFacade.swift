@@ -838,7 +838,8 @@ public extension BltServerContext {
         guard let xbrlDir = await downloadAnnualFilingXbrl(
             docID: docID, correctionDocIDs: correctionDocIDs
         ) else { return .failed }
-        let consolidatedSales = BreakdownFinancialsResolver.financialsCanonicalSales(xbrlDir: xbrlDir)
+        let financials = StatementFinancialsResolver.resolve(xbrlDir: xbrlDir)
+        let consolidatedSales = financials?.sales
         if consolidatedSales == nil || consolidatedSales == 0 {
             return .notApplicable(reason: breakdownNotApplicableNotFound)
         }
@@ -861,7 +862,8 @@ public extension BltServerContext {
             geography: resolvedGeography, consolidatedSales: consolidatedSales,
             columnDecider: geographyColumnDecider, labelsByTag: labelsByTag,
             fiscalYearEnd: BreakdownExtractor.currentFiscalYearEnd(fromXbrlDir: xbrlDir),
-            docID: docID)
+            docID: docID,
+            salesLabel: financials?.geographyCoverageSalesLabel ?? financials?.salesLabel)
         guard let snapshot = result.snapshot else {
             // Resolver の notFound は「地域注記なし」または列が無い／none_of_these。
             // audit があれば Jev が明示的に非該当と答えた正当欠測。audit 無しで表だけある場合は

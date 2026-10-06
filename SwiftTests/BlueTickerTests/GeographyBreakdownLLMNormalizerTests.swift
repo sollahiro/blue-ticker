@@ -8,8 +8,8 @@ import Testing
 @Suite("GeographyBreakdownLLMNormalizer")
 struct GeographyBreakdownLLMNormalizerTests {
 
-    @Test("親地域とうち内数の二重計上を内数側だけ落とす")
-    func dropsOfWhichSubsetSegments() {
+    @Test("親地域とうち内数は親を segment、内数を subtotal 明細にする")
+    func keepsOfWhichSubsetAsSubtotalDetails() throws {
         let rows: [BreakdownRow] = [
             .init(labelRaw: "日本", amount: 254_181, share: nil, profit: nil, rowKind: "segment"),
             .init(labelRaw: "北米", amount: 37_897, share: nil, profit: nil, rowKind: "segment"),
@@ -18,14 +18,18 @@ struct GeographyBreakdownLLMNormalizerTests {
             .init(labelRaw: "その他", amount: 21_084, share: nil, profit: nil, rowKind: "segment"),
             .init(labelRaw: "合計", amount: 351_363, share: nil, profit: nil, rowKind: "subtotal"),
         ]
-        let filtered = GeographyBreakdownLLMNormalizer.dropOfWhichSubsetSegments(rows)
+        let filtered = GeographyBreakdownLLMNormalizer.keepOfWhichSubsetAsSubtotals(rows)
         let labels = filtered.filter { $0.rowKind == "segment" }.map(\.labelRaw)
         #expect(labels == ["日本", "北米", "欧州", "その他"])
-        #expect(filtered.contains { $0.rowKind == "subtotal" })
+        let us = try #require(filtered.first { $0.category == "米国" })
+        #expect(us.rowKind == "subtotal")
+        #expect(us.categoryGroup == "北米")
+        #expect(us.amount == 37_220)
+        #expect(filtered.contains { $0.rowKind == "subtotal" && $0.labelRaw == "合計" })
     }
 
-    @Test("うちラベルは比率が低くても内数として落とす")
-    func dropsUchiLabeledChildEvenWhenRatioIsLow() {
+    @Test("うちラベルは比率が低くても内数 subtotal にする")
+    func keepsUchiLabeledChildAsSubtotalEvenWhenRatioIsLow() throws {
         let rows: [BreakdownRow] = [
             .init(labelRaw: "日本", amount: 38_840, share: nil, profit: nil, rowKind: "segment"),
             .init(labelRaw: "アジア", amount: 14_246, share: nil, profit: nil, rowKind: "segment"),
@@ -33,13 +37,16 @@ struct GeographyBreakdownLLMNormalizerTests {
             .init(labelRaw: "その他", amount: 6_391, share: nil, profit: nil, rowKind: "segment"),
             .init(labelRaw: "合計", amount: 59_479, share: nil, profit: nil, rowKind: "subtotal"),
         ]
-        let filtered = GeographyBreakdownLLMNormalizer.dropOfWhichSubsetSegments(rows)
+        let filtered = GeographyBreakdownLLMNormalizer.keepOfWhichSubsetAsSubtotals(rows)
         let labels = filtered.filter { $0.rowKind == "segment" }.map(\.labelRaw)
         #expect(labels == ["日本", "アジア", "その他"])
+        let china = try #require(filtered.first { $0.category == "中国" })
+        #expect(china.rowKind == "subtotal")
+        #expect(china.categoryGroup == "アジア")
     }
 
-    @Test("北米のうち米国（高比率）だけ落とし、並列の中国はそのまま残す")
-    func dropsOnlyHighRatioAmericasSubset() {
+    @Test("北米のうち米国（高比率）だけ subtotal にし、並列の中国はそのまま残す")
+    func demotesOnlyHighRatioAmericasSubset() {
         let rows: [BreakdownRow] = [
             .init(labelRaw: "日本", amount: 84_769, share: nil, profit: nil, rowKind: "segment"),
             .init(labelRaw: "北米", amount: 322_540, share: nil, profit: nil, rowKind: "segment"),
@@ -48,10 +55,10 @@ struct GeographyBreakdownLLMNormalizerTests {
             .init(labelRaw: "中国", amount: 19_341, share: nil, profit: nil, rowKind: "segment"),
             .init(labelRaw: "合計", amount: 453_294, share: nil, profit: nil, rowKind: "subtotal"),
         ]
-        let filtered = GeographyBreakdownLLMNormalizer.dropOfWhichSubsetSegments(rows)
+        let filtered = GeographyBreakdownLLMNormalizer.keepOfWhichSubsetAsSubtotals(rows)
         let labels = Set(filtered.filter { $0.rowKind == "segment" }.map(\.labelRaw))
-        // 米国は北米の内数（比率≈99%）。中国はその他の並列地域なので残す（プロンプト側でうち除外）。
         #expect(labels == ["日本", "北米", "その他", "中国"])
+        #expect(filtered.contains { $0.category == "米国" && $0.categoryGroup == "北米" })
     }
 
     @Test("アジア他と中国が並列のときは中国を落とさない（テルモ型）")
@@ -104,7 +111,8 @@ struct GeographyBreakdownLLMNormalizerTests {
     }
 
     private static func normalizeHTML(
-        _ html: String, sales: Double, heading: String = "地域ごとの情報"
+        _ html: String, sales: Double, heading: String = "地域ごとの情報",
+        salesLabel: String? = nil
     ) async -> BreakdownSnapshot? {
         var tables = BreakdownExtractor.allTablesFromHtml(html, defaultHeading: heading)
         if !tables.isEmpty { tables[0].period = "当期" }
@@ -113,7 +121,8 @@ struct GeographyBreakdownLLMNormalizerTests {
             consolidatedSales: sales,
             decider: FakeRevenueRecognitionColumnDecider(),
             fiscalYearEnd: "2026-03-31",
-            docID: "S-geo-unit")
+            docID: "S-geo-unit",
+            salesLabel: salesLabel)
         return snapshot
     }
 
@@ -140,7 +149,7 @@ struct GeographyBreakdownLLMNormalizerTests {
         #expect(labels == ["日本", "北米", "欧州", "その他"])
     }
 
-    @Test("地域注記合計が IS 売上と乖離しても表内小計で分母を揃える（クレディセゾン型）")
+    @Test("地域注記合計が IS 売上の 95–105% を外れるときは既存の llm_row_sum_mismatch")
     func alignsDenominatorToGeographyTableSubtotal() async throws {
         let html = """
             <p>当連結会計年度</p>
@@ -155,13 +164,11 @@ struct GeographyBreakdownLLMNormalizerTests {
             """
         let snap = try #require(
             await Self.normalizeHTML(html, sales: 472_770 * Financial.millionYen))
-        #expect(snap.needsReview == false)
-        #expect(snap.warnings.contains("llm_denominator_from_internal_subtotal"))
-        #expect(!snap.warnings.contains("llm_row_sum_mismatch"))
+        #expect(snap.needsReview == true)
+        #expect(snap.warnings.contains("llm_row_sum_mismatch"))
         #expect(snap.denominatorTag == "llm_table_subtotal")
         #expect(abs(snap.denominator - 546_271.0 * Financial.millionYen) < 1)
-        let segmentShare = snap.rows.filter { $0.rowKind == "segment" }.compactMap(\.share).reduce(0, +)
-        #expect(abs(segmentShare - 1.0) < 0.01)
+        #expect(GeographyBreakdownLLMNormalizer.hasHardGuardWarnings(snap.warnings))
     }
 
     @Test("表内小計が無く IS 売上とも合わないときは needs_review のまま")
@@ -180,6 +187,179 @@ struct GeographyBreakdownLLMNormalizerTests {
         #expect(snap.needsReview == true)
         #expect(snap.warnings.contains("llm_row_sum_mismatch"))
         #expect(snap.denominatorTag == "income_statement.sales")
+    }
+
+    @Test("内部小計を分母にしても公開行が売上を大きく下回れば needs_review")
+    func coverageGuardNeedsReviewWhenInternalSubtotalHidesMissingRegions() async throws {
+        let html = """
+            <p>当連結会計年度</p>
+            <p>（単位：百万円）</p>
+            <table>
+              <tr><td></td><td>日本</td><td>その他の地域</td><td>計</td></tr>
+              <tr><td>外部顧客への売上高</td><td>1,844,286</td><td>624,984</td><td>10,430,269</td></tr>
+            </table>
+            """
+        let snap = try #require(
+            await Self.normalizeHTML(html, sales: 10_430_269 * Financial.millionYen))
+        #expect(snap.needsReview == true)
+        #expect(snap.warnings.contains("llm_row_sum_mismatch"))
+        #expect(snap.denominatorTag == "income_statement.sales")
+        let labels = snap.rows.filter { $0.rowKind == "segment" }.map(\.labelRaw)
+        #expect(!labels.contains("北米"))
+    }
+
+    @Test("最終判定の correct はカバレッジハードガードを覆さない")
+    func finalReviewDoesNotRecoverCoverageGuard() async throws {
+        let html = """
+            <p>当連結会計年度</p>
+            <p>（単位：百万円）</p>
+            <table>
+              <tr><td></td><td>日本</td><td>その他の地域</td><td>計</td></tr>
+              <tr><td>外部顧客への売上高</td><td>1,844,286</td><td>624,984</td><td>10,430,269</td></tr>
+            </table>
+            """
+        var tables = BreakdownExtractor.allTablesFromHtml(html, defaultHeading: "地域ごとの情報")
+        if !tables.isEmpty { tables[0].period = "当期" }
+        let (snap, _) = await GeographyBreakdownLLMNormalizer.normalize(
+            ExtractedBreakdown(method: "html_table", tables: tables, facts: []),
+            consolidatedSales: 10_430_269 * Financial.millionYen,
+            decider: FakeRevenueRecognitionColumnDecider(
+                reviewSelected: GeographyBreakdownLLMNormalizer.reviewCorrect,
+                reviewProbability: 0.99),
+            fiscalYearEnd: "2026-02-28",
+            docID: "S-coverage-guard")
+        let snapshot = try #require(snap)
+        #expect(snapshot.needsReview == true)
+        #expect(snapshot.warnings.contains("llm_row_sum_mismatch"))
+        #expect(GeographyBreakdownLLMNormalizer.hasHardGuardWarnings(snapshot.warnings))
+    }
+
+    @Test("行合計が表の計と一致し IS 売上だけが離れるときは表の計を分母にしても 95–105% 外は NR")
+    func prefersTableTotalWhenCloserThanIncomeStatementSales() async throws {
+        let html = """
+            <p>当連結会計年度</p>
+            <p>（単位：百万円）</p>
+            <table>
+              <tr><td></td><td>売上高</td></tr>
+              <tr><td>日本</td><td>2,244,356</td></tr>
+              <tr><td>米国</td><td>4,127,795</td></tr>
+              <tr><td>欧州</td><td>2,630,934</td></tr>
+              <tr><td>中国</td><td>1,244,115</td></tr>
+              <tr><td>アジア・太平洋地域</td><td>1,640,582</td></tr>
+              <tr><td>その他地域</td><td>1,069,282</td></tr>
+              <tr><td>計</td><td>12,957,064</td></tr>
+            </table>
+            """
+        let snap = try #require(
+            await Self.normalizeHTML(html, sales: 12_034_917 * Financial.millionYen))
+        #expect(snap.needsReview == true)
+        #expect(snap.warnings.contains("llm_row_sum_mismatch"))
+        #expect(snap.denominatorTag == "llm_table_subtotal")
+        #expect(abs(snap.denominator - 12_957_064.0 * Financial.millionYen) < 1)
+        #expect(GeographyBreakdownLLMNormalizer.hasHardGuardWarnings(snap.warnings))
+    }
+
+    @Test("小さすぎる内部小計は総合計にせず、既存の llm_row_sum_mismatch で fail-closed")
+    func coverageUsesIncomeStatementEvenWhenSubtotalDenomMatchesPublishedRows() async throws {
+        let html = """
+            <p>当連結会計年度</p>
+            <p>（単位：百万円）</p>
+            <table>
+              <tr><td></td><td>売上高</td></tr>
+              <tr><td>日本</td><td>1,844,286</td></tr>
+              <tr><td>その他の地域</td><td>624,984</td></tr>
+              <tr><td>小計</td><td>2,469,270</td></tr>
+              <tr><td>計</td><td>10,430,269</td></tr>
+            </table>
+            """
+        let snap = try #require(
+            await Self.normalizeHTML(html, sales: 10_430_269 * Financial.millionYen))
+        #expect(snap.needsReview == true)
+        #expect(snap.denominatorTag == "income_statement.sales")
+        #expect(abs(snap.denominator - 10_430_269.0 * Financial.millionYen) < 1)
+        #expect(snap.warnings.contains("llm_row_sum_mismatch"))
+        #expect(!snap.warnings.contains("llm_denominator_from_internal_subtotal"))
+        #expect(GeographyBreakdownLLMNormalizer.hasHardGuardWarnings(snap.warnings))
+    }
+
+    @Test("カバー判定のアンカーは損益計算書売上、無ければ表の総合計")
+    func coverageAnchorPrefersSalesThenGrandTotal() {
+        let salesTable = RevenueRecognitionCandidates.ParsedTable(
+            tableIndex: 0, grid: [], headerRowCount: 0, columnHeaders: [:],
+            precedingCaption: "売上高", unitCaption: nil, period: "当期",
+            heading: "地域ごとの情報", items: [], totals: [], groups: [])
+        let ordinaryTable = RevenueRecognitionCandidates.ParsedTable(
+            tableIndex: 0, grid: [], headerRowCount: 0, columnHeaders: [:],
+            precedingCaption: "経常収益", unitCaption: nil, period: "当期",
+            heading: "地域ごとの情報", items: [], totals: [], groups: [])
+        #expect(
+            GeographyBreakdownLLMNormalizer.coverageCheckAnchor(
+                table: salesTable, consolidatedSales: 10, tableGrandTotal: 12) == 10)
+        #expect(
+            GeographyBreakdownLLMNormalizer.coverageCheckAnchor(
+                table: salesTable, consolidatedSales: 0, tableGrandTotal: 12) == 12)
+        #expect(
+            GeographyBreakdownLLMNormalizer.coverageCheckAnchor(
+                table: salesTable, consolidatedSales: 0, tableGrandTotal: nil) == nil)
+        #expect(
+            GeographyBreakdownLLMNormalizer.coverageCheckAnchor(
+                table: ordinaryTable, consolidatedSales: 10, tableGrandTotal: 12) == 12)
+        #expect(
+            GeographyBreakdownLLMNormalizer.coverageCheckAnchor(
+                table: ordinaryTable, consolidatedSales: 10, tableGrandTotal: nil) == nil)
+        #expect(
+            GeographyBreakdownLLMNormalizer.coverageCheckAnchor(
+                table: salesTable, consolidatedSales: 10, tableGrandTotal: 12,
+                salesLabel: "営業収益") == 12)
+        #expect(
+            GeographyBreakdownLLMNormalizer.coverageCheckAnchor(
+                table: salesTable, consolidatedSales: 8_893_693, tableGrandTotal: 10_430_269,
+                salesLabel: "売上高") == 8_893_693)
+        #expect(
+            GeographyBreakdownLLMNormalizer.coverageCheckAnchor(
+                table: salesTable, consolidatedSales: 8_893_693, tableGrandTotal: 10_430_269,
+                salesLabel: "営業収益") == 10_430_269)
+    }
+
+    @Test("PL が営業収益のときは表に売上高と書いてあっても表の総合計をアンカーにする")
+    func operatingRevenueSalesLabelUsesTableGrandTotal() async throws {
+        let html = """
+            <p>当連結会計年度</p>
+            <p>（単位：百万円）</p>
+            <table>
+              <tr><td></td><td>売上高</td></tr>
+              <tr><td>日本</td><td>400,000</td></tr>
+              <tr><td>アメリカ</td><td>200,000</td></tr>
+              <tr><td>欧州</td><td>80,000</td></tr>
+              <tr><td>アジア・オセアニア</td><td>40,427</td></tr>
+              <tr><td>合計</td><td>720,427</td></tr>
+            </table>
+            """
+        let snap = try #require(
+            await Self.normalizeHTML(
+                html, sales: 1_467_983 * Financial.millionYen, salesLabel: "営業収益"))
+        #expect(snap.needsReview == false)
+        #expect(!snap.warnings.contains("llm_row_sum_mismatch"))
+    }
+
+    @Test("経常収益の地理表は表の総合計をアンカーにし、IS 経常収益との差では NR しない")
+    func ordinaryRevenueTableUsesGrandTotalAnchor() async throws {
+        let html = """
+            <p>当連結会計年度</p>
+            <p>（単位：百万円）</p>
+            <table>
+              <tr><td></td><td>経常収益</td></tr>
+              <tr><td>日本</td><td>3,000,000</td></tr>
+              <tr><td>米国</td><td>800,000</td></tr>
+              <tr><td>その他</td><td>379,527</td></tr>
+              <tr><td>合計</td><td>4,179,527</td></tr>
+            </table>
+            """
+        let snap = try #require(
+            await Self.normalizeHTML(html, sales: 4_933_646 * Financial.millionYen))
+        #expect(snap.needsReview == false)
+        #expect(!snap.warnings.contains("llm_row_sum_mismatch"))
+        #expect(snap.denominatorTag == "llm_table_subtotal")
     }
 
     @Test("脚注マーカーをラベルから決定的に除去する")
@@ -276,6 +456,26 @@ struct GeographyBreakdownLLMNormalizerTests {
         #expect(GeographyBreakdownLLMNormalizer.extractedSubtotalsMismatch(wrong) == true)
     }
 
+    @Test("うち内数 subtotal は親以下なら mismatch にしない")
+    func ofWhichSubtotalDoesNotFlagRegularMismatch() {
+        let rows: [BreakdownRow] = [
+            .init(labelRaw: "日本", amount: 254_181, share: nil, profit: nil, rowKind: "segment"),
+            .init(labelRaw: "北米", amount: 37_897, share: nil, profit: nil, rowKind: "segment"),
+            .init(
+                labelRaw: "米国", amount: 37_220, share: nil, profit: nil, rowKind: "subtotal",
+                categoryGroup: "北米", category: "米国"),
+            .init(labelRaw: "欧州", amount: 38_201, share: nil, profit: nil, rowKind: "segment"),
+            .init(labelRaw: "その他", amount: 21_084, share: nil, profit: nil, rowKind: "segment"),
+            .init(labelRaw: "合計", amount: 351_363, share: nil, profit: nil, rowKind: "subtotal"),
+        ]
+        #expect(GeographyBreakdownLLMNormalizer.extractedSubtotalsMismatch(rows) == false)
+        var over = rows
+        over[2] = .init(
+            labelRaw: "米国", amount: 40_000, share: nil, profit: nil, rowKind: "subtotal",
+            categoryGroup: "北米", category: "米国")
+        #expect(GeographyBreakdownLLMNormalizer.extractedSubtotalsMismatch(over) == true)
+    }
+
     @Test("日本（百万円）は単位見出しではなく地域名として残す")
     func japanWithYenUnitIsNotUnitCaption() {
         #expect(RevenueRecognitionCandidates.isUnitCaptionHeader("（単位：百万円）"))
@@ -284,9 +484,22 @@ struct GeographyBreakdownLLMNormalizerTests {
         #expect(RevenueRecognitionCandidates.collapsedCell("日 本") == "日本")
         #expect(RevenueRecognitionCandidates.isAggregateColumnHeader("合 計"))
         #expect(RevenueRecognitionCandidates.isOfWhichColumnHeader("内、米国"))
+        #expect(!RevenueRecognitionCandidates.isOfWhichColumnHeader("北米（うち米国）"))
+        #expect(!RevenueRecognitionCandidates.isOfWhichColumnHeader("北米(うち、米国)"))
+        #expect(RevenueRecognitionCandidates.isOfWhichColumnHeader("（うち米国）"))
+        #expect(RevenueRecognitionCandidates.geographyParentBeforeOfWhichAnnotation("北米（うち米国）") == "北米")
         #expect(RevenueRecognitionCandidates.parseAmount("(37,220)") == 37_220)
         #expect(RevenueRecognitionCandidates.parseAmount("（37,220）") == 37_220)
         #expect(RevenueRecognitionCandidates.parseAmount("(1)") == nil)
+        #expect(RevenueRecognitionCandidates.parseAmount("490,399(474,795)") == 490_399)
+        #expect(RevenueRecognitionCandidates.parseTrailingParentheticalAmount("490,399(474,795)") == 474_795)
+        #expect(RevenueRecognitionCandidates.parseAmount("7,960,998（7,624,333）") == 7_960_998)
+        #expect(RevenueRecognitionCandidates.parseTrailingParentheticalAmount("7,960,998（7,624,333）") == 7_624_333)
+        #expect(RevenueRecognitionCandidates.ofWhichChildDetailName("北米（うち米国）") == "米国")
+        #expect(RevenueRecognitionCandidates.ofWhichChildDetailName("（うち米国）") == "米国")
+        #expect(RevenueRecognitionCandidates.ofWhichChildDetailName("上記米州のうち米国") == "米国")
+        #expect(RevenueRecognitionCandidates.ofWhichImpliedParent("上記米州のうち米国") == "米州")
+        #expect(RevenueRecognitionCandidates.ofWhichChildDetailName("うち、アメリカ") == "アメリカ")
         #expect(RevenueRecognitionCandidates.isAmountCell("(37,220)"))
     }
 
@@ -311,7 +524,8 @@ struct GeographyBreakdownLLMNormalizerTests {
         #expect(itemLabels.contains("その他"))
         #expect(totalLabels.contains("合計"))
         let (built, _) = RevenueRecognitionCandidates.buildRows(
-            table: table, column: 2, applyParallelDimension: false)
+            table: table, column: 2, applyParallelDimension: false,
+            keepOfWhichPartials: true)
         let builtLabels = built.map {
             RevenueRecognitionCandidates.displayLabel(
                 categoryGroup: $0.categoryGroup, category: $0.category)
@@ -324,15 +538,21 @@ struct GeographyBreakdownLLMNormalizerTests {
         }
         #expect(droppedLabels.contains("その他"))
         var published: [BreakdownRow] = dropped.map { row in
+            if row.rowKind == "subtotal", let category = row.category, !category.isEmpty {
+                return BreakdownRow(
+                    labelRaw: category, amount: row.amount, share: nil, profit: nil,
+                    rowKind: "subtotal", categoryGroup: row.categoryGroup, category: category)
+            }
             let label = GeographyBreakdownLLMNormalizer.geographyPublishedLabel(row)
             return BreakdownRow(
                 labelRaw: label, amount: row.amount, share: nil, profit: nil,
                 rowKind: row.rowKind)
         }
-        published = GeographyBreakdownLLMNormalizer.dropOfWhichSubsetSegments(published)
+        published = GeographyBreakdownLLMNormalizer.keepOfWhichSubsetAsSubtotals(published)
         let publishedLabels = published.filter { $0.rowKind == "segment" }.map(\.labelRaw)
         #expect(publishedLabels.contains("その他"))
         #expect(Set(publishedLabels) == Set(["日本", "北米", "欧州", "その他"]))
+        #expect(published.contains { $0.category == "米国" && $0.categoryGroup == "北米" })
     }
 
     @Test("うち米国があっても正規化後にその他が残る")
@@ -362,6 +582,9 @@ struct GeographyBreakdownLLMNormalizerTests {
         let labels = snapshot.rows.filter { $0.rowKind == "segment" }.map(\.labelRaw)
         #expect(labels.contains("その他"))
         #expect(Set(labels) == Set(["日本", "北米", "欧州", "その他"]))
+        #expect(snapshot.rows.contains {
+            $0.rowKind == "subtotal" && $0.categoryGroup == "北米" && $0.category == "米国"
+        })
     }
 
     @Test("キャプションの当連結会計年度で前期列を残さない")
@@ -432,7 +655,8 @@ struct GeographyBreakdownLLMNormalizerTests {
                     key: "t0_c2", header: "当連結会計年度", priorOnly: false,
                     amounts: ["日本": 155_330]),
             ],
-            docID: "S-review-json"))
+            docID: "S-review-json",
+            consolidatedSalesMillionYen: 163_036))
         let object = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
         let questions = try #require(object["questions"] as? [String: Any])
         let review = try #require(
@@ -443,6 +667,8 @@ struct GeographyBreakdownLLMNormalizerTests {
         let state = try #require(object["state"] as? [String: Any])
         #expect(state["needs_review"] as? Bool == true)
         #expect(state["table_truncated"] as? Bool == false)
+        #expect(state["consolidated_sales_million_yen"] as? Double == 163_036)
+        #expect(criteria[GeographyBreakdownLLMNormalizer.reviewWrong]?.contains("consolidated_sales_million_yen") == true)
         let rows = try #require(state["extracted_rows"] as? [[String: Any]])
         #expect(rows.count == 2)
         #expect(rows[0]["label"] as? String == "日本")
