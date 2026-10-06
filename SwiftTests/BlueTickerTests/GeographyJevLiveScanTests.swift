@@ -228,9 +228,11 @@ struct GeographyProdBreakdownRow: Codable {
         let labelsOnlyOfWhich = why.contains("labels") && (
             why.contains("うち") || why.contains("米国") || why.contains("オーストラリア"))
         if prodPublic && !newPublic {
-            if snapshot?.warnings.contains(GeographyBreakdownLLMNormalizer.subtotalMismatchWarning)
-                == true
-                || snapshot?.warnings.contains("llm_row_sum_mismatch") == true
+            let warnings = snapshot?.warnings ?? []
+            if warnings.contains(GeographyBreakdownLLMNormalizer.subtotalMismatchWarning)
+                || warnings.contains("llm_row_sum_mismatch")
+                || warnings.contains(RevenueRecognitionColumnNormalizer.warningLowConfidence)
+                || warnings.contains(RevenueRecognitionColumnNormalizer.warningNoneOfTheseOverridden)
             {
                 return "fail_closed"
             }
