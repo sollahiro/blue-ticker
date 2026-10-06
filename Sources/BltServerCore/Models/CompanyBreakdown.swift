@@ -1,8 +1,8 @@
 // 内訳取り込み: 書類1件・軸1つ分の正規化済み事業別/地域別売上スナップショット（BreakdownSnapshotPayload）= 1 行。
 // docs/breakdown.md参照。company_filing_sections（有報セクション取り込み,
-// 生のsegments/geography表）とは別テーブル — LLM 経由の行（source != xbrl_facts）は
-// content_hash + needs_review でのみ再計算し、cache_version バンプでの全件再計算対象にしない
-// ため（decisive/deterministic 経路と再計算経済性が違う。）。
+// 生のsegments/geography表）とは別テーブル。
+// ingest の skip は現行 cache_version + !needs_review。LLM の needs_review=true だけ現行版でも再試行する。
+// clean LLM の抽出差し替えは行削除または --doc-ids。決定論の破壊的変更だけ cache_version バンプ。
 //
 // 主キーは "doc_id#axis" の合成文字列（例: "S100XTLJ#product_service"）。本プロジェクトの既存テーブルは
 // すべて単一 String ID の慣習（company_filing_sections 等）のため、複合IDではなくこの合成キーで揃える。
@@ -50,7 +50,8 @@ final class CompanyBreakdown: Model, @unchecked Sendable {
 
     /// 生入力（ExtractedBreakdown）+ 採用した分母のみのハッシュ。プロンプト/モデル/スキーマは
     /// 含めない（含めるとプロンプト微修正のたびに正しい行まで再計算対象になってしまう）。
-    /// LLM 経由の行の再計算スキップ判定に使う（content_hash 一致 かつ needs_review=false ならスキップ）。
+    /// ingest の skip は現行 `cache_version` + `!needs_review`（`content_hash` は見ない）。
+    /// clean LLM を新しい抽出で書き直すときは行削除または `--doc-ids`。
     @Field(key: "content_hash")
     var contentHash: String
 
