@@ -231,6 +231,7 @@ struct GeographyProdBreakdownRow: Codable {
             let warnings = snapshot?.warnings ?? []
             if warnings.contains(GeographyBreakdownLLMNormalizer.subtotalMismatchWarning)
                 || warnings.contains("llm_row_sum_mismatch")
+                || warnings.contains("geography_label_mismatch")
                 || warnings.contains(RevenueRecognitionColumnNormalizer.warningLowConfidence)
                 || warnings.contains(RevenueRecognitionColumnNormalizer.warningNoneOfTheseOverridden)
             {

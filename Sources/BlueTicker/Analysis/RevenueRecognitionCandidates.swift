@@ -295,6 +295,7 @@ enum RevenueRecognitionCandidates {
         for (column, header) in headers.sorted(by: { $0.key < $1.key }) {
             if column == wholeCompanyColumn { continue }
             if isAggregateColumnHeader(header) { continue }
+            if isOfWhichColumnHeader(header) { continue }
             if isPeriodHeadingLabel(header) { continue }
             guard column < row.count, let amount = parseAmount(row[column]) else { continue }
             let name = compactCell(header)
@@ -327,20 +328,62 @@ enum RevenueRecognitionCandidates {
         if geographySales, let current = hits.first(where: { $0.2 }) {
             return current.0
         }
+        if geographySales {
+            let unlabeled = hits.filter { index, _, _ in
+                compactCell(table.grid[index].first ?? "").isEmpty
+            }
+            if let last = unlabeled.last { return last.0 }
+        }
         guard hits.count == 1 else { return hits.max(by: { $0.1 < $1.1 })?.0 }
         return hits[0].0
     }
 
     /// 7734 の「Ⅰ売上高（千円）」や Canon の「売上高」、1887 の当期行。
+    /// 金額の無い親見出し（7211 の「売上高」）は飛ばし、外部顧客合計や 計 を優先する。
     static func geographySalesMetricRowIndex(_ table: ParsedTable) -> Int? {
         let labeled = table.totals.map { ($0.row, $0.label) }
             + table.items.map { ($0.row, $0.label) }
-        if let hit = labeled.first(where: { isGeographySalesMetricLabel($0.1) }) {
+        let withAmounts = labeled.filter { rowHasAmountCells(table, row: $0.0) }
+        let preferredMarkers = [
+            "外部顧客に対する売上高", "外部顧客への売上高", "外部顧客への収益",
+            "顧客との契約から生じる収益", "顧客との契約から認識した収益",
+            "営業収益", "売上収益", "売上高", "収益",
+        ]
+        for marker in preferredMarkers {
+            if let hit = withAmounts.first(where: {
+                let compact = collapsedCell($0.1)
+                return compact.contains(marker)
+                    && !compact.contains("その他")
+                    && !compact.contains("税引前")
+                    && isGeographySalesMetricLabel($0.1)
+            }) {
+                return hit.0
+            }
+        }
+        if let total = withAmounts.first(where: { isTotalLabel($0.1) }) {
+            return total.0
+        }
+        if let hit = withAmounts.first(where: { isGeographySalesMetricLabel($0.1) }) {
             return hit.0
         }
-        let current = table.items.filter { isCurrentPeriodHeading($0.label) }
+        let current = table.items.filter {
+            isCurrentPeriodHeading($0.label) && rowHasAmountCells(table, row: $0.row)
+        }
         if let row = current.last { return row.row }
         return unlabeledMetricRowIndex(table, geographySales: true)
+    }
+
+    static func rowHasAmountCells(_ table: ParsedTable, row: Int) -> Bool {
+        guard row >= 0, row < table.grid.count else { return false }
+        let amounts = table.grid[row].enumerated().filter { column, cell in
+            column > 0 && isAmountCell(cell) && parseAmount(cell) != 0
+        }
+        return amounts.count >= 2
+    }
+
+    /// 空白を潰した照合用。`日 本` / `合 計` を地域・合計判定に使う。
+    static func collapsedCell(_ text: String) -> String {
+        compactCell(text).replacingOccurrences(of: " ", with: "")
     }
 
     static func isPercentMetricLabel(_ label: String) -> Bool {
@@ -399,9 +442,14 @@ enum RevenueRecognitionCandidates {
     }
 
     static func isAggregateColumnHeader(_ header: String) -> Bool {
-        let compact = compactCell(header)
+        let compact = collapsedCell(header)
         return compact.contains("合計") || compact.contains("連結") || compact.contains("調整")
             || compact.contains("消去") || compact.hasSuffix("計")
+    }
+
+    static func isOfWhichColumnHeader(_ header: String) -> Bool {
+        let compact = collapsedCell(header)
+        return compact.contains("うち") || compact.contains("内、") || compact.hasPrefix("内,")
     }
 
     static func displayLabel(categoryGroup: String, category: String?) -> String {
@@ -529,11 +577,29 @@ enum RevenueRecognitionCandidates {
     }
 
     /// 列見出しに載った「（単位：百万円）」はカテゴリ名ではない（6140）。
+    /// `日本（百万円）` は単位付き地域名なので残す（8031 / 8572）。
     static func isUnitCaptionHeader(_ label: String) -> Bool {
         let token = compactCell(label)
         if token.isEmpty { return false }
-        if BreakdownExtractor.parseUnitCaption(token) != nil { return true }
-        return token.contains("単位")
+        if BreakdownExtractor.parseUnitCaption(token) == nil, !token.contains("単位") {
+            return false
+        }
+        return unitCaptionRemainder(token).isEmpty
+    }
+
+    static func unitCaptionRemainder(_ label: String) -> String {
+        var token = collapsedCell(label)
+            .replacingOccurrences(of: "単位", with: "")
+            .replacingOccurrences(of: "：", with: "")
+            .replacingOccurrences(of: ":", with: "")
+            .replacingOccurrences(of: "（", with: "")
+            .replacingOccurrences(of: "）", with: "")
+            .replacingOccurrences(of: "(", with: "")
+            .replacingOccurrences(of: ")", with: "")
+        for unit in ["百万ユーロ", "百万米ドル", "千米ドル", "千ユーロ", "十億円", "百万円", "千円", "億円"] {
+            token = token.replacingOccurrences(of: unit, with: "")
+        }
+        return token
     }
 
     /// 先頭から連続する非金額セル。Denso / 7416 のラベル域（空 rowspan + 内側ラベル）。

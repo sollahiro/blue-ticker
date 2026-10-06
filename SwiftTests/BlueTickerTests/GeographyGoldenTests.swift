@@ -627,4 +627,236 @@ import Testing
         #expect(!snapshot.needsReview)
         #expect(publiclyServable(snapshot))
     }
+
+    /// 7211 型: 空の売上高見出しの下に顧客契約行と外部顧客合計行。うち米国列は落とす。
+    @Test func emptySalesHeaderUsesExternalCustomerSubtotalAndDropsOfWhichUS() async throws {
+        let html = """
+            <p>当連結会計年度</p>
+            <p>（単位：百万円）</p>
+            <table>
+              <tr>
+                <td></td><td>日本</td><td>北米</td><td>北米</td>
+                <td>欧州</td><td>アジア</td><td>オセアニア</td><td>その他</td><td>合計</td>
+              </tr>
+              <tr>
+                <td></td><td></td><td></td><td>内、米国</td>
+                <td></td><td></td><td></td><td></td><td></td>
+              </tr>
+              <tr>
+                <td>売上高</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td>
+              </tr>
+              <tr>
+                <td>外部顧客に対する売上高</td>
+                <td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td>
+              </tr>
+              <tr>
+                <td>顧客との契約から生じる収益</td>
+                <td>638,986</td><td>661,310</td><td>373,349</td><td>211,992</td>
+                <td>623,566</td><td>286,015</td><td>452,846</td><td>2,874,718</td>
+              </tr>
+              <tr>
+                <td>その他の収益</td>
+                <td>20,414</td><td>405</td><td>405</td><td>－</td>
+                <td>978</td><td>19</td><td>－</td><td>21,818</td>
+              </tr>
+              <tr>
+                <td></td><td>659,400</td><td>661,715</td><td>373,754</td><td>211,992</td>
+                <td>624,545</td><td>286,035</td><td>452,846</td><td>2,896,536</td>
+              </tr>
+            </table>
+            """
+        let (snapshotOrNil, _) = await normalize(
+            html: html, sales: yen(2_896_536), docID: "S100YCMC")
+        let snapshot = try #require(snapshotOrNil)
+        #expect(Set(segmentLabels(snapshot)) == Set(["日本", "北米", "欧州", "アジア", "オセアニア", "その他"]))
+        #expect(snapshot.rows.first { $0.labelRaw == "日本" }?.amount == yen(659_400))
+        #expect(!segmentLabels(snapshot).contains("米国"))
+        #expect(!snapshot.needsReview)
+        #expect(publiclyServable(snapshot))
+    }
+
+    /// 6963 型: 見出しが「日 本」「合 計」。空白を潰して日本を残し合計列で転置する。
+    @Test func spacedJapanAndTotalHeadersPublishChina() async throws {
+        let html = """
+            <p>当連結会計年度</p>
+            <table>
+              <tr><td>日 本</td><td>中国</td><td>その他</td><td>合 計</td></tr>
+              <tr><td>145,144</td><td>146,600</td><td>189,402</td><td>481,148</td></tr>
+            </table>
+            """
+        let (snapshotOrNil, _) = await normalize(
+            html: html, sales: yen(481_148), docID: "S100YF41")
+        let snapshot = try #require(snapshotOrNil)
+        #expect(Set(segmentLabels(snapshot)) == Set(["日本", "中国", "その他"]))
+        #expect(snapshot.rows.first { $0.labelRaw == "中国" }?.amount == yen(146_600))
+        #expect(!snapshot.needsReview)
+        #expect(publiclyServable(snapshot))
+    }
+
+    /// 9412 型: 国内|海外|計 の2行表。海外列を全社列にしない。
+    @Test func japanOverseasTwoRowTableKeepsOverseas() async throws {
+        let html = """
+            <p>当連結会計年度</p>
+            <p>（単位：百万円）</p>
+            <table>
+              <tr><td>国内</td><td>海外</td><td>計</td></tr>
+              <tr><td>114,902</td><td>12,682</td><td>127,584</td></tr>
+            </table>
+            """
+        let (snapshotOrNil, _) = await normalize(
+            html: html, sales: yen(127_584), docID: "S100YBNS")
+        let snapshot = try #require(snapshotOrNil)
+        #expect(Set(segmentLabels(snapshot)) == Set(["国内", "海外"]))
+        #expect(snapshot.rows.first { $0.labelRaw == "海外" }?.amount == yen(12_682))
+        #expect(!snapshot.needsReview)
+        #expect(publiclyServable(snapshot))
+    }
+
+    /// 8031 型: 列見出しが「日本（百万円）」。単位付き地域名を落とさない。
+    @Test func regionHeadersWithYenUnitSuffixPublishDestinations() async throws {
+        let html = """
+            <p>当連結会計年度（2025年4月1日から2026年3月31日まで）</p>
+            <table>
+              <tr>
+                <td></td>
+                <td>日本（百万円）</td><td>シンガポール（百万円）</td>
+                <td>アメリカ（百万円）</td><td>オーストラリア（百万円）</td>
+                <td>その他（百万円）</td><td>連結合計（百万円）</td>
+              </tr>
+              <tr>
+                <td>収益</td>
+                <td>7,084,345</td><td>2,431,669</td><td>1,167,690</td>
+                <td>767,524</td><td>2,543,994</td><td>13,995,222</td>
+              </tr>
+            </table>
+            """
+        let (snapshotOrNil, _) = await normalize(
+            html: html, sales: yen(13_995_222), docID: "S100YAVT")
+        let snapshot = try #require(snapshotOrNil)
+        #expect(Set(segmentLabels(snapshot)) == Set(["日本", "シンガポール", "アメリカ", "オーストラリア", "その他"]))
+        #expect(snapshot.rows.first { $0.labelRaw == "日本" }?.amount == yen(7_084_345))
+        #expect(!snapshot.needsReview)
+        #expect(publiclyServable(snapshot))
+    }
+
+    /// 6645 型: 国別の残余表より、地域列の外部顧客売上表を使う。
+    @Test func destinationSalesTablePreferredOverCountryRemainder() async throws {
+        let html = """
+            <p>３．当連結会計年度および翌連結会計年度以降の収益の金額を理解するための情報</p>
+            <table>
+              <tr><td></td><td>第89期（百万円）</td></tr>
+              <tr><td>国内</td><td>8,183</td></tr>
+              <tr><td>海外</td><td></td></tr>
+              <tr><td>中国</td><td>8,572</td></tr>
+              <tr><td>オランダ</td><td>1,024</td></tr>
+              <tr><td>その他</td><td>3,066</td></tr>
+              <tr><td>海外合計</td><td>12,662</td></tr>
+              <tr><td>合計</td><td>20,845</td></tr>
+            </table>
+            <p>第89期（自 2025年4月1日 至 2026年3月31日）（単位：百万円）</p>
+            <table>
+              <tr>
+                <td></td><td>日本</td><td>米州</td><td>欧州</td>
+                <td>中華圏</td><td>東南アジア他</td><td>直接輸出</td><td>連結</td>
+              </tr>
+              <tr>
+                <td>外部顧客に対する売上高</td>
+                <td>348,638</td><td>73,283</td><td>116,770</td>
+                <td>144,131</td><td>82,039</td><td>2,490</td><td>767,351</td>
+              </tr>
+              <tr>
+                <td>有形固定資産</td>
+                <td>75,657</td><td>2,485</td><td>4,004</td>
+                <td>13,888</td><td>7,038</td><td>－</td><td>103,072</td>
+              </tr>
+            </table>
+            """
+        let (snapshotOrNil, _) = await normalize(
+            html: html, sales: yen(767_351), docID: "S100YG81")
+        let snapshot = try #require(snapshotOrNil)
+        #expect(Set(segmentLabels(snapshot)) == Set(["日本", "米州", "欧州", "中華圏", "東南アジア他", "直接輸出"]))
+        #expect(snapshot.rows.first { $0.labelRaw == "日本" }?.amount == yen(348_638))
+        #expect(!segmentLabels(snapshot).contains("オランダ"))
+        #expect(!snapshot.needsReview)
+        #expect(publiclyServable(snapshot))
+    }
+
+    /// 6301 型: 行=事業・列=地域。連結列の事業行ではなく地域の計を公開する。
+    @Test func productRowsByRegionColumnsPublishRegionTotals() async throws {
+        let html = """
+            <p>当連結会計年度</p>
+            <p>（単位：百万円）</p>
+            <table>
+              <tr>
+                <td></td><td></td><td></td><td></td><td></td><td>（百万円）</td>
+              </tr>
+              <tr>
+                <td></td><td>米州</td><td>欧州・アフリカ・中近東</td>
+                <td>オセアニア・アジア※・CIS</td><td>日本</td><td>連結</td>
+              </tr>
+              <tr>
+                <td>建設機械・車両</td>
+                <td>1,824,091</td><td>712,698</td><td>944,795</td><td>314,516</td><td>3,796,100</td>
+              </tr>
+              <tr>
+                <td>リテールファイナンス</td>
+                <td>70,906</td><td>13,972</td><td>14,154</td><td>1,488</td><td>100,520</td>
+              </tr>
+              <tr>
+                <td>産業機械他</td>
+                <td>38,674</td><td>12,417</td><td>76,461</td><td>108,579</td><td>236,131</td>
+              </tr>
+              <tr>
+                <td>計</td>
+                <td>1,933,671</td><td>739,087</td><td>1,035,410</td><td>424,583</td><td>4,132,751</td>
+              </tr>
+            </table>
+            """
+        let (snapshotOrNil, _) = await normalize(
+            html: html, sales: yen(4_132_751), docID: "S100YD25")
+        let snapshot = try #require(snapshotOrNil)
+        #expect(Set(segmentLabels(snapshot)) == Set(["米州", "欧州・アフリカ・中近東", "オセアニア・アジア・CIS", "日本"]))
+        #expect(snapshot.rows.first { $0.labelRaw == "日本" }?.amount == yen(424_583))
+        #expect(!segmentLabels(snapshot).contains("リテールファイナンス"))
+        #expect(!snapshot.needsReview)
+        #expect(publiclyServable(snapshot))
+    }
+
+    /// 8591 型: 営業収益行を使い、税引前当期純利益や長期性資産は出さない。
+    @Test func operatingRevenuePreferredOverPretaxProfitAndPpe() async throws {
+        let html = """
+            <p>当連結会計年度末</p>
+            <table>
+              <tr>
+                <td>当連結会計年度</td><td>当連結会計年度</td>
+                <td>当連結会計年度</td><td>当連結会計年度</td><td>当連結会計年度</td>
+              </tr>
+              <tr>
+                <td></td>
+                <td>日本（百万円）</td><td>米州地域（百万円）</td>
+                <td>その他海外（百万円）</td><td>連結合計（百万円）</td>
+              </tr>
+              <tr>
+                <td>営業収益</td>
+                <td>2,423,388</td><td>405,209</td><td>502,234</td><td>3,330,831</td>
+              </tr>
+              <tr>
+                <td>税引前当期純利益</td>
+                <td>442,322</td><td>35,156</td><td>213,953</td><td>691,431</td>
+              </tr>
+              <tr>
+                <td>長期性資産残高</td>
+                <td>1,961,020</td><td>70,896</td><td>1,277,096</td><td>3,309,012</td>
+              </tr>
+            </table>
+            """
+        let (snapshotOrNil, _) = await normalize(
+            html: html, sales: yen(3_330_831), docID: "S100YG5L")
+        let snapshot = try #require(snapshotOrNil)
+        #expect(Set(segmentLabels(snapshot)) == Set(["日本", "米州地域", "その他海外"]))
+        #expect(snapshot.rows.first { $0.labelRaw == "日本" }?.amount == yen(2_423_388))
+        #expect(!segmentLabels(snapshot).contains("税引前当期純利益"))
+        #expect(!snapshot.needsReview)
+        #expect(publiclyServable(snapshot))
+    }
 }

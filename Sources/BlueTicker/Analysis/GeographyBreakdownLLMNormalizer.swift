@@ -88,16 +88,28 @@ enum GeographyBreakdownLLMNormalizer {
               let selectedTable = parsed.first(where: { $0.tableIndex == selectedColumn.tableIndex })
         else { return (nil, audit) }
 
-        var (built, _) = RevenueRecognitionCandidates.buildRows(
-            table: selectedTable, column: selectedColumn.column, applyParallelDimension: false)
-        built = dropNonGeographyMetricRows(built)
+        let wholeCompanyColumn = preferredWholeCompanyColumn(
+            selectedTable, selected: selectedColumn.column)
+        let regionCols = regionColumnCount(selectedTable)
+        var built: [RevenueRecognitionCandidates.BuiltRow] = []
         var transposedWhole: Double?
-        if built.isEmpty {
+        if regionCols >= 2 {
             let transposed = RevenueRecognitionCandidates.transposeMetricRow(
-                table: selectedTable, wholeCompanyColumn: selectedColumn.column,
+                table: selectedTable, wholeCompanyColumn: wholeCompanyColumn,
                 geographySales: true)
             built = dropNonGeographyMetricRows(transposed.rows)
             transposedWhole = transposed.wholeCompanyAmount
+        } else {
+            (built, _) = RevenueRecognitionCandidates.buildRows(
+                table: selectedTable, column: wholeCompanyColumn, applyParallelDimension: false)
+            built = dropNonGeographyMetricRows(built)
+            if built.isEmpty {
+                let transposed = RevenueRecognitionCandidates.transposeMetricRow(
+                    table: selectedTable, wholeCompanyColumn: wholeCompanyColumn,
+                    geographySales: true)
+                built = dropNonGeographyMetricRows(transposed.rows)
+                transposedWhole = transposed.wholeCompanyAmount
+            }
         }
         if built.isEmpty {
             stampJev(&audit, applied: false, needsReview: true)
@@ -114,7 +126,7 @@ enum GeographyBreakdownLLMNormalizer {
         }
 
         let tableTotalAmount = RevenueRecognitionCandidates.tableTotal(
-            table: selectedTable, column: selectedColumn.column)?.amount
+            table: selectedTable, column: wholeCompanyColumn)?.amount
         let scaleRef = transposedWhole
             ?? tableTotalAmount
             ?? built.filter { $0.rowKind == "segment" || $0.rowKind == "reconciling" }
@@ -150,7 +162,7 @@ enum GeographyBreakdownLLMNormalizer {
             ))
         }
         appendSubtotalRows(
-            from: selectedTable, column: selectedColumn.column, multiplier: unitMultiplier,
+            from: selectedTable, column: wholeCompanyColumn, multiplier: unitMultiplier,
             into: &rows, strippedFootnotes: &strippedFootnotes)
 
         if !strippedFootnotes.isEmpty {
@@ -242,31 +254,25 @@ enum GeographyBreakdownLLMNormalizer {
             if RevenueRecognitionColumnNormalizer.isPriorOnlyColumn(column, table: table) {
                 return false
             }
-            let header = RevenueRecognitionCandidates.compactCell(column.header)
-            if header.contains("うち") { return false }
+            let header = RevenueRecognitionCandidates.collapsedCell(column.header)
+            if RevenueRecognitionCandidates.isOfWhichColumnHeader(column.header) { return false }
             if header.contains("％") || header.contains("%") || header.contains("構成比") {
                 return false
             }
             return true
         }
+        let regionColumnTables = tables.filter { regionColumnCount($0) >= 2 }
+        let tablesForOffer = regionColumnTables.isEmpty ? tables : regionColumnTables
         var preferred: [RevenueRecognitionCandidates.AmountColumn] = []
-        for table in tables {
+        for table in tablesForOffer {
             let tableCols = usable.filter { $0.tableIndex == table.tableIndex }
-            let regionHeaders = table.columnHeaders.values.filter { header in
-                Xbrl.segmentGeographyLabelKeywordsJa.contains {
-                    RevenueRecognitionCandidates.compactCell(header).contains($0)
-                }
-            }
-            let totals = tableCols.filter { column in
-                let header = RevenueRecognitionCandidates.compactCell(column.header)
-                return header.contains("合計") || header.contains("連結") || header == "計"
+            let totals = tableCols.filter {
+                RevenueRecognitionCandidates.isAggregateColumnHeader($0.header)
             }
             let rowGeo = (table.items.map(\.label) + table.totals.map(\.label)).filter { label in
-                Xbrl.segmentGeographyLabelKeywordsJa.contains {
-                    RevenueRecognitionCandidates.compactCell(label).contains($0)
-                }
+                looksLikeGeographyLabel(label)
             }
-            if regionHeaders.count >= 2 {
+            if regionColumnCount(table) >= 2 {
                 preferred.append(contentsOf: totals.isEmpty ? tableCols : totals)
             } else if rowGeo.count >= 2, !totals.isEmpty {
                 // 3659: 行=地域、列=事業＋合計。合計列だけを選ぶ。
@@ -276,6 +282,32 @@ enum GeographyBreakdownLLMNormalizer {
             }
         }
         return preferred.isEmpty ? (usable.isEmpty ? columns : usable) : preferred
+    }
+
+    static func regionColumnCount(
+        _ table: RevenueRecognitionCandidates.ParsedTable
+    ) -> Int {
+        let headers = table.columnHeaders.values
+            + table.grid.prefix(table.headerRowCount).flatMap { $0 }
+        return Set(headers.filter {
+            looksLikeGeographyLabel($0) && !RevenueRecognitionCandidates.isAggregateColumnHeader($0)
+                && !RevenueRecognitionCandidates.isOfWhichColumnHeader($0)
+        }.map { RevenueRecognitionCandidates.collapsedCell($0) }).count
+    }
+
+    static func preferredWholeCompanyColumn(
+        _ table: RevenueRecognitionCandidates.ParsedTable, selected: Int
+    ) -> Int {
+        guard regionColumnCount(table) >= 2 else { return selected }
+        let totals = table.columnHeaders.filter {
+            RevenueRecognitionCandidates.isAggregateColumnHeader($0.value)
+        }
+        return totals.keys.sorted().last ?? selected
+    }
+
+    static func looksLikeGeographyLabel(_ label: String) -> Bool {
+        let compact = RevenueRecognitionCandidates.collapsedCell(label)
+        return Xbrl.segmentGeographyLabelKeywordsJa.contains { compact.contains($0) }
     }
 
     static func dropAssetTables(
@@ -309,7 +341,7 @@ enum GeographyBreakdownLLMNormalizer {
             return false
         }
         return labels.contains { label in
-            Xbrl.segmentGeographyLabelKeywordsJa.contains { label.contains($0) }
+            looksLikeGeographyLabel(label)
                 || label.contains("その他の地域") || label.contains("その他地域")
         }
     }
@@ -416,11 +448,15 @@ enum GeographyBreakdownLLMNormalizer {
     ]
 
     static func compactGeographyLabel(_ label: String) -> String {
-        RevenueRecognitionCandidates.compactCell(label)
+        var token = RevenueRecognitionCandidates.compactCell(label)
             .replacingOccurrences(of: " ", with: "")
             .replacingOccurrences(of: "\u{3000}", with: "")
             .replacingOccurrences(of: "（", with: "(")
             .replacingOccurrences(of: "）", with: ")")
+        token = token.replacingOccurrences(
+            of: #"\([^)]*円[^)]*\)"#, with: "", options: .regularExpression)
+        token = token.replacingOccurrences(of: "※", with: "")
+        return token
     }
 
     static func geographyPublishedLabel(

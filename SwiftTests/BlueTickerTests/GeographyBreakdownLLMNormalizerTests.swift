@@ -275,4 +275,14 @@ struct GeographyBreakdownLLMNormalizerTests {
             labelRaw: "その他の地域", amount: 3_760_490, share: nil, profit: nil, rowKind: "segment")
         #expect(GeographyBreakdownLLMNormalizer.extractedSubtotalsMismatch(wrong) == true)
     }
+
+    @Test("日本（百万円）は単位見出しではなく地域名として残す")
+    func japanWithYenUnitIsNotUnitCaption() {
+        #expect(RevenueRecognitionCandidates.isUnitCaptionHeader("（単位：百万円）"))
+        #expect(!RevenueRecognitionCandidates.isUnitCaptionHeader("日本（百万円）"))
+        #expect(!RevenueRecognitionCandidates.isUnitCaptionHeader("連結合計（百万円）"))
+        #expect(RevenueRecognitionCandidates.collapsedCell("日 本") == "日本")
+        #expect(RevenueRecognitionCandidates.isAggregateColumnHeader("合 計"))
+        #expect(RevenueRecognitionCandidates.isOfWhichColumnHeader("内、米国"))
+    }
 }
