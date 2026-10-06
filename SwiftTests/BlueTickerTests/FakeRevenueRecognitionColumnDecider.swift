@@ -12,6 +12,8 @@ actor FakeRevenueRecognitionColumnDecider: RevenueRecognitionColumnDeciding, Geo
     var model: String
     var reviewSelected: String?
     var reviewProbability: Double?
+    var lastReviewTableTruncated: Bool?
+    var lastReviewTableMarkdown: String?
 
     init(
         selected: String? = nil, containing: String? = nil, confidence: Double = 0.9,
@@ -52,9 +54,12 @@ actor FakeRevenueRecognitionColumnDecider: RevenueRecognitionColumnDeciding, Geo
         warnings: [String],
         needsReview: Bool,
         periodColumns: [GeographyReviewPeriodColumn],
+        tableTruncated: Bool,
         docID: String
     ) async -> SegmentNoteConsultedChoice {
-        SegmentNoteConsultedChoice(
+        lastReviewTableTruncated = tableTruncated
+        lastReviewTableMarkdown = tableMarkdown
+        return SegmentNoteConsultedChoice(
             question: OpenRouterSegmentNoteDecider.reviewDecisionQuestion,
             selected: reviewSelected,
             probability: reviewProbability,

@@ -1511,4 +1511,75 @@ import Testing
         #expect(audit?.jev?.decisionSource != SegmentNoteDecision.reviewDecisionSource)
         #expect(!publiclyServable(snapshot))
     }
+
+    /// 表 markdown が切れているときは correct 回復をしない。
+    @Test func finalReviewDoesNotRecoverWhenTableTruncated() async throws {
+        let html = paddedGeographyHTML()
+        var tables = BreakdownExtractor.allTablesFromHtml(html, defaultHeading: "地域ごとの情報")
+        if !tables.isEmpty { tables[0].period = "当期" }
+        let parsed = RevenueRecognitionCandidates.parse(tables: tables)
+        let table = try #require(parsed.first)
+        #expect(BreakdownExtractor.gridToMarkdown(table.grid).count
+            > GeographyBreakdownLLMNormalizer.reviewMarkdownLimit)
+        let decider = FakeRevenueRecognitionColumnDecider(
+            confidence: 0.49,
+            reviewSelected: GeographyBreakdownLLMNormalizer.reviewCorrect,
+            reviewProbability: 0.99)
+        let (snapshotOrNil, audit) = await GeographyBreakdownLLMNormalizer.normalize(
+            ExtractedBreakdown(method: "html_table", tables: tables, facts: []),
+            consolidatedSales: yen(1_000),
+            decider: decider,
+            fiscalYearEnd: "2026-03-31",
+            docID: "S-truncated-recover")
+        let snapshot = try #require(snapshotOrNil)
+        #expect(await decider.lastReviewTableTruncated == true)
+        #expect(await decider.lastReviewTableMarkdown?.count
+            == GeographyBreakdownLLMNormalizer.reviewMarkdownLimit)
+        #expect(snapshot.needsReview)
+        #expect(snapshot.warnings.contains(RevenueRecognitionColumnNormalizer.warningLowConfidence))
+        #expect(!publiclyServable(snapshot))
+        #expect(audit?.jev?.calls.contains {
+            $0.question == OpenRouterSegmentNoteDecider.reviewDecisionQuestion && !$0.applied
+        } == true)
+        #expect(audit?.jev?.decisionSource != SegmentNoteDecision.reviewDecisionSource)
+    }
+
+    /// 切れた表でも confident wrong は公開を NR にする。
+    @Test func finalReviewStillDemotesWhenTableTruncated() async throws {
+        let html = paddedGeographyHTML()
+        var tables = BreakdownExtractor.allTablesFromHtml(html, defaultHeading: "地域ごとの情報")
+        if !tables.isEmpty { tables[0].period = "当期" }
+        let decider = FakeRevenueRecognitionColumnDecider(
+            confidence: 0.99,
+            reviewSelected: GeographyBreakdownLLMNormalizer.reviewWrong,
+            reviewProbability: 0.95)
+        let (snapshotOrNil, _) = await GeographyBreakdownLLMNormalizer.normalize(
+            ExtractedBreakdown(method: "html_table", tables: tables, facts: []),
+            consolidatedSales: yen(1_000),
+            decider: decider,
+            fiscalYearEnd: "2026-03-31",
+            docID: "S-truncated-demote")
+        let snapshot = try #require(snapshotOrNil)
+        #expect(await decider.lastReviewTableTruncated == true)
+        #expect(snapshot.needsReview)
+        #expect(snapshot.warnings.contains(GeographyBreakdownLLMNormalizer.warningFinalReviewWrong))
+        #expect(!publiclyServable(snapshot))
+    }
+
+    private func paddedGeographyHTML() -> String {
+        let notes = (0..<160).map { i in
+            "<tr><td>脚注\(String(repeating: "あ", count: 80))\(i)</td><td></td></tr>"
+        }.joined()
+        return """
+            <p>当連結会計年度</p>
+            <p>（単位：百万円）</p>
+            <table>
+              <tr><td></td><td>売上高</td></tr>
+              <tr><td>日本</td><td>600</td></tr>
+              <tr><td>海外</td><td>400</td></tr>
+              <tr><td>合計</td><td>1,000</td></tr>
+              \(notes)
+            </table>
+            """
+    }
 }

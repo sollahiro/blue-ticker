@@ -4,6 +4,7 @@
 // 行・単位・うち内数・脚注はコードが組む。低確信は needs_review（公開面 fail-closed）。
 // 行を組んだあと Jev 第二パスで最終判定する。公開直前の confident wrong は NR。
 // 低確信 NR は confident correct かつハードガード無しのときだけ回復する。
+// 表 markdown が reviewMarkdownLimit 字で切れたときは table_truncated を渡し、correct 回復はしない。
 // docs/breakdown.md。BreakdownNormalizer.swift（xbrl_facts 経路）とは別経路。
 
 import Foundation
@@ -53,6 +54,7 @@ protocol GeographyExtractionReviewing: Sendable {
         warnings: [String],
         needsReview: Bool,
         periodColumns: [GeographyReviewPeriodColumn],
+        tableTruncated: Bool,
         docID: String
     ) async -> SegmentNoteConsultedChoice
 }
@@ -336,7 +338,12 @@ enum GeographyBreakdownLLMNormalizer {
     static let reviewCorrect = "correct"
     static let reviewWrong = "wrong"
     static let reviewOptions = [reviewCorrect, reviewWrong]
-    private static let reviewMarkdownLimit = 4_000
+    static let reviewMarkdownLimit = 8_000
+
+    static func clippedReviewMarkdown(_ raw: String) -> (text: String, truncated: Bool) {
+        if raw.count <= reviewMarkdownLimit { return (raw, false) }
+        return (String(raw.prefix(reviewMarkdownLimit)), true)
+    }
 
     /// 小計・分母・ラベル・単位のハードガード。最終判定の correct では覆さない。
     static func hasHardGuardWarnings(_ warnings: [String]) -> Bool {
@@ -959,6 +966,7 @@ enum GeographyBreakdownLLMNormalizer {
 
     /// 組んだ行が当期全社の地域別売上として正しいか Jev に聞く。
     /// 公開直前の confident wrong は NR。低確信 NR の confident correct はハードガード無しのときだけ回復。
+    /// 表 markdown が切れているときは correct 回復をしない（wrong の降格はする）。
     /// 呼び出し失敗・低信頼は提案を維持する。
     static func applyFinalReview(
         snapshot: BreakdownSnapshot,
@@ -976,16 +984,16 @@ enum GeographyBreakdownLLMNormalizer {
                 amountMillionYen: $0.amount / Financial.millionYen,
                 rowKind: $0.rowKind)
         }
-        let markdown = String(
-            BreakdownExtractor.gridToMarkdown(table.grid).prefix(reviewMarkdownLimit))
+        let clipped = clippedReviewMarkdown(BreakdownExtractor.gridToMarkdown(table.grid))
         let choice = await reviewer.reviewExtractedGeography(
             rows: rows,
-            tableMarkdown: markdown,
+            tableMarkdown: clipped.text,
             heading: table.heading,
             caption: table.precedingCaption,
             warnings: snapshot.warnings,
             needsReview: snapshot.needsReview,
             periodColumns: reviewPeriodColumnValues(table),
+            tableTruncated: clipped.truncated,
             docID: docID)
 
         var next = snapshot
@@ -996,7 +1004,9 @@ enum GeographyBreakdownLLMNormalizer {
             next.needsReview = true
             next.warnings.append(warningFinalReviewWrong)
             applied = true
-        } else if high, choice.selected == reviewCorrect, canRecoverLowConfidence(snapshot) {
+        } else if high, choice.selected == reviewCorrect, canRecoverLowConfidence(snapshot),
+            !clipped.truncated
+        {
             next.needsReview = false
             applied = true
         }
@@ -1136,6 +1146,7 @@ struct OpenRouterGeographyColumnDecider: RevenueRecognitionColumnDeciding, Geogr
         warnings: [String],
         needsReview: Bool,
         periodColumns: [GeographyReviewPeriodColumn],
+        tableTruncated: Bool,
         docID: String
     ) async -> SegmentNoteConsultedChoice {
         let unavailable = SegmentNoteConsultedChoice(
@@ -1145,7 +1156,7 @@ struct OpenRouterGeographyColumnDecider: RevenueRecognitionColumnDeciding, Geogr
         guard let body = Self.reviewRequestJSON(
             model: model, rows: rows, tableMarkdown: tableMarkdown, heading: heading,
             caption: caption, warnings: warnings, needsReview: needsReview,
-            periodColumns: periodColumns, docID: docID)
+            periodColumns: periodColumns, tableTruncated: tableTruncated, docID: docID)
         else {
             return unavailable
         }
@@ -1169,6 +1180,7 @@ struct OpenRouterGeographyColumnDecider: RevenueRecognitionColumnDeciding, Geogr
         warnings: [String],
         needsReview: Bool,
         periodColumns: [GeographyReviewPeriodColumn] = [],
+        tableTruncated: Bool = false,
         docID: String
     ) -> Data? {
         let criteria: [String: String] = [
@@ -1219,6 +1231,7 @@ struct OpenRouterGeographyColumnDecider: RevenueRecognitionColumnDeciding, Geogr
                 "extracted_rows": rowState,
                 "period_columns": columnState,
                 "table_markdown": tableMarkdown,
+                "table_truncated": tableTruncated,
             ],
             questions: questions)
     }

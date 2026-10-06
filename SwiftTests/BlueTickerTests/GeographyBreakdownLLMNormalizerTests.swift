@@ -442,6 +442,7 @@ struct GeographyBreakdownLLMNormalizerTests {
         #expect(criteria[GeographyBreakdownLLMNormalizer.reviewWrong]?.contains("前期") == true)
         let state = try #require(object["state"] as? [String: Any])
         #expect(state["needs_review"] as? Bool == true)
+        #expect(state["table_truncated"] as? Bool == false)
         let rows = try #require(state["extracted_rows"] as? [[String: Any]])
         #expect(rows.count == 2)
         #expect(rows[0]["label"] as? String == "日本")
@@ -462,5 +463,35 @@ struct GeographyBreakdownLLMNormalizerTests {
             as? [String: Any]
         #expect(priorAmounts?["日本"] as? Double == 162_636)
         #expect(rows[0]["amount_million_yen"] as? Double == 162_636)
+    }
+
+    @Test func clippedReviewMarkdownFlagsTruncation() {
+        let short = GeographyBreakdownLLMNormalizer.clippedReviewMarkdown("短い表")
+        #expect(short.truncated == false)
+        #expect(short.text == "短い表")
+        let raw = String(repeating: "あ", count: GeographyBreakdownLLMNormalizer.reviewMarkdownLimit + 5)
+        let clipped = GeographyBreakdownLLMNormalizer.clippedReviewMarkdown(raw)
+        #expect(clipped.truncated)
+        #expect(clipped.text.count == GeographyBreakdownLLMNormalizer.reviewMarkdownLimit)
+    }
+
+    @Test func reviewRequestJSONMarksTruncatedTable() throws {
+        let data = try #require(OpenRouterGeographyColumnDecider.reviewRequestJSON(
+            model: "typesafe/jev-1.13",
+            rows: [
+                GeographyExtractionReviewRow(
+                    label: "日本", amountMillionYen: 600, rowKind: "segment"),
+            ],
+            tableMarkdown: String(repeating: "x", count: 40),
+            heading: "地域ごとの情報",
+            caption: "当連結会計年度",
+            warnings: [RevenueRecognitionColumnNormalizer.warningLowConfidence],
+            needsReview: true,
+            tableTruncated: true,
+            docID: "S-truncated-json"))
+        let object = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let state = try #require(object["state"] as? [String: Any])
+        #expect(state["table_truncated"] as? Bool == true)
+        #expect(state["table_markdown"] as? String == String(repeating: "x", count: 40))
     }
 }
