@@ -879,24 +879,22 @@ enum GeographyBreakdownLLMNormalizer {
 
     /// 親地域の内数（「うち」）を segment から外し、親の subtotal 明細として残す。
     /// 親は加算対象のまま。child は category_group=親 / category=子。
+    /// 親候補が複数あるときは金額が子以上で最も近い親を使う（うち中国→アジア、日本ではない）。
     static func keepOfWhichSubsetAsSubtotals(_ rows: [BreakdownRow]) -> [BreakdownRow] {
-        let segmentIndices = rows.indices.filter { rows[$0].rowKind == "segment" }
-        guard segmentIndices.count >= 2 else { return rows }
-        var childToParent: [Int: Int] = [:]
-        for childIdx in segmentIndices {
-            let child = rows[childIdx]
-            if child.categoryGroup != nil { continue }
-            for parentIdx in segmentIndices where parentIdx != childIdx {
-                let parent = rows[parentIdx]
-                if isLikelyOfWhichChild(parent: parent, child: child) {
-                    childToParent[childIdx] = parentIdx
-                    break
-                }
-            }
-        }
-        guard !childToParent.isEmpty else { return rows }
+        let parentIndices = rows.indices.filter { rows[$0].rowKind == "segment" }
+        guard parentIndices.count >= 1 else { return rows }
         return rows.enumerated().map { idx, row in
-            guard let parentIdx = childToParent[idx] else { return row }
+            let childForMatch: BreakdownRow
+            if row.rowKind == "segment" {
+                childForMatch = row
+            } else if isOfWhichDetailRow(row) {
+                childForMatch = row
+            } else {
+                return row
+            }
+            guard let parentIdx = bestOfWhichParentIndex(
+                child: childForMatch, among: rows, parentIndices: parentIndices, excluding: idx)
+            else { return row }
             let parentLabel = stripStackedOfWhichAnnotation(rows[parentIdx].labelRaw)
             let childLabel = RevenueRecognitionCandidates.strippedOfWhichDetailName(row.labelRaw)
             var copy = row
@@ -906,6 +904,36 @@ enum GeographyBreakdownLLMNormalizer {
             copy.labelRaw = childLabel
             return copy
         }
+    }
+
+    private static func bestOfWhichParentIndex(
+        child: BreakdownRow, among rows: [BreakdownRow], parentIndices: [Int], excluding: Int
+    ) -> Int? {
+        let implied = RevenueRecognitionCandidates.ofWhichImpliedParent(child.labelRaw)
+        if let implied {
+            let hits = parentIndices.filter { idx in
+                idx != excluding
+                    && compactGeographyLabel(rows[idx].labelRaw).contains(
+                        compactGeographyLabel(implied))
+            }
+            if let hit = hits.min(by: { rows[$0].amount < rows[$1].amount }),
+                isLikelyOfWhichChild(parent: rows[hit], child: child)
+            {
+                return hit
+            }
+        }
+        if isOfWhichDetailRow(child), let group = child.categoryGroup {
+            let current = parentIndices.first {
+                compactGeographyLabel(rows[$0].labelRaw) == compactGeographyLabel(group)
+            }
+            if let current, isLikelyOfWhichChild(parent: rows[current], child: child) {
+                return current
+            }
+        }
+        let candidates = parentIndices.filter { idx in
+            idx != excluding && isLikelyOfWhichChild(parent: rows[idx], child: child)
+        }
+        return candidates.min(by: { rows[$0].amount < rows[$1].amount })
     }
 
     /// 旧名。親を残し内数を subtotal 明細にする。

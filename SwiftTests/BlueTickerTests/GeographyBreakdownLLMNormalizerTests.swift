@@ -498,6 +498,7 @@ struct GeographyBreakdownLLMNormalizerTests {
         #expect(RevenueRecognitionCandidates.ofWhichChildDetailName("北米（うち米国）") == "米国")
         #expect(RevenueRecognitionCandidates.ofWhichChildDetailName("（うち米国）") == "米国")
         #expect(RevenueRecognitionCandidates.ofWhichChildDetailName("上記米州のうち米国") == "米国")
+        #expect(RevenueRecognitionCandidates.ofWhichImpliedParent("上記米州のうち米国") == "米州")
         #expect(RevenueRecognitionCandidates.ofWhichChildDetailName("うち、アメリカ") == "アメリカ")
         #expect(RevenueRecognitionCandidates.isAmountCell("(37,220)"))
     }

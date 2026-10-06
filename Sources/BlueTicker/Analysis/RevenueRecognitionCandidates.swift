@@ -169,8 +169,9 @@ enum RevenueRecognitionCandidates {
                         for item in partialItems {
                             let childName = ofWhichChildDetailName(item.label)
                                 ?? strippedOfWhichDetailName(item.label)
+                            let parentName = ofWhichImpliedParent(item.label) ?? group
                             built.append(BuiltRow(
-                                categoryGroup: group, category: childName,
+                                categoryGroup: parentName, category: childName,
                                 amount: amounts[item.row] ?? 0, isPartial: true,
                                 rowKind: "subtotal"))
                         }
@@ -212,8 +213,9 @@ enum RevenueRecognitionCandidates {
                         if keepOfWhichPartials {
                             let childName = ofWhichChildDetailName(item.label)
                                 ?? strippedOfWhichDetailName(item.label)
+                            let parentName = ofWhichImpliedParent(item.label) ?? group
                             built.append(BuiltRow(
-                                categoryGroup: group, category: childName,
+                                categoryGroup: parentName, category: childName,
                                 amount: amounts[item.row] ?? 0, isPartial: true,
                                 rowKind: "subtotal"))
                         } else {
@@ -794,6 +796,20 @@ enum RevenueRecognitionCandidates {
             return rest.isEmpty ? nil : rest
         }
         return nil
+    }
+
+    /// `上記米州のうち米国` → `米州`。ラベルから親が読めないときは nil。
+    static func ofWhichImpliedParent(_ label: String) -> String? {
+        let compact = collapsedCell(label)
+            .replacingOccurrences(of: "、", with: "")
+            .replacingOccurrences(of: ",", with: "")
+        guard let range = compact.range(of: "のうち") else { return nil }
+        var prefix = String(compact[..<range.lowerBound])
+        if prefix.hasPrefix("上記") {
+            prefix = String(prefix.dropFirst(2))
+        }
+        prefix = stripWrappingParens(prefix)
+        return prefix.isEmpty ? nil : prefix
     }
 
     static func strippedOfWhichDetailName(_ label: String) -> String {
