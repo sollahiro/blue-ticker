@@ -51,6 +51,7 @@ actor FakeRevenueRecognitionColumnDecider: RevenueRecognitionColumnDeciding, Geo
         caption: String?,
         warnings: [String],
         needsReview: Bool,
+        periodColumns: [GeographyReviewPeriodColumn],
         docID: String
     ) async -> SegmentNoteConsultedChoice {
         SegmentNoteConsultedChoice(

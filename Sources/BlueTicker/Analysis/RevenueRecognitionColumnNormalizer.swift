@@ -358,31 +358,53 @@ enum RevenueRecognitionColumnNormalizer {
         }
         let headerBlob = column.header + headerCells.joined()
         let caption = column.caption ?? table.precedingCaption ?? ""
-        let headerHasPrior = headerBlob.contains("前連結会計年度") || headerBlob.contains("前事業年度")
-            || headerBlob.contains("前期")
-        let headerHasCurrent = headerBlob.contains("当連結会計年度") || headerBlob.contains("当事業年度")
-            || headerBlob.contains("当期")
+        let headerHasPrior = periodBlobHasPrior(headerBlob)
+        let headerHasCurrent = periodBlobHasCurrent(headerBlob)
             || (column.header.contains("当") && !column.header.contains("前"))
             || headerCells.contains(where: { $0.contains("当") && !$0.contains("前") })
+        // 列セルの 前 が正本。キャプションの 当連結会計年度（導入文漏れ）で前期列を残さない。
         if headerHasPrior && !headerHasCurrent { return true }
-        let blob = caption + headerBlob
-        let hasPrior = blob.contains("前連結会計年度") || blob.contains("前事業年度")
-            || blob.contains("前期")
-        let hasCurrent = blob.contains("当連結会計年度") || blob.contains("当事業年度")
-            || blob.contains("当期") || headerHasCurrent
-        if hasPrior && !hasCurrent { return true }
+        if !headerHasPrior && !headerHasCurrent {
+            let captionHasPrior = periodBlobHasPrior(caption)
+            let captionHasCurrent = periodBlobHasCurrent(caption)
+            if captionHasPrior && !captionHasCurrent { return true }
+        }
+        let headerYears = SegmentInfoPublishGuards.years(in: headerBlob)
+        let siblingYears = table.columnHeaders.flatMap { key, header -> [Int] in
+            guard key != column.column else { return [] }
+            return SegmentInfoPublishGuards.years(in: header)
+        } + table.grid.prefix(table.headerRowCount).flatMap { row in
+            row.enumerated().flatMap { index, cell -> [Int] in
+                index == column.column ? [] : SegmentInfoPublishGuards.years(in: cell)
+            }
+        }
+        if !headerYears.isEmpty, let maxYear = siblingYears.max(),
+           headerYears.allSatisfy({ $0 < maxYear })
+        {
+            return true
+        }
         let headerEra = SegmentInfoPublishGuards.eraNumber(in: column.header)
             ?? headerCells.compactMap { SegmentInfoPublishGuards.eraNumber(in: $0) }.first
             ?? SegmentInfoPublishGuards.eraNumber(in: caption)
-        let siblingEras = table.columnHeaders.values.compactMap {
-            SegmentInfoPublishGuards.eraNumber(in: $0)
+        let siblingEras = table.columnHeaders.compactMap { key, header -> Int? in
+            key == column.column ? nil : SegmentInfoPublishGuards.eraNumber(in: header)
         } + table.grid.prefix(table.headerRowCount).flatMap { row in
-            row.compactMap { SegmentInfoPublishGuards.eraNumber(in: $0) }
+            row.enumerated().compactMap { index, cell -> Int? in
+                index == column.column ? nil : SegmentInfoPublishGuards.eraNumber(in: cell)
+            }
         }
         if let headerEra, let maxEra = siblingEras.max(), headerEra < maxEra {
             return true
         }
         return false
+    }
+
+    private static func periodBlobHasPrior(_ text: String) -> Bool {
+        text.contains("前連結会計年度") || text.contains("前事業年度") || text.contains("前期")
+    }
+
+    private static func periodBlobHasCurrent(_ text: String) -> Bool {
+        text.contains("当連結会計年度") || text.contains("当事業年度") || text.contains("当期")
     }
 
     /// 免除は明細のカテゴリ行だけ。合計行やグリッドに「その他の収益（注）」があっても

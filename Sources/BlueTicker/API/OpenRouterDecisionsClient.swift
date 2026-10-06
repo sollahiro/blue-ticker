@@ -1,5 +1,7 @@
 // OpenRouter Decisions API（Jev）。Chat Completions とは別エンドポイント。
 // 返すのは Choice / Noul / Score と確率で、散文は返さない。
+// リクエストに temperature / seed は無い（API が受けない）。同一入力でも confidence は揺れる
+// （収益分解 272A は 0.69 / 0.94 / 0.87。geography 列選択も 0.3 台〜0.8 台）。
 // セグメント注記は `OPENROUTER_DECISION_API_KEY` があるときだけ呼ぶ。未設定ならクライアントを作らない。
 
 import Foundation

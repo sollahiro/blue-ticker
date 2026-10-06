@@ -50,7 +50,7 @@ description: XBRL 抽出ロジック、Stage、statement・notes・breakdown 契
 5. 正規化契約（スキーマ・分母・軸）が本体。LLM は契約への写像補助。
 6. 小計・調整行の除外は名称より**数値判定**が頑健。単一セグメントでは数値近似だけで小計扱いにしない。
 7. 銀行は `normalizeBankBasis`（分母は segment 小計のうち行合計に最も近い値。単純最大は不可）。単一セグメントは専用タグで検出。
-8. 実装コストの重心は geography の `html_table`。`segments` は多くが `xbrl_facts`。geography は列選択のあと Jev 最終判定（`review_decision` の correct/wrong、閾値 0.9）。confident wrong は公開を NR。低確信 NR は correct かつ小計・分母・ラベルのハードガード無しのときだけ回復。失敗は提案維持。`cache_version` は上げない。
+8. 実装コストの重心は geography の `html_table`。`segments` は多くが `xbrl_facts`。geography は列選択のあと Jev 最終判定（`review_decision` の correct/wrong、閾値 0.9）。confident wrong は公開を NR。低確信 NR は correct かつ小計・分母・ラベル・単位・前期列・選択列不一致のハードガード無しのときだけ回復。失敗は提案維持。Jev Decisions は temperature/seed 無しで confidence が揺れるので、列 0.5 の NR は最終判定 ≥0.9 の correct で回復する。前期列は候補に出さず、前期だけの表は当期内訳にしない。`cache_version` は上げない。
 9. `segments` の軸は member 名キーワード。全一致→geography、0一致→product_service、特定地域名の部分一致のみ混在扱いで `needs_review`（Domestic/Overseas だけの一致では立てない）。
 10. 連結優先・非連結フォールバック必須。member ラベル選択は Dictionary 走査順に依存させない。
 11. LLM の `profit == nil` だけでは未開示と見落としを区別できない → `profit_disclosed`＋決定的ガード。

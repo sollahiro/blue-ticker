@@ -708,6 +708,13 @@ enum BreakdownExtractor {
                 tables = revenueDecomp
             }
         }
+        // 前期 TextBlock だけが残るとき（2146 S100YKK1 / 1968 S100TU63）は当期の地域表が無い。
+        // html_table の前期を公開せず、報告セグメントが地域軸なら facts へ落とす。
+        if !tables.isEmpty, tables.allSatisfy({ $0.period == "前期" }),
+           let segmentGeography = extractGeographyFromReportableSegments(xbrlDir: xbrlDir)
+        {
+            return segmentGeography
+        }
         let result = buildResult(
             xbrlDir: xbrlDir, tables: tables, dimensionKeywords: Xbrl.geographyDimensionKeywords)
         if result.method == "not_found",

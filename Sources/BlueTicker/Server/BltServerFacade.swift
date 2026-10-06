@@ -564,7 +564,14 @@ public extension BltServerContext {
                 fiscalYearEnd: fiscalYearEnd)
         }
         guard let decider = segmentNoteDecider else { return pass }
-        guard !extracted.tables.isEmpty else { return pass }
+        let tablesForDecision: [BreakdownTable]
+        if axis == .geography {
+            let current = extracted.tables.filter { $0.period != "前期" }
+            tablesForDecision = current
+        } else {
+            tablesForDecision = extracted.tables
+        }
+        guard !tablesForDecision.isEmpty else { return pass }
         let clean: Bool
         if let snapshot = BreakdownNormalizer.normalize(
             extracted, consolidatedSales: consolidatedSales, labelsByTag: labelsByTag)
@@ -579,7 +586,7 @@ public extension BltServerContext {
             clean = false
         }
         let outcome = await SegmentNoteDecision.decide(
-            axis: axis, docID: docID, tables: extracted.tables,
+            axis: axis, docID: docID, tables: tablesForDecision,
             sentences: sentences,
             hasCleanDeterministicSnapshot: clean, decider: decider)
         switch outcome.action {
@@ -613,8 +620,15 @@ public extension BltServerContext {
         case .omitGeography:
             return (axis == .geography ? nil : extracted, outcome)
         case .keepTable(let index):
+            let originalIndex: Int
+            if axis == .geography {
+                let current = extracted.tables.enumerated().filter { $0.element.period != "前期" }
+                originalIndex = current.indices.contains(index) ? current[index].offset : index
+            } else {
+                originalIndex = index
+            }
             return isolatingKeptTableIfSafe(
-                extracted, index: index, outcome: outcome, fiscalYearEnd: fiscalYearEnd)
+                extracted, index: originalIndex, outcome: outcome, fiscalYearEnd: fiscalYearEnd)
         }
     }
 

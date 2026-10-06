@@ -38,10 +38,11 @@ import Testing
         probabilities: [String: Double] = [:],
         reviewSelected: String? = nil,
         reviewProbability: Double? = nil,
-        docID: String = "S-geo-golden"
+        docID: String = "S-geo-golden",
+        assignCurrentPeriod: Bool = true
     ) async -> (BreakdownSnapshot?, LLMBreakdownAudit?) {
         var tables = BreakdownExtractor.allTablesFromHtml(html, defaultHeading: heading)
-        if !tables.isEmpty {
+        if assignCurrentPeriod, !tables.isEmpty {
             tables[0].period = "当期"
         }
         return await GeographyBreakdownLLMNormalizer.normalize(
@@ -988,9 +989,7 @@ import Testing
         #expect(publiclyServable(snapshot))
     }
 
-    /// 7272 型: 当期列と（うち米国）（うちインドネシア）を落として その他 を残す。
-    @Test func yamahaOfWhichKeepsOtherAndCurrentYear() async throws {
-        let html = """
+    private static let yamahaGeographyHTML = """
             <p>当連結会計年度</p>
             <table>
               <tr>
@@ -1008,14 +1007,168 @@ import Testing
               <tr><td>合計</td><td>2,576,179</td><td>2,534,203</td></tr>
             </table>
             """
+
+    /// 7272 型: 当期列と（うち米国）（うちインドネシア）を落として その他 を残す。
+    @Test func yamahaOfWhichKeepsOtherAndCurrentYear() async throws {
         let (snapshotOrNil, _) = await normalize(
-            html: html, sales: yen(2_534_203), docID: "S100XRTH")
+            html: Self.yamahaGeographyHTML, sales: yen(2_534_203), docID: "S100XRTH",
+            assignCurrentPeriod: false)
         let snapshot = try #require(snapshotOrNil)
         #expect(Set(segmentLabels(snapshot)) == Set(["日本", "北米", "欧州", "アジア", "その他"]))
         #expect(snapshot.rows.first { $0.labelRaw == "日本" }?.amount == yen(155_330))
+        #expect(snapshot.rows.first { $0.labelRaw == "日本" }?.amount != yen(137_712))
         #expect(snapshot.rows.first { $0.labelRaw == "その他" }?.amount == yen(469_686))
         #expect(!segmentLabels(snapshot).contains { $0.contains("米国") })
         #expect(!segmentLabels(snapshot).contains { $0.contains("インドネシア") })
+        #expect(!snapshot.needsReview)
+        #expect(publiclyServable(snapshot))
+        #expect(!snapshot.warnings.contains(GeographyBreakdownLLMNormalizer.warningPriorPeriodColumn))
+    }
+
+    /// 7272: キャプションに 当 があっても前期列は候補から外す。
+    @Test func yamahaPriorYearColumnIsNotOffered() throws {
+        var tables = BreakdownExtractor.allTablesFromHtml(
+            Self.yamahaGeographyHTML, defaultHeading: "地域ごとの情報")
+        #expect(!tables.isEmpty)
+        let parsed = RevenueRecognitionCandidates.parse(tables: tables)
+        let columns = RevenueRecognitionCandidates.amountColumns(in: parsed)
+        let offered = GeographyBreakdownLLMNormalizer.offeredColumns(columns, tables: parsed)
+        #expect(!offered.isEmpty)
+        #expect(offered.allSatisfy { column in
+            let table = parsed.first { $0.tableIndex == column.tableIndex }!
+            return !RevenueRecognitionColumnNormalizer.isPriorOnlyColumn(column, table: table)
+        })
+        #expect(offered.contains { $0.header.contains("当連結会計年度") })
+        #expect(!offered.contains { column in
+            column.header.contains("前連結会計年度") && !column.header.contains("当連結会計年度")
+        })
+    }
+
+    /// 7272: 前期列を選ぶと金額は 162,636 になり、決定論で NR（最終判定の correct では覆さない）。
+    @Test func yamahaPriorYearColumnStaysNeedsReviewEvenIfReviewSaysCorrect() async throws {
+        let (snapshotOrNil, _) = await normalize(
+            html: Self.yamahaGeographyHTML, sales: yen(2_534_203),
+            selected: "t0_c1", confidence: 0.99,
+            reviewSelected: GeographyBreakdownLLMNormalizer.reviewCorrect,
+            reviewProbability: 0.99, docID: "S100XRTH-prior",
+            assignCurrentPeriod: false)
+        let snapshot = try #require(snapshotOrNil)
+        #expect(snapshot.rows.first { $0.labelRaw == "日本" }?.amount == yen(162_636))
+        #expect(snapshot.needsReview)
+        #expect(snapshot.warnings.contains(GeographyBreakdownLLMNormalizer.warningPriorPeriodColumn))
+        #expect(!publiclyServable(snapshot))
+    }
+
+    /// 最終判定: 前期列金額は confident wrong で公開しない。
+    @Test func finalReviewDemotesPriorYearAmounts() async throws {
+        let (snapshotOrNil, audit) = await normalize(
+            html: Self.yamahaGeographyHTML, sales: yen(2_534_203),
+            selected: "t0_c1", confidence: 0.99,
+            reviewSelected: GeographyBreakdownLLMNormalizer.reviewWrong,
+            reviewProbability: 0.95, docID: "S100XRTH-review-prior",
+            assignCurrentPeriod: false)
+        let snapshot = try #require(snapshotOrNil)
+        #expect(snapshot.rows.first { $0.labelRaw == "日本" }?.amount == yen(162_636))
+        #expect(snapshot.needsReview)
+        #expect(!publiclyServable(snapshot))
+        #expect(snapshot.warnings.contains(GeographyBreakdownLLMNormalizer.warningPriorPeriodColumn))
+        let asked = audit?.jev?.calls.contains {
+            $0.question == OpenRouterSegmentNoteDecider.reviewDecisionQuestion
+        }
+        #expect(asked == false || snapshot.warnings.contains(
+            GeographyBreakdownLLMNormalizer.warningPriorPeriodColumn))
+    }
+
+    /// 7272 本番 137,712: 当期列 155,330 とも前期列 162,636 とも違う金額は NR。
+    @Test func yamahaStaleAmountsMismatchSelectedColumn() throws {
+        var tables = BreakdownExtractor.allTablesFromHtml(
+            Self.yamahaGeographyHTML, defaultHeading: "地域ごとの情報")
+        let parsed = RevenueRecognitionCandidates.parse(tables: tables)
+        let table = try #require(parsed.first)
+        let current = try #require(
+            RevenueRecognitionCandidates.amountColumns(in: parsed).first {
+                $0.header.contains("当連結会計年度")
+            })
+        let stale: [BreakdownRow] = [
+            .init(labelRaw: "日本", amount: yen(137_712), share: nil, profit: nil, rowKind: "segment"),
+            .init(labelRaw: "北米", amount: yen(579_929), share: nil, profit: nil, rowKind: "segment"),
+            .init(labelRaw: "欧州", amount: yen(331_041), share: nil, profit: nil, rowKind: "segment"),
+            .init(labelRaw: "アジア", amount: yen(1_016_543), share: nil, profit: nil, rowKind: "segment"),
+            .init(labelRaw: "その他", amount: yen(468_976), share: nil, profit: nil, rowKind: "segment"),
+        ]
+        #expect(
+            GeographyBreakdownLLMNormalizer.extractedMismatchesSelectedColumn(
+                rows: stale, table: table, selectedColumn: current, multiplier: Financial.millionYen))
+        #expect(
+            !GeographyBreakdownLLMNormalizer.extractedMatchesPriorYearColumn(
+                rows: stale, table: table, selectedColumn: current, multiplier: Financial.millionYen))
+        let currentRows: [BreakdownRow] = [
+            .init(labelRaw: "日本", amount: yen(155_330), share: nil, profit: nil, rowKind: "segment"),
+            .init(labelRaw: "北米", amount: yen(546_655), share: nil, profit: nil, rowKind: "segment"),
+            .init(labelRaw: "欧州", amount: yen(345_782), share: nil, profit: nil, rowKind: "segment"),
+            .init(labelRaw: "アジア", amount: yen(1_016_748), share: nil, profit: nil, rowKind: "segment"),
+            .init(labelRaw: "その他", amount: yen(469_686), share: nil, profit: nil, rowKind: "segment"),
+        ]
+        #expect(
+            !GeographyBreakdownLLMNormalizer.extractedMismatchesSelectedColumn(
+                rows: currentRows, table: table, selectedColumn: current,
+                multiplier: Financial.millionYen))
+    }
+
+    /// 2146 / 1968 型: 前期だけの地域表は当期内訳にしない。
+    @Test func priorOnlyRegionTableIsNotPublished() async throws {
+        let html = """
+            <p>前連結会計年度</p>
+            <table>
+              <tr><td>日本</td><td>ベトナム</td><td>合計</td></tr>
+              <tr><td>165,591</td><td>29,157</td><td>194,748</td></tr>
+            </table>
+            """
+        var tables = BreakdownExtractor.allTablesFromHtml(html, defaultHeading: "地域ごとの情報")
+        if !tables.isEmpty { tables[0].period = "前期" }
+        let (snapshot, _) = await GeographyBreakdownLLMNormalizer.normalize(
+            ExtractedBreakdown(method: "html_table", tables: tables, facts: []),
+            consolidatedSales: yen(194_748),
+            decider: FakeRevenueRecognitionColumnDecider(confidence: 0.9),
+            fiscalYearEnd: "2026-03-31",
+            docID: "S100YKK1")
+        #expect(snapshot == nil)
+    }
+
+    /// 1968 S100TU63 型: 前期の日本/アジアは当期内訳にしない。
+    @Test func taiheiPriorOnlyJapanAsiaIsNotPublished() async throws {
+        let html = """
+            <p>前連結会計年度</p>
+            <table>
+              <tr><td>日本</td><td>アジア</td><td>合計</td></tr>
+              <tr><td>112,974</td><td>12,799</td><td>125,774</td></tr>
+            </table>
+            """
+        var tables = BreakdownExtractor.allTablesFromHtml(html, defaultHeading: "地域ごとの情報")
+        if !tables.isEmpty { tables[0].period = "前期" }
+        let (snapshot, _) = await GeographyBreakdownLLMNormalizer.normalize(
+            ExtractedBreakdown(method: "html_table", tables: tables, facts: []),
+            consolidatedSales: yen(125_774),
+            decider: FakeRevenueRecognitionColumnDecider(confidence: 0.9),
+            fiscalYearEnd: "2026-03-31",
+            docID: "S100TU63")
+        #expect(snapshot == nil)
+    }
+
+    /// 2146 型: 当期の地域列があれば日本/ベトナムを公開する。
+    @Test func currentYearRegionColumnsPublishJapanVietnam() async throws {
+        let html = """
+            <p>当連結会計年度</p>
+            <table>
+              <tr><td>日本</td><td>ベトナム</td><td>合計</td></tr>
+              <tr><td>165,591</td><td>29,157</td><td>194,748</td></tr>
+            </table>
+            """
+        let (snapshotOrNil, _) = await normalize(
+            html: html, sales: yen(194_748), docID: "S100W94T")
+        let snapshot = try #require(snapshotOrNil)
+        #expect(Set(segmentLabels(snapshot)) == Set(["日本", "ベトナム"]))
+        #expect(snapshot.rows.first { $0.labelRaw == "日本" }?.amount == yen(165_591))
         #expect(!snapshot.needsReview)
         #expect(publiclyServable(snapshot))
     }

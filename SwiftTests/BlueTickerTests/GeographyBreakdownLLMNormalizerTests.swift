@@ -364,20 +364,53 @@ struct GeographyBreakdownLLMNormalizerTests {
         #expect(Set(labels) == Set(["日本", "北米", "欧州", "その他"]))
     }
 
+    @Test("キャプションの当連結会計年度で前期列を残さない")
+    func captionCurrentDoesNotKeepPriorColumn() throws {
+        let html = """
+            <p>当連結会計年度より報告セグメントを変更しました。</p>
+            <table>
+              <tr>
+                <td></td>
+                <td>前連結会計年度（自 2024年１月１日 至 2024年12月31日）</td>
+                <td>当連結会計年度（自 2025年１月１日 至 2025年12月31日）</td>
+              </tr>
+              <tr><td>日本</td><td>162,636</td><td>155,330</td></tr>
+              <tr><td>合計</td><td>2,576,179</td><td>2,534,203</td></tr>
+            </table>
+            """
+        let tables = BreakdownExtractor.allTablesFromHtml(html, defaultHeading: "地域ごとの情報")
+        let parsed = RevenueRecognitionCandidates.parse(tables: tables)
+        let columns = RevenueRecognitionCandidates.amountColumns(in: parsed)
+        #expect(columns.count >= 2)
+        let prior = try #require(columns.first { $0.header.contains("前連結会計年度") })
+        let current = try #require(columns.first { $0.header.contains("当連結会計年度") })
+        let table = try #require(parsed.first { $0.tableIndex == prior.tableIndex })
+        #expect(RevenueRecognitionColumnNormalizer.isPriorOnlyColumn(prior, table: table))
+        #expect(!RevenueRecognitionColumnNormalizer.isPriorOnlyColumn(current, table: table))
+    }
+
     @Test func reviewRequestJSONAsksCorrectOrWrong() throws {
         let data = try #require(OpenRouterGeographyColumnDecider.reviewRequestJSON(
             model: "typesafe/jev-1.13",
             rows: [
                 GeographyExtractionReviewRow(
-                    label: "日本", amountMillionYen: 600, rowKind: "segment"),
+                    label: "日本", amountMillionYen: 162_636, rowKind: "segment"),
                 GeographyExtractionReviewRow(
                     label: "海外", amountMillionYen: 400, rowKind: "segment"),
             ],
-            tableMarkdown: "| 日本 | 600 |\n| 海外 | 400 |",
+            tableMarkdown: "| 日本 | 162,636 | 155,330 |",
             heading: "地域ごとの情報",
             caption: "当連結会計年度",
             warnings: [RevenueRecognitionColumnNormalizer.warningLowConfidence],
             needsReview: true,
+            periodColumns: [
+                GeographyReviewPeriodColumn(
+                    key: "t0_c1", header: "前連結会計年度", priorOnly: true,
+                    amounts: ["日本": 162_636]),
+                GeographyReviewPeriodColumn(
+                    key: "t0_c2", header: "当連結会計年度", priorOnly: false,
+                    amounts: ["日本": 155_330]),
+            ],
             docID: "S-review-json"))
         let object = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
         let questions = try #require(object["questions"] as? [String: Any])
@@ -385,10 +418,28 @@ struct GeographyBreakdownLLMNormalizerTests {
             questions[OpenRouterSegmentNoteDecider.reviewDecisionQuestion] as? [String: Any])
         let criteria = try #require(review["criteria"] as? [String: String])
         #expect(Set(criteria.keys) == Set(GeographyBreakdownLLMNormalizer.reviewOptions))
+        #expect(criteria[GeographyBreakdownLLMNormalizer.reviewWrong]?.contains("前期") == true)
         let state = try #require(object["state"] as? [String: Any])
         #expect(state["needs_review"] as? Bool == true)
         let rows = try #require(state["extracted_rows"] as? [[String: Any]])
         #expect(rows.count == 2)
         #expect(rows[0]["label"] as? String == "日本")
+        let periodColumns = try #require(state["period_columns"] as? [[String: Any]])
+        #expect(periodColumns.count == 2)
+        #expect(periodColumns.contains { $0["prior_only"] as? Bool == true })
+        let instructions = try #require(review["instructions"] as? String)
+        #expect(instructions.contains("前期列"))
+        #expect(instructions.contains("period_columns"))
+        #expect(GeographyBreakdownLLMNormalizer.hasHardGuardWarnings(
+            [GeographyBreakdownLLMNormalizer.warningPriorPeriodColumn]))
+        #expect(GeographyBreakdownLLMNormalizer.hasHardGuardWarnings(
+            [GeographyBreakdownLLMNormalizer.warningSelectedColumnMismatch]))
+        let currentAmounts = periodColumns.first { $0["prior_only"] as? Bool == false }?["amounts"]
+            as? [String: Any]
+        #expect(currentAmounts?["日本"] as? Double == 155_330)
+        let priorAmounts = periodColumns.first { $0["prior_only"] as? Bool == true }?["amounts"]
+            as? [String: Any]
+        #expect(priorAmounts?["日本"] as? Double == 162_636)
+        #expect(rows[0]["amount_million_yen"] as? Double == 162_636)
     }
 }
