@@ -211,7 +211,7 @@ import Testing
         #expect(snapshot.rows.first { $0.labelRaw == "北米" }?.amount == yen(7_960_998))
         #expect(!segmentLabels(snapshot).contains { $0.contains("うち") })
         #expect(!snapshot.needsReview)
-        #expect(!snapshot.warnings.contains(GeographyBreakdownLLMNormalizer.warningCoverageBelowSales))
+        #expect(!snapshot.warnings.contains("llm_row_sum_mismatch"))
         #expect(publiclyServable(snapshot))
     }
 
@@ -294,7 +294,7 @@ import Testing
         #expect(publiclyServable(snapshot))
     }
 
-    /// カバレッジガード: 内部小計分母でも公開行が売上の95%を下回れば NR。correct では覆さない。
+    /// カバレッジ: 公開行が IS 売上の 95–105% を外れるときは既存の llm_row_sum_mismatch。correct では覆さない。
     @Test func coverageGuardIsHardAndNotRecoveredByFinalReview() async throws {
         let html = """
             <p>当連結会計年度</p>
@@ -310,11 +310,11 @@ import Testing
             reviewProbability: 0.99, docID: "S-coverage-golden")
         let snapshot = try #require(snapshotOrNil)
         #expect(snapshot.needsReview)
-        #expect(snapshot.warnings.contains(GeographyBreakdownLLMNormalizer.warningCoverageBelowSales))
+        #expect(snapshot.warnings.contains("llm_row_sum_mismatch"))
         #expect(!publiclyServable(snapshot))
     }
 
-    /// 小さすぎる内部小計を分母にしても、カバーは損益計算書売上で fail-closed。
+    /// 小さすぎる内部小計は総合計にせず、既存の llm_row_sum_mismatch で fail-closed。
     @Test func tooSmallSubtotalDenominatorStillNeedsReviewAgainstSales() async throws {
         let html = """
             <p>当連結会計年度</p>
@@ -333,9 +333,9 @@ import Testing
             reviewProbability: 0.99, docID: "S-coverage-small-subtotal")
         let snapshot = try #require(snapshotOrNil)
         #expect(snapshot.needsReview)
-        #expect(snapshot.denominatorTag == "llm_table_subtotal")
-        #expect(abs(snapshot.denominator - yen(2_469_270)) < 1)
-        #expect(snapshot.warnings.contains(GeographyBreakdownLLMNormalizer.warningCoverageBelowSales))
+        #expect(snapshot.denominatorTag == "income_statement.sales")
+        #expect(abs(snapshot.denominator - yen(10_430_269)) < 1)
+        #expect(snapshot.warnings.contains("llm_row_sum_mismatch"))
         #expect(!publiclyServable(snapshot))
     }
 
@@ -364,7 +364,7 @@ import Testing
         #expect(publiclyServable(snapshot))
     }
 
-    /// 4. クレディセゾン型: 地域注記合計で分母を揃えて公開する。
+    /// 4. クレディセゾン型: 表合計が IS 売上の 95–105% を外れるときは既存 mismatch で NR。
     @Test func creditSaisonStyleDenominatorFromTableSubtotal() async throws {
         let html = """
             <p>当連結会計年度</p>
@@ -381,8 +381,9 @@ import Testing
             html: html, sales: yen(472_770), docID: "S-saison")
         let snapshot = try #require(snapshotOrNil)
         #expect(snapshot.denominatorTag == "llm_table_subtotal")
-        #expect(!snapshot.needsReview)
-        #expect(publiclyServable(snapshot))
+        #expect(snapshot.needsReview)
+        #expect(snapshot.warnings.contains("llm_row_sum_mismatch"))
+        #expect(!publiclyServable(snapshot))
     }
 
     /// 4. 列=地域の転置表。合計列を選び行へ展開する。

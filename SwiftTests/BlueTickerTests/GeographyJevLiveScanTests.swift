@@ -282,7 +282,6 @@ struct GeographyProdBreakdownRow: Codable {
                 || warnings.contains(GeographyBreakdownLLMNormalizer.warningFinalReviewWrong)
                 || warnings.contains(GeographyBreakdownLLMNormalizer.warningColumnSampleDisagreement)
                 || warnings.contains(GeographyBreakdownLLMNormalizer.warningColumnSampleInsufficient)
-                || warnings.contains(GeographyBreakdownLLMNormalizer.warningCoverageBelowSales)
             {
                 return "fail_closed"
             }

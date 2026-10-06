@@ -7,8 +7,8 @@
 // の 0.5 ゲートは使わない）。不一致・成功不足は needs_review（公開面 fail-closed）。
 // 行を組んだあと Jev 第二パスで最終判定する。一致した confident wrong は NR。
 // 低確信 NR は一致した confident correct かつハードガード無しのときだけ回復する。
-// 公開行のカバーは独立アンカー（損益計算書売上。無ければ表の総合計）に対して見る。
-// 同じ表から拾った内部小計分母だけでは判定しない。95% 未満は NR（correct では覆さない）。
+// 分母整合は既存の llm_row_sum_mismatch。アンカーは損益計算書売上、無ければ表の総合計。
+// 同じ表の内部小計では満たさない。95–105% の外は NR（correct では覆さない）。
 // 表 markdown が reviewMarkdownLimit 字で切れたときは table_truncated を渡し、correct 回復はしない。
 // docs/breakdown.md。BreakdownNormalizer.swift（xbrl_facts 経路）とは別経路。
 
@@ -60,16 +60,18 @@ protocol GeographyExtractionReviewing: Sendable {
         needsReview: Bool,
         periodColumns: [GeographyReviewPeriodColumn],
         tableTruncated: Bool,
-        docID: String
+        docID: String,
+        consolidatedSalesMillionYen: Double?
     ) async -> SegmentNoteConsultedChoice
 }
 
 enum GeographyBreakdownLLMNormalizer {
 
-    /// 分母整合性チェックの許容範囲。xbrl_facts 経路（0.95...1.05）より広め。
-    /// html_table は「注記の仕向地合計」と「損益計算書の売上」が数%ずれることがある
-    /// （実データ: キヤノン地域別注記の計 4,509,821 百万円 vs 連結売上 4,624,727 百万円 ≈ 2.5%差）。
-    private static let denominatorTolerance = 0.90...1.10
+    /// 分母整合性チェックの許容範囲。xbrl_facts 経路と同じ 0.95...1.05。
+    /// キヤノン地域別注記の計 vs 連結売上 ≈ 2.5% 差は帯の内側。
+    private static let denominatorTolerance = 0.95...1.05
+    /// 単位推定だけ従来どおり広め。分母整合の帯を単位判定に使わない。
+    private static let unitScaleTolerance = 0.90...1.10
 
     /// geography の ExtractedBreakdown（html_table）と連結外部売上から BreakdownSnapshot を組み立てる。
     /// 列が選べない・非該当・パース不能の場合は snapshot=nil。
@@ -298,34 +300,50 @@ enum GeographyBreakdownLLMNormalizer {
 
         var denominator = consolidatedSales
         var denominatorTag = "income_statement.sales"
-        let matchingTableTotal = matchingTableTotalAmount(
-            internalSum: internalSum, rows: rows, transposedWhole: transposedWhole,
-            unitMultiplier: unitMultiplier)
-        let tableGrandTotal = tableGrandTotalAmount(
+        let fromPublishedSubtotals = tableGrandTotalAmount(
             rows: rows, transposedWhole: transposedWhole, unitMultiplier: unitMultiplier)
+        let fromTableTotal = tableTotalAmount.map { $0 * unitMultiplier }
+        let tableGrandTotal: Double? = {
+            switch (fromPublishedSubtotals, fromTableTotal) {
+            case let (row?, table?): return max(row, table)
+            case let (row?, nil): return row
+            case let (nil, table?): return table
+            default: return nil
+            }
+        }()
+        let publishedCoversGrandTotal = tableGrandTotal.map {
+            denominatorTolerance.contains(internalSum / $0)
+        } ?? false
 
-        let isGap = relativeGap(internalSum, consolidatedSales)
-        if let tableDenom = matchingTableTotal, tableDenom != 0 {
-            let tableGap = relativeGap(internalSum, tableDenom)
+        // 公開分母の同一報告ベース切替は表の総合計だけ。公開行に近い内部小計では満たさない。
+        if let grand = tableGrandTotal, grand != 0, publishedCoversGrandTotal {
+            let isGap = relativeGap(internalSum, consolidatedSales)
+            let tableGap = relativeGap(internalSum, grand)
             let closerThanSales = isGap > sameBasisGapFloor && tableGap + 1e-12 < isGap
             if !denominatorTolerance.contains(segmentShare) || closerThanSales {
-                denominator = tableDenom
+                denominator = grand
                 denominatorTag = "llm_table_subtotal"
                 warnings.append("llm_denominator_from_internal_subtotal")
             }
-        } else if !denominatorTolerance.contains(segmentShare) {
-            needsReview = true
-            warnings.append("llm_row_sum_mismatch")
         }
 
-        if coverageBelowIndependentAnchor(
-            segmentSum: segmentSum, consolidatedSales: consolidatedSales,
-            tableGrandTotal: tableGrandTotal)
+        // 既存の分母整合。アンカーは損益計算書売上、無ければ表の総合計。
+        // 銀行・保険の経常収益／営業収益表は表の総合計をアンカーにする。
+        if let anchor = coverageCheckAnchor(
+            table: selectedTable, consolidatedSales: consolidatedSales,
+            tableGrandTotal: tableGrandTotal), anchor != 0
         {
-            needsReview = true
-            if !warnings.contains(warningCoverageBelowSales) {
-                warnings.append(warningCoverageBelowSales)
+            let coverageShare = segmentSum / anchor
+            if !denominatorTolerance.contains(coverageShare) {
+                needsReview = true
+                if !warnings.contains("llm_row_sum_mismatch") {
+                    warnings.append("llm_row_sum_mismatch")
+                }
             }
+        } else if tableUsesNonSalesRevenueLine(selectedTable) {
+            let suffix = "coverage_anchor=skipped_non_sales_line"
+            notes = notes.isEmpty ? suffix : notes + " / " + suffix
+            audit.notes = notes
         }
 
         let rowsWithShare = rows.map { row -> BreakdownRow in
@@ -351,7 +369,8 @@ enum GeographyBreakdownLLMNormalizer {
         if let reviewer = decider as? any GeographyExtractionReviewing {
             (snapshot, audit) = await applyFinalReview(
                 snapshot: snapshot, audit: audit, table: selectedTable,
-                reviewer: reviewer, docID: docID)
+                reviewer: reviewer, docID: docID,
+                consolidatedSales: consolidatedSales)
         }
         return (snapshot, audit)
     }
@@ -363,12 +382,7 @@ enum GeographyBreakdownLLMNormalizer {
     static let warningFinalReviewWrong = "jev_final_review_wrong"
     /// 前期列の金額を当期として組んだとき。公開面は `needs_review`。最終判定の correct では覆さない。
     static let warningPriorPeriodColumn = "geography_prior_period_column"
-    /// 公開セグメント合計が独立アンカー（損益計算書売上。無ければ表の総合計）の 95% を下回るとき。
-    /// 同じ表から選んだ内部小計分母では判定しない。最終判定の correct では覆さない。
-    static let warningCoverageBelowSales = "geography_coverage_below_sales"
-    /// 公開行のカバー率がこれを下回れば fail-closed。
-    static let coverageFloor = 0.95
-    /// 表内小計の方が損益計算書売上より明らかに近いときの同一報告ベース切替。
+    /// 表の総合計の方が損益計算書売上より明らかに近いときの同一報告ベース切替。
     private static let sameBasisGapFloor = 0.05
     /// 組んだ金額が選んだ当期列と一致しないとき。最終判定の correct では覆さない。
     static let warningSelectedColumnMismatch = "geography_selected_column_mismatch"
@@ -396,7 +410,6 @@ enum GeographyBreakdownLLMNormalizer {
             || warnings.contains(warningSelectedColumnMismatch)
             || warnings.contains(warningColumnSampleDisagreement)
             || warnings.contains(warningColumnSampleInsufficient)
-            || warnings.contains(warningCoverageBelowSales)
     }
 
     static func relativeGap(_ amount: Double, _ reference: Double) -> Double {
@@ -404,33 +417,26 @@ enum GeographyBreakdownLLMNormalizer {
         return abs(amount - reference) / abs(reference)
     }
 
-    static func matchingTableTotalAmount(
-        internalSum: Double,
-        rows: [BreakdownRow],
-        transposedWhole: Double?,
-        unitMultiplier: Double
-    ) -> Double? {
-        let subtotalCandidates = rows.filter { $0.rowKind == "subtotal" }
-        if let closest = subtotalCandidates.min(by: {
-            abs($0.amount - internalSum) < abs($1.amount - internalSum)
-        }), closest.amount != 0, relativeGap(internalSum, closest.amount) <= sameBasisGapFloor {
-            return closest.amount
-        }
-        if let transposedWhole, transposedWhole != 0 {
-            let scaled = transposedWhole * unitMultiplier
-            if relativeGap(internalSum, scaled) <= sameBasisGapFloor { return scaled }
-        }
-        return nil
+    /// 表の総合計ラベル（計／合計）。小計・海外計は総合計ではない。
+    static func isTableGrandTotalLabel(_ label: String) -> Bool {
+        let compact = RevenueRecognitionCandidates.compactCell(label)
+        if compact.contains("小計") { return false }
+        if compact == "海外計" || compact == "海外合計" { return false }
+        return compact == "計" || compact == "合計" || compact == "連結合計"
+            || compact == "連結計" || compact == "売上高合計" || compact == "総合計"
+            || compact == "連結売上高" || compact == "連結売上"
     }
 
-    /// 表の総合計（最大の 計／合計。公開行に近い内部小計ではない）。
+    /// 表の総合計（計／合計。公開行に近い内部小計ではない）。
     static func tableGrandTotalAmount(
         rows: [BreakdownRow],
         transposedWhole: Double?,
         unitMultiplier: Double
     ) -> Double? {
         let subtotals = rows.filter { $0.rowKind == "subtotal" && $0.amount > 0 }
-        let fromRows = subtotals.max(by: { $0.amount < $1.amount })?.amount
+        let grandLabeled = subtotals.filter { isTableGrandTotalLabel($0.labelRaw) }
+        // 公開行に合う内部小計へフォールバックしない（計が subtotal_mismatch で落ちたあとの小計）。
+        let fromRows = grandLabeled.max(by: { $0.amount < $1.amount })?.amount
         let fromTransposed: Double? = {
             guard let transposedWhole, transposedWhole != 0 else { return nil }
             return transposedWhole * unitMultiplier
@@ -443,27 +449,34 @@ enum GeographyBreakdownLLMNormalizer {
         }
     }
 
-    /// カバー判定の独立アンカー。損益計算書売上があればそれ、無ければ表の総合計。
-    /// 採用分母や公開行に合わせた内部小計は使わない。
-    static func coverageAnchor(
-        consolidatedSales: Double, tableGrandTotal: Double?
+    /// 分母整合のアンカー。損益計算書売上があればそれ、無ければ表の総合計。
+    /// 経常収益／営業収益／保険収益の表は表の総合計を先に使う。
+    static func coverageCheckAnchor(
+        table: RevenueRecognitionCandidates.ParsedTable,
+        consolidatedSales: Double,
+        tableGrandTotal: Double?
     ) -> Double? {
+        if tableUsesNonSalesRevenueLine(table) {
+            if let tableGrandTotal, tableGrandTotal != 0 { return tableGrandTotal }
+            return nil
+        }
         if consolidatedSales != 0 { return consolidatedSales }
         if let tableGrandTotal, tableGrandTotal != 0 { return tableGrandTotal }
         return nil
     }
 
-    /// 公開行が独立アンカーの 95% を下回るとき NR。分母が小さすぎても迂回しない。
-    static func coverageBelowIndependentAnchor(
-        segmentSum: Double,
-        consolidatedSales: Double,
-        tableGrandTotal: Double?
+    /// 銀行・保険など、地理注記の行が売上高ではなく経常収益／営業収益／保険収益のとき。
+    static func tableUsesNonSalesRevenueLine(
+        _ table: RevenueRecognitionCandidates.ParsedTable
     ) -> Bool {
-        guard let anchor = coverageAnchor(
-            consolidatedSales: consolidatedSales, tableGrandTotal: tableGrandTotal),
-            anchor != 0
-        else { return false }
-        return segmentSum / anchor < coverageFloor
+        let labels = [table.heading, table.precedingCaption ?? ""]
+            + Array(table.columnHeaders.values)
+            + table.items.map(\.label) + table.totals.map(\.label)
+        return labels.contains { label in
+            let compact = RevenueRecognitionCandidates.compactCell(label)
+            return compact.contains("経常収益") || compact.contains("営業収益")
+                || compact.contains("保険収益")
+        }
     }
 
     /// 組んだ金額が当期列ではなく、同じ表の前期列と一致するとき。
@@ -1094,8 +1107,8 @@ enum GeographyBreakdownLLMNormalizer {
         guard let total = tableTotal, total != 0,
               let sales = consolidatedSales, sales != 0
         else { return "other" }
-        let yenOK = denominatorTolerance.contains(abs(total / sales))
-        let millionOK = denominatorTolerance.contains(
+        let yenOK = unitScaleTolerance.contains(abs(total / sales))
+        let millionOK = unitScaleTolerance.contains(
             abs(total * Financial.millionYen / sales))
         if millionOK != yenOK {
             return millionOK ? "million_yen" : "yen"
@@ -1173,7 +1186,8 @@ enum GeographyBreakdownLLMNormalizer {
         audit: LLMBreakdownAudit,
         table: RevenueRecognitionCandidates.ParsedTable,
         reviewer: any GeographyExtractionReviewing,
-        docID: String
+        docID: String,
+        consolidatedSales: Double
     ) async -> (BreakdownSnapshot, LLMBreakdownAudit) {
         let shouldAsk = !snapshot.needsReview || canRecoverLowConfidence(snapshot)
         guard shouldAsk else { return (snapshot, audit) }
@@ -1198,7 +1212,8 @@ enum GeographyBreakdownLLMNormalizer {
                         needsReview: snapshot.needsReview,
                         periodColumns: periodColumns,
                         tableTruncated: clipped.truncated,
-                        docID: docID)
+                        docID: docID,
+                        consolidatedSalesMillionYen: consolidatedSales / Financial.millionYen)
                 }
             }
             var samples: [SegmentNoteConsultedChoice] = []
@@ -1362,7 +1377,8 @@ struct OpenRouterGeographyColumnDecider: RevenueRecognitionColumnDeciding, Geogr
         needsReview: Bool,
         periodColumns: [GeographyReviewPeriodColumn],
         tableTruncated: Bool,
-        docID: String
+        docID: String,
+        consolidatedSalesMillionYen: Double?
     ) async -> SegmentNoteConsultedChoice {
         let unavailable = SegmentNoteConsultedChoice(
             question: OpenRouterSegmentNoteDecider.reviewDecisionQuestion,
@@ -1371,7 +1387,8 @@ struct OpenRouterGeographyColumnDecider: RevenueRecognitionColumnDeciding, Geogr
         guard let body = Self.reviewRequestJSON(
             model: model, rows: rows, tableMarkdown: tableMarkdown, heading: heading,
             caption: caption, warnings: warnings, needsReview: needsReview,
-            periodColumns: periodColumns, tableTruncated: tableTruncated, docID: docID)
+            periodColumns: periodColumns, tableTruncated: tableTruncated, docID: docID,
+            consolidatedSalesMillionYen: consolidatedSalesMillionYen)
         else {
             return unavailable
         }
@@ -1396,7 +1413,8 @@ struct OpenRouterGeographyColumnDecider: RevenueRecognitionColumnDeciding, Geogr
         needsReview: Bool,
         periodColumns: [GeographyReviewPeriodColumn] = [],
         tableTruncated: Bool = false,
-        docID: String
+        docID: String,
+        consolidatedSalesMillionYen: Double? = nil
     ) -> Data? {
         let criteria: [String: String] = [
             GeographyBreakdownLLMNormalizer.reviewCorrect: """
@@ -1407,7 +1425,8 @@ struct OpenRouterGeographyColumnDecider: RevenueRecognitionColumnDeciding, Geogr
             GeographyBreakdownLLMNormalizer.reviewWrong: """
                 抽出された行は正しくない。前期列の金額、有形固定資産／長期性資産、事業別、顧客別、 \
                 うち内数の独立行、合計や列の取り違えなど、当期・全社の地域別売上ではない。 \
-                period_columns の prior_only=true の金額と抽出行が一致するなら wrong。
+                period_columns の prior_only=true の金額と抽出行が一致するなら wrong。 \
+                表にある地域が抽出から欠け、合計が consolidated_sales_million_yen より明らかに足りないなら wrong。
                 """,
         ]
         let rowState: [[String: Any]] = rows.map {
@@ -1431,23 +1450,28 @@ struct OpenRouterGeographyColumnDecider: RevenueRecognitionColumnDeciding, Geogr
                     抽出された行は、当期・会社全体の仕向地／地域別（外部顧客への売上高）の内訳として正しいか。 \
                     正しいなら correct、誤りなら wrong。前期列の金額なら wrong。 \
                     period_columns に当期列と前期列の金額がある。抽出行が前期列と一致し当期列と一致しないなら wrong。 \
-                    自信が無いときは probabilities を下げる。
+                    表の地域が欠け、抽出合計が consolidated_sales_million_yen より明らかに足りないなら wrong。 \
+                    欠落を correct で回復してはいけない。自信が無いときは probabilities を下げる。
                     """,
                 criteria: criteria),
         ]
+        var state: [String: Any] = [
+            "doc_id": docID,
+            "heading": heading,
+            "caption_above_table": caption ?? "",
+            "warnings": warnings,
+            "needs_review": needsReview,
+            "extracted_rows": rowState,
+            "period_columns": columnState,
+            "table_markdown": tableMarkdown,
+            "table_truncated": tableTruncated,
+        ]
+        if let sales = consolidatedSalesMillionYen {
+            state["consolidated_sales_million_yen"] = sales
+        }
         return OpenRouterDecisionsCodec.requestJSON(
             model: model,
-            state: [
-                "doc_id": docID,
-                "heading": heading,
-                "caption_above_table": caption ?? "",
-                "warnings": warnings,
-                "needs_review": needsReview,
-                "extracted_rows": rowState,
-                "period_columns": columnState,
-                "table_markdown": tableMarkdown,
-                "table_truncated": tableTruncated,
-            ],
+            state: state,
             questions: questions)
     }
 }
