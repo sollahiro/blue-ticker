@@ -25,7 +25,8 @@ enum GeographyBreakdownResolver {
         columnDecider: (any RevenueRecognitionColumnDeciding)?,
         labelsByTag: [String: String] = [:],
         fiscalYearEnd: String? = nil,
-        docID: String = ""
+        docID: String = "",
+        salesLabel: String? = nil
     ) async -> (snapshot: BreakdownSnapshot?, source: GeographyBreakdownSource, audit: LLMBreakdownAudit?) {
         switch geography.method {
         case "not_found":
@@ -41,7 +42,7 @@ enum GeographyBreakdownResolver {
             if !geography.tables.isEmpty, let columnDecider {
                 let (snapshot, audit) = await GeographyBreakdownLLMNormalizer.normalize(
                     geography, consolidatedSales: consolidatedSales, decider: columnDecider,
-                    fiscalYearEnd: fiscalYearEnd, docID: docID)
+                    fiscalYearEnd: fiscalYearEnd, docID: docID, salesLabel: salesLabel)
                 if let snapshot { return (snapshot, .geographyLLM, audit) }
                 return (nil, .notFound, audit)
             }
@@ -51,7 +52,7 @@ enum GeographyBreakdownResolver {
             guard let columnDecider else { return (nil, .notFound, nil) }
             let (snapshot, audit) = await GeographyBreakdownLLMNormalizer.normalize(
                 geography, consolidatedSales: consolidatedSales, decider: columnDecider,
-                fiscalYearEnd: fiscalYearEnd, docID: docID)
+                fiscalYearEnd: fiscalYearEnd, docID: docID, salesLabel: salesLabel)
             if let snapshot { return (snapshot, .geographyLLM, audit) }
             return (nil, .notFound, audit)
 

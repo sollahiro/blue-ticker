@@ -125,13 +125,14 @@ struct GeographyProdBreakdownRow: Codable {
                 continue
             }
             let geography = BreakdownExtractor.extractGeographyInfo(xbrlDir: xbrlDir)
-            let sales = BreakdownFinancialsResolver.financialsCanonicalSales(xbrlDir: xbrlDir)
+            let financials = StatementFinancialsResolver.resolve(xbrlDir: xbrlDir)
+            let sales = financials?.sales
             let (snapshot, source, audit) = await GeographyBreakdownResolver.resolve(
                 geography: geography, consolidatedSales: sales,
                 columnDecider: columnDecider,
                 labelsByTag: XBRLUtils.loadLabelsByTag(in: xbrlDir),
                 fiscalYearEnd: BreakdownExtractor.currentFiscalYearEnd(fromXbrlDir: xbrlDir),
-                docID: row.docID)
+                docID: row.docID, salesLabel: financials?.salesLabel)
 
             var comparison = compare(prod: row, snapshot: snapshot, source: source, audit: audit)
             comparison.record["extract_method"] = geography.method

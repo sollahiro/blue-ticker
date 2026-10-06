@@ -104,7 +104,8 @@ struct GeographyBreakdownLLMNormalizerTests {
     }
 
     private static func normalizeHTML(
-        _ html: String, sales: Double, heading: String = "地域ごとの情報"
+        _ html: String, sales: Double, heading: String = "地域ごとの情報",
+        salesLabel: String? = nil
     ) async -> BreakdownSnapshot? {
         var tables = BreakdownExtractor.allTablesFromHtml(html, defaultHeading: heading)
         if !tables.isEmpty { tables[0].period = "当期" }
@@ -113,7 +114,8 @@ struct GeographyBreakdownLLMNormalizerTests {
             consolidatedSales: sales,
             decider: FakeRevenueRecognitionColumnDecider(),
             fiscalYearEnd: "2026-03-31",
-            docID: "S-geo-unit")
+            docID: "S-geo-unit",
+            salesLabel: salesLabel)
         return snapshot
     }
 
@@ -298,6 +300,31 @@ struct GeographyBreakdownLLMNormalizerTests {
         #expect(
             GeographyBreakdownLLMNormalizer.coverageCheckAnchor(
                 table: ordinaryTable, consolidatedSales: 10, tableGrandTotal: nil) == nil)
+        #expect(
+            GeographyBreakdownLLMNormalizer.coverageCheckAnchor(
+                table: salesTable, consolidatedSales: 10, tableGrandTotal: 12,
+                salesLabel: "営業収益") == 12)
+    }
+
+    @Test("PL が営業収益のときは表に売上高と書いてあっても表の総合計をアンカーにする")
+    func operatingRevenueSalesLabelUsesTableGrandTotal() async throws {
+        let html = """
+            <p>当連結会計年度</p>
+            <p>（単位：百万円）</p>
+            <table>
+              <tr><td></td><td>売上高</td></tr>
+              <tr><td>日本</td><td>400,000</td></tr>
+              <tr><td>アメリカ</td><td>200,000</td></tr>
+              <tr><td>欧州</td><td>80,000</td></tr>
+              <tr><td>アジア・オセアニア</td><td>40,427</td></tr>
+              <tr><td>合計</td><td>720,427</td></tr>
+            </table>
+            """
+        let snap = try #require(
+            await Self.normalizeHTML(
+                html, sales: 1_467_983 * Financial.millionYen, salesLabel: "営業収益"))
+        #expect(snap.needsReview == false)
+        #expect(!snap.warnings.contains("llm_row_sum_mismatch"))
     }
 
     @Test("経常収益の地理表は表の総合計をアンカーにし、IS 経常収益との差では NR しない")

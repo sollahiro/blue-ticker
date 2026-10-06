@@ -80,7 +80,8 @@ enum GeographyBreakdownLLMNormalizer {
         consolidatedSales: Double?,
         decider: any RevenueRecognitionColumnDeciding,
         fiscalYearEnd: String?,
-        docID: String
+        docID: String,
+        salesLabel: String? = nil
     ) async -> (snapshot: BreakdownSnapshot?, audit: LLMBreakdownAudit?) {
         guard !result.tables.isEmpty,
               let consolidatedSales, consolidatedSales != 0 else { return (nil, nil) }
@@ -331,7 +332,7 @@ enum GeographyBreakdownLLMNormalizer {
         // 銀行・保険の経常収益／営業収益表は表の総合計をアンカーにする。
         if let anchor = coverageCheckAnchor(
             table: selectedTable, consolidatedSales: consolidatedSales,
-            tableGrandTotal: tableGrandTotal), anchor != 0
+            tableGrandTotal: tableGrandTotal, salesLabel: salesLabel), anchor != 0
         {
             let coverageShare = segmentSum / anchor
             if !denominatorTolerance.contains(coverageShare) {
@@ -340,7 +341,9 @@ enum GeographyBreakdownLLMNormalizer {
                     warnings.append("llm_row_sum_mismatch")
                 }
             }
-        } else if tableUsesNonSalesRevenueLine(selectedTable) {
+        } else if tableUsesNonSalesRevenueLine(selectedTable)
+            || isNonSalesRevenueLabel(salesLabel)
+        {
             let suffix = "coverage_anchor=skipped_non_sales_line"
             notes = notes.isEmpty ? suffix : notes + " / " + suffix
             audit.notes = notes
@@ -454,15 +457,23 @@ enum GeographyBreakdownLLMNormalizer {
     static func coverageCheckAnchor(
         table: RevenueRecognitionCandidates.ParsedTable,
         consolidatedSales: Double,
-        tableGrandTotal: Double?
+        tableGrandTotal: Double?,
+        salesLabel: String? = nil
     ) -> Double? {
-        if tableUsesNonSalesRevenueLine(table) {
+        if tableUsesNonSalesRevenueLine(table) || isNonSalesRevenueLabel(salesLabel) {
             if let tableGrandTotal, tableGrandTotal != 0 { return tableGrandTotal }
             return nil
         }
         if consolidatedSales != 0 { return consolidatedSales }
         if let tableGrandTotal, tableGrandTotal != 0 { return tableGrandTotal }
         return nil
+    }
+
+    /// 損益計算書の売上ラベルが経常収益／営業収益／保険収益のとき。
+    static func isNonSalesRevenueLabel(_ label: String?) -> Bool {
+        guard let label else { return false }
+        return label.contains("経常収益") || label.contains("営業収益")
+            || label.contains("保険収益") || label == "営業収入" || label == "営業総収入"
     }
 
     /// 銀行・保険など、地理注記の行が売上高ではなく経常収益／営業収益／保険収益のとき。
