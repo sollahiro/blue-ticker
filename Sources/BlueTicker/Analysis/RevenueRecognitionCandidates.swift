@@ -764,6 +764,15 @@ enum RevenueRecognitionCandidates {
             }
             items.append(Item(
                 group: assigned, label: label, row: i, isPartial: false))
+            if isOtherResidualChild(label), !assigned.isEmpty,
+               let previous = items.dropLast().last,
+               isOtherResidualChild(previous.label), previous.group == assigned
+            {
+                items[items.count - 1].group = ""
+            }
+            if isOtherResidualChild(label) {
+                group = ""
+            }
         }
         return ParsedTable(
             tableIndex: index, grid: rows, headerRowCount: firstData, columnHeaders: headers,

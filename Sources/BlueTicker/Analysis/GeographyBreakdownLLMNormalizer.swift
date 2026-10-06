@@ -186,6 +186,7 @@ enum GeographyBreakdownLLMNormalizer {
             return true
         }
         rows = dropDuplicateSegmentLabels(rows)
+        rows = dropMismatchedSubtotals(rows)
 
         if extractedSubtotalsMismatch(rows) {
             needsReview = true
@@ -470,6 +471,26 @@ enum GeographyBreakdownLLMNormalizer {
             guard row.rowKind == "segment" else { return true }
             let key = compactGeographyLabel(row.labelRaw)
             return seen.insert(key).inserted
+        }
+    }
+
+    /// 売上ブロックの `合計` は残し、後続 PPE の合わない `合計` は捨てる。
+    /// `海外計` のような名前付き小計は残して subtotal_mismatch 判定に回す。
+    static func dropMismatchedSubtotals(_ rows: [BreakdownRow]) -> [BreakdownRow] {
+        let components = rows.compactMap { row -> Double? in
+            (row.rowKind == "segment" || row.rowKind == "reconciling") ? row.amount : nil
+        }
+        guard !components.isEmpty else { return rows }
+        var keptGeneric = false
+        return rows.filter { row in
+            guard row.rowKind == "subtotal", row.amount != 0 else { return true }
+            let generic = row.labelRaw == "合計" || row.labelRaw == "計"
+            guard generic else { return true }
+            if subsetSums(to: row.amount, among: components), !keptGeneric {
+                keptGeneric = true
+                return true
+            }
+            return false
         }
     }
     static func dropCoarseOverseasWhenFinerRegionsExist(

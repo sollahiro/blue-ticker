@@ -164,6 +164,9 @@ enum RevenueRecognitionTableStructure {
                 index: index, labelKind: .category,
                 categoryGroup: currentGroup.isEmpty ? nil : currentGroup, category: token,
                 amountKind: nil, hasAmount: true))
+            if RevenueRecognitionCandidates.isOtherResidualChild(token) {
+                currentGroup = ""
+            }
         }
         return classified
     }

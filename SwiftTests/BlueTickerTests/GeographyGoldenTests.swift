@@ -1116,4 +1116,38 @@ import Testing
         #expect(!snapshot.needsReview)
         #expect(publiclyServable(snapshot))
     }
+
+    /// 6473 型: 北米/アジアの空見出しのあとの その他 は親に付け、続く全社その他は残す。
+    @Test func nestedOtherUnderEmptyRegionHeadersKeepsCompanyResidual() async throws {
+        let html = """
+            <p>当連結会計年度</p>
+            <table>
+              <tr>
+                <td></td>
+                <td>前連結会計年度</td>
+                <td>当連結会計年度</td>
+              </tr>
+              <tr><td>日本</td><td>706,585</td><td>732,640</td></tr>
+              <tr><td>北米</td><td></td><td></td></tr>
+              <tr><td>アメリカ</td><td>395,047</td><td>428,912</td></tr>
+              <tr><td>その他</td><td>92,986</td><td>97,009</td></tr>
+              <tr><td>欧州</td><td>212,054</td><td>199,850</td></tr>
+              <tr><td>アジア・オセアニア</td><td></td><td></td></tr>
+              <tr><td>中国</td><td>175,008</td><td>150,435</td></tr>
+              <tr><td>その他</td><td>259,419</td><td>270,741</td></tr>
+              <tr><td>その他</td><td>43,295</td><td>45,361</td></tr>
+              <tr><td>合計</td><td>1,884,397</td><td>1,924,950</td></tr>
+            </table>
+            """
+        let (snapshotOrNil, _) = await normalize(
+            html: html, sales: yen(1_924_950), docID: "S100YEL3")
+        let snapshot = try #require(snapshotOrNil)
+        #expect(Set(segmentLabels(snapshot)) == Set([
+            "日本", "アメリカ", "北米その他", "欧州", "中国", "アジア・オセアニアその他", "その他",
+        ]))
+        #expect(snapshot.rows.first { $0.labelRaw == "その他" }?.amount == yen(45_361))
+        #expect(snapshot.rows.first { $0.labelRaw == "北米その他" }?.amount == yen(97_009))
+        #expect(!snapshot.needsReview)
+        #expect(publiclyServable(snapshot))
+    }
 }
