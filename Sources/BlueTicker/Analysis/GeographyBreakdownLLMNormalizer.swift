@@ -583,6 +583,11 @@ enum GeographyBreakdownLLMNormalizer {
             if raw != total.label {
                 strippedFootnotes.append("\(total.label)→\(raw)")
             }
+            if RevenueRecognitionCandidates.isGeographySalesMetricLabel(raw),
+               !looksLikeGeographyLabel(raw)
+            {
+                continue
+            }
             guard !existing.contains(raw), let amount = amounts[total.row] else { continue }
             rows.append(BreakdownRow(
                 labelRaw: raw, amount: amount * multiplier, share: nil, profit: nil,

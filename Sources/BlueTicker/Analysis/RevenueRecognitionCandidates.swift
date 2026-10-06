@@ -252,7 +252,8 @@ enum RevenueRecognitionCandidates {
     ) -> (rows: [BuiltRow], wholeCompanyAmount: Double?) {
         if !table.items.isEmpty, !geographySales { return ([], nil) }
         if !table.items.isEmpty, geographySales,
-           !itemsLookLikeMetrics(table.items), !itemsLookLikePeriodRows(table.items)
+           !itemsLookLikeMetrics(table.items), !itemsLookLikePeriodRows(table.items),
+           geographySalesMetricRowIndex(table) == nil
         {
             return ([], nil)
         }
@@ -339,8 +340,12 @@ enum RevenueRecognitionCandidates {
     }
 
     /// 7734 の「Ⅰ売上高（千円）」や Canon の「売上高」、1887 の当期行。
-    /// 金額の無い親見出し（7211 の「売上高」）は飛ばし、外部顧客合計や 計 を優先する。
+    /// 金額の無い親見出し（7211 の「売上高」）は飛ばす。
+    /// 顧客契約とその他収益の下の無ラベル合計行があればそれを優先する。
     static func geographySalesMetricRowIndex(_ table: ParsedTable) -> Int? {
+        if let unlabeled = unlabeledEmptyLabelRowIndex(table) {
+            return unlabeled
+        }
         let labeled = table.totals.map { ($0.row, $0.label) }
             + table.items.map { ($0.row, $0.label) }
         let withAmounts = labeled.filter { rowHasAmountCells(table, row: $0.0) }
@@ -371,6 +376,16 @@ enum RevenueRecognitionCandidates {
         }
         if let row = current.last { return row.row }
         return unlabeledMetricRowIndex(table, geographySales: true)
+    }
+
+    static func unlabeledEmptyLabelRowIndex(_ table: ParsedTable) -> Int? {
+        let data = table.grid.enumerated().dropFirst(table.headerRowCount)
+        let hits = data.compactMap { index, row -> Int? in
+            guard compactCell(row.first ?? "").isEmpty else { return nil }
+            guard rowHasAmountCells(table, row: index) else { return nil }
+            return index
+        }
+        return hits.last
     }
 
     static func rowHasAmountCells(_ table: ParsedTable, row: Int) -> Bool {
