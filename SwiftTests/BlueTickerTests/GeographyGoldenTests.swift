@@ -245,7 +245,7 @@ import Testing
             </table>
             """
         let (snapshotOrNil, _) = await normalize(
-            html: html, sales: yen(8_893_693), salesLabel: "営業収益", docID: "S100Y4VB")
+            html: html, sales: yen(8_893_693), docID: "S100Y4VB", salesLabel: "営業収益")
         let snapshot = try #require(snapshotOrNil)
         #expect(Set(segmentLabels(snapshot)) == Set(["日本", "北米", "その他の地域"]))
         #expect(snapshot.rows.first { $0.labelRaw == "北米" }?.amount == yen(7_960_998))
