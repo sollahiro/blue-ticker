@@ -178,6 +178,142 @@ import Testing
         #expect(publiclyServable(snapshot))
     }
 
+    /// 3382 型: 北米見出しに（うち米国）が縦積み。北米は残しうち行だけ落とす。
+    @Test func stackedOfWhichUnitedStatesKeepsNorthAmericaParent() async throws {
+        let html = """
+            <p>当連結会計年度</p>
+            <p>（単位：百万円）</p>
+            <table>
+              <tr>
+                <td></td><td></td><td></td><td>（単位：百万円）</td>
+              </tr>
+              <tr>
+                <td>日本</td>
+                <td><p>北米</p><p>（うち米国）</p></td>
+                <td>その他の地域</td>
+                <td>計</td>
+              </tr>
+              <tr>
+                <td rowspan="2">1,844,286</td>
+                <td>7,960,998</td>
+                <td rowspan="2">624,984</td>
+                <td rowspan="2">10,430,269</td>
+              </tr>
+              <tr>
+                <td>(7,624,333)</td>
+              </tr>
+            </table>
+            """
+        let (snapshotOrNil, _) = await normalize(
+            html: html, sales: yen(10_430_269), docID: "S100Y4VB")
+        let snapshot = try #require(snapshotOrNil)
+        #expect(Set(segmentLabels(snapshot)) == Set(["日本", "北米", "その他の地域"]))
+        #expect(snapshot.rows.first { $0.labelRaw == "北米" }?.amount == yen(7_960_998))
+        #expect(!segmentLabels(snapshot).contains { $0.contains("うち") })
+        #expect(!snapshot.needsReview)
+        #expect(!snapshot.warnings.contains(GeographyBreakdownLLMNormalizer.warningCoverageBelowSales))
+        #expect(publiclyServable(snapshot))
+    }
+
+    /// 4005 型: 北米(うち、米国) の見出しと金額が同一セル。北米の親金額を残す。
+    @Test func stackedOfWhichInSameCellKeepsNorthAmericaParent() async throws {
+        let html = """
+            <p>当連結会計年度</p>
+            <p>（単位：百万円）</p>
+            <table>
+              <tr>
+                <td></td>
+                <td>日本</td>
+                <td>中国</td>
+                <td><p>北米</p><p>(うち、米国)</p></td>
+                <td>東南アジア</td>
+                <td>その他</td>
+                <td>合計</td>
+              </tr>
+              <tr>
+                <td></td>
+                <td>675,899</td>
+                <td>304,923</td>
+                <td><p>490,399</p><p>(474,795)</p></td>
+                <td>220,815</td>
+                <td>636,479</td>
+                <td>2,328,515</td>
+              </tr>
+            </table>
+            """
+        let (snapshotOrNil, _) = await normalize(
+            html: html, sales: yen(2_328_515), docID: "S100YAUO")
+        let snapshot = try #require(snapshotOrNil)
+        #expect(Set(segmentLabels(snapshot)) == Set(["日本", "中国", "北米", "東南アジア", "その他"]))
+        #expect(snapshot.rows.first { $0.labelRaw == "北米" }?.amount == yen(490_399))
+        #expect(!segmentLabels(snapshot).contains { $0.contains("うち") })
+        #expect(!snapshot.needsReview)
+        #expect(publiclyServable(snapshot))
+    }
+
+    /// 6762 型: 製品×地域マトリクスがあっても、同じ合計の地域行表を使う。
+    @Test func prefersSimpleGeographyRowsOverProductRegionMatrix() async throws {
+        let html = """
+            <p>当連結会計年度</p>
+            <p>（単位：百万円）</p>
+            <table>
+              <tr><td></td><td>前連結会計年度</td><td>当連結会計年度</td></tr>
+              <tr><td>日本</td><td>110,403</td><td>117,205</td></tr>
+              <tr><td>米州</td><td>96,135</td><td>96,666</td></tr>
+              <tr><td>欧州</td><td>148,254</td><td>148,443</td></tr>
+              <tr><td>中国</td><td>714,011</td><td>840,129</td></tr>
+              <tr><td>アジア他</td><td>294,234</td><td>276,565</td></tr>
+              <tr><td>合計</td><td>1,363,037</td><td>1,479,008</td></tr>
+            </table>
+            <table>
+              <tr>
+                <td>2021年度</td><td>日本</td><td>米州</td><td>欧州</td>
+                <td>中国</td><td>アジア他</td><td>合計</td>
+              </tr>
+              <tr>
+                <td>コンデンサ</td><td>18,495</td><td>22,830</td><td>36,328</td>
+                <td>54,210</td><td>26,319</td><td>158,182</td>
+              </tr>
+              <tr>
+                <td>インダクティブデバイス</td><td>18,805</td><td>13,660</td><td>37,281</td>
+                <td>53,310</td><td>16,934</td><td>139,990</td>
+              </tr>
+              <tr>
+                <td>売上高 合計</td><td>117,205</td><td>96,666</td><td>148,443</td>
+                <td>840,129</td><td>276,565</td><td>1,479,008</td>
+              </tr>
+            </table>
+            """
+        let (snapshotOrNil, _) = await normalize(
+            html: html, sales: yen(1_479_008), docID: "S100LMH9")
+        let snapshot = try #require(snapshotOrNil)
+        #expect(Set(segmentLabels(snapshot)) == Set(["日本", "米州", "欧州", "中国", "アジア他"]))
+        #expect(snapshot.rows.first { $0.labelRaw == "日本" }?.amount == yen(117_205))
+        #expect(!segmentLabels(snapshot).contains("2021年度"))
+        #expect(!snapshot.needsReview)
+        #expect(publiclyServable(snapshot))
+    }
+
+    /// カバレッジガード: 内部小計分母でも公開行が売上の95%を下回れば NR。correct では覆さない。
+    @Test func coverageGuardIsHardAndNotRecoveredByFinalReview() async throws {
+        let html = """
+            <p>当連結会計年度</p>
+            <p>（単位：百万円）</p>
+            <table>
+              <tr><td></td><td>日本</td><td>その他の地域</td><td>計</td></tr>
+              <tr><td>外部顧客への売上高</td><td>1,844,286</td><td>624,984</td><td>10,430,269</td></tr>
+            </table>
+            """
+        let (snapshotOrNil, _) = await normalize(
+            html: html, sales: yen(10_430_269),
+            reviewSelected: GeographyBreakdownLLMNormalizer.reviewCorrect,
+            reviewProbability: 0.99, docID: "S-coverage-golden")
+        let snapshot = try #require(snapshotOrNil)
+        #expect(snapshot.needsReview)
+        #expect(snapshot.warnings.contains(GeographyBreakdownLLMNormalizer.warningCoverageBelowSales))
+        #expect(!publiclyServable(snapshot))
+    }
+
     /// 4. 脚注マーカーは公開ラベルから落ちる。
     @Test func footnoteMarkersStrippedFromPublishedLabels() async throws {
         let html = """

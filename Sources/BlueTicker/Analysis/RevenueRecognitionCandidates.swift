@@ -471,7 +471,33 @@ enum RevenueRecognitionCandidates {
 
     static func isOfWhichColumnHeader(_ header: String) -> Bool {
         let compact = collapsedCell(header)
-        return compact.contains("うち") || compact.contains("内、") || compact.hasPrefix("内,")
+        guard compact.contains("うち") || compact.contains("内、") || compact.hasPrefix("内,") else {
+            return false
+        }
+        // 北米（うち米国）は親地域列。うち列ではない（3382 / 4005）。
+        if geographyParentBeforeOfWhichAnnotation(header) != nil { return false }
+        return true
+    }
+
+    /// 親地域＋括弧の「うち」注記（`北米（うち米国）` / `北米(うち、米国)`）。
+    /// 内数だけのラベル（`（うち米国）` / `上記米州のうち米国`）は nil。
+    static func geographyParentBeforeOfWhichAnnotation(_ label: String) -> String? {
+        let compact = collapsedCell(label)
+            .replacingOccurrences(of: " ", with: "")
+            .replacingOccurrences(of: "\u{3000}", with: "")
+            .replacingOccurrences(of: "、", with: "")
+            .replacingOccurrences(of: ",", with: "")
+        let pattern = try! NSRegularExpression(pattern: #"^(.+?)[（(]うち[^）)]*[）)]?$"#)
+        let ns = compact as NSString
+        let range = NSRange(location: 0, length: ns.length)
+        guard let match = pattern.firstMatch(in: compact, options: [], range: range),
+            match.numberOfRanges >= 2
+        else { return nil }
+        let prefix = ns.substring(with: match.range(at: 1))
+        guard !prefix.contains("うち"),
+            Xbrl.segmentGeographyLabelKeywordsJa.contains(where: prefix.contains)
+        else { return nil }
+        return prefix
     }
 
     static func displayLabel(categoryGroup: String, category: String?) -> String {
@@ -661,7 +687,21 @@ enum RevenueRecognitionCandidates {
         let text = compactCell(raw)
         if dashCells.contains(text) { return 0 }
         if let value = XBRLUtils.parseHtmlNumber(text) { return value }
-        return parseParenthesizedAmount(text)
+        if let value = parseParenthesizedAmount(text) { return value }
+        return parseLeadingAmountBeforeParenthetical(text)
+    }
+
+    /// 同一セルに親金額と（うち）金額が並ぶとき（4005 `490,399(474,795)`）は先頭だけ取る。
+    static func parseLeadingAmountBeforeParenthetical(_ text: String) -> Double? {
+        let compact = compactCell(text)
+        let pattern = try! NSRegularExpression(
+            pattern: #"^([△▲\-−]?\d[\d,]*)\s*[（(][△▲\-−]?\d[\d,]*[）)]$"#)
+        let ns = compact as NSString
+        let range = NSRange(location: 0, length: ns.length)
+        guard let match = pattern.firstMatch(in: compact, options: [], range: range),
+            match.numberOfRanges >= 2
+        else { return nil }
+        return XBRLUtils.parseHtmlNumber(ns.substring(with: match.range(at: 1)))
     }
 
     /// 注記の内数行は金額を括弧で囲む（2413 の `(37,220)`）。脚注番号 `(1)` は採らない。

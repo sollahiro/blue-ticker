@@ -182,6 +182,75 @@ struct GeographyBreakdownLLMNormalizerTests {
         #expect(snap.denominatorTag == "income_statement.sales")
     }
 
+    @Test("内部小計を分母にしても公開行が売上を大きく下回れば needs_review")
+    func coverageGuardNeedsReviewWhenInternalSubtotalHidesMissingRegions() async throws {
+        let html = """
+            <p>当連結会計年度</p>
+            <p>（単位：百万円）</p>
+            <table>
+              <tr><td></td><td>日本</td><td>その他の地域</td><td>計</td></tr>
+              <tr><td>外部顧客への売上高</td><td>1,844,286</td><td>624,984</td><td>10,430,269</td></tr>
+            </table>
+            """
+        let snap = try #require(
+            await Self.normalizeHTML(html, sales: 10_430_269 * Financial.millionYen))
+        #expect(snap.needsReview == true)
+        #expect(snap.warnings.contains(GeographyBreakdownLLMNormalizer.warningCoverageBelowSales))
+        #expect(snap.warnings.contains("llm_denominator_from_internal_subtotal"))
+        let labels = snap.rows.filter { $0.rowKind == "segment" }.map(\.labelRaw)
+        #expect(!labels.contains("北米"))
+    }
+
+    @Test("最終判定の correct はカバレッジハードガードを覆さない")
+    func finalReviewDoesNotRecoverCoverageGuard() async throws {
+        let html = """
+            <p>当連結会計年度</p>
+            <p>（単位：百万円）</p>
+            <table>
+              <tr><td></td><td>日本</td><td>その他の地域</td><td>計</td></tr>
+              <tr><td>外部顧客への売上高</td><td>1,844,286</td><td>624,984</td><td>10,430,269</td></tr>
+            </table>
+            """
+        var tables = BreakdownExtractor.allTablesFromHtml(html, defaultHeading: "地域ごとの情報")
+        if !tables.isEmpty { tables[0].period = "当期" }
+        let (snap, _) = await GeographyBreakdownLLMNormalizer.normalize(
+            ExtractedBreakdown(method: "html_table", tables: tables, facts: []),
+            consolidatedSales: 10_430_269 * Financial.millionYen,
+            decider: FakeRevenueRecognitionColumnDecider(
+                reviewSelected: GeographyBreakdownLLMNormalizer.reviewCorrect,
+                reviewProbability: 0.99),
+            fiscalYearEnd: "2026-02-28",
+            docID: "S-coverage-guard")
+        let snapshot = try #require(snap)
+        #expect(snapshot.needsReview == true)
+        #expect(snapshot.warnings.contains(GeographyBreakdownLLMNormalizer.warningCoverageBelowSales))
+        #expect(GeographyBreakdownLLMNormalizer.hasHardGuardWarnings(snapshot.warnings))
+    }
+
+    @Test("行合計が表の計と一致し IS 売上だけが離れるときは表の計を分母にする")
+    func prefersTableTotalWhenCloserThanIncomeStatementSales() async throws {
+        let html = """
+            <p>当連結会計年度</p>
+            <p>（単位：百万円）</p>
+            <table>
+              <tr><td></td><td>売上高</td></tr>
+              <tr><td>日本</td><td>2,244,356</td></tr>
+              <tr><td>米国</td><td>4,127,795</td></tr>
+              <tr><td>欧州</td><td>2,630,934</td></tr>
+              <tr><td>中国</td><td>1,244,115</td></tr>
+              <tr><td>アジア・太平洋地域</td><td>1,640,582</td></tr>
+              <tr><td>その他地域</td><td>1,069,282</td></tr>
+              <tr><td>計</td><td>12,957,064</td></tr>
+            </table>
+            """
+        let snap = try #require(
+            await Self.normalizeHTML(html, sales: 12_034_917 * Financial.millionYen))
+        #expect(snap.needsReview == false)
+        #expect(snap.denominatorTag == "llm_table_subtotal")
+        #expect(abs(snap.denominator - 12_957_064.0 * Financial.millionYen) < 1)
+        #expect(!snap.warnings.contains(GeographyBreakdownLLMNormalizer.warningCoverageBelowSales))
+    }
+
     @Test("脚注マーカーをラベルから決定的に除去する")
     func stripsGeographyLabelFootnotes() {
         #expect(GeographyBreakdownLLMNormalizer.stripGeographyLabelFootnotes("米州（注）2") == "米州")
@@ -284,9 +353,15 @@ struct GeographyBreakdownLLMNormalizerTests {
         #expect(RevenueRecognitionCandidates.collapsedCell("日 本") == "日本")
         #expect(RevenueRecognitionCandidates.isAggregateColumnHeader("合 計"))
         #expect(RevenueRecognitionCandidates.isOfWhichColumnHeader("内、米国"))
+        #expect(!RevenueRecognitionCandidates.isOfWhichColumnHeader("北米（うち米国）"))
+        #expect(!RevenueRecognitionCandidates.isOfWhichColumnHeader("北米(うち、米国)"))
+        #expect(RevenueRecognitionCandidates.isOfWhichColumnHeader("（うち米国）"))
+        #expect(RevenueRecognitionCandidates.geographyParentBeforeOfWhichAnnotation("北米（うち米国）") == "北米")
         #expect(RevenueRecognitionCandidates.parseAmount("(37,220)") == 37_220)
         #expect(RevenueRecognitionCandidates.parseAmount("（37,220）") == 37_220)
         #expect(RevenueRecognitionCandidates.parseAmount("(1)") == nil)
+        #expect(RevenueRecognitionCandidates.parseAmount("490,399(474,795)") == 490_399)
+        #expect(RevenueRecognitionCandidates.parseAmount("7,960,998（7,624,333）") == 7_960_998)
         #expect(RevenueRecognitionCandidates.isAmountCell("(37,220)"))
     }
 

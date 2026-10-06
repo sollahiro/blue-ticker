@@ -411,6 +411,20 @@ import Foundation
         #expect(!dropped.joined().joined().contains("500000"))
     }
 
+    @Test func dropOfWhichHeaderColumnsKeepsStackedParentNorthAmerica() {
+        let grid = [
+            ["日本", "北米（うち米国）", "その他の地域", "計"],
+            ["1844286", "7960998", "624984", "10430269"],
+        ]
+        let kept = BreakdownExtractor.dropOfWhichHeaderColumns(grid)
+        #expect(kept == grid)
+        #expect(kept[0][1] == "北米（うち米国）")
+        #expect(kept[1][1] == "7960998")
+        #expect(!BreakdownExtractor.isOfWhichRegionChildHeader("北米（うち米国）"))
+        #expect(BreakdownExtractor.isGeographicRegionHeader("北米（うち米国）"))
+        #expect(BreakdownExtractor.isOfWhichRegionChildHeader("（うち米国）"))
+    }
+
     @Test func geographyHtmlDropsOneRowOfWhichAustraliaColumn() {
         let html = """
             <table>

@@ -1289,9 +1289,14 @@ enum BreakdownExtractor {
     ]
 
     /// 地域区分の見出しセルか（うち内数ラベルは除く）。
+    /// 親地域に（うち米国）が重なったセルは親として残す（3382 / 4005）。
     static func isGeographicRegionHeader(_ cell: String) -> Bool {
         let trimmed = cell.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty, !trimmed.contains("うち") else { return false }
+        guard !trimmed.isEmpty else { return false }
+        if RevenueRecognitionCandidates.geographyParentBeforeOfWhichAnnotation(trimmed) != nil {
+            return true
+        }
+        guard !trimmed.contains("うち") else { return false }
         return Xbrl.segmentGeographyLabelKeywordsJa.contains(where: trimmed.contains)
     }
 
@@ -1301,6 +1306,9 @@ enum BreakdownExtractor {
         _ cell: String, parentIsRegion: Bool = false
     ) -> Bool {
         let trimmed = cell.trimmingCharacters(in: .whitespacesAndNewlines)
+        if RevenueRecognitionCandidates.geographyParentBeforeOfWhichAnnotation(trimmed) != nil {
+            return false
+        }
         guard trimmed.contains("うち") || trimmed.contains("内、") || trimmed.hasPrefix("内,")
         else { return false }
         if ofWhichMetricHeaderHints.contains(where: trimmed.contains) { return false }
