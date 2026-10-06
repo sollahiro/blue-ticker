@@ -7,7 +7,8 @@
 // の 0.5 ゲートは使わない）。不一致・成功不足は needs_review（公開面 fail-closed）。
 // 行を組んだあと Jev 第二パスで最終判定する。一致した confident wrong は NR。
 // 低確信 NR は一致した confident correct かつハードガード無しのときだけ回復する。
-// 内部小計を分母にしても、公開行が売上／表合計の 95% を下回れば NR（correct では覆さない）。
+// 公開行のカバーは独立アンカー（損益計算書売上。無ければ表の総合計）に対して見る。
+// 同じ表から拾った内部小計分母だけでは判定しない。95% 未満は NR（correct では覆さない）。
 // 表 markdown が reviewMarkdownLimit 字で切れたときは table_truncated を渡し、correct 回復はしない。
 // docs/breakdown.md。BreakdownNormalizer.swift（xbrl_facts 経路）とは別経路。
 
@@ -300,6 +301,8 @@ enum GeographyBreakdownLLMNormalizer {
         let matchingTableTotal = matchingTableTotalAmount(
             internalSum: internalSum, rows: rows, transposedWhole: transposedWhole,
             unitMultiplier: unitMultiplier)
+        let tableGrandTotal = tableGrandTotalAmount(
+            rows: rows, transposedWhole: transposedWhole, unitMultiplier: unitMultiplier)
 
         let isGap = relativeGap(internalSum, consolidatedSales)
         if let tableDenom = matchingTableTotal, tableDenom != 0 {
@@ -315,10 +318,9 @@ enum GeographyBreakdownLLMNormalizer {
             warnings.append("llm_row_sum_mismatch")
         }
 
-        if coverageBelowFloor(
-            segmentSum: segmentSum, denominator: denominator,
-            consolidatedSales: consolidatedSales, tableTotal: matchingTableTotal,
-            usedInternalSubtotal: denominatorTag == "llm_table_subtotal")
+        if coverageBelowIndependentAnchor(
+            segmentSum: segmentSum, consolidatedSales: consolidatedSales,
+            tableGrandTotal: tableGrandTotal)
         {
             needsReview = true
             if !warnings.contains(warningCoverageBelowSales) {
@@ -361,8 +363,8 @@ enum GeographyBreakdownLLMNormalizer {
     static let warningFinalReviewWrong = "jev_final_review_wrong"
     /// 前期列の金額を当期として組んだとき。公開面は `needs_review`。最終判定の correct では覆さない。
     static let warningPriorPeriodColumn = "geography_prior_period_column"
-    /// 公開セグメント合計が分母（または内部小計採用時の売上／表合計）を大きく下回るとき。
-    /// `llm_denominator_from_internal_subtotal` では迂回しない。最終判定の correct では覆さない。
+    /// 公開セグメント合計が独立アンカー（損益計算書売上。無ければ表の総合計）の 95% を下回るとき。
+    /// 同じ表から選んだ内部小計分母では判定しない。最終判定の correct では覆さない。
     static let warningCoverageBelowSales = "geography_coverage_below_sales"
     /// 公開行のカバー率がこれを下回れば fail-closed。
     static let coverageFloor = 0.95
@@ -417,28 +419,51 @@ enum GeographyBreakdownLLMNormalizer {
         if let transposedWhole, transposedWhole != 0 {
             let scaled = transposedWhole * unitMultiplier
             if relativeGap(internalSum, scaled) <= sameBasisGapFloor { return scaled }
-            // 欠落地域があると内部合計は表合計から大きく外れる。カバー判定用に残す。
-            return scaled
         }
         return nil
     }
 
-    /// 内部小計を分母にしても、公開行が売上／表合計を大きく下回るときは NR。
-    static func coverageBelowFloor(
-        segmentSum: Double,
-        denominator: Double,
-        consolidatedSales: Double,
-        tableTotal: Double?,
-        usedInternalSubtotal: Bool
-    ) -> Bool {
-        if denominator != 0, segmentSum / denominator < coverageFloor { return true }
-        guard usedInternalSubtotal else { return false }
-        let belowSales = consolidatedSales != 0 && segmentSum / consolidatedSales < coverageFloor
-        guard belowSales else { return false }
-        if let tableTotal, tableTotal != 0 {
-            return segmentSum / tableTotal < coverageFloor
+    /// 表の総合計（最大の 計／合計。公開行に近い内部小計ではない）。
+    static func tableGrandTotalAmount(
+        rows: [BreakdownRow],
+        transposedWhole: Double?,
+        unitMultiplier: Double
+    ) -> Double? {
+        let subtotals = rows.filter { $0.rowKind == "subtotal" && $0.amount > 0 }
+        let fromRows = subtotals.max(by: { $0.amount < $1.amount })?.amount
+        let fromTransposed: Double? = {
+            guard let transposedWhole, transposedWhole != 0 else { return nil }
+            return transposedWhole * unitMultiplier
+        }()
+        switch (fromRows, fromTransposed) {
+        case let (row?, transposed?): return max(row, transposed)
+        case let (row?, nil): return row
+        case let (nil, transposed?): return transposed
+        default: return nil
         }
-        return true
+    }
+
+    /// カバー判定の独立アンカー。損益計算書売上があればそれ、無ければ表の総合計。
+    /// 採用分母や公開行に合わせた内部小計は使わない。
+    static func coverageAnchor(
+        consolidatedSales: Double, tableGrandTotal: Double?
+    ) -> Double? {
+        if consolidatedSales != 0 { return consolidatedSales }
+        if let tableGrandTotal, tableGrandTotal != 0 { return tableGrandTotal }
+        return nil
+    }
+
+    /// 公開行が独立アンカーの 95% を下回るとき NR。分母が小さすぎても迂回しない。
+    static func coverageBelowIndependentAnchor(
+        segmentSum: Double,
+        consolidatedSales: Double,
+        tableGrandTotal: Double?
+    ) -> Bool {
+        guard let anchor = coverageAnchor(
+            consolidatedSales: consolidatedSales, tableGrandTotal: tableGrandTotal),
+            anchor != 0
+        else { return false }
+        return segmentSum / anchor < coverageFloor
     }
 
     /// 組んだ金額が当期列ではなく、同じ表の前期列と一致するとき。

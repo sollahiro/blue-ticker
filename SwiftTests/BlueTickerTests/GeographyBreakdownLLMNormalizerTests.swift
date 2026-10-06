@@ -196,7 +196,9 @@ struct GeographyBreakdownLLMNormalizerTests {
             await Self.normalizeHTML(html, sales: 10_430_269 * Financial.millionYen))
         #expect(snap.needsReview == true)
         #expect(snap.warnings.contains(GeographyBreakdownLLMNormalizer.warningCoverageBelowSales))
-        #expect(snap.warnings.contains("llm_denominator_from_internal_subtotal"))
+        #expect(
+            snap.warnings.contains("llm_row_sum_mismatch")
+                || snap.warnings.contains("llm_denominator_from_internal_subtotal"))
         let labels = snap.rows.filter { $0.rowKind == "segment" }.map(\.labelRaw)
         #expect(!labels.contains("北米"))
     }
@@ -249,6 +251,49 @@ struct GeographyBreakdownLLMNormalizerTests {
         #expect(snap.denominatorTag == "llm_table_subtotal")
         #expect(abs(snap.denominator - 12_957_064.0 * Financial.millionYen) < 1)
         #expect(!snap.warnings.contains(GeographyBreakdownLLMNormalizer.warningCoverageBelowSales))
+    }
+
+    @Test("小さすぎる内部小計を分母にしてもカバーは損益計算書売上で判定する")
+    func coverageUsesIncomeStatementEvenWhenSubtotalDenomMatchesPublishedRows() async throws {
+        let html = """
+            <p>当連結会計年度</p>
+            <p>（単位：百万円）</p>
+            <table>
+              <tr><td></td><td>売上高</td></tr>
+              <tr><td>日本</td><td>1,844,286</td></tr>
+              <tr><td>その他の地域</td><td>624,984</td></tr>
+              <tr><td>小計</td><td>2,469,270</td></tr>
+              <tr><td>計</td><td>10,430,269</td></tr>
+            </table>
+            """
+        let snap = try #require(
+            await Self.normalizeHTML(html, sales: 10_430_269 * Financial.millionYen))
+        #expect(snap.needsReview == true)
+        #expect(snap.denominatorTag == "llm_table_subtotal")
+        #expect(abs(snap.denominator - 2_469_270.0 * Financial.millionYen) < 1)
+        #expect(snap.warnings.contains(GeographyBreakdownLLMNormalizer.warningCoverageBelowSales))
+        #expect(GeographyBreakdownLLMNormalizer.hasHardGuardWarnings(snap.warnings))
+        #expect(
+            GeographyBreakdownLLMNormalizer.coverageBelowIndependentAnchor(
+                segmentSum: 2_469_270, consolidatedSales: 10_430_269,
+                tableGrandTotal: 10_430_269))
+        #expect(
+            !GeographyBreakdownLLMNormalizer.coverageBelowIndependentAnchor(
+                segmentSum: 2_469_270, consolidatedSales: 2_469_270,
+                tableGrandTotal: 2_469_270))
+    }
+
+    @Test("カバー判定は採用分母を見ず独立アンカーだけを使う")
+    func coverageAnchorPrefersSalesThenGrandTotal() {
+        #expect(
+            GeographyBreakdownLLMNormalizer.coverageAnchor(
+                consolidatedSales: 10, tableGrandTotal: 12) == 10)
+        #expect(
+            GeographyBreakdownLLMNormalizer.coverageAnchor(
+                consolidatedSales: 0, tableGrandTotal: 12) == 12)
+        #expect(
+            GeographyBreakdownLLMNormalizer.coverageAnchor(
+                consolidatedSales: 0, tableGrandTotal: nil) == nil)
     }
 
     @Test("脚注マーカーをラベルから決定的に除去する")

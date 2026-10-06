@@ -314,6 +314,31 @@ import Testing
         #expect(!publiclyServable(snapshot))
     }
 
+    /// 小さすぎる内部小計を分母にしても、カバーは損益計算書売上で fail-closed。
+    @Test func tooSmallSubtotalDenominatorStillNeedsReviewAgainstSales() async throws {
+        let html = """
+            <p>当連結会計年度</p>
+            <p>（単位：百万円）</p>
+            <table>
+              <tr><td></td><td>売上高</td></tr>
+              <tr><td>日本</td><td>1,844,286</td></tr>
+              <tr><td>その他の地域</td><td>624,984</td></tr>
+              <tr><td>小計</td><td>2,469,270</td></tr>
+              <tr><td>計</td><td>10,430,269</td></tr>
+            </table>
+            """
+        let (snapshotOrNil, _) = await normalize(
+            html: html, sales: yen(10_430_269),
+            reviewSelected: GeographyBreakdownLLMNormalizer.reviewCorrect,
+            reviewProbability: 0.99, docID: "S-coverage-small-subtotal")
+        let snapshot = try #require(snapshotOrNil)
+        #expect(snapshot.needsReview)
+        #expect(snapshot.denominatorTag == "llm_table_subtotal")
+        #expect(abs(snapshot.denominator - yen(2_469_270)) < 1)
+        #expect(snapshot.warnings.contains(GeographyBreakdownLLMNormalizer.warningCoverageBelowSales))
+        #expect(!publiclyServable(snapshot))
+    }
+
     /// 4. 脚注マーカーは公開ラベルから落ちる。
     @Test func footnoteMarkersStrippedFromPublishedLabels() async throws {
         let html = """
