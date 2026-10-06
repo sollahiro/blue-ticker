@@ -7,14 +7,6 @@ import Testing
 
 @Suite struct BreakdownLLMHeaderUnitTests {
 
-    private actor MockChat: ChatCompleting {
-        let response: [String: Any]
-        init(_ response: [String: Any]) { self.response = response }
-        func complete(system: String, user: String, jsonSchema: Data, schemaName: String) async throws -> Data {
-            try JSONSerialization.data(withJSONObject: response)
-        }
-    }
-
     /// 332A S100YKM2 収益認識表に近い形。単位は別表「（単位：千円）」で、データ表に単位行が無い。
     private static let senYenStubHtml = """
         <table><tr><td>（単位：千円）</td></tr></table>
@@ -148,32 +140,24 @@ import Testing
         #expect(!snapshot.needsReview)
     }
 
-    @Test func noHeaderFallsBackToLLMForGeography() async throws {
-        let extracted = ExtractedBreakdown(
-            method: "html_table",
-            tables: [
-                BreakdownTable(
-                    heading: "地域ごとの情報",
-                    markdown: "| 日本 | 合計 |\n| 100 | 100 |\n",
-                    period: "当期")
-            ],
-            facts: []
-        )
+    @Test func noHeaderInfersMillionFromConsolidatedSalesForGeography() async throws {
+        let html = """
+            <p>当連結会計年度</p>
+            <table>
+              <tr><td></td><td>売上高</td></tr>
+              <tr><td>日本</td><td>100</td></tr>
+              <tr><td>合計</td><td>100</td></tr>
+            </table>
+            """
+        var tables = Self.tables(from: html, heading: "地域ごとの情報")
+        if !tables.isEmpty { tables[0].period = "当期" }
+        let extracted = ExtractedBreakdown(method: "html_table", tables: tables, facts: [])
         let sales = 100 * Financial.millionYen
-        let response: [String: Any] = [
-            "applicable": true,
-            "unit": "million_yen",
-            "source_table_index": 0,
-            "period_column": "当期",
-            "rows": [
-                ["label": "日本", "amount": 100, "row_kind": "segment"],
-                ["label": "合計", "amount": 100, "row_kind": "subtotal"],
-            ],
-            "notes": "ヘッダー単位なし",
-        ]
         let (snapshotOrNil, _) = await GeographyBreakdownLLMNormalizer.normalize(
-            extracted, consolidatedSales: sales, client: MockChat(response)
-        )
+            extracted, consolidatedSales: sales,
+            decider: FakeRevenueRecognitionColumnDecider(),
+            fiscalYearEnd: "2026-03-31",
+            docID: "S-geo-unit")
         let snapshot = try #require(snapshotOrNil)
         #expect(snapshot.rows[0].amount == sales)
         #expect(!snapshot.warnings.contains("llm_unit_unresolved"))
@@ -200,7 +184,7 @@ import Testing
             Self.publiclyServable(snapshot, source: breakdownSourceRevenueRecognitionLLM) == false)
     }
 
-    @Test func borrowedSiblingHeaderScalesWithoutLunaUnit() async throws {
+    @Test func borrowedSiblingHeaderScalesWithoutDeclaredUnit() async throws {
         let extracted = ExtractedBreakdown(
             method: "html_table",
             tables: [

@@ -135,6 +135,13 @@ enum RevenueRecognitionTableStructure {
             let colspan = area.columnCount >= 2 && labelCells.count >= 2
                 && !labelCells[0].isEmpty && labelCells[0] == labelCells[1]
             if !hasAmount {
+                if RevenueRecognitionCandidates.isOfWhichColumnHeader(token) {
+                    classified.append(ClassifiedRow(
+                        index: index, labelKind: .category,
+                        categoryGroup: currentGroup.isEmpty ? nil : currentGroup,
+                        category: token, amountKind: nil, hasAmount: false))
+                    continue
+                }
                 currentGroup = token
                 classified.append(ClassifiedRow(
                     index: index, labelKind: .categoryGroup, categoryGroup: token, category: nil,
@@ -157,6 +164,9 @@ enum RevenueRecognitionTableStructure {
                 index: index, labelKind: .category,
                 categoryGroup: currentGroup.isEmpty ? nil : currentGroup, category: token,
                 amountKind: nil, hasAmount: true))
+            if RevenueRecognitionCandidates.isOtherResidualChild(token) {
+                currentGroup = ""
+            }
         }
         return classified
     }

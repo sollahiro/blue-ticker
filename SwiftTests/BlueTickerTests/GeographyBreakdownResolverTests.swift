@@ -1,28 +1,11 @@
 // GeographyBreakdownResolver のユニットテスト。
 // geography 軸の振り分け（not_found / xbrl_facts / html_table）を
-// smoke golden + モック LLM で検証する。
+// smoke golden + Fake Jev 列選択で検証する。ネットワークは使わない。
 
 import Foundation
 import Testing
 
 @testable import BlueTickerCore
-
-private actor MockChatCompleting: ChatCompleting {
-    private let responseJSON: [String: Any]?
-    private(set) var callCount = 0
-
-    init(responseJSON: [String: Any]?) {
-        self.responseJSON = responseJSON
-    }
-
-    func complete(system: String, user: String, jsonSchema: Data, schemaName: String) async throws -> Data {
-        callCount += 1
-        guard let responseJSON else { throw ChatCompletionError.emptyContent }
-        return try JSONSerialization.data(withJSONObject: responseJSON)
-    }
-
-    func timesCalled() async -> Int { callCount }
-}
 
 @Suite struct GeographyBreakdownResolverTests {
 
@@ -56,61 +39,49 @@ private actor MockChatCompleting: ChatCompleting {
         return ExtractedBreakdown(dictionary: geoDict)
     }
 
-    @Test func notFoundReturnsNilWithoutCallingLLM() async throws {
+    @Test func notFoundReturnsNilWithoutColumnDecider() async throws {
         let geography = ExtractedBreakdown(method: "not_found", tables: [], facts: [])
-        let client = MockChatCompleting(responseJSON: nil)
 
         let (snapshot, source, audit) = await GeographyBreakdownResolver.resolve(
-            geography: geography, consolidatedSales: 1_000_000, client: client
+            geography: geography, consolidatedSales: 1_000_000,
+            columnDecider: FakeRevenueRecognitionColumnDecider()
         )
 
         #expect(snapshot == nil)
         #expect(source == .notFound)
         #expect(audit == nil)
-        #expect(await client.timesCalled() == 0)
     }
 
-    /// 味の素 geography は html_table。LLM 成功時は geography_llm。
-    @Test func htmlTableResolvesViaGeographyLLM() async throws {
+    /// 味の素 geography は html_table。Jev 列選択で geography_llm。
+    @Test func htmlTableResolvesViaGeographyJev() async throws {
         let geography = try Self.geographyResult(docID: "S100VXJA")
         #expect(geography.method == "html_table")
         let sales = try #require(try Self.loadSales(code: "2802"))
 
-        let halfMillionYen = (sales / 2) / Financial.millionYen
-        let response: [String: Any] = [
-            "applicable": true,
-            "unit": "million_yen",
-            "source_table_index": 0,
-            "period_column": "当期",
-            "rows": [
-                ["label": "日本", "amount": halfMillionYen, "row_kind": "segment"],
-                ["label": "海外", "amount": halfMillionYen, "row_kind": "segment"],
-            ],
-            "notes": "test",
-        ]
-        let client = MockChatCompleting(responseJSON: response)
-
         let (snapshot, source, audit) = await GeographyBreakdownResolver.resolve(
-            geography: geography, consolidatedSales: sales, client: client
+            geography: geography, consolidatedSales: sales,
+            columnDecider: FakeRevenueRecognitionColumnDecider(),
+            fiscalYearEnd: "2025-03-31",
+            docID: "S100VXJA"
         )
 
         #expect(source == .geographyLLM)
         #expect(snapshot?.axis == "geography")
         #expect(audit != nil)
-        #expect(await client.timesCalled() == 1)
+        #expect(audit?.jev != nil)
+        let snap = try #require(snapshot)
+        #expect(!snap.rows.filter { $0.rowKind == "segment" }.isEmpty)
     }
 
-    @Test func htmlTableLLMFailureReturnsNotFoundSource() async throws {
+    @Test func htmlTableWithoutDeciderReturnsNotFound() async throws {
         let geography = try Self.geographyResult(docID: "S100VXJA")
         let sales = try #require(try Self.loadSales(code: "2802"))
-        let client = MockChatCompleting(responseJSON: nil)
 
         let (snapshot, source, _) = await GeographyBreakdownResolver.resolve(
-            geography: geography, consolidatedSales: sales, client: client
+            geography: geography, consolidatedSales: sales, columnDecider: nil
         )
 
         #expect(snapshot == nil)
         #expect(source == .notFound)
-        #expect(await client.timesCalled() == 1)
     }
 }

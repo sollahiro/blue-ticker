@@ -7,23 +7,6 @@ import Testing
 import Foundation
 @testable import BlueTickerCore
 
-private actor MockChatCompleting: ChatCompleting {
-    private let responseJSON: [String: Any]?
-    private(set) var callCount = 0
-
-    init(responseJSON: [String: Any]?) {
-        self.responseJSON = responseJSON
-    }
-
-    func complete(system: String, user: String, jsonSchema: Data, schemaName: String) async throws -> Data {
-        callCount += 1
-        guard let responseJSON else { throw ChatCompletionError.emptyContent }
-        return try JSONSerialization.data(withJSONObject: responseJSON)
-    }
-
-    func timesCalled() async -> Int { callCount }
-}
-
 @Suite struct BusinessBreakdownResolverTests {
 
     private static func loadGolden() throws -> [String: [String: Any]] {
@@ -62,16 +45,14 @@ private actor MockChatCompleting: ChatCompleting {
     @Test func xbrlFactsBusinessAxisResolvesWithoutCallingLLM() async throws {
         let segments = try Self.segmentsResult(docID: "S100VXJA")
         let sales = try #require(try Self.loadSales(code: "2802"))
-        let client = MockChatCompleting(responseJSON: nil)
 
         let (snapshot, source, audit) = await BusinessBreakdownResolver.resolve(
-            segments: segments, consolidatedSales: sales, client: client
+            segments: segments, consolidatedSales: sales
         )
 
         #expect(source == .xbrlFacts)
         #expect(snapshot?.axis == breakdownAxisProductService)
         #expect(audit == nil)
-        #expect(await client.timesCalled() == 0)
     }
 
     /// オークマ最新 S100YFQC: 収益認識の品目表が前期（table 0, 206,822）と当期
@@ -99,11 +80,10 @@ private actor MockChatCompleting: ChatCompleting {
         #expect(segments.tables[0].unitCaption == "百万円")
         #expect(segments.tables[1].unitCaption == "百万円")
         let sales: Double = 235_888 * Financial.millionYen
-        let client = MockChatCompleting(responseJSON: nil)
         let decider = FakeRevenueRecognitionColumnDecider()
 
         let (snapshot, source, audit) = await BusinessBreakdownResolver.resolve(
-            segments: segments, consolidatedSales: sales, client: client, columnDecider: decider,
+            segments: segments, consolidatedSales: sales, columnDecider: decider,
             fiscalYearEnd: "2026-03-31", docID: "S100YFQC"
         )
 
@@ -120,7 +100,6 @@ private actor MockChatCompleting: ChatCompleting {
         let selectedTotal = RevenueRecognitionCandidates.tableTotal(table: selected, column: 1)
         #expect(selectedTotal?.amount == 235_888)
         #expect(audit?.jev?.model == "typesafe/jev-1.13")
-        #expect(await client.timesCalled() == 0)
         let labels = Set(snapshot?.rows.map(\.categoryGroup) ?? [])
         #expect(labels.contains("ＮＣ旋盤"))
         #expect(labels.contains("マシニングセンタ"))
@@ -132,11 +111,10 @@ private actor MockChatCompleting: ChatCompleting {
         let segments = try Self.segmentsResult(docID: "S100W043")
         #expect(segments.tables.first?.heading == "収益認識関係")
         let sales = try #require(try Self.loadSales(code: "6103"))
-        let client = MockChatCompleting(responseJSON: nil)
         let decider = FakeRevenueRecognitionColumnDecider(confidence: 0.49)
 
         let (snapshot, source, _) = await BusinessBreakdownResolver.resolve(
-            segments: segments, consolidatedSales: sales, client: client, columnDecider: decider
+            segments: segments, consolidatedSales: sales, columnDecider: decider
         )
 
         #expect(source == .revenueRecognitionLLM)
@@ -167,17 +145,15 @@ private actor MockChatCompleting: ChatCompleting {
             unitCaption: "百万円"
         )
         let segments = ExtractedBreakdown(method: "xbrl_facts", tables: [table], facts: [unresolvableFact])
-        let client = MockChatCompleting(responseJSON: nil)
         let decider = FakeRevenueRecognitionColumnDecider()
 
         let (snapshot, source, _) = await BusinessBreakdownResolver.resolve(
-            segments: segments, consolidatedSales: 1_000 * Financial.millionYen, client: client,
+            segments: segments, consolidatedSales: 1_000 * Financial.millionYen,
             columnDecider: decider
         )
 
         #expect(source == .segmentInfoLLM)
         #expect(snapshot?.axis == breakdownAxisProductService)
-        #expect(await client.timesCalled() == 0)
     }
 
     /// 富士フイルム（積み上げセグメント損益表）: 決定論寄せで解決し、LLM を呼ばない。
@@ -186,15 +162,13 @@ private actor MockChatCompleting: ChatCompleting {
         let segments = try Self.segmentsResult(docID: "S100W3XJ")
         #expect(segments.method == "html_table")
         let sales = try #require(try Self.loadSales(code: "4901"))
-        let client = MockChatCompleting(responseJSON: nil)
 
         let (snapshot, source, audit) = await BusinessBreakdownResolver.resolve(
-            segments: segments, consolidatedSales: sales, client: client
+            segments: segments, consolidatedSales: sales
         )
 
         #expect(source == .stackedSegmentPnL)
         #expect(audit == nil)
-        #expect(await client.timesCalled() == 0)
         let snap = try #require(snapshot)
         #expect(snap.sourceKind == "stacked_segment_pnl")
         let byLabel = Dictionary(
@@ -215,11 +189,10 @@ private actor MockChatCompleting: ChatCompleting {
         #expect(segments.method == "html_table")
         #expect(segments.tables.first?.heading != "収益認識関係")
         let sales = try #require(try Self.loadSales(code: "7751"))
-        let client = MockChatCompleting(responseJSON: nil)
         let decider = FakeRevenueRecognitionColumnDecider()
 
         let (snapshot, source, audit) = await BusinessBreakdownResolver.resolve(
-            segments: segments, consolidatedSales: sales, client: client, columnDecider: decider
+            segments: segments, consolidatedSales: sales, columnDecider: decider
         )
 
         #expect(source == .segmentInfoLLM)
@@ -230,7 +203,6 @@ private actor MockChatCompleting: ChatCompleting {
         let labels = Set(snapshot?.rows.map(\.labelRaw) ?? [])
         #expect(labels.contains("プリンティング"))
         #expect(labels.contains("メディカル"))
-        #expect(await client.timesCalled() == 0)
     }
 
     /// swap 対象の収益認識関係注記が見つからず `BreakdownExtractor` 側のフォールバックで
@@ -254,16 +226,14 @@ private actor MockChatCompleting: ChatCompleting {
                 ),
             ]
         )
-        let client = MockChatCompleting(responseJSON: nil)
 
         let (snapshot, source, audit) = await BusinessBreakdownResolver.resolve(
-            segments: segments, consolidatedSales: 1_000_000_000_000, client: client
+            segments: segments, consolidatedSales: 1_000_000_000_000
         )
 
         #expect(snapshot == nil)
         #expect(source == .notFound)
         #expect(audit == nil)
-        #expect(await client.timesCalled() == 0)
     }
 
     /// 住友ファーマ型: 報告セグメント facts は geography だが、セグメント注記 tables に製品別表が残る。
@@ -299,11 +269,10 @@ private actor MockChatCompleting: ChatCompleting {
                 ),
             ]
         )
-        let client = MockChatCompleting(responseJSON: nil)
         let decider = FakeRevenueRecognitionColumnDecider()
 
         let (snapshot, source, _) = await BusinessBreakdownResolver.resolve(
-            segments: segments, consolidatedSales: 453_294_000_000, client: client,
+            segments: segments, consolidatedSales: 453_294_000_000,
             columnDecider: decider
         )
 
@@ -311,7 +280,6 @@ private actor MockChatCompleting: ChatCompleting {
         #expect(snapshot?.axis == breakdownAxisProductService)
         let labels = Set(snapshot?.rows.map(\.labelRaw) ?? [])
         #expect(labels.contains("ラツーダ"))
-        #expect(await client.timesCalled() == 0)
     }
 
     /// 地域別のみのセグメント情報表は business に載せない。audit の geography_only を持ち帰る。
@@ -332,18 +300,16 @@ private actor MockChatCompleting: ChatCompleting {
             ],
             facts: []
         )
-        let client = MockChatCompleting(responseJSON: nil)
         let decider = FakeRevenueRecognitionColumnDecider()
 
         let (snapshot, source, audit) = await BusinessBreakdownResolver.resolve(
-            segments: segments, consolidatedSales: 1_000 * Financial.millionYen, client: client,
+            segments: segments, consolidatedSales: 1_000 * Financial.millionYen,
             columnDecider: decider
         )
 
         #expect(snapshot == nil)
         #expect(source == .notFound)
         #expect(audit?.notApplicableReason == breakdownNotApplicableGeographyOnly)
-        #expect(await client.timesCalled() == 0)
     }
 
     /// Jev が none_of_these のとき snapshot は無く、列選択の audit は持ち帰る。
@@ -351,13 +317,12 @@ private actor MockChatCompleting: ChatCompleting {
         let segments = try Self.segmentsResult(docID: "S100W043")
         #expect(segments.tables.first?.heading == "収益認識関係")
         let sales = try #require(try Self.loadSales(code: "6103"))
-        let client = MockChatCompleting(responseJSON: nil)
         let decider = FakeRevenueRecognitionColumnDecider(
             selected: RevenueRecognitionColumnNormalizer.noneOfThese, confidence: 0.95,
             pNone: 0.9)
 
         let (snapshot, source, audit) = await BusinessBreakdownResolver.resolve(
-            segments: segments, consolidatedSales: sales, client: client, columnDecider: decider
+            segments: segments, consolidatedSales: sales, columnDecider: decider
         )
 
         #expect(snapshot == nil)
@@ -370,11 +335,10 @@ private actor MockChatCompleting: ChatCompleting {
         let segments = try Self.segmentsResult(docID: "S100W043")
         #expect(segments.tables.first?.heading == "収益認識関係")
         let sales = try #require(try Self.loadSales(code: "6103"))
-        let client = MockChatCompleting(responseJSON: nil)
         let decider = FakeRevenueRecognitionColumnDecider(confidence: 0.49)
 
         let (snapshot, source, audit) = await BusinessBreakdownResolver.resolve(
-            segments: segments, consolidatedSales: sales, client: client, columnDecider: decider
+            segments: segments, consolidatedSales: sales, columnDecider: decider
         )
 
         #expect(snapshot?.needsReview == true)
@@ -385,14 +349,12 @@ private actor MockChatCompleting: ChatCompleting {
     /// segments が not_found の場合は何も呼ばない。
     @Test func segmentsNotFoundReturnsNotFound() async throws {
         let segments = ExtractedBreakdown(method: "not_found", tables: [], facts: [])
-        let client = MockChatCompleting(responseJSON: nil)
 
         let (snapshot, source, _) = await BusinessBreakdownResolver.resolve(
-            segments: segments, consolidatedSales: 1_000_000, client: client
+            segments: segments, consolidatedSales: 1_000_000
         )
 
         #expect(snapshot == nil)
         #expect(source == .notFound)
-        #expect(await client.timesCalled() == 0)
     }
 }

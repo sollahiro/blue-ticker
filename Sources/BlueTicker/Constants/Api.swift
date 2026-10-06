@@ -1,12 +1,9 @@
 public enum Api {
     static let edinetBaseURL = "https://api.edinet-fsa.go.jp/api/v2"
 
-    /// Chat Completions 互換エンドポイントの既定ベースURL。
-    /// 内訳取り込み の html_table 正規化でのみ使用。稼働先は `LLM_PROVIDER`、
-    /// 明示 `*_BASE_URL` があればそちらが勝つ。
-    static let xaiBaseURL = "https://api.x.ai/v1"
+    /// Chat Completions 互換エンドポイントの既定ベースURL。Overview 生成で使う。
     static let openaiBaseURL = "https://api.openai.com/v1"
-    /// Overview 生成（OpenRouter / Chat Completions 互換）。内訳 LLM の `LLM_PROVIDER` とは別。
+    /// Overview 生成（OpenRouter / Chat Completions 互換）。
     static let openrouterBaseURL = "https://openrouter.ai/api/v1"
     /// セグメント注記の Decisions API。Chat Completions の `/api/v1` とは別パス。
     static let openrouterDecisionsURL = "https://openrouter.ai/api/alpha/decisions"

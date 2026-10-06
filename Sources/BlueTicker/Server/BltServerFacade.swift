@@ -32,13 +32,6 @@ public struct BltServerContext: Sendable {
     let edinetClient: EdinetAPIClient
     let cacheManager: CacheManager
     let cacheDir: URL
-    /// 内訳取り込み product_service 軸の html_table 正規化（LLM）に使うクライアント。
-    /// `XAI_BUSINESS_*` / `OPENAI_BUSINESS_*` が無いときは `UnavailableChatClient`。
-    /// xbrl_facts 経路はこのフィールドに触れない。
-    let businessChatClient: ChatCompleting
-    /// 内訳取り込み geography 軸の html_table 正規化（LLM）に使うクライアント。
-    /// `OPENAI_GEOGRAPHY_*` / `XAI_GEOGRAPHY_*` 未設定時は `UnavailableChatClient`。
-    let geographyChatClient: ChatCompleting
     /// Overview 生成。`OPENROUTER_OVERVIEW_API_KEY` 未設定なら `UnavailableChatClient`。
     let overviewChatClient: ChatCompleting
     let overviewModel: String
@@ -46,6 +39,8 @@ public struct BltServerContext: Sendable {
     let segmentNoteDecider: (any SegmentNoteDeciding)?
     /// 収益分解の当期列選択。同じキーが無いときは nil（Chat Completions には落とさない）。
     let revenueRecognitionColumnDecider: (any RevenueRecognitionColumnDeciding)?
+    /// geography html_table の当期列選択。同じキーが無いときは nil。
+    let geographyColumnDecider: (any RevenueRecognitionColumnDeciding)?
     /// セグメント情報 html_table の列・行選択。同じキーが無いときは列デサイダへ落とす。
     let segmentInfoDecider: (any SegmentInfoDeciding)?
     /// 研究開発費の本文総額。同じキーが無いときは nil（数値タグが無い書類は not_found のまま）。
@@ -56,12 +51,12 @@ public struct BltServerContext: Sendable {
     let businessSegmentDimensionCache: BusinessSegmentDimensionCache
 
     init(
-        apiKey: String, cacheDir: URL, businessChatClient: ChatCompleting,
-        geographyChatClient: ChatCompleting,
+        apiKey: String, cacheDir: URL,
         overviewChatClient: ChatCompleting = UnavailableChatClient(),
         overviewModel: String = companyOverviewDefaultModel,
         segmentNoteDecider: (any SegmentNoteDeciding)? = nil,
         revenueRecognitionColumnDecider: (any RevenueRecognitionColumnDeciding)? = nil,
+        geographyColumnDecider: (any RevenueRecognitionColumnDeciding)? = nil,
         segmentInfoDecider: (any SegmentInfoDeciding)? = nil,
         researchAndDevelopmentProseDecider: (any ResearchAndDevelopmentProseDeciding)? = nil,
         capexProseDecider: (any CapexProseDeciding)? = nil
@@ -73,12 +68,11 @@ public struct BltServerContext: Sendable {
         self.edinetClient = EdinetAPIClient(
             apiKey: apiKey, cacheStore: store, xbrlObjectStore: xbrlObjectStore)
         self.cacheManager = CacheManager(cacheDir: derivedCacheDir(cacheDir))
-        self.businessChatClient = businessChatClient
-        self.geographyChatClient = geographyChatClient
         self.overviewChatClient = overviewChatClient
         self.overviewModel = overviewModel
         self.segmentNoteDecider = segmentNoteDecider
         self.revenueRecognitionColumnDecider = revenueRecognitionColumnDecider
+        self.geographyColumnDecider = geographyColumnDecider
         self.segmentInfoDecider = segmentInfoDecider
         self.researchAndDevelopmentProseDecider = researchAndDevelopmentProseDecider
         self.capexProseDecider = capexProseDecider
@@ -119,22 +113,6 @@ private func resolveEdinetApiKey() async -> String? {
     return (envKey?.isEmpty == false) ? envKey : nil
 }
 
-/// 内訳取り込み の LLM 軸。環境変数は軸別に読む（`resolveBreakdownLLMEndpoint`）。
-enum BreakdownLLMAxis: String, Sendable {
-    case business
-    case geography
-}
-
-/// 内訳取り込み の LLM（Chat Completions 互換）エンドポイントを軸別に環境変数から解決する。
-/// 稼働プロバイダは軸共通の `LLM_PROVIDER`（`openai` / `xai`。未設定は xai。不正値は未解決）。
-/// openai は `OPENAI_{BUSINESS,GEOGRAPHY}_*`、xai は `XAI_{BUSINESS,GEOGRAPHY}_*`
-/// （xai の business のみ旧 `XAI_*` へフォールバック）。未設定なら nil。
-func resolveBreakdownLLMEndpoint(axis: BreakdownLLMAxis) -> ChatCompletionEndpoint? {
-    let env = ProcessInfo.processInfo.environment
-    guard let provider = LLMProvider.fromEnv(env) else { return nil }
-    return provider.endpoint(axis: axis.rawValue, env: env)
-}
-
 /// Overview 生成の OpenRouter エンドポイント。
 /// `OPENROUTER_OVERVIEW_API_KEY` のみ読む。未設定なら nil。
 func resolveOverviewLLMEndpoint(
@@ -154,28 +132,15 @@ func resolveOverviewLLMEndpoint(
 
 /// EDINET API キー（env 優先）と設定から BltServerContext を構築する。
 /// EDINET API キーが未設定なら nil を返す（呼び出し元がユーザー向けメッセージを出す）。
-/// LLM キー未設定でも 内訳取り込み の xbrl_facts 経路は動く（LLM 未設定は html_table 経路のみに影響）。
+/// Decisions キー未設定でも 内訳取り込み の xbrl_facts 経路は動く（html_table の Jev 列選択のみに影響）。
 public func makeBltServerContext() async -> BltServerContext? {
     let env = ProcessInfo.processInfo.environment
-    if let provider = env["LLM_PROVIDER"], !provider.isEmpty,
-       LLMProvider.fromEnv(env) == nil
-    {
-        printError(
-            "[blue-ticker] Warning: LLM_PROVIDER='\(provider)' は不正です（openai または xai）。breakdowns の html_table 経路（LLM正規化）が無効になります。\n"
-        )
-    }
     guard let key = await resolveEdinetApiKey() else {
         return nil
     }
     let cacheDirStr = await settingsStore.get(.cacheDir) ?? ""
     let cacheDir = URL(
         fileURLWithPath: cacheDirStr.isEmpty ? settingsStore.cacheDir.path : cacheDirStr)
-    let businessChatClient: ChatCompleting =
-        resolveBreakdownLLMEndpoint(axis: .business).map { ChatCompletionClient(endpoint: $0) }
-        ?? UnavailableChatClient()
-    let geographyChatClient: ChatCompleting =
-        resolveBreakdownLLMEndpoint(axis: .geography).map { ChatCompletionClient(endpoint: $0) }
-        ?? UnavailableChatClient()
     let overviewEndpoint = resolveOverviewLLMEndpoint(env)
     let overviewChatClient: ChatCompleting =
         overviewEndpoint.map { ChatCompletionClient(endpoint: $0) } ?? UnavailableChatClient()
@@ -189,6 +154,10 @@ public func makeBltServerContext() async -> BltServerContext? {
         decisionsClient.map {
             OpenRouterRevenueRecognitionColumnDecider(client: $0)
         }
+    let geographyColumnDecider: (any RevenueRecognitionColumnDeciding)? =
+        decisionsClient.map {
+            OpenRouterGeographyColumnDecider(client: $0)
+        }
     let segmentInfoDecider: (any SegmentInfoDeciding)? = decisionsClient.map {
         OpenRouterSegmentInfoDecider(client: $0)
     }
@@ -200,11 +169,11 @@ public func makeBltServerContext() async -> BltServerContext? {
         OpenRouterCapexProseDecider(client: $0)
     }
     return BltServerContext(
-        apiKey: key, cacheDir: cacheDir, businessChatClient: businessChatClient,
-        geographyChatClient: geographyChatClient, overviewChatClient: overviewChatClient,
+        apiKey: key, cacheDir: cacheDir, overviewChatClient: overviewChatClient,
         overviewModel: overviewEndpoint?.model ?? companyOverviewDefaultModel,
         segmentNoteDecider: segmentNoteDecider,
         revenueRecognitionColumnDecider: revenueRecognitionColumnDecider,
+        geographyColumnDecider: geographyColumnDecider,
         segmentInfoDecider: segmentInfoDecider,
         researchAndDevelopmentProseDecider: researchAndDevelopmentProseDecider,
         capexProseDecider: capexProseDecider)
@@ -719,7 +688,7 @@ public extension BltServerContext {
         }
         let hash = breakdownContentHash(extracted: resolvedSegments, consolidatedSales: consolidatedSales)
         let result = await BusinessBreakdownResolver.resolve(
-            segments: resolvedSegments, consolidatedSales: consolidatedSales, client: businessChatClient,
+            segments: resolvedSegments, consolidatedSales: consolidatedSales,
             labelsByTag: labelsByTag, denominatorTag: denomItem.tag,
             columnDecider: revenueRecognitionColumnDecider,
             segmentInfoDecider: segmentInfoDecider,
@@ -744,7 +713,7 @@ public extension BltServerContext {
             if let recoveredExtracted = reviewed.extracted {
                 let retry = await BusinessBreakdownResolver.resolve(
                     segments: recoveredExtracted, consolidatedSales: consolidatedSales,
-                    client: businessChatClient, labelsByTag: labelsByTag,
+                    labelsByTag: labelsByTag,
                     denominatorTag: denomItem.tag,
                     columnDecider: revenueRecognitionColumnDecider,
                     segmentInfoDecider: segmentInfoDecider,
@@ -802,7 +771,7 @@ public extension BltServerContext {
                 copy.tables = [segments.tables[index]]
                 let retry = await BusinessBreakdownResolver.resolve(
                     segments: copy, consolidatedSales: consolidatedSales,
-                    client: businessChatClient, labelsByTag: labelsByTag,
+                    labelsByTag: labelsByTag,
                     denominatorTag: denomItem.tag,
                     columnDecider: revenueRecognitionColumnDecider,
                     segmentInfoDecider: segmentInfoDecider,
@@ -843,9 +812,9 @@ public extension BltServerContext {
     }
 
     /// 内訳取り込み: 書類1件分の geography 軸内訳を解決する。`GeographyBreakdownResolver` が
-    /// xbrl_facts / geography_llm へ振り分ける。正当欠測（地域注記なし、または LLM が
-    /// applicable=false）は `not_applicable` / `not_found`、正規化・LLM 呼び出し失敗は
-    /// `unknown`（要再試行）。売上分母は同一 XBRL パスで直接解決する（#9 / #10b）。
+    /// xbrl_facts / geography_llm へ振り分ける。正当欠測（地域注記なし、または Jev が
+    /// none_of_these）は `not_applicable` / `not_found`、正規化・列選択失敗は
+    /// `unknown`（要再試行）。売上分母は同一 XBRL パスで直接解決する。
     func resolveGeographyBreakdown(docID: String, correctionDocIDs: [String] = []) async -> BreakdownResolveResult {
         guard let xbrlDir = await downloadAnnualFilingXbrl(
             docID: docID, correctionDocIDs: correctionDocIDs
@@ -870,12 +839,14 @@ public extension BltServerContext {
 
         let hash = breakdownContentHash(extracted: resolvedGeography, consolidatedSales: consolidatedSales)
         let result = await GeographyBreakdownResolver.resolve(
-            geography: resolvedGeography, consolidatedSales: consolidatedSales, client: geographyChatClient,
-            labelsByTag: labelsByTag)
+            geography: resolvedGeography, consolidatedSales: consolidatedSales,
+            columnDecider: geographyColumnDecider, labelsByTag: labelsByTag,
+            fiscalYearEnd: BreakdownExtractor.currentFiscalYearEnd(fromXbrlDir: xbrlDir),
+            docID: docID)
         guard let snapshot = result.snapshot else {
-            // Resolver の notFound は「地域注記なし」または LLM の applicable=false。
-            // audit があれば LLM が明示的に非該当と答えた正当欠測。audit 無しで表だけある場合は
-            // LLM 呼び出し失敗の可能性が高いので unknown（再試行）に落とす。
+            // Resolver の notFound は「地域注記なし」または列が無い／none_of_these。
+            // audit があれば Jev が明示的に非該当と答えた正当欠測。audit 無しで表だけある場合は
+            // 列選択失敗の可能性が高いので unknown（再試行）に落とす。
             let reason: String
             if result.source == .notFound {
                 if result.audit != nil || geography.tables.isEmpty {

@@ -31,13 +31,6 @@ import Foundation
         return true
     }
 
-    private actor RejectLLM: ChatCompleting {
-        func complete(system: String, user: String, jsonSchema: Data, schemaName: String) async throws -> Data {
-            Issue.record("LLM must not be called for stacked segment P&L")
-            throw ChatCompletionError.emptyContent
-        }
-    }
-
     /// FY2025-03。格納済み profit は営業利益ブロック（HC 77,635 等）と一致する。
     @Test func s100W3XJProfitIsSegmentOperatingProfitNotRD() async throws {
         guard await Self.ensureAvailable("S100W3XJ") else { return }
@@ -48,7 +41,7 @@ import Foundation
 
         let sales = 3_195_828 * Financial.millionYen
         let (snapshot, source, audit) = await BusinessBreakdownResolver.resolve(
-            segments: segments, consolidatedSales: sales, client: RejectLLM()
+            segments: segments, consolidatedSales: sales
         )
 
         #expect(source == .stackedSegmentPnL)
@@ -81,9 +74,8 @@ import Foundation
         #expect(!segments.tables.isEmpty)
 
         let sales = 3_356_969 * Financial.millionYen
-        let client = RejectLLM()
         let (snapshot, source, audit) = await BusinessBreakdownResolver.resolve(
-            segments: segments, consolidatedSales: sales, client: client
+            segments: segments, consolidatedSales: sales
         )
 
         #expect(source == .stackedSegmentPnL)

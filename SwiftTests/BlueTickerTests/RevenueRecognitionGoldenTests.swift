@@ -547,7 +547,7 @@ import Testing
     }
 
     /// 7413 S100YKKP: prod currently stores labels shifted by one row (油脂 instead of
-    /// 油脂・乳製品) after Luna re-split a cell that `bs4Text` had glued. Pin the disclosed
+    /// 油脂・乳製品) after a cell that `bs4Text` had glued was re-split. Pin the disclosed
     /// labels and 千円 amounts, not the shifted ones.
     @Test func ykkp7413CandidatesAndRows() async throws {
         let snapshot = try await assert7413(
@@ -733,8 +733,7 @@ import Testing
                 facts: [])
             let context = BltServerContext(
                 apiKey: "test", cacheDir: URL(fileURLWithPath: NSTemporaryDirectory()),
-                businessChatClient: UnavailableChatClient(),
-                geographyChatClient: UnavailableChatClient())
+)
             let result = await context.segmentsAfterNoteDecision(
                 axis: .business, docID: "S100TRF1", extracted: extracted, xbrlDir: dir,
                 consolidatedSales: 100, labelsByTag: [:])
@@ -769,8 +768,7 @@ import Testing
                 facts: [])
             let context = BltServerContext(
                 apiKey: "test", cacheDir: URL(fileURLWithPath: NSTemporaryDirectory()),
-                businessChatClient: UnavailableChatClient(),
-                geographyChatClient: UnavailableChatClient())
+)
             let gate = await context.segmentsAfterNoteDecision(
                 axis: .business, docID: "S100YKOI", extracted: extracted, xbrlDir: dir,
                 consolidatedSales: 102 * Financial.millionYen, labelsByTag: [:])
@@ -795,8 +793,7 @@ import Testing
 
             let decider = FakeRevenueRecognitionColumnDecider(selected: "t0_c2", confidence: 0.97)
             let (snapshot, _, audit) = await BusinessBreakdownResolver.resolve(
-                segments: extracted, consolidatedSales: 102 * Financial.millionYen,
-                client: UnavailableChatClient(), columnDecider: decider,
+                segments: extracted, consolidatedSales: 102 * Financial.millionYen, columnDecider: decider,
                 fiscalYearEnd: "2026-03-31", docID: "S100YKOI")
             #expect(snapshot?.rows.contains { $0.rowKind == "segment" } != true)
             let tag = try #require(
@@ -851,8 +848,7 @@ import Testing
                 facts: [])
             let decider = FakeRevenueRecognitionColumnDecider(selected: "t0_c1", confidence: 0.97)
             let (snapshot, _, _) = await BusinessBreakdownResolver.resolve(
-                segments: extracted, consolidatedSales: 100 * Financial.millionYen,
-                client: UnavailableChatClient(), columnDecider: decider,
+                segments: extracted, consolidatedSales: 100 * Financial.millionYen, columnDecider: decider,
                 fiscalYearEnd: "2024-03-31", docID: "S100R95J")
             let row = try #require(snapshot)
             let tag = try #require(
@@ -2250,6 +2246,19 @@ import Testing
         let unitHeader: String = RevenueRecognitionCandidates.joinHeaderParts(
             ["(単位：百万円)", "その他"])
         #expect(unitHeader == "その他")
+        #expect(
+            RevenueRecognitionCandidates.joinHeaderParts(["海外売上高", "アジア"]) == "アジア")
+        #expect(
+            RevenueRecognitionCandidates.joinHeaderParts(["海外", "アジア"]) == "アジア")
+        #expect(
+            RevenueRecognitionCandidates.joinHeaderParts(["アジア", "タイ"]) == "アジアタイ")
+        #expect(
+            RevenueRecognitionCandidates.joinHeaderParts(["その他の地域", "豪州"]) == "豪州")
+        #expect(
+            RevenueRecognitionCandidates.joinHeaderParts(["その他の地域", "その他"])
+                == "その他の地域その他")
+        #expect(
+            RevenueRecognitionCandidates.joinHeaderParts(["(1) 売上高", "日本"]) == "日本")
         let north: String = RevenueRecognitionCandidates.displayLabel(
             categoryGroup: "（海外）", category: "北米")
         let appliance: String = BreakdownRowPayload.displayLabel(

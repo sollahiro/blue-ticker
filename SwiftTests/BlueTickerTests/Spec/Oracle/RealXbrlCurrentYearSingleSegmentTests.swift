@@ -40,9 +40,7 @@ import Testing
 
     private func noteContext() -> BltServerContext {
         BltServerContext(
-            apiKey: "test", cacheDir: URL(fileURLWithPath: NSTemporaryDirectory()),
-            businessChatClient: UnavailableChatClient(),
-            geographyChatClient: UnavailableChatClient())
+            apiKey: "test", cacheDir: URL(fileURLWithPath: NSTemporaryDirectory()))
     }
 
     /// 7063 S100P97P: Prior 専用タグの定型文が残るが、当期は MX / EX の 2 報告セグメント。
@@ -69,7 +67,7 @@ import Testing
         #expect(gate.outcome.omissionReason != breakdownNotApplicableSingleSegmentDisclosed)
 
         let (snapshot, source, _) = await BusinessBreakdownResolver.resolve(
-            segments: kept, consolidatedSales: sales, client: UnavailableChatClient())
+            segments: kept, consolidatedSales: sales)
         let snap = try #require(snapshot)
         #expect(source == .xbrlFacts)
         let labels = Self.segmentLabels(snap)
@@ -184,7 +182,7 @@ import Testing
         #expect(gate.outcome.omissionReason != breakdownNotApplicableSingleSegmentDisclosed)
 
         let (snapshot, source, _) = await BusinessBreakdownResolver.resolve(
-            segments: kept, consolidatedSales: sales, client: UnavailableChatClient())
+            segments: kept, consolidatedSales: sales)
         if let snap = snapshot {
             #expect(snap.axis == breakdownAxisProductService)
             #expect(snap.rows.filter { $0.rowKind == "segment" }.count >= 2)

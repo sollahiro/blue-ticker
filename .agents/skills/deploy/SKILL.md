@@ -178,9 +178,9 @@ Neon / Fly Volume の内容は EDINET から `sync`→`ingest` で再導出可�
 
 結合点はプロセス束縛の `DATABASE_URL` のみ（手元では `BLT_NEON_DISPOSABLE_DATABASE_URL` 等を代入）。標準 Postgres（JSONB）。`withDbRetry` は cold start 対策で他 Postgres でも無害。切替: dump/restore または再 ingest → secret 差し替え。
 
-### 内訳 LLM（切替容易）
+### 内訳（Jev / OpenRouter Decisions）
 
-結合点は軸共通の `LLM_PROVIDER`（`openai` / `xai`）と、プロバイダ×軸のキー（`OPENAI_*` / `XAI_*`）。現行は `LLM_PROVIDER=openai` + GPT-5.6 Luna。Grok に戻すときは `LLM_PROVIDER=xai`（xAI 側のキーはそのまま残せる）。`BASE_URL` 省略時はプロバイダの既定 URL。html_table 経路のみ使用。切替後の再計算は `docs/breakdown.md`（`needs_review` または行削除）。
+結合点は `OPENROUTER_DECISION_API_KEY`（`typesafe/jev-1.13`）。product_service / geography の html_table は決定論の表構造 + 列選択。Chat Completions は内訳経路では使わない。Overview は別キー `OPENROUTER_OVERVIEW_API_KEY`。切替後の再計算は `docs/breakdown.md`（行削除または `needs_review`）。
 
 ### Fly.io（代替容易）
 

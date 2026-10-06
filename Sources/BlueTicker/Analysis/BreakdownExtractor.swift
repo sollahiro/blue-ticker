@@ -1286,7 +1286,8 @@ enum BreakdownExtractor {
         _ cell: String, parentIsRegion: Bool = false
     ) -> Bool {
         let trimmed = cell.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard trimmed.contains("うち") else { return false }
+        guard trimmed.contains("うち") || trimmed.contains("内、") || trimmed.hasPrefix("内,")
+        else { return false }
         if ofWhichMetricHeaderHints.contains(where: trimmed.contains) { return false }
         let compact = trimmed
             .replacingOccurrences(of: "\u{00a0}", with: "")
@@ -1297,7 +1298,9 @@ enum BreakdownExtractor {
             .replacingOccurrences(of: "(", with: "")
             .replacingOccurrences(of: ")", with: "")
         guard compact.unicodeScalars.count <= 24 else { return false }
-        guard let uchi = compact.range(of: "うち") else { return false }
+        guard let uchi = compact.range(of: "うち") ?? compact.range(of: "内、")
+            ?? compact.range(of: "内,")
+        else { return false }
         let after = String(compact[uchi.upperBound...])
         let afterIsRegion = Xbrl.segmentGeographyLabelKeywordsJa.contains(where: after.contains)
         if afterIsRegion { return true }
