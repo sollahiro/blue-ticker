@@ -551,4 +551,36 @@ import Testing
         #expect(!snapshot.needsReview)
         #expect(publiclyServable(snapshot))
     }
+
+    /// 3659 型: 行=地域、列=事業別＋合計。合計列の金額を公開する。
+    @Test func regionRowsBusinessColumnsUseTotalColumn() async throws {
+        let html = """
+            <p>当連結会計年度(自 2025年1月1日 至 2025年12月31日)</p>
+            <p>（単位：百万円）</p>
+            <table>
+              <tr>
+                <td></td><td colspan="3">事業別の売上収益</td><td rowspan="2">合計</td>
+              </tr>
+              <tr>
+                <td></td><td>PCオンライン</td><td>モバイル</td><td>その他</td>
+              </tr>
+              <tr><td>日本</td><td>8,235</td><td>5,733</td><td>46</td><td>14,014</td></tr>
+              <tr><td>韓国</td><td>186,830</td><td>60,122</td><td>3,021</td><td>249,973</td></tr>
+              <tr><td>中国</td><td>59,283</td><td>50,209</td><td>21</td><td>109,513</td></tr>
+              <tr>
+                <td>北米及び欧州</td><td>61,139</td><td>7,218</td><td>225</td><td>68,582</td>
+              </tr>
+              <tr><td>その他</td><td>19,826</td><td>12,000</td><td>1,194</td><td>33,020</td></tr>
+              <tr><td>合計</td><td>335,313</td><td>135,282</td><td>4,507</td><td>475,102</td></tr>
+            </table>
+            """
+        let (snapshotOrNil, _) = await normalize(
+            html: html, sales: yen(475_102), docID: "S100XSM4")
+        let snapshot = try #require(snapshotOrNil)
+        #expect(Set(segmentLabels(snapshot)) == Set(["日本", "韓国", "中国", "北米及び欧州", "その他"]))
+        #expect(snapshot.rows.first { $0.labelRaw == "韓国" }?.amount == yen(249_973))
+        #expect(snapshot.rows.first { $0.labelRaw == "日本" }?.amount == yen(14_014))
+        #expect(!snapshot.needsReview)
+        #expect(publiclyServable(snapshot))
+    }
 }

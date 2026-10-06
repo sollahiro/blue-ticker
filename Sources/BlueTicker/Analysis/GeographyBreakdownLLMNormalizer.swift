@@ -255,12 +255,20 @@ enum GeographyBreakdownLLMNormalizer {
                     RevenueRecognitionCandidates.compactCell(header).contains($0)
                 }
             }
-            if regionHeaders.count >= 2 {
-                let totals = tableCols.filter { column in
-                    let header = RevenueRecognitionCandidates.compactCell(column.header)
-                    return header.contains("合計") || header.contains("連結") || header == "計"
+            let totals = tableCols.filter { column in
+                let header = RevenueRecognitionCandidates.compactCell(column.header)
+                return header.contains("合計") || header.contains("連結") || header == "計"
+            }
+            let rowGeo = (table.items.map(\.label) + table.totals.map(\.label)).filter { label in
+                Xbrl.segmentGeographyLabelKeywordsJa.contains {
+                    RevenueRecognitionCandidates.compactCell(label).contains($0)
                 }
+            }
+            if regionHeaders.count >= 2 {
                 preferred.append(contentsOf: totals.isEmpty ? tableCols : totals)
+            } else if rowGeo.count >= 2, !totals.isEmpty {
+                // 3659: 行=地域、列=事業＋合計。合計列だけを選ぶ。
+                preferred.append(contentsOf: totals)
             } else {
                 preferred.append(contentsOf: tableCols)
             }
@@ -416,7 +424,11 @@ enum GeographyBreakdownLLMNormalizer {
     private static func isLikelyOfWhichChild(parent: BreakdownRow, child: BreakdownRow) -> Bool {
         guard child.amount > 0, parent.amount > 0 else { return false }
         guard child.amount <= parent.amount * 1.001 else { return false }
-        if child.labelRaw.contains("うち") { return true }
+        if child.labelRaw.contains("うち") || child.labelRaw.hasPrefix("内、")
+            || child.labelRaw.hasPrefix("内,")
+        {
+            return true
+        }
         guard child.amount >= parent.amount * 0.80 else { return false }
         return matchesOfWhichLabelPair(parent: parent.labelRaw, child: child.labelRaw)
     }
