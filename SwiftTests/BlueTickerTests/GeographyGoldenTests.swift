@@ -1079,7 +1079,7 @@ import Testing
             GeographyBreakdownLLMNormalizer.warningPriorPeriodColumn))
     }
 
-    /// 7272 本番 137,712: 当期列 155,330 とも前期列 162,636 とも違う金額は NR。
+    /// 原本 S100XRTH の当期列 155,330 に、訂正 130 の 137,712 を載せると不一致（NR）。
     @Test func yamahaStaleAmountsMismatchSelectedColumn() throws {
         let tables = BreakdownExtractor.allTablesFromHtml(
             Self.yamahaGeographyHTML, defaultHeading: "地域ごとの情報")
@@ -1115,6 +1115,43 @@ import Testing
                 multiplier: Financial.millionYen))
     }
 
+    /// 7272 訂正 130 S100YTNF: 仕向地の当期 日本 137,712 は公開してよい（原本 120 の 155,330 ではない）。
+    @Test func yamahaAmendedDestinationCurrentYearIs137712() async throws {
+        let html = """
+            <p>当連結会計年度</p>
+            <table>
+              <tr>
+                <td></td>
+                <td>前連結会計年度（自 2024年１月１日 至 2024年12月31日）</td>
+                <td>当連結会計年度（自 2025年１月１日 至 2025年12月31日）</td>
+              </tr>
+              <tr><td>日本</td><td>141,221</td><td>137,712</td></tr>
+              <tr><td>北米</td><td>638,406</td><td>579,929</td></tr>
+              <tr><td>（うち米国）</td><td>（572,571）</td><td>（527,812）</td></tr>
+              <tr><td>欧州</td><td>341,778</td><td>331,041</td></tr>
+              <tr><td>アジア</td><td>1,007,166</td><td>1,016,543</td></tr>
+              <tr><td>（うちインドネシア）</td><td>（309,185）</td><td>（309,462）</td></tr>
+              <tr><td>その他</td><td>447,605</td><td>468,976</td></tr>
+              <tr><td>合計</td><td>2,576,179</td><td>2,534,203</td></tr>
+            </table>
+            """
+        let (snapshotOrNil, _) = await normalize(
+            html: html, sales: yen(2_534_203), docID: "S100YTNF",
+            assignCurrentPeriod: false)
+        let snapshot = try #require(snapshotOrNil)
+        #expect(Set(segmentLabels(snapshot)) == Set(["日本", "北米", "欧州", "アジア", "その他"]))
+        #expect(snapshot.rows.first { $0.labelRaw == "日本" }?.amount == yen(137_712))
+        #expect(snapshot.rows.first { $0.labelRaw == "北米" }?.amount == yen(579_929))
+        #expect(snapshot.rows.first { $0.labelRaw == "その他" }?.amount == yen(468_976))
+        #expect(!segmentLabels(snapshot).contains { $0.contains("米国") })
+        #expect(!snapshot.needsReview)
+        #expect(publiclyServable(snapshot))
+        #expect(!snapshot.warnings.contains(
+            GeographyBreakdownLLMNormalizer.warningSelectedColumnMismatch))
+        #expect(!snapshot.warnings.contains(
+            GeographyBreakdownLLMNormalizer.warningPriorPeriodColumn))
+    }
+
     /// 2146 / 1968 型: 前期だけの地域表は当期内訳にしない。
     @Test func priorOnlyRegionTableIsNotPublished() async throws {
         let html = """
@@ -1133,6 +1170,64 @@ import Testing
             fiscalYearEnd: "2026-03-31",
             docID: "S100YKK1")
         #expect(snapshot == nil)
+    }
+
+    /// 1887 S100YXXI: Prior コンテキストの比較表でも当期行 121,492 を公開する。
+    @Test func priorContextComparativeTablePublishesCurrentRow() async throws {
+        let html = """
+            <table>
+              <tr><td></td><td>日本</td><td>アジア</td><td>合計</td></tr>
+              <tr><td>前連結会計年度(自2024年６月１日至2025年５月31日)</td><td>113,009</td><td>10,339</td><td>123,349</td></tr>
+              <tr><td>当連結会計年度(自2025年６月１日至2026年５月31日)</td><td>121,492</td><td>13,715</td><td>135,207</td></tr>
+            </table>
+            """
+        var tables = BreakdownExtractor.allTablesFromHtml(html, defaultHeading: "地域ごとの情報")
+        if !tables.isEmpty { tables[0].period = "前期" }
+        let (snapshotOrNil, _) = await GeographyBreakdownLLMNormalizer.normalize(
+            ExtractedBreakdown(method: "html_table", tables: tables, facts: []),
+            consolidatedSales: yen(135_207),
+            decider: FakeRevenueRecognitionColumnDecider(confidence: 0.9),
+            fiscalYearEnd: "2026-05-31",
+            docID: "S100YXXI")
+        let snapshot = try #require(snapshotOrNil)
+        #expect(snapshot.rows.first { $0.labelRaw == "日本" }?.amount == yen(121_492))
+        #expect(snapshot.rows.first { $0.labelRaw == "アジア" }?.amount == yen(13_715))
+        #expect(!snapshot.needsReview)
+        #expect(publiclyServable(snapshot))
+        #expect(!snapshot.warnings.contains(GeographyBreakdownLLMNormalizer.warningPriorPeriodColumn))
+    }
+
+    /// 4568 S100YEY0: 列=地域・行=期間の比較表。当期 日本 580,112。
+    @Test func priorContextRegionColumnsPublishCurrentPeriodRow() async throws {
+        let html = """
+            <table>
+              <tr>
+                <td></td><td>日本</td><td>米国</td><td>欧州</td><td>その他</td><td>連結</td>
+              </tr>
+              <tr>
+                <td>前連結会計年度（自 2024年４月１日 至 2025年３月31日）</td>
+                <td>583,802</td><td>642,215</td><td>418,211</td><td>242,026</td><td>1,886,256</td>
+              </tr>
+              <tr>
+                <td>当連結会計年度（自 2025年４月１日 至 2026年３月31日）</td>
+                <td>580,112</td><td>749,401</td><td>497,375</td><td>296,155</td><td>2,123,045</td>
+              </tr>
+            </table>
+            """
+        var tables = BreakdownExtractor.allTablesFromHtml(html, defaultHeading: "地域ごとの情報")
+        if !tables.isEmpty { tables[0].period = "前期" }
+        let (snapshotOrNil, _) = await GeographyBreakdownLLMNormalizer.normalize(
+            ExtractedBreakdown(method: "html_table", tables: tables, facts: []),
+            consolidatedSales: yen(2_123_045),
+            decider: FakeRevenueRecognitionColumnDecider(confidence: 0.9),
+            fiscalYearEnd: "2026-03-31",
+            docID: "S100YEY0")
+        let snapshot = try #require(snapshotOrNil)
+        #expect(snapshot.rows.first { $0.labelRaw == "日本" }?.amount == yen(580_112))
+        #expect(snapshot.rows.first { $0.labelRaw == "米国" }?.amount == yen(749_401))
+        #expect(!snapshot.needsReview)
+        #expect(publiclyServable(snapshot))
+        #expect(!snapshot.warnings.contains(GeographyBreakdownLLMNormalizer.warningPriorPeriodColumn))
     }
 
     /// 1968 S100TU63 型: 前期の日本/アジアは当期内訳にしない。

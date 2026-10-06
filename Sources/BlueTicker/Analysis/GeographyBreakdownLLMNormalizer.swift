@@ -86,11 +86,20 @@ enum GeographyBreakdownLLMNormalizer {
             )
         )
         let currentGeography = afterFilters.filter { $0.period != "前期" }
+        // 前期 TextBlock に当期行がある表（1887 S100YXXI / 4568 S100YEY0）は落とさない。
         // 前期だけの地域表は当期内訳に使わない（2146 S100YKK1 / 1968 S100TU63）。
-        if currentGeography.isEmpty, afterFilters.contains(where: { $0.period == "前期" }) {
+        let priorWithCurrentRow = afterFilters.filter {
+            $0.period == "前期" && tableHasCurrentPeriodRow($0)
+        }
+        if currentGeography.isEmpty, afterFilters.contains(where: { $0.period == "前期" }),
+           priorWithCurrentRow.isEmpty
+        {
             return (nil, nil)
         }
-        let scopedTables = currentGeography.isEmpty ? afterFilters : currentGeography
+        let scopedTables =
+            currentGeography.isEmpty
+            ? (priorWithCurrentRow.isEmpty ? afterFilters : priorWithCurrentRow)
+            : currentGeography
         let scopedColumns = columns.filter { column in
             scopedTables.contains { $0.tableIndex == column.tableIndex }
         }
@@ -152,9 +161,10 @@ enum GeographyBreakdownLLMNormalizer {
 
         let belowThreshold = (choice.confidence ?? 0) < RevenueRecognitionColumnNormalizer
             .confidenceThreshold
-        let priorPeriod = selectedTable.period == "前期"
-            || RevenueRecognitionColumnNormalizer.isPriorOnlyColumn(
-                selectedColumn, table: selectedTable)
+        let priorPeriod = (
+            selectedTable.period == "前期" && !tableHasCurrentPeriodRow(selectedTable)
+        ) || RevenueRecognitionColumnNormalizer.isPriorOnlyColumn(
+            selectedColumn, table: selectedTable)
         var warnings: [String] = []
         var needsReview = belowThreshold || resolved.forceReview || priorPeriod
         if belowThreshold { warnings.append(RevenueRecognitionColumnNormalizer.warningLowConfidence) }
@@ -238,7 +248,8 @@ enum GeographyBreakdownLLMNormalizer {
             rows: rows, table: selectedTable, selectedColumn: selectedColumn,
             multiplier: unitMultiplier)
         {
-            // 7272 本番 日本 137,712 は当期列 155,330 にも前期列 162,636 にも無い（Luna 残）。
+            // 組立額が選んだ列のセルに無いとき。原本 S100XRTH の当期は 155,330。
+            // 本番 137,712 は訂正 130 S100YTNF の当期列であり、原本表へ載せると不一致。
             needsReview = true
             if !warnings.contains(warningSelectedColumnMismatch) {
                 warnings.append(warningSelectedColumnMismatch)
@@ -320,7 +331,7 @@ enum GeographyBreakdownLLMNormalizer {
     static let warningFinalReviewWrong = "jev_final_review_wrong"
     /// 前期列の金額を当期として組んだとき。公開面は `needs_review`。最終判定の correct では覆さない。
     static let warningPriorPeriodColumn = "geography_prior_period_column"
-    /// 組んだ金額が選んだ当期列と一致しないとき（7272 の 137,712）。最終判定の correct では覆さない。
+    /// 組んだ金額が選んだ当期列と一致しないとき。最終判定の correct では覆さない。
     static let warningSelectedColumnMismatch = "geography_selected_column_mismatch"
     static let reviewCorrect = "correct"
     static let reviewWrong = "wrong"
@@ -362,7 +373,7 @@ enum GeographyBreakdownLLMNormalizer {
         }
     }
 
-    /// 選んだ列に同じラベルがあるのに金額が違うとき（7272 本番 137,712 vs 当期 155,330）。
+    /// 選んだ列に同じラベルがあるのに金額が違うとき（原本 120 の 155,330 列へ訂正 130 の 137,712 を載せた形）。
     /// 同一ラベルが売上と資産で二度出る表は、どれか1つの出現に一致すれば足りる。
     static func extractedMismatchesSelectedColumn(
         rows: [BreakdownRow],
@@ -575,6 +586,13 @@ enum GeographyBreakdownLLMNormalizer {
             looksLikeGeographyLabel(label)
                 || label.contains("その他の地域") || label.contains("その他地域")
         }
+    }
+
+    /// dedicated の Prior コンテキストでも、表内に当期行があれば当期内訳に使う。
+    static func tableHasCurrentPeriodRow(
+        _ table: RevenueRecognitionCandidates.ParsedTable
+    ) -> Bool {
+        RevenueRecognitionCandidates.tableHasCurrentPeriodRow(table)
     }
 
     static func dropNonGeographyMetricRows(

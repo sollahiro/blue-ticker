@@ -389,6 +389,27 @@ struct GeographyBreakdownLLMNormalizerTests {
         #expect(!RevenueRecognitionColumnNormalizer.isPriorOnlyColumn(current, table: table))
     }
 
+    @Test("Prior stamp でも当期行がある地域列は prior-only にしない")
+    func priorStampWithCurrentRowIsNotWholesalePriorOnly() throws {
+        let html = """
+            <table>
+              <tr><td></td><td>日本</td><td>アジア</td><td>合計</td></tr>
+              <tr><td>前連結会計年度(自2024年６月１日至2025年５月31日)</td><td>113,009</td><td>10,339</td><td>123,349</td></tr>
+              <tr><td>当連結会計年度(自2025年６月１日至2026年５月31日)</td><td>121,492</td><td>13,715</td><td>135,207</td></tr>
+            </table>
+            """
+        var tables = BreakdownExtractor.allTablesFromHtml(html, defaultHeading: "地域ごとの情報")
+        if !tables.isEmpty { tables[0].period = "前期" }
+        let parsed = RevenueRecognitionCandidates.parse(tables: tables)
+        let table = try #require(parsed.first)
+        #expect(RevenueRecognitionCandidates.tableHasCurrentPeriodRow(table))
+        let columns = RevenueRecognitionCandidates.amountColumns(in: parsed)
+        #expect(!columns.isEmpty)
+        #expect(columns.allSatisfy {
+            !RevenueRecognitionColumnNormalizer.isPriorOnlyColumn($0, table: table)
+        })
+    }
+
     @Test func reviewRequestJSONAsksCorrectOrWrong() throws {
         let data = try #require(OpenRouterGeographyColumnDecider.reviewRequestJSON(
             model: "typesafe/jev-1.13",

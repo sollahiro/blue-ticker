@@ -1,6 +1,8 @@
 // 本番 geography_llm 行を R2 GET + Jev 新経路で再計算して比較する。CI では走らない。
 // `BLT_GEOGRAPHY_SCAN=1`、R2 XBRL 資格、`OPENROUTER_DECISION_API_KEY` が必要。
 // R2 GET のみ。DB へは書かない。EDINET フォールバックもしない（apiKey=nil）。
+// 訂正 130 overlay は掛けない（ingest の `resolveAnnualXbrlDirectory` とは非対称）。
+// 7272 は原本 S100XRTH が 155,330、訂正 S100YTNF overlay 後が 137,712。
 
 import Foundation
 import Testing
@@ -127,6 +129,7 @@ struct GeographyProdBreakdownRow: Codable {
             comparison.record["extract_method"] = geography.method
             comparison.record["table_count"] = geography.tables.count
             comparison.record["headings"] = geography.tables.map { $0.heading }
+            comparison.record["table_periods"] = geography.tables.map { $0.period ?? "" }
             if let sales { comparison.record["consolidated_sales"] = sales }
             if let notes = audit?.notes { comparison.record["audit_notes"] = notes }
             if let selected = audit?.periodColumn { comparison.record["jev_column"] = selected }
@@ -270,6 +273,10 @@ struct GeographyProdBreakdownRow: Codable {
                 || warnings.contains(RevenueRecognitionColumnNormalizer.warningNoneOfTheseOverridden)
                 || warnings.contains(GeographyBreakdownLLMNormalizer.warningFinalReviewWrong)
             {
+                return "fail_closed"
+            }
+            let periods = record["table_periods"] as? [String] ?? []
+            if snapshot == nil, !periods.isEmpty, periods.allSatisfy({ $0 == "前期" }) {
                 return "fail_closed"
             }
             return "jev_worse"

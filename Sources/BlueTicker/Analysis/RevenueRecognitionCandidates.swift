@@ -438,6 +438,13 @@ enum RevenueRecognitionCandidates {
         return compact.contains("当") && !compact.contains("前")
     }
 
+    /// dedicated の Prior コンテキストでも、表内に当期行があれば当期内訳に使う。
+    static func tableHasCurrentPeriodRow(_ table: ParsedTable) -> Bool {
+        let labels = table.items.map(\.label) + table.totals.map(\.label)
+            + table.grid.dropFirst(max(0, table.headerRowCount)).compactMap(\.first)
+        return labels.contains { isCurrentPeriodHeading($0) }
+    }
+
     static func isAssetMetricLabel(_ label: String) -> Bool {
         let compact = compactCell(label)
         return compact.contains("固定資産") || compact.contains("非流動資産")

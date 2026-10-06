@@ -566,7 +566,9 @@ public extension BltServerContext {
         guard let decider = segmentNoteDecider else { return pass }
         let tablesForDecision: [BreakdownTable]
         if axis == .geography {
-            let current = extracted.tables.filter { $0.period != "前期" }
+            let current = extracted.tables.filter {
+                $0.period != "前期" || BreakdownExtractor.htmlTableHasCurrentPeriodRow($0)
+            }
             tablesForDecision = current
         } else {
             tablesForDecision = extracted.tables
@@ -622,7 +624,10 @@ public extension BltServerContext {
         case .keepTable(let index):
             let originalIndex: Int
             if axis == .geography {
-                let current = extracted.tables.enumerated().filter { $0.element.period != "前期" }
+                let current = extracted.tables.enumerated().filter {
+                    $0.element.period != "前期"
+                        || BreakdownExtractor.htmlTableHasCurrentPeriodRow($0.element)
+                }
                 originalIndex = current.indices.contains(index) ? current[index].offset : index
             } else {
                 originalIndex = index

@@ -350,7 +350,13 @@ enum RevenueRecognitionColumnNormalizer {
         _ column: RevenueRecognitionCandidates.AmountColumn,
         table: RevenueRecognitionCandidates.ParsedTable
     ) -> Bool {
-        if table.period == "前期" { return true }
+        // XBRL Prior contextRef は表全体を 前期 にする。前期だけの注記（2146 / 1968）は
+        // それで正しい。Prior TextBlock の比較表に当期行があるとき（1887 / 4568）は列ごとに見る。
+        if table.period == "前期",
+           !RevenueRecognitionCandidates.tableHasCurrentPeriodRow(table)
+        {
+            return true
+        }
         let headerCells = table.grid.prefix(table.headerRowCount).compactMap { row -> String? in
             guard column.column < row.count else { return nil }
             let text = RevenueRecognitionCandidates.compactCell(row[column.column])
