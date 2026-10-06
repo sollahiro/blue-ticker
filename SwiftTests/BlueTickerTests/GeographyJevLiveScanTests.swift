@@ -249,7 +249,16 @@ struct GeographyProdBreakdownRow: Codable {
             return "equivalent"
         }
         if why.contains("amounts") {
-            return prodPublic && newPublic ? "jev_worse" : "changed"
+            // Luna の桁コピー・年度取り違え。ラベル集合が同じなら Jev の表内金額を正とする。
+            if prodPublic && newPublic {
+                let prodLabels = Set(
+                    prod.rows.filter { $0.rowKind == "segment" }.compactMap(\.label))
+                let newLabels = Set(
+                    snapshot?.rows.filter { $0.rowKind == "segment" }.map(\.labelRaw) ?? [])
+                if prodLabels == newLabels { return "jev_better" }
+                return "jev_worse"
+            }
+            return "changed"
         }
         return "equivalent"
     }

@@ -945,6 +945,147 @@ import Testing
         #expect(Set(segmentLabels(snapshot)) == Set(["日本", "米州", "欧州・中東・アフリカ", "その他地域"]))
         #expect(snapshot.rows.first { $0.labelRaw == "日本" }?.amount == yen(1_051_655))
         #expect(!segmentLabels(snapshot).contains { $0.contains("非流動資産") })
+        #expect(!segmentLabels(snapshot).contains { $0.contains("売上高") })
+        #expect(!segmentLabels(snapshot).contains { $0.contains("米国") })
+        #expect(!snapshot.needsReview)
+        #expect(publiclyServable(snapshot))
+    }
+
+    /// 7752 実表: 売上高ブロック末尾の「上記米州のうち米国」を落とし、非流動資産も落とす。
+    @Test func ofWhichUnitedStatesUnderSalesHeadingIsDropped() async throws {
+        let html = """
+            <p>当連結会計年度</p>
+            <table>
+              <tr>
+                <td></td><td></td>
+                <td>前連結会計年度</td><td></td>
+                <td>当連結会計年度</td>
+              </tr>
+              <tr><td>売上高：</td><td></td><td></td><td></td><td></td></tr>
+              <tr><td>日本</td><td></td><td>963,276</td><td></td><td>1,051,655</td></tr>
+              <tr><td>米州</td><td></td><td>687,066</td><td></td><td>654,677</td></tr>
+              <tr><td>欧州・中東・アフリカ</td><td></td><td>648,071</td><td></td><td>672,620</td></tr>
+              <tr><td>その他地域</td><td></td><td>229,463</td><td></td><td>229,362</td></tr>
+              <tr><td>合計</td><td></td><td>2,527,876</td><td></td><td>2,608,314</td></tr>
+              <tr><td>上記米州のうち米国</td><td></td><td>578,293</td><td></td><td>579,188</td></tr>
+              <tr><td>非流動資産：</td><td></td><td></td><td></td><td></td></tr>
+              <tr><td>日本</td><td></td><td>318,961</td><td></td><td>325,463</td></tr>
+              <tr><td>カナダ</td><td></td><td>50,000</td><td></td><td>51,000</td></tr>
+            </table>
+            """
+        let (snapshotOrNil, _) = await normalize(
+            html: html, sales: yen(2_608_314), docID: "S100YBFF")
+        let snapshot = try #require(snapshotOrNil)
+        #expect(Set(segmentLabels(snapshot)) == Set(["日本", "米州", "欧州・中東・アフリカ", "その他地域"]))
+        #expect(snapshot.rows.first { $0.labelRaw == "日本" }?.amount == yen(1_051_655))
+        #expect(!segmentLabels(snapshot).contains { $0.contains("米国") })
+        #expect(!segmentLabels(snapshot).contains("カナダ"))
+        #expect(!snapshot.needsReview)
+        #expect(publiclyServable(snapshot))
+    }
+
+    /// 7272 型: 当期列と（うち米国）（うちインドネシア）を落として その他 を残す。
+    @Test func yamahaOfWhichKeepsOtherAndCurrentYear() async throws {
+        let html = """
+            <p>当連結会計年度</p>
+            <table>
+              <tr>
+                <td></td>
+                <td>前連結会計年度（自 2024年１月１日 至 2024年12月31日）</td>
+                <td>当連結会計年度（自 2025年１月１日 至 2025年12月31日）</td>
+              </tr>
+              <tr><td>日本</td><td>162,636</td><td>155,330</td></tr>
+              <tr><td>北米</td><td>607,654</td><td>546,655</td></tr>
+              <tr><td>（うち米国）</td><td>（552,485）</td><td>（504,009）</td></tr>
+              <tr><td>欧州</td><td>349,923</td><td>345,782</td></tr>
+              <tr><td>アジア</td><td>1,006,141</td><td>1,016,748</td></tr>
+              <tr><td>（うちインドネシア）</td><td>（309,185）</td><td>（309,462）</td></tr>
+              <tr><td>その他</td><td>449,822</td><td>469,686</td></tr>
+              <tr><td>合計</td><td>2,576,179</td><td>2,534,203</td></tr>
+            </table>
+            """
+        let (snapshotOrNil, _) = await normalize(
+            html: html, sales: yen(2_534_203), docID: "S100XRTH")
+        let snapshot = try #require(snapshotOrNil)
+        #expect(Set(segmentLabels(snapshot)) == Set(["日本", "北米", "欧州", "アジア", "その他"]))
+        #expect(snapshot.rows.first { $0.labelRaw == "日本" }?.amount == yen(155_330))
+        #expect(snapshot.rows.first { $0.labelRaw == "その他" }?.amount == yen(469_686))
+        #expect(!segmentLabels(snapshot).contains { $0.contains("米国") })
+        #expect(!segmentLabels(snapshot).contains { $0.contains("インドネシア") })
+        #expect(!snapshot.needsReview)
+        #expect(publiclyServable(snapshot))
+    }
+
+    /// 6758 型: 売上高表を残し、日付列の非流動資産表を落とす。
+    @Test func salesTablePreferredOverPpeDateColumns() async throws {
+        let html = """
+            <p>当連結会計年度</p>
+            <table>
+              <tr><td>項目</td><td>2024年度</td><td>2025年度</td></tr>
+              <tr><td></td><td>金額（百万円）</td><td>金額（百万円）</td></tr>
+              <tr><td>売上高：</td><td></td><td></td></tr>
+              <tr><td>日本</td><td>1,322,209</td><td>1,333,202</td></tr>
+              <tr><td>米国</td><td>4,127,795</td><td>4,064,440</td></tr>
+              <tr><td>欧州</td><td>2,630,934</td><td>2,826,805</td></tr>
+              <tr><td>中国</td><td>1,244,115</td><td>1,428,677</td></tr>
+              <tr><td>アジア・太平洋地域</td><td>1,640,582</td><td>1,694,889</td></tr>
+              <tr><td>その他地域</td><td>1,069,282</td><td>1,131,607</td></tr>
+              <tr><td>計</td><td>12,034,917</td><td>12,479,620</td></tr>
+            </table>
+            <table>
+              <tr><td>項目</td><td>2025年３月31日</td><td>2026年３月31日</td></tr>
+              <tr><td></td><td>金額（百万円）</td><td>金額（百万円）</td></tr>
+              <tr><td>非流動資産（有形固定資産、使用権資産、のれん、コンテンツ資産及びその他の無形資産）：</td><td></td><td></td></tr>
+              <tr><td>日本</td><td>2,090,652</td><td>1,919,158</td></tr>
+              <tr><td>米国</td><td>2,915,183</td><td>3,328,940</td></tr>
+              <tr><td>欧州</td><td>989,679</td><td>1,119,027</td></tr>
+              <tr><td>計</td><td>6,000,000</td><td>6,500,000</td></tr>
+            </table>
+            """
+        let (snapshotOrNil, _) = await normalize(
+            html: html, sales: yen(12_479_620), docID: "S100YE2C")
+        let snapshot = try #require(snapshotOrNil)
+        #expect(Set(segmentLabels(snapshot)) == Set(["日本", "米国", "欧州", "中国", "アジア・太平洋地域", "その他地域"]))
+        #expect(snapshot.rows.first { $0.labelRaw == "日本" }?.amount == yen(1_333_202))
+        #expect(!segmentLabels(snapshot).contains { $0.contains("2026") })
+        #expect(!segmentLabels(snapshot).contains { $0.contains("金額") })
+        #expect(!snapshot.needsReview)
+        #expect(publiclyServable(snapshot))
+    }
+
+    /// 8058 型: 同じ表の非流動資産ブロック（カナダ等）を落とす。
+    @Test func trailingNoncurrentAssetCountriesDropped() async throws {
+        let html = """
+            <p>当連結会計年度</p>
+            <table>
+              <tr>
+                <td></td>
+                <td>前連結会計年度（百万円）</td>
+                <td>当連結会計年度（百万円）</td>
+              </tr>
+              <tr><td>収益</td><td></td><td></td></tr>
+              <tr><td>日本</td><td>9,134,688</td><td>8,939,316</td></tr>
+              <tr><td>アメリカ</td><td>3,007,521</td><td>3,475,425</td></tr>
+              <tr><td>シンガポール</td><td>1,735,868</td><td>1,953,592</td></tr>
+              <tr><td>オーストラリア</td><td>821,561</td><td>805,608</td></tr>
+              <tr><td>オランダ</td><td>735,358</td><td>728,806</td></tr>
+              <tr><td>その他</td><td>3,182,605</td><td>3,013,248</td></tr>
+              <tr><td>合計</td><td>18,617,601</td><td>18,915,995</td></tr>
+              <tr><td>非流動資産（金融資産、繰延税金資産及び退職後給付資産を除く）</td><td></td><td></td></tr>
+              <tr><td>オーストラリア</td><td>1,034,247</td><td>1,206,418</td></tr>
+              <tr><td>カナダ</td><td>685,263</td><td>986,344</td></tr>
+              <tr><td>日本</td><td>899,941</td><td>920,373</td></tr>
+              <tr><td>オランダ</td><td>788,580</td><td>903,080</td></tr>
+              <tr><td>その他</td><td>1,002,738</td><td>1,248,177</td></tr>
+              <tr><td>合計</td><td>4,410,769</td><td>5,264,392</td></tr>
+            </table>
+            """
+        let (snapshotOrNil, _) = await normalize(
+            html: html, sales: yen(18_915_995), docID: "S100YB25")
+        let snapshot = try #require(snapshotOrNil)
+        #expect(Set(segmentLabels(snapshot)) == Set(["日本", "アメリカ", "シンガポール", "オーストラリア", "オランダ", "その他"]))
+        #expect(snapshot.rows.first { $0.labelRaw == "日本" }?.amount == yen(8_939_316))
+        #expect(!segmentLabels(snapshot).contains("カナダ"))
         #expect(!snapshot.needsReview)
         #expect(publiclyServable(snapshot))
     }

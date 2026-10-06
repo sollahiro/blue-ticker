@@ -173,6 +173,18 @@ enum GeographyBreakdownLLMNormalizer {
 
         rows = dropOfWhichSubsetSegments(rows)
         rows = dropCoarseOverseasWhenFinerRegionsExist(rows)
+        rows = rows.filter { row in
+            guard row.rowKind == "segment" else { return true }
+            if RevenueRecognitionCandidates.isPeriodHeadingLabel(row.labelRaw) { return false }
+            if row.labelRaw.contains("金額") { return false }
+            if RevenueRecognitionCandidates.isGeographySalesMetricLabel(row.labelRaw),
+               !looksLikeGeographyLabel(row.labelRaw)
+                && !row.labelRaw.contains("その他の地域") && !row.labelRaw.contains("その他地域")
+            {
+                return false
+            }
+            return true
+        }
 
         if extractedSubtotalsMismatch(rows) {
             needsReview = true
@@ -363,46 +375,53 @@ enum GeographyBreakdownLLMNormalizer {
     static func dropNonGeographyMetricRows(
         _ rows: [RevenueRecognitionCandidates.BuiltRow]
     ) -> [RevenueRecognitionCandidates.BuiltRow] {
-        rows.filter { row in
+        var skippingAsset = false
+        var kept: [RevenueRecognitionCandidates.BuiltRow] = []
+        for row in rows {
             let label = RevenueRecognitionCandidates.displayLabel(
                 categoryGroup: row.categoryGroup, category: row.category)
             let group = row.categoryGroup
             if RevenueRecognitionCandidates.isAssetMetricLabel(label)
                 || RevenueRecognitionCandidates.isAssetMetricLabel(group)
             {
-                return false
+                skippingAsset = true
+                continue
             }
-            if RevenueRecognitionCandidates.isPeriodHeadingLabel(label) { return false }
-            if RevenueRecognitionCandidates.isPercentMetricLabel(label) { return false }
-            if label.contains("単位") || label.hasPrefix("Ⅰ") || label.hasPrefix("Ⅱ")
-                || label.hasPrefix("I．") || label.hasPrefix("I.")
+            if skippingAsset { continue }
+            if RevenueRecognitionCandidates.isPeriodHeadingLabel(label) { continue }
+            if RevenueRecognitionCandidates.isPercentMetricLabel(label) { continue }
+            if label.contains("単位") || label.contains("金額") || label.hasPrefix("Ⅰ")
+                || label.hasPrefix("Ⅱ") || label.hasPrefix("I．") || label.hasPrefix("I.")
             {
-                return false
+                continue
             }
             if RevenueRecognitionCandidates.isGeographySalesMetricLabel(label),
                !looksLikeGeographyLabel(label)
                 && !label.contains("その他の地域") && !label.contains("その他地域")
             {
-                return false
+                continue
             }
             if label.contains("セグメント損失") || label.contains("セグメント利益") {
-                return false
+                continue
             }
-            if group.contains("政府債") || label.contains("政府債") { return false }
-            return true
+            if group.contains("政府債") || label.contains("政府債") { continue }
+            kept.append(row)
         }
+        return kept
     }
 
     static func isAssetMetricTable(_ table: RevenueRecognitionCandidates.ParsedTable) -> Bool {
-        let blob = [
-            table.heading,
-            table.precedingCaption ?? "",
-            table.columnHeaders.values.joined(separator: " "),
-            table.items.map(\.label).joined(separator: " "),
-            table.totals.map(\.label).joined(separator: " "),
-        ].joined(separator: " ")
-        if blob.contains("固定資産") || blob.contains("非流動資産") || blob.contains("長期性資産") {
-            let hasSales = blob.contains("売上") || blob.contains("外部顧客") || blob.contains("収益")
+        // 直前キャプションの「売上高」で PPE 表を残さない（6758）。
+        let labels = table.items.map(\.label) + table.totals.map(\.label)
+            + Array(table.columnHeaders.values)
+            + table.grid.prefix(6).compactMap(\.first)
+        let body = labels.joined(separator: " ")
+        if body.contains("固定資産") || body.contains("非流動資産") || body.contains("長期性資産") {
+            let hasSales = labels.contains { label in
+                let compact = RevenueRecognitionCandidates.compactCell(label)
+                return compact.contains("売上") || compact.contains("外部顧客")
+                    || compact.contains("営業収益") || compact == "収益"
+            }
             if !hasSales { return true }
         }
         return false
@@ -485,6 +504,11 @@ enum GeographyBreakdownLLMNormalizer {
     ) -> String {
         let group = compactGeographyLabel(row.categoryGroup)
         if let category = row.category.map(compactGeographyLabel), !category.isEmpty {
+            if RevenueRecognitionCandidates.isGeographySalesMetricLabel(group)
+                || RevenueRecognitionCandidates.isAssetMetricLabel(group)
+            {
+                return category
+            }
             if isOfWhichGeographyLabel(category) {
                 if group.isEmpty || isOfWhichGeographyLabel(group) { return category }
                 return group
@@ -495,11 +519,6 @@ enum GeographyBreakdownLLMNormalizer {
                !isOfWhichGeographyLabel(group)
             {
                 return group + category
-            }
-            if RevenueRecognitionCandidates.isGeographySalesMetricLabel(group)
-                || RevenueRecognitionCandidates.isAssetMetricLabel(group)
-            {
-                return category
             }
             return category
         }
@@ -613,8 +632,14 @@ enum GeographyBreakdownLLMNormalizer {
         strippedFootnotes: inout [String]
     ) {
         let amounts = RevenueRecognitionCandidates.dataAmounts(table: table, column: column)
-        let existing = Set(rows.map(\.labelRaw))
+        var existing = Set(rows.map(\.labelRaw))
+        let firstAssetRow = table.grid.enumerated().dropFirst(table.headerRowCount)
+            .compactMap { index, row -> Int? in
+                let label = RevenueRecognitionCandidates.compactCell(row.first ?? "")
+                return RevenueRecognitionCandidates.isAssetMetricLabel(label) ? index : nil
+            }.first
         for total in table.totals {
+            if let firstAssetRow, total.row >= firstAssetRow { continue }
             let raw = stripGeographyLabelFootnotes(total.label)
             if raw != total.label {
                 strippedFootnotes.append("\(total.label)→\(raw)")
@@ -624,7 +649,7 @@ enum GeographyBreakdownLLMNormalizer {
             {
                 continue
             }
-            guard !existing.contains(raw), let amount = amounts[total.row] else { continue }
+            guard existing.insert(raw).inserted, let amount = amounts[total.row] else { continue }
             rows.append(BreakdownRow(
                 labelRaw: raw, amount: amount * multiplier, share: nil, profit: nil,
                 rowKind: "subtotal"
