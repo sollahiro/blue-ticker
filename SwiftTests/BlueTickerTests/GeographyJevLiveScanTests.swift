@@ -130,6 +130,25 @@ struct GeographyProdBreakdownRow: Codable {
             if let sales { comparison.record["consolidated_sales"] = sales }
             if let notes = audit?.notes { comparison.record["audit_notes"] = notes }
             if let selected = audit?.periodColumn { comparison.record["jev_column"] = selected }
+            if let review = audit?.jev?.calls.last(where: {
+                $0.question == OpenRouterSegmentNoteDecider.reviewDecisionQuestion
+            }) {
+                comparison.record["review_selected"] = review.selected ?? ""
+                if let probability = review.probability {
+                    comparison.record["review_probability"] = probability
+                }
+                comparison.record["review_applied"] = review.applied
+                if review.applied, review.selected == GeographyBreakdownLLMNormalizer.reviewWrong {
+                    comparison.record["review_action"] = "demote"
+                } else if review.applied, review.selected == GeographyBreakdownLLMNormalizer.reviewCorrect {
+                    comparison.record["review_action"] = "recover"
+                } else {
+                    comparison.record["review_action"] = "keep"
+                }
+            }
+            if let source = audit?.jev?.decisionSource {
+                comparison.record["decision_source"] = source
+            }
             comparison.record["quality"] = qualityClass(prod: row, snapshot: snapshot, record: comparison.record)
             if !store.hasXbrlDir(row.docID, saveDir: workDir) {
                 comparison.record["xbrl_status"] = "missing_on_disk"
@@ -168,6 +187,16 @@ struct GeographyProdBreakdownRow: Codable {
             ($0["prod_needs_review"] as? Bool) == true
                 && ($0["new_needs_review"] as? Bool) == false
         }
+        let demoted = (same + changed + nowNeedsReview).filter {
+            ($0["review_action"] as? String) == "demote"
+        }
+        let recovered = (same + changed).filter {
+            ($0["review_action"] as? String) == "recover"
+        }
+        let uniqueDemoted = Dictionary(grouping: demoted, by: { $0["code"] as? String ?? "" })
+            .values.compactMap(\.first)
+        let uniqueRecovered = Dictionary(grouping: recovered, by: { $0["code"] as? String ?? "" })
+            .values.compactMap(\.first)
         let artifact: [String: Any] = [
             "prod_row_count": rows.count,
             "companies": Set(rows.map(\.code)).count,
@@ -182,6 +211,10 @@ struct GeographyProdBreakdownRow: Codable {
             "missing_xbrl_count": missingXbrl.count,
             "newly_clean_count": newlyClean.count,
             "newly_clean": newlyClean,
+            "demoted_count": uniqueDemoted.count,
+            "demoted": uniqueDemoted,
+            "recovered_count": uniqueRecovered.count,
+            "recovered": uniqueRecovered,
             "why_counts": whyCounts,
             "sample_changed": Array(changed.prefix(25)),
             "changed_records": changed,
@@ -201,7 +234,8 @@ struct GeographyProdBreakdownRow: Codable {
             """
             geography Jev scan same=\(same.count) changed=\(changed.count) \
             now_needs_review=\(nowNeedsReview.count) jev_worse=\(jevWorse.count) \
-            jev_better=\(jevBetter.count) errors=\(errors.count)
+            jev_better=\(jevBetter.count) demoted=\(uniqueDemoted.count) \
+            recovered=\(uniqueRecovered.count) errors=\(errors.count)
             """.utf8))
         #expect(errors.count < rows.count || rows.isEmpty)
         if !useFake {
@@ -234,6 +268,7 @@ struct GeographyProdBreakdownRow: Codable {
                 || warnings.contains("geography_label_mismatch")
                 || warnings.contains(RevenueRecognitionColumnNormalizer.warningLowConfidence)
                 || warnings.contains(RevenueRecognitionColumnNormalizer.warningNoneOfTheseOverridden)
+                || warnings.contains(GeographyBreakdownLLMNormalizer.warningFinalReviewWrong)
             {
                 return "fail_closed"
             }

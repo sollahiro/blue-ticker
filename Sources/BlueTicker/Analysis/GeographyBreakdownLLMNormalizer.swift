@@ -2,6 +2,8 @@
 // BreakdownSnapshot へ正規化する。Chat Completions は使わない。
 // 表構造は収益認識と同じ候補列。Jev は当期の全社（または合計）金額列だけを選ぶ。
 // 行・単位・うち内数・脚注はコードが組む。低確信は needs_review（公開面 fail-closed）。
+// 行を組んだあと Jev 第二パスで最終判定する。公開直前の confident wrong は NR。
+// 低確信 NR は confident correct かつハードガード無しのときだけ回復する。
 // docs/breakdown.md。BreakdownNormalizer.swift（xbrl_facts 経路）とは別経路。
 
 import Foundation
@@ -27,6 +29,24 @@ struct LLMBreakdownAudit {
     var jev: SegmentNoteJevAuditPayload? = nil
     /// 収益分解の列選択 Jev。`jev` は後段のセグメント注記判断で上書きされる。
     var columnJev: SegmentNoteJevAuditPayload? = nil
+}
+
+struct GeographyExtractionReviewRow: Equatable, Sendable {
+    var label: String
+    var amountMillionYen: Double
+    var rowKind: String
+}
+
+protocol GeographyExtractionReviewing: Sendable {
+    func reviewExtractedGeography(
+        rows: [GeographyExtractionReviewRow],
+        tableMarkdown: String,
+        heading: String,
+        caption: String?,
+        warnings: [String],
+        needsReview: Bool,
+        docID: String
+    ) async -> SegmentNoteConsultedChoice
 }
 
 enum GeographyBreakdownLLMNormalizer {
@@ -239,7 +259,7 @@ enum GeographyBreakdownLLMNormalizer {
         audit.unit = scale.headerToken ?? selectedTable.unitCaption ?? ""
         stampJev(&audit, applied: !belowThreshold, needsReview: needsReview)
 
-        let snapshot = BreakdownSnapshot(
+        var snapshot = BreakdownSnapshot(
             axis: "geography",
             denominator: denominator,
             denominatorTag: denominatorTag,
@@ -248,12 +268,40 @@ enum GeographyBreakdownLLMNormalizer {
             needsReview: needsReview,
             warnings: warnings
         )
+        if let reviewer = decider as? any GeographyExtractionReviewing {
+            (snapshot, audit) = await applyFinalReview(
+                snapshot: snapshot, audit: audit, table: selectedTable,
+                reviewer: reviewer, docID: docID)
+        }
         return (snapshot, audit)
     }
 
     /// 抽出済み subtotal が segment / reconciling の一部の和と一致しないときの警告。
     /// 公開面は `needs_review` で隠す。
     static let subtotalMismatchWarning = "subtotal_mismatch"
+    /// Jev 最終判定が公開行を誤りとしたとき。公開面は `needs_review` で隠す。
+    static let warningFinalReviewWrong = "jev_final_review_wrong"
+    static let reviewCorrect = "correct"
+    static let reviewWrong = "wrong"
+    static let reviewOptions = [reviewCorrect, reviewWrong]
+    private static let reviewMarkdownLimit = 4_000
+
+    /// 小計・分母・ラベル・単位のハードガード。最終判定の correct では覆さない。
+    static func hasHardGuardWarnings(_ warnings: [String]) -> Bool {
+        warnings.contains(subtotalMismatchWarning)
+            || warnings.contains("llm_row_sum_mismatch")
+            || warnings.contains("geography_label_mismatch")
+            || warnings.contains(breakdownWarningLLMUnitUnresolved)
+    }
+
+    /// 低確信 NR だけ最終判定の correct で回復できる。none_of_these 上書きは対象外。
+    static func canRecoverLowConfidence(_ snapshot: BreakdownSnapshot) -> Bool {
+        snapshot.needsReview
+            && snapshot.warnings.contains(RevenueRecognitionColumnNormalizer.warningLowConfidence)
+            && !snapshot.warnings.contains(RevenueRecognitionColumnNormalizer.warningNoneOfTheseOverridden)
+            && !hasHardGuardWarnings(snapshot.warnings)
+            && snapshot.rows.contains { $0.rowKind == "segment" }
+    }
 
     /// 相対 0.5%。百万円表の行丸めは通すが、1 桁のコピー誤り（約 1.4% 以上）は落とす。
     private static let subtotalRelativeTolerance = 0.005
@@ -735,9 +783,82 @@ enum GeographyBreakdownLLMNormalizer {
         audit.jev = apply(audit.jev)
         audit.columnJev = apply(audit.columnJev)
     }
+
+    /// 組んだ行が当期全社の地域別売上として正しいか Jev に聞く。
+    /// 公開直前の confident wrong は NR。低確信 NR の confident correct はハードガード無しのときだけ回復。
+    /// 呼び出し失敗・低信頼は提案を維持する。
+    static func applyFinalReview(
+        snapshot: BreakdownSnapshot,
+        audit: LLMBreakdownAudit,
+        table: RevenueRecognitionCandidates.ParsedTable,
+        reviewer: any GeographyExtractionReviewing,
+        docID: String
+    ) async -> (BreakdownSnapshot, LLMBreakdownAudit) {
+        let shouldAsk = !snapshot.needsReview || canRecoverLowConfidence(snapshot)
+        guard shouldAsk else { return (snapshot, audit) }
+
+        let rows = snapshot.rows.map {
+            GeographyExtractionReviewRow(
+                label: $0.labelRaw,
+                amountMillionYen: $0.amount / Financial.millionYen,
+                rowKind: $0.rowKind)
+        }
+        let markdown = String(
+            BreakdownExtractor.gridToMarkdown(table.grid).prefix(reviewMarkdownLimit))
+        let choice = await reviewer.reviewExtractedGeography(
+            rows: rows,
+            tableMarkdown: markdown,
+            heading: table.heading,
+            caption: table.precedingCaption,
+            warnings: snapshot.warnings,
+            needsReview: snapshot.needsReview,
+            docID: docID)
+
+        var next = snapshot
+        var nextAudit = audit
+        let high = SegmentNoteDecision.meetsThreshold(choice.probability)
+        var applied = false
+        if high, choice.selected == reviewWrong, !snapshot.needsReview {
+            next.needsReview = true
+            next.warnings.append(warningFinalReviewWrong)
+            applied = true
+        } else if high, choice.selected == reviewCorrect, canRecoverLowConfidence(snapshot) {
+            next.needsReview = false
+            applied = true
+        }
+        let reviewCall = SegmentNoteJevCallPayload(
+            question: OpenRouterSegmentNoteDecider.reviewDecisionQuestion,
+            options: choice.options.isEmpty ? reviewOptions : choice.options,
+            selected: choice.selected,
+            probability: choice.probability,
+            sentences: choice.sentences,
+            applied: applied)
+        if var jev = nextAudit.jev {
+            jev.calls.append(reviewCall)
+            jev.needsReview = next.needsReview
+            if applied {
+                jev.applied = true
+                jev.decisionSource = SegmentNoteDecision.reviewDecisionSource
+            }
+            nextAudit.jev = jev
+        } else {
+            nextAudit.jev = SegmentNoteJevAuditPayload(
+                code: "", docID: docID, axis: breakdownAxisGeography,
+                model: Api.openrouterDecisionsModel,
+                threshold: SegmentNoteDecision.applyProbabilityThreshold,
+                applied: applied, needsReview: next.needsReview, sentences: [],
+                calls: [reviewCall],
+                decisionSource: applied ? SegmentNoteDecision.reviewDecisionSource : nil)
+        }
+        let selected = choice.selected ?? "nil"
+        let pNote = choice.probability.map { String($0) } ?? "nil"
+        let suffix = "final_review=\(selected) p=\(pNote) applied=\(applied)"
+        nextAudit.notes = nextAudit.notes.isEmpty ? suffix : nextAudit.notes + " / " + suffix
+        return (next, nextAudit)
+    }
 }
 
-struct OpenRouterGeographyColumnDecider: RevenueRecognitionColumnDeciding {
+struct OpenRouterGeographyColumnDecider: RevenueRecognitionColumnDeciding, GeographyExtractionReviewing {
     let client: any DecisionsCompleting
     var model: String = Api.openrouterDecisionsModel
 
@@ -829,6 +950,86 @@ struct OpenRouterGeographyColumnDecider: RevenueRecognitionColumnDeciding {
                 "doc_id": docID,
                 "fiscal_year_end": fy,
                 "tables": tableState,
+            ],
+            questions: questions)
+    }
+
+    func reviewExtractedGeography(
+        rows: [GeographyExtractionReviewRow],
+        tableMarkdown: String,
+        heading: String,
+        caption: String?,
+        warnings: [String],
+        needsReview: Bool,
+        docID: String
+    ) async -> SegmentNoteConsultedChoice {
+        let unavailable = SegmentNoteConsultedChoice(
+            question: OpenRouterSegmentNoteDecider.reviewDecisionQuestion,
+            selected: nil, probability: nil,
+            options: GeographyBreakdownLLMNormalizer.reviewOptions, sentences: [])
+        guard let body = Self.reviewRequestJSON(
+            model: model, rows: rows, tableMarkdown: tableMarkdown, heading: heading,
+            caption: caption, warnings: warnings, needsReview: needsReview, docID: docID)
+        else {
+            return unavailable
+        }
+        do {
+            let data = try await client.decide(requestJSON: body)
+            return OpenRouterSegmentNoteDecider.consultedChoice(
+                from: data, question: OpenRouterSegmentNoteDecider.reviewDecisionQuestion,
+                options: GeographyBreakdownLLMNormalizer.reviewOptions, sentences: [])
+        } catch {
+            printError("GeographyBreakdownLLMNormalizer: 最終判定のJev呼び出し失敗: \(error)\n")
+            return unavailable
+        }
+    }
+
+    static func reviewRequestJSON(
+        model: String,
+        rows: [GeographyExtractionReviewRow],
+        tableMarkdown: String,
+        heading: String,
+        caption: String?,
+        warnings: [String],
+        needsReview: Bool,
+        docID: String
+    ) -> Data? {
+        let criteria: [String: String] = [
+            GeographyBreakdownLLMNormalizer.reviewCorrect: """
+                抽出された行は、当期の全社（合計／連結）列から組んだ仕向地または地域ごとの \
+                外部顧客売上高の内訳である。日本のみ・単一地域も正しい。うち内数を落としているのは正しい。 \
+                有形固定資産・長期性資産・事業別・顧客別ではない。
+                """,
+            GeographyBreakdownLLMNormalizer.reviewWrong: """
+                抽出された行は正しくない。前期列、有形固定資産／長期性資産、事業別、顧客別、 \
+                うち内数の独立行、合計や列の取り違えなど、当期・全社の地域別売上ではない。
+                """,
+        ]
+        let rowState: [[String: Any]] = rows.map {
+            [
+                "label": $0.label,
+                "amount_million_yen": $0.amountMillionYen,
+                "row_kind": $0.rowKind,
+            ]
+        }
+        let questions: [String: Any] = [
+            OpenRouterSegmentNoteDecider.reviewDecisionQuestion: OpenRouterDecisionsCodec.choiceQuestion(
+                instructions: """
+                    抽出された行は、当期・会社全体の仕向地／地域別（外部顧客への売上高）の内訳として正しいか。 \
+                    正しいなら correct、誤りなら wrong。自信が無いときは probabilities を下げる。
+                    """,
+                criteria: criteria),
+        ]
+        return OpenRouterDecisionsCodec.requestJSON(
+            model: model,
+            state: [
+                "doc_id": docID,
+                "heading": heading,
+                "caption_above_table": caption ?? "",
+                "warnings": warnings,
+                "needs_review": needsReview,
+                "extracted_rows": rowState,
+                "table_markdown": tableMarkdown,
             ],
             questions: questions)
     }

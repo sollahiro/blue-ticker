@@ -7,6 +7,7 @@
 // 3 geography_only（フジックス型: product_service は geography_only NA。地域は geography だけ）
 // 4 うち内数 / 脚注 / クレディセゾン分母 / 転置（列=地域）
 // 5 fail-closed NR（低確信、none_of_these、小計不一致、分母不一致）
+// 12 最終判定（公開の confident wrong 降格、低確信 0.9 correct 回復、低信頼は提案維持）
 
 import Foundation
 import Testing
@@ -35,6 +36,8 @@ import Testing
         confidence: Double = 0.9,
         pNone: Double? = nil,
         probabilities: [String: Double] = [:],
+        reviewSelected: String? = nil,
+        reviewProbability: Double? = nil,
         docID: String = "S-geo-golden"
     ) async -> (BreakdownSnapshot?, LLMBreakdownAudit?) {
         var tables = BreakdownExtractor.allTablesFromHtml(html, defaultHeading: heading)
@@ -46,7 +49,8 @@ import Testing
             consolidatedSales: sales,
             decider: FakeRevenueRecognitionColumnDecider(
                 selected: selected, confidence: confidence, pNone: pNone,
-                probabilities: probabilities),
+                probabilities: probabilities,
+                reviewSelected: reviewSelected, reviewProbability: reviewProbability),
             fiscalYearEnd: "2026-03-31",
             docID: docID)
     }
@@ -1149,5 +1153,114 @@ import Testing
         #expect(snapshot.rows.first { $0.labelRaw == "北米その他" }?.amount == yen(97_009))
         #expect(!snapshot.needsReview)
         #expect(publiclyServable(snapshot))
+    }
+
+    /// 最終判定: 公開直前の confident wrong は NR（fail-closed）。
+    @Test func finalReviewDemotesPublishedWhenConfidentWrong() async throws {
+        let html = """
+            <p>当連結会計年度</p>
+            <p>（単位：百万円）</p>
+            <table>
+              <tr><td></td><td>売上高</td></tr>
+              <tr><td>日本</td><td>600</td></tr>
+              <tr><td>海外</td><td>400</td></tr>
+              <tr><td>合計</td><td>1,000</td></tr>
+            </table>
+            """
+        let (snapshotOrNil, audit) = await normalize(
+            html: html, sales: yen(1_000),
+            reviewSelected: GeographyBreakdownLLMNormalizer.reviewWrong,
+            reviewProbability: 0.95, docID: "S-review-demote")
+        let snapshot = try #require(snapshotOrNil)
+        #expect(snapshot.needsReview)
+        #expect(snapshot.warnings.contains(GeographyBreakdownLLMNormalizer.warningFinalReviewWrong))
+        #expect(!publiclyServable(snapshot))
+        #expect(audit?.jev?.decisionSource == SegmentNoteDecision.reviewDecisionSource)
+        #expect(audit?.jev?.calls.contains {
+            $0.question == OpenRouterSegmentNoteDecider.reviewDecisionQuestion && $0.applied
+        } == true)
+    }
+
+    /// 最終判定: 低確信 NR は 0.9 以上の correct で回復する。
+    @Test func finalReviewRecoversLowConfidenceAtHighCorrect() async throws {
+        let html = """
+            <p>当連結会計年度</p>
+            <p>（単位：百万円）</p>
+            <table>
+              <tr><td></td><td>売上高</td></tr>
+              <tr><td>日本</td><td>600</td></tr>
+              <tr><td>海外</td><td>400</td></tr>
+              <tr><td>合計</td><td>1,000</td></tr>
+            </table>
+            """
+        let (snapshotOrNil, audit) = await normalize(
+            html: html, sales: yen(1_000), confidence: 0.49,
+            reviewSelected: GeographyBreakdownLLMNormalizer.reviewCorrect,
+            reviewProbability: 0.9, docID: "S-review-recover")
+        let snapshot = try #require(snapshotOrNil)
+        #expect(!snapshot.needsReview)
+        #expect(snapshot.warnings.contains(RevenueRecognitionColumnNormalizer.warningLowConfidence))
+        #expect(publiclyServable(snapshot))
+        #expect(audit?.jev?.decisionSource == SegmentNoteDecision.reviewDecisionSource)
+        #expect(segmentLabels(snapshot) == ["日本", "海外"])
+    }
+
+    /// 最終判定: 低確信の correct/wrong は提案維持（NR のまま）。
+    @Test func finalReviewKeepsLowConfidenceWhenReviewIsWeak() async throws {
+        let html = """
+            <p>当連結会計年度</p>
+            <p>（単位：百万円）</p>
+            <table>
+              <tr><td></td><td>売上高</td></tr>
+              <tr><td>日本</td><td>600</td></tr>
+              <tr><td>海外</td><td>400</td></tr>
+              <tr><td>合計</td><td>1,000</td></tr>
+            </table>
+            """
+        let (weakCorrect, _) = await normalize(
+            html: html, sales: yen(1_000), confidence: 0.49,
+            reviewSelected: GeographyBreakdownLLMNormalizer.reviewCorrect,
+            reviewProbability: 0.5, docID: "S-review-keep-correct")
+        let keptCorrect = try #require(weakCorrect)
+        #expect(keptCorrect.needsReview)
+        #expect(keptCorrect.warnings.contains(RevenueRecognitionColumnNormalizer.warningLowConfidence))
+        #expect(!keptCorrect.warnings.contains(GeographyBreakdownLLMNormalizer.warningFinalReviewWrong))
+        #expect(!publiclyServable(keptCorrect))
+
+        let (unavailable, audit) = await normalize(
+            html: html, sales: yen(1_000), confidence: 0.49, docID: "S-review-keep-missing")
+        let keptMissing = try #require(unavailable)
+        #expect(keptMissing.needsReview)
+        #expect(audit?.jev?.decisionSource == nil)
+        #expect(audit?.jev?.calls.contains {
+            $0.question == OpenRouterSegmentNoteDecider.reviewDecisionQuestion && !$0.applied
+        } == true)
+    }
+
+    /// 最終判定: 小計ハードガードは 0.9 の correct でも覆さない（8604）。
+    @Test func finalReviewDoesNotRecoverHardGuardSubtotalMismatch() async throws {
+        let html = """
+            <p>当連結会計年度</p>
+            <p>（単位：百万円）</p>
+            <table>
+              <tr><td></td><td>売上高</td></tr>
+              <tr><td>日本</td><td>29,122,646</td></tr>
+              <tr><td>アジア</td><td>13,442,307</td></tr>
+              <tr><td>北米</td><td>10,127,597</td></tr>
+              <tr><td>欧州</td><td>2,143,634</td></tr>
+              <tr><td>その他の地域</td><td>3,760,490</td></tr>
+              <tr><td>海外合計</td><td>26,089,588</td></tr>
+              <tr><td>連結売上高</td><td>55,212,234</td></tr>
+            </table>
+            """
+        let (snapshotOrNil, audit) = await normalize(
+            html: html, sales: yen(55_212_234),
+            reviewSelected: GeographyBreakdownLLMNormalizer.reviewCorrect,
+            reviewProbability: 0.99, docID: "S-review-hard-guard")
+        let snapshot = try #require(snapshotOrNil)
+        #expect(snapshot.needsReview)
+        #expect(snapshot.warnings.contains(GeographyBreakdownLLMNormalizer.subtotalMismatchWarning))
+        #expect(audit?.jev?.decisionSource != SegmentNoteDecision.reviewDecisionSource)
+        #expect(!publiclyServable(snapshot))
     }
 }

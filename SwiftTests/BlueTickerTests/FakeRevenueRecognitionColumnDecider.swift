@@ -3,18 +3,21 @@
 import Foundation
 @testable import BlueTickerCore
 
-actor FakeRevenueRecognitionColumnDecider: RevenueRecognitionColumnDeciding {
+actor FakeRevenueRecognitionColumnDecider: RevenueRecognitionColumnDeciding, GeographyExtractionReviewing {
     var selected: String?
     var containing: String?
     var confidence: Double
     var pNone: Double?
     var probabilities: [String: Double]
     var model: String
+    var reviewSelected: String?
+    var reviewProbability: Double?
 
     init(
         selected: String? = nil, containing: String? = nil, confidence: Double = 0.9,
         pNone: Double? = nil, probabilities: [String: Double] = [:],
-        model: String = "typesafe/jev-1.13"
+        model: String = "typesafe/jev-1.13",
+        reviewSelected: String? = nil, reviewProbability: Double? = nil
     ) {
         self.selected = selected
         self.containing = containing
@@ -22,6 +25,8 @@ actor FakeRevenueRecognitionColumnDecider: RevenueRecognitionColumnDeciding {
         self.pNone = pNone
         self.probabilities = probabilities
         self.model = model
+        self.reviewSelected = reviewSelected
+        self.reviewProbability = reviewProbability
     }
 
     func chooseColumn(
@@ -37,6 +42,23 @@ actor FakeRevenueRecognitionColumnDecider: RevenueRecognitionColumnDeciding {
         return RevenueRecognitionColumnChoice(
             selected: pick, confidence: confidence, pNone: pNone, probabilities: probabilities,
             model: model, options: options)
+    }
+
+    func reviewExtractedGeography(
+        rows: [GeographyExtractionReviewRow],
+        tableMarkdown: String,
+        heading: String,
+        caption: String?,
+        warnings: [String],
+        needsReview: Bool,
+        docID: String
+    ) async -> SegmentNoteConsultedChoice {
+        SegmentNoteConsultedChoice(
+            question: OpenRouterSegmentNoteDecider.reviewDecisionQuestion,
+            selected: reviewSelected,
+            probability: reviewProbability,
+            options: GeographyBreakdownLLMNormalizer.reviewOptions,
+            sentences: [])
     }
 
     /// 実 XBRL 回帰で、既知ラベルを含む分解表の全社列をスタブする。

@@ -363,4 +363,32 @@ struct GeographyBreakdownLLMNormalizerTests {
         #expect(labels.contains("その他"))
         #expect(Set(labels) == Set(["日本", "北米", "欧州", "その他"]))
     }
+
+    @Test func reviewRequestJSONAsksCorrectOrWrong() throws {
+        let data = try #require(OpenRouterGeographyColumnDecider.reviewRequestJSON(
+            model: "typesafe/jev-1.13",
+            rows: [
+                GeographyExtractionReviewRow(
+                    label: "日本", amountMillionYen: 600, rowKind: "segment"),
+                GeographyExtractionReviewRow(
+                    label: "海外", amountMillionYen: 400, rowKind: "segment"),
+            ],
+            tableMarkdown: "| 日本 | 600 |\n| 海外 | 400 |",
+            heading: "地域ごとの情報",
+            caption: "当連結会計年度",
+            warnings: [RevenueRecognitionColumnNormalizer.warningLowConfidence],
+            needsReview: true,
+            docID: "S-review-json"))
+        let object = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let questions = try #require(object["questions"] as? [String: Any])
+        let review = try #require(
+            questions[OpenRouterSegmentNoteDecider.reviewDecisionQuestion] as? [String: Any])
+        let criteria = try #require(review["criteria"] as? [String: String])
+        #expect(Set(criteria.keys) == Set(GeographyBreakdownLLMNormalizer.reviewOptions))
+        let state = try #require(object["state"] as? [String: Any])
+        #expect(state["needs_review"] as? Bool == true)
+        let rows = try #require(state["extracted_rows"] as? [[String: Any]])
+        #expect(rows.count == 2)
+        #expect(rows[0]["label"] as? String == "日本")
+    }
 }
