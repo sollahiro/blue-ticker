@@ -456,6 +456,10 @@ struct GeographyBreakdownLLMNormalizerTests {
             [GeographyBreakdownLLMNormalizer.warningPriorPeriodColumn]))
         #expect(GeographyBreakdownLLMNormalizer.hasHardGuardWarnings(
             [GeographyBreakdownLLMNormalizer.warningSelectedColumnMismatch]))
+        #expect(GeographyBreakdownLLMNormalizer.hasHardGuardWarnings(
+            [GeographyBreakdownLLMNormalizer.warningColumnSampleDisagreement]))
+        #expect(GeographyBreakdownLLMNormalizer.hasHardGuardWarnings(
+            [GeographyBreakdownLLMNormalizer.warningColumnSampleInsufficient]))
         let currentAmounts = periodColumns.first { $0["prior_only"] as? Bool == false }?["amounts"]
             as? [String: Any]
         #expect(currentAmounts?["日本"] as? Double == 155_330)

@@ -60,7 +60,15 @@ struct GeographyProdBreakdownRow: Codable {
         let outPath = env["BLT_GEOGRAPHY_SCAN_OUTPUT"]
             ?? "/opt/cursor/artifacts/geography-jev-scan.json"
         let data = try Data(contentsOf: URL(fileURLWithPath: listPath))
-        let rows = try JSONDecoder().decode([GeographyProdRow].self, from: data)
+        let decoded = try JSONDecoder().decode([GeographyProdRow].self, from: data)
+        let codesRaw = env["BLT_GEOGRAPHY_SCAN_CODES"] ?? ""
+        let wantedCodes = Set(
+            codesRaw.split { $0 == "," || $0 == " " || $0 == "\n" }
+                .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty })
+        let rows = wantedCodes.isEmpty
+            ? decoded
+            : decoded.filter { wantedCodes.contains($0.code) }
         let config = try #require(R2StorageConfig.resolveXbrlFromEnvironment())
         let endpoint = try #require(resolveOpenRouterDecisionsEndpoint())
         let cacheOverride = env["BLT_GEOGRAPHY_SCAN_CACHE"]
@@ -272,6 +280,8 @@ struct GeographyProdBreakdownRow: Codable {
                 || warnings.contains(RevenueRecognitionColumnNormalizer.warningLowConfidence)
                 || warnings.contains(RevenueRecognitionColumnNormalizer.warningNoneOfTheseOverridden)
                 || warnings.contains(GeographyBreakdownLLMNormalizer.warningFinalReviewWrong)
+                || warnings.contains(GeographyBreakdownLLMNormalizer.warningColumnSampleDisagreement)
+                || warnings.contains(GeographyBreakdownLLMNormalizer.warningColumnSampleInsufficient)
             {
                 return "fail_closed"
             }

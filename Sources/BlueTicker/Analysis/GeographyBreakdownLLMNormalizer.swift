@@ -1,9 +1,11 @@
 // geography（地域別情報）の html_table を、決定論の表構造チェック + Jev の列選択で
 // BreakdownSnapshot へ正規化する。Chat Completions は使わない。
 // 表構造は収益認識と同じ候補列。Jev は当期の全社（または合計）金額列だけを選ぶ。
-// 行・単位・うち内数・脚注はコードが組む。低確信は needs_review（公開面 fail-closed）。
-// 行を組んだあと Jev 第二パスで最終判定する。公開直前の confident wrong は NR。
-// 低確信 NR は confident correct かつハードガード無しのときだけ回復する。
+// 行・単位・うち内数・脚注はコードが組む。
+// 列 Choice と最終判定は N 回並列（JevChoiceAggregate）。一致は confident（生 confidence
+// の 0.5 ゲートは使わない）。不一致・成功不足は needs_review（公開面 fail-closed）。
+// 行を組んだあと Jev 第二パスで最終判定する。一致した confident wrong は NR。
+// 低確信 NR は一致した confident correct かつハードガード無しのときだけ回復する。
 // 表 markdown が reviewMarkdownLimit 字で切れたときは table_truncated を渡し、correct 回復はしない。
 // docs/breakdown.md。BreakdownNormalizer.swift（xbrl_facts 経路）とは別経路。
 
@@ -113,14 +115,19 @@ enum GeographyBreakdownLLMNormalizer {
         }
         guard !offered.isEmpty else { return (nil, nil) }
 
-        let choice = await decider.chooseColumn(
-            columns: offered, tables: offeredTables, fiscalYearEnd: fiscalYearEnd, docID: docID)
+        let columnSamples = await sampleColumnChoices(
+            decider: decider, columns: offered, tables: offeredTables,
+            fiscalYearEnd: fiscalYearEnd, docID: docID)
+        let columnAggregate = JevChoiceAggregate.combine(
+            columnSamples.map(JevChoiceAggregate.fromColumn))
+        let choice = JevChoiceAggregate.columnChoice(from: columnAggregate)
         let resolved = RevenueRecognitionColumnNormalizer.resolveSelection(choice, columns: offered)
         let columnJev = jevPayload(
-            docID: docID, choice: choice, resolvedKey: resolved?.key ?? choice.selected)
+            docID: docID, samples: columnSamples, aggregate: columnAggregate)
         let pNoneNote = choice.pNone.map { String($0) } ?? "nil"
+        let medianNote = columnAggregate.probability.map { String($0) } ?? "nil"
         var notes =
-            "jev_column=\(choice.selected ?? "nil") confidence=\(choice.confidence.map { String($0) } ?? "nil") p_none=\(pNoneNote)"
+            "jev_column=\(choice.selected ?? "nil") samples=\(columnSamples.count) \(columnAggregate.outcome.rawValue) median=\(medianNote) p_none=\(pNoneNote)"
         if let resolved, resolved.forceReview {
             notes += " overridden=\(resolved.key)"
         }
@@ -161,15 +168,21 @@ enum GeographyBreakdownLLMNormalizer {
             return (nil, audit)
         }
 
-        let belowThreshold = (choice.confidence ?? 0) < RevenueRecognitionColumnNormalizer
-            .confidenceThreshold
+        let columnUncertain = !columnAggregate.isConfident
         let priorPeriod = (
             selectedTable.period == "前期" && !tableHasCurrentPeriodRow(selectedTable)
         ) || RevenueRecognitionColumnNormalizer.isPriorOnlyColumn(
             selectedColumn, table: selectedTable)
         var warnings: [String] = []
-        var needsReview = belowThreshold || resolved.forceReview || priorPeriod
-        if belowThreshold { warnings.append(RevenueRecognitionColumnNormalizer.warningLowConfidence) }
+        var needsReview = columnUncertain || resolved.forceReview || priorPeriod
+        switch columnAggregate.outcome {
+        case .disagreement:
+            warnings.append(warningColumnSampleDisagreement)
+        case .insufficient:
+            warnings.append(warningColumnSampleInsufficient)
+        case .allFailed, .agreed:
+            break
+        }
         if resolved.forceReview {
             warnings.append(RevenueRecognitionColumnNormalizer.warningNoneOfTheseOverridden)
         }
@@ -307,7 +320,7 @@ enum GeographyBreakdownLLMNormalizer {
         audit.sourceTableIndex = selectedTable.tableIndex
         audit.periodColumn = selectedColumn.key
         audit.unit = scale.headerToken ?? selectedTable.unitCaption ?? ""
-        stampJev(&audit, applied: !belowThreshold, needsReview: needsReview)
+        stampJev(&audit, applied: columnAggregate.isConfident, needsReview: needsReview)
 
         var snapshot = BreakdownSnapshot(
             axis: "geography",
@@ -335,6 +348,10 @@ enum GeographyBreakdownLLMNormalizer {
     static let warningPriorPeriodColumn = "geography_prior_period_column"
     /// 組んだ金額が選んだ当期列と一致しないとき。最終判定の correct では覆さない。
     static let warningSelectedColumnMismatch = "geography_selected_column_mismatch"
+    /// 列サンプルが同じ selected に揃わないとき。最終判定の correct では覆さない。
+    static let warningColumnSampleDisagreement = "jev_column_sample_disagreement"
+    /// 列サンプルの成功が足りないとき。最終判定の correct では覆さない。
+    static let warningColumnSampleInsufficient = "jev_column_sample_insufficient"
     static let reviewCorrect = "correct"
     static let reviewWrong = "wrong"
     static let reviewOptions = [reviewCorrect, reviewWrong]
@@ -345,7 +362,7 @@ enum GeographyBreakdownLLMNormalizer {
         return (String(raw.prefix(reviewMarkdownLimit)), true)
     }
 
-    /// 小計・分母・ラベル・単位のハードガード。最終判定の correct では覆さない。
+    /// 小計・分母・ラベル・単位・列サンプル不一致のハードガード。最終判定の correct では覆さない。
     static func hasHardGuardWarnings(_ warnings: [String]) -> Bool {
         warnings.contains(subtotalMismatchWarning)
             || warnings.contains("llm_row_sum_mismatch")
@@ -353,6 +370,8 @@ enum GeographyBreakdownLLMNormalizer {
             || warnings.contains(breakdownWarningLLMUnitUnresolved)
             || warnings.contains(warningPriorPeriodColumn)
             || warnings.contains(warningSelectedColumnMismatch)
+            || warnings.contains(warningColumnSampleDisagreement)
+            || warnings.contains(warningColumnSampleInsufficient)
     }
 
     /// 組んだ金額が当期列ではなく、同じ表の前期列と一致するとき。
@@ -931,21 +950,25 @@ enum GeographyBreakdownLLMNormalizer {
     }
 
     private static func jevPayload(
-        docID: String, choice: RevenueRecognitionColumnChoice, resolvedKey: String?
+        docID: String, samples: [RevenueRecognitionColumnChoice],
+        aggregate: JevChoiceAggregate.Result
     ) -> SegmentNoteJevAuditPayload {
-        SegmentNoteJevAuditPayload(
+        let calls = samples.map { sample in
+            SegmentNoteJevCallPayload(
+                question: RevenueRecognitionColumnNormalizer.question,
+                options: sample.options.isEmpty ? aggregate.options : sample.options,
+                selected: sample.selected,
+                probability: sample.confidence,
+                sentences: [],
+                applied: false)
+        }
+        return SegmentNoteJevAuditPayload(
             code: "", docID: docID, axis: breakdownAxisGeography,
-            model: choice.model, threshold: RevenueRecognitionColumnNormalizer.confidenceThreshold,
+            model: aggregate.model.isEmpty
+                ? (samples.first?.model ?? "") : aggregate.model,
+            threshold: RevenueRecognitionColumnNormalizer.confidenceThreshold,
             applied: false, needsReview: false, sentences: [],
-            calls: [
-                SegmentNoteJevCallPayload(
-                    question: RevenueRecognitionColumnNormalizer.question,
-                    options: choice.options,
-                    selected: resolvedKey ?? choice.selected,
-                    probability: choice.confidence,
-                    sentences: [],
-                    applied: false)
-            ])
+            calls: calls)
     }
 
     private static func stampJev(
@@ -955,8 +978,9 @@ enum GeographyBreakdownLLMNormalizer {
             guard var payload else { return nil }
             payload.applied = applied
             payload.needsReview = needsReview
-            if !payload.calls.isEmpty {
-                payload.calls[0].applied = applied
+            for index in payload.calls.indices
+            where payload.calls[index].question == RevenueRecognitionColumnNormalizer.question {
+                payload.calls[index].applied = applied
             }
             return payload
         }
@@ -964,10 +988,32 @@ enum GeographyBreakdownLLMNormalizer {
         audit.columnJev = apply(audit.columnJev)
     }
 
+    private static func sampleColumnChoices(
+        decider: any RevenueRecognitionColumnDeciding,
+        columns: [RevenueRecognitionCandidates.AmountColumn],
+        tables: [RevenueRecognitionCandidates.ParsedTable],
+        fiscalYearEnd: String?,
+        docID: String
+    ) async -> [RevenueRecognitionColumnChoice] {
+        await withTaskGroup(of: RevenueRecognitionColumnChoice.self) { group in
+            for _ in 0..<JevChoiceAggregate.sampleCount {
+                group.addTask {
+                    await decider.chooseColumn(
+                        columns: columns, tables: tables,
+                        fiscalYearEnd: fiscalYearEnd, docID: docID)
+                }
+            }
+            var samples: [RevenueRecognitionColumnChoice] = []
+            samples.reserveCapacity(JevChoiceAggregate.sampleCount)
+            for await choice in group { samples.append(choice) }
+            return samples
+        }
+    }
+
     /// 組んだ行が当期全社の地域別売上として正しいか Jev に聞く。
-    /// 公開直前の confident wrong は NR。低確信 NR の confident correct はハードガード無しのときだけ回復。
-    /// 表 markdown が切れているときは correct 回復をしない（wrong の降格はする）。
-    /// 呼び出し失敗・低信頼は提案を維持する。
+    /// 公開直前の一致した confident wrong は NR。低確信 NR の一致した confident correct は
+    /// ハードガード無しのときだけ回復。表 markdown が切れているときは correct 回復をしない
+    /// （wrong の降格はする）。呼び出し失敗・不一致・低信頼は提案を維持する。
     static func applyFinalReview(
         snapshot: BreakdownSnapshot,
         audit: LLMBreakdownAudit,
@@ -985,40 +1031,54 @@ enum GeographyBreakdownLLMNormalizer {
                 rowKind: $0.rowKind)
         }
         let clipped = clippedReviewMarkdown(BreakdownExtractor.gridToMarkdown(table.grid))
-        let choice = await reviewer.reviewExtractedGeography(
-            rows: rows,
-            tableMarkdown: clipped.text,
-            heading: table.heading,
-            caption: table.precedingCaption,
-            warnings: snapshot.warnings,
-            needsReview: snapshot.needsReview,
-            periodColumns: reviewPeriodColumnValues(table),
-            tableTruncated: clipped.truncated,
-            docID: docID)
+        let periodColumns = reviewPeriodColumnValues(table)
+        let reviewSamples = await withTaskGroup(of: SegmentNoteConsultedChoice.self) { group in
+            for _ in 0..<JevChoiceAggregate.sampleCount {
+                group.addTask {
+                    await reviewer.reviewExtractedGeography(
+                        rows: rows,
+                        tableMarkdown: clipped.text,
+                        heading: table.heading,
+                        caption: table.precedingCaption,
+                        warnings: snapshot.warnings,
+                        needsReview: snapshot.needsReview,
+                        periodColumns: periodColumns,
+                        tableTruncated: clipped.truncated,
+                        docID: docID)
+                }
+            }
+            var samples: [SegmentNoteConsultedChoice] = []
+            samples.reserveCapacity(JevChoiceAggregate.sampleCount)
+            for await choice in group { samples.append(choice) }
+            return samples
+        }
+        let aggregate = JevChoiceAggregate.combine(reviewSamples.map(JevChoiceAggregate.fromReview))
 
         var next = snapshot
         var nextAudit = audit
-        let high = SegmentNoteDecision.meetsThreshold(choice.probability)
+        let high = SegmentNoteDecision.meetsThreshold(aggregate.probability)
         var applied = false
-        if high, choice.selected == reviewWrong, !snapshot.needsReview {
+        if aggregate.isConfident, high, aggregate.selected == reviewWrong, !snapshot.needsReview {
             next.needsReview = true
             next.warnings.append(warningFinalReviewWrong)
             applied = true
-        } else if high, choice.selected == reviewCorrect, canRecoverLowConfidence(snapshot),
-            !clipped.truncated
+        } else if aggregate.isConfident, high, aggregate.selected == reviewCorrect,
+            canRecoverLowConfidence(snapshot), !clipped.truncated
         {
             next.needsReview = false
             applied = true
         }
-        let reviewCall = SegmentNoteJevCallPayload(
-            question: OpenRouterSegmentNoteDecider.reviewDecisionQuestion,
-            options: choice.options.isEmpty ? reviewOptions : choice.options,
-            selected: choice.selected,
-            probability: choice.probability,
-            sentences: choice.sentences,
-            applied: applied)
+        let reviewCalls = reviewSamples.map { sample in
+            SegmentNoteJevCallPayload(
+                question: OpenRouterSegmentNoteDecider.reviewDecisionQuestion,
+                options: sample.options.isEmpty ? reviewOptions : sample.options,
+                selected: sample.selected,
+                probability: sample.probability,
+                sentences: sample.sentences,
+                applied: applied && sample.selected == aggregate.selected)
+        }
         if var jev = nextAudit.jev {
-            jev.calls.append(reviewCall)
+            jev.calls.append(contentsOf: reviewCalls)
             jev.needsReview = next.needsReview
             if applied {
                 jev.applied = true
@@ -1031,12 +1091,13 @@ enum GeographyBreakdownLLMNormalizer {
                 model: Api.openrouterDecisionsModel,
                 threshold: SegmentNoteDecision.applyProbabilityThreshold,
                 applied: applied, needsReview: next.needsReview, sentences: [],
-                calls: [reviewCall],
+                calls: reviewCalls,
                 decisionSource: applied ? SegmentNoteDecision.reviewDecisionSource : nil)
         }
-        let selected = choice.selected ?? "nil"
-        let pNote = choice.probability.map { String($0) } ?? "nil"
-        let suffix = "final_review=\(selected) p=\(pNote) applied=\(applied)"
+        let selected = aggregate.selected ?? "nil"
+        let pNote = aggregate.probability.map { String($0) } ?? "nil"
+        let suffix =
+            "final_review=\(selected) samples=\(reviewSamples.count) \(aggregate.outcome.rawValue) p=\(pNote) applied=\(applied)"
         nextAudit.notes = nextAudit.notes.isEmpty ? suffix : nextAudit.notes + " / " + suffix
         return (next, nextAudit)
     }

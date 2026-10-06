@@ -14,12 +14,20 @@ actor FakeRevenueRecognitionColumnDecider: RevenueRecognitionColumnDeciding, Geo
     var reviewProbability: Double?
     var lastReviewTableTruncated: Bool?
     var lastReviewTableMarkdown: String?
+    var columnPickQueue: [String?]
+    var columnFailRemaining: Int
+    var reviewPickQueue: [(String?, Double?)]
+    private var columnPickOffset = 0
+    private var reviewPickOffset = 0
 
     init(
         selected: String? = nil, containing: String? = nil, confidence: Double = 0.9,
         pNone: Double? = nil, probabilities: [String: Double] = [:],
         model: String = "typesafe/jev-1.13",
-        reviewSelected: String? = nil, reviewProbability: Double? = nil
+        reviewSelected: String? = nil, reviewProbability: Double? = nil,
+        columnPickQueue: [String?] = [],
+        columnFailRemaining: Int = 0,
+        reviewPickQueue: [(String?, Double?)] = []
     ) {
         self.selected = selected
         self.containing = containing
@@ -29,6 +37,9 @@ actor FakeRevenueRecognitionColumnDecider: RevenueRecognitionColumnDeciding, Geo
         self.model = model
         self.reviewSelected = reviewSelected
         self.reviewProbability = reviewProbability
+        self.columnPickQueue = columnPickQueue
+        self.columnFailRemaining = columnFailRemaining
+        self.reviewPickQueue = reviewPickQueue
     }
 
     func chooseColumn(
@@ -38,9 +49,20 @@ actor FakeRevenueRecognitionColumnDecider: RevenueRecognitionColumnDeciding, Geo
         docID: String
     ) async -> RevenueRecognitionColumnChoice {
         let options = columns.map(\.key) + [RevenueRecognitionColumnNormalizer.noneOfThese]
-        let pick = selected
-            ?? containing.flatMap { Self.keyContaining($0, columns: columns, tables: tables) }
-            ?? Self.preferWholeCompany(columns, tables: tables)
+        if columnFailRemaining > 0 {
+            columnFailRemaining -= 1
+            return RevenueRecognitionColumnChoice(
+                selected: nil, confidence: nil, model: model, options: options)
+        }
+        let pick: String?
+        if columnPickOffset < columnPickQueue.count {
+            pick = columnPickQueue[columnPickOffset]
+            columnPickOffset += 1
+        } else {
+            pick = selected
+                ?? containing.flatMap { Self.keyContaining($0, columns: columns, tables: tables) }
+                ?? Self.preferWholeCompany(columns, tables: tables)
+        }
         return RevenueRecognitionColumnChoice(
             selected: pick, confidence: confidence, pNone: pNone, probabilities: probabilities,
             model: model, options: options)
@@ -59,10 +81,17 @@ actor FakeRevenueRecognitionColumnDecider: RevenueRecognitionColumnDeciding, Geo
     ) async -> SegmentNoteConsultedChoice {
         lastReviewTableTruncated = tableTruncated
         lastReviewTableMarkdown = tableMarkdown
+        let pick: (String?, Double?)
+        if reviewPickOffset < reviewPickQueue.count {
+            pick = reviewPickQueue[reviewPickOffset]
+            reviewPickOffset += 1
+        } else {
+            pick = (reviewSelected, reviewProbability)
+        }
         return SegmentNoteConsultedChoice(
             question: OpenRouterSegmentNoteDecider.reviewDecisionQuestion,
-            selected: reviewSelected,
-            probability: reviewProbability,
+            selected: pick.0,
+            probability: pick.1,
             options: GeographyBreakdownLLMNormalizer.reviewOptions,
             sentences: [])
     }
