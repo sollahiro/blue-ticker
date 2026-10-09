@@ -608,7 +608,7 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                 items はクエリ days 窓を新しい暦日から limit 件埋める（既定 90 日・10 件）。同日が残り枠を超えるとその日から安定サンプリングする。
                 `date` は集計した UTC 暦日。`total.day` はその日、`total.week` は直近7日の上場提出件数（limit で切る前。days とは独立）。
                 空でも 200（items=[]）。DB 非接続は 503。ライブ EDINET へはフォールバックしない。
-                RSS は未提供（REST が契約の正。MCP は追従）。
+                RSS は静的フィード（https://feed.sollahiro.com/blue-ticker/edinet-filings.xml。日次 19:15 JST・ヘッドラインのみ・直近7日 120/130/140/160）。REST が契約の正。MCP は追従。
                 例: GET /v1/feed/updates?days=90&limit=10
                 例: GET /v1/feed/updates?doc_type=120,160
                 """,
@@ -666,7 +666,7 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                 顧客アカウントや IP は持たない。書き込みは origin からカウンターへ fire-and-forget（失敗しても本 API は 200/404/503 のまま）。
                 items は code ごとの件数降順。空でも 200（items=[]）。カウンター未設定・取得失敗は 503。
                 提出件数ランキングは出さない（それは get_feed_updates）。
-                RSS は未提供（REST が契約の正。MCP は追従）。
+                Trend の RSS は未提供（REST が契約の正。MCP は追従）。
                 例: GET /v1/feed/trend?days=7&limit=20
                 例: GET /v1/feed/trend?code=7203
                 """,

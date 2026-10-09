@@ -1,0 +1,26 @@
+{
+  "name": "blt-feed-rss",
+  "main": "src/index.js",
+  "compatibility_date": "2026-09-19",
+  // Cron 専用 Worker。公開ルートは持たない（fetch は常に 404）。
+  // フィードは R2 カスタムドメイン feed.sollahiro.com からだけ配信する。
+  // この Worker を api.* / mcp.* の前段に置かない（Tunnel + Access はそのまま）。
+  "workers_dev": false,
+  "triggers": {
+    // 19:15 JST = 10:15 UTC。18:00 JST の blt-sync 完了後に回す。
+    "crons": ["15 10 * * *"]
+  },
+  "r2_buckets": [
+    {
+      "binding": "FEED_BUCKET",
+      "bucket_name": "blt-public-feed"
+    }
+  ],
+  "vars": {
+    "FEED_OBJECT_KEY": "blue-ticker/edinet-filings.xml",
+    "FEED_PUBLIC_URL": "https://feed.sollahiro.com/blue-ticker/edinet-filings.xml",
+    "COMPANY_URL_TEMPLATE": "https://sollahiro.com/blue-ticker/companies/{code}"
+  }
+  // secret FEED_DATABASE_URL: Neon の読み取り専用ロールの接続文字列。
+  // 書き込み URL（BLT_NEON_WRITE_DATABASE_URL 系）は絶対に入れない。
+}
