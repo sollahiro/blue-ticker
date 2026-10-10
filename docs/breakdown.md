@@ -43,6 +43,7 @@ geography は変えない。本邦90％の `not_found` は既存の Jev ゲー�
 | `goodwill_amortization` | 報告セグメントごとののれんの償却額 |
 | `equity_method_investments` | 報告セグメントごとの持分法会計処理される投資 |
 | `capex` | 設備投資マトリクス（行=セグメント / 調整額 / EntityTotal。セル= `segment_assets` / `flow` / `capital_expenditures_overview`）。`flow` は書類単位で資本的支出があればそれ、無ければ非流動性資産への追加額。旧 4 軸名は廃止 |
+| `interest_bearing_debt` | 有利子負債（社債・借入金＋リース負債）。行=負債の行、セル= `opening` / `closing` / `average_rate`、行ごとに `source` と `maturity_class` |
 
 公開軸（意味。公開判断の現在地は Linear [JP 現在地](https://linear.app/sollahiro/document/jp-現在地-af2abd076034)）:
 
@@ -56,6 +57,7 @@ geography は変えない。本邦90％の `not_found` は既存の Jev ゲー�
 | `goodwill_amortization` | のれんの償却額 |
 | `equity_method_investments` | 持分法投資 |
 | `capex` | 設備投資マトリクス |
+| `interest_bearing_debt` | 有利子負債内訳 |
 
 旧 `segment_assets` / `capital_expenditures` / `noncurrent_asset_additions` / `capital_expenditures_overview` は REST / MCP / skills から削除した（breaking。`apiSkillsSchemaVersion` 2、`breakdown-capex-v1`）。
 
@@ -64,13 +66,36 @@ geography は変えない。本邦90％の `not_found` は既存の Jev ゲー�
 - 比較用スナップショット: `BreakdownSnapshot`（`BreakdownContract.swift` / `BreakdownNormalizer`）。
 - 保存: `company_breakdowns`（filing-sections とは別。LLM 行を filing バンプに巻き込まない）。主キー `doc_id#axis`。
 - `not_found` は行を作らない。business の E/F/unknown は `not_applicable` プレースホルダ。REST と開発用 MCP は 404＋ボディ `reason`（200 化しない）。
-- 公開 serving（REST `GET /v1/companies/{code}/breakdown`、開発用 MCP `get_breakdown`。iOS Breakdown の backing）は `needs_review=true` または `warnings` に `llm_unit_unresolved` がある **LLM 行を出さない**（千円表の 1000 倍誤り stopgap。fail closed）。残行が 0 なら未算出と同じ 404。payload 形は変えない。XBRL（`xbrl_facts` / `stacked_segment_pnl`）と `not_applicable`（'none'）、研究開発費の本文総額（`research_and_development_prose`）、設備投資の本文総額（`capex_prose`）はそのまま出す。`not_allocatable_to_segments` が付いていても 404 にしない。抽出・Neon 行・`cache_version` は触らない。
+- 公開 serving（REST `GET /v1/companies/{code}/breakdown`、開発用 MCP `get_breakdown`。iOS Breakdown の backing）は `needs_review=true` または `warnings` に `llm_unit_unresolved` がある **LLM 行を出さない**（千円表の 1000 倍誤り stopgap。fail closed）。残行が 0 なら未算出と同じ 404。payload 形は変えない。XBRL（`xbrl_facts` / `stacked_segment_pnl`）と `not_applicable`（'none'）、研究開発費の本文総額（`research_and_development_prose`）、設備投資の本文総額（`capex_prose`）はそのまま出す。`not_allocatable_to_segments` が付いていても 404 にしない。抽出・Neon 行・`cache_version` は触らない。`interest_bearing_debt` だけは、行が version-servable で公開除外の理由が `needs_review` だけのとき、未算出ではなく 404 reason `needs_review`（「有利子負債の内訳は要確認のため公開を保留しています」）。他軸の公開除外は reason 無しの 404 のまま。
 - 対象母集団: 全軸とも上場全体（日経225は処理順の先頭寄せのみ。2026-09 に employees / rd / goodwill および報告セグメント別指標軸も日経225限定を廃止して拡大）。read は Fly 専用（ingest 時に LLM 計算）。処理順は各社の最新有報 → 前年以降。同一年次内は日経225 → ローカル XBRL 展開済み → 欠測/要再試行/版ずれのラウンドロビン（軸ごとにキャッシュ集合を取り直す）。
 - 売上分母・employees / rd の Summary 正本は breakdown 分母（ingest も同一 XBRL パスで直接解決）。
 - 報告セグメント別指標の分母は通常 segment + reconciling（表の小計・EntityTotal は行として保持）。`capex` の各セル（`segment_assets` / `flow` / `capital_expenditures_overview`）の分母は、その指標の連結の無 dimension 総額タグ（EntityTotal）である。加算した segment+reconciling は 100% 分母にしない（項目タグ漏れがシェアに出るようにする）。5% 超ずれは `needs_review`。総額が無いときは Jev 本文総額（Role のみ、円はコード）、それも無ければそのセルの分母は null。`segment_assets` だけ、銀行の固定資産など連結 EntityTotal が無いとき segment + reconciling を残す。差額表 HTML の非分類行が既存 segment 行と同額のときは、その行だけ落とす（ラベル非依存）。
   XBRL タグ付き reconciling member（`ReconcilingItemsMember` 等）には適用しない。
 - `capex` は名前付きセル。単一 `amount` は使わない。欠測セルは null。`flow` は書類単位で `capital_expenditures` があればそれ、無ければ `noncurrent_asset_additions`（混ぜず足さない）。Overview HTML 表は正本。HTML ラベルと XBRL member の結合は初期はしない。財務諸表計上額の `row_kind` は `EntityTotal`。
 - 設備投資の本文総額は `OPENROUTER_DECISION_API_KEY` があるときだけ別 Choice（`capex_prose`）。Jev は Role だけ、円はコード。埋めるのは Overview の会社総額と、タグ付きセグメント行があるときの reconciling だけ。セグメント別は埋めない。`SegmentNoteDecision` の表/省略 Choice には載せない。source `capex_prose` は公開面で研究開発費本文総額と同じ扱い。`cache_version` は `breakdown-capex-v1`。
+
+## 有利子負債（`interest_bearing_debt`）
+
+- 社債・借入金とリース負債を1軸にまとめる。`cache_version` は `breakdown-interest-bearing-debt-v1`（新軸なので v1 から。銀行行の追加は互換追加で据え置き）。`source_kind` は `xbrl_facts`。
+- 行は名前付きセル `opening`（前期末）/ `closing`（当期末）/ `average_rate`（平均利率 %、書類に記載があるときだけ）。行ごとに `source`（`balance_sheet` / `borrowings_schedule` / `lease_note` / `financials_bank_components`）と `maturity_class`（`current` / `non_current` / null）を持つ。末尾に `合計` 行（`row_kind` `subtotal`）。合計行の利率は常に null（加重平均は計算しない）。返済期限列は持たない。
+- 読む書類はコードが選ぶ: 連結貸借対照表、連結の借入金等明細表、IFRS のリース負債注記。連結財務諸表がある会社は連結だけ、個別だけの会社は個別だけを読む（`BorrowingsSchedule.filerHasConsolidatedStatements`。FieldParser と同じ連結判定）。
+- Jev（`OPENROUTER_DECISION_API_KEY`、Choice、確率 0.9 以上）は、コードが決められない行（会社独自タグ、デリバティブ等の明細表行）が有利子負債か・リースか・どちらでもないかだけを答える。金額は触らない。0.9 未満・キー無しは決定論のまま `needs_review`。応答が無いときは行を作らず再試行する。
+- 重複除去はコードが先。明細表のリース行とリース注記が 2% 以内で一致しないときだけ、Jev が同一負債かを答える。両方の金額と理由を `llm_audit` に残す。黙って片方を選ばない。2% を超えて食い違うときは明細表側を残し `interest_bearing_debt_lease_sources_differ` と `needs_review`。
+- 分母は同じ財務諸表の貸借対照表の有利子負債＋リース負債。分母に入れるのはコードが分類した BS 行だけ（`presetClass`）。Jev が債務と答えた BS 行は行には残すが分母には入れない（coverage の自己参照を避ける）。行の合計が 95〜105% を外れたら `needs_review`（Jev は覆せない）。明細表が帯を外れ貸借対照表の行がすべて分類済みなら、貸借対照表の行を使い `borrowings_schedule_outside_coverage_band` を残す（例: ソフトバンクグループの明細表はセール・アンド・リースバック負債の表で、全体の約 6%）。BS にリース科目が無く、リース込み合算でもないとき、分母のリース部分はリース注記または明細表から足す。そのときは `interest_bearing_debt_lease_denominator_from_notes` を残す（`needs_review` にはしない。分母の一部が行の出所と同じで、coverage が完全な外部検算にならないため）。
+- 合計行の `opening` は、明細行の期首が1つでも null なら null（部分合計はしない）。`closing` は従来どおり合計する。
+- `maturity_class` は書類の表示だけから取る: 貸借対照表の流動/非流動タグ、注記の流動/非流動の区分、明細表のラベル（「1年以内に返済予定の…」「（1年以内に返済予定のものを除く。）」）。「除く」は「1年以内/1年内 … 除く」のときだけ非流動（「長期借入金（ノンリコース債務を除く）」は null）。日付や金額からは推定しない。曖昧なら null（例: 「長期借入金」「社債」だけの行）。行を流動・非流動に分けても合計とカバレッジは変わらない（同じ負債を二重に数えない）。
+- 銀行（statement Instant FieldSet に `DepositsLiabilitiesBNK` の当期または前期がある）は通常の BS / 明細表パイプラインに入れず、`Xbrl.bankIBDComponents` を1行ずつ出す。`source` は `financials_bank_components`。`maturity_class` はコンポーネントのラベルだけから取る（短期社債は `current`。預金・社債・借用金は null）。statement にリース科目が無ければ notes のリース行を足す（出所は `borrowings_schedule` または `lease_note` のまま）。分母はコンポーネント合計そのもの（`bank_components`。銀行には独立した coverage 検算が無い。コンポーネントが1つも無ければ `not_found`）。保険は通常パイプライン（除外しない）。
+- 公開 serving では、この軸だけ `needs_review=true` を出さない（source が `xbrl_facts` でも fail closed）。行が version-servable で公開除外の理由が `needs_review` だけのときは、未算出ではなく 404 reason `unknown`（メッセージ「有利子負債の内訳は公開していません」。公開 reason は single_segment_disclosed / geography_only / not_found / unknown の 4 種に固定し、needs_review などの内部理由は監査にだけ残す）。REST と MCP の両方。他軸の公開除外は reason 無しの 404 のまま。
+- 再計算: この軸は source `xbrl_facts`（version-gated）。現行版でも再試行するのは、Jev が分類（`interest_bearing_debt_row_unclassified`）または近似重複（`interest_bearing_debt_near_duplicate_unresolved`）で止まった `needs_review` だけ。coverage 帯外だけの行は再試行しない。
+- J-GAAP の借入金等明細表は社債を含まない（社債明細表は別）。明細表主で明細表に社債行が無いときは、BS の社債単独行（「社債及び借入金」等の合算行は除く）を `source=balance_sheet` のまま足す。
+- /financials の `interest_bearing_debt` はこの軸の合計行（decider 無し。銀行は `financials_bank_components` 行）。軸が `needs_review`・`unavailable`・小さな `not_found` のときは旧 `IBDExtractor`（BS 項目タグ合算）へフォールバックし、既存の `IBDExtractor.extractCanonical` をそのまま使う（新しい推定は足さない）。印は内部の method `legacy_ibd_extractor_fallback` と warnings だけで、/financials の公開フィールドは増やさない（例: ソニーは Jev 分類の 長期借入債務 824,393 百万円 が未確認のため 845,276 百万円 のまま）。`not_found` でインスタンス文書が大きいときは 0（明細がどこにも無い大きな書類は無借金）。`fin-vN` は上げない（組立指紋にこの軸の `cache_version` を足して再組立する）。
+- 対象外: 返済期限列、注記タイプの削除。
+
+互換追加: 銀行行（`financials_bank_components`）と /financials の正本切替。`schema_version` / `cache_version` は据え置き。
+
+## 変更履歴
+
+- 2026-10: 軸 `interest_bearing_debt` を追加（互換追加。`schema_version` / `apiSkillsSchemaVersion` は据え置き）。/financials `interest_bearing_debt` の正本をこの軸へ（`fin-vN` は上げず組立指紋で再組立）。
 
 ## 非目標
 

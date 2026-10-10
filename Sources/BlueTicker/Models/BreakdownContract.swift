@@ -29,6 +29,35 @@ public let breakdownAxisEquityMethodInvestments = "equity_method_investments"
 /// 旧 4 軸（`segment_assets` / `capital_expenditures` / `noncurrent_asset_additions` /
 /// `capital_expenditures_overview`）は REST / MCP / skills から廃止。セル名としては残す。
 public let breakdownAxisCapex = "capex"
+/// 有利子負債（社債・借入金＋リース負債を1表にした内訳）。報告セグメント指標ではないため
+/// `breakdownSegmentMetricAxes` には入れない。`needs_review` の行は公開しない（fail closed）。
+public let breakdownAxisInterestBearingDebt = "interest_bearing_debt"
+
+/// interest_bearing_debt 行の名前付きセルキー。期首残高（円）。
+public let ibdCellOpening = "opening"
+/// interest_bearing_debt 行の名前付きセルキー。期末残高（円）。
+public let ibdCellClosing = "closing"
+/// interest_bearing_debt 行の名前付きセルキー。平均利率（％、開示値のみ。加重平均は計算しない）。
+public let ibdCellAverageRate = "average_rate"
+/// interest_bearing_debt 行の出所キー（`ibdRowSource*`）。
+public let ibdRowSourceKey = "source"
+/// interest_bearing_debt 行の流動/非流動区分キー（`ibdMaturity*`。開示区分をそのまま取るだけで計算しない）。
+public let ibdMaturityClassKey = "maturity_class"
+
+/// interest_bearing_debt 行の出所: 貸借対照表の科目。
+public let ibdRowSourceBalanceSheet = "balance_sheet"
+/// interest_bearing_debt 行の出所: 借入金等明細表／社債及び借入金注記。
+public let ibdRowSourceBorrowingsSchedule = "borrowings_schedule"
+/// interest_bearing_debt 行の出所: リース注記。
+public let ibdRowSourceLeaseNote = "lease_note"
+/// interest_bearing_debt 行の出所: 銀行の BS 有利子負債コンポーネント
+/// （`Xbrl.bankIBDComponents`。預金・譲渡性預金・借用金等）。
+public let ibdRowSourceFinancialsBankComponents = "financials_bank_components"
+
+/// interest_bearing_debt 行の maturity_class: 流動（1年以内）。
+public let ibdMaturityCurrent = "current"
+/// interest_bearing_debt 行の maturity_class: 非流動。
+public let ibdMaturityNonCurrent = "non_current"
 
 /// capex 行のセルキー。Instant の連結資産内訳。
 public let capexCellSegmentAssets = "segment_assets"
@@ -75,6 +104,7 @@ public let breakdownSegmentMetricAxes = [
 /// `company_breakdowns.axis` として実装済みの軸か。
 public func isSupportedBreakdownAxis(_ axis: String) -> Bool {
     axis == breakdownAxisProductService || axis == breakdownAxisGeography
+        || axis == breakdownAxisInterestBearingDebt
         || breakdownSegmentMetricAxes.contains(axis)
 }
 
@@ -116,6 +146,8 @@ public let capitalExpendituresOverviewBreakdownCacheVersion = "breakdown-capital
 public let noncurrentAssetAdditionsBreakdownCacheVersion = "breakdown-noncurrent-asset-additions-v3"
 /// 設備投資マトリクス。破壊的な新軸のため v1 から。
 public let capexBreakdownCacheVersion = "breakdown-capex-v1"
+/// 有利子負債。新軸のため v1 から。
+public let interestBearingDebtBreakdownCacheVersion = "breakdown-interest-bearing-debt-v1"
 
 /// 軸に対応する現行 cache_version 文字列。未知の軸は product_service 扱い（安全側に決定的バンプ対象へ）。
 public func breakdownCacheVersion(forAxis axis: String) -> String {
@@ -127,6 +159,7 @@ public func breakdownCacheVersion(forAxis axis: String) -> String {
     case breakdownAxisCapex: return capexBreakdownCacheVersion
     case breakdownAxisGoodwillAmortization: return goodwillAmortizationBreakdownCacheVersion
     case breakdownAxisEquityMethodInvestments: return equityMethodInvestmentsBreakdownCacheVersion
+    case breakdownAxisInterestBearingDebt: return interestBearingDebtBreakdownCacheVersion
     default: return productServiceBreakdownCacheVersion
     }
 }
@@ -174,6 +207,40 @@ public let breakdownWarningResearchAndDevelopmentProseExclusion =
     "research_and_development_prose_exclusion"
 public let breakdownWarningCapexProseRemainder = "capex_prose_remainder"
 public let breakdownWarningCapexProseExclusion = "capex_prose_exclusion"
+/// interest_bearing_debt: 行合計が BS 分母の 95–105% 帯の外。`needs_review` とセット（公開しない）。
+public let breakdownWarningIBDCoverageOutOfBand = "interest_bearing_debt_coverage_out_of_band"
+/// interest_bearing_debt: BS 分母が取れず coverage を検算できない。`needs_review` とセット。
+public let breakdownWarningIBDCoverageUnavailable = "interest_bearing_debt_coverage_unavailable"
+/// interest_bearing_debt: 分類未解決の候補行がある（分母が不完全な可能性）。`needs_review` とセット。
+public let breakdownWarningIBDRowUnclassified = "interest_bearing_debt_row_unclassified"
+/// interest_bearing_debt: 明細表とリース注記の近似重複を解決できなかった。明細表側を採用。
+public let breakdownWarningIBDNearDuplicateUnresolved = "interest_bearing_debt_near_duplicate_unresolved"
+/// interest_bearing_debt: 明細表候補が coverage 帯の外のため棄却し、BS 科目行を使った。
+public let breakdownWarningIBDScheduleRejected = "borrowings_schedule_outside_coverage_band"
+/// interest_bearing_debt: 明細表とリース注記のリース額が帯の外で食い違う。明細表側を採用。
+/// `needs_review` とセット（公開しない）。
+public let breakdownWarningIBDLeaseSourcesDiffer = "interest_bearing_debt_lease_sources_differ"
+/// interest_bearing_debt: BS にリース科目が無く、分母のリース部分をリース注記または明細表から
+/// 足している。注記・明細表の行を分母に使う自己参照なので、coverage は完全な外部検算ではない。
+/// `needs_review` にはしない（帯判定は別）。
+public let breakdownWarningIBDLeaseDenominatorFromNotes =
+    "interest_bearing_debt_lease_denominator_from_notes"
+
+/// 公開 serving が needs_review の格納行を出さないときの 404 reason。
+/// interest_bearing_debt 軸だけ。行は version-servable だが公開保留。未算出（reason 無し 404）とは区別する。
+public let breakdownWithheldNeedsReview = "needs_review"
+
+/// interest_bearing_debt の現行版行を再試行するか。Jev が分類または近似重複で止まったときだけ。
+/// source は xbrl_facts（version-gated）なので、これ以外の needs_review（coverage 帯外など）は
+/// 同じ入力では結果が変わらず、再試行しない。
+public func isJevRetryableBreakdown(axis: String, needsReview: Bool, warnings: [String]) -> Bool {
+    axis == breakdownAxisInterestBearingDebt
+        && needsReview
+        && warnings.contains {
+            $0 == breakdownWarningIBDRowUnclassified
+                || $0 == breakdownWarningIBDNearDuplicateUnresolved
+        }
+}
 
 /// product_service breakdown が解決できなかった理由（issue #130、E/F判定の検知結果明示化）。
 /// `BreakdownExtractor.BusinessBreakdownNotApplicableReason`（internal 型）の rawValue と揃える
@@ -218,6 +285,7 @@ public let capitalExpendituresBreakdownMinServableVersion = 1
 public let capitalExpendituresOverviewBreakdownMinServableVersion = 1
 public let noncurrentAssetAdditionsBreakdownMinServableVersion = 1
 public let capexBreakdownMinServableVersion = 1
+public let interestBearingDebtBreakdownMinServableVersion = 1
 
 /// 軸に対応する read 床。未知の軸は product_service 床。
 public func breakdownMinServableVersion(forAxis axis: String) -> Int {
@@ -229,6 +297,7 @@ public func breakdownMinServableVersion(forAxis axis: String) -> Int {
     case breakdownAxisCapex: return capexBreakdownMinServableVersion
     case breakdownAxisGoodwillAmortization: return goodwillAmortizationBreakdownMinServableVersion
     case breakdownAxisEquityMethodInvestments: return equityMethodInvestmentsBreakdownMinServableVersion
+    case breakdownAxisInterestBearingDebt: return interestBearingDebtBreakdownMinServableVersion
     default: return productServiceBreakdownMinServableVersion
     }
 }
@@ -246,6 +315,7 @@ public func breakdownCacheVersionNumber(_ version: String) -> Int? {
         "breakdown-equity-method-investments-v", "breakdown-capital-expenditures-v",
         "breakdown-capital-expenditures-overview-v", "breakdown-noncurrent-asset-additions-v",
         "breakdown-capex-v",
+        "breakdown-interest-bearing-debt-v",
         "breakdown-v",
     ]
     for prefix in prefixes where version.hasPrefix(prefix) {
@@ -299,15 +369,20 @@ public func isPubliclyInsufficientRevenueRecognition(
 /// （`capex_prose`）はフラグがあってもそのまま出す。
 /// `not_allocatable_to_segments` は総額行に付く警告であり、404 にしない。
 /// ただし訂正 overlay 回帰（`overlay_regression`）はこれらの行も隠す。
+/// interest_bearing_debt 軸は `needs_review` の行を xbrl_facts でも出さない（fail closed）。
+/// その 404 は未算出ではなく公開 reason `unknown`。内部の保留理由 `breakdownWithheldNeedsReview` は公開しない。
 /// `revenue_recognition_llm` は単一行または明細合計 0 も出さない（`rows` を渡したとき。
 /// 既に格納された 6620 を ingest 前に隠す）。
 /// ingest / status-report の `isServableBreakdown` とは独立（格納行は消さない・書き換えない。
 /// `cache_version` も上げない）。
 public func isPubliclyServableBreakdown(
     source: String, needsReview: Bool, warnings: [String],
-    rows: [BreakdownRowPayload]? = nil
+    rows: [BreakdownRowPayload]? = nil, axis: String? = nil
 ) -> Bool {
     if hasOverlayRegressionWarning(warnings) { return false }
+    // interest_bearing_debt 軸は needs_review の行を出さない（fail closed。
+    // xbrl_facts 系の早期 return より先に判定する）。
+    if axis == breakdownAxisInterestBearingDebt, needsReview { return false }
     if source == breakdownSourceXbrlFacts
         || source == breakdownSourceStackedSegmentPnL
         || source == breakdownSourceNotApplicable
@@ -378,19 +453,35 @@ public struct BreakdownRowPayload: Codable, Sendable, Equatable {
     public var categoryGroup: String?
     /// 収益分解・うち内数の明細。フラット表・加算行は nil。
     public var category: String?
+    /// interest_bearing_debt 軸の名前付きセル。期首残高（円）。他軸は nil。
+    public var opening: Double?
+    /// interest_bearing_debt 軸の名前付きセル。期末残高（円）。他軸は nil。
+    public var closing: Double?
+    /// interest_bearing_debt 軸の名前付きセル。平均利率（％、開示値のみ）。他軸は nil。
+    public var averageRate: Double?
+    /// interest_bearing_debt 行の出所（`ibdRowSource*`）。他軸は nil。
+    public var debtSource: String?
+    /// interest_bearing_debt 行の流動/非流動区分（`ibdMaturity*`）。他軸は nil。
+    public var maturityClass: String?
 
     private enum CodingKeys: String, CodingKey {
         case labelRaw, label, amount, profit, rowKind, description
         case segmentAssets, flow, capitalExpendituresOverview
         case categoryGroup = "category_group"
         case category
+        case opening, closing
+        case averageRate = "average_rate"
+        case debtSource = "debt_source"
+        case maturityClass = "maturity_class"
     }
 
     public init(
         labelRaw: String, label: String, amount: Double, profit: Double?, rowKind: String,
         description: String? = nil, segmentAssets: Double? = nil, flow: Double? = nil,
         capitalExpendituresOverview: Double? = nil,
-        categoryGroup: String? = nil, category: String? = nil
+        categoryGroup: String? = nil, category: String? = nil,
+        opening: Double? = nil, closing: Double? = nil, averageRate: Double? = nil,
+        debtSource: String? = nil, maturityClass: String? = nil
     ) {
         self.labelRaw = labelRaw
         self.label = label
@@ -403,6 +494,11 @@ public struct BreakdownRowPayload: Codable, Sendable, Equatable {
         self.capitalExpendituresOverview = capitalExpendituresOverview
         self.categoryGroup = categoryGroup
         self.category = category
+        self.opening = opening
+        self.closing = closing
+        self.averageRate = averageRate
+        self.debtSource = debtSource
+        self.maturityClass = maturityClass
         if let categoryGroup {
             self.label = Self.displayLabel(categoryGroup: categoryGroup, category: category)
         }
@@ -427,6 +523,11 @@ public struct BreakdownRowPayload: Codable, Sendable, Equatable {
         flow = try container.decodeIfPresent(Double.self, forKey: .flow)
         capitalExpendituresOverview = try container.decodeIfPresent(
             Double.self, forKey: .capitalExpendituresOverview)
+        opening = try container.decodeIfPresent(Double.self, forKey: .opening)
+        closing = try container.decodeIfPresent(Double.self, forKey: .closing)
+        averageRate = try container.decodeIfPresent(Double.self, forKey: .averageRate)
+        debtSource = try container.decodeIfPresent(String.self, forKey: .debtSource)
+        maturityClass = try container.decodeIfPresent(String.self, forKey: .maturityClass)
         if let categoryGroup {
             label = try container.decodeIfPresent(String.self, forKey: .label)
                 ?? Self.displayLabel(categoryGroup: categoryGroup, category: category)
@@ -451,6 +552,11 @@ public struct BreakdownRowPayload: Codable, Sendable, Equatable {
             capitalExpendituresOverview, forKey: .capitalExpendituresOverview)
         try container.encodeIfPresent(categoryGroup, forKey: .categoryGroup)
         try container.encodeIfPresent(category, forKey: .category)
+        try container.encodeIfPresent(opening, forKey: .opening)
+        try container.encodeIfPresent(closing, forKey: .closing)
+        try container.encodeIfPresent(averageRate, forKey: .averageRate)
+        try container.encodeIfPresent(debtSource, forKey: .debtSource)
+        try container.encodeIfPresent(maturityClass, forKey: .maturityClass)
     }
 
     public static func displayLabel(categoryGroup: String, category: String?) -> String {
@@ -640,6 +746,21 @@ public extension BreakdownRowPayload {
         return object
     }
 
+    /// interest_bearing_debt 軸の行。`amount` / `profit` は出さない（opening/closing が正）。
+    /// 欠測セルは null。`source` / `maturity_class` は開示区分をそのまま載せる（計算しない）。
+    func interestBearingDebtJsonObject() -> [String: Any] {
+        [
+            "label_raw": labelRaw,
+            "label": label,
+            "row_kind": rowKind,
+            ibdCellOpening: opening ?? NSNull(),
+            ibdCellClosing: closing ?? NSNull(),
+            ibdCellAverageRate: averageRate ?? NSNull(),
+            ibdRowSourceKey: debtSource ?? NSNull(),
+            ibdMaturityClassKey: maturityClass ?? NSNull(),
+        ]
+    }
+
     /// capex 軸の行。`amount` は出さない（名前付きセルが正）。欠測セルは null。
     func capexJsonObject() -> [String: Any] {
         var object: [String: Any] = [
@@ -662,6 +783,17 @@ public extension BreakdownSnapshotPayload {
     func jsonObject() -> [String: Any] {
         if axis == breakdownAxisCapex {
             return capexJsonObject()
+        }
+        if axis == breakdownAxisInterestBearingDebt {
+            return [
+                "axis": axis,
+                "denominator": denominator,
+                "denominator_tag": denominatorTag,
+                "rows": rows.map { $0.interestBearingDebtJsonObject() },
+                "source_kind": sourceKind,
+                "needs_review": needsReview,
+                "warnings": warnings,
+            ]
         }
         return [
             "axis": axis,

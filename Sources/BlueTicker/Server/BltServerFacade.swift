@@ -47,6 +47,8 @@ public struct BltServerContext: Sendable {
     let researchAndDevelopmentProseDecider: (any ResearchAndDevelopmentProseDeciding)?
     /// 設備投資マトリクスの本文総額。同じキーが無いときは nil。
     let capexProseDecider: (any CapexProseDeciding)?
+    /// 有利子負債の行分類と近似重複判定。同じキーが無いときは nil（未分類行は needs_review）。
+    let interestBearingDebtDecider: (any InterestBearingDebtDeciding)?
     /// employees / rd / goodwill / 報告セグメント指標軸が同一 doc を軸ループで再パースしないためのメモ。
     let businessSegmentDimensionCache: BusinessSegmentDimensionCache
 
@@ -59,7 +61,8 @@ public struct BltServerContext: Sendable {
         geographyColumnDecider: (any RevenueRecognitionColumnDeciding)? = nil,
         segmentInfoDecider: (any SegmentInfoDeciding)? = nil,
         researchAndDevelopmentProseDecider: (any ResearchAndDevelopmentProseDeciding)? = nil,
-        capexProseDecider: (any CapexProseDeciding)? = nil
+        capexProseDecider: (any CapexProseDeciding)? = nil,
+        interestBearingDebtDecider: (any InterestBearingDebtDeciding)? = nil
     ) {
         self.cacheDir = cacheDir
         let store = EdinetCacheStore(cacheDir: edinetCacheDir(cacheDir))
@@ -76,6 +79,7 @@ public struct BltServerContext: Sendable {
         self.segmentInfoDecider = segmentInfoDecider
         self.researchAndDevelopmentProseDecider = researchAndDevelopmentProseDecider
         self.capexProseDecider = capexProseDecider
+        self.interestBearingDebtDecider = interestBearingDebtDecider
         self.businessSegmentDimensionCache = BusinessSegmentDimensionCache()
     }
 }
@@ -168,6 +172,9 @@ public func makeBltServerContext() async -> BltServerContext? {
     let capexProseDecider: (any CapexProseDeciding)? = decisionsClient.map {
         OpenRouterCapexProseDecider(client: $0)
     }
+    let interestBearingDebtDecider: (any InterestBearingDebtDeciding)? = decisionsClient.map {
+        OpenRouterInterestBearingDebtDecider(client: $0)
+    }
     return BltServerContext(
         apiKey: key, cacheDir: cacheDir, overviewChatClient: overviewChatClient,
         overviewModel: overviewEndpoint?.model ?? companyOverviewDefaultModel,
@@ -176,7 +183,8 @@ public func makeBltServerContext() async -> BltServerContext? {
         geographyColumnDecider: geographyColumnDecider,
         segmentInfoDecider: segmentInfoDecider,
         researchAndDevelopmentProseDecider: researchAndDevelopmentProseDecider,
-        capexProseDecider: capexProseDecider)
+        capexProseDecider: capexProseDecider,
+        interestBearingDebtDecider: interestBearingDebtDecider)
 }
 
 // MARK: - REST Facade
@@ -1205,6 +1213,34 @@ private extension BltServerContext {
     }
 }
 
+private extension BltServerContext {
+    /// 有利子負債の内訳（axis=`interest_bearing_debt`）を解決する。
+    /// Jev の応答無し（`.unavailable`）は行を作らず `.failed`（再試行する）。
+    func resolveInterestBearingDebtBreakdownImpl(
+        docID: String, correctionDocIDs: [String] = []
+    ) async -> BreakdownResolveResult {
+        guard let xbrlDir = await downloadAnnualFilingXbrl(
+            docID: docID, correctionDocIDs: correctionDocIDs)
+        else { return .failed }
+        let inputs = InterestBearingDebtBreakdown.inputs(xbrlDir: xbrlDir)
+        switch await InterestBearingDebtBreakdown.resolve(
+            inputs: inputs, decider: interestBearingDebtDecider, docID: docID)
+        {
+        case .resolved(let payload, let audit):
+            return breakdownByRecordingOverlayRegressions(
+                .resolved(
+                    payload: payload, source: breakdownSourceXbrlFacts,
+                    contentHash: ibdBreakdownContentHash(payload: payload),
+                    audit: .segmentNoteJev(audit)),
+                xbrlDir: xbrlDir)
+        case .notApplicable(let reason):
+            return .notApplicable(reason: reason)
+        case .unavailable:
+            return .failed
+        }
+    }
+}
+
 enum CapexProseFillResult {
     case resolved((payload: BreakdownSnapshotPayload, source: String, audit: LLMBreakdownAuditPayload?))
     case failed
@@ -1227,6 +1263,12 @@ public extension BltServerContext {
     /// 設備投資マトリクス（axis=`capex`）を解決する。
     func resolveCapexBreakdown(docID: String, correctionDocIDs: [String] = []) async -> BreakdownResolveResult {
         await resolveCapexBreakdownImpl(docID: docID, correctionDocIDs: correctionDocIDs)
+    }
+
+    /// 有利子負債の内訳（axis=`interest_bearing_debt`）を解決する。
+    func resolveInterestBearingDebtBreakdown(docID: String, correctionDocIDs: [String] = []) async -> BreakdownResolveResult {
+        await resolveInterestBearingDebtBreakdownImpl(
+            docID: docID, correctionDocIDs: correctionDocIDs)
     }
 }
 
@@ -1302,6 +1344,40 @@ private func breakdownContentHash(
     }
     let input = HashInput(
         segments: extractedBreakdownPayload(from: extracted), consolidatedSales: consolidatedSales)
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = [.sortedKeys]
+    guard let data = try? encoder.encode(input) else { return "" }
+    var hash: UInt64 = 0xcbf2_9ce4_8422_2325
+    for byte in data {
+        hash ^= UInt64(byte)
+        hash = hash &* 0x0000_0100_0000_01b3
+    }
+    return String(format: "%016llx", hash)
+}
+
+/// interest_bearing_debt の content_hash。行（label_raw/source/セル値/maturity_class）と
+/// 分母の安定文字列を `breakdownContentHash` と同じ FNV-1a で潰す。
+private func ibdBreakdownContentHash(payload: BreakdownSnapshotPayload) -> String {
+    struct HashInput: Codable {
+        struct Row: Codable {
+            let labelRaw: String
+            let source: String?
+            let opening: Double?
+            let closing: Double?
+            let averageRate: Double?
+            let maturityClass: String?
+        }
+        let denominator: Double
+        let rows: [Row]
+    }
+    let input = HashInput(
+        denominator: payload.denominator,
+        rows: payload.rows.map {
+            HashInput.Row(
+                labelRaw: $0.labelRaw, source: $0.debtSource, opening: $0.opening,
+                closing: $0.closing, averageRate: $0.averageRate,
+                maturityClass: $0.maturityClass)
+        })
     let encoder = JSONEncoder()
     encoder.outputFormatting = [.sortedKeys]
     guard let data = try? encoder.encode(input) else { return "" }

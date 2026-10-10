@@ -110,6 +110,10 @@ extension BreakdownLoadResult {
         if case .absent = self { return true }
         return false
     }
+    fileprivate var withheldReason: String? {
+        if case .withheld(let reason) = self { return reason }
+        return nil
+    }
 }
 
 @Suite struct BreakdownIngestTests {
@@ -503,6 +507,42 @@ extension BreakdownLoadResult {
         }
     }
 
+    /// interest_bearing_debt は xbrl_facts でも、Jev 未分類の現行版行だけ再試行する。
+    /// coverage だけの needs_review は再試行しない。
+    @Test func ingestRetriesInterestBearingDebtWhenJevBlocked() async throws {
+        try await withMigratedApp { app in
+            try await seedDoc("S_JEV", secCode: "67580", db: app.db)
+            try await seedDoc("S_COV", secCode: "72030", db: app.db)
+            try await seedRow(
+                "S_JEV", code: "6758", submit: "2025-06-20 09:00", db: app.db,
+                axis: breakdownAxisInterestBearingDebt,
+                source: breakdownSourceXbrlFacts,
+                cacheVersion: interestBearingDebtBreakdownCacheVersion,
+                needsReview: true, warnings: [breakdownWarningIBDRowUnclassified])
+            try await seedRow(
+                "S_COV", code: "7203", submit: "2025-06-20 09:00", db: app.db,
+                axis: breakdownAxisInterestBearingDebt,
+                source: breakdownSourceXbrlFacts,
+                cacheVersion: interestBearingDebtBreakdownCacheVersion,
+                needsReview: true, warnings: [breakdownWarningIBDCoverageOutOfBand])
+
+            let summary = try await runBreakdownIngest(
+                db: app.db, listedCodes: ["6758", "7203"], years: 3, limit: nil,
+                axis: breakdownAxisInterestBearingDebt
+            ) { docID in
+                #expect(docID == "S_JEV")
+                return .resolved(
+                    payload: fakePayload(
+                        axis: breakdownAxisInterestBearingDebt, needsReview: false, warnings: []),
+                    source: breakdownSourceXbrlFacts, contentHash: "h-jev", audit: nil)
+            }
+
+            #expect(summary.attempted == 1)
+            #expect(summary.stored == 1)
+            #expect(summary.skipped == 1)
+        }
+    }
+
     @Test func ingestReattemptsDeterministicRowFlaggedForReviewWhenVersionStale() async throws {
         try await withMigratedApp { app in
             try await seedDoc("S1", secCode: "72030", db: app.db)
@@ -816,6 +856,40 @@ extension BreakdownLoadResult {
                 code: "6758", docId: nil, axis: breakdownAxisProductService, db: app.db)
             let xbrlJSON = try #require(xbrl.foundJSON)
             #expect(xbrlJSON["doc_id"] as? String == "S_XBRL")
+        }
+    }
+
+    /// interest_bearing_debt の needs_review は未算出ではなく withheld。
+    /// geography の公開除外は従来どおり absent。
+    @Test func loadWithholdsInterestBearingDebtNeedsReview() async throws {
+        try await withMigratedApp { app in
+            try await seedRow(
+                "S_IBD", code: "6758", submit: "2026-06-20 09:00", db: app.db,
+                axis: breakdownAxisInterestBearingDebt,
+                source: breakdownSourceXbrlFacts,
+                cacheVersion: interestBearingDebtBreakdownCacheVersion,
+                needsReview: true, warnings: [breakdownWarningIBDCoverageOutOfBand])
+            try await seedRow(
+                "S_GEO", code: "7203", submit: "2026-06-20 09:00", db: app.db,
+                axis: breakdownAxisGeography, source: breakdownSourceGeographyLLM,
+                cacheVersion: geographyBreakdownCacheVersion, needsReview: true)
+
+            let withheld = try await loadStoredBreakdown(
+                code: "6758", docId: nil, axis: breakdownAxisInterestBearingDebt, db: app.db)
+            #expect(withheld.withheldReason == breakdownWithheldNeedsReview)
+            if case .withheld(let reason, let message) = mapWithheldBreakdownLoad(
+                breakdownWithheldNeedsReview)
+            {
+                #expect(reason == breakdownNotApplicableUnknown)
+                #expect(message == "有利子負債の内訳は公開していません")
+            } else {
+                Issue.record("expected withheld")
+            }
+
+            let geography = try await loadStoredBreakdown(
+                code: "7203", docId: nil, axis: breakdownAxisGeography, db: app.db)
+            #expect(geography.isAbsent)
+            #expect(geography.withheldReason == nil)
         }
     }
 

@@ -483,6 +483,15 @@ public func runFactsIngestCommand(
                     await context.resolveCapexBreakdown(
                         docID: docID, correctionDocIDs: correctionIDsByOriginal[docID] ?? [])
                 },
+                BreakdownStage(
+                    axis: breakdownAxisInterestBearingDebt,
+                    target: "breakdowns-interest_bearing_debt",
+                    listedCodes: deterministicMetricsListed, limit: unpublishedLimit,
+                    candidateSets: unpublishedSets
+                ) { docID in
+                    await context.resolveInterestBearingDebtBreakdown(
+                        docID: docID, correctionDocIDs: correctionIDsByOriginal[docID] ?? [])
+                },
             ]
             var summaries: [(stage: BreakdownStage, summary: BreakdownIngestSummary)] = []
             for stage in stages {

@@ -10,6 +10,14 @@ enum BreakdownFinancialsResolver {
         let tag: String?
     }
 
+    struct InterestBearingDebtCanonicalValue {
+        let total: Double?
+        let priorTotal: Double?
+        let method: String
+        let accountingStandard: String
+        let warnings: [String]
+    }
+
     /// geography 軸と Summary の売上分母。正本は statement PL の連結売上（`StatementFinancialsResolver`）。
     /// 三菱商事等の本表 `Revenue2IFRS`「収益」も含む。product_service 軸は
     /// `breakdownBusinessSalesDenominatorItem`（収益認識表なら顧客契約）。
@@ -83,6 +91,71 @@ enum BreakdownFinancialsResolver {
             return CanonicalValue(value: fieldSet[noteTag]?.current, tag: noteTag)
         }
         return CanonicalValue(value: result.current, tag: result.tag)
+    }
+
+    /// financials の `interest_bearing_debt`。正本は breakdown `interest_bearing_debt` 軸の合計。
+    /// 軸が needs_review / 解決不能のときは公開 JSON キーを増やさず旧 Extractor 値へ戻し、
+    /// canonical value の method/warnings に印を残す（会社が null へ退行しないため）。
+    static func financialsCanonicalInterestBearingDebt(
+        xbrlDir: URL
+    ) async -> InterestBearingDebtCanonicalValue {
+        let inputs = InterestBearingDebtBreakdown.inputs(xbrlDir: xbrlDir)
+        let allTags = XBRLUtils.collectAllNumericElements(in: xbrlDir, nilAsZero: false)
+        let accountingStandard = detectAccountingStandard(allTags)
+        let resolution = await InterestBearingDebtBreakdown.resolve(inputs: inputs, decider: nil)
+        return canonicalInterestBearingDebt(
+            resolution: resolution,
+            inputs: inputs,
+            accountingStandard: accountingStandard,
+            legacy: { IBDExtractor.extractCanonical(xbrlDir: xbrlDir) })
+    }
+
+    /// `financialsCanonicalInterestBearingDebt` の純粋な写像部分（unit test 用）。
+    static func canonicalInterestBearingDebt(
+        resolution: IBDResolution,
+        inputs: IBDInputs,
+        accountingStandard: String,
+        legacy: () -> IBDResult
+    ) -> InterestBearingDebtCanonicalValue {
+        func legacyFallback(reason: String, extra: [String] = []) -> InterestBearingDebtCanonicalValue {
+            let result = legacy()
+            let warning = (["legacy_ibd_extractor_fallback", "reason=\(reason)"] + extra)
+            return InterestBearingDebtCanonicalValue(
+                total: result.total,
+                priorTotal: result.priorTotal,
+                method: "legacy_ibd_extractor_fallback",
+                accountingStandard: result.accountingStandard,
+                warnings: warning)
+        }
+        switch resolution {
+        case .resolved(let payload, let audit):
+            guard !payload.needsReview else {
+                let unclassified = audit.sentences.filter { $0.hasPrefix("unclassified ") }
+                return legacyFallback(reason: "needs_review", extra: payload.warnings + unclassified)
+            }
+            guard let total = payload.rows.last(where: { $0.rowKind == "subtotal" && $0.label == "合計" }) else {
+                return legacyFallback(reason: "missing_total_row")
+            }
+            let bank = payload.rows.contains { $0.debtSource == ibdRowSourceFinancialsBankComponents }
+            return InterestBearingDebtCanonicalValue(
+                total: total.closing,
+                priorTotal: total.opening,
+                method: bank
+                    ? "breakdown.interest_bearing_debt.bank_components"
+                    : "breakdown.interest_bearing_debt",
+                accountingStandard: accountingStandard,
+                warnings: payload.warnings)
+        case .notApplicable(let reason):
+            if reason == breakdownNotApplicableNotFound, inputs.largeInstance {
+                // 従来 /financials と同じ: 大きな本表インスタンスに債務行が無ければ無借金とみなす。
+                return InterestBearingDebtCanonicalValue(
+                    total: 0, priorTotal: 0, method: "zero_debt",
+                    accountingStandard: accountingStandard, warnings: [])
+            }
+            return legacyFallback(reason: reason)
+        case .unavailable:
+            return legacyFallback(reason: "unavailable")
+        }
     }
 
     /// financials の `capex`。正本は breakdown の
