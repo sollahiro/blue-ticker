@@ -2,6 +2,10 @@
 
 段階の列は origin / 公開扉のロールアウト（段階 A が origin 現行。段階 B の公開入口は HAPIS。`public-api.md`）。iOS クライアントは段階 B：Release は HAPIS + App Attest、Simulator はローカル stub。開発 / agents の REST は Service Token（アプリには埋め込まない）。blt-server origin はどちらの段階でもトークンを検証しない（エッジ / ゲートウェイ信頼）。認証ミドルウェアは origin に載せない。
 
+## 例外: 静的 RSS フィード
+
+`feed.sollahiro.com` の静的 RSS は認証なしの公開（R2 カスタムドメイン。Worker ルートも origin へのパスもない）。それ以外は本ファイルどおり HAPIS + App Attest / Access のまま。origin の起動ガードは変更なし。詳細は `public-api.md`。
+
 ## origin の起動ガード
 
 非 loopback bind（`0.0.0.0` 等。Dockerfile / Fly の既定）では、次のどちらかが無いと **プロセス起動を拒否**する（EDINET キー欠落と同型の fail-closed。Routes の warning だけでは足りない）。

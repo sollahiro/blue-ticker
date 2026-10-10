@@ -1,0 +1,11 @@
+{
+  "name": "blt-feed-rss",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@neondatabase/serverless": "^1.0.0"
+  },
+  "scripts": {
+    "test": "node --test src/*.test.js"
+  }
+}

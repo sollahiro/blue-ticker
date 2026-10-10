@@ -310,5 +310,8 @@ jobs:
       - name: Feed Trend Worker の入力正規化
         run: node --test workers/feed-trend/src/validate.test.js
 
+      - name: Feed RSS Worker の組み立てと fail closed
+        run: node --test workers/feed-rss/src/rss.test.js workers/feed-rss/src/feed.test.js workers/feed-rss/src/parity.test.js
+
       - name: Legal Worker の経路
         run: node --test workers/legal/src/rewrite.test.js
