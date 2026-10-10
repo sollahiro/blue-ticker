@@ -544,6 +544,9 @@ import Testing
     @Test func ownMediaAdIsCategoryNotPeriodHeading() {
         #expect(RevenueRecognitionCandidates.isPeriodHeadingLabel("自社メディア広告") == false)
         #expect(RevenueRecognitionCandidates.isPeriodHeadingLabel("当連結会計年度") == true)
+        #expect(RevenueRecognitionCandidates.isPeriodHeadingLabel("2021年度") == true)
+        #expect(RevenueRecognitionCandidates.isPeriodHeadingLabel("2021年度 / 日本") == true)
+        #expect(RevenueRecognitionCandidates.isPeriodHeadingLabel("日本") == false)
     }
 
     /// 7413 S100YKKP: prod currently stores labels shifted by one row (油脂 instead of

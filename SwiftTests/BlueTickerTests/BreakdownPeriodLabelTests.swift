@@ -76,6 +76,35 @@ import Foundation
         #expect(tables[1].periodBasis == .pair)
     }
 
+    @Test func identicalCurrentCaptionsPairAsPriorThenCurrent() {
+        let html = """
+            <p>当連結会計年度</p>
+            \(numericPairTable("100", "50", "150"))
+            <p>当連結会計年度</p>
+            \(numericPairTable("120", "60", "180"))
+            """
+        let tables = BreakdownExtractor.allTablesFromHtml(html, defaultHeading: "地域ごとの情報")
+        #expect(tables.map(\.period) == ["前期", "当期"])
+        #expect(tables.map(\.periodBasis) == [.pair, .pair])
+    }
+
+    @Test func salesThenAssetSameLayoutStayCurrent() {
+        let html = """
+            <p>当連結会計年度</p>
+            <table>
+              <tr><td>日本</td><td>海外</td><td>合計</td></tr>
+              <tr><td>100</td><td>50</td><td>150</td></tr>
+            </table>
+            <p>当連結会計年度</p>
+            <table>
+              <tr><td>日本</td><td>海外</td><td>合計</td></tr>
+              <tr><td>有形固定資産</td><td>20</td><td>80</td></tr>
+            </table>
+            """
+        let tables = BreakdownExtractor.allTablesFromHtml(html, defaultHeading: "地域ごとの情報")
+        #expect(tables.map(\.period) == ["当期", "当期"])
+    }
+
     // MARK: - (b) identical pair without captions (7203-like)
 
     @Test func identicalPairWithoutCaptionsUsesPosition() {
