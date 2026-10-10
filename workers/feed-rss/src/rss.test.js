@@ -5,8 +5,9 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
 import {
+  EDINET_VIEWER_URL_BASE,
   buildRss,
-  companyUrl,
+  edinetDocumentUrl,
   escapeXml,
   jstToRfc822,
   utcToRfc822Jst,
@@ -93,11 +94,18 @@ describe("utcToRfc822Jst", () => {
   });
 });
 
-describe("companyUrl", () => {
-  test("{code} を URL エスケープして置き換える", () => {
+describe("edinetDocumentUrl", () => {
+  test("EDINET 提出書類内容照会画面の URL になる", () => {
     assert.equal(
-      companyUrl("https://example.com/companies/{code}", "7203"),
-      "https://example.com/companies/7203"
+      edinetDocumentUrl("S100AAA"),
+      "https://disclosure2.edinet-fsa.go.jp/WZEK0040.aspx?S100AAA"
+    );
+  });
+
+  test("doc_id は URL エスケープされる", () => {
+    assert.equal(
+      edinetDocumentUrl("S100 A&B"),
+      `${EDINET_VIEWER_URL_BASE}S100%20A%26B`
     );
   });
 });
@@ -204,7 +212,6 @@ describe("buildRss", () => {
     items,
     now: new Date("2026-10-10T10:15:00Z"),
     feedUrl: "https://feed.sollahiro.com/blue-ticker/edinet-filings.xml",
-    companyUrlTemplate: "https://sollahiro.com/blue-ticker/companies/{code}",
   });
 
   test("XML 宣言とチャネル要素", () => {
@@ -224,14 +231,33 @@ describe("buildRss", () => {
 
   test("item の数と内容", () => {
     assert.equal((xml.match(/<item>/g) ?? []).length, 2);
-    assert.ok(xml.includes("<title>A&amp;B &lt;ホールディングス&gt; 有価証券報告書</title>"));
+    // タイトルは `{name}（{code}） {doc_type_label}`
+    assert.ok(
+      xml.includes("<title>A&amp;B &lt;ホールディングス&gt;（7203） 有価証券報告書</title>")
+    );
     assert.ok(xml.includes('<guid isPermaLink="false">S100AAA</guid>'));
     assert.ok(xml.includes("<pubDate>Fri, 09 Oct 2026 15:30:00 +0900</pubDate>"));
-    assert.ok(xml.includes("<category>120</category>"));
-    assert.ok(
-      xml.includes("<link>https://sollahiro.com/blue-ticker/companies/7203</link>")
-    );
+    // category は書類種別と証券コードの 2 つ
+    assert.ok(xml.includes('<category domain="edinet:doc_type">120</category>'));
+    assert.ok(xml.includes('<category domain="jp:sec_code">7203</category>'));
     assert.ok(xml.includes("<description>決算期: 2026-03 / 証券コード: 7203</description>"));
+  });
+
+  test("item の link は EDINET 提出書類内容照会画面", () => {
+    assert.ok(
+      xml.includes(
+        "<link>https://disclosure2.edinet-fsa.go.jp/WZEK0040.aspx?S100AAA</link>"
+      )
+    );
+    assert.ok(
+      xml.includes(
+        "<link>https://disclosure2.edinet-fsa.go.jp/WZEK0040.aspx?S100BBB</link>"
+      )
+    );
+  });
+
+  test("会社ページのプレースホルダ URL は出力に含まれない", () => {
+    assert.ok(!xml.includes("sollahiro.com/blue-ticker/companies"));
   });
 
   test("pubDate がパースできない item は pubDate 要素を出さない", () => {

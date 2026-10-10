@@ -64,18 +64,25 @@ export function utcToRfc822Jst(date) {
   );
 }
 
-// 会社ページ URL。テンプレートの `{code}` を URL エスケープ済みコードで置き換える。
-export function companyUrl(template, code) {
-  return String(template).replace("{code}", encodeURIComponent(code));
+// EDINET 提出書類内容照会画面（doc_id で書類内容を見られる公開ビューア。API キー不要）。
+// `?` は XML 上そのまま書いてよい（`&` が出る場合は escapeXml が `&amp;` にする）。
+export const EDINET_VIEWER_URL_BASE =
+  "https://disclosure2.edinet-fsa.go.jp/WZEK0040.aspx?";
+
+export function edinetDocumentUrl(docId) {
+  return EDINET_VIEWER_URL_BASE + encodeURIComponent(docId);
 }
 
 // RSS 2.0 本文。items は toFeedItem の戻り値。ヘッドラインのみ（アイコン・画像なし）。
-export function buildRss({ items, now = new Date(), feedUrl, companyUrlTemplate }) {
+export function buildRss({ items, now = new Date(), feedUrl }) {
   const lines = [];
   lines.push('<?xml version="1.0" encoding="UTF-8"?>');
   lines.push('<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">');
   lines.push("  <channel>");
   lines.push("    <title>Blue Ticker — EDINET 提出書類（上場）</title>");
+  // チャネル link はアプリ紹介ページ。sollahiro.com/blue-ticker/ は
+  // workers/legal（src/index.js の assetPathFor が /blue-ticker を privacy へ回す）
+  // が実際に配信しているので、この URL を使う（存在しない場合は feedUrl にする想定だった）。
   lines.push("    <link>https://sollahiro.com/blue-ticker/</link>");
   lines.push(
     "    <description>EDINET に提出された上場会社の開示書類のヘッドラインのみを配信します。" +
@@ -90,14 +97,21 @@ export function buildRss({ items, now = new Date(), feedUrl, companyUrlTemplate 
   );
   for (const item of items) {
     lines.push("    <item>");
-    lines.push(`      <title>${escapeXml(`${item.name} ${item.doc_type_label}`)}</title>`);
-    lines.push(`      <link>${escapeXml(companyUrl(companyUrlTemplate, item.code))}</link>`);
+    lines.push(
+      `      <title>${escapeXml(`${item.name}（${item.code}） ${item.doc_type_label}`)}</title>`
+    );
+    lines.push(`      <link>${escapeXml(edinetDocumentUrl(item.doc_id))}</link>`);
     lines.push(`      <guid isPermaLink="false">${escapeXml(item.doc_id)}</guid>`);
     const pubDate = jstToRfc822(item.submitted_at);
     if (pubDate !== null) {
       lines.push(`      <pubDate>${pubDate}</pubDate>`);
     }
-    lines.push(`      <category>${escapeXml(item.doc_type)}</category>`);
+    lines.push(
+      `      <category domain="edinet:doc_type">${escapeXml(item.doc_type)}</category>`
+    );
+    lines.push(
+      `      <category domain="jp:sec_code">${escapeXml(item.code)}</category>`
+    );
     lines.push(
       `      <description>${escapeXml(`決算期: ${item.fy_end} / 証券コード: ${item.code}`)}</description>`
     );

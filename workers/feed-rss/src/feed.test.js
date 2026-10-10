@@ -37,7 +37,6 @@ function makeEnv(bucket) {
     FEED_BUCKET: bucket,
     FEED_OBJECT_KEY: KEY,
     FEED_PUBLIC_URL: "https://feed.sollahiro.com/blue-ticker/edinet-filings.xml",
-    COMPANY_URL_TEMPLATE: "https://sollahiro.com/blue-ticker/companies/{code}",
   };
 }
 
@@ -46,6 +45,7 @@ const LISTED_ROW = {
   sec_code: "72030",
   filer_name: "テスト株式会社",
   doc_type_code: "120",
+  ordinance_code: "010",
   period_end: "2026-03-31",
   submit_date_time: "2026-10-09 15:30",
   doc_description: "有価証券報告書－第100期",
@@ -74,7 +74,13 @@ describe("refreshFeed", () => {
     assert.deepEqual(put.options, {
       httpMetadata: { contentType: CONTENT_TYPE, cacheControl: CACHE_CONTROL },
     });
-    assert.ok(put.body.includes("<title>テスト株式会社 有価証券報告書</title>"));
+    assert.ok(put.body.includes("<title>テスト株式会社（7203） 有価証券報告書</title>"));
+    assert.ok(
+      put.body.includes(
+        "<link>https://disclosure2.edinet-fsa.go.jp/WZEK0040.aspx?S100AAA</link>"
+      )
+    );
+    assert.ok(!put.body.includes("sollahiro.com/blue-ticker/companies"));
     assert.ok(log.lines.some((line) => line.includes('"feed_rss_written"')));
   });
 
@@ -111,6 +117,7 @@ describe("refreshFeed", () => {
       { ...LISTED_ROW, sec_code: "72031" },
       { ...LISTED_ROW, sec_code: "00000" },
       { ...LISTED_ROW, sec_code: null },
+      { ...LISTED_ROW, ordinance_code: "030" },
     ];
 
     const result = await refreshFeed({ env: makeEnv(bucket), runQuery, now: NOW, log });

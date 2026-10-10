@@ -21,14 +21,32 @@ RSS は窓内を時系列で全部出すフィードなので、同日の絞り�
 
 ## item マッピング
 
-- `title` = `{filer_name} {doc_type_label}`（ラベルは Swift `docTypeLabel` と同じ。未知コードは `doc_description`）
-- `link` = `COMPANY_URL_TEMPLATE` の `{code}` を 4 桁証券コードで置換
+- `title` = `{filer_name}（{code}） {doc_type_label}`（ラベルは Swift `docTypeLabel` と同じ。未知コードは `doc_description`）
+- `link` = EDINET 提出書類内容照会画面 `https://disclosure2.edinet-fsa.go.jp/WZEK0040.aspx?{doc_id}`（公開ビューア。API キー不要）
 - `guid`（isPermaLink="false"）= `doc_id`
 - `pubDate` = `submit_date_time`（JST 壁時計 → RFC 822 `+0900`）
-- `category` = 書類種別コード
+- `category` = 2 つ: `<category domain="edinet:doc_type">{doc_type}</category>` と `<category domain="jp:sec_code">{code}</category>`
 - `description` = `決算期: {fy_end} / 証券コード: {code}`（`fy_end` は期末日の先頭 7 文字）
 
 会社アイコンは意図的に載せない（アイコンは認証越しの配信のみ）。
+
+チャネル `<link>` は `https://sollahiro.com/blue-ticker/`（workers/legal が配信するアプリ紹介ページ）。
+
+## Swift とのパリティ
+
+抽出条件・item マッピングは REST `/v1/feed/updates` の Swift 実装と揃える。対応関係:
+
+- listed 抽出 SQL: `feedListedQuery` + `loadFeedListedRows`（Sources/BltServerCore/FeedServe.swift）
+- item 組み立て: `feedFilingItem`、`listedTickerCode(fromSecCode:)`、`feedInclusiveCutoffDateString`（Sources/BlueTicker/Server/FeedAssembly.swift）
+- ラベル・辞書形: `filingDict`、`docTypeLabel`（Sources/BlueTicker/Server/BltServerFacade.swift）
+- 対象書類種別・府令: `Api.documentSyncDocTypes` / `feedAllowedDocTypes`、`Api.ordinanceCompanyDisclosure`（Sources/BlueTicker/Constants/Api.swift）
+
+共有 fixture `test-fixtures/feed-parity.json` を正本に、両側のテストでドリフトを検知する:
+
+- JS: `src/parity.test.js`（`node --test src/*.test.js` に含まれる。Swift ソースも直接パースして定数・ラベル・生 SQL を照合する）
+- Swift: `SwiftTests/BlueTickerTests/FeedRssParityFixtureTests.swift`
+
+Swift 側のラベル・対象種別・listed 判定を変えたら fixture も一緒に更新すること。
 
 ## fail closed
 

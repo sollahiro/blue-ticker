@@ -23,7 +23,7 @@ export function feedCutoffDateString(days, now = new Date()) {
 
 // listed 行の抽出。$1: 書類種別 text[]、$2: 下限日（含む）text、$3: 件数上限 int。
 // 府令 010・5 桁 sec_code 末尾 0・00000 以外は Swift の feedListedQuery と同じ。
-export const FEED_SQL = `SELECT doc_id, sec_code, filer_name, doc_type_code, period_end, submit_date_time, doc_description
+export const FEED_SQL = `SELECT doc_id, sec_code, filer_name, doc_type_code, ordinance_code, period_end, submit_date_time, doc_description
 FROM edinet_documents
 WHERE doc_type_code = ANY($1::text[])
   AND ordinance_code = '010'

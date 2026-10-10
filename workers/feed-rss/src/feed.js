@@ -48,14 +48,7 @@ export async function refreshFeed({ env, runQuery, now = new Date(), log = conso
     return { written: false, reason: "empty" };
   }
 
-  const xml = buildRss({
-    items,
-    now,
-    feedUrl: env.FEED_PUBLIC_URL,
-    companyUrlTemplate:
-      env.COMPANY_URL_TEMPLATE ??
-      "https://sollahiro.com/blue-ticker/companies/{code}",
-  });
+  const xml = buildRss({ items, now, feedUrl: env.FEED_PUBLIC_URL });
 
   try {
     await bucket.put(key, xml, {
