@@ -43,6 +43,7 @@ geography は変えない。本邦90％の `not_found` は既存の Jev ゲー�
 | `goodwill_amortization` | 報告セグメントごとののれんの償却額 |
 | `equity_method_investments` | 報告セグメントごとの持分法会計処理される投資 |
 | `capex` | 設備投資マトリクス（行=セグメント / 調整額 / EntityTotal。セル= `segment_assets` / `flow` / `capital_expenditures_overview`）。`flow` は書類単位で資本的支出があればそれ、無ければ非流動性資産への追加額。旧 4 軸名は廃止 |
+| `interest_bearing_debt` | 有利子負債（社債・借入金＋リース負債）。行=負債の行、セル= `opening` / `closing` / `average_rate`、行ごとに `source` と `maturity_class` |
 
 公開軸（意味。公開判断の現在地は Linear [JP 現在地](https://linear.app/sollahiro/document/jp-現在地-af2abd076034)）:
 
@@ -56,6 +57,7 @@ geography は変えない。本邦90％の `not_found` は既存の Jev ゲー�
 | `goodwill_amortization` | のれんの償却額 |
 | `equity_method_investments` | 持分法投資 |
 | `capex` | 設備投資マトリクス |
+| `interest_bearing_debt` | 有利子負債内訳 |
 
 旧 `segment_assets` / `capital_expenditures` / `noncurrent_asset_additions` / `capital_expenditures_overview` は REST / MCP / skills から削除した（breaking。`apiSkillsSchemaVersion` 2、`breakdown-capex-v1`）。
 
@@ -71,6 +73,19 @@ geography は変えない。本邦90％の `not_found` は既存の Jev ゲー�
   XBRL タグ付き reconciling member（`ReconcilingItemsMember` 等）には適用しない。
 - `capex` は名前付きセル。単一 `amount` は使わない。欠測セルは null。`flow` は書類単位で `capital_expenditures` があればそれ、無ければ `noncurrent_asset_additions`（混ぜず足さない）。Overview HTML 表は正本。HTML ラベルと XBRL member の結合は初期はしない。財務諸表計上額の `row_kind` は `EntityTotal`。
 - 設備投資の本文総額は `OPENROUTER_DECISION_API_KEY` があるときだけ別 Choice（`capex_prose`）。Jev は Role だけ、円はコード。埋めるのは Overview の会社総額と、タグ付きセグメント行があるときの reconciling だけ。セグメント別は埋めない。`SegmentNoteDecision` の表/省略 Choice には載せない。source `capex_prose` は公開面で研究開発費本文総額と同じ扱い。`cache_version` は `breakdown-capex-v1`。
+
+## 有利子負債（`interest_bearing_debt`）
+
+- 社債・借入金とリース負債を1軸にまとめる。`cache_version` は `breakdown-interest-bearing-debt-v1`（新軸なので v1 から）。`source_kind` は `xbrl_facts`。
+- 行は名前付きセル `opening`（前期末）/ `closing`（当期末）/ `average_rate`（平均利率 %、書類に記載があるときだけ）。行ごとに `source`（`balance_sheet` / `borrowings_schedule` / `lease_note`）と `maturity_class`（`current` / `non_current` / null）を持つ。末尾に `合計` 行（`row_kind` `subtotal`）。合計行の利率は常に null（加重平均は計算しない）。返済期限列は持たない。
+- 読む書類はコードが選ぶ: 連結貸借対照表、連結の借入金等明細表、IFRS のリース負債注記。連結財務諸表がある会社は連結だけ、個別だけの会社は個別だけを読む（`BorrowingsSchedule.filerHasConsolidatedStatements`。FieldParser と同じ連結判定）。
+- Jev（`OPENROUTER_DECISION_API_KEY`、Choice、確率 0.9 以上）は、コードが決められない行（会社独自タグ、デリバティブ等の明細表行）が有利子負債か・リースか・どちらでもないかだけを答える。金額は触らない。0.9 未満・キー無しは決定論のまま `needs_review`。応答が無いときは行を作らず再試行する。
+- 重複除去はコードが先。明細表のリース行とリース注記が 2% 以内で一致しないときだけ、Jev が同一負債かを答える。両方の金額と理由を `llm_audit` に残す。黙って片方を選ばない。
+- 分母は同じ財務諸表の貸借対照表の有利子負債＋リース負債。行の合計が 95〜105% を外れたら `needs_review`（Jev は覆せない）。明細表が帯を外れ貸借対照表の行がすべて分類済みなら、貸借対照表の行を使い `borrowings_schedule_outside_coverage_band` を残す（例: ソフトバンクグループの明細表はセール・アンド・リースバック負債の表で、全体の約 6%）。
+- `maturity_class` は書類の表示だけから取る: 貸借対照表の流動/非流動タグ、注記の流動/非流動の区分、明細表のラベル（「1年以内に返済予定の…」「（1年以内に返済予定のものを除く。）」）。日付や金額からは推定しない。曖昧なら null（例: 「長期借入金」「社債」だけの行）。行を流動・非流動に分けても合計とカバレッジは変わらない（同じ負債を二重に数えない）。
+- 銀行・保険（`DepositsLiabilitiesBNK` 等）は `not_applicable`、理由 `financial_institution`。預金・保険契約準備金は資金調達の本業で、比較できる有利子負債の合計が無い。
+- 公開 serving では、この軸だけ `needs_review=true` を出さない（source が `xbrl_facts` でも fail closed）。
+- 対象外: 返済期限列、/financials の有利子負債の修正、注記タイプの削除。
 
 ## 非目標
 

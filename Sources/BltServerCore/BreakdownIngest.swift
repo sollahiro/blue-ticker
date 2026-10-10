@@ -398,7 +398,7 @@ func loadStoredBreakdown(
         source: row.source,
         needsReview: row.needsReview || row.payload.needsReview,
         warnings: row.payload.warnings,
-        rows: row.payload.rows)
+        rows: row.payload.rows, axis: axis)
     else { return .absent }
 
     if let reason = row.notApplicableReason {

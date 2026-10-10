@@ -16,6 +16,17 @@ enum BorrowingsSchedule {
         let current: Double?
         let prior: Double?
         let averageInterestRatePercent: Double?
+        /// displayLabel 正規化前のラベル（明細表・注記の開示表記そのまま）。
+        /// interest_bearing_debt 軸の label_raw / 分類の判定材料に使う。
+        var sourceLabel: String? = nil
+    }
+
+    /// 連結財務諸表を作成する会社か（連結＋単体コンテキストの共存で判定。
+    /// `fieldSetFromInstant` / `fieldSetFromDuration`（FieldParser）の連結検出と同じ基準）。
+    /// true のとき単体タグへのフォールバックを抑止する（連結優先）。
+    static func filerHasConsolidatedStatements(xbrlDir: URL) -> Bool {
+        ContextHelpers.hasNonConsolidatedContexts(
+            XBRLUtils.collectAllNumericElements(in: xbrlDir, nilAsZero: false))
     }
 
     /// リース債務行は「リース負債（流動/非流動）」へ正規化し、コードベース全体の表示ラベルに揃える。
@@ -159,10 +170,15 @@ enum BorrowingsSchedule {
         // 東邦レマック S100XRD8 実データ検証（2026-08-08）: 連結財務諸表を作成しない小規模企業は
         // 連結版タグを持たず、単体版タグのみに明細表が入る。列構成・「合計」行判定は共通のため、
         // 連結版が見つからない場合のみ単体版へフォールバックする。
-        guard let html = XBRLUtils.extractTextblockHtml(
-                in: xbrlDir, textblockTag: Xbrl.borrowingsScheduleTextblockTag)
-                ?? XBRLUtils.extractTextblockHtml(
-                    in: xbrlDir, textblockTag: Xbrl.borrowingsScheduleNonConsolidatedTextblockTag),
+        // 連結財務諸表を作成する会社（連結＋単体コンテキストが共存）では単体版へフォールバックしない
+        // （単体の明細表を連結の有利子負債に誤って混ぜないため。連結優先）。
+        let consolidatedHtml = XBRLUtils.extractTextblockHtml(
+            in: xbrlDir, textblockTag: Xbrl.borrowingsScheduleTextblockTag)
+        let nonConsolidatedHtml = filerHasConsolidatedStatements(xbrlDir: xbrlDir)
+            ? nil
+            : XBRLUtils.extractTextblockHtml(
+                in: xbrlDir, textblockTag: Xbrl.borrowingsScheduleNonConsolidatedTextblockTag)
+        guard let html = consolidatedHtml ?? nonConsolidatedHtml,
               let soup = try? SwiftSoup.parse(html),
               let tables = (try? soup.select("table"))?.array() else { return nil }
 
@@ -261,7 +277,8 @@ enum BorrowingsSchedule {
                 label: displayLabel(for: r.label),
                 current: r.current.map { $0 * scale },
                 prior: r.prior.map { $0 * scale },
-                averageInterestRatePercent: r.rate
+                averageInterestRatePercent: r.rate,
+                sourceLabel: r.label
             ))
         }
 
@@ -534,7 +551,8 @@ enum BorrowingsSchedule {
                 label: displayLabel(for: label),
                 current: current.map { $0 * scale },
                 prior: prior.map { $0 * scale },
-                averageInterestRatePercent: rate
+                averageInterestRatePercent: rate,
+                sourceLabel: label
             ))
         }
 
@@ -817,7 +835,8 @@ enum BorrowingsSchedule {
                 label: displayLabel(for: label),
                 current: currentMap[label].map { $0 * scale },
                 prior: priorMap[label].map { $0 * scale },
-                averageInterestRatePercent: nil
+                averageInterestRatePercent: nil,
+                sourceLabel: label
             )
         }
         return (components, sorted[1].total * scale, sorted[0].total * scale)
@@ -1105,7 +1124,8 @@ enum BorrowingsSchedule {
                 label: displayLabel(for: cleanedUSGAAPLabel(useLabel)),
                 current: current.map { $0 * scale },
                 prior: prior.map { $0 * scale },
-                averageInterestRatePercent: rate
+                averageInterestRatePercent: rate,
+                sourceLabel: cleanedUSGAAPLabel(useLabel)
             ))
         }
         return rows.isEmpty ? nil : rows
@@ -1146,7 +1166,8 @@ enum BorrowingsSchedule {
                 label: displayLabel(for: label),
                 current: current * Financial.millionYen,
                 prior: prior * Financial.millionYen,
-                averageInterestRatePercent: nil
+                averageInterestRatePercent: nil,
+                sourceLabel: label
             ))
         }
         return rows
@@ -1195,10 +1216,15 @@ enum BorrowingsSchedule {
     /// 区分ラベルのみを見る（「リース債務を除く」等の除外文言・注記文への誤ヒットを避ける）。
     /// 東邦レマック S100XRD8 のように残高がすべて「－」の行も、区分が開示されていれば true。
     static func hasLeaseDebtRowLabel(xbrlDir: URL) -> Bool {
-        guard let html = XBRLUtils.extractTextblockHtml(
-                in: xbrlDir, textblockTag: Xbrl.borrowingsScheduleTextblockTag)
-                ?? XBRLUtils.extractTextblockHtml(
-                    in: xbrlDir, textblockTag: Xbrl.borrowingsScheduleNonConsolidatedTextblockTag),
+        // 連結財務諸表を作成する会社では単体明細表へフォールバックしない
+        // （`parseJGaapScheduleTable` と同じ連結優先）。
+        let consolidatedHtml = XBRLUtils.extractTextblockHtml(
+            in: xbrlDir, textblockTag: Xbrl.borrowingsScheduleTextblockTag)
+        let nonConsolidatedHtml = filerHasConsolidatedStatements(xbrlDir: xbrlDir)
+            ? nil
+            : XBRLUtils.extractTextblockHtml(
+                in: xbrlDir, textblockTag: Xbrl.borrowingsScheduleNonConsolidatedTextblockTag)
+        guard let html = consolidatedHtml ?? nonConsolidatedHtml,
               let soup = try? SwiftSoup.parse(html),
               let tables = (try? soup.select("table"))?.array() else { return false }
 
