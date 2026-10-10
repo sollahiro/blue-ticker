@@ -43,6 +43,7 @@ private struct GoldenIBDDecider: InterestBearingDebtDeciding {
             TestVerboseLog.print("SKIP   \(docID): XBRL キャッシュなし（BLT_EDINET_API_KEY 未設定または取得失敗）")
             return false
         }
+        print("IBD-GOLDEN RUN \(docID)")
         return true
     }
 
@@ -82,8 +83,9 @@ private struct GoldenIBDDecider: InterestBearingDebtDeciding {
     @Test func sonyUsesBorrowingsSchedule() async throws {
         guard await Self.ensureAvailable("S100YE2C") else { return }
         let (payload, _) = try await resolve("S100YE2C", decider: GoldenIBDDecider())
-        #expect(payload.needsReview == false)
-        #expect(payload.warnings.isEmpty)
+        // Jev が債務と答えた LongTermDebt2NCLIFRS は行に残るが分母から外す。coverage は帯外。
+        #expect(payload.needsReview == true)
+        #expect(payload.warnings.contains("interest_bearing_debt_coverage_out_of_band"))
         expectRows(payload, [
             ("短期借入金", ibdRowSourceBorrowingsSchedule, 51_183_000_000, ibdMaturityCurrent),
             ("長期借入金", ibdRowSourceBorrowingsSchedule, 516_460_000_000, nil),
@@ -106,7 +108,7 @@ private struct GoldenIBDDecider: InterestBearingDebtDeciding {
         guard await Self.ensureAvailable("S100XSSA") else { return }
         let (payload, audit) = try await resolve("S100XSSA", decider: GoldenIBDDecider())
         #expect(payload.needsReview == false)
-        #expect(payload.warnings.isEmpty)
+        #expect(payload.warnings == ["interest_bearing_debt_lease_denominator_from_notes"])
         expectRows(payload, [
             ("短期借入金", ibdRowSourceBorrowingsSchedule, 79_444_000_000, ibdMaturityCurrent),
             ("１年内返済予定の長期借入金", ibdRowSourceBorrowingsSchedule, 184_000_000, ibdMaturityCurrent),
@@ -179,23 +181,68 @@ private struct GoldenIBDDecider: InterestBearingDebtDeciding {
         #expect(segments.map(\.averageRate) == [0.9, 2.98, 2.75])
         let total = try #require(payload.rows.last)
         #expect(total.closing == 1_529_999_000)
+        #expect(total.opening == nil)
         #expect(total.averageRate == nil)
         let totalJSON = try #require(
             (payload.jsonObject()["rows"] as? [[String: Any]])?.last)
         #expect(totalJSON["average_rate"] is NSNull)
     }
 
-    /// 三菱UFJ: 銀行は financial_institution で内訳を出さない。
-    @Test func mufgIsFinancialInstitution() async throws {
-        guard await Self.ensureAvailable("S100W4FB") else { return }
-        let inputs = InterestBearingDebtBreakdown.inputs(xbrlDir: Self.xbrlDir("S100W4FB"))
-        let resolution = await InterestBearingDebtBreakdown.resolve(
-            inputs: inputs, decider: GoldenIBDDecider(), docID: "S100W4FB")
-        guard case .notApplicable(let reason) = resolution else {
-            Issue.record("expected notApplicable, got \(resolution)")
-            return
+    /// 第一生命: 保険会社は除外せず通常パイプラインで解く。
+    @Test func insurerUsesNormalPipeline() async throws {
+        guard await Self.ensureAvailable("S100YC7A") else { return }
+        let inputs = InterestBearingDebtBreakdown.inputs(xbrlDir: Self.xbrlDir("S100YC7A"))
+        #expect(inputs.isBank == false)
+        let (payload, _) = try await resolve("S100YC7A", decider: GoldenIBDDecider(), inputs: inputs)
+        #expect(payload.needsReview == false)
+        #expect(payload.warnings == [
+            breakdownWarningIBDLeaseDenominatorFromNotes,
+            breakdownWarningIBDScheduleRejected,
+        ])
+        expectRows(payload, [
+            ("短期社債", ibdRowSourceBalanceSheet, 7_822_000_000, ibdMaturityCurrent),
+            ("社債", ibdRowSourceBalanceSheet, 1_337_337_000_000, ibdMaturityNonCurrent),
+            ("リース負債（流動）", ibdRowSourceBorrowingsSchedule, 1_913_000_000, ibdMaturityCurrent),
+            ("リース負債（非流動）", ibdRowSourceBorrowingsSchedule, 16_486_000_000, ibdMaturityNonCurrent),
+        ])
+        #expect(payload.rows.last?.closing == 1_363_558_000_000)
+    }
+
+    @Test func financialsCanonicalInterestBearingDebtGoldens() async throws {
+        let cases: [(String, Double, String)] = [
+            ("S100YGH5", 25_663_566_000_000, "breakdown.interest_bearing_debt"),
+            ("S100XRD8", 1_529_999_000, "breakdown.interest_bearing_debt"),
+            ("S100YE2C", 845_276_000_000, "legacy_ibd_extractor_fallback"),
+        ]
+        for (docID, expected, method) in cases {
+            guard await Self.ensureAvailable(docID) else { continue }
+            let canonical = await BreakdownFinancialsResolver.financialsCanonicalInterestBearingDebt(
+                xbrlDir: Self.xbrlDir(docID))
+            #expect(canonical.total == expected)
+            #expect(canonical.method == method)
+            if docID == "S100YE2C" {
+                #expect(canonical.warnings.contains { $0.contains("長期借入債務") })
+            }
         }
-        #expect(reason == "financial_institution")
+    }
+
+    /// 三菱UFJ: 銀行は bank components を行にする。
+    @Test func mufgUsesBankComponents() async throws {
+        guard await Self.ensureAvailable("S100W4FB") else { return }
+        let (payload, audit) = try await resolve("S100W4FB", decider: GoldenIBDDecider())
+        #expect(payload.needsReview == false)
+        #expect(payload.denominatorTag == "bank_components")
+        expectRows(payload, [
+            ("預金", ibdRowSourceFinancialsBankComponents, 228_512_749_000_000, nil),
+            ("譲渡性預金", ibdRowSourceFinancialsBankComponents, 17_374_010_000_000, nil),
+            ("コマーシャル・ペーパー", ibdRowSourceFinancialsBankComponents, 3_475_042_000_000, nil),
+            ("借用金", ibdRowSourceFinancialsBankComponents, 22_101_954_000_000, nil),
+            ("短期社債", ibdRowSourceFinancialsBankComponents, 1_373_236_000_000, ibdMaturityCurrent),
+            ("社債", ibdRowSourceFinancialsBankComponents, 14_018_955_000_000, nil),
+            ("リース負債（非流動）", ibdRowSourceBorrowingsSchedule, 90_694_000_000, nil),
+        ])
+        #expect(payload.rows.last?.closing == 286_946_640_000_000)
+        #expect(audit.sentences.contains("bank_components"))
     }
 
     // MARK: - helpers

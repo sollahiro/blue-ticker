@@ -468,12 +468,15 @@ func serveStoredStatement(
 enum ReasonedServeResult {
     case ok([String: Any])
     case notApplicable(reason: String)
+    /// 行はあるが公開保留（interest_bearing_debt の needs_review）。404 に reason を載せる。
+    case withheld(reason: String, message: String)
     case notFound
     case dbUnavailable
 }
 
 /// 3値の load 結果（`BreakdownLoadResult` / `StatementNoteLoadResult`）を serve 結果へ写すための
 /// 共通プロトコル。`.found`→ok / `.notApplicable`→notApplicable / `.absent`→notFound。
+/// interest_bearing_debt の `.withheld` は reason 付き 404。
 private protocol ReasonedLoadResult {
     var reasoned: ReasonedServeResult { get }
 }
@@ -483,6 +486,7 @@ extension BreakdownLoadResult: ReasonedLoadResult {
         switch self {
         case .found(let value): return .ok(value)
         case .notApplicable(let reason): return .notApplicable(reason: reason)
+        case .withheld(let reason): return mapWithheldBreakdownLoad(reason)
         case .absent: return .notFound
         }
     }
@@ -496,6 +500,18 @@ extension StatementNoteLoadResult: ReasonedLoadResult {
         case .absent: return .notFound
         }
     }
+}
+
+/// interest_bearing_debt の公開保留を 404 の reason とメッセージへ写す（REST/MCP 共用）。
+/// テスト可能な純関数。他軸はこの case を返さない。
+func mapWithheldBreakdownLoad(_ reason: String) -> ReasonedServeResult {
+    if reason == breakdownWithheldNeedsReview {
+        // 公開 reason は 4 種に固定（unknown）。needs_review の内部理由は監査にだけ残す。
+        return .withheld(
+            reason: breakdownNotApplicableUnknown,
+            message: "有利子負債の内訳は公開していません")
+    }
+    return .notFound
 }
 
 /// reason 付き `stored` 系（breakdown / statement-notes）の DB 読み取り共通枠。
@@ -667,7 +683,8 @@ private func makeStoredDataResponse(
 
 /// `ReasonedServeResult` を HTTP レスポンスへ変換する（breakdown / statement-notes 共通）。
 /// ステータスは 404 のまま維持し（エッジ課金がステータス単位でメーターするため、issue #132 のコメント参照）、
-/// notApplicable のときのみ 404 ボディへ `reason` を追加する。
+/// notApplicable と withheld のときのみ 404 ボディへ `reason` を追加する。
+/// withheld は軸固有のメッセージ（未算出文言にしない）。
 private func makeReasonedResponse(
     _ result: ReasonedServeResult, notFoundMessage: String
 ) -> Response {
@@ -676,6 +693,8 @@ private func makeReasonedResponse(
         return jsonResponse(value, status: .ok)
     case .notApplicable(let reason):
         return errorResponse(.notFound, message: notFoundMessage, reason: reason)
+    case .withheld(let reason, let message):
+        return errorResponse(.notFound, message: message, reason: reason)
     case .notFound:
         return errorResponse(.notFound, message: notFoundMessage)
     case .dbUnavailable:

@@ -105,6 +105,10 @@ func runBreakdownIngest(
             .all()
     }
     let classifyIndex = ingestIndexByID(classifyRows) { $0.id }
+    // Jev 再試行の判定に payload.warnings が要る。分類クエリは payload を載せないので、
+    // needs_review の interest_bearing_debt 行だけ後から warnings を引く。
+    let jevRetryable = try await jevRetryableBreakdownIDs(
+        axis: axis, classifyRows: classifyRows, db: db)
 
     for cand in baseCandidates {
         if forceDocIDs.contains(cand.docID) {
@@ -121,6 +125,9 @@ func runBreakdownIngest(
                 staleVersion.append(cand)
             } else if isLLMBreakdownSource(existing.source), existing.needsReview {
                 // LLM は現行版でも needs_review で再試行（決定論とは非対称）。
+                flaggedForReview.append(cand)
+            } else if jevRetryable.contains(key) {
+                // interest_bearing_debt は xbrl_facts でも、Jev が分類・近似重複で止まった行だけ再試行。
                 flaggedForReview.append(cand)
             } else {
                 skipped += 1
@@ -157,7 +164,10 @@ func runBreakdownIngest(
                 // 現行版の決定論は skip。LLM の needs_review は再試行する。
                 // content_hash は見ない。clean な geography_llm は --codes でも skip する。
                 // Luna→Jev の差し替えは対象行 DELETE（または --doc-ids）が必要。バンプしない。
-                if !(isLLMBreakdownSource(row.source) && row.needsReview) {
+                // interest_bearing_debt は Jev が分類・近似重複で止まった行だけ現行版でも再試行。
+                let jevRetry = isJevRetryableBreakdown(
+                    axis: axis, needsReview: row.needsReview, warnings: row.payload.warnings)
+                if !(isLLMBreakdownSource(row.source) && row.needsReview), !jevRetry {
                     skipped += 1
                     continue
                 }
@@ -339,15 +349,40 @@ func countServableBreakdowns(db: Database) async throws -> (servable: Int, unser
 
 // MARK: - read 経路（REST/MCP breakdown）
 
-/// `loadStoredBreakdown` の結果3値。「行が無い/read不可」と「行はあるが product_service 軸が
-/// 解決できなかった（reason付き）」を区別して呼び出し側（REST/MCP）へ伝える（issue #132）。
+/// `loadStoredBreakdown` の結果。「行が無い/read不可」と「行はあるが product_service 軸が
+/// 解決できなかった（reason付き）」と「行はあるが公開保留」を区別して呼び出し側（REST/MCP）へ伝える（issue #132）。
 enum BreakdownLoadResult {
     /// 実データあり。公開契約 {code, doc_id, axis, breakdown} の JSON。
     case found([String: Any])
     /// 行はあるが product_service 軸が解決できなかった（`breakdownNotApplicable*` のいずれか）。
     case notApplicable(reason: String)
+    /// 行はあるが公開保留。interest_bearing_debt の needs_review のみ（reason は `breakdownWithheldNeedsReview`）。
+    case withheld(reason: String)
     /// 行が無い、または read 不可（バージョン床未満等）。
     case absent
+}
+
+/// 分類フェーズ用。needs_review の interest_bearing_debt 行のうち、Jev 再試行対象の合成 ID。
+/// 他軸・coverage だけの needs_review は空（payload を転送しない）。
+private func jevRetryableBreakdownIDs(
+    axis: String, classifyRows: [CompanyBreakdownSourceVersionOnly], db: Database
+) async throws -> Set<String> {
+    guard axis == breakdownAxisInterestBearingDebt else { return [] }
+    let ids = classifyRows.compactMap { row -> String? in
+        guard row.needsReview, let id = row.id else { return nil }
+        return id
+    }
+    guard !ids.isEmpty else { return [] }
+    let rows = try await CompanyBreakdown.query(on: db)
+        .filter(\.$id ~~ ids)
+        .all()
+    return Set(rows.compactMap { row -> String? in
+        guard let id = row.id,
+            isJevRetryableBreakdown(
+                axis: axis, needsReview: row.needsReview, warnings: row.payload.warnings)
+        else { return nil }
+        return id
+    })
 }
 
 /// 格納済み 内訳取り込み 内訳を引いて公開契約 {code, doc_id, axis, breakdown} を返す。
@@ -362,6 +397,8 @@ enum BreakdownLoadResult {
 /// LLM 行は出さない（千円表の 1000 倍誤り stopgap。fail closed）。`revenue_recognition_llm` は
 /// 単一行または明細合計 0 も出さない。残行が 0 なら `.absent`
 /// （未算出と同じ 404。payload 形は変えない。最新を落としても前年へはフォールバックしない）。
+/// interest_bearing_debt だけ、行が version-servable で公開除外の理由が needs_review だけのとき
+/// `.withheld(needs_review)`（未算出の 404 と区別する）。他軸の公開除外は従来どおり `.absent`。
 /// 無い・read 不可・府令対象外・公開除外なら `.absent`（呼び出し側は 404。ライブ解決へはフォールバックしない）。
 func loadStoredBreakdown(
     code: String, docId: String?, axis: String, db: Database
@@ -394,12 +431,20 @@ func loadStoredBreakdown(
         let docID = row.id?.components(separatedBy: "#").first
     else { return .absent }
 
+    let needsReview = row.needsReview || row.payload.needsReview
     guard isPubliclyServableBreakdown(
         source: row.source,
-        needsReview: row.needsReview || row.payload.needsReview,
+        needsReview: needsReview,
         warnings: row.payload.warnings,
         rows: row.payload.rows, axis: axis)
-    else { return .absent }
+    else {
+        // この軸だけ、行が存在し version-servable で、公開除外の理由が needs_review だけのとき reason を載せる。
+        // 他軸（geography の llm_unit_unresolved 等）は従来どおり absent。
+        if axis == breakdownAxisInterestBearingDebt, needsReview {
+            return .withheld(reason: breakdownWithheldNeedsReview)
+        }
+        return .absent
+    }
 
     if let reason = row.notApplicableReason {
         return .notApplicable(reason: reason)

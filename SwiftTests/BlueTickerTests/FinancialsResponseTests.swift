@@ -87,6 +87,7 @@ import Testing
             leaseLiabilitiesNoteCacheVersion,
             employeesBreakdownCacheVersion,
             researchAndDevelopmentBreakdownCacheVersion,
+            interestBearingDebtBreakdownCacheVersion,
         ])
         #expect(isCurrentFinancialsAssemblyFingerprint(fingerprint))
         #expect(isCurrentFinancialsAssemblyFingerprint(nil) == false)

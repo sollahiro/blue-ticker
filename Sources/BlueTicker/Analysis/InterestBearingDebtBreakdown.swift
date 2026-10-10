@@ -48,10 +48,42 @@ struct IBDLeaseNote: Equatable, Sendable {
 /// `inputs(xbrlDir:)` の出力。XBRL から決定論で取れる材料一式。
 struct IBDInputs: Sendable {
     var consolidated: Bool
-    var financialInstitution: Bool
+    /// 銀行（`DepositsLiabilitiesBNK` が statement Instant FieldSet にある）。
+    /// 保険は通常パイプライン（除外しない）。
+    var isBank: Bool
+    /// 銀行の BS コンポーネント行。`source` は `financials_bank_components`。
+    /// 非銀行は空。
+    var bankComponents: [IBDCandidate]
     var balanceSheet: [IBDCandidate]
     var schedule: [IBDCandidate]
     var leaseNote: IBDLeaseNote?
+    /// インスタンス文書が `Xbrl.zeroDebtMinInstanceBytes` 超（not_found の zero_debt 判定）。
+    var largeInstance: Bool
+
+    init(
+        consolidated: Bool, isBank: Bool = false, bankComponents: [IBDCandidate] = [],
+        balanceSheet: [IBDCandidate], schedule: [IBDCandidate], leaseNote: IBDLeaseNote?,
+        largeInstance: Bool = false
+    ) {
+        self.consolidated = consolidated
+        self.isBank = isBank
+        self.bankComponents = bankComponents
+        self.balanceSheet = balanceSheet
+        self.schedule = schedule
+        self.leaseNote = leaseNote
+        self.largeInstance = largeInstance
+    }
+
+    // 旧テスト呼び出し用。保険は除外しなくなったため `financialInstitution` は無視する。
+    init(
+        consolidated: Bool, financialInstitution _: Bool, balanceSheet: [IBDCandidate],
+        schedule: [IBDCandidate], leaseNote: IBDLeaseNote?
+    ) {
+        self.init(
+            consolidated: consolidated, isBank: false, bankComponents: [],
+            balanceSheet: balanceSheet, schedule: schedule, leaseNote: leaseNote,
+            largeInstance: false)
+    }
 }
 
 /// Jev に一度聞いた Choice。適用しなくても監査に残す。
@@ -114,18 +146,207 @@ enum InterestBearingDebtBreakdown {
     static func inputs(xbrlDir: URL) -> IBDInputs {
         let tags = XBRLUtils.collectAllNumericElements(in: xbrlDir, nilAsZero: false)
         let consolidated = BorrowingsSchedule.filerHasConsolidatedStatements(xbrlDir: xbrlDir)
-        // 銀行（預金）・保険は資金調達が本業で、BS に比較可能な有利子負債の合計が無い。
-        let instantFS = fieldSetFromInstant(tags)
+        let accountingStandard = detectAccountingStandard(tags)
+        // 銀行判定は旧 `IBDExtractor.extractBankIBD` と同じ statement Instant FieldSet。
+        // 保険は通常パイプライン（資金調達の本業でも内訳を出す）。
+        let instantFS = statementInstantFieldSet(
+            xbrlDir: xbrlDir, allTags: tags, accountingStandard: accountingStandard)
         let deposits = instantFS["DepositsLiabilitiesBNK"]
-        let financialInstitution =
-            deposits?.current != nil || deposits?.prior != nil
-            || Xbrl.isInsuranceFiling(fieldSetFromDuration(tags))
+        let isBank = deposits?.current != nil || deposits?.prior != nil
         return IBDInputs(
             consolidated: consolidated,
-            financialInstitution: financialInstitution,
-            balanceSheet: balanceSheetCandidates(xbrlDir: xbrlDir, consolidated: consolidated),
-            schedule: scheduleCandidates(xbrlDir: xbrlDir),
-            leaseNote: leaseNoteCandidates(xbrlDir: xbrlDir))
+            isBank: isBank,
+            bankComponents: isBank ? bankComponentCandidates(fieldSet: instantFS) : [],
+            balanceSheet: isBank
+                ? [] : balanceSheetCandidates(xbrlDir: xbrlDir, consolidated: consolidated),
+            schedule: isBank ? [] : scheduleCandidates(xbrlDir: xbrlDir),
+            leaseNote: isBank
+                ? leaseNote(from: notesLeaseCandidates(
+                    xbrlDir: xbrlDir, accountingStandard: accountingStandard))
+                : leaseNoteCandidates(xbrlDir: xbrlDir),
+            largeInstance: hasLargeXbrlFile(in: xbrlDir))
+    }
+
+    /// 銀行の BS コンポーネント。`Xbrl.bankIBDComponents` を `resolveItem` で先勝ちし、
+    /// 当期または前期があるものだけ行にする（旧 `extractBankIBD` と同じ）。
+    /// 独立した coverage 検算は無い（分母はこの合計そのもの）。
+    private static func bankComponentCandidates(fieldSet: FieldSet) -> [IBDCandidate] {
+        var rows: [IBDCandidate] = []
+        for component in Xbrl.bankIBDComponents {
+            let item = resolveItem(fieldSet, tags: component.tags)
+            guard item.current != nil || item.prior != nil else { continue }
+            rows.append(
+                IBDCandidate(
+                    labelRaw: component.label, label: component.label, tag: item.tag,
+                    opening: item.prior, closing: item.current, averageRatePercent: nil,
+                    source: ibdRowSourceFinancialsBankComponents,
+                    maturityClass: maturityClass(fromLabel: component.label),
+                    presetClass: .interestBearingDebt))
+        }
+        return rows
+    }
+
+    /// statement BS だけを許可した Instant FieldSet。旧 `IBDExtractor.statementInstantFieldSet`。
+    /// 銀行判定と bank components の値はこれと一致させる（US-GAAP は Statement HTML）。
+    static func statementInstantFieldSet(
+        xbrlDir: URL, allTags: XbrlTagElements, accountingStandard: String
+    ) -> FieldSet {
+        if accountingStandard == "US-GAAP" {
+            if case .resolved(let year) = StatementAnalyzer.resolveFromXBRL(
+                xbrlDir: xbrlDir, docID: nil, statementTypes: [.balanceSheet]
+            ) {
+                let mapped = usgaapStatementIBDFieldSet(year.balanceSheet)
+                if mapped["USGAAP_HTML_IBDCurrent"] != nil
+                    || mapped["USGAAP_HTML_IBDNonCurrent"] != nil
+                {
+                    return mapped
+                }
+            }
+            return USGAAPHtml.parseBSFields(in: xbrlDir)
+        }
+        if case .resolved(let year) = StatementAnalyzer.resolveFromXBRL(
+            xbrlDir: xbrlDir, docID: nil, statementTypes: [.balanceSheet]
+        ), !year.balanceSheet.isEmpty {
+            let statementTags = Set(year.balanceSheet.map(\.tag))
+            var fs = fieldSetFromInstant(allTags.filter { statementTags.contains($0.key) })
+            overlayStatementCurrentValues(&fs, lines: year.balanceSheet)
+            return fs
+        }
+        return fieldSetFromInstant(allTags)
+    }
+
+    private static let statementIBDTags: Set<String> = {
+        var tags = Set(Xbrl.ibdDirectTags)
+        tags.formUnion(Xbrl.ibdIFRSCLTags)
+        tags.formUnion(Xbrl.ibdIFRSNCLTags)
+        tags.formUnion(Xbrl.leaseLiabilitiesBSTags)
+        for group in Xbrl.ibdCurrentComponents { tags.formUnion(group) }
+        for group in Xbrl.ibdNonCurrentComponents { tags.formUnion(group) }
+        for component in Xbrl.bankIBDComponents { tags.formUnion(component.tags) }
+        return tags
+    }()
+
+    /// statement 本表の IBD 当期値で Instant FieldSet を上書きする。
+    /// fact 収集は `nilAsZero: false` のため、当期 `xsi:nil` は落ちる。
+    /// statement 組立は既定 `nilAsZero: true` で同じ fact を 0 として載せる（借入金 0 円の
+    /// 日東電工 6988 / S100YCAR）。prior だけ残ると tag あり・current nil になり
+    /// zero_debt へ落ちず ROIC が欠測する。
+    static func overlayStatementCurrentValues(
+        _ fieldSet: inout FieldSet, lines: [StatementLineItem]
+    ) {
+        for item in lines {
+            guard statementIBDTags.contains(item.tag) else { continue }
+            var fv = fieldSet[item.tag] ?? FieldValue(current: nil, prior: nil)
+            fv.current = item.value
+            fieldSet[item.tag] = fv
+        }
+    }
+
+    private static let usgaapIBDLabelMap: [String: String] = [
+        "社債及び短期借入金": "USGAAP_HTML_IBDCurrent",
+        "社債及び長期借入金": "USGAAP_HTML_IBDNonCurrent",
+        "短期借入金及び１年以内に返済する長期債務合計": "USGAAP_HTML_IBDCurrent",
+        "Ⅱ　長期債務": "USGAAP_HTML_IBDNonCurrent",
+        "短期オペレーティング": "USGAAP_HTML_LeaseLiabilitiesCurrent",
+        "長期オペレーティング": "USGAAP_HTML_LeaseLiabilitiesNonCurrent",
+    ]
+
+    private static func usgaapStatementIBDFieldSet(_ items: [StatementLineItem]) -> FieldSet {
+        var fs: FieldSet = [:]
+        for item in items {
+            guard let label = item.label else { continue }
+            if let tag = bestMatchingUSGAAPIBDTag(label), fs[tag] == nil {
+                fs[tag] = FieldValue(current: item.value, prior: nil)
+            }
+            let stripped = USGAAPHtml.stripSectionPrefix(label)
+            if stripped == "長期債務", fs["USGAAP_HTML_IBDNonCurrent"] == nil {
+                fs["USGAAP_HTML_IBDNonCurrent"] = FieldValue(current: item.value, prior: nil)
+            }
+        }
+        return fs
+    }
+
+    private static func bestMatchingUSGAAPIBDTag(_ label: String) -> String? {
+        let stripped = USGAAPHtml.stripSectionPrefix(label)
+        var bestKey: String?
+        for key in usgaapIBDLabelMap.keys {
+            if stripped.contains(key) || label.contains(key) {
+                if bestKey == nil || key.count > bestKey!.count {
+                    bestKey = key
+                }
+            }
+        }
+        return bestKey.map { usgaapIBDLabelMap[$0]! }
+    }
+
+    /// インスタンス文書に 100KB 超のファイルがあるか（zero_debt 判定）。
+    private static func hasLargeXbrlFile(in dir: URL) -> Bool {
+        XBRLUtils.findXbrlFiles(in: dir).contains { url in
+            let size = (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int) ?? 0
+            return size > Xbrl.zeroDebtMinInstanceBytes
+        }
+    }
+
+    /// statement 側にリース科目が無いとき、notes のリース帳簿だけを足す。
+    /// IFRS TextBlock で既に足している場合は components にリースがあるので何もしない。
+    /// 旧 `IBDExtractor.appendingNotesLeaseIfMissing`（銀行の bank_components も同じ規則）。
+    static func notesLeaseCandidates(xbrlDir: URL, accountingStandard: String) -> [IBDCandidate] {
+        if accountingStandard == "IFRS",
+           case .resolved = StatementNotesResolver.resolveLeaseLiabilities(xbrlDir: xbrlDir)
+        {
+            let lease = IFRSLease.extractLeaseLiabilities(fieldSet: [:], xbrlDir: xbrlDir)
+            let rows = leaseNoteRows(from: lease)
+            if !rows.isEmpty { return rows }
+        }
+        guard let parsed = BorrowingsSchedule.extractRows(xbrlDir: xbrlDir) else { return [] }
+        return parsed.rows.compactMap { row in
+            guard BorrowingsSchedule.isLeaseDebtScheduleRowLabel(row.label) else { return nil }
+            guard row.current != nil || row.prior != nil else { return nil }
+            let labelRaw = row.sourceLabel ?? row.label
+            return IBDCandidate(
+                labelRaw: labelRaw, label: row.label, tag: nil,
+                opening: row.prior, closing: row.current, averageRatePercent: nil,
+                source: ibdRowSourceBorrowingsSchedule,
+                maturityClass: maturityClass(fromLabel: labelRaw),
+                presetClass: .leaseLiability)
+        }
+    }
+
+    private static func leaseNoteRows(
+        from lease: (
+            current: Double?, prior: Double?, components: [IBDComponentEntry],
+            maturityBuckets: [IBDComponentEntry]
+        )
+    ) -> [IBDCandidate] {
+        var rows: [IBDCandidate] = []
+        for component in lease.components where component.current != nil || component.prior != nil {
+            rows.append(
+                IBDCandidate(
+                    labelRaw: component.label, label: component.label, tag: nil,
+                    opening: component.prior, closing: component.current,
+                    averageRatePercent: nil, source: ibdRowSourceLeaseNote,
+                    maturityClass: maturityClass(fromLabel: component.label),
+                    presetClass: .leaseLiability))
+        }
+        if rows.isEmpty, lease.current != nil || lease.prior != nil {
+            rows.append(
+                IBDCandidate(
+                    labelRaw: "リース負債", label: "リース負債", tag: nil,
+                    opening: lease.prior, closing: lease.current, averageRatePercent: nil,
+                    source: ibdRowSourceLeaseNote, maturityClass: nil,
+                    presetClass: .leaseLiability))
+        }
+        return rows
+    }
+
+    private static func leaseNote(from rows: [IBDCandidate]) -> IBDLeaseNote? {
+        guard !rows.isEmpty else { return nil }
+        let hasCurrent = rows.contains { $0.closing != nil }
+        let hasPrior = rows.contains { $0.opening != nil }
+        return IBDLeaseNote(
+            rows: rows,
+            total: hasCurrent ? rows.reduce(0) { $0 + ($1.closing ?? 0) } : nil,
+            priorTotal: hasPrior ? rows.reduce(0) { $0 + ($1.opening ?? 0) } : nil)
     }
 
     /// BS 負債の部の行（合計行は除く）。既知タグはコードで確定、キーワード一致だけは Jev 候補、
@@ -236,6 +457,8 @@ enum InterestBearingDebtBreakdown {
 
     /// ラベルの流動/非流動区分。開示区分をそのまま取るだけで計算しない。
     /// 素の「長期借入金」「社債」は 1年内返済分を含み得るため nil。
+    /// 「除く」は「1年以内/1年内 … 除く」のときだけ非流動。
+    /// 「ノンリコース債務を除く」のような別の除外は区分にしない。
     static func maturityClass(fromLabel label: String) -> String? {
         // 全角数字を半角へ正規化してから判定する（「１年以内」を拾う）
         let normalized = String(
@@ -245,7 +468,9 @@ enum InterestBearingDebtBreakdown {
                 else { return char }
                 return Character(Unicode.Scalar(scalar.value - 0xFF10 + 0x30)!)
             })
-        if normalized.contains("非流動") || normalized.contains("除く") || normalized.contains("固定") {
+        if normalized.contains("非流動") || normalized.contains("固定")
+            || excludesCurrentPortion(normalized)
+        {
             return ibdMaturityNonCurrent
         }
         if normalized.contains("1年以内") || normalized.contains("1年内")
@@ -254,6 +479,15 @@ enum InterestBearingDebtBreakdown {
             return ibdMaturityCurrent
         }
         return nil
+    }
+
+    /// 「1年以内/1年内 … 除く」だけを非流動の印にする。裸の「除く」は使わない。
+    private static func excludesCurrentPortion(_ normalized: String) -> Bool {
+        guard normalized.contains("除く") else { return false }
+        guard let range = normalized.range(of: "1年以内") ?? normalized.range(of: "1年内") else {
+            return false
+        }
+        return normalized[range.upperBound...].contains("除く")
     }
 
     /// タグ名の流動/非流動区分。IFRS 接尾辞（NCLIFRS は CLIFRS を内包するので先に判定）と
@@ -280,9 +514,8 @@ enum InterestBearingDebtBreakdown {
         inputs: IBDInputs, decider: (any InterestBearingDebtDeciding)?,
         code: String = "", docID: String = ""
     ) async -> IBDResolution {
-        // 銀行・保険は預金・保険契約準備金が資金調達の本業で、比較可能な有利子負債の合計が無い。
-        if inputs.financialInstitution {
-            return .notApplicable(reason: breakdownNotApplicableFinancialInstitution)
+        if inputs.isBank {
+            return resolveBank(inputs: inputs, code: code, docID: docID)
         }
 
         var sentences: [String] = []
@@ -305,11 +538,23 @@ enum InterestBearingDebtBreakdown {
             zip(candidates, classes).compactMap { $0.1 == cls ? $0.0 : nil }
         }
 
-        // 2. BS の合計（分母の材料）
+        // 2. BS の合計（分母の材料）。分母に入れるのはコード分類（presetClass）の行だけ。
+        //    Jev が債務と答えた BS 行は行としては残すが、分母には入れない
+        //    （同じ判断が分母と行の両方に入ると coverage が自己参照になる）。
         let bsDebt = rows(inputs.balanceSheet, bsClassified.classes, .interestBearingDebt)
         let bsLease = rows(inputs.balanceSheet, bsClassified.classes, .leaseLiability)
-        let bsDebtSum = bsDebt.reduce(0) { $0 + ($1.closing ?? 0) }
-        let bsLeaseSum = bsLease.reduce(0) { $0 + ($1.closing ?? 0) }
+        let codeClassifiedBS = zip(inputs.balanceSheet, bsClassified.classes)
+            .filter { $0.0.presetClass != nil }
+        let bsDebtSum = codeClassifiedBS.reduce(0.0) { sum, pair in
+            pair.1 == .interestBearingDebt ? sum + (pair.0.closing ?? 0) : sum
+        }
+        let bsLeaseSum = codeClassifiedBS.reduce(0.0) { sum, pair in
+            pair.1 == .leaseLiability ? sum + (pair.0.closing ?? 0) : sum
+        }
+        // 主データ源の選択だけは分類済み BS 全行で見る。公開 coverage の分母とは別
+        // （Jev 行を分母から外すと、帯内の明細表まで BS へ落ちてしまう）。
+        let classifiedDebtSum = bsDebt.reduce(0) { $0 + ($1.closing ?? 0) }
+        let classifiedLeaseSum = bsLease.reduce(0) { $0 + ($1.closing ?? 0) }
         let bsUnresolved = bsClassified.classes.contains(nil)
         // BondsBorrowingsAndLeaseLiabilities* のようにリース込みの BS 合算タグ
         let leaseInDebt = bsDebt.contains { $0.tag?.contains("Lease") == true }
@@ -334,6 +579,8 @@ enum InterestBearingDebtBreakdown {
             }
             let base = max(schedLeaseSum, noteTotal)
             guard base > 0, diff / base <= nearDuplicateTolerance else {
+                // 2% を超える食い違いは黙って片方を採用しない。明細表側を残し公開保留。
+                needsReview = true
                 warnings.append(breakdownWarningIBDLeaseSourcesDiffer)
                 sentences.append(
                     "lease_sources_differ schedule=\(yen(schedLeaseSum)) lease_note=\(yen(noteTotal))")
@@ -385,27 +632,54 @@ enum InterestBearingDebtBreakdown {
         }
 
         // 4. 分母 = 同じ財務諸表の BS 有利子負債（リース含む）。
+        //    金額はコード分類の BS 行だけ。Jev 分類の BS 行は足さない。
+        //    BS にリース科目が無くリース込み合算でもないとき、リース部分は注記合計、
+        //    無ければ明細表リースを足す。そのときは分母の一部が行の出所と同じになり、
+        //    coverage が自己参照になるので警告だけ残す（needs_review にはしない）。
+        let leaseSupplement = leaseInDebt ? 0 : (inputs.leaseNote?.total ?? schedLeaseSum)
+        // BS にリース科目が無く、注記または明細表のリースを分母へ足すときだけ自己参照になる。
+        // コード分類の BS 債務が無いときは分母自体を作らない（注記リースだけで分母にしない）。
+        let leaseFromNotes = bsLeaseSum <= 0 && !leaseInDebt && bsDebtSum > 0 && leaseSupplement > 0
         let rawDenominator: Double? =
-            (bsDebt.isEmpty && bsLease.isEmpty)
+            (bsDebtSum <= 0 && bsLeaseSum <= 0)
             ? nil
-            : bsDebtSum
-                + (bsLeaseSum > 0
-                    ? bsLeaseSum
-                    : (leaseInDebt ? 0 : (inputs.leaseNote?.total ?? schedLeaseSum)))
+            : bsDebtSum + (bsLeaseSum > 0 ? bsLeaseSum : leaseSupplement)
         // 0 以下の分母では coverage を測れない（0/0 を帯内と誤判定しない）
         let denominator = rawDenominator.flatMap { $0 > 0 ? $0 : nil }
+        if denominator != nil, leaseFromNotes {
+            warnings.append(breakdownWarningIBDLeaseDenominatorFromNotes)
+            sentences.append("lease_denominator_from_notes")
+        }
 
-        // 5. 主データ源の選択。明細表に債務行があれば明細表優先、coverage 帯外で BS が
-        //    完全なら BS へ差し替える（schedule_rejected）。
-        let schedDebt = rows(inputs.schedule, schedClassified.classes, .interestBearingDebt)
+        // 5. 主データ源の選択。明細表に債務行があれば明細表優先。帯判定は分類済み BS
+        //    全行（Jev 含む）に対して行い、帯外で BS が完全なら BS へ差し替える。
+        //    公開 coverage の分母（コード分類のみ）とは分ける。
+        let selectionLease = leaseInDebt ? 0 : (inputs.leaseNote?.total ?? schedLeaseSum)
+        let selectionBase = classifiedDebtSum
+            + (classifiedLeaseSum > 0 ? classifiedLeaseSum : selectionLease)
+        let selectionDenominator = selectionBase > 0 ? selectionBase : nil
+        let schedDebtRows = rows(inputs.schedule, schedClassified.classes, .interestBearingDebt)
+        // J-GAAP の借入金等明細表は社債を含まない（社債は別の社債明細表）。明細表に
+        // 社債行が無いとき、BS の社債行（コード/Jev 分類済みの債務）をそのまま足す。
+        let schedHasBond = schedDebtRows.contains { $0.labelRaw.contains("社債") }
+        let bsBondRows = schedHasBond || schedDebtRows.isEmpty
+            ? [] : bsDebt.filter {
+                // 「社債及び借入金」等の合算行は借入金と二重になるので社債単独の行だけ
+                $0.labelRaw.contains("社債") && !$0.labelRaw.contains("借入") && !$0.labelRaw.contains("及び")
+            }
+        if !bsBondRows.isEmpty {
+            sentences.append(
+                "schedule_bonds_from_balance_sheet " + bsBondRows.map { "\($0.labelRaw)=\($0.closing.map(yen) ?? "null")" }.joined(separator: ", "))
+        }
+        let schedDebt = schedDebtRows + bsBondRows
         let primary: String
         let leaseRows: [IBDCandidate]
         var scheduleRejected = false
         if !schedDebt.isEmpty {
             guard let picked = await scheduleLeaseRows() else { return .unavailable }
             let schedTotal = (schedDebt + picked).reduce(0) { $0 + ($1.closing ?? 0) }
-            if let denominator {
-                let ratio = schedTotal / denominator
+            if let selectionDenominator {
+                let ratio = schedTotal / selectionDenominator
                 if coverageBand.contains(ratio) {
                     primary = ibdRowSourceBorrowingsSchedule
                     leaseRows = picked
@@ -415,7 +689,7 @@ enum InterestBearingDebtBreakdown {
                     warnings.append(breakdownWarningIBDScheduleRejected)
                     scheduleRejected = true
                     sentences.append(
-                        "schedule_rejected schedule_total=\(yen(schedTotal)) denominator=\(yen(denominator)) coverage=\(coverageText(ratio))")
+                        "schedule_rejected schedule_total=\(yen(schedTotal)) denominator=\(yen(selectionDenominator)) coverage=\(coverageText(ratio))")
                 } else {
                     // 帯外でも BS が不完全なら明細表のまま（step 6 の帯判定が needs_review にする）
                     primary = ibdRowSourceBorrowingsSchedule
@@ -477,12 +751,16 @@ enum InterestBearingDebtBreakdown {
                 averageRate: candidate.averageRatePercent,
                 debtSource: candidate.source, maturityClass: candidate.maturityClass)
         }
-        let openings = finalCandidates.compactMap(\.opening)
+        // 期首が1行でも欠けると部分合計は比較不能なので nil。期末は従来どおり合計する。
+        let openingTotal: Double? =
+            finalCandidates.allSatisfy { $0.opening != nil }
+            ? finalCandidates.reduce(0) { $0 + ($1.opening ?? 0) }
+            : nil
         payloadRows.append(
             BreakdownRowPayload(
                 labelRaw: "合計", label: "合計", amount: total, profit: nil,
                 rowKind: "subtotal",
-                opening: openings.isEmpty ? nil : openings.reduce(0, +), closing: total))
+                opening: openingTotal, closing: total))
         let payload = BreakdownSnapshotPayload(
             axis: breakdownAxisInterestBearingDebt,
             denominator: denominator ?? total,
@@ -496,6 +774,47 @@ enum InterestBearingDebtBreakdown {
             applied: anyApplied, needsReview: needsReview,
             sentences: sentences, calls: calls,
             decisionSource: "interest_bearing_debt_pipeline")
+        return .resolved(payload: payload, audit: audit)
+    }
+
+    /// 銀行は `Xbrl.bankIBDComponents` の statement BS 行をそのまま積む。
+    /// 分母は同じ行合計で、独立した coverage 検算はしない。
+    private static func resolveBank(inputs: IBDInputs, code: String, docID: String) -> IBDResolution {
+        guard !inputs.bankComponents.isEmpty else {
+            return .notApplicable(reason: breakdownNotApplicableNotFound)
+        }
+        let finalCandidates = inputs.bankComponents + (inputs.leaseNote?.rows ?? [])
+        let total = finalCandidates.reduce(0) { $0 + ($1.closing ?? 0) }
+        let openingTotal: Double? =
+            finalCandidates.allSatisfy { $0.opening != nil }
+            ? finalCandidates.reduce(0) { $0 + ($1.opening ?? 0) }
+            : nil
+        var payloadRows = finalCandidates.map { candidate in
+            BreakdownRowPayload(
+                labelRaw: candidate.labelRaw, label: candidate.label,
+                amount: candidate.closing ?? 0, profit: nil, rowKind: "segment",
+                opening: candidate.opening, closing: candidate.closing,
+                averageRate: candidate.averageRatePercent,
+                debtSource: candidate.source, maturityClass: candidate.maturityClass)
+        }
+        payloadRows.append(
+            BreakdownRowPayload(
+                labelRaw: "合計", label: "合計", amount: total, profit: nil,
+                rowKind: "subtotal", opening: openingTotal, closing: total))
+        let payload = BreakdownSnapshotPayload(
+            axis: breakdownAxisInterestBearingDebt,
+            denominator: total,
+            denominatorTag: "bank_components",
+            rows: payloadRows,
+            sourceKind: breakdownSourceXbrlFacts,
+            needsReview: false,
+            warnings: [])
+        let audit = SegmentNoteJevAuditPayload(
+            code: code, docID: docID, axis: breakdownAxisInterestBearingDebt,
+            model: Api.openrouterDecisionsModel, threshold: threshold,
+            applied: false, needsReview: false,
+            sentences: ["bank_components", "rows_total=\(String(format: "%.0f", total))"],
+            calls: [], decisionSource: "interest_bearing_debt_bank_components")
         return .resolved(payload: payload, audit: audit)
     }
 

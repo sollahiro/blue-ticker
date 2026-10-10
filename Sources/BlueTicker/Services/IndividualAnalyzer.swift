@@ -125,7 +125,8 @@ struct IndividualAnalyzer {
         // 本表水準値は statement 正本のみ（#5 / #5b-1 / #5c / #8）。旧 Extractor への
         // フィールド単位フォールバックはしない。US-GAAP は USGAAPStatementHtml。
         let statementMain = StatementFinancialsResolver.resolve(xbrlDir: xbrlDir)
-        let ibd = IBDExtractor.extractCanonical(xbrlDir: xbrlDir)
+        let ibd = await BreakdownFinancialsResolver.financialsCanonicalInterestBearingDebt(
+            xbrlDir: xbrlDir)
         let interestExpense = statementMain?.interestExpense
             ?? StatementNotesResolver.financialsCanonicalInterestExpense(xbrlDir: xbrlDir)
 

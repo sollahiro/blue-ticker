@@ -77,7 +77,7 @@ import Foundation
             }
 
             // Swift 抽出
-            let actual = extractFromXBRL(xbrlDir: xbrlDir)
+            let actual = await extractFromXBRL(xbrlDir: xbrlDir)
 
             // 比較
             let gaps = Self.knownGaps[fixtureID] ?? []
@@ -141,11 +141,11 @@ import Foundation
         var shareBuyback: Double?
     }
 
-    private func extractFromXBRL(xbrlDir: URL) -> Extracted {
+    private func extractFromXBRL(xbrlDir: URL) async -> Extracted {
         let allTags = XBRLUtils.collectAllNumericElements(in: xbrlDir, nilAsZero: false)
         let std = detectAccountingStandard(allTags)
         let statementMain = StatementFinancialsResolver.resolve(xbrlDir: xbrlDir)
-        let ibd = IBDExtractor.extractCanonical(xbrlDir: xbrlDir)
+        let ibd = await BreakdownFinancialsResolver.financialsCanonicalInterestBearingDebt(xbrlDir: xbrlDir)
         let pretax = statementMain?.pretaxIncome
         let incomeTax = statementMain?.incomeTax
         let taxRate: Double? = {
@@ -431,7 +431,7 @@ import Foundation
                   !isAllNull(expected)
             else { continue }
 
-            let current = extractFromXBRL(xbrlDir: xbrlDir)
+            let current = await extractFromXBRL(xbrlDir: xbrlDir)
             let statementVals = statementRemainingValues(xbrlDir: xbrlDir)
             let summaryVals = summaryTagRemainingValues(xbrlDir: xbrlDir)
             checked += 1
@@ -653,7 +653,7 @@ import Foundation
     }
 
     /// statement の有利子負債項目 ＋ statement に無い notes 項目（合計行は使わない）が
-    /// 既存 smoke IBD と揃うか。`IBDExtractor.extractCanonical` が本番組立。
+    /// 既存 smoke IBD と揃うか。`BreakdownFinancialsResolver.financialsCanonicalInterestBearingDebt` が本番組立。
     @Test func testIbdItemTagsComposeVsSmoke() async throws {
         guard TestVerboseLog.enabled else { return }
         let projectRoot = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
@@ -680,13 +680,10 @@ import Foundation
             else { continue }
 
             let smoke = dbl((expected["interest_bearing_debt"] as? [String: Any])?["total"])
-            let composed = IBDExtractor.extractCanonical(xbrlDir: xbrlDir)
+            let composed = await BreakdownFinancialsResolver.financialsCanonicalInterestBearingDebt(xbrlDir: xbrlDir)
             checked += 1
             if closeEnoughOptional(smoke, composed.total) { match += 1 }
-            let parts = composed.components.compactMap { c -> String? in
-                guard let v = c.current else { return nil }
-                return "\(c.label)=\(yen(v))"
-            }.joined(separator: ", ")
+            let parts = composed.warnings.joined(separator: ", ")
             TestVerboseLog.print(
                 "\(fixtureID) | \(composed.accountingStandard) | \(yen(smoke)) | \(yen(composed.total)) | \(composed.method) | \(statusMark(exp: smoke, act: composed.total))"
             )
@@ -755,7 +752,7 @@ import Foundation
 
             let notes = notesRemainingFills(xbrlDir: xbrlDir)
             let breakdown = breakdownRemainingFills(xbrlDir: xbrlDir)
-            let current = extractFromXBRL(xbrlDir: xbrlDir)
+            let current = await extractFromXBRL(xbrlDir: xbrlDir)
             checked += 1
 
             var cells: [String] = [fixtureID]

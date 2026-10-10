@@ -58,6 +58,7 @@ public func financialsAssemblyFingerprint() -> String {
         leaseLiabilitiesNoteCacheVersion,
         employeesBreakdownCacheVersion,
         researchAndDevelopmentBreakdownCacheVersion,
+        interestBearingDebtBreakdownCacheVersion,
     ].joined(separator: "|")
 }
 
@@ -99,7 +100,7 @@ public func isCurrentFinancialsAssemblyFingerprint(_ stored: String?) -> Bool {
 // | dividend_ss | statement SS 行（US-GAAP も HTML SS 合計列。減少額は負 → キャッシュアウト正） | StatementFinancialsResolver（#5c） | done |
 // | employees | breakdown `employees` 分母 | BreakdownFinancialsResolver.financialsCanonicalEmployees | done |
 // | rd | breakdown `research_and_development` 分母 | BreakdownFinancialsResolver.financialsCanonicalRd | done |
-// | interest_bearing_debt | statement の有利子負債項目（集約なら集約のまま）＋足りない notes 項目タグ（リース帳簿）。notes 内訳の二重計上・合計行での代用はしない | IBDExtractor.extractCanonical | done |
+// | interest_bearing_debt | breakdown `interest_bearing_debt` 軸の合計（decider 無し。銀行は bank components 行）。軸が needs_review / 解決不能なら既存 IBDExtractor.extractCanonical 値をそのまま使い、内部 method `legacy_ibd_extractor_fallback` と warnings に理由を残す（公開フィールドは増やさない。null へ退行させない）。明細が無い大きな書類は 0 | BreakdownFinancialsResolver.financialsCanonicalInterestBearingDebt | done |
 // | interest_expense | statement PL 行（US-GAAP は △ を絶対値）。無ければ IFRS notes の支払利息タグ / TextBlock（PL の FinanceCostsIFRS は使わない） | StatementFinancialsResolver / StatementNotesResolver.financialsCanonicalInterestExpense | done |
 // | buyback, cf_treasury_stock | statement SS/CF 行（US-GAAP は HTML の取得行。△ はキャッシュアウト正） | StatementFinancialsResolver | done |
 // | gross_profit_margin, operating_margin, nopat, nopat_margin | 派生（入力フィールドの組立後に再計算） | IndividualAnalyzer 内計算 | derived |

@@ -50,6 +50,9 @@ public let ibdRowSourceBalanceSheet = "balance_sheet"
 public let ibdRowSourceBorrowingsSchedule = "borrowings_schedule"
 /// interest_bearing_debt 行の出所: リース注記。
 public let ibdRowSourceLeaseNote = "lease_note"
+/// interest_bearing_debt 行の出所: 銀行の BS 有利子負債コンポーネント
+/// （`Xbrl.bankIBDComponents`。預金・譲渡性預金・借用金等）。
+public let ibdRowSourceFinancialsBankComponents = "financials_bank_components"
 
 /// interest_bearing_debt 行の maturity_class: 流動（1年以内）。
 public let ibdMaturityCurrent = "current"
@@ -215,7 +218,29 @@ public let breakdownWarningIBDNearDuplicateUnresolved = "interest_bearing_debt_n
 /// interest_bearing_debt: 明細表候補が coverage 帯の外のため棄却し、BS 科目行を使った。
 public let breakdownWarningIBDScheduleRejected = "borrowings_schedule_outside_coverage_band"
 /// interest_bearing_debt: 明細表とリース注記のリース額が帯の外で食い違う。明細表側を採用。
+/// `needs_review` とセット（公開しない）。
 public let breakdownWarningIBDLeaseSourcesDiffer = "interest_bearing_debt_lease_sources_differ"
+/// interest_bearing_debt: BS にリース科目が無く、分母のリース部分をリース注記または明細表から
+/// 足している。注記・明細表の行を分母に使う自己参照なので、coverage は完全な外部検算ではない。
+/// `needs_review` にはしない（帯判定は別）。
+public let breakdownWarningIBDLeaseDenominatorFromNotes =
+    "interest_bearing_debt_lease_denominator_from_notes"
+
+/// 公開 serving が needs_review の格納行を出さないときの 404 reason。
+/// interest_bearing_debt 軸だけ。行は version-servable だが公開保留。未算出（reason 無し 404）とは区別する。
+public let breakdownWithheldNeedsReview = "needs_review"
+
+/// interest_bearing_debt の現行版行を再試行するか。Jev が分類または近似重複で止まったときだけ。
+/// source は xbrl_facts（version-gated）なので、これ以外の needs_review（coverage 帯外など）は
+/// 同じ入力では結果が変わらず、再試行しない。
+public func isJevRetryableBreakdown(axis: String, needsReview: Bool, warnings: [String]) -> Bool {
+    axis == breakdownAxisInterestBearingDebt
+        && needsReview
+        && warnings.contains {
+            $0 == breakdownWarningIBDRowUnclassified
+                || $0 == breakdownWarningIBDNearDuplicateUnresolved
+        }
+}
 
 /// product_service breakdown が解決できなかった理由（issue #130、E/F判定の検知結果明示化）。
 /// `BreakdownExtractor.BusinessBreakdownNotApplicableReason`（internal 型）の rawValue と揃える
@@ -234,9 +259,6 @@ public let breakdownNotApplicableUnknown = "unknown"
 /// `method == "not_found"`）。正当欠測として `needsReview=false` で永続化し、無駄な再 LLM を止める
 /// （product_service の E/F と同型の決定的 not_applicable。REST/MCP の geography 公開は別途）。
 public let breakdownNotApplicableNotFound = "not_found"
-/// interest_bearing_debt 軸: 銀行・保険。預金・コール資金・保険契約準備金が資金調達の本業であり、
-/// BS に比較可能な有利子負債の合計が無いため内訳を出さない。
-public let breakdownNotApplicableFinancialInstitution = "financial_institution"
 
 /// not_applicable 行のうち、決定的判定のため `needs_review=false` にする reason か。
 /// E/F（product_service）と geography の正当欠測（`not_found`）が該当。`unknown` は
@@ -246,7 +268,6 @@ public func isDeterministicBreakdownNotApplicableReason(_ reason: String) -> Boo
     reason == breakdownNotApplicableGeographyOnly
         || reason == breakdownNotApplicableSingleSegmentDisclosed
         || reason == breakdownNotApplicableNotFound
-        || reason == breakdownNotApplicableFinancialInstitution
 }
 
 /// breakdown read（REST/MCP）が適用する最低スキーマバージョン番号（軸別 `…-vN` の N）。
@@ -349,6 +370,7 @@ public func isPubliclyInsufficientRevenueRecognition(
 /// `not_allocatable_to_segments` は総額行に付く警告であり、404 にしない。
 /// ただし訂正 overlay 回帰（`overlay_regression`）はこれらの行も隠す。
 /// interest_bearing_debt 軸は `needs_review` の行を xbrl_facts でも出さない（fail closed）。
+/// その 404 は未算出ではなく公開 reason `unknown`。内部の保留理由 `breakdownWithheldNeedsReview` は公開しない。
 /// `revenue_recognition_llm` は単一行または明細合計 0 も出さない（`rows` を渡したとき。
 /// 既に格納された 6620 を ingest 前に隠す）。
 /// ingest / status-report の `isServableBreakdown` とは独立（格納行は消さない・書き換えない。
