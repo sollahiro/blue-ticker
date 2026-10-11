@@ -348,6 +348,25 @@ import Foundation
         }
     }
 
+    @Test func testLeaseRecognisedAmountsTableNegativeSignedLiability() {
+        // パターンF（LIFULL S100X8TY 型）: リース負債を △ 付きで載せる。残高は絶対値。
+        func tr(_ cells: [String]) -> String {
+            "&lt;tr&gt;" + cells.map { "&lt;td&gt;\($0)&lt;/td&gt;" }.joined() + "&lt;/tr&gt;"
+        }
+        let rows = tr(["", "前連結会計年度", "当連結会計年度"])
+            + tr(["使用権資産", "", ""])
+            + tr(["オフィスを原資産とするもの", "1,572", "778"])
+            + tr(["使用権資産合計", "1,654", "789"])
+            + tr(["リース負債", "△1,713", "△829"])
+        let xml = makeXbrlWithLeaseTextblock(ifrsBorrowingsXml, leaseHtmlRows: rows)
+        XBRLTestSupport.withXbrlDir(xml) { dir in
+            let (fs, _) = XBRLTestSupport.instantFieldSet(in: dir)
+            let lease = IFRSLease.extractLeaseLiabilities(fieldSet: fs, xbrlDir: dir)
+            #expect(lease.current == 829 * Financial.millionYen)
+            #expect(lease.prior == 1_713 * Financial.millionYen)
+        }
+    }
+
     @Test func testLeaseRecognisedAmountsTableRejectsTwoLeaseRows() {
         // リース負債の行が2つ以上なら読まない（どちらが残高か決められない）。
         func tr(_ cells: [String]) -> String {

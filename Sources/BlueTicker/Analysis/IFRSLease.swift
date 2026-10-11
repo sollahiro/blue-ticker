@@ -247,9 +247,11 @@ enum IFRSLease {
             guard leaseRows.count == 1, let row = leaseRows.first,
                   row.current != nil || row.prior != nil
             else { continue }
+            // 負債を △ 付きで載せる会社がある（LIFULL S100X8TY 実データ検証 2026-10-12:
+            // 「リース負債 | △1,713 | △829」）。残高なので符号は捨てる。
             let scale = textblockUnitScale(html)
-            let c = row.current.map { $0 * scale }
-            let p = row.prior.map { $0 * scale }
+            let c = row.current.map { abs($0) * scale }
+            let p = row.prior.map { abs($0) * scale }
             return (c, p, [(label: "リース負債", current: c, prior: p)], [])
         }
 
