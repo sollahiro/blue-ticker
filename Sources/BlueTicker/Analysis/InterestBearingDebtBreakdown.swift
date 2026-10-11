@@ -785,11 +785,23 @@ enum InterestBearingDebtBreakdown {
 
         // 6. BS を基準に明細表と突き合わせ、合計に入れる行（in_total）と除外行（理由つき）を決める。
         var ledger = IBDRowLedger()
-        let aggregateNesting = primary == ibdRowSourceBorrowingsSchedule && leaseInDebt && bsBondRows.isEmpty
+        let nestingOutcome: AggregateNesting = primary == ibdRowSourceBorrowingsSchedule && leaseInDebt && bsBondRows.isEmpty
             ? nestUnderLeaseInclusiveAggregates(
                 balanceSheet: bsDebt.filter { $0.presetClass != nil }, bsUnresolved: bsUnresolved,
                 children: schedDebtRows + leaseRows)
-            : nil
+            : .notApplicable
+        var aggregateNesting: (parents: [IBDCandidate], children: [(row: IBDCandidate, parent: IBDCandidate?)], sentences: [String])?
+        switch nestingOutcome {
+        case .nested(let parents, let children, let nestSentences):
+            aggregateNesting = (parents, children, nestSentences)
+        case .unresolved(let reason):
+            // 集約を親にできる形なのに内訳を割り当てられない。明細表の行を数えるが、黙って戻さない
+            needsReview = true
+            warnings.append(breakdownWarningIBDNestingParentUnresolved)
+            sentences.append("nesting_lease_inclusive_aggregate_unresolved \(reason)")
+        case .notApplicable:
+            break
+        }
         if let aggregateNesting {
             ledger.include(aggregateNesting.parents)
             for child in aggregateNesting.children {
@@ -814,7 +826,9 @@ enum InterestBearingDebtBreakdown {
             ledger.include(reconciled.included + bsBondRows)
             if reconciled.parentUnresolved {
                 needsReview = true
-                warnings.append(breakdownWarningIBDNestingParentUnresolved)
+                if !warnings.contains(breakdownWarningIBDNestingParentUnresolved) {
+                    warnings.append(breakdownWarningIBDNestingParentUnresolved)
+                }
             }
             sentences.append(contentsOf: reconciled.sentences)
             if bsLeaseWins {
@@ -1208,20 +1222,34 @@ enum InterestBearingDebtBreakdown {
     /// どの親にも入り得る。各親の closing が内訳の和と一致する（`sameAmount`）割り当てが**ただ1つ**
     /// のときだけ入れ子にする（区分の無い行に区分を作らない。金額の一致だけで決める）。期末値が
     /// 無い・0 の内訳は和に効かないので、入り得る親が1つならそこ、複数なら対応先なしにする。
-    /// 一致しない・複数ある・BS に未分類行があるときは nil（従来どおり明細表の行を数える）。
+    /// 集約が無い・BS に未分類行や他の債務科目があるときは `.notApplicable`（従来どおり明細表の行を
+    /// 数える）。集約を親にできる形なのに割り当てが一致しない・複数ある・探索の上限を超えたときは
+    /// `.unresolved`（呼び出し側が明細表の行を数えたうえで needs_review と監査に理由を残す。黙って
+    /// 明細表に戻さない）。
+    enum AggregateNesting {
+        case notApplicable
+        case unresolved(reason: String)
+        case nested(parents: [IBDCandidate], children: [(row: IBDCandidate, parent: IBDCandidate?)], sentences: [String])
+    }
+
+    /// 割り当て探索で訪れる節点の上限（最悪 4^16）。超えたら `.unresolved`。
+    static let aggregateNestingNodeBudget = 200_000
+
     static func nestUnderLeaseInclusiveAggregates(
-        balanceSheet: [IBDCandidate], bsUnresolved: Bool, children: [IBDCandidate]
-    ) -> (parents: [IBDCandidate], children: [(row: IBDCandidate, parent: IBDCandidate?)], sentences: [String])? {
-        guard !bsUnresolved, !children.isEmpty else { return nil }
+        balanceSheet: [IBDCandidate], bsUnresolved: Bool, children: [IBDCandidate],
+        nodeBudget: Int = aggregateNestingNodeBudget
+    ) -> AggregateNesting {
+        guard !bsUnresolved, !children.isEmpty else { return .notApplicable }
         let aggregates = balanceSheet.filter { Xbrl.ibdInterestBearingAggregateTags.contains($0.tag ?? "") }
-        guard !aggregates.isEmpty else { return nil }
+        guard !aggregates.isEmpty else { return .notApplicable }
         let parents = balanceSheet.filter { row in
             let tag = row.tag ?? ""
             if Xbrl.ibdInterestBearingAggregateTags.contains(tag) { return true }
             // ラベル規則で確定した会社拡張の債務科目（区分つき）
             return !knownDebtTags.contains(tag) && !tag.hasPrefix("USGAAP_HTML_") && row.maturityClass != nil
         }
-        guard parents.count == balanceSheet.count, parents.count <= 4 else { return nil }
+        guard parents.count == balanceSheet.count else { return .notApplicable }
+        guard parents.count <= 4 else { return .unresolved(reason: "too_many_parents count=\(parents.count)") }
         func allowed(_ child: IBDCandidate) -> [Int] {
             parents.indices.filter { i in
                 switch child.maturityClass {
@@ -1233,16 +1261,25 @@ enum InterestBearingDebtBreakdown {
         }
         let valued = children.filter { ($0.closing ?? 0) != 0 }
         let unvalued = children.filter { ($0.closing ?? 0) == 0 }
-        guard valued.count <= 16 else { return nil }
+        guard valued.count <= 16 else { return .unresolved(reason: "too_many_components count=\(valued.count)") }
         let options = valued.map(allowed)
-        guard !options.contains(where: \.isEmpty) else { return nil }
+        if let k = options.firstIndex(where: \.isEmpty) {
+            return .unresolved(reason: "no_parent_for_maturity component=\(valued[k].labelRaw)")
+        }
         // 各親の内訳が何行入るかで端数許容が変わるので、最後に sameAmount で確かめる
         var solutions: [[Int]] = []
         var assignment = Array(repeating: -1, count: valued.count)
         var sums = Array(repeating: 0.0, count: parents.count)
         let tolerance = 500_000.0 * Double(valued.count + parents.count)
+        var nodes = 0
+        var budgetExceeded = false
         func search(_ k: Int) {
-            if solutions.count > 1 { return }
+            if solutions.count > 1 || budgetExceeded { return }
+            nodes += 1
+            if nodes > nodeBudget {
+                budgetExceeded = true
+                return
+            }
             if k == valued.count {
                 let ok = parents.indices.allSatisfy { i in
                     let n = assignment.filter { $0 == i }.count
@@ -1263,7 +1300,13 @@ enum InterestBearingDebtBreakdown {
             }
         }
         search(0)
-        guard solutions.count == 1, let solution = solutions.first else { return nil }
+        if budgetExceeded { return .unresolved(reason: "search_budget_exceeded nodes=\(nodeBudget)") }
+        if solutions.count > 1 { return .unresolved(reason: "ambiguous_assignment") }
+        guard let solution = solutions.first else {
+            let parentTotal = parents.reduce(0) { $0 + ($1.closing ?? 0) }
+            let childTotal = valued.reduce(0) { $0 + ($1.closing ?? 0) }
+            return .unresolved(reason: "no_matching_assignment balance_sheet=\(String(format: "%.0f", parentTotal)) components=\(String(format: "%.0f", childTotal))")
+        }
         var assigned: [(row: IBDCandidate, parent: IBDCandidate?)] = zip(valued, solution).map { ($0, parents[$1]) }
         for row in unvalued {
             let candidates = allowed(row)
@@ -1279,7 +1322,7 @@ enum InterestBearingDebtBreakdown {
             sentences.append(
                 "nesting_lease_inclusive_aggregate parent=\(parent.labelRaw) balance_sheet=\(String(format: "%.0f", parent.closing ?? 0)) components=\(String(format: "%.0f", sum))")
         }
-        return (parents, assigned, sentences)
+        return .nested(parents: parents, children: assigned, sentences: sentences)
     }
 
     /// BS にリース科目があるとき、BS のリース行を合計に入れる。明細表のリース行は満期区分が

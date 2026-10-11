@@ -1010,4 +1010,102 @@ private struct StubIBDDecider: InterestBearingDebtDeciding {
         let decoded = try JSONDecoder().decode(BreakdownRowPayload.self, from: data)
         #expect(decoded.sourceTag == "ShortTermLoansPayable")
     }
+
+    // MARK: - リース込み集約への入れ子の結果（一致・曖昧・不一致・探索上限）
+
+    private func aggregateParent(_ maturity: String, closing: Double) -> IBDCandidate {
+        IBDCandidate(
+            labelRaw: "有利子負債", label: "有利子負債",
+            tag: maturity == ibdMaturityCurrent ? "InterestBearingLiabilitiesCLIFRS" : "InterestBearingLiabilitiesNCLIFRS",
+            opening: nil, closing: closing, source: ibdRowSourceBalanceSheet,
+            maturityClass: maturity, presetClass: .interestBearingDebt)
+    }
+
+    private func scheduleChild(_ label: String, _ closing: Double, maturity: String? = nil) -> IBDCandidate {
+        IBDCandidate(
+            labelRaw: label, label: label, tag: nil, opening: nil, closing: closing,
+            source: ibdRowSourceBorrowingsSchedule, maturityClass: maturity, presetClass: .interestBearingDebt)
+    }
+
+    @Test func aggregateNestingUniqueMatchNests() {
+        let parents = [aggregateParent(ibdMaturityCurrent, closing: 30e9), aggregateParent(ibdMaturityNonCurrent, closing: 70e9)]
+        let outcome = InterestBearingDebtBreakdown.nestUnderLeaseInclusiveAggregates(
+            balanceSheet: parents, bsUnresolved: false,
+            children: [scheduleChild("短期借入金", 30e9), scheduleChild("長期借入金", 70e9)])
+        guard case .nested(_, let children, _) = outcome else {
+            Issue.record("expected nested, got \(outcome)")
+            return
+        }
+        #expect(children.map { $0.parent?.closing } == [30e9, 70e9])
+    }
+
+    @Test func aggregateNestingAmbiguousIsUnresolved() {
+        // 区分の無い同額の2行は、どちらの親にも入り得る（割り当てが2通り）
+        let parents = [aggregateParent(ibdMaturityCurrent, closing: 50e9), aggregateParent(ibdMaturityNonCurrent, closing: 50e9)]
+        let outcome = InterestBearingDebtBreakdown.nestUnderLeaseInclusiveAggregates(
+            balanceSheet: parents, bsUnresolved: false,
+            children: [scheduleChild("借入金", 50e9), scheduleChild("社債", 50e9)])
+        guard case .unresolved(let reason) = outcome else {
+            Issue.record("expected unresolved, got \(outcome)")
+            return
+        }
+        #expect(reason == "ambiguous_assignment")
+    }
+
+    @Test func aggregateNestingMismatchIsUnresolved() {
+        let parents = [aggregateParent(ibdMaturityCurrent, closing: 30e9), aggregateParent(ibdMaturityNonCurrent, closing: 70e9)]
+        let outcome = InterestBearingDebtBreakdown.nestUnderLeaseInclusiveAggregates(
+            balanceSheet: parents, bsUnresolved: false,
+            children: [scheduleChild("短期借入金", 31e9, maturity: ibdMaturityCurrent), scheduleChild("長期借入金", 70e9)])
+        guard case .unresolved(let reason) = outcome else {
+            Issue.record("expected unresolved, got \(outcome)")
+            return
+        }
+        #expect(reason.hasPrefix("no_matching_assignment"))
+    }
+
+    @Test func aggregateNestingSearchBudgetIsUnresolved() {
+        // 一致する割り当てが無く、枝刈りも効かない（各親 85 に対し 10 の行が 16 本）
+        let parents = [aggregateParent(ibdMaturityCurrent, closing: 85e9), aggregateParent(ibdMaturityNonCurrent, closing: 85e9)]
+        let children = (1...16).map { scheduleChild("借入金\($0)", 10e9) }
+        let outcome = InterestBearingDebtBreakdown.nestUnderLeaseInclusiveAggregates(
+            balanceSheet: parents, bsUnresolved: false, children: children, nodeBudget: 1_000)
+        guard case .unresolved(let reason) = outcome else {
+            Issue.record("expected unresolved, got \(outcome)")
+            return
+        }
+        #expect(reason.hasPrefix("search_budget_exceeded"))
+    }
+
+    @Test func aggregateNestingWithoutAggregateIsNotApplicable() {
+        let bsRow = IBDCandidate(
+            labelRaw: "短期借入金", label: "短期借入金", tag: "ShortTermLoansPayable", opening: nil, closing: 10e9,
+            source: ibdRowSourceBalanceSheet, maturityClass: ibdMaturityCurrent, presetClass: .interestBearingDebt)
+        let outcome = InterestBearingDebtBreakdown.nestUnderLeaseInclusiveAggregates(
+            balanceSheet: [bsRow], bsUnresolved: false, children: [scheduleChild("短期借入金", 10e9)])
+        guard case .notApplicable = outcome else {
+            Issue.record("expected notApplicable, got \(outcome)")
+            return
+        }
+    }
+
+    /// 入れ子にできない（不一致）ときは明細表の行を数えるが、needs_review と警告・監査を残す。
+    @Test func unresolvedAggregateNestingFailsClosedVisibly() async {
+        let inputs = IBDInputs(
+            consolidated: true,
+            balanceSheet: [aggregateParent(ibdMaturityCurrent, closing: 30e9), aggregateParent(ibdMaturityNonCurrent, closing: 70e9)],
+            schedule: [
+                scheduleChild("短期借入金", 31e9, maturity: ibdMaturityCurrent),
+                scheduleChild("長期借入金", 70e9, maturity: ibdMaturityNonCurrent),
+            ],
+            leaseNote: nil)
+        let resolution = await InterestBearingDebtBreakdown.resolve(inputs: inputs, decider: nil, docID: "TEST")
+        guard case .resolved(let payload, let audit) = resolution else {
+            Issue.record("expected resolved, got \(String(describing: resolution))")
+            return
+        }
+        #expect(payload.needsReview == true)
+        #expect(payload.warnings.contains(breakdownWarningIBDNestingParentUnresolved))
+        #expect(audit.sentences.contains { $0.hasPrefix("nesting_lease_inclusive_aggregate_unresolved no_matching_assignment") })
+    }
 }
