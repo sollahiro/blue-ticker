@@ -245,6 +245,43 @@ private struct GoldenIBDDecider: InterestBearingDebtDeciding {
         #expect(audit.sentences.contains("bank_components"))
     }
 
+    /// 単体だけの会社（DEI 連結無し）は単体明細表を読む。コンテキスト共存では誤って連結扱いになり
+    /// 唯一の明細表を落としていた（ニッカトー S100Y9NY、サイバーソリューションズ S100YRSR）。
+    @Test func standaloneFilersKeepStandaloneSchedule() async throws {
+        let cases: [(String, Double)] = [
+            ("S100Y9NY", 509_178_000),
+            ("S100YRSR", 10_036_000),
+        ]
+        for (docID, total) in cases {
+            guard await Self.ensureAvailable(docID) else { continue }
+            let dir = Self.xbrlDir(docID)
+            #expect(BorrowingsSchedule.filerHasConsolidatedStatements(xbrlDir: dir) == false)
+            guard case .resolved(let payload, _, _) = StatementNotesResolver.resolveBorrowingsSchedule(
+                xbrlDir: dir)
+            else {
+                Issue.record("\(docID): borrowings_schedule should stay resolved")
+                continue
+            }
+            let totalRow = payload.borrowingsComponents?.first { $0.isTotal }
+            #expect(totalRow?.currentBalance == total)
+            #expect(InterestBearingDebtBreakdown.inputs(xbrlDir: dir).consolidated == false)
+        }
+    }
+
+    /// 連結を作る会社（DEI 連結有り）は単体明細表へフォールバックしない（ＡＩフュージョン S100W4HU）。
+    @Test func consolidatedFilerDoesNotFallBackToStandaloneSchedule() async throws {
+        guard await Self.ensureAvailable("S100W4HU") else { return }
+        let dir = Self.xbrlDir("S100W4HU")
+        #expect(BorrowingsSchedule.filerHasConsolidatedStatements(xbrlDir: dir) == true)
+        guard case .notApplicable(let reason) = StatementNotesResolver.resolveBorrowingsSchedule(
+            xbrlDir: dir)
+        else {
+            Issue.record("S100W4HU: borrowings_schedule should be not_found")
+            return
+        }
+        #expect(reason == statementNoteNotApplicableNotFound)
+    }
+
     // MARK: - helpers
 
     private func resolve(

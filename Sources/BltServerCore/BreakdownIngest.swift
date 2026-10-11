@@ -158,6 +158,8 @@ func runBreakdownIngest(
         ) {
             try await CompanyBreakdown.find(key, on: db)
         }
+        // interest_bearing_debt の Jev 再試行なら何回目か（0 は再試行でない）。
+        var ibdJevRetryAttempt = 0
         if !forceDocIDs.contains(cand.docID), let row = existing {
             let versionGated = isVersionGatedBreakdownSource(row.source)
             if versionGated, row.cacheVersion == currentCacheVersion {
@@ -165,12 +167,15 @@ func runBreakdownIngest(
                 // content_hash は見ない。clean な geography_llm は --codes でも skip する。
                 // Luna→Jev の差し替えは対象行 DELETE（または --doc-ids）が必要。バンプしない。
                 // interest_bearing_debt は Jev が分類・近似重複で止まった行だけ現行版でも再試行。
+                let priorAttempts = ibdJevRetryAttempts(row.llmAudit)
                 let jevRetry = isJevRetryableBreakdown(
-                    axis: axis, needsReview: row.needsReview, warnings: row.payload.warnings)
+                    axis: axis, needsReview: row.needsReview, warnings: row.payload.warnings,
+                    attempts: priorAttempts)
                 if !(isLLMBreakdownSource(row.source) && row.needsReview), !jevRetry {
                     skipped += 1
                     continue
                 }
+                if jevRetry { ibdJevRetryAttempt = priorAttempts + 1 }
             }
             if !versionGated, row.needsReview == false {
                 skipped += 1
@@ -184,15 +189,16 @@ func runBreakdownIngest(
 
         switch resolveResult {
         case .resolved(let payload, let source, let contentHash, let audit):
+            let storedAudit = stampingIBDJevRetryAttempt(audit, attempt: ibdJevRetryAttempt)
             try await withDbRetry(
                 logger: logger, context: "docID=\(cand.docID)", onRetry: { unhealthyRetries += 1 }
             ) {
-                    try await storeBreakdown(
+                try await storeBreakdown(
                     existing: try await CompanyBreakdown.find(key, on: db),
                     docID: cand.docID, axis: axis,
                     code: cand.code, submitDateTime: cand.submitDateTime, payload: payload,
                     source: source, contentHash: contentHash, cacheVersion: currentCacheVersion,
-                    llmAudit: audit, db: db)
+                    llmAudit: storedAudit, db: db)
             }
             stored += 1
             await logXbrlOverlayRegressionIfNeeded(
@@ -379,7 +385,8 @@ private func jevRetryableBreakdownIDs(
     return Set(rows.compactMap { row -> String? in
         guard let id = row.id,
             isJevRetryableBreakdown(
-                axis: axis, needsReview: row.needsReview, warnings: row.payload.warnings)
+                axis: axis, needsReview: row.needsReview, warnings: row.payload.warnings,
+                attempts: ibdJevRetryAttempts(row.llmAudit))
         else { return nil }
         return id
     })

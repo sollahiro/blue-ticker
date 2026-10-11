@@ -230,12 +230,41 @@ public let breakdownWarningIBDLeaseDenominatorFromNotes =
 /// interest_bearing_debt 軸だけ。行は version-servable だが公開保留。未算出（reason 無し 404）とは区別する。
 public let breakdownWithheldNeedsReview = "needs_review"
 
-/// interest_bearing_debt の現行版行を再試行するか。Jev が分類または近似重複で止まったときだけ。
+/// interest_bearing_debt の Jev 再試行の上限（初回取り込みの後に何回まで聞き直すか）。
+/// Jev が確率 0.9 未満で答え続ける行を毎回の ingest で聞き続けないため。
+public let ibdJevRetryMaxAttempts = 3
+
+/// 再試行回数を `llm_audit.jev.sentences` に残す接頭辞（列・公開キーは増やさない）。
+public let ibdJevRetryAttemptSentencePrefix = "jev_retry_attempt="
+
+/// 格納済み行の再試行回数（記録が無ければ 0）。
+public func ibdJevRetryAttempts(_ audit: LLMBreakdownAuditPayload?) -> Int {
+    (audit?.jev?.sentences ?? []).compactMap { sentence -> Int? in
+        guard sentence.hasPrefix(ibdJevRetryAttemptSentencePrefix) else { return nil }
+        return Int(sentence.dropFirst(ibdJevRetryAttemptSentencePrefix.count))
+    }.max() ?? 0
+}
+
+/// 再試行で得た監査に回数を記す。jev が無い監査はそのまま。
+public func stampingIBDJevRetryAttempt(
+    _ audit: LLMBreakdownAuditPayload?, attempt: Int
+) -> LLMBreakdownAuditPayload? {
+    guard attempt > 0, let audit, var jev = audit.jev else { return audit }
+    jev.sentences.removeAll { $0.hasPrefix(ibdJevRetryAttemptSentencePrefix) }
+    jev.sentences.append("\(ibdJevRetryAttemptSentencePrefix)\(attempt)")
+    return audit.replacingJev(jev)
+}
+
+/// interest_bearing_debt の現行版行を再試行するか。Jev が分類または近似重複で止まったときだけ、
+/// かつ再試行回数が `ibdJevRetryMaxAttempts` 未満のとき。
 /// source は xbrl_facts（version-gated）なので、これ以外の needs_review（coverage 帯外など）は
 /// 同じ入力では結果が変わらず、再試行しない。
-public func isJevRetryableBreakdown(axis: String, needsReview: Bool, warnings: [String]) -> Bool {
+public func isJevRetryableBreakdown(
+    axis: String, needsReview: Bool, warnings: [String], attempts: Int = 0
+) -> Bool {
     axis == breakdownAxisInterestBearingDebt
         && needsReview
+        && attempts < ibdJevRetryMaxAttempts
         && warnings.contains {
             $0 == breakdownWarningIBDRowUnclassified
                 || $0 == breakdownWarningIBDNearDuplicateUnresolved

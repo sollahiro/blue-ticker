@@ -543,6 +543,56 @@ extension BreakdownLoadResult {
         }
     }
 
+    /// Jev 再試行は回数を llm_audit に記し、上限に達した行は聞き直さない。
+    @Test func ingestCapsInterestBearingDebtJevRetries() async throws {
+        @Sendable func jevAudit(_ sentences: [String]) -> LLMBreakdownAuditPayload {
+            .segmentNoteJev(
+                SegmentNoteJevAuditPayload(
+                    code: "", docID: "", axis: breakdownAxisInterestBearingDebt, model: "m",
+                    threshold: 0.9, applied: false, needsReview: true, sentences: sentences,
+                    calls: []))
+        }
+        try await withMigratedApp { app in
+            try await seedDoc("S_RETRY", secCode: "67580", db: app.db)
+            try await seedDoc("S_CAPPED", secCode: "72030", db: app.db)
+            try await seedRow(
+                "S_RETRY", code: "6758", submit: "2025-06-20 09:00", db: app.db,
+                axis: breakdownAxisInterestBearingDebt,
+                source: breakdownSourceXbrlFacts,
+                cacheVersion: interestBearingDebtBreakdownCacheVersion,
+                needsReview: true, llmAudit: jevAudit(["\(ibdJevRetryAttemptSentencePrefix)1"]),
+                warnings: [breakdownWarningIBDRowUnclassified])
+            try await seedRow(
+                "S_CAPPED", code: "7203", submit: "2025-06-20 09:00", db: app.db,
+                axis: breakdownAxisInterestBearingDebt,
+                source: breakdownSourceXbrlFacts,
+                cacheVersion: interestBearingDebtBreakdownCacheVersion,
+                needsReview: true,
+                llmAudit: jevAudit(["\(ibdJevRetryAttemptSentencePrefix)\(ibdJevRetryMaxAttempts)"]),
+                warnings: [breakdownWarningIBDRowUnclassified])
+
+            let summary = try await runBreakdownIngest(
+                db: app.db, listedCodes: ["6758", "7203"], years: 3, limit: nil,
+                axis: breakdownAxisInterestBearingDebt
+            ) { docID in
+                #expect(docID == "S_RETRY")
+                return .resolved(
+                    payload: fakePayload(
+                        axis: breakdownAxisInterestBearingDebt, needsReview: true,
+                        warnings: [breakdownWarningIBDRowUnclassified]),
+                    source: breakdownSourceXbrlFacts, contentHash: "h-retry",
+                    audit: jevAudit(["primary=schedule"]))
+            }
+
+            #expect(summary.attempted == 1)
+            #expect(summary.skipped == 1)
+            let stored = try await CompanyBreakdown.find(
+                CompanyBreakdown.compositeID(docID: "S_RETRY", axis: breakdownAxisInterestBearingDebt),
+                on: app.db)
+            #expect(ibdJevRetryAttempts(stored?.llmAudit) == 2)
+        }
+    }
+
     @Test func ingestReattemptsDeterministicRowFlaggedForReviewWhenVersionStale() async throws {
         try await withMigratedApp { app in
             try await seedDoc("S1", secCode: "72030", db: app.db)

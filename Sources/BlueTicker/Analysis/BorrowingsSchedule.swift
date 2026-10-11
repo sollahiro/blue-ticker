@@ -21,12 +21,23 @@ enum BorrowingsSchedule {
         var sourceLabel: String? = nil
     }
 
-    /// 連結財務諸表を作成する会社か（連結＋単体コンテキストの共存で判定。
-    /// `fieldSetFromInstant` / `fieldSetFromDuration`（FieldParser）の連結検出と同じ基準）。
-    /// true のとき単体タグへのフォールバックを抑止する（連結優先）。
+    /// 連結財務諸表を作成する会社か。true のとき単体タグへのフォールバックを抑止する（連結優先）。
+    /// 正本は DEI `WhetherConsolidatedFinancialStatementsArePreparedDEI`。コンテキスト共存
+    /// （`ContextHelpers.hasNonConsolidatedContexts`）は使わない: 単体だけの会社でも経営指標等の
+    /// `…IFRSSummaryOfBusinessResults` 等で真になり、唯一の単体明細表を落とすため
+    /// （ニッカトー S100Y9NY、サイバーソリューションズ S100YRSR）。
+    /// DEI が無いときは連結 BS の TextBlock があるときだけ連結とみなす。
     static func filerHasConsolidatedStatements(xbrlDir: URL) -> Bool {
-        ContextHelpers.hasNonConsolidatedContexts(
-            XBRLUtils.collectAllNumericElements(in: xbrlDir, nilAsZero: false))
+        if let flag = XBRLUtils.extractTextblockHtml(
+            in: xbrlDir, textblockTag: Xbrl.consolidatedStatementsPreparedDEITag)?
+            .trimmingCharacters(in: .whitespacesAndNewlines).lowercased(),
+            flag == "true" || flag == "false"
+        {
+            return flag == "true"
+        }
+        return Xbrl.consolidatedBalanceSheetTextblockTags.contains {
+            XBRLUtils.extractTextblockHtml(in: xbrlDir, textblockTag: $0) != nil
+        }
     }
 
     /// リース債務行は「リース負債（流動/非流動）」へ正規化し、コードベース全体の表示ラベルに揃える。

@@ -447,6 +447,31 @@ private struct StubIBDDecider: InterestBearingDebtDeciding {
                 warnings: [breakdownWarningIBDRowUnclassified]))
     }
 
+    @Test func jevRetryStopsAtAttemptCap() {
+        let warnings = [breakdownWarningIBDRowUnclassified]
+        #expect(isJevRetryableBreakdown(
+            axis: breakdownAxisInterestBearingDebt, needsReview: true, warnings: warnings,
+            attempts: ibdJevRetryMaxAttempts - 1))
+        #expect(!isJevRetryableBreakdown(
+            axis: breakdownAxisInterestBearingDebt, needsReview: true, warnings: warnings,
+            attempts: ibdJevRetryMaxAttempts))
+
+        let jev = SegmentNoteJevAuditPayload(
+            code: "", docID: "S100TEST", axis: breakdownAxisInterestBearingDebt, model: "m",
+            threshold: 0.9, applied: false, needsReview: true, sentences: ["primary=balance_sheet"],
+            calls: [])
+        let base = LLMBreakdownAuditPayload.segmentNoteJev(jev)
+        #expect(ibdJevRetryAttempts(base) == 0)
+        #expect(ibdJevRetryAttempts(nil) == 0)
+        #expect(stampingIBDJevRetryAttempt(base, attempt: 0) == base)
+        let once = stampingIBDJevRetryAttempt(base, attempt: 1)
+        #expect(ibdJevRetryAttempts(once) == 1)
+        let twice = stampingIBDJevRetryAttempt(once, attempt: 2)
+        #expect(ibdJevRetryAttempts(twice) == 2)
+        #expect(twice?.jev?.sentences.filter { $0.hasPrefix(ibdJevRetryAttemptSentencePrefix) }.count == 1)
+        #expect(twice?.jev?.sentences.first == "primary=balance_sheet")
+    }
+
     @Test func unresolvedScheduleRowNeedsReviewEvenWhenBalanceSheetIsPrimary() async throws {
         // 明細表に債務行が無く BS 主でも、明細表の未分類行（割賦未払金等）は落とさず needs_review
         let inputs = IBDInputs(
