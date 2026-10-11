@@ -38,7 +38,9 @@ enum EdinetDiscovery {
         }
 
         // ② 年次インデックスを並列取得
-        let todayYear = utcCalendar.component(.year, from: Date())
+        // EDINET の「今日」は JST（`edinetToday`）。UTC 暦日だと JST 0:00〜8:59 に1日（年初は1年）ずれ、
+        // 当日（JST）提出の書類と当年の年次インデックスを取りこぼす。
+        let todayYear = utcCalendar.component(.year, from: edinetToday())
         let scanStartYear = todayYear - analysisYears
         var allDocs: [[String: Any]] = []
         await withTaskGroup(of: YearDocs.self) { group in
@@ -171,7 +173,7 @@ enum EdinetDiscovery {
     ) async -> [String: Any]? {
         let code4 = String(code.prefix(4))
         let listedEdinet = await masterDataManager.edinetCode(forListedCode: code)
-        let today = utcStartOfDay(Date())
+        let today = edinetToday()
         let scanStart = addDays(today, -(scanDays - 1))
 
         let docsByDate = await client.getDocumentsForDateRange(start: scanStart, end: today)
@@ -200,7 +202,7 @@ enum EdinetDiscovery {
         let fyEndStr = formatDateString(fyEnd)
         let halfEndStr = formatDateString(halfEnd)
         let periodStartStr = formatDateString(periodStart)
-        let today = utcStartOfDay(Date())
+        let today = edinetToday()
         let searchStart = addDays(halfEnd, 1)
         let searchEnd = min(addDays(halfEnd, 90), today)
         guard searchStart <= searchEnd else { return nil }
