@@ -56,12 +56,21 @@ private func makeZipWithEntryCount(_ count: Int) throws -> Data {
         store.documentsByDateDir.appendingPathComponent(filename)
     }
 
+    /// EDINET（JST）の今日。EDINET の日付ラベルは JST の暦日。
     private func todayStr() -> String {
-        ServiceTestSupport.iso(Date())
+        ServiceTestSupport.iso(ServiceTestSupport.edinetToday())
     }
 
-    private func yesterdayStr() -> String {
-        ServiceTestSupport.iso(Date().addingTimeInterval(-86400))
+    private func edinetDayStr(offset: Int) -> String {
+        ServiceTestSupport.iso(ServiceTestSupport.addDays(ServiceTestSupport.edinetToday(), offset))
+    }
+
+    /// 日付ラベルの EDINET 日が締まる瞬間（翌日 0:00 JST = 当日 15:00 UTC）。
+    private func jstClose(_ dateStr: String) -> Date {
+        let day = ServiceTestSupport.utcCalendar.date(from: DateComponents(
+            year: Int(dateStr.prefix(4))!, month: Int(dateStr.dropFirst(5).prefix(2))!,
+            day: Int(dateStr.dropFirst(8).prefix(2))!))!
+        return day.addingTimeInterval(15 * 3600)
     }
 
     // MARK: - 日別検索キャッシュ
@@ -100,9 +109,9 @@ private func makeZipWithEntryCount(_ count: Int) throws -> Data {
 
     @Test func testLoadSearchCacheKeepsHitResultLongerThanEmptyResult() throws {
         let store = makeStore()
-        // 当日分は searchTodayTTLHours で別扱いになるため、この日単位 TTL の
-        // 比較（hit が empty より長持ちする）は前日分の日付で検証する。
-        let filename = store.searchCacheKey(yesterdayStr())
+        // 当日分は searchTodayTTLHours、過去日は締め後書き込みの確定判定で別扱いになるため、
+        // この日単位 TTL の比較（hit が empty より長持ちする）は今日より後の日付で検証する。
+        let filename = store.searchCacheKey(edinetDayStr(offset: 1))
         store.saveSearchCache(filename, data: [["docID": "S100TEST", "docTypeCode": "120"]])
         try ServiceTestSupport.age(searchCachePath(store, filename), days: 1)
 
@@ -161,6 +170,71 @@ private func makeZipWithEntryCount(_ count: Int) throws -> Data {
         try ServiceTestSupport.age(searchCachePath(store, filename), days: 365)
 
         #expect(store.loadSearchCache(filename)?.first?["docID"] as? String == "S100TEST")
+    }
+
+    // MARK: - 同日スナップショット（過去日でも EDINET 日の締め前に書いた分は確定しない）
+
+    @Test func testSameDaySnapshotOfPastDateIsExpired() throws {
+        // 実例: search_2026-09-18.json が 2026-09-18 09:02 JST に 10 件で書かれ、過去日として
+        // 3650 日確定扱いになり、同日に後から提出された有報が年次インデックスに入らなかった。
+        let store = makeStore(searchPastTTLDays: 3650)
+        let day = edinetDayStr(offset: -3)
+        let filename = store.searchCacheKey(day)
+        store.saveSearchCache(filename, data: [["docID": "S100MORNING", "docTypeCode": "120"]])
+        // 当日 09:02 JST（締めの 14 時間 58 分前）に書いた同日スナップショット
+        try ServiceTestSupport.setMtime(
+            searchCachePath(store, filename), jstClose(day).addingTimeInterval(-(14 * 3600 + 58 * 60)))
+
+        #expect(store.loadSearchCache(filename) == nil)  // 期限切れ → 呼び出し側が再取得する
+        #expect(!store.isSearchCacheFinal(day))
+        // 取得失敗時のフォールバック（allowExpired）では読める
+        #expect(store.loadSearchCache(filename, allowExpired: true)?.first?["docID"] as? String == "S100MORNING")
+    }
+
+    @Test func testPastDateWrittenJustBeforeJSTCloseIsStillSnapshot() throws {
+        // 当日 23:59 JST（14:59 UTC）に書いた分は締め（翌日 0:00 JST）前なので確定しない。
+        let store = makeStore(searchPastTTLDays: 3650)
+        let day = edinetDayStr(offset: -3)
+        let filename = store.searchCacheKey(day)
+        store.saveSearchCache(filename, data: [["docID": "S100LATE"]])
+        try ServiceTestSupport.setMtime(searchCachePath(store, filename), jstClose(day).addingTimeInterval(-60))
+
+        #expect(store.loadSearchCache(filename) == nil)
+        #expect(!store.isSearchCacheFinal(day))
+    }
+
+    @Test func testPastDateWrittenAfterJSTCloseIsFinal() throws {
+        // 翌日 0:00 JST 以降（UTC ではまだ同じ日付の 15:00 以降）に書いた分は確定版。
+        let store = makeStore(searchPastTTLDays: 3650)
+        let day = edinetDayStr(offset: -3)
+        let filename = store.searchCacheKey(day)
+        store.saveSearchCache(filename, data: [["docID": "S100FINAL"]])
+        try ServiceTestSupport.setMtime(searchCachePath(store, filename), jstClose(day).addingTimeInterval(60))
+
+        #expect(store.loadSearchCache(filename)?.first?["docID"] as? String == "S100FINAL")
+        #expect(store.isSearchCacheFinal(day))
+    }
+
+    @Test func testTodayCacheIsNeverFinal() {
+        let store = makeStore()
+        let filename = store.searchCacheKey(todayStr())
+        store.saveSearchCache(filename, data: [["docID": "S100TODAY"]])
+
+        #expect(store.loadSearchCache(filename)?.first?["docID"] as? String == "S100TODAY")
+        #expect(!store.isSearchCacheFinal(todayStr()))
+    }
+
+    @Test func testEdinetDayBoundaryIsJST() {
+        let utc = ServiceTestSupport.utcCalendar
+        // 2026-09-18 23:30 UTC = 2026-09-19 08:30 JST → EDINET の今日は 9/19
+        let morningJST = utc.date(from: DateComponents(year: 2026, month: 9, day: 18, hour: 23, minute: 30))!
+        #expect(ServiceTestSupport.iso(edinetToday(morningJST)) == "2026-09-19")
+        // 2026-09-18 14:59 UTC = 23:59 JST → まだ 9/18
+        let lateJST = utc.date(from: DateComponents(year: 2026, month: 9, day: 18, hour: 14, minute: 59))!
+        #expect(ServiceTestSupport.iso(edinetToday(lateJST)) == "2026-09-18")
+        // 9/18 の締めは 9/19 0:00 JST = 9/18 15:00 UTC
+        let day = utc.date(from: DateComponents(year: 2026, month: 9, day: 18))!
+        #expect(edinetDayClose(day) == utc.date(from: DateComponents(year: 2026, month: 9, day: 18, hour: 15))!)
     }
 
     // MARK: - 年次書類インデックス

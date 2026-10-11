@@ -45,9 +45,11 @@ private func seedDocument(
     ordinanceCode: String? = Api.ordinanceCompanyDisclosure,
     formCode: String? = "030000",
     edinetCode: String = "E00001",
+    periodEnd: String? = nil,
     db: Database
 ) async throws {
     let model = EdinetDocument()
+    model.periodEnd = periodEnd
     model.id = docID
     model.edinetCode = edinetCode
     model.secCode = secCode
@@ -60,9 +62,10 @@ private func seedDocument(
 }
 
 /// 公開契約 FinancialsResponse を JSON 経由で構築する（内部 MetricsResult を介さない）。
-/// years 件の年度エントリ（fy_end のみ）を持たせる。
-private func makeResponse(code: String, years: Int) throws -> FinancialsResponse {
-    let yrs = (0..<years).map { ["fy_end": "20\(20 + $0)-03-31"] }
+/// years 件の年度エントリ（fy_end のみ）を新しい順（契約どおり）に持たせる。最新は `newestYear`。
+/// 年数だけ違う応答は最新 FY が同じ（年数減は縮小ガードの対象外）。
+private func makeResponse(code: String, years: Int, newestYear: Int = 2025) throws -> FinancialsResponse {
+    let yrs = (0..<years).map { ["fy_end": "\(newestYear - $0)-03-31"] }
     let dict: [String: Any] = [
         "schema_version": 2, "code": code, "name": "テスト",
         "sector": "", "market": "", "currency": "JPY", "unit": "百万円",
@@ -80,8 +83,8 @@ private let priorDependentKeys = [
     "roe_delta", "roe_net_margin_effect", "roe_asset_turnover_effect", "roe_leverage_effect",
 ]
 /// フェイク計算器のヘルパー: makeResponse の結果を FinancialsComputeResult でラップする。
-private func fakeSuccess(code: String, years: Int) -> FinancialsComputeResult {
-    guard let response = try? makeResponse(code: code, years: years) else { return .failed }
+private func fakeSuccess(code: String, years: Int, newestYear: Int = 2025) -> FinancialsComputeResult {
+    guard let response = try? makeResponse(code: code, years: years, newestYear: newestYear) else { return .failed }
     return .success(response)
 }
 
@@ -100,6 +103,165 @@ private func makeResponseWithChanges(code: String, years: Int) throws -> Financi
 }
 
 @Suite struct FinancialsIngestTests {
+    // MARK: - 縮小ガード（ローカル EDINET インデックスが最新有報を欠くとき書かない）
+
+    @Test func ingestRefusesRowThatLosesStoredNewestFiscalYear() async throws {
+        // 回帰: ローカル年次インデックスが 2026-09-18 提出の有報を欠いたまま --codes ingest が走り、
+        // 最新 FY の無い短い行で全体上書き＋high_water 更新され、FY2026 が skip され続けた。
+        try await withMigratedApp { app in
+            try await seedDocument("S1", secCode: "21540", submitDateTime: "2025-06-20 09:00", db: app.db)
+            let first = try await runFinancialsIngest(db: app.db, years: 5, limit: nil) { code in
+                fakeSuccess(code: code, years: 5)  // fy_end 2025..2021
+            }
+            #expect(first.stored == 1)
+
+            // 新しい提出で high_water が動くが、計算結果は最新 FY（2024）を欠く
+            try await seedDocument("S2", secCode: "21540", submitDateTime: "2026-09-18 15:00", db: app.db)
+            let second = try await runFinancialsIngest(db: app.db, years: 5, limit: nil) { code in
+                fakeSuccess(code: code, years: 5, newestYear: 2024)  // FY2025 を欠く
+            }
+
+            #expect(second.attempted == 1)
+            #expect(second.stored == 0)
+            #expect(second.failed == 1)
+            let row = try #require(try await CompanyFinancials.find("2154", on: app.db))
+            #expect(row.response.yearCount == 5)
+            #expect(row.response.newestFiscalYearEnd?.fyEnd == "2025-03-31")
+            // high_water を据え置くので次回も stale として再試行される
+            #expect(row.highWater == "2025-06-20 09:00")
+
+            let third = try await runFinancialsIngest(db: app.db, years: 5, limit: nil) { code in
+                fakeSuccess(code: code, years: 5)
+            }
+            #expect(third.attempted == 1)
+            #expect(third.stored == 1)
+            #expect(try await CompanyFinancials.find("2154", on: app.db)?.highWater == "2026-09-18 15:00")
+        }
+    }
+
+    @Test func ingestRefusesWhenDatabaseHasNewerAnnualReport() async throws {
+        try await withMigratedApp { app in
+            try await seedDocument("S1", secCode: "21540", periodEnd: "2025-03-31", db: app.db)
+            try await seedDocument(
+                "S2", secCode: "21540", submitDateTime: "2026-09-18 15:00", periodEnd: "2026-06-30",
+                db: app.db)
+
+            let summary = try await runFinancialsIngest(db: app.db, years: 5, limit: nil) { code in
+                fakeSuccess(code: code, years: 5)  // 最新 2025-03-31 < DB の最新有報 2026-06-30
+            }
+
+            #expect(summary.attempted == 1)
+            #expect(summary.stored == 0)
+            #expect(summary.failed == 1)
+            #expect(try await CompanyFinancials.find("2154", on: app.db) == nil)
+        }
+    }
+
+    @Test func ingestStoresNotApplicablePlaceholderEvenWhenDatabaseHasAnnualReport() async throws {
+        // ガードは実際の years を持つ success だけを比較する。会社開示の 120 が DB にあっても
+        // notApplicable はプレースホルダを書いて high_water を進め、次回は skip（毎回 failed で
+        // 再計算し続けるループにしない）。
+        try await withMigratedApp { app in
+            try await seedDocument(
+                "S1", secCode: "72030", submitDateTime: "2026-09-18 15:00", periodEnd: "2026-06-30",
+                db: app.db)
+
+            let first = try await runFinancialsIngest(db: app.db, years: 5, limit: nil) { _ in .notApplicable }
+            #expect(first.notApplicable == 1)
+            #expect(first.failed == 0)
+            let row = try #require(try await CompanyFinancials.find("7203", on: app.db))
+            #expect(row.response.yearCount == 0)
+            #expect(row.highWater == "2026-09-18 15:00")
+
+            let second = try await runFinancialsIngest(db: app.db, years: 5, limit: nil) { _ in .notApplicable }
+            #expect(second.attempted == 0)
+            #expect(second.skipped == 1)
+        }
+    }
+
+    @Test func ingestStoresFewerYearsWhenNewestFiscalYearIsKept() async throws {
+        // 年数が減っても最新 FY が同じなら縮小ガードの対象外（従来どおり格納する）。
+        try await withMigratedApp { app in
+            try await seedDocument("S1", secCode: "72030", periodEnd: "2025-03-31", db: app.db)
+            let pre = CompanyFinancials()
+            pre.id = "7203"
+            pre.response = try makeResponse(code: "7203", years: 6)
+            pre.cacheVersion = "0.0.0"
+            pre.requestedYears = 6
+            pre.highWater = "2025-06-20 09:00"
+            try await pre.create(on: app.db)
+
+            let summary = try await runFinancialsIngest(db: app.db, years: 5, limit: nil) { code in
+                fakeSuccess(code: code, years: 3)
+            }
+
+            #expect(summary.stored == 1)
+            #expect(summary.failed == 0)
+            #expect(try await CompanyFinancials.find("7203", on: app.db)?.response.yearCount == 3)
+        }
+    }
+
+    @Test func ingestRefusesForcedCodeThatWouldShrinkExistingRow() async throws {
+        // force 指定（--codes 等）は行があっても missing 扱いになるが、ガードは既存行と比較する。
+        try await withMigratedApp { app in
+            try await seedDocument("S1", secCode: "72030", db: app.db)
+            let pre = CompanyFinancials()
+            pre.id = "7203"
+            pre.response = try makeResponse(code: "7203", years: 5)
+            pre.cacheVersion = companyFinancialsCacheVersion
+            pre.requestedYears = 5
+            pre.highWater = "2025-06-01 09:00"
+            try await pre.create(on: app.db)
+
+            let summary = try await runFinancialsIngest(
+                db: app.db, years: 5, limit: nil, forceCodes: ["7203"]
+            ) { code in
+                fakeSuccess(code: code, years: 5, newestYear: 2024)
+            }
+
+            #expect(summary.failed == 1)
+            #expect(summary.stored == 0)
+            let row = try #require(try await CompanyFinancials.find("7203", on: app.db))
+            #expect(row.response.newestFiscalYearEnd?.fyEnd == "2025-03-31")
+            #expect(row.highWater == "2025-06-01 09:00")
+        }
+    }
+
+    @Test func ingestIgnoresNonCompanyAnnualReportsForShrinkGuard() async throws {
+        // 府令 030（信託受益証券等）の 120 や period_end 無しの書類はガードの比較対象にしない。
+        try await withMigratedApp { app in
+            try await seedDocument("S1", secCode: "72030", periodEnd: "2025-03-31", db: app.db)
+            try await seedDocument(
+                "S2", secCode: "72030", ordinanceCode: "030", periodEnd: "2026-06-30", db: app.db)
+            try await seedDocument(
+                "S3", secCode: "72030", docTypeCode: "160", periodEnd: "2026-09-30", db: app.db)
+
+            let summary = try await runFinancialsIngest(db: app.db, years: 5, limit: nil) { code in
+                fakeSuccess(code: code, years: 5)  // 最新 2025-03-31 = 会社開示の最新有報
+            }
+
+            #expect(summary.stored == 1)
+            #expect(summary.failed == 0)
+        }
+    }
+
+    @Test func shrinkRefusalNamesMissingDocument() throws {
+        let computed = try makeResponse(code: "2154", years: 5, newestYear: 2024)
+        let stored = try makeResponse(code: "2154", years: 5)  // 最新 2025-03-31
+        #expect(
+            financialsShrinkRefusal(
+                computed: computed, stored: nil,
+                newestAnnual: NewestAnnualFiling(periodEnd: "2026-06-30", docID: "S100WXYZ"))
+                == "S100WXYZ")
+        #expect(financialsShrinkRefusal(computed: computed, stored: stored, newestAnnual: nil) == "fy_end=2025-03-31")
+        #expect(financialsShrinkRefusal(computed: stored, stored: computed, newestAnnual: nil) == nil)
+        #expect(
+            financialsShrinkRefusal(
+                computed: stored, stored: stored,
+                newestAnnual: NewestAnnualFiling(periodEnd: "2025-03-31", docID: "S100SAME"))
+                == nil)
+    }
+
     @Test func ingestStoresFinancialsForEachDistinctCompany() async throws {
         try await withMigratedApp { app in
             try await seedDocument("S1", secCode: "72030", db: app.db)

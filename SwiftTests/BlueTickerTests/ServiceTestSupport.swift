@@ -18,6 +18,18 @@ enum ServiceTestSupport {
         return utcCalendar.date(from: comps)!
     }
 
+    /// EDINET（JST）の今日を UTC 0時表現で（日付ラベルの「今日」。EDINET の日付は JST の暦日）。
+    static func edinetToday() -> Date {
+        var jst = Calendar(identifier: .gregorian)
+        jst.timeZone = TimeZone(secondsFromGMT: 9 * 3600)!
+        let comps = jst.dateComponents([.year, .month, .day], from: Date())
+        return utcCalendar.date(from: comps)!
+    }
+
+    static func currentEdinetYear() -> Int {
+        utcCalendar.component(.year, from: edinetToday())
+    }
+
     static func addDays(_ date: Date, _ days: Int) -> Date {
         utcCalendar.date(byAdding: .day, value: days, to: date)!
     }
