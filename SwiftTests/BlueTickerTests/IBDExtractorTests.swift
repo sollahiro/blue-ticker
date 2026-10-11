@@ -293,6 +293,88 @@ import Foundation
         }
     }
 
+    @Test func testLeaseRecognisedAmountsTableWithNoteMarker() {
+        // パターンF（楽天 S100XTNW 型）: 使用権資産の行＋「リース負債(注)２」1行。注記マーカーは無視する。
+        func tr(_ cells: [String]) -> String {
+            "&lt;tr&gt;" + cells.map { "&lt;td&gt;\($0)&lt;/td&gt;" }.joined() + "&lt;/tr&gt;"
+        }
+        let rows = tr(["", "前連結会計年度", "当連結会計年度"])
+            + tr(["使用権資産", "", ""])
+            + tr(["オフィスを原資産とするもの", "53,355", "77,171"])
+            + tr(["その他を原資産とするもの", "274,130", "225,840"])
+            + tr(["使用権資産合計(注)１", "327,485", "303,011"])
+            + tr(["リース負債(注)２", "352,856", "361,443"])
+        let xml = makeXbrlWithLeaseTextblock(ifrsBorrowingsXml, leaseHtmlRows: rows)
+        XBRLTestSupport.withXbrlDir(xml) { dir in
+            let (fs, _) = XBRLTestSupport.instantFieldSet(in: dir)
+            let lease = IFRSLease.extractLeaseLiabilities(fieldSet: fs, xbrlDir: dir)
+            #expect(lease.current == 361_443 * Financial.millionYen)
+            #expect(lease.prior == 352_856 * Financial.millionYen)
+            #expect(lease.components.map(\.label) == ["リース負債"])
+        }
+    }
+
+    @Test func testLeaseRecognisedAmountsTableRejectsTwoLeaseRows() {
+        // リース負債の行が2つ以上なら読まない（どちらが残高か決められない）。
+        func tr(_ cells: [String]) -> String {
+            "&lt;tr&gt;" + cells.map { "&lt;td&gt;\($0)&lt;/td&gt;" }.joined() + "&lt;/tr&gt;"
+        }
+        let rows = tr(["使用権資産", "260,622", "270,880"])
+            + tr(["リース負債", "352,856", "361,443"])
+            + tr(["リース負債（注）３", "1,000", "2,000"])
+        let xml = makeXbrlWithLeaseTextblock(ifrsBorrowingsXml, leaseHtmlRows: rows)
+        XBRLTestSupport.withXbrlDir(xml) { dir in
+            let (fs, _) = XBRLTestSupport.instantFieldSet(in: dir)
+            let lease = IFRSLease.extractLeaseLiabilities(fieldSet: fs, xbrlDir: dir)
+            #expect(lease.current == nil)
+        }
+    }
+
+    @Test func testLeaseSplitMaturityTablesBookValueColumn() {
+        // パターンG（S100XSDT 型）: 前期・当期の満期表を分け、列「帳簿価額」に残高。
+        func tr(_ cells: [String]) -> String {
+            "&lt;tr&gt;" + cells.map { "&lt;td&gt;\($0)&lt;/td&gt;" }.joined() + "&lt;/tr&gt;"
+        }
+        let header = tr(["", "帳簿価額", "１年以内", "１年超２年以内", "５年超"])
+        let html = "&lt;table&gt;" + header + tr(["リース負債", "5,278", "1,302", "1,236", "1,651"]) + "&lt;/table&gt;"
+            + "&lt;table&gt;" + header + tr(["リース負債", "4,653", "1,289", "682", "1,679"]) + "&lt;/table&gt;"
+        let xml = makeXbrlWithLeaseTextblock(ifrsBorrowingsXml, leaseHtmlRows: html)
+        XBRLTestSupport.withXbrlDir(xml) { dir in
+            let (fs, _) = XBRLTestSupport.instantFieldSet(in: dir)
+            let lease = IFRSLease.extractLeaseLiabilities(fieldSet: fs, xbrlDir: dir)
+            #expect(lease.current == 4_653 * Financial.millionYen)
+            #expect(lease.prior == 5_278 * Financial.millionYen)
+        }
+    }
+
+    @Test func testLeaseSplitMaturityPeriodRowsBookBalanceColumn() {
+        // パターンG（S100YA84 型）: 1表の中を期間行で区切り、列「帳簿残高」に残高。
+        func tr(_ cells: [String]) -> String {
+            "&lt;tr&gt;" + cells.map { "&lt;td&gt;\($0)&lt;/td&gt;" }.joined() + "&lt;/tr&gt;"
+        }
+        let rows = tr(["", "帳簿残高", "契約上のキャッシュ・フロー", "１年以内", "１年超"])
+            + tr(["", "百万円", "百万円", "百万円", "百万円"])
+            + tr(["前連結会計年度末（2025年３月31日）", "", "", "", ""])
+            + tr(["リース負債", "584", "586", "586", "－"])
+            + tr(["当連結会計年度末（2026年３月31日）", "", "", "", ""])
+            + tr(["リース負債", "4,511", "4,542", "3,608", "932"])
+        let xml = makeXbrlWithLeaseTextblock(ifrsBorrowingsXml, leaseHtmlRows: rows)
+        XBRLTestSupport.withXbrlDir(xml) { dir in
+            let (fs, _) = XBRLTestSupport.instantFieldSet(in: dir)
+            let lease = IFRSLease.extractLeaseLiabilities(fieldSet: fs, xbrlDir: dir)
+            #expect(lease.current == 4_511 * Financial.millionYen)
+            #expect(lease.prior == 584 * Financial.millionYen)
+        }
+    }
+
+    @Test func testCleanedLeaseLabelStripsNoteMarkers() {
+        #expect(IFRSLease.cleanedLeaseLabel("リース負債(注)２") == "リース負債")
+        #expect(IFRSLease.cleanedLeaseLabel("リース負債（注３）") == "リース負債")
+        #expect(IFRSLease.cleanedLeaseLabel("リース負債※１") == "リース負債")
+        #expect(IFRSLease.cleanedLeaseLabel("支払期日が1年以内") == "支払期日が1年以内")
+        #expect(IFRSLease.cleanedLeaseLabel("リース負債（流動）") == "リース負債（流動）")
+    }
+
     @Test func testLeaseNoTextblockReturnsNil() {
         let xml = XBRLTestSupport.makeXbrlInstant(ifrsBorrowingsXml)
         XBRLTestSupport.withXbrlDir(xml) { dir in
