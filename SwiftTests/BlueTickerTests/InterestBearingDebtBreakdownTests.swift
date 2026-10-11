@@ -66,7 +66,7 @@ private struct StubIBDDecider: InterestBearingDebtDeciding {
             consolidated: true, isBank: true,
             bankComponents: [
                 candidate(
-                    "預金", tag: "DepositsLiabilitiesBNK", closing: 1_000_000_000_000,
+                    "社債", tag: "BondsPayable", closing: 1_000_000_000_000,
                     source: ibdRowSourceFinancialsBankComponents,
                     preset: .interestBearingDebt),
                 candidate(
@@ -939,6 +939,11 @@ private struct StubIBDDecider: InterestBearingDebtDeciding {
         // 債権流動化は Lease を名前に含むが債務（リースタグではない）
         #expect(!Xbrl.leaseLiabilitiesBSTags.contains("PayablesUnderFluidityLeaseReceivablesCLLEA"))
         #expect(Xbrl.bankIBDComponents.contains { $0.tags.contains("DebenturesLiabilitiesBNK") })
+        // 預金・譲渡性預金は銀行でも有利子負債に含めない（預金は銀行判定マーカーだけ）
+        let bankTags = Set(Xbrl.bankIBDComponents.flatMap(\.tags))
+        #expect(!bankTags.contains("DepositsLiabilitiesBNK"))
+        #expect(!bankTags.contains("NegotiableCertificatesOfDepositLiabilitiesBNK"))
+        #expect(Xbrl.bankMarkerTag == "DepositsLiabilitiesBNK")
         // 除外リストと債務 preset は重ならない
         #expect(Xbrl.ibdNonInterestBearingBSTags.isDisjoint(with: all))
         #expect(Xbrl.ibdSecuritiesBusinessBorrowingTags.isDisjoint(with: all))

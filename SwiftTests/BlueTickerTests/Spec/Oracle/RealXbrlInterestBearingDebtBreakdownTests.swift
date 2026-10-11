@@ -260,22 +260,22 @@ private struct AllInterestBearingIBDDecider: InterestBearingDebtDeciding {
         }
     }
 
-    /// 三菱UFJ: 銀行は bank components を行にする。
+    /// 三菱UFJ: 銀行は bank components を行にする。預金 228,512,749・譲渡性預金 17,374,010 は
+    /// 有利子負債に含めない（Sorahiro 判断 2026-10-11）。旧合計 286,946,640 − 245,886,759 = 41,059,881。
     @Test func mufgUsesBankComponents() async throws {
         guard await Self.ensureAvailable("S100W4FB") else { return }
         let (payload, audit) = try await resolve("S100W4FB", decider: GoldenIBDDecider())
         #expect(payload.needsReview == false)
         #expect(payload.denominatorTag == "bank_components")
         expectRows(payload, [
-            ("預金", ibdRowSourceFinancialsBankComponents, 228_512_749_000_000, nil),
-            ("譲渡性預金", ibdRowSourceFinancialsBankComponents, 17_374_010_000_000, nil),
             ("コマーシャル・ペーパー", ibdRowSourceFinancialsBankComponents, 3_475_042_000_000, nil),
             ("借用金", ibdRowSourceFinancialsBankComponents, 22_101_954_000_000, nil),
             ("短期社債", ibdRowSourceFinancialsBankComponents, 1_373_236_000_000, ibdMaturityCurrent),
             ("社債", ibdRowSourceFinancialsBankComponents, 14_018_955_000_000, nil),
             ("リース債務", ibdRowSourceBorrowingsSchedule, 90_694_000_000, nil),  // 区分の分からない行は開示どおり
         ])
-        #expect(payload.rows.last?.closing == 286_946_640_000_000)
+        #expect(payload.rows.last?.closing == 41_059_881_000_000)
+        #expect(!payload.rows.contains { $0.labelRaw.contains("預金") })
         #expect(audit.sentences.contains("bank_components"))
     }
 

@@ -184,6 +184,40 @@ import Foundation
         }
     }
 
+    // MARK: - 銀行（預金は有利子負債に含めない）
+
+    @Test func testBankExcludesDepositsAndNegotiableCDs() {
+        let xml = XBRLTestSupport.makeXbrlInstant("""
+            <jppfs_cor:DepositsLiabilitiesBNK contextRef="CurrentYearInstant"
+                unitRef="JPY">900000000000</jppfs_cor:DepositsLiabilitiesBNK>
+            <jppfs_cor:NegotiableCertificatesOfDepositLiabilitiesBNK contextRef="CurrentYearInstant"
+                unitRef="JPY">50000000000</jppfs_cor:NegotiableCertificatesOfDepositLiabilitiesBNK>
+            <jppfs_cor:BorrowedMoneyLiabilitiesBNK contextRef="CurrentYearInstant"
+                unitRef="JPY">30000000000</jppfs_cor:BorrowedMoneyLiabilitiesBNK>
+            <jppfs_cor:BondsPayable contextRef="CurrentYearInstant"
+                unitRef="JPY">20000000000</jppfs_cor:BondsPayable>
+        """)
+        XBRLTestSupport.withXbrlDir(xml) { dir in
+            let result = extract(in: dir)
+            #expect(result.method.hasPrefix("bank_components"))
+            #expect(result.total == 50_000_000_000)
+            #expect(!result.components.contains { $0.label.contains("預金") })
+        }
+    }
+
+    @Test func testBankWithDepositsOnlyIsZeroDebt() {
+        let xml = XBRLTestSupport.makeXbrlInstant("""
+            <jppfs_cor:DepositsLiabilitiesBNK contextRef="CurrentYearInstant"
+                unitRef="JPY">900000000000</jppfs_cor:DepositsLiabilitiesBNK>
+        """)
+        XBRLTestSupport.withXbrlDir(xml) { dir in
+            let result = extract(in: dir)
+            #expect(result.method.hasPrefix("bank_components"))
+            #expect(result.total == 0)
+            #expect(result.components.isEmpty)
+        }
+    }
+
     // MARK: - not_found
 
     @Test func testReturnsNotFoundWhenNoDebtTagsPresent() {
