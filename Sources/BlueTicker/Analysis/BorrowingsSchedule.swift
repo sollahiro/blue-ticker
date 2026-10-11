@@ -457,8 +457,6 @@ enum BorrowingsSchedule {
         // いたためラベル重複で合算を免れていた。見出しで除外する。
         return heading.contains("対応する債務") || heading.contains("担保付債務")
             || heading.contains("上記債務のうち") || heading.contains("抵当")
-            // S100YJEX 実データ検証（2026-10-11）: 「これらの担保差入資産に対応する負債は」
-            || heading.contains("対応する負債")
     }
 
     /// 表の直前のテキスト。兄弟要素をさかのぼり、尽きたら親の兄弟へ上がる（親自身の本文は読まない）。
