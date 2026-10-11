@@ -386,6 +386,7 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                 paired_row_index はその除外行が対応する数える行の rows 配列の添字（0 始まり、決まらなければ null）です。
                 BS 科目が明細表の複数行を含む（入れ子）ときは BS 科目を数え、明細表の行はその内訳として
                 category_group（親の BS 科目名）/ category（内訳名）を持ちます。親行は category_group が自分の名前、category が null です。
+                流動と非流動の親が同じ名前だと category_group での集計は両方の内訳をまとめるので、正確な親は paired_row_index で引いてください。
                 連結がある会社は連結だけ、無い会社は単体だけです。
                 denominator は同じ財務諸表の BS 有利子負債（リース含む、コードが分類した科目だけ）です。
                 BS にリース科目が無く注記または明細表のリースを分母に足すときは warnings に

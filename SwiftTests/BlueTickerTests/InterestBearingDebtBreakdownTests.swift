@@ -323,6 +323,30 @@ private struct StubIBDDecider: InterestBearingDebtDeciding {
     }
 
     /// BS のリース科目は明細表リースに勝つ。同額は duplicate_of_balance_sheet、違えば scope_differs。
+    /// 区分の無い明細表リース行が BS リース科目1行と同額なら duplicate でその行を対応先にする。
+    /// 残りは対応した BS 行を除いた和と比べ、対応先は付けない。
+    @Test func unbucketedLeaseRowMatchingOneBalanceSheetRowIsDuplicate() {
+        let bsCurrent = candidate(
+            "リース債務", tag: "LeaseObligationsCL", closing: 756_000_000,
+            source: ibdRowSourceBalanceSheet, preset: .leaseLiability, maturity: ibdMaturityCurrent)
+        let bsNonCurrent = candidate(
+            "リース債務", tag: "LeaseObligationsNCL", closing: 1_102_000_000,
+            source: ibdRowSourceBalanceSheet, preset: .leaseLiability, maturity: ibdMaturityNonCurrent)
+        let matching = candidate(
+            "リース債務（一年以内）", closing: 756_000_000,
+            source: ibdRowSourceBorrowingsSchedule, preset: .leaseLiability)
+        let other = candidate(
+            "リース債務（その他）", closing: 1_000_000_000,
+            source: ibdRowSourceBorrowingsSchedule, preset: .leaseLiability)
+        let result = InterestBearingDebtBreakdown.reconcileLease(
+            balanceSheet: [bsCurrent, bsNonCurrent], schedule: [matching, other], note: [])
+        #expect(result.included == [bsCurrent, bsNonCurrent])
+        #expect(result.excluded == [
+            .init(row: matching, reason: ibdExcludedReasonDuplicateOfBalanceSheet, pairedTo: bsCurrent),
+            .init(row: other, reason: ibdExcludedReasonScopeDiffers, pairedTo: nil),
+        ])
+    }
+
     @Test func balanceSheetLeaseWinsOverScheduleLease() async throws {
         let inputs = IBDInputs(
             consolidated: true,

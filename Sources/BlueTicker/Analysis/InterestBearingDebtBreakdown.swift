@@ -912,10 +912,10 @@ enum InterestBearingDebtBreakdown {
     ///   含めていないので入れ子にしない）。長期借入金 → BS の長期借入金行。
     /// - 区分を跨ぐ明細行（「借入金」「長期借入金（1年以内に返済予定のものを含む）」）は BS の借入金
     ///   各行の和と比べ、親を1行に決められないので対応先は付けない。
-    /// - 親候補が2行以上で決まらないとき、または明細行が BS のどの借入金科目にも入らないのに
-    ///   同じまとまりに BS 行があるときは `parentUnresolved`（needs_review）。
-    /// - BS に科目が無いまとまりの明細行はそのまま合計に入れる。BS の合算科目（社債及び借入金等）
-    ///   は比べない（明細表の内訳をそのまま使う）。
+    /// - 親候補が2行以上で決まらないときだけ `parentUnresolved`（needs_review）。
+    /// - 親が無い明細行（BS に同じ区分の科目が無い、または 1年内返済分を BS 短期借入金に含めていない）は
+    ///   needs_review にせず、そのまま合計に入れる。重複・漏れは coverage 帯（95〜105%）の判定に任せる。
+    /// - BS の合算科目（社債及び借入金等）は比べない（明細表の内訳をそのまま使う）。
     static func reconcileScheduleDebt(
         schedule: [IBDCandidate], balanceSheet: [IBDCandidate]
     ) -> (included: [IBDCandidate], excluded: [ExcludedRow], parentUnresolved: Bool, sentences: [String]) {
@@ -1100,19 +1100,39 @@ enum InterestBearingDebtBreakdown {
 
     /// BS にリース科目があるとき、BS のリース行を合計に入れる。明細表のリース行は満期区分が
     /// 同じ BS 行があれば除外（同額は duplicate、違えば scope_differs）、BS に無い区分なら残す。
-    /// 区分の無い明細表リース行とリース注記は BS リース合計と比べて除外する。
+    /// 区分の無い明細表リース行とリース注記は、まず BS リース科目1行と同額か見て（同額なら
+    /// duplicate でその行を対応先にする）、残りを BS リース合計と比べて除外する。
     static func reconcileLease(
         balanceSheet: [IBDCandidate], schedule: [IBDCandidate], note: [IBDCandidate]
     ) -> (included: [IBDCandidate], excluded: [ExcludedRow]) {
         var included = balanceSheet
         var excluded: [ExcludedRow] = []
-        let bsTotal = balanceSheet.reduce(0) { $0 + ($1.closing ?? 0) }
-        func againstTotal(_ rows: [IBDCandidate]) {
+        // 明細表・注記の行が BS のリース科目1行と同額なら、その行の重複（対応先あり）。
+        func exactBSMatch(_ row: IBDCandidate, among rows: [IBDCandidate]? = nil) -> IBDCandidate? {
+            guard (row.closing ?? 0) != 0 else { return nil }
+            let matches = (rows ?? balanceSheet).filter { sameAmount(row.closing, $0.closing, rows: 2) }
+            return matches.count == 1 ? matches[0] : nil
+        }
+        func againstTotal(_ candidates: [IBDCandidate]) {
+            var rows: [IBDCandidate] = []
+            var matched: [IBDCandidate] = []
+            for row in candidates {
+                if let match = exactBSMatch(row) {
+                    matched.append(match)
+                    excluded.append(ExcludedRow(row: row, reason: ibdExcludedReasonDuplicateOfBalanceSheet, pairedTo: match))
+                } else {
+                    rows.append(row)
+                }
+            }
             guard !rows.isEmpty else { return }
+            // 残りは、同額で対応した BS 行を除いた BS リース科目の和と比べる。
+            let remainingBS = matched.isEmpty ? balanceSheet : balanceSheet.filter { !matched.contains($0) }
+            let remainingTotal = remainingBS.reduce(0) { $0 + ($1.closing ?? 0) }
             let sum = rows.reduce(0) { $0 + ($1.closing ?? 0) }
-            let reason = sameAmount(sum, bsTotal, rows: rows.count + balanceSheet.count)
+            let reason = sameAmount(sum, remainingTotal, rows: rows.count + remainingBS.count)
                 ? ibdExcludedReasonDuplicateOfBalanceSheet : ibdExcludedReasonScopeDiffers
-            let pair = balanceSheet.count == 1 ? balanceSheet[0] : nil
+            // 一部が同額で対応したあとの残りは、残った BS 行と1対1とは言えないので対応先を付けない。
+            let pair = matched.isEmpty && balanceSheet.count == 1 ? balanceSheet[0] : nil
             excluded += rows.map { ExcludedRow(row: $0, reason: reason, pairedTo: pair) }
         }
         var unbucketed: [IBDCandidate] = []
@@ -1124,6 +1144,10 @@ enum InterestBearingDebtBreakdown {
             let bsSame = balanceSheet.filter { $0.maturityClass == maturity }
             guard !bsSame.isEmpty else {
                 included.append(row)  // BS に無い区分（例: 流動分が BS の「その他」に含まれる）
+                continue
+            }
+            if let match = exactBSMatch(row, among: bsSame) {
+                excluded.append(ExcludedRow(row: row, reason: ibdExcludedReasonDuplicateOfBalanceSheet, pairedTo: match))
                 continue
             }
             let bsSum = bsSame.reduce(0) { $0 + ($1.closing ?? 0) }
