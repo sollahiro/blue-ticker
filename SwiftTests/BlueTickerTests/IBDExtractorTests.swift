@@ -218,6 +218,57 @@ import Foundation
         }
     }
 
+    /// 宮崎太陽銀行 S100YG72 型: 借入金等明細表は「該当事項はありません」。リース注記は借手側が文章だけで、
+    /// 表は貸手側（リース料債権部分の金額・回収予定額）だけ。貸手の表をリース債務として読まない → 0。
+    @Test func testBankLeaseFallbackIgnoresLessorSideLeaseNote() {
+        func tr(_ cells: [String]) -> String {
+            "&lt;tr&gt;" + cells.map { "&lt;td&gt;\($0)&lt;/td&gt;" }.joined() + "&lt;/tr&gt;"
+        }
+        let header = tr(["", "前連結会計年度", "当連結会計年度"])
+        let html = "&lt;p&gt;（借手側）&lt;/p&gt;&lt;p&gt;リース資産の内容 車両であります。&lt;/p&gt;"
+            + "&lt;p&gt;（貸手側）&lt;/p&gt;&lt;table&gt;" + header
+            + tr(["リース料債権部分の金額", "5,894", "5,592"])
+            + tr(["見積残存価額部分の金額", "1", "2"])
+            + tr(["受取利息相当額", "557", "530"]) + "&lt;/table&gt;"
+            + "&lt;p&gt;リース料債権部分の金額の回収予定額&lt;/p&gt;&lt;table&gt;" + header
+            + tr(["１年以内", "1,870", "1,867"]) + tr(["１年超２年以内", "1,553", "1,504"])
+            + tr(["合計", "5,894", "5,592"]) + "&lt;/table&gt;"
+        let xml = XBRLTestSupport.makeXbrlInstant("""
+            <jppfs_cor:DepositsLiabilitiesBNK contextRef="CurrentYearInstant"
+                unitRef="JPY">774727000000</jppfs_cor:DepositsLiabilitiesBNK>
+            <jpcrp_cor:NotesLeasesConsolidatedFinancialStatementsTextBlock
+                contextRef="CurrentYearDuration">\(html)</jpcrp_cor:NotesLeasesConsolidatedFinancialStatementsTextBlock>
+            <jpcrp_cor:AnnexedConsolidatedDetailedScheduleOfBorrowingsTextBlock
+                contextRef="CurrentYearDuration">&lt;p&gt;該当事項はありません。&lt;/p&gt;</jpcrp_cor:AnnexedConsolidatedDetailedScheduleOfBorrowingsTextBlock>
+        """)
+        XBRLTestSupport.withXbrlDir(xml) { dir in
+            #expect(BorrowingsSchedule.extractRows(xbrlDir: dir) == nil)
+            let result = extract(in: dir)
+            #expect(result.total == 0)
+            #expect(!result.components.contains { $0.label.contains("リース") })
+        }
+    }
+
+    /// 借手側の表は従来どおり読む（貸手側の表が後ろにあっても）。
+    @Test func testLeaseOnlyNoteStillReadsLesseeTableBeforeLessorSection() {
+        func tr(_ cells: [String]) -> String {
+            "&lt;tr&gt;" + cells.map { "&lt;td&gt;\($0)&lt;/td&gt;" }.joined() + "&lt;/tr&gt;"
+        }
+        let header = tr(["", "前連結会計年度", "当連結会計年度"])
+        let html = "&lt;p&gt;（借手側）未経過リース料&lt;/p&gt;&lt;table&gt;" + header
+            + tr(["１年内", "100", "120"]) + tr(["１年超", "300", "280"]) + tr(["合計", "400", "400"])
+            + "&lt;/table&gt;&lt;p&gt;（貸手側）&lt;/p&gt;&lt;table&gt;" + header
+            + tr(["１年内", "9", "9"]) + tr(["合計", "9", "9"]) + "&lt;/table&gt;"
+        let xml = XBRLTestSupport.makeXbrlInstant("""
+            <jpcrp_cor:NotesLeasesConsolidatedFinancialStatementsTextBlock
+                contextRef="CurrentYearDuration">\(html)</jpcrp_cor:NotesLeasesConsolidatedFinancialStatementsTextBlock>
+        """)
+        XBRLTestSupport.withXbrlDir(xml) { dir in
+            let parsed = BorrowingsSchedule.extractRows(xbrlDir: dir)
+            #expect(parsed?.totalCurrent == 400 * Financial.millionYen)
+        }
+    }
+
     // MARK: - not_found
 
     @Test func testReturnsNotFoundWhenNoDebtTagsPresent() {
