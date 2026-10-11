@@ -66,6 +66,21 @@ import Testing
         #expect(handler.messages[0].level == .notice)
     }
 
+    @Test func logIngestSummaryReportsRefusedSeparatelyAndWarns() {
+        let handler = CapturingHandler()
+        let logger = Logger(label: "test") { _ in handler }
+        logIngestSummary(
+            logger, target: "financials", attempted: 3, stored: 2, failed: 0, skipped: 0, refused: 1)
+        #expect(handler.messages[0].level == .warning)
+        #expect(handler.messages[0].metadata["refused"]?.description == "1")
+        #expect(handler.messages[0].metadata["failed"]?.description == "0")
+
+        handler.messages.removeAll()
+        logIngestSummary(logger, target: "facts", attempted: 1, stored: 1, failed: 0, skipped: 0)
+        #expect(handler.messages[0].metadata["refused"] == nil)
+        #expect(handler.messages[0].level == .notice)
+    }
+
     @Test func redactsPostgresPasswordAndBearerInMessageAndMetadata() throws {
         let tmp = FileManager.default.temporaryDirectory
             .appendingPathComponent("blt-json-log-redact-\(UUID().uuidString).log")

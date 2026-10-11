@@ -202,6 +202,56 @@ import Foundation
         #expect(store.loadDocumentIndexInfo(year, allowStale: true)?["built_through"] as? String == "2024-12-31")
     }
 
+    /// 過去年（2024）の全日に確定版（いま書いた）の日次キャッシュをシードする。
+    private func seedFinalDailyCaches2024() {
+        let support = ServiceTestSupport.self
+        var current = support.utcCalendar.date(from: DateComponents(year: 2024, month: 1, day: 1))!
+        let end = support.utcCalendar.date(from: DateComponents(year: 2024, month: 12, day: 31))!
+        while current <= end {
+            store.saveSearchCache(store.searchCacheKey(support.iso(current)), data: [])
+            current = support.addDays(current, 1)
+        }
+    }
+
+    /// 日次キャッシュを「その日 09:02 JST（= 00:02 UTC）に書いた同日スナップショット」にする。
+    private func makeSameDaySnapshot(_ dateStr: String) throws {
+        let support = ServiceTestSupport.self
+        let parts = dateStr.split(separator: "-").map { Int($0)! }
+        try support.setMtime(
+            store.documentsByDateDir.appendingPathComponent(store.searchCacheKey(dateStr)),
+            support.utcCalendar.date(from: DateComponents(year: parts[0], month: parts[1], day: parts[2], minute: 2))!)
+    }
+
+    @Test func testRefreshDocumentIndexStopsBuiltThroughBeforeSameDaySnapshot() async throws {
+        seedFinalDailyCaches2024()
+        store.saveSearchCache(store.searchCacheKey("2024-03-10"), data: [["docID": "SNAP"]])
+        try makeSameDaySnapshot("2024-03-10")
+
+        let docs = await client.refreshDocumentIndexForYear(2024)
+
+        // 取得失敗（API キーなし）→ 期限切れスナップショットへフォールバック: 書類は入るが built_through は前日まで
+        #expect(docs.compactMap { $0["docID"] as? String } == ["SNAP"])
+        #expect(store.loadDocumentIndexInfo(2024, allowStale: true)?["built_through"] as? String == "2024-03-09")
+    }
+
+    @Test func testRefreshDocumentIndexWithSnapshotOnJanuaryFirstFallsBackToPreviousYearEnd() async throws {
+        seedFinalDailyCaches2024()
+        try makeSameDaySnapshot("2024-01-01")
+
+        _ = await client.refreshDocumentIndexForYear(2024)
+
+        // 年初が未確定 → 前年末日（次回 catchup が 1/1 から取り直す）
+        #expect(store.loadDocumentIndexInfo(2024, allowStale: true)?["built_through"] as? String == "2023-12-31")
+    }
+
+    @Test func testRefreshDocumentIndexAdvancesToYearEndWhenAllDaysFinal() async throws {
+        seedFinalDailyCaches2024()
+
+        _ = await client.refreshDocumentIndexForYear(2024)
+
+        #expect(store.loadDocumentIndexInfo(2024, allowStale: true)?["built_through"] as? String == "2024-12-31")
+    }
+
     // MARK: - XBRL ダウンロード
 
     @Test func testDownloadDocumentReturnsCachedDirWithoutApiKey() async throws {

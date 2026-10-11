@@ -224,6 +224,28 @@ private func makeZipWithEntryCount(_ count: Int) throws -> Data {
         #expect(!store.isSearchCacheFinal(todayStr()))
     }
 
+    @Test func testFinalityInJSTEarlyMorningWindow() throws {
+        // JST 0:00〜8:59 は UTC ではまだ前日。UTC 判定だと前日分を「今日」と誤認していた窓。
+        let store = makeStore()
+        let utc = ServiceTestSupport.utcCalendar
+        let filename = store.searchCacheKey("2026-09-18")
+        store.saveSearchCache(filename, data: [["docID": "S100X"]])
+        let now = utc.date(from: DateComponents(year: 2026, month: 9, day: 18, hour: 23, minute: 30))!  // 9/19 08:30 JST
+
+        // 9/19 08:00 JST（= 9/18 23:00 UTC）に書いた 9/18 分: 締め後 → 確定
+        try ServiceTestSupport.setMtime(
+            searchCachePath(store, filename), utc.date(from: DateComponents(year: 2026, month: 9, day: 18, hour: 23))!)
+        #expect(store.isSearchCacheFinal("2026-09-18", now: now))
+
+        // 9/18 23:00 JST（= 14:00 UTC）に書いた 9/18 分: 締め前 → 未確定
+        try ServiceTestSupport.setMtime(
+            searchCachePath(store, filename), utc.date(from: DateComponents(year: 2026, month: 9, day: 18, hour: 14))!)
+        #expect(!store.isSearchCacheFinal("2026-09-18", now: now))
+
+        // 同じ窓で 9/19 分は JST の「今日」→ 確定しない
+        #expect(!store.isSearchCacheFinal("2026-09-19", now: now))
+    }
+
     @Test func testEdinetDayBoundaryIsJST() {
         let utc = ServiceTestSupport.utcCalendar
         // 2026-09-18 23:30 UTC = 2026-09-19 08:30 JST → EDINET の今日は 9/19
