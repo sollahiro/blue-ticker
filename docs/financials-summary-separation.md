@@ -37,7 +37,7 @@ XBRL → statement / notes / breakdown（正本）
 | `fin-vN` | 存続。破壊的変更だけバンプ（`.agents/rules/versioning.md`）。IA 切替や既存の正しい値を保つ細粒度修正では上げない |
 | 新規生値 | まず正本へ。financials に足さない |
 | 組立 | statement → notes → breakdown。取れた源を1つ採用。**employees / rd は breakdown のみ** |
-| IBD | breakdown `interest_bearing_debt` 軸の合計（decider 無し）。銀行は bank components 行の合計。軸が `needs_review`（公開保留）・解決不能のときは既存の `IBDExtractor.extractCanonical` 値をそのまま使い、内部の method `legacy_ibd_extractor_fallback` と warnings に理由（未確認の Jev 分類行など）を残す（公開フィールドは増やさない）。明細が無い大きな書類は 0 |
+| IBD | breakdown `interest_bearing_debt` 軸の合計（decider 無し）。銀行は bank components 行の合計。軸が `needs_review`（公開保留）・`not_found`・解決不能のときは既存の `IBDExtractor.extractCanonical` 値をそのまま使い、内部の method `legacy_ibd_extractor_fallback` と warnings に理由（未確認の Jev 分類行など）を残す（公開フィールドは増やさない）。無借金の 0 は旧 Extractor の `zero_debt` のまま |
 | employees / rd | breakdown 軸の分母。financials はパススルー。PL 行は使わない |
 | ingest 依存 | 順序変更は採らない。同一 XBRL パスで resolver 直接呼び。正本 `cache_version` が変わったら `assembly_fingerprint` 不一致で financials を再組立する（`fin-vN` は上げない） |
 

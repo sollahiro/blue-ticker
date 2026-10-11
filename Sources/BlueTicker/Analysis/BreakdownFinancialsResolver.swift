@@ -146,11 +146,15 @@ enum BreakdownFinancialsResolver {
                 accountingStandard: accountingStandard,
                 warnings: payload.warnings)
         case .notApplicable(let reason):
-            if reason == breakdownNotApplicableNotFound, inputs.largeInstance {
-                // 従来 /financials と同じ: 大きな本表インスタンスに債務行が無ければ無借金とみなす。
+            // 軸が債務行を見つけられないときも旧 Extractor をそのまま使う。軸の not_found は
+            // 旧 Extractor より狭く（会社独自タグ・TextBlock 等）、ここで 0 にすると実在する
+            // 債務が消える。無借金の判定（大きなインスタンスに IBD タグが皆無 → 0）は旧
+            // Extractor 自身の zero_debt に任せ、その場合は従来どおり印を付けない。
+            let result = legacy()
+            if result.method == "zero_debt" {
                 return InterestBearingDebtCanonicalValue(
-                    total: 0, priorTotal: 0, method: "zero_debt",
-                    accountingStandard: accountingStandard, warnings: [])
+                    total: result.total, priorTotal: result.priorTotal, method: "zero_debt",
+                    accountingStandard: result.accountingStandard, warnings: [])
             }
             return legacyFallback(reason: reason)
         case .unavailable:

@@ -395,8 +395,7 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                 warnings の research_and_development_prose_remainder と research_and_development_prose_exclusion、
                 capex_prose_remainder と capex_prose_exclusion は 404 にしません。
                 内訳が取得できない場合は 404 とともに reason が返ることがあります（reason 無しの 404 は単に未取り込み）。
-                公開 reason は geography_only / single_segment_disclosed / not_found / unknown /
-                needs_review のみ。
+                公開 reason は geography_only / single_segment_disclosed / not_found / unknown のみ。
                 axis=product_service: geography_only（報告セグメントが地域別のみ。地域は geography 軸。日本/アジアを product_service に載せない）、
                 single_segment_disclosed（単一セグメントのため報告セグメント開示自体を省略）、
                 unknown（原因未特定・要再調査）。

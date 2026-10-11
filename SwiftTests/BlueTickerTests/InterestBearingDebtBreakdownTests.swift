@@ -511,16 +511,27 @@ private struct StubIBDDecider: InterestBearingDebtDeciding {
         #expect(review.warnings.contains("legacy_ibd_extractor_fallback"))
         #expect(review.warnings.contains { $0.contains("unclassified") })
 
+        // 軸 not_found でも旧 Extractor が債務を拾えばその値（0 へ落とさない）。
+        let notFound = BreakdownFinancialsResolver.canonicalInterestBearingDebt(
+            resolution: .notApplicable(reason: breakdownNotApplicableNotFound),
+            inputs: IBDInputs(consolidated: true, balanceSheet: [], schedule: [], leaseNote: nil),
+            accountingStandard: "J-GAAP",
+            legacy: { IBDResult(total: 99, priorTotal: 88, components: [], method: "field_parser", accountingStandard: "J-GAAP") })
+        #expect(notFound.total == 99)
+        #expect(notFound.priorTotal == 88)
+        #expect(notFound.method == "legacy_ibd_extractor_fallback")
+        #expect(notFound.warnings.contains("reason=\(breakdownNotApplicableNotFound)"))
+
+        // 無借金は旧 Extractor の zero_debt をそのまま（印なし）。
         let zeroDebt = BreakdownFinancialsResolver.canonicalInterestBearingDebt(
             resolution: .notApplicable(reason: breakdownNotApplicableNotFound),
-            inputs: IBDInputs(
-                consolidated: true, balanceSheet: [], schedule: [], leaseNote: nil,
-                largeInstance: true),
+            inputs: IBDInputs(consolidated: true, balanceSheet: [], schedule: [], leaseNote: nil),
             accountingStandard: "J-GAAP",
-            legacy: { IBDResult(total: 99, priorTotal: 88, components: [], method: "old", accountingStandard: "J-GAAP") })
+            legacy: { IBDResult(total: 0, priorTotal: 0, components: [], method: "zero_debt", accountingStandard: "J-GAAP") })
         #expect(zeroDebt.total == 0)
         #expect(zeroDebt.priorTotal == 0)
         #expect(zeroDebt.method == "zero_debt")
+        #expect(zeroDebt.warnings.isEmpty)
     }
 
     // MARK: - helpers

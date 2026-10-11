@@ -57,13 +57,10 @@ struct IBDInputs: Sendable {
     var balanceSheet: [IBDCandidate]
     var schedule: [IBDCandidate]
     var leaseNote: IBDLeaseNote?
-    /// インスタンス文書が `Xbrl.zeroDebtMinInstanceBytes` 超（not_found の zero_debt 判定）。
-    var largeInstance: Bool
 
     init(
         consolidated: Bool, isBank: Bool = false, bankComponents: [IBDCandidate] = [],
-        balanceSheet: [IBDCandidate], schedule: [IBDCandidate], leaseNote: IBDLeaseNote?,
-        largeInstance: Bool = false
+        balanceSheet: [IBDCandidate], schedule: [IBDCandidate], leaseNote: IBDLeaseNote?
     ) {
         self.consolidated = consolidated
         self.isBank = isBank
@@ -71,7 +68,6 @@ struct IBDInputs: Sendable {
         self.balanceSheet = balanceSheet
         self.schedule = schedule
         self.leaseNote = leaseNote
-        self.largeInstance = largeInstance
     }
 }
 
@@ -152,8 +148,7 @@ enum InterestBearingDebtBreakdown {
             leaseNote: isBank
                 ? leaseNote(from: notesLeaseCandidates(
                     xbrlDir: xbrlDir, accountingStandard: accountingStandard))
-                : leaseNoteCandidates(xbrlDir: xbrlDir),
-            largeInstance: hasLargeXbrlFile(in: xbrlDir))
+                : leaseNoteCandidates(xbrlDir: xbrlDir))
     }
 
     /// 銀行の BS コンポーネント。`Xbrl.bankIBDComponents` を `resolveItem` で先勝ちし、
@@ -266,14 +261,6 @@ enum InterestBearingDebtBreakdown {
             }
         }
         return bestKey.map { usgaapIBDLabelMap[$0]! }
-    }
-
-    /// インスタンス文書に 100KB 超のファイルがあるか（zero_debt 判定）。
-    private static func hasLargeXbrlFile(in dir: URL) -> Bool {
-        XBRLUtils.findXbrlFiles(in: dir).contains { url in
-            let size = (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int) ?? 0
-            return size > Xbrl.zeroDebtMinInstanceBytes
-        }
     }
 
     /// statement 側にリース科目が無いとき、notes のリース帳簿だけを足す。
