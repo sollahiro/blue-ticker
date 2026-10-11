@@ -76,8 +76,13 @@ geography は変えない。本邦90％の `not_found` は既存の Jev ゲー�
 
 ## 有利子負債（`interest_bearing_debt`）
 
-- 社債・借入金とリース負債を1軸にまとめる。`cache_version` は `breakdown-interest-bearing-debt-v1`（新軸なので v1 から。銀行行の追加は互換追加で据え置き）。`source_kind` は `xbrl_facts`。
+- 社債・借入金とリース負債を1軸にまとめる。`cache_version` は `breakdown-interest-bearing-debt-v2`（v1 は新軸。銀行行の追加は互換追加で据え置き。v2 はタクソノミ preset の追加・リース込み「有利子負債」集約・除外リスト・証券業の営業借入・千円注記・`source_tag` で行と合計が変わるため）。`source_kind` は `xbrl_facts`。
 - 行は名前付きセル `opening`（前期末）/ `closing`（当期末）。平均利率は持たない（`average_rate` は廃止。書類ごとに別表・注記にあり行と対応しないため）。行ごとに `source`（`balance_sheet` / `borrowings_schedule` / `lease_note` / `financials_bank_components`）と `maturity_class`（`current` / `non_current` / null）を持つ。末尾に `合計` 行（`row_kind` `subtotal`）。返済期限列は持たない。
+- `source_tag`（nullable string）: その行の値を読んだ XBRL 要素の**ローカル名だけ**（名前空間・プレフィックス・URI は付けない）。
+  - BS 行（`source=balance_sheet`）と銀行行は数値要素（例: `BorrowingsCLIFRS`、`ShortTermLoansPayable`）。US-GAAP の BS は HTML 表の行なので仮想名 `USGAAP_HTML_*`（提出要素ではない）。
+  - 明細表・注記の行（`borrowings_schedule` / `lease_note`）は読んだ表の TextBlock 要素（例: `AnnexedConsolidatedDetailedScheduleOfBorrowingsTextBlock`、`NotesBondsAndBorrowingsConsolidatedFinancialStatementsIFRSTextBlock`、`NotesLeasesConsolidatedFinancialStatementsIFRSTextBlock`）。Jev が行を分類した場合も、数字の出所なので TextBlock を出す。明細表を直接タグ（`ShortTermDebtCLIFRS` 等が3つ揃う三井物産型）から作った行はその数値要素。
+  - 会社拡張要素は提出どおりのローカル名（例: ニデック `LongTermDebtDueWithinOneYearCLIFRS`、ソニー `LongTermDebt2NCLIFRS`）。**提出者固有で、会社間で比較・集計できない**。
+  - `合計` 行とコードで足した値は null（作った名前は入れない）。
 - 行ごとの合計フラグ（明細行のみ。`合計` 行は 3 つとも null）:
   - `in_total`（bool）: 合計に数える行か。BS と明細表・注記の両方の値を行として残し、数える方だけ true にする。
   - `excluded_reason`: `in_total=false` の行は必ず次の 4 値のどれか、`in_total=true` の行は必ず null。自由文・unknown は無い。コードが理由を決められない除外行が出たら軸全体を `needs_review` にする。
@@ -87,6 +92,14 @@ geography は変えない。本邦90％の `not_found` は既存の Jev ゲー�
     - `other_table`: 別の表（IFRS リース注記等）の同じ負債で、採用した行と重なる。
   - `paired_row_index`: 除外行が対応する `in_total=true` 行の、この payload の `rows` 配列内の添字（0 始まり）。対応先が1行に決まらないときは null。新しい ID は作らない。
   - 不変条件: `合計.closing == Σ(in_total=true の closing)`（完全一致）。カバレッジと /financials はこの和だけを使う。**クライアントは全行を足してはいけない**（除外行を含めると二重計上になる）。
+- BS 行の分類順（コードだけ。キーワード規則より前に明示リストを見る。リストは `Xbrl.swift` の有利子負債タグ群の隣）:
+  1. 明示除外 `Xbrl.ibdNonInterestBearingBSTags`（預り敷金・保証金、受入敷金保証金、賃貸料等前受金、リース資産減損勘定、有価証券貸借取引受入金・借入有価証券、代理店債務）→ `in_total=false` / `non_interest_bearing` の行として残す。
+  2. 証券業の営業上の借入 `Xbrl.ibdSecuritiesBusinessBorrowingTags`（信用取引借入金 `BorrowingsOnMarginTransactionsCLSEC`・有価証券担保借入金 `LoansPayableSecuredBySecuritiesCLSEC`・現先取引借入金 `BorrowingsOnGensakiTransactionCLSEC`）→ 合計に入れず `in_total=false` / `scope_differs`。**定義: 有利子負債は事業会社の資金調達（社債・借入金・CP・リース）で、証券会社が顧客取引・トレーディングのために負う信用取引・有価証券担保・現先の借入は範囲が違う**（利息は付くが、営業資産と対で増減する）。新しい enum 値は作らず `scope_differs` を使う。明細表の同名行（「信用取引借入金（１年内返済予定）」等）と会社拡張要素のラベルも同じ扱い（大和証券グループ 8601）。
+  3. 既知の債務タグ（`ibdCurrentComponents` / `ibdNonCurrentComponents` / `ibdLiquidityOrderComponents` / IFRS 集約。転換社債・新株予約権付社債・関係会社や株主等からの借入・リース会社の債権流動化に伴う支払債務（名前に Lease があっても債務）・流動性配列の IFRS / 保険の借入金を含む）→ 債務。
+  4. 既知のリース（`leaseLiabilitiesBSTags`。流動性配列の `LeaseLiabilitiesLiabilitiesIFRS` / `LeaseObligationsLiabilities` を含む）→ リース。
+  5. キーワードだけ当たる行: 標準タクソノミの要素なら Jev。会社拡張要素なら明細表と同じラベル規則（借入金・借入債務・社債・CP・借用金・有利子負債・長期債務・短期債務 → 債務、リース → リース、敷金・受入/預り保証金 → 非有利子。債務の語とリースの両方を含む「社債、借入金及びリース負債」は債務）。決まらなければ Jev（0.9）。会社拡張要素を一覧に手で足すことはしない。
+- リース込みの債務科目: 「社債、借入金及びリース負債」等の合算タグ・ラベル、または **BS に別建てのリース科目が無いときの「有利子負債」集約（`InterestBearingLiabilities*IFRS`）** はリースを含むとみなす（BS の形だけで決める。注記の文言は見ない）。注記・明細表のリースを分母にも合計にも足さない。明細表（債務＋リース行）が集約の流動／非流動の和と一致するときは集約を親にして数え、明細表の行は `duplicate_of_balance_sheet` の内訳にする（トヨタ 7203 43,205,469、RIZAP 2928 63,674、HOYA 7741 42,241）。一致しなければ明細表の行を数える。旧 `IBDExtractor` も同じ規則でリース注記を足さない。
+- IFRS 有利子負債注記の金額単位は表内の単位、無ければ表の直前の見出し（「（単位：千円）」）を見る（夢展望 3185・東静 8923・ブロードリーフ 3673 は千円）。
 - BS を基準にした行の選び方（金額はすべてコードが決める。Jev は分類と候補の同一性判断だけ）:
   - 入れ子（多対一）: BS の借入金・CP 科目が明細表の行の親になるときは BS 行を数え（`in_total=true`）、明細表の行はその内訳の参照行（`in_total=false`）にする。内訳の金額が親と一致すれば `duplicate_of_balance_sheet`、一致しなければ `scope_differs`。不一致だけでは `needs_review` にしない（差は監査 `llm_audit` の `nesting_gap parent=… balance_sheet=… components=… gap=…` だけに残し、公開フィールドにしない）。例: シスメックス 6869 の BS 長期借入金 31,646 が親で、明細表 32,359（1年内分込み）は `scope_differs`。
   - 入れ子の表示は product_service と同じ `category_group`（親 = BS 科目のラベル）/ `category`（内訳のラベル）。親行は `category_group` = 自分のラベル・`category` = null、内訳行は `category_group` = 親のラベル・`category` = 自分のラベル・`paired_row_index` = 親の添字。入れ子が無い行にはこの2キーを出さない。新しいフィールドは足さない。`category_group` は親のラベルなので、流動と非流動の親が同じラベル（IFRS の「借入金」等）だと `category_group` で集計すると両方の内訳が1つにまとまる。正確な親は `paired_row_index` で引くこと。
@@ -108,10 +121,12 @@ geography は変えない。本邦90％の `not_found` は既存の Jev ゲー�
 - 公開 serving では、この軸だけ `needs_review=true` を出さない（source が `xbrl_facts` でも fail closed）。行が version-servable で公開除外の理由が `needs_review` だけのときは、未算出ではなく 404 reason `unknown`（メッセージ「有利子負債の内訳は公開していません」。公開 reason は single_segment_disclosed / geography_only / not_found / unknown の 4 種に固定し、needs_review などの内部理由は監査にだけ残す）。REST と MCP の両方。他軸の公開除外は reason 無しの 404 のまま。
 - 再計算: この軸は source `xbrl_facts`（version-gated）。現行版でも再試行するのは、Jev が分類（`interest_bearing_debt_row_unclassified`）または近似重複（`interest_bearing_debt_near_duplicate_unresolved`）で止まった `needs_review` だけ。coverage 帯外だけの行は再試行しない。再試行は初回の後 3 回まで（`ibdJevRetryMaxAttempts`。回数は `llm_audit.jev.sentences` の `jev_retry_attempt=N`。列もキーも増やさない）。上限に達した行は通常の ingest では再試行しない（版を上げる・行を消す・`--doc-ids` で指定する）。`--doc-ids` は上限・`needs_review` に関係なくその書類を書き直し、保存する監査には回数を付けないので、回数は 0 に戻る。
 - J-GAAP の借入金等明細表は社債を含まない（社債明細表は別）。明細表主で明細表に社債行が無いときは、BS の社債単独行（「社債及び借入金」等の合算行は除く）を `source=balance_sheet` のまま足す。
-- /financials の `interest_bearing_debt` はこの軸の合計行（decider 無し。銀行は `financials_bank_components` 行）。軸が `needs_review`・`unavailable`・`not_found` のときは旧 `IBDExtractor`（BS 項目タグ合算）へフォールバックし、既存の `IBDExtractor.extractCanonical` をそのまま使う（新しい推定は足さない）。印は内部の method `legacy_ibd_extractor_fallback` と warnings だけで、/financials の公開フィールドは増やさない（例: ソニーは Jev 分類の 長期借入債務 824,393 百万円 が未確認のため 845,276 百万円 のまま）。無借金（大きなインスタンス文書に IBD タグが皆無）の 0 は旧 Extractor 自身の `zero_debt` をそのまま使い、印は付けない（軸の `not_found` だけで 0 にはしない。軸は会社独自タグ等を拾わないため）。`fin-vN` は上げない（組立指紋にこの軸の `cache_version` を足して再組立する）。
+- /financials の `interest_bearing_debt` はこの軸の合計行（decider 無し。銀行は `financials_bank_components` 行）。軸が `needs_review`・`unavailable`・`not_found` のときは旧 `IBDExtractor`（BS 項目タグ合算）へフォールバックし、既存の `IBDExtractor.extractCanonical` をそのまま使う（新しい推定は足さない）。印は内部の method `legacy_ibd_extractor_fallback` と warnings だけで、/financials の公開フィールドは増やさない（例: ソニーは v1 では会社拡張の 長期借入債務 824,393 百万円 が Jev 待ちで 845,276 百万円 のままだった。v2 ではラベル規則で確定し 1,669,669 百万円）。無借金（大きなインスタンス文書に IBD タグが皆無）の 0 は旧 Extractor 自身の `zero_debt` をそのまま使い、印は付けない（軸の `not_found` だけで 0 にはしない。軸は会社独自タグ等を拾わないため）。`fin-vN` は上げない（組立指紋にこの軸の `cache_version` を足して再組立する）。
 - 対象外: 返済期限列、注記タイプの削除。
 
 互換追加: 銀行行（`financials_bank_components`）と /financials の正本切替。`schema_version` / `cache_version` は据え置き。
+
+v2（`breakdown-interest-bearing-debt-v2`）: 行と合計が変わる変更（上記の preset・除外・リース込み集約・単位・`source_tag`）。`/financials` は組立指紋にこの `cache_version` が入るので再組立される。`fin-vN` は上げない（`blt-cache-version-policy`: 既存行の読み出しは壊れず、軸の版で再計算対象が決まるため）。
 
 ## 変更履歴
 

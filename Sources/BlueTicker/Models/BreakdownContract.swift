@@ -64,6 +64,11 @@ public let ibdExcludedReasons: Set<String> = [
 public let ibdRowSourceKey = "source"
 /// interest_bearing_debt 行の流動/非流動区分キー（`ibdMaturity*`。開示区分をそのまま取るだけで計算しない）。
 public let ibdMaturityClassKey = "maturity_class"
+/// interest_bearing_debt 行の値の出所 XBRL 要素キー。BS 行は数値要素のローカル名
+/// （例: `BorrowingsCLIFRS`）、明細表・注記の行は読んだ表の TextBlock 要素のローカル名
+/// （例: `AnnexedConsolidatedDetailedScheduleOfBorrowingsTextBlock`）。名前空間・URI は付けない。
+/// 会社拡張要素は提出どおりのローカル名（提出者固有で会社間比較不可）。合計行・コードで足した値は null。
+public let ibdSourceTagKey = "source_tag"
 
 /// interest_bearing_debt 行の出所: 貸借対照表の科目。
 public let ibdRowSourceBalanceSheet = "balance_sheet"
@@ -168,7 +173,7 @@ public let noncurrentAssetAdditionsBreakdownCacheVersion = "breakdown-noncurrent
 /// 設備投資マトリクス。破壊的な新軸のため v1 から。
 public let capexBreakdownCacheVersion = "breakdown-capex-v1"
 /// 有利子負債。新軸のため v1 から。
-public let interestBearingDebtBreakdownCacheVersion = "breakdown-interest-bearing-debt-v1"
+public let interestBearingDebtBreakdownCacheVersion = "breakdown-interest-bearing-debt-v2"
 
 /// 軸に対応する現行 cache_version 文字列。未知の軸は product_service 扱い（安全側に決定的バンプ対象へ）。
 public func breakdownCacheVersion(forAxis axis: String) -> String {
@@ -519,6 +524,9 @@ public struct BreakdownRowPayload: Codable, Sendable, Equatable {
     public var debtSource: String?
     /// interest_bearing_debt 行の流動/非流動区分（`ibdMaturity*`）。他軸は nil。
     public var maturityClass: String?
+    /// interest_bearing_debt 行の値の出所 XBRL 要素のローカル名（`ibdSourceTagKey`）。
+    /// 合計行・コードで足した値・他軸は nil。
+    public var sourceTag: String?
 
     private enum CodingKeys: String, CodingKey {
         case labelRaw, label, amount, profit, rowKind, description
@@ -531,6 +539,7 @@ public struct BreakdownRowPayload: Codable, Sendable, Equatable {
         case pairedRowIndex = "paired_row_index"
         case debtSource = "debt_source"
         case maturityClass = "maturity_class"
+        case sourceTag = "source_tag"
     }
 
     public init(
@@ -540,7 +549,8 @@ public struct BreakdownRowPayload: Codable, Sendable, Equatable {
         categoryGroup: String? = nil, category: String? = nil,
         opening: Double? = nil, closing: Double? = nil,
         debtSource: String? = nil, maturityClass: String? = nil,
-        inTotal: Bool? = nil, excludedReason: String? = nil, pairedRowIndex: Int? = nil
+        inTotal: Bool? = nil, excludedReason: String? = nil, pairedRowIndex: Int? = nil,
+        sourceTag: String? = nil
     ) {
         self.labelRaw = labelRaw
         self.label = label
@@ -560,6 +570,7 @@ public struct BreakdownRowPayload: Codable, Sendable, Equatable {
         self.pairedRowIndex = pairedRowIndex
         self.debtSource = debtSource
         self.maturityClass = maturityClass
+        self.sourceTag = sourceTag
         if let categoryGroup {
             self.label = Self.displayLabel(categoryGroup: categoryGroup, category: category)
         }
@@ -591,6 +602,7 @@ public struct BreakdownRowPayload: Codable, Sendable, Equatable {
         pairedRowIndex = try container.decodeIfPresent(Int.self, forKey: .pairedRowIndex)
         debtSource = try container.decodeIfPresent(String.self, forKey: .debtSource)
         maturityClass = try container.decodeIfPresent(String.self, forKey: .maturityClass)
+        sourceTag = try container.decodeIfPresent(String.self, forKey: .sourceTag)
         if let categoryGroup {
             label = try container.decodeIfPresent(String.self, forKey: .label)
                 ?? Self.displayLabel(categoryGroup: categoryGroup, category: category)
@@ -622,6 +634,7 @@ public struct BreakdownRowPayload: Codable, Sendable, Equatable {
         try container.encodeIfPresent(pairedRowIndex, forKey: .pairedRowIndex)
         try container.encodeIfPresent(debtSource, forKey: .debtSource)
         try container.encodeIfPresent(maturityClass, forKey: .maturityClass)
+        try container.encodeIfPresent(sourceTag, forKey: .sourceTag)
     }
 
     public static func displayLabel(categoryGroup: String, category: String?) -> String {
@@ -823,6 +836,7 @@ public extension BreakdownRowPayload {
             ibdCellClosing: closing ?? NSNull(),
             ibdRowSourceKey: debtSource ?? NSNull(),
             ibdMaturityClassKey: maturityClass ?? NSNull(),
+            ibdSourceTagKey: sourceTag ?? NSNull(),
             ibdInTotalKey: inTotal ?? NSNull(),
             ibdExcludedReasonKey: excludedReason ?? NSNull(),
             ibdPairedRowIndexKey: pairedRowIndex ?? NSNull(),

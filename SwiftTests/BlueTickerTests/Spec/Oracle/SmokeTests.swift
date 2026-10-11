@@ -850,7 +850,6 @@ import Foundation
         let fullIBD = IBDExtractor.extract(
             fieldSet: fullFS, accountingStandard: "IFRS", xbrlDir: xbrlDir)
 
-        let direct = resolveItem(instantFS, tags: Xbrl.ibdDirectTags)
         let ifrsAgg = resolveAggregate(
             instantFS, componentTagLists: [Xbrl.ibdIFRSCLTags, Xbrl.ibdIFRSNCLTags])
         let comp = resolveAggregate(
@@ -864,7 +863,7 @@ import Foundation
         TestVerboseLog.print("=== 味の素 S100VXJA statement IBD ===")
         TestVerboseLog.print("statement IBDExtractor total=\(yenLine(statementIBD.total)) method=\(statementIBD.method)")
         TestVerboseLog.print("full IBDExtractor total=\(yenLine(fullIBD.total)) method=\(fullIBD.method)")
-        TestVerboseLog.print("resolve path: direct.tag=\(direct.tag ?? "nil") ifrsAgg.tag=\(ifrsAgg.tag ?? "nil") comp.tag=\(comp.tag ?? "nil")")
+        TestVerboseLog.print("resolve path: ifrsAgg.tag=\(ifrsAgg.tag ?? "nil") comp.tag=\(comp.tag ?? "nil")")
         TestVerboseLog.print("ifrsAgg current=\(yenLine(ifrsAgg.current))")
         TestVerboseLog.print("component-stack current=\(yenLine(comp.current))")
 
@@ -878,7 +877,6 @@ import Foundation
         }
 
         var candidateTags: [String] = []
-        candidateTags.append(contentsOf: Xbrl.ibdDirectTags)
         candidateTags.append(contentsOf: Xbrl.ibdIFRSCLTags)
         candidateTags.append(contentsOf: Xbrl.ibdIFRSNCLTags)
         candidateTags.append(contentsOf: Xbrl.ibdCurrentComponents.flatMap { $0 })

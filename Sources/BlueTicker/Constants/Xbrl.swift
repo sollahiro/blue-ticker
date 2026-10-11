@@ -458,6 +458,7 @@ enum Xbrl {
         .init(label: "借用金",                 tags: ["BorrowedMoneyLiabilitiesBNK"]),
         .init(label: "短期社債",               tags: ["ShortTermBondsPayable"]),
         .init(label: "社債",                   tags: ["BondsPayable"]),
+        .init(label: "債券",                   tags: ["DebenturesLiabilitiesBNK"]),
     ]
 
     // MARK: - キャッシュフロータグ
@@ -575,24 +576,102 @@ enum Xbrl {
 
     // MARK: - 有利子負債タグ
 
-    static let ibdDirectTags: [String] = [
-        "InterestBearingDebt",
-        "InterestBearingLiabilities",
-    ]
-
+    // 2026-10-11 監査（FSA タクソノミ 2025-11-01 と最新 3,809 件の実 fact）: 旧 `ibdDirectTags`
+    // （InterestBearingDebt / InterestBearingLiabilities）と RedeemableBondsWithinOneYear・
+    // CommercialPapersCLIFRS は標準タクソノミに存在せず、本番の提出 XBRL にも fact が無いため削除した。
     static let ibdCurrentComponents: [[String]] = [
         ["ShortTermLoansPayable", "BorrowingsCLIFRS"],
-        ["CommercialPapersLiabilities", "CommercialPapersCLIFRS"],
+        ["CommercialPapersLiabilities"],
         ["ShortTermBondsPayable"],
-        ["CurrentPortionOfBonds", "RedeemableBondsWithinOneYear", "BondsPayableCLIFRS", "CurrentPortionOfBondsCLIFRS"],
+        ["CurrentPortionOfBonds", "BondsPayableCLIFRS", "CurrentPortionOfBondsCLIFRS"],
         ["CurrentPortionOfLongTermLoansPayable", "CurrentPortionOfLongTermBorrowingsCLIFRS", "CurrentPortionOfLongTermDebtCLIFRS"],
         ["LeaseObligationsCL", "LeaseLiabilitiesCLIFRS"],
+        // 転換社債・新株予約権付社債（１年内償還予定）
+        ["CurrentPortionOfBondsWithSubscriptionRightsToShares"],
+        ["CurrentPortionOfConvertibleBonds"],
+        // 関係会社・株主等からの借入（J-GAAP 個別 BS で多い）
+        ["ShortTermLoansPayableToSubsidiariesAndAffiliates"],
+        ["ShortTermLoansPayableToShareholdersDirectorsOrEmployees"],
+        ["CurrentPortionOfLongTermLoansPayableToSubsidiariesAndAffiliates",
+         "CurrentPortionOfLongTermLoansPayableToSubsidiariesAndAffiliatesCLELC"],
+        ["ShortTermDebtToSubsidiariesAndAffiliatesCLELE", "ShortTermDebtToSubsidiariesAndAffiliatesCLGAS"],
+        // リース会社（貸手）の債権流動化に伴う支払債務。名前に Lease を含むが借手のリース負債ではなく
+        // 資金調達（借入相当）なので debt として扱う（`ibdLessorSecuritizationTags`）。
+        ["PayablesUnderFluidityLeaseReceivablesCLLEA"],
+        ["CurrentPortionOfLongTermPayablesUnderFluidityLeaseReceivablesCLLEA"],
     ]
 
     static let ibdNonCurrentComponents: [[String]] = [
         ["BondsPayable", "BondsPayableNCLIFRS"],
         ["LongTermLoansPayable", "BorrowingsNCLIFRS", "LongTermDebtNCLIFRS"],
         ["LeaseObligationsNCL", "LeaseLiabilitiesNCLIFRS"],
+        ["BondsWithSubscriptionRightsToSharesNCL"],
+        ["ConvertibleBondTypeBondsWithSubscriptionRightsToShares"],
+        ["ConvertibleBonds"],
+        ["LongTermLoansPayableToSubsidiariesAndAffiliates"],
+        ["LongTermLoansPayableToShareholdersDirectorsOrEmployees"],
+        ["LongTermDebtToSubsidiariesAndAffiliatesNCLELE", "LongTermDebtToSubsidiariesAndAffiliatesNCLGAS"],
+        ["LongTermPayablesUnderFluidityLeaseReceivablesNCLLEA"],
+    ]
+
+    /// 流動性配列（流動／非流動の区分が無い）BS の有利子負債タグ。IFRS の金融・保険業
+    /// （SBI アルヒ等）と J-GAAP 保険業（BorrowingsLiabilitiesINS）・リース債務の非区分表示。
+    static let ibdLiquidityOrderComponents: [[String]] = [
+        ["InterestBearingLiabilitiesLiabilitiesIFRS"],
+        ["BondsAndBorrowingsLiabilitiesIFRS"],
+        ["BorrowingsLiabilitiesIFRS", "BorrowingsLiabilitiesINS"],
+        ["BondsPayableLiabilitiesIFRS"],
+        ["LeaseLiabilitiesLiabilitiesIFRS", "LeaseObligationsLiabilities"],
+    ]
+
+    /// 名前に Lease を含むが借手のリース負債ではない資金調達タグ（貸手の債権流動化）。
+    static let ibdLessorSecuritizationTags: Set<String> = [
+        "PayablesUnderFluidityLeaseReceivablesCLLEA",
+        "CurrentPortionOfLongTermPayablesUnderFluidityLeaseReceivablesCLLEA",
+        "LongTermPayablesUnderFluidityLeaseReceivablesNCLLEA",
+    ]
+
+    /// 「有利子負債」集約タグ（流動／非流動／流動性配列）。BS に別建てのリース負債行が無いときは
+    /// リース負債を含む集約として扱う（トヨタ・RIZAP 等、注記の残高表でリースが内訳に入っている）。
+    static let ibdInterestBearingAggregateTags: Set<String> = [
+        "InterestBearingLiabilitiesCLIFRS",
+        "InterestBearingLiabilitiesNCLIFRS",
+        "InterestBearingLiabilitiesLiabilitiesIFRS",
+    ]
+
+    /// 有利子負債に入れない BS 科目（キーワード規則より先に判定する明示除外）。名前やラベルに
+    /// Lease・Debt・借入・リース等を含むが利息を負担しない預り金・減損勘定・前受金・
+    /// 有価証券貸借の担保受入金。行は in_total=false / non_interest_bearing で残す。
+    static let ibdNonInterestBearingBSTags: Set<String> = [
+        "LongTermLeaseAndGuaranteeDeposited",
+        "LongTermLeaseDeposited",
+        "LeaseAndGuaranteeDepositsReceived",
+        "TenantLeaseholdAndSecurityDepositsINV",
+        "TenantLeaseholdAndSecurityDepositsInTrustINV",
+        "AdvancesReceivedLeaseCLLEA",
+        "AccumulatedImpairmentLossOnLeasedAssetsCL",
+        "AccumulatedImpairmentLossOnLongTermLeasedAssetsNCL",
+        "CashReceivedOnDebtCreditTransactionOfSecuritiesCLSEC",
+        "SecuritiesBorrowedLiabilitiesINS",
+        "SecuritiesBorrowedOtherLiabilitiesLiabilitiesBNK",
+        "BorrowedSecuritiesRelatedToTradingTransactionsLiabilitiesBNK",
+        "ShortTermSecuritiesBorrowedCLCMD",
+        "LongTermSecuritiesBorrowedNCLCMD",
+        "SalesOfSecuritiesBorrowedCLFND",
+        "DebtForAgencyCLWAT",
+    ]
+
+    /// 証券業の営業上の借入（信用取引・有価証券担保・現先）。利息は付くが事業会社の資金調達とは
+    /// 範囲が異なるため合計に入れず、行は in_total=false / scope_differs で残す（docs/breakdown.md）。
+    static let ibdSecuritiesBusinessBorrowingTags: Set<String> = [
+        "BorrowingsOnMarginTransactionsCLSEC",
+        "LoansPayableSecuredBySecuritiesCLSEC",
+        "BorrowingsOnGensakiTransactionCLSEC",
+    ]
+
+    /// 証券業の営業上の借入を表すラベル語（会社拡張タグ・借入金等明細表の行に使う）。
+    static let ibdSecuritiesBusinessBorrowingLabelWords: [String] = [
+        "信用取引借入金", "有価証券担保借入金", "現先取引借入金",
     ]
 
     /// 連結 BS のリース負債 構造化タグ（存在判定用。`lease_liabilities` note_type の
@@ -600,6 +679,7 @@ enum Xbrl {
     static let leaseLiabilitiesBSTags: [String] = [
         "LeaseLiabilitiesCLIFRS", "LeaseLiabilitiesNCLIFRS",
         "LeaseObligationsCL", "LeaseObligationsNCL",
+        "LeaseLiabilitiesLiabilitiesIFRS", "LeaseObligationsLiabilities",
     ]
 
     /// 連結／個別 BS の有形固定資産・区分別正味帳簿価額タグ（存在判定用。

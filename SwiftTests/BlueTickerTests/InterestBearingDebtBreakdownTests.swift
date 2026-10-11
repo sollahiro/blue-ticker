@@ -715,9 +715,10 @@ private struct StubIBDDecider: InterestBearingDebtDeciding {
                 axis: breakdownAxisInterestBearingDebt) == true)
     }
 
-    @Test func axisIsSupportedAndCacheVersionIsV1() {
+    @Test func axisIsSupportedAndCacheVersionIsV2() {
         #expect(isSupportedBreakdownAxis(breakdownAxisInterestBearingDebt))
-        #expect(interestBearingDebtBreakdownCacheVersion == "breakdown-interest-bearing-debt-v1")
+        // v2: タクソノミ preset・リース込み有利子負債・除外リスト・source_tag（行の金額が変わる）
+        #expect(interestBearingDebtBreakdownCacheVersion == "breakdown-interest-bearing-debt-v2")
     }
 
     @Test func financialsCanonicalInterestBearingDebtMapping() {
@@ -888,4 +889,125 @@ private struct StubIBDDecider: InterestBearingDebtDeciding {
     }
 
     private enum ResolutionError: Error { case notResolved }
+}
+
+// MARK: - タクソノミ preset・除外リスト・source_tag（2026-10-11）
+
+@Suite struct InterestBearingDebtPresetAndSourceTagTests {
+    @Test func scheduleRowPresetNewDebtWordsAndDeposits() {
+        #expect(InterestBearingDebtBreakdown.scheduleRowPreset("長期借入債務") == .interestBearingDebt)
+        #expect(InterestBearingDebtBreakdown.scheduleRowPreset("１年以内返済予定長期債務") == .interestBearingDebt)
+        #expect(InterestBearingDebtBreakdown.scheduleRowPreset("短期債務") == .interestBearingDebt)
+        #expect(InterestBearingDebtBreakdown.scheduleRowPreset("預り敷金") == .notInterestBearing)
+        // 引当金・債務保証は債務の語を含んでも確定しない（Jev）
+        #expect(InterestBearingDebtBreakdown.scheduleRowPreset("長期債務保証損失引当金") == nil)
+    }
+
+    @Test func balanceSheetExtensionPreset() {
+        let securities = InterestBearingDebtBreakdown.balanceSheetExtensionPreset("信用取引借入金")
+        #expect(securities.0 == .notInterestBearing)
+        #expect(securities.1 == ibdExcludedReasonScopeDiffers)
+        // リース込みの債務科目は債務（リース単独ではない）
+        #expect(InterestBearingDebtBreakdown.balanceSheetExtensionPreset("社債、借入金及びリース負債").0
+            == .interestBearingDebt)
+        #expect(InterestBearingDebtBreakdown.balanceSheetExtensionPreset("リース負債").0 == .leaseLiability)
+        #expect(InterestBearingDebtBreakdown.balanceSheetExtensionPreset("その他の金融負債").0 == nil)
+    }
+
+    @Test func maturityKanjiOneYear() {
+        #expect(InterestBearingDebtBreakdown.maturityClass(fromLabel: "一年以内に返済予定の長期借入金") == ibdMaturityCurrent)
+        #expect(InterestBearingDebtBreakdown.maturityClass(fromLabel: "長期借入金(一年以内に返済予定のものを除く)")
+            == ibdMaturityNonCurrent)
+        #expect(InterestBearingDebtBreakdown.maturityClass(fromTag: "LongTermDebtToSubsidiariesAndAffiliatesNCLGAS")
+            == ibdMaturityNonCurrent)
+        #expect(InterestBearingDebtBreakdown.maturityClass(fromTag: "PayablesUnderFluidityLeaseReceivablesCLLEA")
+            == ibdMaturityCurrent)
+    }
+
+    @Test func deadTagsRemovedAndNewPresetsPresent() {
+        let all = Set((Xbrl.ibdCurrentComponents + Xbrl.ibdNonCurrentComponents
+            + Xbrl.ibdLiquidityOrderComponents + [Xbrl.ibdIFRSCLTags, Xbrl.ibdIFRSNCLTags]).flatMap { $0 })
+        for dead in ["InterestBearingDebt", "InterestBearingLiabilities", "RedeemableBondsWithinOneYear",
+                     "CommercialPapersCLIFRS"] {
+            #expect(!all.contains(dead), "\(dead)")
+        }
+        for tag in ["CurrentPortionOfConvertibleBonds", "ConvertibleBondTypeBondsWithSubscriptionRightsToShares",
+                    "BorrowingsLiabilitiesINS", "PayablesUnderFluidityLeaseReceivablesCLLEA",
+                    "LeaseObligationsLiabilities", "LongTermLoansPayableToSubsidiariesAndAffiliates"] {
+            #expect(all.contains(tag), "\(tag)")
+        }
+        // 債権流動化は Lease を名前に含むが債務（リースタグではない）
+        #expect(!Xbrl.leaseLiabilitiesBSTags.contains("PayablesUnderFluidityLeaseReceivablesCLLEA"))
+        #expect(Xbrl.bankIBDComponents.contains { $0.tags.contains("DebenturesLiabilitiesBNK") })
+        // 除外リストと債務 preset は重ならない
+        #expect(Xbrl.ibdNonInterestBearingBSTags.isDisjoint(with: all))
+        #expect(Xbrl.ibdSecuritiesBusinessBorrowingTags.isDisjoint(with: all))
+    }
+
+    private func candidate(
+        _ label: String, tag: String?, closing: Double, source: String, maturity: String?,
+        preset: IBDRowClass, sourceTag: String?
+    ) -> IBDCandidate {
+        IBDCandidate(
+            labelRaw: label, label: label, tag: tag, opening: nil, closing: closing, source: source,
+            maturityClass: maturity, presetClass: preset, sourceTag: sourceTag)
+    }
+
+    /// BS に別建てのリースが無い「有利子負債」集約はリース込み。明細表（借入金＋リース）を内訳に
+    /// して BS を数え、注記のリースを足さない。source_tag は BS 要素・TextBlock、合計は null。
+    @Test func leaseInclusiveAggregateNestsScheduleAndCarriesSourceTags() async throws {
+        let schedTag = "NotesInterestBearingLiabilitiesConsolidatedFinancialStatementsIFRSTextBlock"
+        let inputs = IBDInputs(
+            consolidated: true,
+            balanceSheet: [
+                candidate("有利子負債", tag: "InterestBearingLiabilitiesCLIFRS", closing: 30_000_000_000,
+                          source: ibdRowSourceBalanceSheet, maturity: ibdMaturityCurrent,
+                          preset: .interestBearingDebt, sourceTag: "InterestBearingLiabilitiesCLIFRS"),
+                candidate("有利子負債", tag: "InterestBearingLiabilitiesNCLIFRS", closing: 50_000_000_000,
+                          source: ibdRowSourceBalanceSheet, maturity: ibdMaturityNonCurrent,
+                          preset: .interestBearingDebt, sourceTag: "InterestBearingLiabilitiesNCLIFRS"),
+            ],
+            schedule: [
+                candidate("短期借入金", tag: nil, closing: 25_000_000_000, source: ibdRowSourceBorrowingsSchedule,
+                          maturity: ibdMaturityCurrent, preset: .interestBearingDebt, sourceTag: schedTag),
+                candidate("１年内返済予定のリース負債", tag: nil, closing: 5_000_000_000,
+                          source: ibdRowSourceBorrowingsSchedule, maturity: ibdMaturityCurrent,
+                          preset: .leaseLiability, sourceTag: schedTag),
+                candidate("長期借入金", tag: nil, closing: 42_000_000_000, source: ibdRowSourceBorrowingsSchedule,
+                          maturity: nil, preset: .interestBearingDebt, sourceTag: schedTag),
+                candidate("長期リース負債", tag: nil, closing: 8_000_000_000, source: ibdRowSourceBorrowingsSchedule,
+                          maturity: nil, preset: .leaseLiability, sourceTag: schedTag),
+            ],
+            leaseNote: nil)
+        let resolution = await InterestBearingDebtBreakdown.resolve(inputs: inputs, decider: nil)
+        guard case .resolved(let payload, _) = resolution else {
+            Issue.record("expected resolved")
+            return
+        }
+        #expect(payload.needsReview == false)
+        #expect(payload.denominator == 80_000_000_000)
+        #expect(payload.rows.last?.closing == 80_000_000_000)
+        #expect(payload.rows.last?.sourceTag == nil)
+        let counted = payload.rows.filter { $0.inTotal == true }
+        #expect(counted.map(\.sourceTag) == ["InterestBearingLiabilitiesCLIFRS", "InterestBearingLiabilitiesNCLIFRS"])
+        let children = payload.rows.filter { $0.inTotal == false }
+        #expect(children.count == 4)
+        #expect(children.allSatisfy { $0.sourceTag == schedTag })
+        #expect(children.allSatisfy { $0.excludedReason == ibdExcludedReasonDuplicateOfBalanceSheet })
+        // JSON は source_tag キーを常に出す（合計行は null）
+        let json = payload.rows.last!.interestBearingDebtJsonObject()
+        #expect(json[ibdSourceTagKey] is NSNull)
+        #expect(counted[0].interestBearingDebtJsonObject()[ibdSourceTagKey] as? String
+            == "InterestBearingLiabilitiesCLIFRS")
+    }
+
+    @Test func sourceTagRoundTripsThroughPayloadCoding() throws {
+        let row = BreakdownRowPayload(
+            labelRaw: "短期借入金", label: "短期借入金", amount: 1, profit: nil, rowKind: "segment",
+            debtSource: ibdRowSourceBalanceSheet, inTotal: true, sourceTag: "ShortTermLoansPayable")
+        let data = try JSONEncoder().encode(row)
+        #expect(String(decoding: data, as: UTF8.self).contains("\"source_tag\":\"ShortTermLoansPayable\""))
+        let decoded = try JSONDecoder().decode(BreakdownRowPayload.self, from: data)
+        #expect(decoded.sourceTag == "ShortTermLoansPayable")
+    }
 }
