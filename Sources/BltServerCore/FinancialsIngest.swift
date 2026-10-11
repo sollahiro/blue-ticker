@@ -19,8 +19,11 @@ public struct FinancialsIngestSummary: Sendable, Equatable {
     public let attempted: Int
     /// 計算・格納に成功した企業数。
     public let stored: Int
-    /// 書類はあるが抽出できず失敗した企業数（要調査）。
+    /// 書類はあるが抽出できず失敗した企業数（要調査）。縮小ガードの保留（`refused`）は含めない。
     public let failed: Int
+    /// 計算はできたが、最新 FY を失う上書き（ローカル EDINET インデックスが最新有報を欠く）として
+    /// 格納を保留した企業数。行と high_water は据え置き、次回再試行される。
+    public let refused: Int
     /// 有価証券報告書が未提出等、計算対象外だった企業数（設計通り・failed に含めない）。
     public let notApplicable: Int
     /// 既に現行バージョン・十分な年数で計算済みのためスキップした企業数。
@@ -51,6 +54,7 @@ func runFinancialsIngest(
     var attempted = 0
     var stored = 0
     var failed = 0
+    var refused = 0
     var notApplicable = 0
     var skipped = 0
     var unhealthyRetries = 0
@@ -129,16 +133,27 @@ func runFinancialsIngest(
         let computed = await compute(code)
         // 計算結果の最新 fy_end が格納済み行や DB の最新有報より古い（＝ローカル EDINET 年次インデックスが
         // 最新有報を欠く）なら書かない。行全体を上書きし high_water まで進めると、欠落した FY が
-        // 以後 skip され続ける（2026-09-18 提出分の FY2026 が 12 社で消えた）。failed として数え、
+        // 以後 skip され続ける（2026-09-18 提出分の FY2026 が 12 社で消えた）。refused として数え、
         // 行と high_water を据え置くので次回 ingest で再試行される。
-        // 実際の years を持つ success だけを比較する。notApplicable（年次書類なし）は従来どおり
-        // プレースホルダを書く（比較すると、正当な対象外社が毎回 failed として再計算され続ける）。
-        if case .success(let response) = computed,
-            let lacking = financialsShrinkRefusal(
-                computed: response, stored: existing?.response, newestAnnual: newestAnnualMap[code])
-        {
-            failed += 1
-            logger?.warning("財務取り込み保留: code=\(code) local EDINET index lacks \(lacking)")
+        // notApplicable は、years を持つ格納行があり DB に格納最新 FY 以上の有報があるときだけ保留する
+        // （603A 型: 遅れたインデックスで years 行を空プレースホルダへ置き換えない）。格納 years が無い
+        // 正当な対象外社は従来どおりプレースホルダを書く（毎回再計算するループにしない）。
+        let refusal: FinancialsStoreRefusal?
+        switch computed {
+        case .success(let response):
+            refusal = financialsStoreRefusal(
+                computedYears: response, stored: existing?.response, newestAnnual: newestAnnualMap[code])
+        case .notApplicable:
+            refusal = financialsStoreRefusal(
+                computedYears: nil, stored: existing?.response, newestAnnual: newestAnnualMap[code])
+        case .failed:
+            refusal = nil
+        }
+        if let refusal {
+            refused += 1
+            logger?.warning(
+                "財務取り込み保留: code=\(code) local EDINET index lacks \(refusal.lacking)",
+                metadata: refusal.logMetadata(code: code))
             continue
         }
         switch computed {
@@ -178,8 +193,8 @@ func runFinancialsIngest(
     await backfillScreenIndexForServableFinancials(db: db, logger: logger)
 
     return FinancialsIngestSummary(
-        attempted: attempted, stored: stored, failed: failed, notApplicable: notApplicable,
-        skipped: skipped)
+        attempted: attempted, stored: stored, failed: failed, refused: refused,
+        notApplicable: notApplicable, skipped: skipped)
 }
 
 /// 発行体の最新有報（会社開示府令の 120・period_end あり）。財務取り込みの縮小ガード用。
@@ -188,18 +203,70 @@ struct NewestAnnualFiling: Sendable, Equatable {
     let docID: String
 }
 
-/// 計算結果の最新 fy_end が、格納済み行の最新 fy_end または DB の最新有報 period_end より古いとき、
-/// 欠けている書類（DB の最新有報 docID、無ければ格納行の最新年の doc_id / fy_end）を返す。
-/// nil なら格納してよい。呼び出し側は実際の years を持つ success にだけ使う。
-func financialsShrinkRefusal(
-    computed: FinancialsResponse, stored: FinancialsResponse?, newestAnnual: NewestAnnualFiling?
-) -> String? {
-    let computedNewest = computed.newestFiscalYearEnd?.fyEnd ?? ""
-    if let annual = newestAnnual, computedNewest < annual.periodEnd {
-        return annual.docID
+/// 財務取り込みの格納保留（縮小ガード）。自動上書き（override）はしない。恒久的に続く保留
+/// （最新有報の XBRL が取れない、別 EDINET コードが同じ 4 桁コードに写る等）を構造化ログで追えるようにする。
+struct FinancialsStoreRefusal: Sendable, Equatable {
+    enum Reason: String, Sendable {
+        /// 計算結果の最新 fy_end < DB の最新有報（会社開示 120）period_end。
+        case olderThanDatabaseAnnual = "older_than_db_annual"
+        /// 計算結果の最新 fy_end < 格納済み行の最新 fy_end。
+        case olderThanStoredRow = "older_than_stored_row"
+        /// notApplicable（years 空）だが、格納行に years があり DB に格納最新 FY 以上の有報がある。
+        case placeholderOverStoredYears = "placeholder_over_stored_years"
     }
-    if let storedNewest = stored?.newestFiscalYearEnd, computedNewest < storedNewest.fyEnd {
-        return storedNewest.docID ?? "fy_end=\(storedNewest.fyEnd)"
+
+    let reason: Reason
+    /// 欠けている書類（DB の最新有報 docID、無ければ格納行の最新年の doc_id）。
+    let missingDocID: String?
+    let computedNewestFyEnd: String?
+    let storedNewestFyEnd: String?
+    let databaseNewestPeriodEnd: String?
+
+    /// ログ本文の `local EDINET index lacks <doc>` に入れる値。
+    var lacking: String { missingDocID ?? "fy_end=\(storedNewestFyEnd ?? "")" }
+
+    func logMetadata(code: String) -> Logger.Metadata {
+        var metadata: Logger.Metadata = [
+            "event": "financials_store_refused",
+            "code": .string(code),
+            "reason": .string(reason.rawValue),
+        ]
+        if let missingDocID { metadata["doc_id"] = .string(missingDocID) }
+        if let computedNewestFyEnd { metadata["computed_newest_fy_end"] = .string(computedNewestFyEnd) }
+        if let storedNewestFyEnd { metadata["stored_newest_fy_end"] = .string(storedNewestFyEnd) }
+        if let databaseNewestPeriodEnd { metadata["db_newest_period_end"] = .string(databaseNewestPeriodEnd) }
+        return metadata
+    }
+}
+
+/// 格納してよいかを判定する。nil なら格納してよい。
+/// - `computedYears` が success の応答: 最新 fy_end が格納済み行の最新 fy_end または DB の最新有報
+///   period_end より古ければ保留。
+/// - `computedYears == nil`（notApplicable プレースホルダ）: 格納行に years があり、かつ DB に格納最新 FY
+///   以上の会社開示 120 があるときだけ保留。格納 years が無ければ従来どおり格納してよい。
+func financialsStoreRefusal(
+    computedYears: FinancialsResponse?, stored: FinancialsResponse?, newestAnnual: NewestAnnualFiling?
+) -> FinancialsStoreRefusal? {
+    let storedNewest = stored?.newestFiscalYearEnd
+    guard let computed = computedYears else {
+        guard let storedNewest, let annual = newestAnnual, annual.periodEnd >= storedNewest.fyEnd
+        else { return nil }
+        return FinancialsStoreRefusal(
+            reason: .placeholderOverStoredYears, missingDocID: annual.docID, computedNewestFyEnd: nil,
+            storedNewestFyEnd: storedNewest.fyEnd, databaseNewestPeriodEnd: annual.periodEnd)
+    }
+    let computedNewest = computed.newestFiscalYearEnd?.fyEnd
+    if let annual = newestAnnual, (computedNewest ?? "") < annual.periodEnd {
+        return FinancialsStoreRefusal(
+            reason: .olderThanDatabaseAnnual, missingDocID: annual.docID,
+            computedNewestFyEnd: computedNewest, storedNewestFyEnd: storedNewest?.fyEnd,
+            databaseNewestPeriodEnd: annual.periodEnd)
+    }
+    if let storedNewest, (computedNewest ?? "") < storedNewest.fyEnd {
+        return FinancialsStoreRefusal(
+            reason: .olderThanStoredRow, missingDocID: storedNewest.docID,
+            computedNewestFyEnd: computedNewest, storedNewestFyEnd: storedNewest.fyEnd,
+            databaseNewestPeriodEnd: newestAnnual?.periodEnd)
     }
     return nil
 }
