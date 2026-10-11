@@ -73,17 +73,6 @@ struct IBDInputs: Sendable {
         self.leaseNote = leaseNote
         self.largeInstance = largeInstance
     }
-
-    // 旧テスト呼び出し用。保険は除外しなくなったため `financialInstitution` は無視する。
-    init(
-        consolidated: Bool, financialInstitution _: Bool, balanceSheet: [IBDCandidate],
-        schedule: [IBDCandidate], leaseNote: IBDLeaseNote?
-    ) {
-        self.init(
-            consolidated: consolidated, isBank: false, bankComponents: [],
-            balanceSheet: balanceSheet, schedule: schedule, leaseNote: leaseNote,
-            largeInstance: false)
-    }
 }
 
 /// Jev に一度聞いた Choice。適用しなくても監査に残す。

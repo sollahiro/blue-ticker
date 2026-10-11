@@ -86,7 +86,7 @@ private struct StubIBDDecider: InterestBearingDebtDeciding {
 
     @Test func scheduleWithinBandResolvesWithoutReview() async throws {
         let inputs = IBDInputs(
-            consolidated: true, financialInstitution: false,
+            consolidated: true,
             balanceSheet: [
                 bs("短期借入金", tag: "ShortTermLoansPayable", closing: 100_000_000_000),
                 bs("長期借入金", tag: "LongTermLoansPayable", closing: 900_000_000_000),
@@ -126,7 +126,7 @@ private struct StubIBDDecider: InterestBearingDebtDeciding {
         // J-GAAP の借入金等明細表は社債を含まない（AZplanning 型）。BS の社債単独行を足す。
         // 「社債及び借入金」のような合算行は借入金と二重になるので足さない。
         let inputs = IBDInputs(
-            consolidated: true, financialInstitution: false,
+            consolidated: true,
             balanceSheet: [
                 bs("短期借入金", tag: "ShortTermLoansPayable", closing: 1_000),
                 bs("社債", tag: "BondsPayable", closing: 30, maturity: ibdMaturityNonCurrent),
@@ -142,7 +142,7 @@ private struct StubIBDDecider: InterestBearingDebtDeciding {
         #expect(payload.rows.last?.closing == 1_030)
 
         let combined = IBDInputs(
-            consolidated: true, financialInstitution: false,
+            consolidated: true,
             balanceSheet: [bs("社債及び借入金", tag: "BondsAndBorrowingsCLIFRS", closing: 1_000)],
             schedule: [schedule("短期借入金", closing: 1_000)],
             leaseNote: nil)
@@ -154,7 +154,7 @@ private struct StubIBDDecider: InterestBearingDebtDeciding {
     @Test func scheduleOutsideBandFallsBackToBalanceSheet() async throws {
         // 明細表は分母の帯外。BS はコード分類済みなので BS 主に差し替える。
         let inputs = IBDInputs(
-            consolidated: true, financialInstitution: false,
+            consolidated: true,
             balanceSheet: [
                 bs("短期借入金", tag: "ShortTermLoansPayable", closing: 200_000_000_000),
                 bs("長期借入金", tag: "LongTermLoansPayable", closing: 800_000_000_000),
@@ -178,7 +178,7 @@ private struct StubIBDDecider: InterestBearingDebtDeciding {
         // BS に未分類行があり差し替えできない。明細表のまま帯外で needs_review。
         // 分母を作るため、分類済みの BS 債務行も置く（未分類だけでは分母が nil）。
         let inputs = IBDInputs(
-            consolidated: true, financialInstitution: false,
+            consolidated: true,
             balanceSheet: [
                 bs("短期借入金", tag: "ShortTermLoansPayable", closing: 1_000_000_000_000),
                 candidate(
@@ -199,7 +199,7 @@ private struct StubIBDDecider: InterestBearingDebtDeciding {
     @Test func nilDeciderLeavesAmbiguousRowUnclassified() async throws {
         // 未分類行を落としても残りの明細表は分母の帯内。BS へは落ちない。
         let inputs = IBDInputs(
-            consolidated: true, financialInstitution: false,
+            consolidated: true,
             balanceSheet: [
                 bs("短期借入金", tag: "ShortTermLoansPayable", closing: 80_000_000_000),
             ],
@@ -227,7 +227,7 @@ private struct StubIBDDecider: InterestBearingDebtDeciding {
                 selected: IBDRowClass.notInterestBearing.rawValue, probability: 0.6)],
             nearDuplicate: IBDChoice(selected: nil, probability: nil))
         let inputs = IBDInputs(
-            consolidated: true, financialInstitution: false,
+            consolidated: true,
             balanceSheet: [
                 bs("短期借入金", tag: "ShortTermLoansPayable", closing: 100_000_000_000),
             ],
@@ -277,7 +277,7 @@ private struct StubIBDDecider: InterestBearingDebtDeciding {
 
     @Test func maturitySplitIsCountedOnceInTotal() async throws {
         let inputs = IBDInputs(
-            consolidated: true, financialInstitution: false,
+            consolidated: true,
             balanceSheet: [
                 bs(
                     "有利子負債", tag: "InterestBearingDebtCL", closing: 100,
@@ -297,7 +297,7 @@ private struct StubIBDDecider: InterestBearingDebtDeciding {
     @Test func zeroDenominatorIsCoverageUnavailable() async throws {
         // BS の有利子負債が 0 だけのとき 0/0 を帯内にしない
         let inputs = IBDInputs(
-            consolidated: true, financialInstitution: false,
+            consolidated: true,
             balanceSheet: [
                 candidate(
                     "リース債務", tag: "LeaseObligationsCL", closing: 0,
@@ -314,7 +314,7 @@ private struct StubIBDDecider: InterestBearingDebtDeciding {
     @Test func balanceSheetWithoutLeaseLineUsesScheduleLeaseRows() async throws {
         // BS にリース科目が無く明細表にだけリース行がある。分母と同じ行を載せる。
         let inputs = IBDInputs(
-            consolidated: true, financialInstitution: false,
+            consolidated: true,
             balanceSheet: [
                 bs("社債", tag: "BondsPayable", closing: 5_000_000_000),
             ],
@@ -343,7 +343,7 @@ private struct StubIBDDecider: InterestBearingDebtDeciding {
                 selected: IBDRowClass.interestBearingDebt.rawValue, probability: 0.95)],
             nearDuplicate: IBDChoice(selected: nil, probability: nil))
         let inputs = IBDInputs(
-            consolidated: true, financialInstitution: false,
+            consolidated: true,
             balanceSheet: [
                 bs("短期借入金", tag: "ShortTermLoansPayable", closing: 100),
                 candidate(
@@ -365,7 +365,7 @@ private struct StubIBDDecider: InterestBearingDebtDeciding {
 
     @Test func leaseSourcesDifferBeyondToleranceNeedsReview() async throws {
         let inputs = IBDInputs(
-            consolidated: true, financialInstitution: false,
+            consolidated: true,
             balanceSheet: [
                 bs("短期借入金", tag: "ShortTermLoansPayable", closing: 1_000),
                 candidate(
@@ -397,7 +397,7 @@ private struct StubIBDDecider: InterestBearingDebtDeciding {
 
     @Test func totalOpeningIsNilWhenAnyRowLacksOpening() async throws {
         let inputs = IBDInputs(
-            consolidated: true, financialInstitution: false,
+            consolidated: true,
             balanceSheet: [
                 bs("短期借入金", tag: "ShortTermLoansPayable", closing: 40),
                 bs("長期借入金", tag: "LongTermLoansPayable", closing: 60),
@@ -450,7 +450,7 @@ private struct StubIBDDecider: InterestBearingDebtDeciding {
     @Test func unresolvedScheduleRowNeedsReviewEvenWhenBalanceSheetIsPrimary() async throws {
         // 明細表に債務行が無く BS 主でも、明細表の未分類行（割賦未払金等）は落とさず needs_review
         let inputs = IBDInputs(
-            consolidated: true, financialInstitution: false,
+            consolidated: true,
             balanceSheet: [
                 candidate(
                     "リース債務", tag: "LeaseObligationsCL", closing: 64_000_000,
@@ -555,7 +555,7 @@ private struct StubIBDDecider: InterestBearingDebtDeciding {
     /// 明細表リース 74,540 と注記合計 74,151（相対差 2% 以内）。
     private func nearDuplicateInputs() -> IBDInputs {
         IBDInputs(
-            consolidated: true, financialInstitution: false,
+            consolidated: true,
             balanceSheet: [
                 bs("短期借入金", tag: "ShortTermLoansPayable", closing: 79_444_000_000),
                 candidate(
