@@ -288,7 +288,7 @@ enum InterestBearingDebtBreakdown {
                 labelRaw: labelRaw, label: row.label, tag: nil,
                 opening: row.prior, closing: row.current,
                 source: ibdRowSourceBorrowingsSchedule,
-                maturityClass: maturityClass(fromLabel: labelRaw),
+                maturityClass: maturityClass(fromLabel: labelRaw) ?? row.sectionMaturity,
                 presetClass: .leaseLiability, sourceTag: row.sourceTag)
         }
     }
@@ -402,7 +402,7 @@ enum InterestBearingDebtBreakdown {
                 labelRaw: labelRaw, label: row.label, tag: nil,
                 opening: row.prior, closing: row.current,
                 source: ibdRowSourceBorrowingsSchedule,
-                maturityClass: maturityClass(fromLabel: labelRaw),
+                maturityClass: maturityClass(fromLabel: labelRaw) ?? row.sectionMaturity,
                 presetClass: securities ? .notInterestBearing : scheduleRowPreset(labelRaw),
                 sourceTag: row.sourceTag,
                 excludedReason: securities ? ibdExcludedReasonScopeDiffers : nil)
@@ -1200,38 +1200,82 @@ enum InterestBearingDebtBreakdown {
         return (included, excluded, parentUnresolved, sentences)
     }
 
-    /// リース込みの「有利子負債」集約（`Xbrl.ibdInterestBearingAggregateTags`）が BS の債務科目の
-    /// すべてのとき、明細表の債務行とリース行をその内訳にする。流動の行は流動の集約へ、それ以外
-    /// （非流動・区分なし）は非流動／流動性配列の集約へ。集約が1行ならすべてその内訳。
-    /// どの集約も内訳の和と一致するときだけ（`sameAmount`）入れ子にし、BS の集約を合計に入れる。
-    /// 一致しなければ nil（従来どおり明細表の行を数える）。BS に未分類行や他の債務科目があれば nil。
+    /// リース込みの「有利子負債」集約（`Xbrl.ibdInterestBearingAggregateTags`）を親にして、明細表の
+    /// 債務行とリース行をその内訳にする。親の候補は集約と、ラベル規則で債務に確定した会社拡張の
+    /// BS 科目（AGC「1年内返済予定の長期有利子負債」）。BS のコード分類の債務科目はすべて親の候補で
+    /// なければならない（他の科目があれば nil）。
+    /// 割り当て: 流動の内訳は流動の親だけ、非流動の内訳は流動以外の親だけ、区分が無い（null）内訳は
+    /// どの親にも入り得る。各親の closing が内訳の和と一致する（`sameAmount`）割り当てが**ただ1つ**
+    /// のときだけ入れ子にする（区分の無い行に区分を作らない。金額の一致だけで決める）。期末値が
+    /// 無い・0 の内訳は和に効かないので、入り得る親が1つならそこ、複数なら対応先なしにする。
+    /// 一致しない・複数ある・BS に未分類行があるときは nil（従来どおり明細表の行を数える）。
     static func nestUnderLeaseInclusiveAggregates(
         balanceSheet: [IBDCandidate], bsUnresolved: Bool, children: [IBDCandidate]
-    ) -> (parents: [IBDCandidate], children: [(row: IBDCandidate, parent: IBDCandidate)], sentences: [String])? {
+    ) -> (parents: [IBDCandidate], children: [(row: IBDCandidate, parent: IBDCandidate?)], sentences: [String])? {
         guard !bsUnresolved, !children.isEmpty else { return nil }
-        let parents = balanceSheet.filter { Xbrl.ibdInterestBearingAggregateTags.contains($0.tag ?? "") }
-        guard !parents.isEmpty, parents.count == balanceSheet.count else { return nil }
-        let currentParents = parents.filter { $0.maturityClass == ibdMaturityCurrent }
-        let otherParents = parents.filter { $0.maturityClass != ibdMaturityCurrent }
-        guard currentParents.count <= 1, otherParents.count <= 1 else { return nil }
-        var assigned: [(row: IBDCandidate, parent: IBDCandidate)] = []
-        for row in children {
-            let parent: IBDCandidate?
-            if parents.count == 1 {
-                parent = parents[0]
-            } else if row.maturityClass == ibdMaturityCurrent {
-                parent = currentParents.first
-            } else {
-                parent = otherParents.first
+        let aggregates = balanceSheet.filter { Xbrl.ibdInterestBearingAggregateTags.contains($0.tag ?? "") }
+        guard !aggregates.isEmpty else { return nil }
+        let parents = balanceSheet.filter { row in
+            let tag = row.tag ?? ""
+            if Xbrl.ibdInterestBearingAggregateTags.contains(tag) { return true }
+            // ラベル規則で確定した会社拡張の債務科目（区分つき）
+            return !knownDebtTags.contains(tag) && !tag.hasPrefix("USGAAP_HTML_") && row.maturityClass != nil
+        }
+        guard parents.count == balanceSheet.count, parents.count <= 4 else { return nil }
+        func allowed(_ child: IBDCandidate) -> [Int] {
+            parents.indices.filter { i in
+                switch child.maturityClass {
+                case ibdMaturityCurrent?: return parents[i].maturityClass == ibdMaturityCurrent
+                case ibdMaturityNonCurrent?: return parents[i].maturityClass != ibdMaturityCurrent
+                default: return true
+                }
             }
-            guard let parent else { return nil }
-            assigned.append((row, parent))
+        }
+        let valued = children.filter { ($0.closing ?? 0) != 0 }
+        let unvalued = children.filter { ($0.closing ?? 0) == 0 }
+        guard valued.count <= 16 else { return nil }
+        let options = valued.map(allowed)
+        guard !options.contains(where: \.isEmpty) else { return nil }
+        // 各親の内訳が何行入るかで端数許容が変わるので、最後に sameAmount で確かめる
+        var solutions: [[Int]] = []
+        var assignment = Array(repeating: -1, count: valued.count)
+        var sums = Array(repeating: 0.0, count: parents.count)
+        let tolerance = 500_000.0 * Double(valued.count + parents.count)
+        func search(_ k: Int) {
+            if solutions.count > 1 { return }
+            if k == valued.count {
+                let ok = parents.indices.allSatisfy { i in
+                    let n = assignment.filter { $0 == i }.count
+                    return n > 0 && sameAmount(sums[i], parents[i].closing, rows: n + 1)
+                }
+                if ok { solutions.append(assignment) }
+                return
+            }
+            for i in options[k] {
+                let amount = valued[k].closing ?? 0
+                // 親を超える和は打ち切る（金額は正の前提。負の行があれば打ち切らない）
+                if amount > 0, sums[i] + amount > (parents[i].closing ?? 0) + tolerance { continue }
+                assignment[k] = i
+                sums[i] += amount
+                search(k + 1)
+                sums[i] -= amount
+                assignment[k] = -1
+            }
+        }
+        search(0)
+        guard solutions.count == 1, let solution = solutions.first else { return nil }
+        var assigned: [(row: IBDCandidate, parent: IBDCandidate?)] = zip(valued, solution).map { ($0, parents[$1]) }
+        for row in unvalued {
+            let candidates = allowed(row)
+            assigned.append((row, candidates.count == 1 ? parents[candidates[0]] : nil))
+        }
+        // 表示順は明細表の順
+        assigned.sort { a, b in
+            (children.firstIndex(of: a.row) ?? 0) < (children.firstIndex(of: b.row) ?? 0)
         }
         var sentences: [String] = []
         for parent in parents {
-            let rows = assigned.filter { $0.parent == parent }.map(\.row)
-            let sum = rows.reduce(0) { $0 + ($1.closing ?? 0) }
-            guard !rows.isEmpty, sameAmount(sum, parent.closing, rows: rows.count + 1) else { return nil }
+            let sum = assigned.filter { $0.parent == parent }.reduce(0) { $0 + ($1.row.closing ?? 0) }
             sentences.append(
                 "nesting_lease_inclusive_aggregate parent=\(parent.labelRaw) balance_sheet=\(String(format: "%.0f", parent.closing ?? 0)) components=\(String(format: "%.0f", sum))")
         }

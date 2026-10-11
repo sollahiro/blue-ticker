@@ -57,7 +57,7 @@
         "is_total": false
       },
       {
-        "label": "リース負債（非流動）",
+        "label": "リース債務",
         "prior_balance": 69216000000,
         "current_balance": 69498000000,
         "average_interest_rate_percent": 4.24,
@@ -132,7 +132,7 @@
         "is_total": false
       },
       {
-        "label": "リース負債（非流動）",
+        "label": "リース負債",
         "prior_balance": 107861000000,
         "current_balance": 79960000000,
         "average_interest_rate_percent": null,
@@ -339,7 +339,7 @@
         "is_total": false
       },
       {
-        "label": "リース負債（非流動）",
+        "label": "リース債務",
         "prior_balance": 33338000000.0,
         "current_balance": 32207000000.0,
         "average_interest_rate_percent": 4.94,
@@ -412,7 +412,7 @@
         "is_total": false
       },
       {
-        "label": "リース負債（非流動）",
+        "label": "リース債務",
         "prior_balance": 69738000000.0,
         "current_balance": 90694000000.0,
         "average_interest_rate_percent": null,

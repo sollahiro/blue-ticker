@@ -378,7 +378,8 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                 interest_bearing_debt は社債・借入金とリース負債を1表にした有利子負債です。
                 行は名前付きセル opening（期首残高）/ closing（期末残高）、
                 source（balance_sheet / borrowings_schedule / lease_note / financials_bank_components）、maturity_class（current / non_current / null。
-                BS 科目・注記の流動/非流動・明細表の区分名から取るだけで計算しません）、
+                BS 科目・注記の流動/非流動・明細表の区分名や区分見出しから取るだけで計算しません。
+                区分の分からないリース行の label は開示どおりで「（流動）/（非流動）」を付けません）、
                 source_tag（値を読んだ XBRL 要素のローカル名。BS 行は科目の要素名（例 BorrowingsCLIFRS）、
                 明細表・注記の行は読んだ表の TextBlock 要素名（例 AnnexedConsolidatedDetailedScheduleOfBorrowingsTextBlock）。
                 名前空間・URI は付きません。会社拡張要素は提出どおりの名前で会社間で比較できません。合計行は null）。

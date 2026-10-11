@@ -22,6 +22,9 @@ enum BorrowingsSchedule {
         /// 値を読んだ XBRL 要素のローカル名（表なら TextBlock、直接タグ経路なら数値要素）。
         /// interest_bearing_debt 軸の `source_tag`。名前空間は付けない。
         var sourceTag: String? = nil
+        /// 表の流動／非流動の区分見出し（値の無い「流動負債」「非流動負債」行）の下にある行の区分
+        /// （"current" / "non_current"）。区分見出しが無ければ nil（ラベルから推定しない）。
+        var sectionMaturity: String? = nil
     }
 
     typealias Parsed = (rows: [Row], totalCurrent: Double?, totalPrior: Double?)
@@ -80,16 +83,36 @@ enum BorrowingsSchedule {
 
     /// リース債務行は「リース負債（流動/非流動）」へ正規化し、コードベース全体の表示ラベルに揃える。
     /// それ以外の区分（短期借入金・社債・長期借入金等）は明細表の表記をそのまま使う。
-    private static func displayLabel(for normalizedLabel: String) -> String {
+    private static func displayLabel(for normalizedLabel: String, section: String? = nil) -> String {
         guard normalizedLabel.contains("リース") else { return normalizedLabel }
         // 「1年以内に返済予定のものを除く」は非流動。"1年以内" を含むため除外判定を先に行う。
         if normalizedLabel.contains("除く") { return "リース負債（非流動）" }
         // HOYA S100Y90T 実データ検証（2026-08-05）: 「短期リース負債」「長期リース負債」という
         // 対で開示する会社がある。"短期" が判定マーカーに無かったため両方とも「非流動」に
         // 誤分類され区別が失われていた（値も欠落したように見えるラベル重複を引き起こす）。
-        let currentMarkers = ["1年以内", "1年内", "１年以内", "１年内", "流動", "短期"]
-        let isCurrent = currentMarkers.contains { normalizedLabel.contains($0) }
-        return isCurrent ? "リース負債（流動）" : "リース負債（非流動）"
+        let currentMarkers = ["1年以内", "1年内", "１年以内", "１年内", "一年以内", "一年内", "非流動", "流動", "短期"]
+        if let marker = currentMarkers.first(where: { normalizedLabel.contains($0) }) {
+            return marker == "非流動" ? "リース負債（非流動）" : "リース負債（流動）"
+        }
+        // 表の区分見出し（流動負債／非流動負債）の下の行は、その区分
+        if section == "current" { return "リース負債（流動）" }
+        if section == "non_current" { return "リース負債（非流動）" }
+        let nonCurrentMarkers = ["長期", "1年超", "１年超", "固定"]
+        if nonCurrentMarkers.contains(where: { normalizedLabel.contains($0) }) { return "リース負債（非流動）" }
+        // ブロードリーフ S100XS43 実データ検証（2026-10-11）: 区分の印も区分見出しも無い素の
+        // 「リース負債」（実際は流動分）を「（非流動）」と作っていた。分からなければ開示どおり。
+        return normalizedLabel
+    }
+
+    /// 値の無い区分見出し行の流動／非流動（「流動負債」「非流動負債」「流動」「固定負債」等）。
+    private static func sectionHeaderMaturity(_ label: String) -> String? {
+        let compact = label.replacingOccurrences(of: " ", with: "").replacingOccurrences(of: "　", with: "")
+            .replacingOccurrences(of: "【", with: "").replacingOccurrences(of: "】", with: "")
+            .replacingOccurrences(of: "＜", with: "").replacingOccurrences(of: "＞", with: "")
+            .replacingOccurrences(of: "<", with: "").replacingOccurrences(of: ">", with: "")
+        if ["非流動負債", "非流動", "固定負債"].contains(compact) { return "non_current" }
+        if ["流動負債", "流動"].contains(compact) { return "current" }
+        return nil
     }
 
     /// フィルタ通過前の1行分（インデント深さつき）。`label` は displayLabel 適用前の生ラベル。
@@ -429,7 +452,11 @@ enum BorrowingsSchedule {
     /// 「担保に供している資産」に対応する債務の表か（直前60文字の見出しで判定）。
     private static func isCollateralSecuredDebtTable(_ table: Element) -> Bool {
         let heading = precedingText(of: table, maxChars: 60)
+        // JFE S100YCUD 実データ検証（2026-10-11）: 「（注）上記債務のうち、工場財団抵当等に係るもの」
+        // という見出しの担保付債務の内訳表。以前は本体表の素の「リース負債」を「（非流動）」と作って
+        // いたためラベル重複で合算を免れていた。見出しで除外する。
         return heading.contains("対応する債務") || heading.contains("担保付債務")
+            || heading.contains("上記債務のうち") || heading.contains("抵当")
     }
 
     /// 表の直前のテキスト。兄弟要素をさかのぼり、尽きたら親の兄弟へ上がる（親自身の本文は読まない）。
@@ -491,7 +518,12 @@ enum BorrowingsSchedule {
         // ラベルが重複しない前提のため、行ラベルに重複が無い場合のみ合算する。重複があれば
         // 合算せず、`hasExplicitTotalRow` を満たす最初の1件のみを使う（ロールフォワード表は
         // 後述の他経路で無視される）。
-        let allLabels = parsedCombinable.flatMap { $0.rows.map(\.label) }
+        // 重複判定のキーは従来の正規化（区分の分からないリース行も「（非流動）」とみなす）。表示ラベルを
+        // 開示どおりに残すようにしても、合算するかどうかの判定は変えない。
+        func dedupeKey(_ row: Row) -> String {
+            row.label.contains("リース") && !row.label.hasSuffix("（流動）") ? "リース負債（非流動）" : row.label
+        }
+        let allLabels = parsedCombinable.flatMap { $0.rows.map(dedupeKey) }
         let hasDuplicateLabels = Set(allLabels).count != allLabels.count
         // ＳＢＩホールディングス S100YK3R 実データ検証（2026-08-06）: 同一テキストブロック内に
         // 「社債及び借入金の内訳」表（合計＝連結BSの社債及び借入金と一致する正解）とは別に、
@@ -643,8 +675,31 @@ enum BorrowingsSchedule {
         var trailingLeaseRows: [Row] = []
         var pastGrandTotal = false
         var inOtherFinancialLiabilities = false
+        // 東静 S100XMC1 実データ検証（2026-10-11）: 「流動負債」見出し → 行 → 合計、「非流動負債」
+        // 見出し → 行 → 合計、と区分ごとに合計を置く表。最初の「合計」で打ち切ると非流動を落とす。
+        // 区分見出しの下の「合計」は、後ろに別区分の見出しがあるときだけ区分小計として読み、
+        // 表の合計は区分小計の和（区分の後に真の合計行があればそれ）。
+        func rowLabel(_ tr: Element) -> (label: String, hasValue: Bool)? {
+            guard let cells = (try? tr.select("td, th"))?.array(), !cells.isEmpty else { return nil }
+            var label = normalizeLabel((try? cells[0].text(trimAndNormaliseWhitespace: true)) ?? "")
+            if label.isEmpty, cells.count > 1 {
+                label = normalizeLabel((try? cells[1].text(trimAndNormaliseWhitespace: true)) ?? "")
+            }
+            let hasValue = cells.count > max(priorIdx, currentIdx)
+                && (XBRLUtils.parseTextblockCellValue(try? cells[priorIdx].text()) != nil
+                    || XBRLUtils.parseTextblockCellValue(try? cells[currentIdx].text()) != nil)
+            return (label, hasValue)
+        }
+        let bodyRows = Array(trs[(headerRowIndex + 1)...])
+        let sectionHeaderPositions: [(index: Int, maturity: String)] = bodyRows.enumerated().compactMap { i, tr in
+            guard let parsed = rowLabel(tr), !parsed.hasValue,
+                  let maturity = sectionHeaderMaturity(parsed.label) else { return nil }
+            return (i, maturity)
+        }
+        var section: String?
+        var sectionTotals: [(current: Double?, prior: Double?)] = []
 
-        rowLoop: for tr in trs[(headerRowIndex + 1)...] {
+        rowLoop: for (rowIndex, tr) in bodyRows.enumerated() {
             if pastGrandTotal {
                 // 合計の後は「（その他の金融負債）」見出しの下のリース負債行だけ拾う
                 let rowText = normalizeLabel((try? tr.text()) ?? "")
@@ -685,8 +740,11 @@ enum BorrowingsSchedule {
 
             let prior = XBRLUtils.parseTextblockCellValue(try? cells[priorIdx].text())
             let current = XBRLUtils.parseTextblockCellValue(try? cells[currentIdx].text())
-            // 区分見出し（「非流動」「流動」等、値なし）を除外する。
-            guard current != nil || prior != nil else { continue }
+            // 区分見出し（「非流動」「流動」等、値なし）を除外する（区分は覚えておく）。
+            guard current != nil || prior != nil else {
+                if let maturity = sectionHeaderMaturity(label) { section = maturity }
+                continue
+            }
             let rate = rateIdx.flatMap { idx in
                 cells.count > idx ? XBRLUtils.parseTextblockCellValue(try? cells[idx].text()) : nil
             }
@@ -702,6 +760,24 @@ enum BorrowingsSchedule {
                 totalPrior = prior.map { $0 * scale }
                 break rowLoop
             }
+            if isGrandTotalLabel(label), let currentSection = section,
+               sectionHeaderPositions.contains(where: { $0.index > rowIndex && $0.maturity != currentSection }) {
+                // 区分小計（後ろに別区分の見出しがある）
+                sectionTotals.append((current.map { $0 * scale }, prior.map { $0 * scale }))
+                section = nil
+                continue
+            }
+            if isGrandTotalLabel(label), section != nil, !sectionTotals.isEmpty {
+                // 最後の区分の小計。区分小計の和を表の合計にする
+                sectionTotals.append((current.map { $0 * scale }, prior.map { $0 * scale }))
+                let cs = sectionTotals.compactMap(\.current)
+                let ps = sectionTotals.compactMap(\.prior)
+                totalCurrent = cs.isEmpty ? nil : cs.reduce(0, +)
+                totalPrior = ps.isEmpty ? nil : ps.reduce(0, +)
+                section = nil
+                pastGrandTotal = true
+                continue
+            }
             if isGrandTotalLabel(label) {
                 totalCurrent = current.map { $0 * scale }
                 totalPrior = prior.map { $0 * scale }
@@ -711,11 +787,12 @@ enum BorrowingsSchedule {
                 continue
             }
             components.append(Row(
-                label: displayLabel(for: label),
+                label: displayLabel(for: label, section: section),
                 current: current.map { $0 * scale },
                 prior: prior.map { $0 * scale },
                 averageInterestRatePercent: rate,
-                sourceLabel: label
+                sourceLabel: label,
+                sectionMaturity: section
             ))
         }
 
