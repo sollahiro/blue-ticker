@@ -107,7 +107,8 @@ func runFinancialsIngest(
             break
         }
         let existing: CompanyFinancials?
-        if missingCodes.contains(code) {
+        // force 指定は行があっても missing に入るため、縮小ガード用に既存行を読む（--codes 等の少数のみ）。
+        if missingCodes.contains(code) && !forceCodes.contains(code) {
             existing = nil
         } else {
             existing = try await withDbRetry(
@@ -126,29 +127,19 @@ func runFinancialsIngest(
         if let lim = limit, attempted >= lim { break }
         attempted += 1
         let computed = await compute(code)
-        // 計算結果が格納済み行や DB の最新有報より古い FY で終わる（＝ローカル EDINET 年次インデックスが
+        // 計算結果の最新 fy_end が格納済み行や DB の最新有報より古い（＝ローカル EDINET 年次インデックスが
         // 最新有報を欠く）なら書かない。行全体を上書きし high_water まで進めると、欠落した FY が
         // 以後 skip され続ける（2026-09-18 提出分の FY2026 が 12 社で消えた）。failed として数え、
         // 行と high_water を据え置くので次回 ingest で再試行される。
-        let storable: FinancialsResponse?
-        switch computed {
-        case .success(let response): storable = response
-        case .notApplicable: storable = .notApplicablePlaceholder(code: code)
-        case .failed: storable = nil
-        }
-        if let storable {
-            let current = try await withDbRetry(
-                logger: logger, context: "code=\(code)", onRetry: { unhealthyRetries += 1 }
-            ) {
-                try await CompanyFinancials.find(code, on: db)
-            }
-            if let lacking = financialsShrinkRefusal(
-                computed: storable, stored: current?.response, newestAnnual: newestAnnualMap[code])
-            {
-                failed += 1
-                logger?.warning("財務取り込み保留: code=\(code) local EDINET index lacks \(lacking)")
-                continue
-            }
+        // 実際の years を持つ success だけを比較する。notApplicable（年次書類なし）は従来どおり
+        // プレースホルダを書く（比較すると、正当な対象外社が毎回 failed として再計算され続ける）。
+        if case .success(let response) = computed,
+            let lacking = financialsShrinkRefusal(
+                computed: response, stored: existing?.response, newestAnnual: newestAnnualMap[code])
+        {
+            failed += 1
+            logger?.warning("財務取り込み保留: code=\(code) local EDINET index lacks \(lacking)")
+            continue
         }
         switch computed {
         case .success(let response):
@@ -199,7 +190,7 @@ struct NewestAnnualFiling: Sendable, Equatable {
 
 /// 計算結果の最新 fy_end が、格納済み行の最新 fy_end または DB の最新有報 period_end より古いとき、
 /// 欠けている書類（DB の最新有報 docID、無ければ格納行の最新年の doc_id / fy_end）を返す。
-/// nil なら格納してよい。notApplicable プレースホルダ（years 空）は最新 fy_end 無し＝どれよりも古い。
+/// nil なら格納してよい。呼び出し側は実際の years を持つ success にだけ使う。
 func financialsShrinkRefusal(
     computed: FinancialsResponse, stored: FinancialsResponse?, newestAnnual: NewestAnnualFiling?
 ) -> String? {
