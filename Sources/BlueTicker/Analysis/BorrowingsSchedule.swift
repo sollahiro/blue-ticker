@@ -116,8 +116,12 @@ enum BorrowingsSchedule {
     /// （例: コンコルディア「　　借入金」、しずおかFG「　借入金」。①②のインデントが検出できない
     /// 場合はこちらにフォールバックする）。`<p>` が無い（インデント情報自体が無い）行は 0
     /// （トップレベル）として扱う。単位混在（px/pt）はテーブル間で比較しないため問題にならない。
+    /// テレビ東京HD S100YCRR 実データ検証（2026-10-11）: 同じ字下げを `padding-left:0pt` +
+    /// `text-indent:4.8pt` で書く行と `padding-left:4.8pt`（折り返しラベル）で書く行が混在する。
+    /// 片方だけを見ると折り返し行が直前行（１年以内に返済予定のリース債務）の「子」になり、
+    /// 直前行がカテゴリ小計として消えていた。3つの正の値の最大を字下げとみなす。
     private static let indentOffsetRegex = try! NSRegularExpression(
-        pattern: "(?:margin-left|padding-left):\\s*([\\d.]+)(?:px|pt)")
+        pattern: "(?:margin-left|padding-left|text-indent):\\s*([\\d.]+)(?:px|pt)")
     private static let jpDateRegex = try! NSRegularExpression(pattern: "\\d{4}年\\d{1,2}月\\d{1,2}日")
     private static let debtHeadingRegex = try! NSRegularExpression(pattern: "社債及び借入金.*(内訳|帳簿価額)")
 
@@ -127,11 +131,14 @@ enum BorrowingsSchedule {
 
     private static func indentLevel(of p: Element?) -> Double {
         guard let p else { return 0 }
-        if let style = try? p.attr("style"),
-           let match = indentOffsetRegex.firstMatch(in: style, range: NSRange(style.startIndex..., in: style)),
-           let numRange = Range(match.range(at: 1), in: style),
-           let value = Double(style[numRange]), value > 0 {
-            return value
+        if let style = try? p.attr("style") {
+            let values = indentOffsetRegex.matches(
+                in: style, range: NSRange(style.startIndex..., in: style)
+            ).compactMap { match -> Double? in
+                guard let numRange = Range(match.range(at: 1), in: style) else { return nil }
+                return Double(style[numRange])
+            }
+            if let value = values.max(), value > 0 { return value }
         }
         let raw = (try? p.text(trimAndNormaliseWhitespace: false)) ?? ""
         return Double(raw.prefix { $0 == " " || $0 == "\u{3000}" || $0 == "\u{00A0}" }.count)
@@ -322,6 +329,12 @@ enum BorrowingsSchedule {
     /// するか"合計"で終わるラベル（"有利子負債合計"等）に達したら真の合計として確定し打ち切る。
     /// こうしないとHOYAの参考内訳がコンポーネントに紛れ込み二重計上になる。
     private static func parseIFRSNotesTable(xbrlDir: URL) -> (rows: [Row], totalCurrent: Double?, totalPrior: Double?)? {
+        guard let found = ifrsNoteCandidateTables(xbrlDir: xbrlDir) else { return nil }
+        return parseIFRSNotesCandidateTables(soup: found.0, candidateTables: found.1)
+    }
+
+    /// IFRS 社債及び借入金注記の TextBlock と、残高内訳表の候補（銘柄別表・担保の対応債務表を除く）。
+    private static func ifrsNoteCandidateTables(xbrlDir: URL) -> (Document, [Element])? {
         let html = XBRLUtils.extractTextblockHtml(in: xbrlDir, textblockTag: Xbrl.ifrsBondsAndBorrowingsTextblockTag)
             ?? XBRLUtils.extractTextblockHtml(in: xbrlDir, textblockTag: Xbrl.ifrsInterestBearingLiabilitiesTextblockTag)
             ?? XBRLUtils.extractTextblockHtml(in: xbrlDir, textblockTag: Xbrl.ifrsBorrowingsOnlyTextblockTag)
@@ -349,12 +362,55 @@ enum BorrowingsSchedule {
         // 金融負債」のように資産・負債セクションが同一タグ内に併存する会社がある。資産側の表も
         // 「前」「当」列を持つため銘柄除外だけでは資産表を誤選択する。社債・借入金・リース・
         // 有利子負債のいずれかを含む表のみを対象にする。
+        // 豊田合成 S100YC23・すかいらーく S100XUBI・日清食品 S100YEWB 実データ検証（2026-10-11）:
+        // 同じ注記の「担保に供している資産」に続く「対応する債務」表（担保付の借入金だけの再掲）も
+        // 前/当列と借入金ラベル・「合計」行を持つ。本体表と（注n）付きラベルが一致しないため重複排除を
+        // すり抜けて合算され（豊田合成 285、すかいらーく 1,259 / 2,823）、日清食品では本体表に
+        // 長期受入保証金があるため「借入金だけの表」優先でこちらが選ばれていた。直前の見出しで除外する。
         let candidateTables = tables.filter {
             let t = (try? $0.text()) ?? ""
             guard !t.contains("銘柄") else { return false }
             guard t.contains("社債") || t.contains("借入金") || t.contains("リース") || t.contains("有利子負債") else { return false }
+            guard !isCollateralSecuredDebtTable($0) else { return false }
             return (t.contains("前") && t.contains("当")) || jpDateMatchCount(t) >= 2
         }
+        return (soup, candidateTables)
+    }
+
+    /// 「担保に供している資産」に対応する債務の表か（直前60文字の見出しで判定）。
+    private static func isCollateralSecuredDebtTable(_ table: Element) -> Bool {
+        let heading = precedingText(of: table, maxChars: 60)
+        return heading.contains("対応する債務") || heading.contains("担保付債務")
+    }
+
+    /// 表の直前のテキスト。兄弟要素をさかのぼり、尽きたら親の兄弟へ上がる（親自身の本文は読まない）。
+    private static func precedingText(of element: Element, maxChars: Int) -> String {
+        var collected = ""
+        var current: Element? = element
+        while let node = current, collected.count < maxChars {
+            if let previous = try? node.previousElementSibling() {
+                collected = ((try? previous.text()) ?? "").replacingOccurrences(of: " ", with: "") + collected
+                current = previous
+            } else {
+                current = node.parent()
+                if current == nil || current?.tagName() == "body" { break }
+            }
+        }
+        return String(collected.suffix(maxChars))
+    }
+
+    /// 注記の残高表で「合計」の後に続く「（その他の金融負債）」区分のリース負債行。
+    /// すかいらーく S100XUBI 実データ検証（2026-10-11）: BS はリースを「その他の金融負債」に含め、
+    /// リース注記にも残高表が無い。リース負債は社債及び借入金注記の合計の後の区分にだけある。
+    /// 注記（borrowings_schedule）の行・合計は変えず、有利子負債軸のリース行の材料にだけ使う。
+    static func ifrsNoteOtherFinancialLiabilityLeaseRows(xbrlDir: URL) -> [Row] {
+        guard let found = ifrsNoteCandidateTables(xbrlDir: xbrlDir) else { return [] }
+        return found.1.flatMap { parseComparisonTableDetailed($0)?.trailingLeaseRows ?? [] }
+    }
+
+    private static func parseIFRSNotesCandidateTables(
+        soup: Document, candidateTables: [Element]
+    ) -> (rows: [Row], totalCurrent: Double?, totalPrior: Double?)? {
         // 三井物産 S100YAVT 実データ検証（2026-08-04）: 「短期銀行借入金等」と「長期債務」が別々の表
         // に分かれる（短期表のみを拾うと不完全な合計になる）。該当する表が複数あれば全て解析し、
         // 行を連結・合計を合算する。三菱重工業 S100YHZG 実データ検証（2026-08-04）: 相殺（ネッティング）
@@ -425,6 +481,15 @@ enum BorrowingsSchedule {
     /// `parseHeadingAnchoredComparisonTable`（汎用タグ配下で見出しアンカーによりテーブルを選ぶ）の
     /// 両方から、テーブル選択後の解析ロジックとして共有する。
     private static func parseComparisonTable(_ table: Element) -> (rows: [Row], totalCurrent: Double?, totalPrior: Double?)? {
+        guard let parsed = parseComparisonTableDetailed(table) else { return nil }
+        return (parsed.rows, parsed.totalCurrent, parsed.totalPrior)
+    }
+
+    /// `parseComparisonTable` 本体。合計行の後の「（その他の金融負債）」区分のリース負債行も返す
+    /// （本体の行・合計には入れない）。
+    private static func parseComparisonTableDetailed(_ table: Element) -> (
+        rows: [Row], totalCurrent: Double?, totalPrior: Double?, trailingLeaseRows: [Row]
+    )? {
         guard let trs = (try? table.select("tr"))?.array() else { return nil }
 
         let tableText = (try? table.text()) ?? ""
@@ -522,8 +587,39 @@ enum BorrowingsSchedule {
         var components: [Row] = []
         var totalCurrent: Double?
         var totalPrior: Double?
+        var trailingLeaseRows: [Row] = []
+        var pastGrandTotal = false
+        var inOtherFinancialLiabilities = false
 
         rowLoop: for tr in trs[(headerRowIndex + 1)...] {
+            if pastGrandTotal {
+                // 合計の後は「（その他の金融負債）」見出しの下のリース負債行だけ拾う
+                let rowText = normalizeLabel((try? tr.text()) ?? "")
+                guard let cells = (try? tr.select("td, th"))?.array(),
+                      cells.count > max(priorIdx, currentIdx) else {
+                    if rowText.contains("その他の金融負債") { inOtherFinancialLiabilities = true }
+                    continue
+                }
+                var label = normalizeLabel((try? cells[0].text(trimAndNormaliseWhitespace: true)) ?? "")
+                if label.isEmpty, cells.count > 1 {
+                    label = normalizeLabel((try? cells[1].text(trimAndNormaliseWhitespace: true)) ?? "")
+                }
+                let prior = XBRLUtils.parseTextblockCellValue(try? cells[priorIdx].text())
+                let current = XBRLUtils.parseTextblockCellValue(try? cells[currentIdx].text())
+                if current == nil, prior == nil {
+                    if label.contains("その他の金融負債") { inOtherFinancialLiabilities = true }
+                    continue
+                }
+                if inOtherFinancialLiabilities, isLeaseDebtScheduleRowLabel(label) {
+                    trailingLeaseRows.append(Row(
+                        label: displayLabel(for: label),
+                        current: current.map { $0 * scale },
+                        prior: prior.map { $0 * scale },
+                        averageInterestRatePercent: nil,
+                        sourceLabel: label))
+                }
+                continue
+            }
             guard let cells = (try? tr.select("td, th"))?.array(),
                   cells.count > max(priorIdx, currentIdx) else { continue }
             // 日東電工 S100VYH3 実データ検証（2026-08-03）: ラベル列の前に幅の狭いインデント専用の
@@ -556,7 +652,10 @@ enum BorrowingsSchedule {
             if isGrandTotalLabel(label) {
                 totalCurrent = current.map { $0 * scale }
                 totalPrior = prior.map { $0 * scale }
-                break rowLoop   // 真の合計に到達。以降の参考内訳は無視する
+                // 真の合計に到達。以降の参考内訳は行・合計に使わない（その他の金融負債の
+                // リース負債行だけ trailingLeaseRows に分けて拾う）
+                pastGrandTotal = true
+                continue
             }
             components.append(Row(
                 label: displayLabel(for: label),
@@ -575,7 +674,7 @@ enum BorrowingsSchedule {
         }
 
         guard totalCurrent != nil || totalPrior != nil else { return nil }
-        return (components, totalCurrent, totalPrior)
+        return (components, totalCurrent, totalPrior, trailingLeaseRows)
     }
 
     /// 「社債及び借入金の内訳は次のとおりです」等の見出し段落の直後にある表を、前/当の内訳表として

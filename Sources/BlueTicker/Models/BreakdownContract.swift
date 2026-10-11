@@ -37,8 +37,29 @@ public let breakdownAxisInterestBearingDebt = "interest_bearing_debt"
 public let ibdCellOpening = "opening"
 /// interest_bearing_debt 行の名前付きセルキー。期末残高（円）。
 public let ibdCellClosing = "closing"
-/// interest_bearing_debt 行の名前付きセルキー。平均利率（％、開示値のみ。加重平均は計算しない）。
-public let ibdCellAverageRate = "average_rate"
+/// interest_bearing_debt 明細行が合計に入るか（bool）。合計行（subtotal）は null。
+/// 合計 = in_total=true の行の closing の和（クライアントは全行を足さないこと）。
+public let ibdInTotalKey = "in_total"
+/// interest_bearing_debt の in_total=false の行の理由（`ibdExcludedReason*` の4値だけ）。
+/// in_total=true の行と合計行は null。
+public let ibdExcludedReasonKey = "excluded_reason"
+/// in_total=false の行が対応する合計内の行の位置（同じ payload の rows の 0 始まり添字）。
+/// 対応行が1つに決まらないときは null。
+public let ibdPairedRowIndexKey = "paired_row_index"
+
+/// 除外理由: 貸借対照表の行と同じ負債（BS 側を合計に入れる）。
+public let ibdExcludedReasonDuplicateOfBalanceSheet = "duplicate_of_balance_sheet"
+/// 除外理由: 同じ科目だが BS と範囲・金額が違う（BS 側を合計に入れる）。
+public let ibdExcludedReasonScopeDiffers = "scope_differs"
+/// 除外理由: 有利子負債ではない（受入保証金・デリバティブ等）。
+public let ibdExcludedReasonNonInterestBearing = "non_interest_bearing"
+/// 除外理由: 別の表で同じ負債を示しただけ（例: 明細表と同額のリース注記）。
+public let ibdExcludedReasonOtherTable = "other_table"
+/// 除外理由の全値。これ以外の値・自由記述は使わない。
+public let ibdExcludedReasons: Set<String> = [
+    ibdExcludedReasonDuplicateOfBalanceSheet, ibdExcludedReasonScopeDiffers,
+    ibdExcludedReasonNonInterestBearing, ibdExcludedReasonOtherTable,
+]
 /// interest_bearing_debt 行の出所キー（`ibdRowSource*`）。
 public let ibdRowSourceKey = "source"
 /// interest_bearing_debt 行の流動/非流動区分キー（`ibdMaturity*`。開示区分をそのまま取るだけで計算しない）。
@@ -213,6 +234,8 @@ public let breakdownWarningIBDCoverageOutOfBand = "interest_bearing_debt_coverag
 public let breakdownWarningIBDCoverageUnavailable = "interest_bearing_debt_coverage_unavailable"
 /// interest_bearing_debt: 分類未解決の候補行がある（分母が不完全な可能性）。`needs_review` とセット。
 public let breakdownWarningIBDRowUnclassified = "interest_bearing_debt_row_unclassified"
+/// interest_bearing_debt: 明細表の行の親になる BS 科目が2行以上あり決められない（needs_review）。
+public let breakdownWarningIBDNestingParentUnresolved = "interest_bearing_debt_nesting_parent_unresolved"
 /// interest_bearing_debt: 明細表とリース注記の近似重複を解決できなかった。明細表側を採用。
 public let breakdownWarningIBDNearDuplicateUnresolved = "interest_bearing_debt_near_duplicate_unresolved"
 /// interest_bearing_debt: 明細表候補が coverage 帯の外のため棄却し、BS 科目行を使った。
@@ -486,8 +509,12 @@ public struct BreakdownRowPayload: Codable, Sendable, Equatable {
     public var opening: Double?
     /// interest_bearing_debt 軸の名前付きセル。期末残高（円）。他軸は nil。
     public var closing: Double?
-    /// interest_bearing_debt 軸の名前付きセル。平均利率（％、開示値のみ）。他軸は nil。
-    public var averageRate: Double?
+    /// interest_bearing_debt 明細行が合計に入るか。合計行・他軸は nil。
+    public var inTotal: Bool?
+    /// interest_bearing_debt の in_total=false の理由（`ibdExcludedReasons`）。他は nil。
+    public var excludedReason: String?
+    /// interest_bearing_debt の in_total=false の行の対応行（rows の添字）。他は nil。
+    public var pairedRowIndex: Int?
     /// interest_bearing_debt 行の出所（`ibdRowSource*`）。他軸は nil。
     public var debtSource: String?
     /// interest_bearing_debt 行の流動/非流動区分（`ibdMaturity*`）。他軸は nil。
@@ -499,7 +526,9 @@ public struct BreakdownRowPayload: Codable, Sendable, Equatable {
         case categoryGroup = "category_group"
         case category
         case opening, closing
-        case averageRate = "average_rate"
+        case inTotal = "in_total"
+        case excludedReason = "excluded_reason"
+        case pairedRowIndex = "paired_row_index"
         case debtSource = "debt_source"
         case maturityClass = "maturity_class"
     }
@@ -509,8 +538,9 @@ public struct BreakdownRowPayload: Codable, Sendable, Equatable {
         description: String? = nil, segmentAssets: Double? = nil, flow: Double? = nil,
         capitalExpendituresOverview: Double? = nil,
         categoryGroup: String? = nil, category: String? = nil,
-        opening: Double? = nil, closing: Double? = nil, averageRate: Double? = nil,
-        debtSource: String? = nil, maturityClass: String? = nil
+        opening: Double? = nil, closing: Double? = nil,
+        debtSource: String? = nil, maturityClass: String? = nil,
+        inTotal: Bool? = nil, excludedReason: String? = nil, pairedRowIndex: Int? = nil
     ) {
         self.labelRaw = labelRaw
         self.label = label
@@ -525,7 +555,9 @@ public struct BreakdownRowPayload: Codable, Sendable, Equatable {
         self.category = category
         self.opening = opening
         self.closing = closing
-        self.averageRate = averageRate
+        self.inTotal = inTotal
+        self.excludedReason = excludedReason
+        self.pairedRowIndex = pairedRowIndex
         self.debtSource = debtSource
         self.maturityClass = maturityClass
         if let categoryGroup {
@@ -554,7 +586,9 @@ public struct BreakdownRowPayload: Codable, Sendable, Equatable {
             Double.self, forKey: .capitalExpendituresOverview)
         opening = try container.decodeIfPresent(Double.self, forKey: .opening)
         closing = try container.decodeIfPresent(Double.self, forKey: .closing)
-        averageRate = try container.decodeIfPresent(Double.self, forKey: .averageRate)
+        inTotal = try container.decodeIfPresent(Bool.self, forKey: .inTotal)
+        excludedReason = try container.decodeIfPresent(String.self, forKey: .excludedReason)
+        pairedRowIndex = try container.decodeIfPresent(Int.self, forKey: .pairedRowIndex)
         debtSource = try container.decodeIfPresent(String.self, forKey: .debtSource)
         maturityClass = try container.decodeIfPresent(String.self, forKey: .maturityClass)
         if let categoryGroup {
@@ -583,7 +617,9 @@ public struct BreakdownRowPayload: Codable, Sendable, Equatable {
         try container.encodeIfPresent(category, forKey: .category)
         try container.encodeIfPresent(opening, forKey: .opening)
         try container.encodeIfPresent(closing, forKey: .closing)
-        try container.encodeIfPresent(averageRate, forKey: .averageRate)
+        try container.encodeIfPresent(inTotal, forKey: .inTotal)
+        try container.encodeIfPresent(excludedReason, forKey: .excludedReason)
+        try container.encodeIfPresent(pairedRowIndex, forKey: .pairedRowIndex)
         try container.encodeIfPresent(debtSource, forKey: .debtSource)
         try container.encodeIfPresent(maturityClass, forKey: .maturityClass)
     }
@@ -777,17 +813,26 @@ public extension BreakdownRowPayload {
 
     /// interest_bearing_debt 軸の行。`amount` / `profit` は出さない（opening/closing が正）。
     /// 欠測セルは null。`source` / `maturity_class` は開示区分をそのまま載せる（計算しない）。
+    /// `in_total` / `excluded_reason` / `paired_row_index` は合計に入るかとその理由。
     func interestBearingDebtJsonObject() -> [String: Any] {
-        [
+        var object: [String: Any] = [
             "label_raw": labelRaw,
             "label": label,
             "row_kind": rowKind,
             ibdCellOpening: opening ?? NSNull(),
             ibdCellClosing: closing ?? NSNull(),
-            ibdCellAverageRate: averageRate ?? NSNull(),
             ibdRowSourceKey: debtSource ?? NSNull(),
             ibdMaturityClassKey: maturityClass ?? NSNull(),
+            ibdInTotalKey: inTotal ?? NSNull(),
+            ibdExcludedReasonKey: excludedReason ?? NSNull(),
+            ibdPairedRowIndexKey: pairedRowIndex ?? NSNull(),
         ]
+        // 入れ子（親 BS 科目と内訳）があるときだけ product_service と同じキーを出す
+        if let categoryGroup {
+            object["category_group"] = categoryGroup
+            object["category"] = category ?? NSNull()
+        }
+        return object
     }
 
     /// capex 軸の行。`amount` は出さない（名前付きセルが正）。欠測セルは null。

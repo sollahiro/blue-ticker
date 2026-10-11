@@ -376,10 +376,16 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                 行の amount は使いません。flow は書類単位で capital_expenditures があればそれ、
                 無ければ noncurrent_asset_additions です。混ぜず足しません。欠測セルは null です。
                 interest_bearing_debt は社債・借入金とリース負債を1表にした有利子負債です。
-                行は名前付きセル opening（期首残高）/ closing（期末残高）/ average_rate（平均利率 %）、
+                行は名前付きセル opening（期首残高）/ closing（期末残高）、
                 source（balance_sheet / borrowings_schedule / lease_note / financials_bank_components）、maturity_class（current / non_current / null。
                 BS 科目・注記の流動/非流動・明細表の区分名から取るだけで計算しません）。
-                合計行の average_rate は開示が無ければ null です（加重平均は計算しません）。
+                各行の in_total が true の行だけが合計に入ります（合計行の closing = in_total 行の closing の和）。
+                全行を足さないでください。BS と明細表の両方の値を行として残し、数えない方は in_total=false です。
+                in_total=false の行の excluded_reason は duplicate_of_balance_sheet / scope_differs /
+                non_interest_bearing / other_table のいずれかで、in_total=true の行は null です。
+                paired_row_index はその除外行が対応する数える行の rows 配列の添字（0 始まり、決まらなければ null）です。
+                BS 科目が明細表の複数行を含む（入れ子）ときは BS 科目を数え、明細表の行はその内訳として
+                category_group（親の BS 科目名）/ category（内訳名）を持ちます。親行は category_group が自分の名前、category が null です。
                 連結がある会社は連結だけ、無い会社は単体だけです。
                 denominator は同じ財務諸表の BS 有利子負債（リース含む、コードが分類した科目だけ）です。
                 BS にリース科目が無く注記または明細表のリースを分母に足すときは warnings に

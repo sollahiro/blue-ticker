@@ -1364,8 +1364,12 @@ private func ibdBreakdownContentHash(payload: BreakdownSnapshotPayload) -> Strin
             let source: String?
             let opening: Double?
             let closing: Double?
-            let averageRate: Double?
             let maturityClass: String?
+            let inTotal: Bool?
+            let excludedReason: String?
+            let pairedRowIndex: Int?
+            let categoryGroup: String?
+            let category: String?
         }
         let denominator: Double
         let rows: [Row]
@@ -1375,8 +1379,10 @@ private func ibdBreakdownContentHash(payload: BreakdownSnapshotPayload) -> Strin
         rows: payload.rows.map {
             HashInput.Row(
                 labelRaw: $0.labelRaw, source: $0.debtSource, opening: $0.opening,
-                closing: $0.closing, averageRate: $0.averageRate,
-                maturityClass: $0.maturityClass)
+                closing: $0.closing, maturityClass: $0.maturityClass,
+                inTotal: $0.inTotal, excludedReason: $0.excludedReason,
+                pairedRowIndex: $0.pairedRowIndex,
+                categoryGroup: $0.categoryGroup, category: $0.category)
         })
     let encoder = JSONEncoder()
     encoder.outputFormatting = [.sortedKeys]

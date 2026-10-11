@@ -30,7 +30,6 @@ struct IBDCandidate: Equatable, Sendable {
     var opening: Double?
     /// 期末残高（円）
     var closing: Double?
-    var averageRatePercent: Double?
     /// `ibdRowSource*`
     var source: String
     /// `ibdMaturity*` または nil
@@ -162,7 +161,7 @@ enum InterestBearingDebtBreakdown {
             rows.append(
                 IBDCandidate(
                     labelRaw: component.label, label: component.label, tag: item.tag,
-                    opening: item.prior, closing: item.current, averageRatePercent: nil,
+                    opening: item.prior, closing: item.current,
                     source: ibdRowSourceFinancialsBankComponents,
                     maturityClass: maturityClass(fromLabel: component.label),
                     presetClass: .interestBearingDebt))
@@ -281,7 +280,7 @@ enum InterestBearingDebtBreakdown {
             let labelRaw = row.sourceLabel ?? row.label
             return IBDCandidate(
                 labelRaw: labelRaw, label: row.label, tag: nil,
-                opening: row.prior, closing: row.current, averageRatePercent: nil,
+                opening: row.prior, closing: row.current,
                 source: ibdRowSourceBorrowingsSchedule,
                 maturityClass: maturityClass(fromLabel: labelRaw),
                 presetClass: .leaseLiability)
@@ -300,7 +299,7 @@ enum InterestBearingDebtBreakdown {
                 IBDCandidate(
                     labelRaw: component.label, label: component.label, tag: nil,
                     opening: component.prior, closing: component.current,
-                    averageRatePercent: nil, source: ibdRowSourceLeaseNote,
+                    source: ibdRowSourceLeaseNote,
                     maturityClass: maturityClass(fromLabel: component.label),
                     presetClass: .leaseLiability))
         }
@@ -308,7 +307,7 @@ enum InterestBearingDebtBreakdown {
             rows.append(
                 IBDCandidate(
                     labelRaw: "リース負債", label: "リース負債", tag: nil,
-                    opening: lease.prior, closing: lease.current, averageRatePercent: nil,
+                    opening: lease.prior, closing: lease.current,
                     source: ibdRowSourceLeaseNote, maturityClass: nil,
                     presetClass: .leaseLiability))
         }
@@ -356,7 +355,7 @@ enum InterestBearingDebtBreakdown {
             candidates.append(
                 IBDCandidate(
                     labelRaw: label, label: label, tag: tag,
-                    opening: opening, closing: line.value, averageRatePercent: nil,
+                    opening: opening, closing: line.value,
                     source: ibdRowSourceBalanceSheet,
                     maturityClass: maturityClass(fromTag: tag) ?? maturityClass(fromLabel: label),
                     presetClass: preset))
@@ -367,13 +366,18 @@ enum InterestBearingDebtBreakdown {
     /// 借入金等明細表（社債及び借入金注記）の行。`sourceLabel`（表示正規化前）を判定材料に使う。
     private static func scheduleCandidates(xbrlDir: URL) -> [IBDCandidate] {
         guard let extracted = BorrowingsSchedule.extractRows(xbrlDir: xbrlDir) else { return [] }
-        return extracted.rows.compactMap { row in
+        var rows = extracted.rows
+        // IFRS 社債及び借入金注記で「合計」の後に「（その他の金融負債）」区分としてリース負債を
+        // 載せる会社（すかいらーく S100XUBI）。明細表にリース行が無いときだけ拾う。
+        if !rows.contains(where: { BorrowingsSchedule.isLeaseDebtScheduleRowLabel($0.sourceLabel ?? $0.label) }) {
+            rows += BorrowingsSchedule.ifrsNoteOtherFinancialLiabilityLeaseRows(xbrlDir: xbrlDir)
+        }
+        return rows.compactMap { row in
             guard row.current != nil || row.prior != nil else { return nil }
             let labelRaw = row.sourceLabel ?? row.label
             return IBDCandidate(
                 labelRaw: labelRaw, label: row.label, tag: nil,
                 opening: row.prior, closing: row.current,
-                averageRatePercent: row.averageInterestRatePercent,
                 source: ibdRowSourceBorrowingsSchedule,
                 maturityClass: maturityClass(fromLabel: labelRaw),
                 presetClass: scheduleRowPreset(labelRaw))
@@ -395,7 +399,6 @@ enum InterestBearingDebtBreakdown {
                 IBDCandidate(
                     labelRaw: component.label, label: component.label, tag: nil,
                     opening: component.prior, closing: component.current,
-                    averageRatePercent: nil,
                     source: ibdRowSourceLeaseNote,
                     maturityClass: maturityClass(fromLabel: component.label),
                     presetClass: .leaseLiability))
@@ -404,7 +407,7 @@ enum InterestBearingDebtBreakdown {
             rows.append(
                 IBDCandidate(
                     labelRaw: "リース負債", label: "リース負債", tag: nil,
-                    opening: lease.prior, closing: lease.current, averageRatePercent: nil,
+                    opening: lease.prior, closing: lease.current,
                     source: ibdRowSourceLeaseNote, maturityClass: nil,
                     presetClass: .leaseLiability))
         }
@@ -422,6 +425,9 @@ enum InterestBearingDebtBreakdown {
             cleaned = regex.stringByReplacingMatches(
                 in: cleaned, range: NSRange(cleaned.startIndex..., in: cleaned), withTemplate: "")
         }
+        // 受入保証金・預り保証金は利息の付かない預り（日清食品 S100YEWB「長期受入保証金」）。
+        // コードで非有利子に確定する。
+        if cleaned.contains("受入保証金") || cleaned.contains("預り保証金") { return .notInterestBearing }
         // 非有利子の典型（デリバティブ・和解金・預り金等）は Jev に回す
         let nonDebt = ["デリバティブ", "和解", "預り", "預金", "保証金", "未払", "先渡"]
         if nonDebt.contains(where: { cleaned.contains($0) }) { return nil }
@@ -539,6 +545,8 @@ enum InterestBearingDebtBreakdown {
         let noteRows = inputs.leaseNote?.rows ?? []
 
         func yen(_ value: Double) -> String { String(format: "%.0f", value) }
+        // 明細表リースと同じ負債だと決まったリース注記（完全一致または Jev が同一と判断）
+        var leaseNoteSuperseded = false
 
         // 3. 明細表主時のリース行。注記合計との近似重複だけ Jev に聞く（金額は選ばせない）。
         //    判定不能なら明細表側を採用して needs_review。
@@ -551,6 +559,7 @@ enum InterestBearingDebtBreakdown {
             if diff < 0.5 {
                 sentences.append(
                     "lease_exact_match schedule=\(yen(schedLeaseSum)) lease_note=\(yen(noteTotal))")
+                leaseNoteSuperseded = true
                 return schedLease
             }
             let base = max(schedLeaseSum, noteTotal)
@@ -590,7 +599,10 @@ enum InterestBearingDebtBreakdown {
             sentences.append(
                 "lease_near_duplicate schedule=\(yen(schedLeaseSum)) lease_note=\(yen(noteTotal)) decision=\(choice.selected ?? "nil") p=\(probabilityText)")
             guard let selected = choice.selected else { return nil }
-            if selected == IBDDuplicateRole.sameLiability, applied { return schedLease }
+            if selected == IBDDuplicateRole.sameLiability, applied {
+                leaseNoteSuperseded = true
+                return schedLease
+            }
             if selected == IBDDuplicateRole.differentLiabilities, applied {
                 return schedLease + noteRows
             }
@@ -648,11 +660,21 @@ enum InterestBearingDebtBreakdown {
                 "schedule_bonds_from_balance_sheet " + bsBondRows.map { "\($0.labelRaw)=\($0.closing.map(yen) ?? "null")" }.joined(separator: ", "))
         }
         let schedDebt = schedDebtRows + bsBondRows
+        // BS のリース科目（コード分類）があれば、明細表・注記のリースより BS を合計に入れる。
+        // 満期区分ごとに見て、BS に無い区分の明細表リース行（例: 流動分が BS「その他」に含まれる）は残す。
+        let bsLeaseCode = bsLease.filter { $0.presetClass != nil }
+        let bsLeaseWins = !bsLeaseCode.isEmpty && !leaseInDebt
         let primary: String
         let leaseRows: [IBDCandidate]
         var scheduleRejected = false
         if !schedDebt.isEmpty {
-            guard let picked = await scheduleLeaseRows() else { return .unavailable }
+            let picked: [IBDCandidate]
+            if bsLeaseWins {
+                picked = bsLeaseCode
+            } else {
+                guard let scheduleLease = await scheduleLeaseRows() else { return .unavailable }
+                picked = scheduleLease
+            }
             let schedTotal = (schedDebt + picked).reduce(0) { $0 + ($1.closing ?? 0) }
             if let selectionDenominator {
                 let ratio = schedTotal / selectionDenominator
@@ -684,10 +706,51 @@ enum InterestBearingDebtBreakdown {
             return .notApplicable(reason: breakdownNotApplicableNotFound)
         }
 
-        // 6. 最終行と coverage 判定（Jev の判断で帯判定は覆らない）。
-        let debtRows = primary == ibdRowSourceBorrowingsSchedule ? schedDebt : bsDebt
-        let finalCandidates = debtRows + leaseRows
-        let total = finalCandidates.reduce(0) { $0 + ($1.closing ?? 0) }
+        // 6. BS を基準に明細表と突き合わせ、合計に入れる行（in_total）と除外行（理由つき）を決める。
+        var ledger = IBDRowLedger()
+        if primary == ibdRowSourceBorrowingsSchedule {
+            let reconciled = reconcileScheduleDebt(
+                schedule: schedDebtRows,
+                balanceSheet: bsDebt.filter { $0.presetClass != nil })
+            ledger.include(reconciled.included + bsBondRows)
+            if reconciled.parentUnresolved {
+                needsReview = true
+                warnings.append(breakdownWarningIBDNestingParentUnresolved)
+            }
+            sentences.append(contentsOf: reconciled.sentences)
+            if bsLeaseWins {
+                let leaseLedger = reconcileLease(
+                    balanceSheet: bsLeaseCode, schedule: schedLease, note: noteRows)
+                ledger.include(leaseLedger.included)
+                for excluded in leaseLedger.excluded {
+                    ledger.exclude(excluded.row, reason: excluded.reason, pairedTo: excluded.pairedTo)
+                }
+                sentences.append("lease_from_balance_sheet")
+            } else {
+                ledger.include(leaseRows)
+                // 明細表リースと同じ負債を示しただけのリース注記行は別表の重複として残す
+                if leaseNoteSuperseded {
+                    for note in noteRows where !leaseRows.contains(note) {
+                        ledger.exclude(note, reason: ibdExcludedReasonOtherTable, pairedTo: nil)
+                    }
+                }
+            }
+            for excluded in reconciled.excluded {
+                ledger.exclude(excluded.row, reason: excluded.reason, pairedTo: excluded.pairedTo)
+            }
+            for row in rows(inputs.schedule, schedClassified.classes, .notInterestBearing) {
+                ledger.exclude(row, reason: ibdExcludedReasonNonInterestBearing, pairedTo: nil)
+            }
+        } else {
+            ledger.include(bsDebt + leaseRows)
+            for row in rows(inputs.balanceSheet, bsClassified.classes, .notInterestBearing) {
+                ledger.exclude(row, reason: ibdExcludedReasonNonInterestBearing, pairedTo: nil)
+            }
+        }
+
+        // 7. 合計と coverage は in_total 行だけ（Jev の判断で帯判定は覆らない）。
+        let includedRows = ledger.entries.filter(\.inTotal).map(\.row)
+        let total = includedRows.reduce(0) { $0 + ($1.closing ?? 0) }
         if let denominator {
             if !coverageBand.contains(total / denominator) {
                 needsReview = true
@@ -704,6 +767,11 @@ enum InterestBearingDebtBreakdown {
             needsReview = true
             warnings.append(breakdownWarningIBDRowUnclassified)
         }
+        // 除外行は4つの理由のどれかを必ず持つ。付けられない行があれば公開しない。
+        if ledger.entries.contains(where: { !$0.inTotal && !ibdExcludedReasons.contains($0.excludedReason ?? "") }) {
+            needsReview = true
+            warnings.append(breakdownWarningIBDRowUnclassified)
+        }
         // 未分類行は合計に入れないが、金額ごと監査に残す（黙って落とさない）
         for (candidate, rowClass) in zip(inputs.balanceSheet + inputs.schedule,
                                          bsClassified.classes + schedClassified.classes)
@@ -717,20 +785,32 @@ enum InterestBearingDebtBreakdown {
         sentences.append(
             "coverage=\(denominator.map { coverageText(total / $0) } ?? "null")")
 
-        // 7. 格納用ペイロード。合計行の average_rate は開示値が無いため常に nil
-        //    （加重平均は計算しない）。
-        var payloadRows = finalCandidates.map { candidate in
-            BreakdownRowPayload(
-                labelRaw: candidate.labelRaw, label: candidate.label,
-                amount: candidate.closing ?? 0, profit: nil, rowKind: "segment",
-                opening: candidate.opening, closing: candidate.closing,
-                averageRate: candidate.averageRatePercent,
-                debtSource: candidate.source, maturityClass: candidate.maturityClass)
+        // 8. 格納用ペイロード。合計 = in_total 行の closing の和。
+        // 入れ子は product_service と同じ category_group（親 = BS 科目）/ category（内訳）で示す。
+        // 親行は category_group = 自分のラベル・category = null、内訳行は category_group = 親のラベル。
+        let parentIndices = Set(ledger.entries.compactMap(\.pairedTo))
+        var payloadRows = ledger.entries.enumerated().map { index, entry in
+            var categoryGroup: String?
+            var category: String?
+            if let parent = entry.pairedTo {
+                categoryGroup = ledger.entries[parent].row.label
+                category = entry.row.label
+            } else if parentIndices.contains(index) {
+                categoryGroup = entry.row.label
+            }
+            return BreakdownRowPayload(
+                labelRaw: entry.row.labelRaw, label: entry.row.label,
+                amount: entry.row.closing ?? 0, profit: nil, rowKind: "segment",
+                categoryGroup: categoryGroup, category: category,
+                opening: entry.row.opening, closing: entry.row.closing,
+                debtSource: entry.row.source, maturityClass: entry.row.maturityClass,
+                inTotal: entry.inTotal, excludedReason: entry.excludedReason,
+                pairedRowIndex: entry.pairedTo)
         }
-        // 期首が1行でも欠けると部分合計は比較不能なので nil。期末は従来どおり合計する。
+        // 期首が1行でも欠けると部分合計は比較不能なので nil。
         let openingTotal: Double? =
-            finalCandidates.allSatisfy { $0.opening != nil }
-            ? finalCandidates.reduce(0) { $0 + ($1.opening ?? 0) }
+            includedRows.allSatisfy { $0.opening != nil }
+            ? includedRows.reduce(0) { $0 + ($1.opening ?? 0) }
             : nil
         payloadRows.append(
             BreakdownRowPayload(
@@ -753,6 +833,296 @@ enum InterestBearingDebtBreakdown {
         return .resolved(payload: payload, audit: audit)
     }
 
+    // MARK: - BS 基準の突き合わせ
+
+    /// 明細表と BS を比べる科目のまとまり。BS の合算科目（社債及び借入金等）は対象外。
+    enum LineGroup: Equatable {
+        case loansCurrent, loansNonCurrent, commercialPaper
+    }
+
+    /// 同じ科目とみなす金額差。表示単位（百万円）の端数を行ごとに 0.5 まで許す。
+    static func sameAmount(_ a: Double?, _ b: Double?, rows: Int) -> Bool {
+        guard let a, let b else { return false }
+        return abs(a - b) <= 500_000 * Double(max(rows, 1))
+    }
+
+    /// BS 行のまとまり（タグで決める）と、短期借入金・CP（B6 の足し戻し対象）か。
+    static func balanceSheetGroup(_ row: IBDCandidate) -> (group: LineGroup, shortTermKind: Bool)? {
+        guard let tag = row.tag else { return nil }
+        if tag.contains("CommercialPaper") { return (.commercialPaper, true) }
+        switch tag {
+        case "ShortTermLoansPayable", "ShortTermBorrowingsCLIFRS":
+            return (.loansCurrent, true)
+        case "CurrentPortionOfLongTermLoansPayable", "CurrentPortionOfLongTermBorrowingsCLIFRS":
+            return (.loansCurrent, false)
+        case "BorrowingsCLIFRS":
+            return (.loansCurrent, cleanedLabel(row.labelRaw) == "短期借入金")
+        case "LongTermLoansPayable", "BorrowingsNCLIFRS", "LongTermBorrowingsNCLIFRS":
+            return (.loansNonCurrent, false)
+        default:
+            return nil
+        }
+    }
+
+    /// IFRS の流動「借入金」1科目（短期借入金だけを表すラベルでないもの）。
+    static func isGenericCurrentBorrowings(_ row: IBDCandidate) -> Bool {
+        row.tag == "BorrowingsCLIFRS" && cleanedLabel(row.labelRaw) != "短期借入金"
+    }
+
+    /// 明細表行のまとまり（ラベルで決める）。社債・リース・判別できない行は nil。
+    static func scheduleGroup(_ row: IBDCandidate) -> (group: LineGroup, shortTermKind: Bool)? {
+        let label = cleanedLabel(row.labelRaw)
+        if label.contains("コマーシャル") { return (.commercialPaper, true) }
+        guard label.contains("借入金"), !label.contains("社債"), !label.contains("リース") else {
+            return nil
+        }
+        if label.contains("短期") { return (.loansCurrent, true) }
+        switch row.maturityClass {
+        case ibdMaturityCurrent?: return (.loansCurrent, false)
+        case ibdMaturityNonCurrent?: return (.loansNonCurrent, false)
+        default: return label.contains("長期") ? (.loansNonCurrent, false) : nil
+        }
+    }
+
+    /// 「(注n)」「*n」と空白を除いたラベル。
+    static func cleanedLabel(_ label: String) -> String {
+        var cleaned = label
+        if let regex = try? NSRegularExpression(pattern: #"[（(]注[0-9０-９]+[）)]|\*[0-9０-９]+"#) {
+            cleaned = regex.stringByReplacingMatches(
+                in: cleaned, range: NSRange(cleaned.startIndex..., in: cleaned), withTemplate: "")
+        }
+        return cleaned.replacingOccurrences(of: " ", with: "").replacingOccurrences(of: "　", with: "")
+    }
+
+    struct ExcludedRow: Equatable {
+        var row: IBDCandidate
+        var reason: String
+        /// 合計に入る対応行（候補そのもの。payload では rows の添字になる）
+        var pairedTo: IBDCandidate?
+    }
+
+    /// 明細表主のとき、借入金・CP を BS の科目（親）ごとに突き合わせる（入れ子）。
+    /// - BS に同じまとまりの科目があれば BS の行を合計に入れる。明細表の行はその BS 行の内訳
+    ///   （参照行）として残す: 金額が親と一致すれば duplicate_of_balance_sheet、違えば scope_differs。
+    ///   不一致は needs_review にしない（差額は監査 `nesting_gap` に残す）。
+    /// - 親の決め方（コードだけ）: 短期借入金・CP の明細行 → BS の短期借入金・CP 行。1年内返済の長期
+    ///   借入金 → BS の1年内返済行、無ければ BS の短期借入金行（BS 短期借入金に1年内返済分を含める
+    ///   会社。ただし BS 短期借入金が明細表の短期借入金だけと一致し1年内分に当期末値があるときは
+    ///   含めていないので入れ子にしない）。長期借入金 → BS の長期借入金行。
+    /// - 区分を跨ぐ明細行（「借入金」「長期借入金（1年以内に返済予定のものを含む）」）は BS の借入金
+    ///   各行の和と比べ、親を1行に決められないので対応先は付けない。
+    /// - 親候補が2行以上で決まらないとき、または明細行が BS のどの借入金科目にも入らないのに
+    ///   同じまとまりに BS 行があるときは `parentUnresolved`（needs_review）。
+    /// - BS に科目が無いまとまりの明細行はそのまま合計に入れる。BS の合算科目（社債及び借入金等）
+    ///   は比べない（明細表の内訳をそのまま使う）。
+    static func reconcileScheduleDebt(
+        schedule: [IBDCandidate], balanceSheet: [IBDCandidate]
+    ) -> (included: [IBDCandidate], excluded: [ExcludedRow], parentUnresolved: Bool, sentences: [String]) {
+        var included = schedule
+        var excluded: [ExcludedRow] = []
+        var sentences: [String] = []
+        var parentUnresolved = false
+        let bsLoans = balanceSheet.filter { balanceSheetGroup($0) != nil }
+        guard !bsLoans.isEmpty else { return (included, excluded, false, sentences) }
+        func bs(_ group: LineGroup, short: Bool) -> [IBDCandidate] {
+            bsLoans.filter { balanceSheetGroup($0)?.group == group && balanceSheetGroup($0)?.shortTermKind == short }
+        }
+        func closingSum(_ rows: [IBDCandidate]) -> Double { rows.reduce(0) { $0 + ($1.closing ?? 0) } }
+        let schedShortLoans = schedule.filter {
+            scheduleGroup($0)?.group == .loansCurrent && scheduleGroup($0)?.shortTermKind == true
+        }
+        // 流動の借入金を1科目にまとめた BS 行（IFRS「借入金」BorrowingsCLIFRS。短期・1年内・CP を含み得る）
+        let genericCurrent = bsLoans.filter { isGenericCurrentBorrowings($0) }
+        let currentPortion = bs(.loansCurrent, short: false).filter { !isGenericCurrentBorrowings($0) }
+        var children: [(parent: IBDCandidate, row: IBDCandidate)] = []
+        var spanning: [IBDCandidate] = []
+        var pendingCP: [IBDCandidate] = []
+        for row in schedule {
+            let group = scheduleGroup(row)
+            let label = cleanedLabel(row.labelRaw)
+            let spansMaturities = label.contains("借入金")
+                && (group == nil || (label.contains("含む") && (label.contains("1年") || label.contains("１年") || label.contains("一年"))))
+                && !label.contains("社債") && !label.contains("リース")
+            if spansMaturities, !label.contains("短期") {
+                spanning.append(row)
+                continue
+            }
+            guard let group else { continue }
+            var parents: [IBDCandidate]
+            switch (group.group, group.shortTermKind) {
+            case (.loansCurrent, true):
+                parents = bs(.loansCurrent, short: true)
+                if parents.isEmpty { parents = genericCurrent }
+            case (.loansCurrent, false):
+                parents = currentPortion
+                if parents.isEmpty { parents = genericCurrent }
+                if parents.isEmpty {
+                    let bsShort = bs(.loansCurrent, short: true)
+                    // BS 短期借入金が明細表の短期借入金だけと一致し、1年内分に当期末値がある → 含めていない
+                    let excludesCurrentPortion = (row.closing ?? 0) != 0
+                        && sameAmount(closingSum(bsShort), closingSum(schedShortLoans), rows: bsShort.count + schedShortLoans.count)
+                        && !sameAmount(closingSum(bsShort), closingSum(schedShortLoans) + (row.closing ?? 0),
+                            rows: bsShort.count + schedShortLoans.count + 1)
+                    parents = excludesCurrentPortion ? [] : bsShort
+                }
+            case (.commercialPaper, _):
+                parents = bs(.commercialPaper, short: true)
+                if parents.isEmpty { pendingCP.append(row); continue }
+            default:
+                parents = bs(group.group, short: group.shortTermKind)
+            }
+            if parents.count == 1 {
+                children.append((parents[0], row))
+            } else if parents.count > 1 {
+                parentUnresolved = true
+                sentences.append("nesting_parent_unresolved \(row.labelRaw) candidates=\(parents.count)")
+            }
+            // 親が無い（BS に載らない区分）明細行はそのまま合計に入れる
+        }
+        // BS に CP 科目が無い明細表の CP は、流動の借入金科目1行に含めるとその科目の内訳と一致する
+        // ときだけ入れ子にする（例: S100YEWN の BS「借入金」= 短期 + 1年内 + CP）。それ以外は数える。
+        if !pendingCP.isEmpty {
+            let currentParents = genericCurrent.isEmpty ? bs(.loansCurrent, short: true) : genericCurrent
+            if currentParents.count == 1 {
+                let parent = currentParents[0]
+                let nestedSum = closingSum(children.filter { $0.parent == parent }.map(\.row))
+                let rows = 1 + children.filter { $0.parent == parent }.count + pendingCP.count
+                if sameAmount(parent.closing, nestedSum + closingSum(pendingCP), rows: rows),
+                   !sameAmount(parent.closing, nestedSum, rows: rows)
+                {
+                    children += pendingCP.map { (parent, $0) }
+                }
+            }
+        }
+        // 合計に入れる BS 行: 内訳を持つ親、短期借入金・CP（B6 の足し戻し）、明細表に同じまとまりの
+        // 行が無い BS 行。区分を跨ぐ明細行があれば、その親として CP 以外の BS 借入金行すべて。
+        let spanningParents = spanning.isEmpty ? [] : bsLoans.filter {
+            balanceSheetGroup($0)?.group != .commercialPaper
+        }
+        let countedBS = bsLoans.filter { bsRow in
+            guard let bsGroup = balanceSheetGroup(bsRow) else { return false }
+            if children.contains(where: { $0.parent == bsRow }) || spanningParents.contains(bsRow) { return true }
+            if bsGroup.shortTermKind { return true }
+            return !schedule.contains { scheduleGroup($0)?.group == bsGroup.group }
+        }
+        // 足し戻す BS 行（内訳なし）と同額の、どの科目にも入らない明細行（J-GAAP 明細表の
+        // 「その他有利子負債」に CP を載せる会社。S100YJ8J / S100YJRS / S100YL2M）は同じ負債の内訳。
+        for bsRow in countedBS where !children.contains(where: { $0.parent == bsRow }) && !spanningParents.contains(bsRow) {
+            guard (bsRow.closing ?? 0) != 0 else { continue }
+            let matches = schedule.filter { row in
+                scheduleGroup(row) == nil && !spanning.contains(row)
+                    && !children.contains(where: { $0.row == row })
+                    && !cleanedLabel(row.labelRaw).contains("社債")
+                    && !BorrowingsSchedule.isLeaseDebtScheduleRowLabel(row.labelRaw)
+                    && sameAmount(row.closing, bsRow.closing, rows: 2)
+            }
+            if matches.count == 1 { children.append((bsRow, matches[0])) }
+        }
+        included.removeAll { row in children.contains { $0.row == row } || spanning.contains(row) }
+        included += countedBS
+        func amount(_ value: Double) -> String { String(format: "%.0f", value) }
+        for parent in countedBS where !spanningParents.contains(parent) {
+            let rows = children.filter { $0.parent == parent }.map(\.row)
+            guard !rows.isEmpty else {
+                sentences.append("balance_sheet_add_back \(parent.labelRaw)=\(amount(parent.closing ?? 0))")
+                continue
+            }
+            let componentSum = closingSum(rows)
+            sentences.append(
+                "nesting_gap parent=\(parent.labelRaw) balance_sheet=\(amount(parent.closing ?? 0)) components=\(amount(componentSum)) gap=\(amount((parent.closing ?? 0) - componentSum))")
+            for row in rows {
+                // 明細行が親の全額と一致するか、内訳の和が親と一致すれば重複、違えば範囲違い
+                let duplicate = row.closing == nil
+                    || sameAmount(row.closing, parent.closing, rows: 2)
+                    || sameAmount(componentSum, parent.closing, rows: rows.count + 1)
+                excluded.append(ExcludedRow(
+                    row: row,
+                    reason: duplicate ? ibdExcludedReasonDuplicateOfBalanceSheet : ibdExcludedReasonScopeDiffers,
+                    pairedTo: parent))
+            }
+        }
+        if !spanning.isEmpty {
+            let nested = children.filter { spanningParents.contains($0.parent) }.map(\.row)
+            let parentSum = closingSum(spanningParents)
+            let componentSum = closingSum(spanning + nested)
+            sentences.append(
+                "nesting_gap parent=\(spanningParents.map(\.labelRaw).joined(separator: "+")) balance_sheet=\(amount(parentSum)) components=\(amount(componentSum)) gap=\(amount(parentSum - componentSum))")
+            let duplicate = sameAmount(componentSum, parentSum, rows: spanning.count + nested.count + spanningParents.count)
+            let reason = duplicate ? ibdExcludedReasonDuplicateOfBalanceSheet : ibdExcludedReasonScopeDiffers
+            // 区分を跨ぐ行は親を1行に決められない（対応先なし）。同じ親群の他の内訳も同じ扱い。
+            for row in spanning + nested {
+                excluded.append(ExcludedRow(
+                    row: row, reason: reason,
+                    pairedTo: spanningParents.count == 1 ? spanningParents[0] : nil))
+            }
+        }
+        return (included, excluded, parentUnresolved, sentences)
+    }
+
+    /// BS にリース科目があるとき、BS のリース行を合計に入れる。明細表のリース行は満期区分が
+    /// 同じ BS 行があれば除外（同額は duplicate、違えば scope_differs）、BS に無い区分なら残す。
+    /// 区分の無い明細表リース行とリース注記は BS リース合計と比べて除外する。
+    static func reconcileLease(
+        balanceSheet: [IBDCandidate], schedule: [IBDCandidate], note: [IBDCandidate]
+    ) -> (included: [IBDCandidate], excluded: [ExcludedRow]) {
+        var included = balanceSheet
+        var excluded: [ExcludedRow] = []
+        let bsTotal = balanceSheet.reduce(0) { $0 + ($1.closing ?? 0) }
+        func againstTotal(_ rows: [IBDCandidate]) {
+            guard !rows.isEmpty else { return }
+            let sum = rows.reduce(0) { $0 + ($1.closing ?? 0) }
+            let reason = sameAmount(sum, bsTotal, rows: rows.count + balanceSheet.count)
+                ? ibdExcludedReasonDuplicateOfBalanceSheet : ibdExcludedReasonScopeDiffers
+            let pair = balanceSheet.count == 1 ? balanceSheet[0] : nil
+            excluded += rows.map { ExcludedRow(row: $0, reason: reason, pairedTo: pair) }
+        }
+        var unbucketed: [IBDCandidate] = []
+        for row in schedule {
+            guard let maturity = row.maturityClass else {
+                unbucketed.append(row)
+                continue
+            }
+            let bsSame = balanceSheet.filter { $0.maturityClass == maturity }
+            guard !bsSame.isEmpty else {
+                included.append(row)  // BS に無い区分（例: 流動分が BS の「その他」に含まれる）
+                continue
+            }
+            let bsSum = bsSame.reduce(0) { $0 + ($1.closing ?? 0) }
+            let reason = sameAmount(row.closing, bsSum, rows: 1 + bsSame.count)
+                ? ibdExcludedReasonDuplicateOfBalanceSheet : ibdExcludedReasonScopeDiffers
+            excluded.append(ExcludedRow(
+                row: row, reason: reason, pairedTo: bsSame.count == 1 ? bsSame[0] : nil))
+        }
+        againstTotal(unbucketed)
+        againstTotal(note)
+        return (included, excluded)
+    }
+
+    /// 合計に入る行と除外行の帳簿。除外行の対応先は合計に入る行の位置で持つ。
+    struct IBDRowLedger {
+        struct Entry {
+            var row: IBDCandidate
+            var inTotal: Bool
+            var excludedReason: String?
+            var pairedTo: Int?
+        }
+        private(set) var entries: [Entry] = []
+
+        mutating func include(_ rows: [IBDCandidate]) {
+            for row in rows where !entries.contains(where: { $0.row == row }) {
+                entries.append(Entry(row: row, inTotal: true, excludedReason: nil, pairedTo: nil))
+            }
+        }
+
+        mutating func exclude(_ row: IBDCandidate, reason: String, pairedTo: IBDCandidate?) {
+            guard !entries.contains(where: { $0.row == row }) else { return }
+            let index = pairedTo.flatMap { pair in
+                entries.firstIndex { $0.inTotal && $0.row == pair }
+            }
+            entries.append(Entry(row: row, inTotal: false, excludedReason: reason, pairedTo: index))
+        }
+    }
+
     /// 銀行は `Xbrl.bankIBDComponents` の statement BS 行をそのまま積む。
     /// 分母は同じ行合計で、独立した coverage 検算はしない。
     private static func resolveBank(inputs: IBDInputs, code: String, docID: String) -> IBDResolution {
@@ -770,8 +1140,8 @@ enum InterestBearingDebtBreakdown {
                 labelRaw: candidate.labelRaw, label: candidate.label,
                 amount: candidate.closing ?? 0, profit: nil, rowKind: "segment",
                 opening: candidate.opening, closing: candidate.closing,
-                averageRate: candidate.averageRatePercent,
-                debtSource: candidate.source, maturityClass: candidate.maturityClass)
+                debtSource: candidate.source, maturityClass: candidate.maturityClass,
+                inTotal: true)
         }
         payloadRows.append(
             BreakdownRowPayload(

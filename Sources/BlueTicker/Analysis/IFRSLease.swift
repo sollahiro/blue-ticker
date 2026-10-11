@@ -183,6 +183,15 @@ enum IFRSLease {
             return (c, p, components, details)
         }
 
+        // パターンD: 列見出しが「帳簿価額｜将来リース料｜１年以内…」で、値が次の行に並ぶ表を
+        // 前期・当期で2つ並べる様式。日機装 S100XU3R 実データ検証（2026-10-11）: 帳簿価額
+        // 27,492 百万円 = BS リース負債 3,963 + 23,529。
+        if let columnLayout = columnLayoutLeaseBookValues(html) {
+            let c = columnLayout.current * Financial.millionYen
+            let p = columnLayout.prior * Financial.millionYen
+            return (c, p, [(label: "リース負債", current: c, prior: p)], [])
+        }
+
         // フラット辞書フォールバック（表境界が取れない TextBlock 等）
         let flat = XBRLUtils.extractIfrsTextblockTable(in: dir, textblockTag: leaseTextblockTag)
         let flatCL = flat["支払期日が1年以内"]
@@ -210,7 +219,14 @@ enum IFRSLease {
                 []
             )
         }
+        // 日機装 S100XU3R: 「帳簿価額」は使用権資産の表（取得原価・減価償却累計額と並ぶ）にもある。
+        // 資産の帳簿価額をリース負債として読まない。
+        let hasRightOfUseAssetTable = tables.contains { rows in
+            rows.contains { $0.label == "帳簿価額" }
+                && rows.contains { $0.label.contains("取得原価") || $0.label.contains("減価償却累計額") }
+        }
         for key in ["帳簿価額", "リース負債の現在価値"] {
+            if key == "帳簿価額", hasRightOfUseAssetTable { continue }
             if let vals = flat[key] {
                 let c = vals.current.map { $0 * Financial.millionYen }
                 let p = vals.prior.map { $0 * Financial.millionYen }
@@ -219,6 +235,31 @@ enum IFRSLease {
         }
 
         return (nil, nil, [], [])
+    }
+
+    /// 列見出し型の借手リース負債表（先頭行「帳簿価額｜将来リース料（契約上CF・割引前）｜…」、
+    /// 次の行の先頭セルが帳簿価額）の帳簿価額。前期・当期の2表がこの順に並ぶときだけ返す（百万円）。
+    private static func columnLayoutLeaseBookValues(_ html: String) -> (prior: Double, current: Double)? {
+        guard let soup = try? SwiftSoup.parse(html), let tables = try? soup.select("table") else {
+            return nil
+        }
+        var values: [Double] = []
+        for table in tables {
+            guard let rows = try? table.select("tr").array(), rows.count >= 2 else { continue }
+            let header = (try? rows[0].select("td, th").array().map {
+                (try? $0.text(trimAndNormaliseWhitespace: true)) ?? ""
+            }) ?? []
+            guard header.first?.replacingOccurrences(of: " ", with: "") == "帳簿価額" else { continue }
+            let joined = header.joined()
+            guard joined.contains("将来リース料") || joined.contains("契約上") || joined.contains("割引前")
+            else { continue }
+            guard let firstValue = try? rows[1].select("td, th").first()?.text(),
+                  let value = XBRLUtils.parseTextblockCellValue(firstValue)
+            else { continue }
+            values.append(value)
+        }
+        guard values.count == 2 else { return nil }
+        return (prior: values[0], current: values[1])
     }
 
     /// 借手のリース負債満期分析表か（貸手の正味投資未回収表と「１年以内」が衝突するため表単位判定）。

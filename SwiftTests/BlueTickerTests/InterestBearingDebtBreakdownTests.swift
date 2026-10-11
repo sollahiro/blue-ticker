@@ -88,12 +88,13 @@ private struct StubIBDDecider: InterestBearingDebtDeciding {
         let inputs = IBDInputs(
             consolidated: true,
             balanceSheet: [
-                bs("短期借入金", tag: "ShortTermLoansPayable", closing: 100_000_000_000),
-                bs("長期借入金", tag: "LongTermLoansPayable", closing: 900_000_000_000),
+                // 合算科目は入れ子の親にしない（明細表の内訳をそのまま数える）
+                bs("社債及び借入金", tag: "BondsAndBorrowingsCLIFRS", closing: 100_000_000_000),
+                bs("社債及び借入金", tag: "BondsAndBorrowingsNCLIFRS", closing: 900_000_000_000),
             ],
             schedule: [
-                schedule("短期借入金", closing: 100_000_000_000, rate: 0.5),
-                schedule("長期借入金", closing: 900_000_000_000, rate: 1.2),
+                schedule("短期借入金", closing: 100_000_000_000),
+                schedule("長期借入金", closing: 900_000_000_000),
             ],
             leaseNote: nil)
         let resolution = await InterestBearingDebtBreakdown.resolve(inputs: inputs, decider: nil)
@@ -104,21 +105,23 @@ private struct StubIBDDecider: InterestBearingDebtDeciding {
         #expect(total.label == "合計")
         #expect(total.rowKind == "subtotal")
         #expect(total.closing == 1_000_000_000_000)
-        #expect(total.averageRate == nil)
+        #expect(total.inTotal == nil)
         let jsonRows = try #require(
             payload.jsonObject()["rows"] as? [[String: Any]])
         let totalJSON = try #require(jsonRows.last)
-        #expect(totalJSON["average_rate"] is NSNull)
+        #expect(!totalJSON.keys.contains("average_rate"))
         let segment = try #require(jsonRows.first)
         #expect(segment["opening"] is NSNull || segment["opening"] is Double)
         #expect(segment.keys.contains("opening"))
         #expect(segment.keys.contains("closing"))
-        #expect(segment.keys.contains("average_rate"))
+        #expect(!segment.keys.contains("average_rate"))
+        #expect(segment["in_total"] as? Bool == true)
+        #expect(segment["excluded_reason"] is NSNull)
+        #expect(segment["paired_row_index"] is NSNull)
         #expect(segment.keys.contains("source"))
         #expect(segment.keys.contains("maturity_class"))
         #expect(segment["source"] as? String == ibdRowSourceBorrowingsSchedule)
         #expect(segment["closing"] as? Double == 100_000_000_000)
-        #expect(segment["average_rate"] as? Double == 0.5)
         #expect(segment["maturity_class"] as? String == ibdMaturityCurrent)
     }
 
@@ -131,15 +134,17 @@ private struct StubIBDDecider: InterestBearingDebtDeciding {
                 bs("短期借入金", tag: "ShortTermLoansPayable", closing: 1_000),
                 bs("社債", tag: "BondsPayable", closing: 30, maturity: ibdMaturityNonCurrent),
             ],
-            schedule: [schedule("短期借入金", closing: 1_000, rate: 1.5)],
+            schedule: [schedule("短期借入金", closing: 1_000)],
             leaseNote: nil)
         let payload = try resolved(
             await InterestBearingDebtBreakdown.resolve(inputs: inputs, decider: nil))
         #expect(payload.needsReview == false)
-        let rows = payload.rows.dropLast()
+        // BS 短期借入金が親として数え、明細表の短期借入金は同額の内訳
+        let rows = payload.rows.dropLast().filter { $0.inTotal == true }
         #expect(rows.map(\.label) == ["短期借入金", "社債"])
-        #expect(rows.map(\.debtSource) == [ibdRowSourceBorrowingsSchedule, ibdRowSourceBalanceSheet])
+        #expect(rows.map(\.debtSource) == [ibdRowSourceBalanceSheet, ibdRowSourceBalanceSheet])
         #expect(payload.rows.last?.closing == 1_030)
+        expectInvariants(payload)
 
         let combined = IBDInputs(
             consolidated: true,
@@ -174,8 +179,9 @@ private struct StubIBDDecider: InterestBearingDebtDeciding {
         #expect(audit.sentences.contains { $0.contains("schedule_rejected") })
     }
 
-    @Test func coverageOutOfBandWithUnclassifiableBalanceSheetNeedsReview() async throws {
-        // BS に未分類行があり差し替えできない。明細表のまま帯外で needs_review。
+    @Test func unclassifiableBalanceSheetRowNeedsReviewAfterBalanceSheetWins() async throws {
+        // 同じ区分で明細表の和と BS が食い違うので BS の短期借入金を数える（明細表行は scope_differs）。
+        // BS に未分類行が残るので needs_review。
         // 分母を作るため、分類済みの BS 債務行も置く（未分類だけでは分母が nil）。
         let inputs = IBDInputs(
             consolidated: true,
@@ -192,8 +198,15 @@ private struct StubIBDDecider: InterestBearingDebtDeciding {
         let resolution = await InterestBearingDebtBreakdown.resolve(inputs: inputs, decider: nil)
         let payload = try resolved(resolution)
         #expect(payload.needsReview == true)
-        #expect(payload.warnings.contains(breakdownWarningIBDCoverageOutOfBand))
         #expect(payload.warnings.contains(breakdownWarningIBDRowUnclassified))
+        let counted = payload.rows.filter { $0.inTotal == true }
+        #expect(counted.map(\.debtSource) == [ibdRowSourceBalanceSheet])
+        #expect(counted.map(\.closing) == [1_000_000_000_000])
+        let excluded = try #require(payload.rows.first { $0.inTotal == false })
+        #expect(excluded.debtSource == ibdRowSourceBorrowingsSchedule)
+        #expect(excluded.excludedReason == ibdExcludedReasonScopeDiffers)
+        #expect(excluded.pairedRowIndex == 0)
+        expectInvariants(payload)
     }
 
     @Test func nilDeciderLeavesAmbiguousRowUnclassified() async throws {
@@ -215,7 +228,7 @@ private struct StubIBDDecider: InterestBearingDebtDeciding {
         #expect(payload.needsReview == true)
         #expect(payload.warnings.contains(breakdownWarningIBDRowUnclassified))
         // 未解決行は金額を変えず、行にも載せない
-        let segments = payload.rows.filter { $0.rowKind == "segment" }
+        let segments = payload.rows.filter { $0.rowKind == "segment" && $0.inTotal == true }
         #expect(segments.count == 1)
         #expect(segments[0].label == "短期借入金")
         #expect(segments[0].closing == 80_000_000_000)
@@ -243,7 +256,7 @@ private struct StubIBDDecider: InterestBearingDebtDeciding {
         let payload = try resolved(resolution)
         #expect(payload.needsReview == true)
         #expect(payload.warnings.contains(breakdownWarningIBDRowUnclassified))
-        #expect(payload.rows.filter { $0.rowKind == "segment" }.map(\.label) == ["短期借入金"])
+        #expect(payload.rows.filter { $0.rowKind == "segment" && $0.inTotal == true }.map(\.label) == ["短期借入金"])
         #expect(payload.rows.last?.closing == 100_000_000_000)
     }
 
@@ -255,13 +268,187 @@ private struct StubIBDDecider: InterestBearingDebtDeciding {
             inputs: nearDuplicateInputs(), decider: decider)
         let (payload, audit) = try resolvedWithAudit(resolution)
         #expect(payload.needsReview == false)
-        let leaseRows = payload.rows.filter { $0.label.contains("リース") }
+        let leaseRows = payload.rows.filter { $0.label.contains("リース") && $0.inTotal == true }
         #expect(leaseRows.count == 1)
         #expect(leaseRows[0].closing == 74_540_000_000)
         #expect(leaseRows[0].debtSource == ibdRowSourceBorrowingsSchedule)
+        // 注記側は別表の同じ負債として残し、合計に入れない
+        let noteRow = try #require(payload.rows.first { $0.debtSource == ibdRowSourceLeaseNote })
+        #expect(noteRow.inTotal == false)
+        #expect(noteRow.excludedReason == ibdExcludedReasonOtherTable)
+        #expect(payload.rows.last?.closing == 153_984_000_000)
+        expectInvariants(payload)
         let joined = audit.sentences.joined(separator: " ")
         #expect(joined.contains("74540000000"))
         #expect(joined.contains("74151000000"))
+    }
+
+    /// 受入保証金・預り保証金はラベルで非有利子に確定（Jev に聞かない）。他の曖昧ラベルは nil（Jev）。
+    @Test func depositLabelsAreDeterministicallyNonInterestBearing() {
+        #expect(InterestBearingDebtBreakdown.scheduleRowPreset("長期受入保証金") == .notInterestBearing)
+        #expect(InterestBearingDebtBreakdown.scheduleRowPreset("預り保証金（注３）") == .notInterestBearing)
+        #expect(InterestBearingDebtBreakdown.scheduleRowPreset("預り金") == nil)
+        #expect(InterestBearingDebtBreakdown.scheduleRowPreset("デリバティブ負債") == nil)
+    }
+
+    /// B6: 明細表に当期末値が無い CP・短期借入金は BS 行を足し、明細表行は duplicate_of_balance_sheet。
+    @Test func balanceSheetCommercialPaperAndShortTermAreAddedBack() async throws {
+        let balanceSheet = [
+            bs("短期借入金", tag: "ShortTermLoansPayable", closing: 383_000_000),
+            bs("コマーシャル・ペーパー", tag: "CommercialPapersLiabilities", closing: 5_932_000_000),
+            bs("長期借入金", tag: "LongTermLoansPayable", closing: 160_000_000_000),
+        ]
+        let noClosing = IBDInputs(
+            consolidated: true,
+            balanceSheet: balanceSheet,
+            schedule: [
+                IBDCandidate(
+                    labelRaw: "短期借入金", label: "短期借入金", tag: nil, opening: 542_000_000,
+                    closing: nil, source: ibdRowSourceBorrowingsSchedule,
+                    maturityClass: ibdMaturityCurrent, presetClass: .interestBearingDebt),
+                schedule("長期借入金（１年以内に返済予定のものを除く。）", closing: 160_000_000_000),
+            ],
+            leaseNote: nil)
+        let payload = try resolved(
+            await InterestBearingDebtBreakdown.resolve(inputs: noClosing, decider: nil))
+        #expect(payload.rows.last?.closing == 166_315_000_000)
+        let addedBack = payload.rows.filter { $0.debtSource == ibdRowSourceBalanceSheet && $0.inTotal == true }
+        #expect(Set(addedBack.map(\.label)) == ["短期借入金", "コマーシャル・ペーパー", "長期借入金"])
+        let dup = try #require(payload.rows.first {
+            $0.debtSource == ibdRowSourceBorrowingsSchedule && $0.label == "短期借入金"
+        })
+        #expect(dup.inTotal == false)
+        #expect(dup.excludedReason == ibdExcludedReasonDuplicateOfBalanceSheet)
+        expectInvariants(payload)
+    }
+
+    /// BS のリース科目は明細表リースに勝つ。同額は duplicate_of_balance_sheet、違えば scope_differs。
+    @Test func balanceSheetLeaseWinsOverScheduleLease() async throws {
+        let inputs = IBDInputs(
+            consolidated: true,
+            balanceSheet: [
+                bs("短期借入金", tag: "ShortTermLoansPayable", closing: 1_000_000_000),
+                candidate(
+                    "リース債務", tag: "LeaseObligationsCL", closing: 756_000_000,
+                    source: ibdRowSourceBalanceSheet, preset: .leaseLiability, maturity: ibdMaturityCurrent),
+                candidate(
+                    "リース債務", tag: "LeaseObligationsNCL", closing: 1_102_000_000,
+                    source: ibdRowSourceBalanceSheet, preset: .leaseLiability,
+                    maturity: ibdMaturityNonCurrent),
+            ],
+            schedule: [
+                schedule("短期借入金", closing: 1_000_000_000),
+                candidate(
+                    "１年以内に返済予定のリース債務", closing: 756_000_000,
+                    source: ibdRowSourceBorrowingsSchedule, preset: .leaseLiability,
+                    maturity: ibdMaturityCurrent),
+                candidate(
+                    "リース債務（１年以内に返済予定のものを除く。）", closing: 507_000_000,
+                    source: ibdRowSourceBorrowingsSchedule, preset: .leaseLiability,
+                    maturity: ibdMaturityNonCurrent),
+            ],
+            leaseNote: nil)
+        let payload = try resolved(
+            await InterestBearingDebtBreakdown.resolve(inputs: inputs, decider: nil))
+        #expect(payload.rows.last?.closing == 2_858_000_000)
+        let excluded = payload.rows.filter { $0.inTotal == false && $0.label.contains("リース") }
+        #expect(excluded.map(\.excludedReason) == [
+            ibdExcludedReasonDuplicateOfBalanceSheet, ibdExcludedReasonScopeDiffers,
+        ])
+        for row in excluded {
+            let paired = try #require(row.pairedRowIndex)
+            #expect(payload.rows[paired].debtSource == ibdRowSourceBalanceSheet)
+            #expect(payload.rows[paired].maturityClass == row.maturityClass)
+        }
+        expectInvariants(payload)
+        // JSON でも合計行の 3 キーは null、除外行は理由と添字を持つ
+        let json = try #require(payload.jsonObject()["rows"] as? [[String: Any]])
+        let totalJSON = try #require(json.last)
+        #expect(totalJSON["in_total"] is NSNull)
+        #expect(totalJSON["excluded_reason"] is NSNull)
+        let excludedJSON = json.filter { $0["in_total"] as? Bool == false }
+        #expect(excludedJSON.count == 3)  // リース2行 + 明細表の短期借入金（BS 短期借入金の内訳）
+        #expect(excludedJSON.allSatisfy { $0["excluded_reason"] is String && $0["paired_row_index"] is Int })
+    }
+
+    /// 入れ子: BS 短期借入金が明細表の短期借入金と1年内返済の長期借入金を含む。和が違っても
+    /// BS 行を数え、内訳は scope_differs で親を指す。needs_review にせず差は監査だけ。
+    @Test func nestedComponentsWithGapCountBalanceSheetLine() async throws {
+        let inputs = IBDInputs(
+            consolidated: true,
+            balanceSheet: [
+                bs("短期借入金", tag: "ShortTermLoansPayable", closing: 128_000_000_000),
+                bs("長期借入金", tag: "LongTermLoansPayable", closing: 900_000_000_000),
+            ],
+            schedule: [
+                schedule("短期借入金", closing: 110_000_000_000),
+                schedule("１年以内に返済予定の長期借入金", closing: 16_000_000_000),
+                schedule("長期借入金（１年以内に返済予定のものを除く。）", closing: 900_000_000_000),
+            ],
+            leaseNote: nil)
+        let (payload, audit) = try resolvedWithAudit(
+            await InterestBearingDebtBreakdown.resolve(inputs: inputs, decider: nil))
+        #expect(payload.needsReview == false)
+        #expect(payload.warnings.isEmpty)
+        #expect(payload.rows.last?.closing == 1_028_000_000_000)
+        let parent = try #require(payload.rows.firstIndex { $0.debtSource == ibdRowSourceBalanceSheet && $0.label == "短期借入金" })
+        #expect(payload.rows[parent].categoryGroup == "短期借入金")
+        #expect(payload.rows[parent].category == nil)
+        let components = payload.rows.filter { $0.pairedRowIndex == parent }
+        #expect(components.map(\.label) == ["短期借入金", "１年以内に返済予定の長期借入金"])
+        #expect(components.allSatisfy {
+            $0.inTotal == false && $0.excludedReason == ibdExcludedReasonScopeDiffers
+                && $0.categoryGroup == "短期借入金" && $0.category == $0.label
+        })
+        #expect(audit.sentences.contains {
+            $0.contains("nesting_gap parent=短期借入金 balance_sheet=128000000000 components=126000000000 gap=2000000000")
+        })
+        let json = try #require(payload.jsonObject()["rows"] as? [[String: Any]])
+        #expect(json[parent]["category_group"] as? String == "短期借入金")
+        #expect(json[parent]["category"] is NSNull)
+        expectInvariants(payload)
+    }
+
+    /// 親候補の BS 行が2行以上で決まらないときだけ needs_review。
+    @Test func unresolvableNestingParentNeedsReview() async throws {
+        let inputs = IBDInputs(
+            consolidated: true,
+            balanceSheet: [
+                bs("短期借入金", tag: "ShortTermLoansPayable", closing: 60),
+                bs("短期借入金", tag: "ShortTermBorrowingsCLIFRS", closing: 40),
+            ],
+            schedule: [schedule("短期借入金", closing: 100)],
+            leaseNote: nil)
+        let payload = try resolved(
+            await InterestBearingDebtBreakdown.resolve(inputs: inputs, decider: nil))
+        #expect(payload.needsReview == true)
+        #expect(payload.warnings.contains(breakdownWarningIBDNestingParentUnresolved))
+    }
+
+    /// 逆向き: 明細表「借入金」1行が BS の流動・非流動の2科目に跨る。BS を数え、明細行は親を
+    /// 1行に決められないので対応先なし（category_group も付けない）。
+    @Test func scheduleRowSpanningTwoBalanceSheetLines() async throws {
+        let inputs = IBDInputs(
+            consolidated: true,
+            balanceSheet: [
+                bs("短期借入金", tag: "ShortTermLoansPayable", closing: 996),
+                bs("長期借入金", tag: "LongTermLoansPayable", closing: 12_447),
+            ],
+            schedule: [
+                candidate("借入金", closing: 13_444, source: ibdRowSourceBorrowingsSchedule,
+                    preset: .interestBearingDebt),
+            ],
+            leaseNote: nil)
+        let payload = try resolved(
+            await InterestBearingDebtBreakdown.resolve(inputs: inputs, decider: nil))
+        #expect(payload.needsReview == false)
+        #expect(payload.rows.last?.closing == 13_443)
+        let row = try #require(payload.rows.first { $0.debtSource == ibdRowSourceBorrowingsSchedule })
+        #expect(row.inTotal == false)
+        #expect(row.excludedReason == ibdExcludedReasonDuplicateOfBalanceSheet)
+        #expect(row.pairedRowIndex == nil)
+        #expect(row.categoryGroup == nil)
+        expectInvariants(payload)
     }
 
     @Test func nearDuplicateLowProbabilityNeedsReview() async throws {
@@ -367,10 +554,8 @@ private struct StubIBDDecider: InterestBearingDebtDeciding {
         let inputs = IBDInputs(
             consolidated: true,
             balanceSheet: [
+                // BS にリース科目が無いときだけ明細表と注記のリースを突き合わせる
                 bs("短期借入金", tag: "ShortTermLoansPayable", closing: 1_000),
-                candidate(
-                    "リース負債", tag: "LeaseLiabilitiesCLIFRS", closing: 100,
-                    source: ibdRowSourceBalanceSheet, preset: .leaseLiability),
             ],
             schedule: [
                 schedule("短期借入金", closing: 1_000),
@@ -399,8 +584,9 @@ private struct StubIBDDecider: InterestBearingDebtDeciding {
         let inputs = IBDInputs(
             consolidated: true,
             balanceSheet: [
-                bs("短期借入金", tag: "ShortTermLoansPayable", closing: 40),
-                bs("長期借入金", tag: "LongTermLoansPayable", closing: 60),
+                // 合算科目（入れ子の親にならない）なので明細表の期首で合計する
+                bs("社債及び借入金", tag: "BondsAndBorrowingsCLIFRS", closing: 40),
+                bs("社債及び借入金", tag: "BondsAndBorrowingsNCLIFRS", closing: 60),
             ],
             schedule: [
                 candidate(
@@ -570,22 +756,22 @@ private struct StubIBDDecider: InterestBearingDebtDeciding {
     }
 
     private func schedule(
-        _ label: String, closing: Double, rate: Double? = nil
+        _ label: String, closing: Double
     ) -> IBDCandidate {
         candidate(
             label, closing: closing, source: ibdRowSourceBorrowingsSchedule,
-            preset: .interestBearingDebt, rate: rate,
+            preset: .interestBearingDebt,
             maturity: InterestBearingDebtBreakdown.maturityClass(fromLabel: label))
     }
 
     private func candidate(
         _ label: String, tag: String? = nil, closing: Double, source: String,
-        preset: IBDRowClass?, rate: Double? = nil, maturity: String? = nil,
+        preset: IBDRowClass?, maturity: String? = nil,
         opening: Double? = nil
     ) -> IBDCandidate {
         IBDCandidate(
             labelRaw: label, label: label, tag: tag, opening: opening, closing: closing,
-            averageRatePercent: rate, source: source, maturityClass: maturity, presetClass: preset)
+            source: source, maturityClass: maturity, presetClass: preset)
     }
 
     /// 明細表リース 74,540 と注記合計 74,151（相対差 2% 以内）。
@@ -593,11 +779,8 @@ private struct StubIBDDecider: InterestBearingDebtDeciding {
         IBDInputs(
             consolidated: true,
             balanceSheet: [
+                // BS にリース科目が無い（あれば BS リースが勝ち近似重複は起きない。JT 型）
                 bs("短期借入金", tag: "ShortTermLoansPayable", closing: 79_444_000_000),
-                candidate(
-                    "リース負債", tag: "LeaseLiabilitiesCLIFRS", closing: 74_151_000_000,
-                    source: ibdRowSourceBalanceSheet, preset: .leaseLiability,
-                    maturity: ibdMaturityCurrent),
             ],
             schedule: [
                 schedule("短期借入金", closing: 79_444_000_000),
@@ -612,6 +795,29 @@ private struct StubIBDDecider: InterestBearingDebtDeciding {
                         source: ibdRowSourceLeaseNote, preset: .leaseLiability),
                 ],
                 total: 74_151_000_000, priorTotal: nil))
+    }
+
+    /// Maintainer の不変条件: 合計 == in_total 行の和（完全一致）、除外行は 4 値の理由を必ず持ち、
+    /// 数える行は理由を持たない。対応先は数える行の添字。
+    private func expectInvariants(_ payload: BreakdownSnapshotPayload) {
+        let segments = payload.rows.filter { $0.rowKind == "segment" }
+        let sum = segments.filter { $0.inTotal == true }.reduce(0.0) { $0 + ($1.closing ?? 0) }
+        #expect(payload.rows.last?.closing == sum)
+        for (index, row) in payload.rows.enumerated() where row.rowKind == "segment" {
+            #expect(row.inTotal != nil)
+            if row.inTotal == true {
+                #expect(row.excludedReason == nil)
+                #expect(row.pairedRowIndex == nil)
+            } else {
+                let reason = try? #require(row.excludedReason)
+                #expect(reason.map { ibdExcludedReasons.contains($0) } == true)
+                if let paired = row.pairedRowIndex {
+                    #expect(paired != index)
+                    #expect(payload.rows.indices.contains(paired))
+                    #expect(payload.rows[paired].inTotal == true)
+                }
+            }
+        }
     }
 
     private func resolved(_ resolution: IBDResolution) throws -> BreakdownSnapshotPayload {
