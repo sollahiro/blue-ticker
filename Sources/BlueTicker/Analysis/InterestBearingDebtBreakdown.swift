@@ -281,7 +281,7 @@ enum InterestBearingDebtBreakdown {
         }
         guard let parsed = BorrowingsSchedule.extractRows(xbrlDir: xbrlDir) else { return [] }
         return parsed.rows.compactMap { row in
-            guard BorrowingsSchedule.isLeaseDebtScheduleRowLabel(row.label) else { return nil }
+            guard BorrowingsSchedule.isLeaseScheduleRow(row) else { return nil }
             guard row.current != nil || row.prior != nil else { return nil }
             let labelRaw = row.sourceLabel ?? row.label
             return IBDCandidate(

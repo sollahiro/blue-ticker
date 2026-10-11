@@ -209,7 +209,7 @@ enum IBDExtractor {
         var hasCurrent = false
         var hasPrior = false
         for row in parsed.rows {
-            guard BorrowingsSchedule.isLeaseDebtScheduleRowLabel(row.label) else { continue }
+            guard BorrowingsSchedule.isLeaseScheduleRow(row) else { continue }
             guard row.current != nil || row.prior != nil else { continue }
             if let c = row.current { currentTotal += c; hasCurrent = true }
             if let p = row.prior { priorTotal += p; hasPrior = true }
