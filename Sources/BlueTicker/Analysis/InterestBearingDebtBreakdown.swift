@@ -670,7 +670,8 @@ enum InterestBearingDebtBreakdown {
         if !schedDebt.isEmpty {
             let picked: [IBDCandidate]
             if bsLeaseWins {
-                picked = bsLeaseCode
+                // BS のリース科目 + BS に区分の無い明細表リース行（最終の帳簿と同じ行で帯を見る）
+                picked = reconcileLease(balanceSheet: bsLeaseCode, schedule: schedLease, note: noteRows).included
             } else {
                 guard let scheduleLease = await scheduleLeaseRows() else { return .unavailable }
                 picked = scheduleLease
@@ -994,6 +995,30 @@ enum InterestBearingDebtBreakdown {
                 }
             }
         }
+        // 明細表の素の「長期借入金」（区分なし・1年内返済行が別に無い）が BS の非流動借入金を超え、
+        // その差が BS の流動の合算科目（社債及び借入金 等。区分外）と一致するときは、その合算科目も
+        // 親とする（区分を跨ぐ内訳。S100Y2PC: 15,208 + 5,837 = 21,045）。
+        var coParents: [(rows: [IBDCandidate], parents: [IBDCandidate])] = []
+        let scheduleHasCurrentPortion = schedule.contains {
+            scheduleGroup($0)?.group == .loansCurrent && scheduleGroup($0)?.shortTermKind == false
+        }
+        if !scheduleHasCurrentPortion {
+            let aggregatesCurrent = balanceSheet.filter {
+                balanceSheetGroup($0) == nil && $0.maturityClass == ibdMaturityCurrent
+                    && ($0.tag ?? "").contains("Borrowings")
+            }
+            for parent in bs(.loansNonCurrent, short: false) {
+                let rows = children.filter { $0.parent == parent }.map(\.row)
+                guard !rows.isEmpty, rows.allSatisfy({ $0.maturityClass == nil }) else { continue }
+                let gap = closingSum(rows) - (parent.closing ?? 0)
+                guard gap > 0, !sameAmount(gap, 0, rows: rows.count + 1) else { continue }
+                let matches = aggregatesCurrent.filter { sameAmount($0.closing, gap, rows: rows.count + 2) }
+                if matches.count == 1 {
+                    coParents.append((rows, [parent, matches[0]]))
+                    children.removeAll { child in rows.contains(child.row) }
+                }
+            }
+        }
         // 合計に入れる BS 行: 内訳を持つ親、短期借入金・CP（B6 の足し戻し）、明細表に同じまとまりの
         // 行が無い BS 行。区分を跨ぐ明細行があれば、その親として CP 以外の BS 借入金行すべて。
         let spanningParents = spanning.isEmpty ? [] : bsLoans.filter {
@@ -1001,7 +1026,8 @@ enum InterestBearingDebtBreakdown {
         }
         let countedBS = bsLoans.filter { bsRow in
             guard let bsGroup = balanceSheetGroup(bsRow) else { return false }
-            if children.contains(where: { $0.parent == bsRow }) || spanningParents.contains(bsRow) { return true }
+            if children.contains(where: { $0.parent == bsRow }) || spanningParents.contains(bsRow)
+                || coParents.contains(where: { $0.parents.contains(bsRow) }) { return true }
             if bsGroup.shortTermKind { return true }
             return !schedule.contains { scheduleGroup($0)?.group == bsGroup.group }
         }
@@ -1018,10 +1044,23 @@ enum InterestBearingDebtBreakdown {
             }
             if matches.count == 1 { children.append((bsRow, matches[0])) }
         }
-        included.removeAll { row in children.contains { $0.row == row } || spanning.contains(row) }
-        included += countedBS
+        included.removeAll { row in
+            children.contains { $0.row == row } || spanning.contains(row)
+                || coParents.contains { $0.rows.contains(row) }
+        }
+        included += countedBS + coParents.flatMap(\.parents).filter { !countedBS.contains($0) }
+        for group in coParents {
+            let parentSum = closingSum(group.parents)
+            let componentSum = closingSum(group.rows)
+            sentences.append(
+                "nesting_gap parent=\(group.parents.map(\.labelRaw).joined(separator: "+")) balance_sheet=\(String(format: "%.0f", parentSum)) components=\(String(format: "%.0f", componentSum)) gap=\(String(format: "%.0f", parentSum - componentSum))")
+            for row in group.rows {
+                excluded.append(ExcludedRow(row: row, reason: ibdExcludedReasonDuplicateOfBalanceSheet, pairedTo: nil))
+            }
+        }
         func amount(_ value: Double) -> String { String(format: "%.0f", value) }
-        for parent in countedBS where !spanningParents.contains(parent) {
+        for parent in countedBS where !spanningParents.contains(parent)
+            && !coParents.contains(where: { $0.parents.contains(parent) }) {
             let rows = children.filter { $0.parent == parent }.map(\.row)
             guard !rows.isEmpty else {
                 sentences.append("balance_sheet_add_back \(parent.labelRaw)=\(amount(parent.closing ?? 0))")

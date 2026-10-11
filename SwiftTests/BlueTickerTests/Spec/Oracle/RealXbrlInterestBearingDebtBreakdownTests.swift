@@ -694,6 +694,40 @@ private struct GoldenIBDDecider: InterestBearingDebtDeciding {
         ])
     }
 
+    /// 4665: BS に流動リース科目が無い（非流動 0 だけ）とき、明細表の1年内リース 2 を選択段階の帯判定でも数える（明細表を退けない）。
+    @Test func ledger4665S100YEAI() async throws {
+        guard await Self.ensureAvailable("S100YEAI") else { return }
+        let (payload, _) = try await resolve("S100YEAI", decider: nil)
+        #expect(payload.needsReview == false)
+        expectLedger(payload, total: 5_000_000, [
+            ("１年内返済予定の長期借入金", ibdRowSourceBalanceSheet, 1_000_000, ibdMaturityCurrent, true, nil, nil, "１年内返済予定の長期借入金"),
+            ("長期借入金", ibdRowSourceBalanceSheet, 2_000_000, ibdMaturityNonCurrent, true, nil, nil, "長期借入金"),
+            ("リース債務", ibdRowSourceBalanceSheet, 0, ibdMaturityNonCurrent, true, nil, nil, "リース債務"),
+            ("1年以内に返済予定のリース債務", ibdRowSourceBorrowingsSchedule, 2_000_000, ibdMaturityCurrent, true, nil, nil, nil),
+            ("リース債務(1年以内に返済予定のものを除く。)", ibdRowSourceBorrowingsSchedule, 0, ibdMaturityNonCurrent, false, ibdExcludedReasonDuplicateOfBalanceSheet, 2, "リース債務"),
+            ("1年以内に返済予定の長期借入金", ibdRowSourceBorrowingsSchedule, 1_000_000, ibdMaturityCurrent, false, ibdExcludedReasonDuplicateOfBalanceSheet, 0, "１年内返済予定の長期借入金"),
+            ("長期借入金(1年以内に返済予定のものを除く。)", ibdRowSourceBorrowingsSchedule, 2_000_000, ibdMaturityNonCurrent, false, ibdExcludedReasonDuplicateOfBalanceSheet, 1, "長期借入金"),
+        ])
+    }
+
+    /// 3387（区分を跨ぐ入れ子）: 明細表の素の「長期借入金」21,045 = BS 非流動「借入金」15,208 + 流動の合算科目「社債及び借入金」5,837。両方を親として数え、明細表行は対応先なしの重複。
+    @Test func ledger3387S100Y2PC() async throws {
+        guard await Self.ensureAvailable("S100Y2PC") else { return }
+        let (payload, _) = try await resolve("S100Y2PC", decider: nil)
+        #expect(payload.needsReview == false)
+        expectLedger(payload, total: 65_037_000_000, [
+            ("短期借入金", ibdRowSourceBorrowingsSchedule, nil, ibdMaturityCurrent, true, nil, nil, nil),
+            ("社債", ibdRowSourceBorrowingsSchedule, nil, nil, true, nil, nil, nil),
+            ("借入金", ibdRowSourceBalanceSheet, 15_208_000_000, ibdMaturityNonCurrent, true, nil, nil, nil),
+            ("社債及び借入金", ibdRowSourceBalanceSheet, 5_837_000_000, ibdMaturityCurrent, true, nil, nil, nil),
+            ("リース負債", ibdRowSourceBalanceSheet, 11_319_000_000, ibdMaturityCurrent, true, nil, nil, nil),
+            ("リース負債", ibdRowSourceBalanceSheet, 32_673_000_000, ibdMaturityNonCurrent, true, nil, nil, nil),
+            ("リース負債", ibdRowSourceBorrowingsSchedule, 43_992_000_000, nil, false, ibdExcludedReasonDuplicateOfBalanceSheet, nil, nil),
+            ("長期借入金", ibdRowSourceBorrowingsSchedule, 21_045_000_000, nil, false, ibdExcludedReasonDuplicateOfBalanceSheet, nil, nil),
+        ])
+    }
+
+
     /// 意図的な不一致の入れ子は needs_review にせず、BS と内訳の差を監査だけに残す（公開フィールドにしない）。
     @Test func nestingMismatchGapIsAuditedNotReviewed() async throws {
         guard await Self.ensureAvailable("S100Y02W") else { return }
