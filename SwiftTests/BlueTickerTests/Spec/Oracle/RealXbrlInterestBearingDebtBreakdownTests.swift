@@ -1093,6 +1093,45 @@ private struct AllInterestBearingIBDDecider: InterestBearingDebtDeciding {
         #expect(lease.allSatisfy { $0.sourceTag == Self.ifrsLeaseNote })
     }
 
+    /// 4755 楽天グループ: BS 4科目（社債及び借入金・証券/カード/銀行事業の借入金）に、リース注記
+    /// 「財政状態計算書で認識された金額」表の「リース負債(注)２」361,443 を足す（BS はその他の金融負債に含めて
+    /// 表示）。年度末 5,931,065 = 有報 注記28 の調整表合計。期首 5,461,713 + 352,856 = 5,814,569。
+    @Test func rakutenLeaseNoteRecognisedAmountsRow() async throws {
+        guard await Self.ensureAvailable("S100XTNW") else { return }
+        let lease = IFRSLease.extractLeaseLiabilities(fieldSet: [:], xbrlDir: Self.xbrlDir("S100XTNW"))
+        #expect(lease.current == 361_443_000_000)
+        #expect(lease.prior == 352_856_000_000)
+        let (payload, _) = try await resolve("S100XTNW", decider: nil)
+        #expect(payload.needsReview == false)
+        let rows = payload.rows.filter { $0.rowKind == "segment" }
+        #expect(rows.map(\.labelRaw) == ["社債及び借入金", "証券事業の借入金", "カード事業の社債及び借入金", "銀行事業の借入金", "リース負債"])
+        #expect(rows.map(\.closing) == [1_598_052_000_000, 269_228_000_000, 810_559_000_000, 2_891_783_000_000, 361_443_000_000])
+        #expect(rows.allSatisfy { $0.inTotal == true })
+        #expect(rows.last?.debtSource == ibdRowSourceLeaseNote)
+        #expect(payload.rows.last?.closing == 5_931_065_000_000)
+        #expect(payload.rows.last?.opening == 5_814_569_000_000)
+        expectInvariants(payload)
+    }
+
+    /// 8508 Ｊトラスト（S100XSDT）: 前期・当期で分けた満期表の列「帳簿価額」を読む。
+    @Test func splitMaturityTablesLeaseBookValue() async throws {
+        guard await Self.ensureAvailable("S100XSDT") else { return }
+        let lease = IFRSLease.extractLeaseLiabilities(fieldSet: [:], xbrlDir: Self.xbrlDir("S100XSDT"))
+        #expect(lease.current == 4_653_000_000)
+        #expect(lease.prior == 5_278_000_000)
+    }
+
+    /// 8697 日本取引所グループ（S100YA84）: 1表を期間行で区切った満期表の列「帳簿残高」を読む。
+    @Test func periodRowMaturityTableLeaseBookBalance() async throws {
+        guard await Self.ensureAvailable("S100YA84") else { return }
+        let lease = IFRSLease.extractLeaseLiabilities(fieldSet: [:], xbrlDir: Self.xbrlDir("S100YA84"))
+        #expect(lease.current == 4_511_000_000)
+        #expect(lease.prior == 584_000_000)
+        let (payload, _) = try await resolve("S100YA84", decider: nil)
+        #expect(payload.needsReview == false)
+        #expect(payload.rows.last?.closing == 57_004_000_000)
+    }
+
     /// サワイ: リース注記の値の後ろの空 <td> を飛ばす（当期 3,967 を前期と読まない）。
     @Test func sawaiLeaseNoteSpacerCells() async throws {
         guard await Self.ensureAvailable("S100YITS") else { return }
