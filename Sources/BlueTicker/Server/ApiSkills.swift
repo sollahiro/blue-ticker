@@ -367,14 +367,32 @@ public func apiSkillsCatalog() -> [ApiSkill] {
             description: """
                 有価証券報告書から製品・サービス別/地域別売上高、従業員数、研究開発費、のれん、
                 報告セグメント別ののれんの償却額・持分法会計処理される投資、
-                設備投資マトリクス（capex）を取得します（格納済みデータのみ）。
+                設備投資マトリクス（capex）、有利子負債（interest_bearing_debt）を取得します（格納済みデータのみ）。
                 対象は取り込み済みの上場企業です。doc_id を省略すると最新の有価証券報告書を使用します。
                 axis は product_service（既定）/ geography / employees / research_and_development / goodwill /
-                goodwill_amortization / equity_method_investments / capex に対応。
+                goodwill_amortization / equity_method_investments / capex / interest_bearing_debt に対応。
                 数値タグとセグメント fact から解決します。合計のみの開示は分母だけの行になります。
                 axis=capex は名前付きセル（segment_assets / flow / capital_expenditures_overview）で、
                 行の amount は使いません。flow は書類単位で capital_expenditures があればそれ、
                 無ければ noncurrent_asset_additions です。混ぜず足しません。欠測セルは null です。
+                interest_bearing_debt は社債・借入金とリース負債を1表にした有利子負債です。
+                行は名前付きセル opening（期首残高）/ closing（期末残高）、
+                source（balance_sheet / borrowings_schedule / lease_note / financials_bank_components）、maturity_class（current / non_current / null。
+                BS 科目・注記の流動/非流動・明細表の区分名から取るだけで計算しません）。
+                各行の in_total が true の行だけが合計に入ります（合計行の closing = in_total 行の closing の和）。
+                全行を足さないでください。BS と明細表の両方の値を行として残し、数えない方は in_total=false です。
+                in_total=false の行の excluded_reason は duplicate_of_balance_sheet / scope_differs /
+                non_interest_bearing / other_table のいずれかで、in_total=true の行は null です。
+                paired_row_index はその除外行が対応する数える行の rows 配列の添字（0 始まり、決まらなければ null）です。
+                BS 科目が明細表の複数行を含む（入れ子）ときは BS 科目を数え、明細表の行はその内訳として
+                category_group（親の BS 科目名）/ category（内訳名）を持ちます。親行は category_group が自分の名前、category が null です。
+                流動と非流動の親が同じ名前だと category_group での集計は両方の内訳をまとめるので、正確な親は paired_row_index で引いてください。
+                連結がある会社は連結だけ、無い会社は単体だけです。
+                denominator は同じ財務諸表の BS 有利子負債（リース含む、コードが分類した科目だけ）です。
+                BS にリース科目が無く注記または明細表のリースを分母に足すときは warnings に
+                interest_bearing_debt_lease_denominator_from_notes が付きます（404 にはしません）。
+                要確認（needs_review）の行は出しません。行があるのに needs_review で出さないときは
+                404 reason unknown（メッセージは「公開していません」。未算出の reason 無し 404 とは別）です。
                 research_and_development は、数値タグが無いとき本文の当期の会社全体の総額だけを補うことがあります。
                 capex も Overview 本文から会社全体の総額、またはタグ付き行の不足分を補うことがあります。
                 その行の warnings に not_allocatable_to_segments があっても 404 にはしません。
@@ -390,6 +408,8 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                 unknown（原因未特定・要再調査）。
                 axis=geography: not_found（地域別情報の注記自体が存在しない）、unknown（抽出失敗・要再調査）。
                 決定論軸: not_found（セグメント別内訳が非開示）。
+                axis=interest_bearing_debt: not_found（有利子負債の開示が無い）、
+                unknown（行はあるが公開していない。未算出ではない）。銀行は financials_bank_components 行。
                 """,
             method: "GET",
             path: "/v1/companies/{code}/breakdown",
@@ -414,7 +434,7 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                     name: "axis",
                     location: .query,
                     type: .string,
-                    description: "内訳の軸（product_service / geography / employees / research_and_development / goodwill / goodwill_amortization / equity_method_investments / capex。省略時 product_service）",
+                    description: "内訳の軸（product_service / geography / employees / research_and_development / goodwill / goodwill_amortization / equity_method_investments / capex / interest_bearing_debt。省略時 product_service）",
                     required: false,
                     defaultValue: .string(breakdownAxisProductService)
                 ),

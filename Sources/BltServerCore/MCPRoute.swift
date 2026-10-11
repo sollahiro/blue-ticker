@@ -392,7 +392,8 @@ private func mapFeedTrendResult(_ result: FeedTrendServeResult) -> CallTool.Resu
 }
 
 /// `ReasonedServeResult` → `CallTool.Result`（breakdown / statement-notes 共通）。
-/// REST の `makeReasonedResponse` と同型（notApplicable のときのみエラー本文に `reason` を添える。issue #132）。
+/// REST の `makeReasonedResponse` と同型（notApplicable / withheld のときエラー本文に `reason` を添える。issue #132）。
+/// withheld は isError で、軸固有メッセージと reason を載せる（未算出文言にしない）。
 private func mapReasonedResult(
     _ result: ReasonedServeResult, notFoundMessage: String
 ) -> CallTool.Result {
@@ -401,6 +402,8 @@ private func mapReasonedResult(
         return jsonToolResult(value)
     case .notApplicable(let reason):
         return errorToolResult(notFoundMessage, reason: reason)
+    case .withheld(let reason, let message):
+        return errorToolResult(message, reason: reason)
     case .notFound:
         return errorToolResult(notFoundMessage)
     case .dbUnavailable:

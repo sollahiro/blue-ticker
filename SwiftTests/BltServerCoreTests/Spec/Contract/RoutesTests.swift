@@ -473,6 +473,30 @@ private func send(
         }
     }
 
+    /// interest_bearing_debt の needs_review は未算出ではなく reason 付き 404。
+    @Test func breakdownWithholdsInterestBearingDebtNeedsReview() async throws {
+        try await withApp(databases: true) { app in
+            let row = CompanyBreakdown(docID: "S_IBD", axis: breakdownAxisInterestBearingDebt)
+            row.code = "6758"
+            row.submitDateTime = "2026-06-20 09:00"
+            row.payload = BreakdownSnapshotPayload(
+                axis: breakdownAxisInterestBearingDebt, denominator: 1, denominatorTag: "bs",
+                rows: [], sourceKind: breakdownSourceXbrlFacts, needsReview: true,
+                warnings: [breakdownWarningIBDCoverageOutOfBand])
+            row.needsReview = true
+            row.source = breakdownSourceXbrlFacts
+            row.contentHash = ""
+            row.cacheVersion = interestBearingDebtBreakdownCacheVersion
+            try await row.create(on: app.db)
+
+            let (status, json) = try await send(
+                app, "/v1/companies/6758/breakdown?axis=interest_bearing_debt")
+            #expect(status == .notFound)
+            #expect(json?["reason"] as? String == "unknown")
+            #expect(json?["error"] as? String == "有利子負債の内訳は公開していません")
+        }
+    }
+
     @Test func financialsWithInvalidYearsReturns404() async throws {
         // years <= 0 は無効要求として 404（空 years の 200 を返さない）
         try await withApp(databases: true) { app in
