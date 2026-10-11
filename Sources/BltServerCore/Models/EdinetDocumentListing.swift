@@ -1,5 +1,5 @@
 // edinet_documents の一覧走査用の軽量射影。
-// ingest は sec_code / edinet_code / 書類種別 / 府令 / 提出日時 / doc_id を使う。
+// ingest は sec_code / edinet_code / 書類種別 / 府令 / 提出日時 / period_end / doc_id を使う。
 // 提出者名・期間・概要などの全カラムを毎回転送しない。
 // `sec_code` が空のときは `edinet_code` を master の上場証券コードへ写して候補にする。
 
@@ -27,6 +27,10 @@ final class EdinetDocumentListing: Model, @unchecked Sendable {
 
     @Field(key: "submit_date_time")
     var submitDateTime: String
+
+    /// 財務取り込みの縮小ガード（発行体の最新有報 period_end）用。
+    @OptionalField(key: "period_end")
+    var periodEnd: String?
 
     init() {}
 }

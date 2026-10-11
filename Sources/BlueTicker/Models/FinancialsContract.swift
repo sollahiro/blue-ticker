@@ -668,6 +668,18 @@ extension FinancialsResponse {
     /// notApplicable プレースホルダ（`years` 空）を検出して 404 を維持するために使う（issue #86）。
     public var yearCount: Int { years.count }
 
+    /// 格納 `years` のうち最新の fy_end（先頭 10 文字 YYYY-MM-DD）とその年の doc_id。years 空なら nil。
+    /// public: 財務取り込み（BltServerCore）が、最新 FY を失う縮小上書きを拒否する判定に使う。
+    public var newestFiscalYearEnd: (fyEnd: String, docID: String?)? {
+        var newest: (fyEnd: String, docID: String?)?
+        for year in years {
+            guard let raw = year.fyEnd, !raw.isEmpty else { continue }
+            let fyEnd = String(raw.prefix(10))
+            if fyEnd > (newest?.fyEnd ?? "") { newest = (fyEnd, year.docId) }
+        }
+        return newest
+    }
+
     /// 全キーを含む JSON オブジェクト（years 各要素も null 補完する）。サーバー応答用。
     /// public: BltServerCore の 財務取り込み read 経路が格納済みレスポンスを JSON へ落とすために使う。
     public func jsonObject() -> [String: Any] {
