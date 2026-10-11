@@ -944,6 +944,13 @@ private struct StubIBDDecider: InterestBearingDebtDeciding {
         #expect(!bankTags.contains("DepositsLiabilitiesBNK"))
         #expect(!bankTags.contains("NegotiableCertificatesOfDepositLiabilitiesBNK"))
         #expect(Xbrl.bankMarkerTag == "DepositsLiabilitiesBNK")
+        // 銀行コンポーネントは同じタグを2回数えない（一般事業会社の借入金タグを足しても）
+        let bankTagList = Xbrl.bankIBDComponents.flatMap(\.tags)
+        #expect(bankTagList.count == bankTags.count)
+        #expect(bankTags.contains("LongTermLoansPayable"))
+        #expect(bankTags.isDisjoint(with: Xbrl.leaseLiabilitiesBSTags))
+        #expect(bankTags.isDisjoint(with: Xbrl.ibdInterestBearingAggregateTags))
+        #expect(!bankTags.contains("BondsAndBorrowingsLiabilitiesIFRS"))
         // 除外リストと債務 preset は重ならない
         #expect(Xbrl.ibdNonInterestBearingBSTags.isDisjoint(with: all))
         #expect(Xbrl.ibdSecuritiesBusinessBorrowingTags.isDisjoint(with: all))

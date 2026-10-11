@@ -205,6 +205,49 @@ import Foundation
         }
     }
 
+    /// HSホールディングス 8699 S100YJQ6 型: 預金（銀行判定）に加えて一般事業会社の借入金タグ。
+    /// 預金は入れず、短期借入金 13 + 1年内返済予定の長期借入金 253 + 長期借入金 1,960 = 2,226。
+    @Test func testBankHoldingCountsOrdinaryBorrowingTags() {
+        let xml = XBRLTestSupport.makeXbrlInstant("""
+            <jppfs_cor:DepositsLiabilitiesBNK contextRef="CurrentYearInstant"
+                unitRef="JPY">9475000000</jppfs_cor:DepositsLiabilitiesBNK>
+            <jppfs_cor:DepositsLiabilitiesBNK contextRef="Prior1YearInstant"
+                unitRef="JPY">10241000000</jppfs_cor:DepositsLiabilitiesBNK>
+            <jppfs_cor:ShortTermLoansPayable contextRef="CurrentYearInstant"
+                unitRef="JPY">13000000</jppfs_cor:ShortTermLoansPayable>
+            <jppfs_cor:CurrentPortionOfLongTermLoansPayable contextRef="CurrentYearInstant"
+                unitRef="JPY">253000000</jppfs_cor:CurrentPortionOfLongTermLoansPayable>
+            <jppfs_cor:CurrentPortionOfLongTermLoansPayable contextRef="Prior1YearInstant"
+                unitRef="JPY">79000000</jppfs_cor:CurrentPortionOfLongTermLoansPayable>
+            <jppfs_cor:LongTermLoansPayable contextRef="CurrentYearInstant"
+                unitRef="JPY">1960000000</jppfs_cor:LongTermLoansPayable>
+            <jppfs_cor:LongTermLoansPayable contextRef="Prior1YearInstant"
+                unitRef="JPY">1235000000</jppfs_cor:LongTermLoansPayable>
+        """)
+        XBRLTestSupport.withXbrlDir(xml) { dir in
+            let result = extract(in: dir)
+            #expect(result.method.hasPrefix("bank_components"))
+            #expect(result.total == 2_226_000_000)
+            #expect(result.priorTotal == 1_314_000_000)
+            #expect(!result.components.contains { $0.label.contains("預金") })
+        }
+    }
+
+    /// 銀行の社債（BondsPayable）は一般事業会社のタグと共通。1回だけ数える。
+    @Test func testBankBondsPayableCountedOnce() {
+        let xml = XBRLTestSupport.makeXbrlInstant("""
+            <jppfs_cor:DepositsLiabilitiesBNK contextRef="CurrentYearInstant"
+                unitRef="JPY">900000000000</jppfs_cor:DepositsLiabilitiesBNK>
+            <jppfs_cor:BorrowedMoneyLiabilitiesBNK contextRef="CurrentYearInstant"
+                unitRef="JPY">30000000000</jppfs_cor:BorrowedMoneyLiabilitiesBNK>
+            <jppfs_cor:BondsPayable contextRef="CurrentYearInstant"
+                unitRef="JPY">20000000000</jppfs_cor:BondsPayable>
+        """)
+        XBRLTestSupport.withXbrlDir(xml) { dir in
+            #expect(extract(in: dir).total == 50_000_000_000)
+        }
+    }
+
     @Test func testBankWithDepositsOnlyIsZeroDebt() {
         let xml = XBRLTestSupport.makeXbrlInstant("""
             <jppfs_cor:DepositsLiabilitiesBNK contextRef="CurrentYearInstant"
