@@ -141,7 +141,7 @@ enum InterestBearingDebtBreakdown {
         // 保険は通常パイプライン（資金調達の本業でも内訳を出す）。
         let instantFS = statementInstantFieldSet(
             xbrlDir: xbrlDir, allTags: tags, accountingStandard: accountingStandard)
-        let deposits = instantFS["DepositsLiabilitiesBNK"]
+        let deposits = instantFS[Xbrl.bankMarkerTag]
         let isBank = deposits?.current != nil || deposits?.prior != nil
         return IBDInputs(
             consolidated: consolidated,
@@ -212,6 +212,7 @@ enum InterestBearingDebtBreakdown {
         for group in Xbrl.ibdNonCurrentComponents { tags.formUnion(group) }
         for group in Xbrl.ibdLiquidityOrderComponents { tags.formUnion(group) }
         for component in Xbrl.bankIBDComponents { tags.formUnion(component.tags) }
+        tags.insert(Xbrl.bankMarkerTag)
         return tags
     }()
 
@@ -1413,7 +1414,7 @@ enum InterestBearingDebtBreakdown {
         }
     }
 
-    /// 銀行は `Xbrl.bankIBDComponents` の statement BS 行をそのまま積む。
+    /// 銀行は `Xbrl.bankIBDComponents` の statement BS 行をそのまま積む（預金・譲渡性預金は含めない）。
     /// 分母は同じ行合計で、独立した coverage 検算はしない。
     private static func resolveBank(inputs: IBDInputs, code: String, docID: String) -> IBDResolution {
         guard !inputs.bankComponents.isEmpty else {

@@ -449,11 +449,13 @@ enum Xbrl {
         let tags: [String]
     }
 
+    /// 銀行業判定マーカー（BS の預金）。有利子負債には含めない。
+    static let bankMarkerTag = "DepositsLiabilitiesBNK"
+
     // 銀行業 有利子負債コンポーネント（Python: BANK_IBD_COMPONENT_DEFINITIONS）
-    // DepositsLiabilitiesBNK の存在が銀行業判定マーカーを兼ねる
+    // 預金・譲渡性預金は銀行でも有利子負債に含めない（Sorahiro 判断 2026-10-11）。
+    // 銀行かどうかは `bankMarkerTag`（預金）の有無で判定する。
     static let bankIBDComponents: [BankIBDComponent] = [
-        .init(label: "預金",                   tags: ["DepositsLiabilitiesBNK"]),
-        .init(label: "譲渡性預金",             tags: ["NegotiableCertificatesOfDepositLiabilitiesBNK"]),
         .init(label: "コマーシャル・ペーパー", tags: ["CommercialPapersLiabilities"]),
         .init(label: "借用金",                 tags: ["BorrowedMoneyLiabilitiesBNK"]),
         .init(label: "短期社債",               tags: ["ShortTermBondsPayable"]),
