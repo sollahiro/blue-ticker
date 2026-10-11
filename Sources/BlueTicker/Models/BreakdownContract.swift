@@ -77,7 +77,7 @@ public let ibdRowSourceBorrowingsSchedule = "borrowings_schedule"
 /// interest_bearing_debt 行の出所: リース注記。
 public let ibdRowSourceLeaseNote = "lease_note"
 /// interest_bearing_debt 行の出所: 銀行の BS 有利子負債コンポーネント
-/// （`Xbrl.bankIBDComponents`。借用金・社債・CP 等。預金・譲渡性預金は含めない）。
+/// （`Xbrl.bankIBDComponents`。借用金・社債・CP 等と一般事業会社の借入金タグ。預金・譲渡性預金は含めない）。
 public let ibdRowSourceFinancialsBankComponents = "financials_bank_components"
 
 /// interest_bearing_debt 行の maturity_class: 流動（1年以内）。
