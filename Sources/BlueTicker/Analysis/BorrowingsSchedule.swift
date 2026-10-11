@@ -104,6 +104,29 @@ enum BorrowingsSchedule {
         return normalizedLabel
     }
 
+    /// 区分ごとに「合計」を置く表の合計（期末・期首のそれぞれ）。候補を内訳行の和と照合し、一致した
+    /// 最初のものを使う: 区分小計の和 → 区分の直後の真の合計行 → 最後の区分の「合計」（累計型）。
+    /// どれも一致しなければ内訳行の和。内訳に値が無ければ区分小計の和（照合できないため従来どおり）。
+    /// 許容差は表示単位の端数（内訳行数＋1 単位）。
+    static func reconciledSectionedTotal(
+        subtotals: [Double?], trailing: Double?, components: [Double?], scale: Double
+    ) -> Double? {
+        let values = components.compactMap { $0 }
+        let presentSubtotals = subtotals.compactMap { $0 }
+        let subtotalSum: Double? = presentSubtotals.isEmpty ? nil : presentSubtotals.reduce(0, +)
+        guard !values.isEmpty else { return subtotalSum }
+        let componentSum = values.reduce(0, +)
+        let tolerance = scale * Double(values.count + 1)
+        func reconciles(_ candidate: Double?) -> Bool {
+            guard let candidate else { return false }
+            return abs(candidate - componentSum) <= tolerance
+        }
+        if reconciles(subtotalSum) { return subtotalSum }
+        if reconciles(trailing) { return trailing }
+        if let last = subtotals.last ?? nil, reconciles(last) { return last }
+        return componentSum
+    }
+
     /// 値の無い区分見出し行の流動／非流動（「流動負債」「非流動負債」「流動」「固定負債」等）。
     private static func sectionHeaderMaturity(_ label: String) -> String? {
         let compact = label.replacingOccurrences(of: " ", with: "").replacingOccurrences(of: "　", with: "")
@@ -572,6 +595,13 @@ enum BorrowingsSchedule {
         return (parsed.rows, parsed.totalCurrent, parsed.totalPrior)
     }
 
+    /// HTML 断片の最初の表を `parseComparisonTable` で読む（表の形のユニットテスト用）。
+    static func parseComparisonTableHtml(_ html: String) -> (rows: [Row], totalCurrent: Double?, totalPrior: Double?)? {
+        guard let document = try? SwiftSoup.parse(html),
+              let table = try? document.select("table").first() else { return nil }
+        return parseComparisonTable(table)
+    }
+
     /// `parseComparisonTable` 本体。合計行の後の「（その他の金融負債）」区分のリース負債行も返す
     /// （本体の行・合計には入れない）。
     private static func parseComparisonTableDetailed(_ table: Element) -> (
@@ -677,8 +707,11 @@ enum BorrowingsSchedule {
         var inOtherFinancialLiabilities = false
         // 東静 S100XMC1 実データ検証（2026-10-11）: 「流動負債」見出し → 行 → 合計、「非流動負債」
         // 見出し → 行 → 合計、と区分ごとに合計を置く表。最初の「合計」で打ち切ると非流動を落とす。
-        // 区分見出しの下の「合計」は、後ろに別区分の見出しがあるときだけ区分小計として読み、
-        // 表の合計は区分小計の和（区分の後に真の合計行があればそれ）。
+        // 区分見出しの下の「合計」は、後ろに別区分の見出しがあるときだけ区分小計として読む。
+        // 表の合計は内訳行の和と照合して決める（`reconciledSectionedTotal`）: 区分小計の和、
+        // 最後の区分の「合計」そのもの（流動 → 小計、非流動 → 全体の累計合計、という表）、
+        // 区分の直後に置かれた真の合計行のうち、内訳の和と一致するもの。どれも一致しなければ
+        // 内訳の和（区分小計の和をそのまま使うと、累計型の表で流動分を二重に数える）。
         func rowLabel(_ tr: Element) -> (label: String, hasValue: Bool)? {
             guard let cells = (try? tr.select("td, th"))?.array(), !cells.isEmpty else { return nil }
             var label = normalizeLabel((try? cells[0].text(trimAndNormaliseWhitespace: true)) ?? "")
@@ -768,12 +801,24 @@ enum BorrowingsSchedule {
                 continue
             }
             if isGrandTotalLabel(label), section != nil, !sectionTotals.isEmpty {
-                // 最後の区分の小計。区分小計の和を表の合計にする
+                // 最後の区分の「合計」。区分小計か表全体の累計かは表記で区別できないので、内訳の和と照合する
                 sectionTotals.append((current.map { $0 * scale }, prior.map { $0 * scale }))
-                let cs = sectionTotals.compactMap(\.current)
-                let ps = sectionTotals.compactMap(\.prior)
-                totalCurrent = cs.isEmpty ? nil : cs.reduce(0, +)
-                totalPrior = ps.isEmpty ? nil : ps.reduce(0, +)
+                // 区分の直後（値のある次の行）が真の合計行なら、それも候補にする
+                var trailing: (current: Double?, prior: Double?)?
+                if let nextTr = bodyRows[(rowIndex + 1)...].first(where: { rowLabel($0)?.hasValue == true }),
+                   let next = rowLabel(nextTr), isGrandTotalLabel(next.label),
+                   let nextCells = (try? nextTr.select("td, th"))?.array(),
+                   nextCells.count > max(priorIdx, currentIdx) {
+                    trailing = (
+                        XBRLUtils.parseTextblockCellValue(try? nextCells[currentIdx].text()).map { $0 * scale },
+                        XBRLUtils.parseTextblockCellValue(try? nextCells[priorIdx].text()).map { $0 * scale })
+                }
+                totalCurrent = reconciledSectionedTotal(
+                    subtotals: sectionTotals.map(\.current), trailing: trailing?.current,
+                    components: components.map(\.current), scale: scale)
+                totalPrior = reconciledSectionedTotal(
+                    subtotals: sectionTotals.map(\.prior), trailing: trailing?.prior,
+                    components: components.map(\.prior), scale: scale)
                 section = nil
                 pastGrandTotal = true
                 continue

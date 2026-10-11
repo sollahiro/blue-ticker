@@ -965,6 +965,18 @@ private struct AllInterestBearingIBDDecider: InterestBearingDebtDeciding {
         ])
         let leases = payload.rows.filter { $0.labelRaw == "リース負債" }.map(\.label)
         #expect(leases == ["リース負債（流動）", "リース負債（非流動）"])
+        // 注記の表合計（notes の borrowings_schedule・/financials フォールバック）は区分小計の和で、
+        // 内訳の和と一致する（流動の小計を二重に数えない）
+        let dir = Self.xbrlDir("S100XMC1")
+        let notes = try #require(BorrowingsSchedule.extractRows(xbrlDir: dir))
+        #expect(notes.totalCurrent == 182_640_328_000)
+        #expect(notes.totalPrior == 165_900_807_000)
+        // 開示の端数: 流動の内訳の和 27,625,865 千円に対し小計 27,625,866 千円
+        #expect(notes.rows.compactMap(\.current).reduce(0, +) == 182_640_327_000)
+        let fallback = try #require(BorrowingsSchedule.extract(xbrlDir: dir, accountingStandard: "IFRS"))
+        #expect(fallback.total == 182_640_328_000)
+        #expect(fallback.priorTotal == 165_900_807_000)
+        #expect(IBDExtractor.extractCanonical(xbrlDir: dir).total == 182_640_328_000)
     }
 
     /// LINEヤフー: BS は区分の無い単一の集約 `InterestBearingLiabilitiesLiabilitiesIFRS`（リース込み）。
