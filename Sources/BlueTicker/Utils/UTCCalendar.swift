@@ -28,3 +28,29 @@ func utcStartOfDay(_ date: Date) -> Date {
     let comps = utcCalendar.dateComponents([.year, .month, .day], from: date)
     return utcCalendar.date(from: comps)!
 }
+
+// MARK: - EDINET 日（JST）
+
+/// EDINET の日付ラベル（書類一覧 API の `date`）は日本時間（JST, UTC+9・夏時間なし）の暦日。
+/// 「今日」「その日が締まったか」は UTC の暦日ではなく JST で判定する（JST 0:00〜8:59 に
+/// UTC 暦日で判定すると 1 日ずれる）。ラベルの Date 表現は従来どおり `parseDateString` と同じ
+/// 「UTC 0時」形のまま扱い、境界の判定だけを JST で行う。
+private let edinetDayCalendar: Calendar = {
+    var cal = Calendar(identifier: .gregorian)
+    cal.timeZone = TimeZone(secondsFromGMT: 9 * 3600)!
+    return cal
+}()
+
+/// EDINET（JST）の今日を日付ラベル形（UTC 0時表現。`parseDateString` と比較可能）で返す。
+func edinetToday(_ now: Date = Date()) -> Date {
+    let comps = edinetDayCalendar.dateComponents([.year, .month, .day], from: now)
+    return utcCalendar.date(from: comps)!
+}
+
+/// 日付ラベル（UTC 0時表現）の EDINET 日が締まる瞬間（翌日 0:00 JST）。
+/// これ以降に書いた日次検索キャッシュだけが、その日の確定版になりうる。
+func edinetDayClose(_ day: Date) -> Date {
+    let comps = utcCalendar.dateComponents([.year, .month, .day], from: day)
+    let start = edinetDayCalendar.date(from: comps)!
+    return edinetDayCalendar.date(byAdding: .day, value: 1, to: start)!
+}

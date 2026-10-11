@@ -19,8 +19,11 @@ public struct FinancialsIngestSummary: Sendable, Equatable {
     public let attempted: Int
     /// 計算・格納に成功した企業数。
     public let stored: Int
-    /// 書類はあるが抽出できず失敗した企業数（要調査）。
+    /// 書類はあるが抽出できず失敗した企業数（要調査）。縮小ガードの保留（`refused`）は含めない。
     public let failed: Int
+    /// 計算はできたが、最新 FY を失う上書き（ローカル EDINET インデックスが最新有報を欠く）として
+    /// 格納を保留した企業数。行と high_water は据え置き、次回再試行される。
+    public let refused: Int
     /// 有価証券報告書が未提出等、計算対象外だった企業数（設計通り・failed に含めない）。
     public let notApplicable: Int
     /// 既に現行バージョン・十分な年数で計算済みのためスキップした企業数。
@@ -43,7 +46,7 @@ func runFinancialsIngest(
     forceCodes: Set<String> = [], logger: Logger? = nil,
     compute: FinancialsComputer
 ) async throws -> FinancialsIngestSummary {
-    let (allCodes, highWaterMap) = try await distinctCompanyCodesWithHighWater(
+    let (allCodes, highWaterMap, newestAnnualMap) = try await distinctCompanyCodesWithHighWater(
         db: db, docTypes: Api.financialsFreshnessDocTypes, logger: logger)
     let listedFiltered = listedCodes.map { listed in allCodes.filter { listed.contains($0) } } ?? allCodes
     let codes = explicitCodes.map { explicit in listedFiltered.filter { explicit.contains($0) } } ?? listedFiltered
@@ -51,6 +54,7 @@ func runFinancialsIngest(
     var attempted = 0
     var stored = 0
     var failed = 0
+    var refused = 0
     var notApplicable = 0
     var skipped = 0
     var unhealthyRetries = 0
@@ -107,7 +111,8 @@ func runFinancialsIngest(
             break
         }
         let existing: CompanyFinancials?
-        if missingCodes.contains(code) {
+        // force 指定は行があっても missing に入るため、縮小ガード用に既存行を読む（--codes 等の少数のみ）。
+        if missingCodes.contains(code) && !forceCodes.contains(code) {
             existing = nil
         } else {
             existing = try await withDbRetry(
@@ -125,7 +130,33 @@ func runFinancialsIngest(
         }
         if let lim = limit, attempted >= lim { break }
         attempted += 1
-        switch await compute(code) {
+        let computed = await compute(code)
+        // 計算結果の最新 fy_end が格納済み行や DB の最新有報より古い（＝ローカル EDINET 年次インデックスが
+        // 最新有報を欠く）なら書かない。行全体を上書きし high_water まで進めると、欠落した FY が
+        // 以後 skip され続ける（2026-09-18 提出分の FY2026 が 12 社で消えた）。refused として数え、
+        // 行と high_water を据え置くので次回 ingest で再試行される。
+        // notApplicable は、years を持つ格納行があり DB に格納最新 FY 以上の有報があるときだけ保留する
+        // （603A 型: 遅れたインデックスで years 行を空プレースホルダへ置き換えない）。格納 years が無い
+        // 正当な対象外社は従来どおりプレースホルダを書く（毎回再計算するループにしない）。
+        let refusal: FinancialsStoreRefusal?
+        switch computed {
+        case .success(let response):
+            refusal = financialsStoreRefusal(
+                computedYears: response, stored: existing?.response, newestAnnual: newestAnnualMap[code])
+        case .notApplicable:
+            refusal = financialsStoreRefusal(
+                computedYears: nil, stored: existing?.response, newestAnnual: newestAnnualMap[code])
+        case .failed:
+            refusal = nil
+        }
+        if let refusal {
+            refused += 1
+            logger?.warning(
+                "財務取り込み保留: code=\(code) local EDINET index lacks \(refusal.lacking)",
+                metadata: refusal.logMetadata(code: code))
+            continue
+        }
+        switch computed {
         case .success(let response):
             try await withDbRetry(
                 logger: logger, context: "code=\(code)", onRetry: { unhealthyRetries += 1 }
@@ -162,13 +193,90 @@ func runFinancialsIngest(
     await backfillScreenIndexForServableFinancials(db: db, logger: logger)
 
     return FinancialsIngestSummary(
-        attempted: attempted, stored: stored, failed: failed, notApplicable: notApplicable,
-        skipped: skipped)
+        attempted: attempted, stored: stored, failed: failed, refused: refused,
+        notApplicable: notApplicable, skipped: skipped)
+}
+
+/// 発行体の最新有報（会社開示府令の 120・period_end あり）。財務取り込みの縮小ガード用。
+struct NewestAnnualFiling: Sendable, Equatable {
+    let periodEnd: String
+    let docID: String
+}
+
+/// 財務取り込みの格納保留（縮小ガード）。自動上書き（override）はしない。恒久的に続く保留
+/// （最新有報の XBRL が取れない、別 EDINET コードが同じ 4 桁コードに写る等）を構造化ログで追えるようにする。
+struct FinancialsStoreRefusal: Sendable, Equatable {
+    enum Reason: String, Sendable {
+        /// 計算結果の最新 fy_end < DB の最新有報（会社開示 120）period_end。
+        case olderThanDatabaseAnnual = "older_than_db_annual"
+        /// 計算結果の最新 fy_end < 格納済み行の最新 fy_end。
+        case olderThanStoredRow = "older_than_stored_row"
+        /// notApplicable（years 空）だが、格納行に years があり DB に格納最新 FY 以上の有報がある。
+        case placeholderOverStoredYears = "placeholder_over_stored_years"
+    }
+
+    let reason: Reason
+    /// 欠けている書類（DB の最新有報 docID、無ければ格納行の最新年の doc_id）。
+    let missingDocID: String?
+    let computedNewestFyEnd: String?
+    let storedNewestFyEnd: String?
+    let databaseNewestPeriodEnd: String?
+
+    /// ログ本文の `local EDINET index lacks <doc>` に入れる値。
+    var lacking: String { missingDocID ?? "fy_end=\(storedNewestFyEnd ?? "")" }
+
+    func logMetadata(code: String) -> Logger.Metadata {
+        var metadata: Logger.Metadata = [
+            "event": "financials_store_refused",
+            "code": .string(code),
+            "reason": .string(reason.rawValue),
+        ]
+        if let missingDocID { metadata["doc_id"] = .string(missingDocID) }
+        if let computedNewestFyEnd { metadata["computed_newest_fy_end"] = .string(computedNewestFyEnd) }
+        if let storedNewestFyEnd { metadata["stored_newest_fy_end"] = .string(storedNewestFyEnd) }
+        if let databaseNewestPeriodEnd { metadata["db_newest_period_end"] = .string(databaseNewestPeriodEnd) }
+        return metadata
+    }
+}
+
+/// 格納してよいかを判定する。nil なら格納してよい。
+/// - `computedYears` が success の応答: 最新 fy_end が格納済み行の最新 fy_end または DB の最新有報
+///   period_end より古ければ保留。
+/// - `computedYears == nil`（notApplicable プレースホルダ）: 格納行に years があり、かつ DB に格納最新 FY
+///   以上の会社開示 120 があるときだけ保留。格納 years が無ければ従来どおり格納してよい。
+func financialsStoreRefusal(
+    computedYears: FinancialsResponse?, stored: FinancialsResponse?, newestAnnual: NewestAnnualFiling?
+) -> FinancialsStoreRefusal? {
+    let storedNewest = stored?.newestFiscalYearEnd
+    guard let computed = computedYears else {
+        guard let storedNewest, let annual = newestAnnual, annual.periodEnd >= storedNewest.fyEnd
+        else { return nil }
+        return FinancialsStoreRefusal(
+            reason: .placeholderOverStoredYears, missingDocID: annual.docID, computedNewestFyEnd: nil,
+            storedNewestFyEnd: storedNewest.fyEnd, databaseNewestPeriodEnd: annual.periodEnd)
+    }
+    let computedNewest = computed.newestFiscalYearEnd?.fyEnd
+    if let annual = newestAnnual, (computedNewest ?? "") < annual.periodEnd {
+        return FinancialsStoreRefusal(
+            reason: .olderThanDatabaseAnnual, missingDocID: annual.docID,
+            computedNewestFyEnd: computedNewest, storedNewestFyEnd: storedNewest?.fyEnd,
+            databaseNewestPeriodEnd: annual.periodEnd)
+    }
+    if let storedNewest, (computedNewest ?? "") < storedNewest.fyEnd {
+        return FinancialsStoreRefusal(
+            reason: .olderThanStoredRow, missingDocID: storedNewest.docID,
+            computedNewestFyEnd: computedNewest, storedNewestFyEnd: storedNewest.fyEnd,
+            databaseNewestPeriodEnd: newestAnnual?.periodEnd)
+    }
+    return nil
 }
 
 /// 発行体（sec_code × edinet_code の組）単位の集約行。`highWater` は
 /// `docTypes` ∩ 会社開示府令(010) の doc だけの `MAX(submit_date_time)`（無ければ nil）。
-private typealias IssuerHighWater = (secCode: String?, edinetCode: String, highWater: String?)
+/// `newestAnnual` は会社開示府令の有報(120) のうち period_end 最大の 1 件（`period_end|doc_id`、無ければ nil）。
+private typealias IssuerHighWater = (
+    secCode: String?, edinetCode: String, highWater: String?, newestAnnual: String?
+)
 
 /// edinet_documents を発行体組へ SQL 集約して読む（全行転送しない）。
 /// コード列挙は財務行の対象社集合を変えないため全 doc の DISTINCT 組を使い、
@@ -183,7 +291,11 @@ private func issuerHighWaterRows(
                 \(ident: "edinet_code") AS edinet_code,
                 MAX(CASE WHEN \(ident: "doc_type_code") IN (\(binds: Array(docTypes)))
                         AND \(ident: "ordinance_code") = \(bind: Api.ordinanceCompanyDisclosure)
-                    THEN \(ident: "submit_date_time") END) AS high_water
+                    THEN \(ident: "submit_date_time") END) AS high_water,
+                MAX(CASE WHEN \(ident: "doc_type_code") = \(bind: Api.docTypeAnnualReport)
+                        AND \(ident: "ordinance_code") = \(bind: Api.ordinanceCompanyDisclosure)
+                        AND \(ident: "period_end") IS NOT NULL AND \(ident: "period_end") <> ''
+                    THEN SUBSTR(\(ident: "period_end"), 1, 10) || '|' || \(ident: "doc_id") END) AS newest_annual
             FROM \(ident: EdinetDocument.schema)
             GROUP BY \(ident: "sec_code"), \(ident: "edinet_code")
             ORDER BY \(ident: "edinet_code"), \(ident: "sec_code")
@@ -192,7 +304,8 @@ private func issuerHighWaterRows(
             (
                 try row.decode(column: "sec_code", as: String?.self),
                 try row.decode(column: "edinet_code", as: String.self),
-                try row.decode(column: "high_water", as: String?.self)
+                try row.decode(column: "high_water", as: String?.self),
+                try row.decode(column: "newest_annual", as: String?.self)
             )
         }
     }
@@ -201,13 +314,21 @@ private func issuerHighWaterRows(
     var byIssuer: [String: IssuerHighWater] = [:]
     for doc in documents {
         let key = "\(doc.secCode ?? "")\u{1F}\(doc.edinetCode)"
-        var row = byIssuer[key] ?? (secCode: doc.secCode, edinetCode: doc.edinetCode, highWater: nil)
+        var row = byIssuer[key]
+            ?? (secCode: doc.secCode, edinetCode: doc.edinetCode, highWater: nil, newestAnnual: nil)
         if byIssuer[key] == nil { order.append(key) }
         if let docType = doc.docTypeCode, docTypes.contains(docType),
             Api.isCompanyDisclosureOrdinance(doc.ordinanceCode),
             doc.submitDateTime > (row.highWater ?? "")
         {
             row.highWater = doc.submitDateTime
+        }
+        if doc.docTypeCode == Api.docTypeAnnualReport,
+            Api.isCompanyDisclosureOrdinance(doc.ordinanceCode),
+            let periodEnd = doc.periodEnd, !periodEnd.isEmpty, let docID = doc.id
+        {
+            let candidate = "\(periodEnd.prefix(10))|\(docID)"
+            if candidate > (row.newestAnnual ?? "") { row.newestAnnual = candidate }
         }
         byIssuer[key] = row
     }
@@ -221,9 +342,10 @@ private func issuerHighWaterRows(
 /// `docTypes` に含まれる **かつ会社開示府令(010)** の doc のみで `code -> max(submitDateTime)`
 /// （辞書順）を構築する。信託受益証券等の 120 では通期再計算を起こさない。
 /// 該当種別の書類が無い社は high-water map に現れない（nil 扱い）。
+/// `newestAnnual` は code ごとの最新有報（会社開示府令の 120 で period_end 最大。縮小ガード用）。
 func distinctCompanyCodesWithHighWater(
     db: Database, docTypes: Set<String>, logger: Logger? = nil
-) async throws -> (codes: [String], highWater: [String: String]) {
+) async throws -> (codes: [String], highWater: [String: String], newestAnnual: [String: NewestAnnualFiling]) {
     let listedSecByEdinet = await listedSecCodeByEdinetCode()
     let issuers = try await withDbRetry(logger: logger, context: "全書類一覧") {
         try await issuerHighWaterRows(db: db, docTypes: docTypes)
@@ -231,6 +353,7 @@ func distinctCompanyCodesWithHighWater(
     var seen = Set<String>()
     var codes: [String] = []
     var highWater: [String: String] = [:]
+    var newestAnnual: [String: NewestAnnualFiling] = [:]
     for issuer in issuers {
         guard let code = listedIssuerCode(
             secCode: issuer.secCode, edinetCode: issuer.edinetCode,
@@ -240,8 +363,13 @@ func distinctCompanyCodesWithHighWater(
         if let water = issuer.highWater, water > (highWater[code] ?? "") {
             highWater[code] = water
         }
+        if let packed = issuer.newestAnnual, let sep = packed.firstIndex(of: "|") {
+            let filing = NewestAnnualFiling(
+                periodEnd: String(packed[..<sep]), docID: String(packed[packed.index(after: sep)...]))
+            if filing.periodEnd > (newestAnnual[code]?.periodEnd ?? "") { newestAnnual[code] = filing }
+        }
     }
-    return (codes, highWater)
+    return (codes, highWater, newestAnnual)
 }
 
 /// 計算済みサマリを company_financials へ書き込む（既存行があれば更新、無ければ作成）。

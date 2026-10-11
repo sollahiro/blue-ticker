@@ -71,7 +71,7 @@ actor EdinetAPIClient {
 
     func refreshDocumentIndexForYear(_ year: Int) async -> sending [[String: Any]] {
         let yearEnd = utcCalendar.date(from: DateComponents(year: year, month: 12, day: 31))!
-        let requiredDate = min(yearEnd, utcStartOfDay(Date()))
+        let requiredDate = min(yearEnd, edinetToday())
         let persistableThrough = formatDateString(safeBuiltThroughDate(requiredDate: requiredDate))
 
         let cs = cacheStore
@@ -83,7 +83,9 @@ actor EdinetAPIClient {
                 cs.clearDocumentIndex(year)
                 guard let built = await self.buildDocumentIndexForYear(year, requiredThrough: requiredDate)
                 else { return [] }
-                cs.saveDocumentIndex(year, documents: built, builtThrough: persistableThrough)
+                cs.saveDocumentIndex(
+                    year, documents: built,
+                    builtThrough: finalizedBuiltThrough(cs, year: year, through: persistableThrough))
                 return built
             }
             pruneDocumentIndexLock(year: year, lock: lock)
@@ -100,10 +102,12 @@ actor EdinetAPIClient {
     /// この関数を呼び直しても当日分の再取得判定（`startDate > requiredDate`）が常に真になり、
     /// 後から提出された書類（有報等）を二度と取り込めなくなる（実例: 2026-06-29 提出の有報欠落）。
     /// 前日までに留めることで、当日は日次検索キャッシュ側の TTL（`Api.searchTodayTTLHours`）が
-    /// 満了するたびに再取得され続け、日境界を跨いだ翌日の呼び出しで初めて前日分が確定する。
+    /// 満了するたびに再取得され続け、日境界（JST）を跨いだ翌日の呼び出しで初めて前日分が確定する。
+    /// 前日以前でも、日次キャッシュがその日の締め（翌日 0:00 JST）前に書かれた同日スナップショットの
+    /// 日は越えない（`finalizedBuiltThrough`。キャッシュ側も期限切れ扱いにして再取得する）。
     func catchupDocumentIndexForYear(_ year: Int) async -> sending [[String: Any]] {
         let yearEnd = utcCalendar.date(from: DateComponents(year: year, month: 12, day: 31))!
-        let requiredDate = min(yearEnd, utcStartOfDay(Date()))
+        let requiredDate = min(yearEnd, edinetToday())
         let requiredThrough = formatDateString(requiredDate)
         let persistableThrough = formatDateString(safeBuiltThroughDate(requiredDate: requiredDate))
 
@@ -116,7 +120,9 @@ actor EdinetAPIClient {
 
                 guard let info = cs.loadDocumentIndexInfo(year, requiredThrough: requiredThrough, allowStale: true) else {
                     guard let built = await self.buildDocumentIndexForYear(year, requiredThrough: requiredDate) else { return [] }
-                    cs.saveDocumentIndex(year, documents: built, builtThrough: persistableThrough)
+                    cs.saveDocumentIndex(
+                        year, documents: built,
+                        builtThrough: finalizedBuiltThrough(cs, year: year, through: persistableThrough))
                     return built
                 }
 
@@ -138,10 +144,17 @@ actor EdinetAPIClient {
                 let newByDate = await self.getDocumentsForDateRange(start: startDate, end: requiredDate, useIndex: false)
                 if newByDate.values.contains(where: { $0 == nil }) { return existingDocs }
                 let merged = mergeDocumentIndexDocs(existing: existingDocs, byDate: newByDate.compactMapValues { $0 })
+                // 取得に失敗した日は期限切れの同日スナップショットが返りうる（`getDocumentsForDate` の
+                // フォールバック）。その日を越えて built_through を進めると以後再取得されないため、
+                // 確定版キャッシュが連続する日までに留める（書類自体は merge 済み・次回また差分取得する）。
+                let finalizedThrough = formatDateString(
+                    finalizedBuiltThrough(
+                        cs, from: startDate,
+                        through: parseDateString(persistableThrough) ?? builtDate, fallback: builtDate))
                 // 内容・built_through のいずれかが変わった時だけ書き込む（同日内の呼び出しごとの
                 // 無駄なフル書き込みを避ける。当日は毎回この分岐へ来るため効果が大きい）。
-                if merged.count != existingDocs.count || persistableThrough != builtStr {
-                    cs.saveDocumentIndex(year, documents: merged, builtThrough: persistableThrough)
+                if merged.count != existingDocs.count || finalizedThrough != builtStr {
+                    cs.saveDocumentIndex(year, documents: merged, builtThrough: finalizedThrough)
                 }
                 return merged
             }
@@ -498,9 +511,31 @@ private func yearRange(start: Date, end: Date) -> [Int] {
 /// 「確定済み」として永久にマークしない（EDINET が当日の書類一覧を随時更新するため）。
 /// 既に年末まで到達した過去年はそのまま `requiredDate` を返す（キャップ不要）。
 private func safeBuiltThroughDate(requiredDate: Date, today: Date = Date()) -> Date {
-    let todayStart = utcStartOfDay(today)
+    let todayStart = edinetToday(today)
     guard requiredDate >= todayStart else { return requiredDate }
     return utcCalendar.date(byAdding: .day, value: -1, to: todayStart)!
+}
+
+/// `from`〜`through` の各日が確定版の日次検索キャッシュ（`EdinetCacheStore.isSearchCacheFinal`）を
+/// 持つ限り進めた最終日。`from` が未確定なら `fallback`（built_through を進めない）。
+private func finalizedBuiltThrough(_ cs: EdinetCacheStore, from: Date, through: Date, fallback: Date) -> Date {
+    var last = fallback
+    var day = from
+    while day <= through, cs.isSearchCacheFinal(formatDateString(day)) {
+        last = day
+        day = utcCalendar.date(byAdding: .day, value: 1, to: day)!
+    }
+    return last
+}
+
+/// 年初から構築した年次インデックス用。全日が確定なら `through` のまま、途中に同日スナップショットが
+/// あればその前日（年初が未確定なら前年末日＝次回 catchup が年初から取り直す）。
+private func finalizedBuiltThrough(_ cs: EdinetCacheStore, year: Int, through: String) -> String {
+    let yearStart = utcCalendar.date(from: DateComponents(year: year, month: 1, day: 1))!
+    let beforeYear = utcCalendar.date(byAdding: .day, value: -1, to: yearStart)!
+    guard let throughDate = parseDateString(through) else { return through }
+    return formatDateString(
+        finalizedBuiltThrough(cs, from: yearStart, through: throughDate, fallback: beforeYear))
 }
 
 // withTaskGroup の子タスク結果を運ぶ型。[[String: Any]] は Sendable 非準拠のため
