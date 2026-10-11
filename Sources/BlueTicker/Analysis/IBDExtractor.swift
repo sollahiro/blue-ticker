@@ -14,17 +14,39 @@ enum IBDExtractor {
     // コンポーネント表示用ラベル
     private static let componentDefs: [(label: String, tags: [String])] = [
         ("短期借入金", ["ShortTermLoansPayable", "BorrowingsCLIFRS"]),
-        ("コマーシャル・ペーパー", ["CommercialPapersLiabilities", "CommercialPapersCLIFRS"]),
+        ("コマーシャル・ペーパー", ["CommercialPapersLiabilities"]),
         ("短期社債", ["ShortTermBondsPayable"]),
-        ("1年内償還予定の社債", ["CurrentPortionOfBonds", "RedeemableBondsWithinOneYear",
-                                 "BondsPayableCLIFRS", "CurrentPortionOfBondsCLIFRS"]),
+        ("1年内償還予定の社債", ["CurrentPortionOfBonds", "BondsPayableCLIFRS", "CurrentPortionOfBondsCLIFRS"]),
         ("1年内返済予定の長期借入金", ["CurrentPortionOfLongTermLoansPayable",
                                       "CurrentPortionOfLongTermBorrowingsCLIFRS",
                                       "CurrentPortionOfLongTermDebtCLIFRS"]),
         ("リース負債（流動）", ["LeaseObligationsCL", "LeaseLiabilitiesCLIFRS"]),
+        ("1年内償還予定の新株予約権付社債", ["CurrentPortionOfBondsWithSubscriptionRightsToShares"]),
+        ("1年内償還予定の転換社債", ["CurrentPortionOfConvertibleBonds"]),
+        ("関係会社短期借入金", ["ShortTermLoansPayableToSubsidiariesAndAffiliates"]),
+        ("株主、役員又は従業員からの短期借入金", ["ShortTermLoansPayableToShareholdersDirectorsOrEmployees"]),
+        ("1年内返済予定の関係会社長期借入金", ["CurrentPortionOfLongTermLoansPayableToSubsidiariesAndAffiliates",
+                                              "CurrentPortionOfLongTermLoansPayableToSubsidiariesAndAffiliatesCLELC"]),
+        ("関係会社短期債務", ["ShortTermDebtToSubsidiariesAndAffiliatesCLELE",
+                              "ShortTermDebtToSubsidiariesAndAffiliatesCLGAS"]),
+        ("債権流動化に伴う支払債務", ["PayablesUnderFluidityLeaseReceivablesCLLEA"]),
+        ("1年内支払予定の債権流動化に伴う長期支払債務", ["CurrentPortionOfLongTermPayablesUnderFluidityLeaseReceivablesCLLEA"]),
         ("社債", ["BondsPayable", "BondsPayableNCLIFRS"]),
         ("長期借入金", ["LongTermLoansPayable", "BorrowingsNCLIFRS", "LongTermDebtNCLIFRS"]),
         ("リース負債（非流動）", ["LeaseObligationsNCL", "LeaseLiabilitiesNCLIFRS"]),
+        ("新株予約権付社債", ["BondsWithSubscriptionRightsToSharesNCL"]),
+        ("転換社債型新株予約権付社債", ["ConvertibleBondTypeBondsWithSubscriptionRightsToShares"]),
+        ("転換社債", ["ConvertibleBonds"]),
+        ("関係会社長期借入金", ["LongTermLoansPayableToSubsidiariesAndAffiliates"]),
+        ("株主、役員又は従業員からの長期借入金", ["LongTermLoansPayableToShareholdersDirectorsOrEmployees"]),
+        ("関係会社長期債務", ["LongTermDebtToSubsidiariesAndAffiliatesNCLELE",
+                              "LongTermDebtToSubsidiariesAndAffiliatesNCLGAS"]),
+        ("債権流動化に伴う長期支払債務", ["LongTermPayablesUnderFluidityLeaseReceivablesNCLLEA"]),
+        ("有利子負債", ["InterestBearingLiabilitiesLiabilitiesIFRS"]),
+        ("社債及び借入金", ["BondsAndBorrowingsLiabilitiesIFRS"]),
+        ("借入金", ["BorrowingsLiabilitiesIFRS", "BorrowingsLiabilitiesINS"]),
+        ("社債", ["BondsPayableLiabilitiesIFRS"]),
+        ("リース負債", ["LeaseLiabilitiesLiabilitiesIFRS", "LeaseObligationsLiabilities"]),
     ]
 
     private static let tagToLabel: [String: String] = {
@@ -80,6 +102,12 @@ enum IBDExtractor {
                              method: "not_found", accountingStandard: accountingStandard)
         }
 
+        // 有利子負債の集約タグがリース込み（BS に別建てのリース行が無い）なら、注記のリースを
+        // 足すと二重計上になる（トヨタ・RIZAP・HOYA 等）。軸と同じ BS 形状の判定で加算を止める。
+        if isLeaseInclusiveAggregate(resolvedTag: resolved.tag, fieldSet: fieldSet) {
+            return result
+        }
+
         // IFRS適用企業: リース負債を追加（XBRLタグで既に取得済みの場合はスキップ）
         if accountingStandard == "IFRS" {
             let resolvedTags = Set((resolved.tag ?? "").split(separator: "+").map(String.init))
@@ -115,6 +143,20 @@ enum IBDExtractor {
 
         return appendingNotesLeaseIfMissing(
             result, xbrlDir: xbrlDir, accountingStandard: accountingStandard)
+    }
+
+    /// 解決したタグがリース込みの集約か。「社債、借入金及びリース負債」集約、または
+    /// 「有利子負債」集約で BS にリース負債タグの値が無い場合（`InterestBearingDebtBreakdown` と同じ規則）。
+    static func isLeaseInclusiveAggregate(resolvedTag: String?, fieldSet: FieldSet) -> Bool {
+        guard let resolvedTag else { return false }
+        let tags = Set(resolvedTag.split(separator: "+").map(String.init))
+        if tags.contains(where: { $0.hasPrefix("BondsBorrowingsAndLeaseLiabilities") }) { return true }
+        guard !tags.isDisjoint(with: Xbrl.ibdInterestBearingAggregateTags) else { return false }
+        let hasBSLease = Xbrl.leaseLiabilitiesBSTags.contains { tag in
+            guard let fv = fieldSet[tag] else { return false }
+            return fv.current != nil || fv.prior != nil
+        }
+        return !hasBSLease
     }
 
     /// financials 組立が読む IBD。statement の有利子負債項目 ＋ statement に無い notes リース。
@@ -167,7 +209,7 @@ enum IBDExtractor {
         var hasCurrent = false
         var hasPrior = false
         for row in parsed.rows {
-            guard BorrowingsSchedule.isLeaseDebtScheduleRowLabel(row.label) else { continue }
+            guard BorrowingsSchedule.isLeaseScheduleRow(row) else { continue }
             guard row.current != nil || row.prior != nil else { continue }
             if let c = row.current { currentTotal += c; hasCurrent = true }
             if let p = row.prior { priorTotal += p; hasPrior = true }
@@ -205,12 +247,12 @@ enum IBDExtractor {
     }
 
     private static let statementIBDTags: Set<String> = {
-        var tags = Set(Xbrl.ibdDirectTags)
-        tags.formUnion(Xbrl.ibdIFRSCLTags)
+        var tags = Set(Xbrl.ibdIFRSCLTags)
         tags.formUnion(Xbrl.ibdIFRSNCLTags)
         tags.formUnion(Xbrl.leaseLiabilitiesBSTags)
         for group in Xbrl.ibdCurrentComponents { tags.formUnion(group) }
         for group in Xbrl.ibdNonCurrentComponents { tags.formUnion(group) }
+        for group in Xbrl.ibdLiquidityOrderComponents { tags.formUnion(group) }
         for comp in Xbrl.bankIBDComponents { tags.formUnion(comp.tags) }
         return tags
     }()
@@ -268,15 +310,13 @@ enum IBDExtractor {
         return bestKey.map { usgaapIBDLabelMap[$0]! }
     }
 
-    /// 解決順: 直接法 → IFRS集約タグ → コンポーネント積み上げ → US-GAAP HTML仮想タグ。
+    /// 解決順: IFRS集約タグ → コンポーネント積み上げ（流動性配列を含む） → US-GAAP HTML仮想タグ。
     private static func resolveIBD(_ fieldSet: FieldSet) -> ResolvedItem {
-        let direct = resolveItem(fieldSet, tags: Xbrl.ibdDirectTags)
-        if direct.tag != nil { return direct }
-
         let ifrsAgg = resolveAggregate(fieldSet, componentTagLists: [Xbrl.ibdIFRSCLTags, Xbrl.ibdIFRSNCLTags])
         if ifrsAgg.tag != nil { return ifrsAgg }
 
-        let comp = resolveAggregate(fieldSet, componentTagLists: Xbrl.ibdCurrentComponents + Xbrl.ibdNonCurrentComponents)
+        let comp = resolveAggregate(fieldSet, componentTagLists: Xbrl.ibdCurrentComponents + Xbrl.ibdNonCurrentComponents
+                + Xbrl.ibdLiquidityOrderComponents)
         if comp.tag != nil { return comp }
 
         return resolveAggregate(fieldSet, componentTagLists: [["USGAAP_HTML_IBDCurrent"], ["USGAAP_HTML_IBDNonCurrent"]])

@@ -1355,7 +1355,7 @@ private func breakdownContentHash(
     return String(format: "%016llx", hash)
 }
 
-/// interest_bearing_debt の content_hash。行（label_raw/source/セル値/maturity_class）と
+/// interest_bearing_debt の content_hash。行（label_raw/source/source_tag/セル値/maturity_class）と
 /// 分母の安定文字列を `breakdownContentHash` と同じ FNV-1a で潰す。
 private func ibdBreakdownContentHash(payload: BreakdownSnapshotPayload) -> String {
     struct HashInput: Codable {
@@ -1365,6 +1365,7 @@ private func ibdBreakdownContentHash(payload: BreakdownSnapshotPayload) -> Strin
             let opening: Double?
             let closing: Double?
             let maturityClass: String?
+            let sourceTag: String?
             let inTotal: Bool?
             let excludedReason: String?
             let pairedRowIndex: Int?
@@ -1380,7 +1381,7 @@ private func ibdBreakdownContentHash(payload: BreakdownSnapshotPayload) -> Strin
             HashInput.Row(
                 labelRaw: $0.labelRaw, source: $0.debtSource, opening: $0.opening,
                 closing: $0.closing, maturityClass: $0.maturityClass,
-                inTotal: $0.inTotal, excludedReason: $0.excludedReason,
+                sourceTag: $0.sourceTag, inTotal: $0.inTotal, excludedReason: $0.excludedReason,
                 pairedRowIndex: $0.pairedRowIndex,
                 categoryGroup: $0.categoryGroup, category: $0.category)
         })

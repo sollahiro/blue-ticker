@@ -27,6 +27,22 @@ private struct GoldenIBDDecider: InterestBearingDebtDeciding {
     }
 }
 
+/// 明細表の未分類行（「その他」）も有利子負債と答えるデサイダ（LINEヤフーの単一集約の検証用）。
+private struct AllInterestBearingIBDDecider: InterestBearingDebtDeciding {
+    func classifyRow(
+        label: String, source: String, tag: String?, closingYen: Double?,
+        siblingLabels: [String]
+    ) async -> IBDChoice {
+        IBDChoice(selected: IBDRowClass.interestBearingDebt.rawValue, probability: 0.95)
+    }
+
+    func classifyNearDuplicate(
+        scheduleLabel: String, scheduleYen: Double, leaseNoteLabel: String, leaseNoteYen: Double
+    ) async -> IBDChoice {
+        IBDChoice(selected: IBDDuplicateRole.sameLiability, probability: 0.95)
+    }
+}
+
 @Suite struct RealXbrlInterestBearingDebtBreakdownTests {
     private static let xbrlRoot: URL = {
         FileManager.default.homeDirectoryForCurrentUser
@@ -79,13 +95,14 @@ private struct GoldenIBDDecider: InterestBearingDebtDeciding {
         #expect(payload.rows.last?.closing == 25_663_566_000_000)
     }
 
-    /// ソニー: 明細表が帯内。リースは BS。
+    /// ソニー: 明細表が帯内。リースは BS。BS「長期借入債務」（会社拡張 LongTermDebt2NCLIFRS）は
+    /// ラベル規則（借入債務）でコード分類になり分母に入るので coverage 1.0。
     @Test func sonyUsesBorrowingsSchedule() async throws {
         guard await Self.ensureAvailable("S100YE2C") else { return }
         let (payload, _) = try await resolve("S100YE2C", decider: GoldenIBDDecider())
-        // Jev が債務と答えた LongTermDebt2NCLIFRS は行に残るが分母から外す。coverage は帯外。
-        #expect(payload.needsReview == true)
-        #expect(payload.warnings.contains("interest_bearing_debt_coverage_out_of_band"))
+        #expect(payload.needsReview == false)
+        #expect(payload.warnings.isEmpty)
+        #expect(payload.denominator == 1_669_669_000_000)
         expectRows(payload, [
             // BS 短期借入金（BorrowingsCLIFRS）が親で数え、明細表の短期借入金は同額の内訳
             ("長期借入金", ibdRowSourceBorrowingsSchedule, 516_460_000_000, nil),
@@ -97,11 +114,21 @@ private struct GoldenIBDDecider: InterestBearingDebtDeciding {
         #expect(payload.rows.last?.closing == 1_669_669_000_000)
     }
 
-    /// ソニーは「長期借入債務」が Jev 待ち。デサイダ無しは未分類。
-    @Test func sonyWithoutDeciderNeedsReview() async throws {
+    /// ソニーの「長期借入債務」は会社拡張要素。Jev 無しでもラベル規則で債務に確定する。
+    @Test func sonyWithoutDeciderResolvesExtensionByLabelRule() async throws {
         guard await Self.ensureAvailable("S100YE2C") else { return }
-        let (payload, _) = try await resolve("S100YE2C", decider: nil)
-        #expect(payload.needsReview == true)
+        let inputs = InterestBearingDebtBreakdown.inputs(xbrlDir: Self.xbrlDir("S100YE2C"))
+        let ext = try #require(inputs.balanceSheet.first { $0.tag == "LongTermDebt2NCLIFRS" })
+        #expect(ext.presetClass == .interestBearingDebt)
+        #expect(ext.sourceTag == "LongTermDebt2NCLIFRS")
+        let (payload, _) = try await resolve("S100YE2C", decider: nil, inputs: inputs)
+        #expect(payload.needsReview == false)
+        #expect(payload.rows.last?.closing == 1_669_669_000_000)
+        expectSourceTags(payload, [
+            "長期借入金": "NotesShortTermBorrowingsAndLongTermDebtConsolidatedFinancialStatementsIFRSTextBlock",
+        ])
+        let leaseTags = payload.rows.filter { $0.labelRaw == "リース負債" }.map(\.sourceTag)
+        #expect(leaseTags == ["LeaseLiabilitiesCLIFRS", "LeaseLiabilitiesNCLIFRS"])
     }
 
     /// JT: 明細表リースと注記合計が近似重複。same_liability で明細表側だけ残す。
@@ -116,7 +143,7 @@ private struct GoldenIBDDecider: InterestBearingDebtDeciding {
             ("１年内償還予定の社債(注２)", ibdRowSourceBorrowingsSchedule, nil, ibdMaturityCurrent),
             ("長期借入金(注１)", ibdRowSourceBorrowingsSchedule, 120_699_000_000, nil),
             ("社債(注２)", ibdRowSourceBorrowingsSchedule, 1_478_362_000_000, nil),
-            ("リース負債（非流動）", ibdRowSourceBorrowingsSchedule, 74_540_000_000, nil),
+            ("リース負債", ibdRowSourceBorrowingsSchedule, 74_540_000_000, nil),  // 区分の分からない行は開示どおり
         ])
         #expect(payload.rows.last?.closing == 1_753_229_000_000)
         // 非有利子の明細表行は合計に入れず non_interest_bearing で残す
@@ -220,7 +247,9 @@ private struct GoldenIBDDecider: InterestBearingDebtDeciding {
         let cases: [(String, Double, String)] = [
             ("S100YGH5", 25_663_566_000_000, "breakdown.interest_bearing_debt"),
             ("S100XRD8", 1_529_999_000, "breakdown.interest_bearing_debt"),
-            ("S100YE2C", 845_276_000_000, "legacy_ibd_extractor_fallback"),
+            // 2026-10-11: 会社拡張「長期借入債務」をラベル規則で確定し、軸が解決する（旧 845,276 は
+            // legacy が拡張要素を読めず長期借入債務を落としていた値）。
+            ("S100YE2C", 1_669_669_000_000, "breakdown.interest_bearing_debt"),
         ]
         for (docID, expected, method) in cases {
             guard await Self.ensureAvailable(docID) else { continue }
@@ -228,9 +257,6 @@ private struct GoldenIBDDecider: InterestBearingDebtDeciding {
                 xbrlDir: Self.xbrlDir(docID))
             #expect(canonical.total == expected)
             #expect(canonical.method == method)
-            if docID == "S100YE2C" {
-                #expect(canonical.warnings.contains { $0.contains("長期借入債務") })
-            }
         }
     }
 
@@ -247,7 +273,7 @@ private struct GoldenIBDDecider: InterestBearingDebtDeciding {
             ("借用金", ibdRowSourceFinancialsBankComponents, 22_101_954_000_000, nil),
             ("短期社債", ibdRowSourceFinancialsBankComponents, 1_373_236_000_000, ibdMaturityCurrent),
             ("社債", ibdRowSourceFinancialsBankComponents, 14_018_955_000_000, nil),
-            ("リース負債（非流動）", ibdRowSourceBorrowingsSchedule, 90_694_000_000, nil),
+            ("リース債務", ibdRowSourceBorrowingsSchedule, 90_694_000_000, nil),  // 区分の分からない行は開示どおり
         ])
         #expect(payload.rows.last?.closing == 286_946_640_000_000)
         #expect(audit.sentences.contains("bank_components"))
@@ -801,6 +827,319 @@ private struct GoldenIBDDecider: InterestBearingDebtDeciding {
         #expect(InterestBearingDebtBreakdown.scheduleRowPreset("長期受入保証金") == .notInterestBearing)
     }
 
+    // MARK: - タクソノミ preset・リース込み有利子負債・除外リスト（2026-10-11）
+
+    private static let jgaapSchedule = "AnnexedConsolidatedDetailedScheduleOfBorrowingsTextBlock"
+    private static let ifrsLeaseNote = "NotesLeasesConsolidatedFinancialStatementsIFRSTextBlock"
+
+    /// source_tag（期待値）: label_raw → ローカル名。
+    private func expectSourceTags(
+        _ payload: BreakdownSnapshotPayload, _ expected: [String: String],
+        sourceLocation: SourceLocation = #_sourceLocation
+    ) {
+        for (label, tag) in expected {
+            let rows = payload.rows.filter { $0.labelRaw == label && $0.rowKind == "segment" }
+            #expect(!rows.isEmpty, "\(label)", sourceLocation: sourceLocation)
+            for row in rows {
+                #expect(row.sourceTag == tag, "\(label)", sourceLocation: sourceLocation)
+            }
+        }
+        #expect(payload.rows.last?.label == "合計", sourceLocation: sourceLocation)
+        #expect(payload.rows.last?.sourceTag == nil, sourceLocation: sourceLocation)
+    }
+
+    /// ニデック: BS「１年以内返済予定長期債務」は会社拡張要素（LongTermDebtDueWithinOneYearCLIFRS）。
+    /// 手書きのタグ一覧ではなくラベル規則（長期債務）で債務に確定する。Jev 無しで 1,113,404。
+    @Test func nidecExtensionCurrentPortionByLabelRule() async throws {
+        guard await Self.ensureAvailable("S100Z5CA") else { return }
+        let (payload, _) = try await resolve("S100Z5CA", decider: nil)
+        #expect(payload.needsReview == false)
+        expectLedger(payload, total: 1_113_404_000_000, [
+            ("短期借入金", ibdRowSourceBalanceSheet, 587_026_000_000, ibdMaturityCurrent, true, nil, nil, nil),
+            ("１年以内返済予定長期債務", ibdRowSourceBalanceSheet, 95_106_000_000, ibdMaturityCurrent, true, nil, nil, nil),
+            ("長期債務", ibdRowSourceBalanceSheet, 431_272_000_000, ibdMaturityNonCurrent, true, nil, nil, nil),
+        ])
+        // 標準要素・会社拡張要素とも、提出どおりのローカル名
+        expectSourceTags(payload, [
+            "短期借入金": "BorrowingsCLIFRS",
+            "１年以内返済予定長期債務": "LongTermDebtDueWithinOneYearCLIFRS",
+            "長期債務": "LongTermDebtNCLIFRS",
+        ])
+    }
+
+    /// トヨタ: BS は「有利子負債」集約（流動/非流動）だけでリース科目が無い。明細表（借入債務・
+    /// リース負債）はその内訳で、集約がリースを含む。リースを二重に足さない。
+    @Test func toyotaLeaseInclusiveInterestBearingAggregate() async throws {
+        guard await Self.ensureAvailable("S100Y8NY") else { return }
+        let (payload, _) = try await resolve("S100Y8NY", decider: nil)
+        #expect(payload.needsReview == false)
+        #expect(payload.denominator == 43_205_469_000_000)
+        let dup = ibdExcludedReasonDuplicateOfBalanceSheet
+        expectLedger(payload, total: 43_205_469_000_000, [
+            ("有利子負債", ibdRowSourceBalanceSheet, 17_581_104_000_000, ibdMaturityCurrent, true, nil, nil, "有利子負債"),
+            ("有利子負債", ibdRowSourceBalanceSheet, 25_624_365_000_000, ibdMaturityNonCurrent, true, nil, nil, "有利子負債"),
+            ("短期借入債務", ibdRowSourceBorrowingsSchedule, 5_699_083_000_000, ibdMaturityCurrent, false, dup, 0, "有利子負債"),
+            ("１年以内返済予定長期借入債務", ibdRowSourceBorrowingsSchedule, 11_718_586_000_000, ibdMaturityCurrent, false, dup, 0, "有利子負債"),
+            ("長期借入債務", ibdRowSourceBorrowingsSchedule, 25_076_787_000_000, nil, false, dup, 1, "有利子負債"),
+            ("１年以内返済予定長期リース負債", ibdRowSourceBorrowingsSchedule, 163_435_000_000, ibdMaturityCurrent, false, dup, 0, "有利子負債"),
+            ("長期リース負債", ibdRowSourceBorrowingsSchedule, 547_578_000_000, nil, false, dup, 1, "有利子負債"),
+        ])
+        expectSourceTags(payload, [
+            "短期借入債務": Xbrl.ifrsInterestBearingLiabilitiesTextblockTag,
+            "長期リース負債": Xbrl.ifrsInterestBearingLiabilitiesTextblockTag,
+        ])
+        let legacy = IBDExtractor.extractCanonical(xbrlDir: Self.xbrlDir("S100Y8NY"))
+        #expect(legacy.total == 43_205_469_000_000)
+    }
+
+    /// ブロードリーフ: 千円の有利子負債注記に区分見出しが無く、流動分のリース負債が素の「リース負債」。
+    /// 区分を作らず（maturity=null・ラベルは開示どおり）、金額の一致で流動の親
+    /// （2,559,182 + 514,505 = 3,073,687 千円）に入れる。
+    @Test func broadleafBareLeaseRowNestsUnderCurrentAggregate() async throws {
+        guard await Self.ensureAvailable("S100XS43") else { return }
+        let (payload, _) = try await resolve("S100XS43", decider: nil)
+        #expect(payload.needsReview == false)
+        let dup = ibdExcludedReasonDuplicateOfBalanceSheet
+        expectLedger(payload, total: 4_457_558_000, [
+            ("短期有利子負債", ibdRowSourceBalanceSheet, 3_073_687_000, ibdMaturityCurrent, true, nil, nil, "短期有利子負債"),
+            ("長期有利子負債", ibdRowSourceBalanceSheet, 1_383_871_000, ibdMaturityNonCurrent, true, nil, nil, "長期有利子負債"),
+            ("１年内返済予定の長期借入金", ibdRowSourceBorrowingsSchedule, 2_559_182_000, ibdMaturityCurrent, false, dup, 0, "短期有利子負債"),
+            ("長期借入金", ibdRowSourceBorrowingsSchedule, 1_159_135_000, nil, false, dup, 1, "長期有利子負債"),
+            ("リース負債", ibdRowSourceBorrowingsSchedule, 514_505_000, nil, false, dup, 0, "短期有利子負債"),
+            ("長期リース負債", ibdRowSourceBorrowingsSchedule, 224_736_000, nil, false, dup, 1, "長期有利子負債"),
+        ])
+        // 区分の分からない行に「（非流動）」を作らない
+        let bare = try #require(payload.rows.first { $0.labelRaw == "リース負債" })
+        #expect(bare.label == "リース負債")
+        #expect(payload.rows.first { $0.labelRaw == "長期リース負債" }?.label == "リース負債（非流動）")
+    }
+
+    /// AGC: 集約2本（短期／長期有利子負債）に、ラベル規則で債務に確定した会社拡張
+    /// `LongTermInterestBearingDebtDueWithinOneYearCLIFRS`（1年内返済予定の長期有利子負債）が3本目の
+    /// BS 行として並ぶ。拡張行も流動の親として内訳を受ける。期末値の無い「1年内償還予定の社債」は
+    /// 流動の親が2つあるので対応先なし。
+    @Test func agcExtensionCurrentRowJoinsAggregateParents() async throws {
+        guard await Self.ensureAvailable("S100XSTU") else { return }
+        let (payload, _) = try await resolve("S100XSTU", decider: nil)
+        #expect(payload.needsReview == false)
+        let dup = ibdExcludedReasonDuplicateOfBalanceSheet
+        let ext = "1年内返済予定の長期有利子負債"
+        expectLedger(payload, total: 646_463_000_000, [
+            ("短期有利子負債", ibdRowSourceBalanceSheet, 98_538_000_000, ibdMaturityCurrent, true, nil, nil, "短期有利子負債"),
+            (ext, ibdRowSourceBalanceSheet, 118_411_000_000, ibdMaturityCurrent, true, nil, nil, ext),
+            ("長期有利子負債", ibdRowSourceBalanceSheet, 429_514_000_000, ibdMaturityNonCurrent, true, nil, nil, "長期有利子負債"),
+            ("短期借入金", ibdRowSourceBorrowingsSchedule, 85_556_000_000, ibdMaturityCurrent, false, dup, 0, "短期有利子負債"),
+            ("コマーシャル・ペーパー", ibdRowSourceBorrowingsSchedule, 12_981_000_000, nil, false, dup, 0, "短期有利子負債"),
+            ("1年内返済予定の長期借入金", ibdRowSourceBorrowingsSchedule, 103_450_000_000, ibdMaturityCurrent, false, dup, 1, ext),
+            ("1年内償還予定の社債", ibdRowSourceBorrowingsSchedule, nil, ibdMaturityCurrent, false, dup, nil, nil),
+            ("長期借入金", ibdRowSourceBorrowingsSchedule, 265_384_000_000, nil, false, dup, 2, "長期有利子負債"),
+            ("社債", ibdRowSourceBorrowingsSchedule, 99_789_000_000, nil, false, dup, 2, "長期有利子負債"),
+            ("短期リース負債", ibdRowSourceBorrowingsSchedule, 14_960_000_000, ibdMaturityCurrent, false, dup, 1, ext),
+            ("長期リース負債", ibdRowSourceBorrowingsSchedule, 64_340_000_000, nil, false, dup, 2, "長期有利子負債"),
+        ])
+        expectSourceTags(payload, [
+            ext: "LongTermInterestBearingDebtDueWithinOneYearCLIFRS",
+            "短期有利子負債": "InterestBearingLiabilitiesCLIFRS",
+        ])
+    }
+
+    /// 東静: 千円の有利子負債注記が「流動負債」「非流動負債」の区分ごとに合計を置く。以前は最初の
+    /// 「合計」で打ち切り非流動を落として明細表が帯外（coverage 0.1513）。両区分を読み、区分の
+    /// 素の「リース負債」は区分で流動／非流動になる。
+    @Test func toseiSectionedThousandYenNoteReadsBothSections() async throws {
+        guard await Self.ensureAvailable("S100XMC1") else { return }
+        let (payload, _) = try await resolve("S100XMC1", decider: nil)
+        #expect(payload.needsReview == false)
+        #expect(!payload.warnings.contains(breakdownWarningIBDScheduleRejected))
+        let dup = ibdExcludedReasonDuplicateOfBalanceSheet
+        expectLedger(payload, total: 182_640_328_000, [
+            ("有利子負債", ibdRowSourceBalanceSheet, 27_625_866_000, ibdMaturityCurrent, true, nil, nil, "有利子負債"),
+            ("有利子負債", ibdRowSourceBalanceSheet, 155_014_462_000, ibdMaturityNonCurrent, true, nil, nil, "有利子負債"),
+            ("短期借入金", ibdRowSourceBorrowingsSchedule, 6_350_090_000, ibdMaturityCurrent, false, dup, 0, "有利子負債"),
+            ("１年内返済予定の長期借入金", ibdRowSourceBorrowingsSchedule, 21_020_294_000, ibdMaturityCurrent, false, dup, 0, "有利子負債"),
+            ("１年内償還予定の社債", ibdRowSourceBorrowingsSchedule, 11_356_000, ibdMaturityCurrent, false, dup, 0, "有利子負債"),
+            ("長期借入金", ibdRowSourceBorrowingsSchedule, 153_382_261_000, ibdMaturityNonCurrent, false, dup, 1, "有利子負債"),
+            ("社債", ibdRowSourceBorrowingsSchedule, 232_118_000, ibdMaturityNonCurrent, false, dup, 1, "有利子負債"),
+            ("リース負債", ibdRowSourceBorrowingsSchedule, 244_125_000, ibdMaturityCurrent, false, dup, 0, "有利子負債"),
+            ("リース負債", ibdRowSourceBorrowingsSchedule, 1_400_083_000, ibdMaturityNonCurrent, false, dup, 1, "有利子負債"),
+        ])
+        let leases = payload.rows.filter { $0.labelRaw == "リース負債" }.map(\.label)
+        #expect(leases == ["リース負債（流動）", "リース負債（非流動）"])
+        // 注記の表合計（notes の borrowings_schedule・/financials フォールバック）は区分小計の和で、
+        // 内訳の和と一致する（流動の小計を二重に数えない）
+        let dir = Self.xbrlDir("S100XMC1")
+        let notes = try #require(BorrowingsSchedule.extractRows(xbrlDir: dir))
+        #expect(notes.totalCurrent == 182_640_328_000)
+        #expect(notes.totalPrior == 165_900_807_000)
+        // 開示の端数: 流動の内訳の和 27,625,865 千円に対し小計 27,625,866 千円
+        #expect(notes.rows.compactMap(\.current).reduce(0, +) == 182_640_327_000)
+        let fallback = try #require(BorrowingsSchedule.extract(xbrlDir: dir, accountingStandard: "IFRS"))
+        #expect(fallback.total == 182_640_328_000)
+        #expect(fallback.priorTotal == 165_900_807_000)
+        #expect(IBDExtractor.extractCanonical(xbrlDir: dir).total == 182_640_328_000)
+    }
+
+    /// LINEヤフー: BS は区分の無い単一の集約 `InterestBearingLiabilitiesLiabilitiesIFRS`（リース込み）。
+    /// 明細表の行（リース・その他を含む）はすべてその1つの親に入る。デサイダ無しでは「その他」が
+    /// 未分類のため入れ子にせず明細表の行を数える（needs_review）。
+    @Test func lineYahooSingleLiquidityOrderAggregateParent() async throws {
+        guard await Self.ensureAvailable("S100YBXD") else { return }
+        let (payload, _) = try await resolve("S100YBXD", decider: AllInterestBearingIBDDecider())
+        #expect(payload.needsReview == false)
+        let dup = ibdExcludedReasonDuplicateOfBalanceSheet
+        expectLedger(payload, total: 1_961_998_000_000, [
+            ("有利子負債", ibdRowSourceBalanceSheet, 1_961_998_000_000, nil, true, nil, nil, "有利子負債"),
+            ("借入金(注)３", ibdRowSourceBorrowingsSchedule, 1_208_219_000_000, nil, false, dup, 0, "有利子負債"),
+            ("コマーシャル・ペーパー", ibdRowSourceBorrowingsSchedule, 73_000_000_000, nil, false, dup, 0, "有利子負債"),
+            ("社債(注)４", ibdRowSourceBorrowingsSchedule, 474_344_000_000, nil, false, dup, 0, "有利子負債"),
+            ("その他", ibdRowSourceBorrowingsSchedule, 1_232_000_000, nil, false, dup, 0, "有利子負債"),
+            ("リース負債", ibdRowSourceBorrowingsSchedule, 205_201_000_000, nil, false, dup, 0, "有利子負債"),
+        ])
+        expectSourceTags(payload, ["有利子負債": "InterestBearingLiabilitiesLiabilitiesIFRS"])
+        let (noDecider, _) = try await resolve("S100YBXD", decider: nil)
+        #expect(noDecider.needsReview == true)
+        #expect(noDecider.rows.last?.closing == 1_960_764_000_000)
+        let legacy = IBDExtractor.extractCanonical(xbrlDir: Self.xbrlDir("S100YBXD"))
+        #expect(legacy.total == 1_961_998_000_000)
+    }
+
+    /// RIZAP: 「有利子負債」集約 63,674 = 明細表（リース込み）。以前はリース 36,159 を二重に足し 99,833。
+    @Test func rizapLeaseInclusiveInterestBearingAggregate() async throws {
+        guard await Self.ensureAvailable("S100YF9Y") else { return }
+        let (payload, _) = try await resolve("S100YF9Y", decider: nil)
+        #expect(payload.needsReview == false)
+        expectRows(payload, [
+            ("有利子負債", ibdRowSourceBalanceSheet, 31_406_000_000, ibdMaturityCurrent),
+            ("有利子負債", ibdRowSourceBalanceSheet, 32_268_000_000, ibdMaturityNonCurrent),
+        ])
+        #expect(payload.rows.last?.closing == 63_674_000_000)
+        let lease = try #require(payload.rows.first { $0.labelRaw == "１年内返済予定のリース負債" })
+        #expect(lease.inTotal == false)
+        #expect(lease.excludedReason == ibdExcludedReasonDuplicateOfBalanceSheet)
+        #expect(payload.rows[lease.pairedRowIndex ?? -1].maturityClass == ibdMaturityCurrent)
+        let legacy = IBDExtractor.extractCanonical(xbrlDir: Self.xbrlDir("S100YF9Y"))
+        #expect(legacy.total == 63_674_000_000)
+    }
+
+    /// 夢展望: IFRS 有利子負債注記は千円表で、単位は表の外の見出しにだけある。百万円と読まない。
+    @Test func yumetenboThousandYenNoteAndLeaseInclusiveAggregate() async throws {
+        guard await Self.ensureAvailable("S100YG5J") else { return }
+        let parsed = try #require(BorrowingsSchedule.extractRows(xbrlDir: Self.xbrlDir("S100YG5J")))
+        let lease = try #require(parsed.rows.first { ($0.sourceLabel ?? $0.label).contains("１年内返済予定のリース負債") })
+        #expect(lease.current == 36_556_000)
+        let (payload, _) = try await resolve("S100YG5J", decider: nil)
+        #expect(payload.needsReview == false)
+        #expect(payload.rows.last?.closing == 1_308_733_000)
+        #expect(payload.rows.filter { $0.inTotal == true }.map(\.closing) == [1_157_640_000, 151_093_000])
+    }
+
+    /// 大和証券グループ: 信用取引借入金・現先取引借入金（証券業の営業借入）は合計に入れず
+    /// scope_differs、有価証券貸借取引受入金（担保受入）は non_interest_bearing の行として残す。
+    @Test func daiwaSecuritiesBusinessBorrowingsExcluded() async throws {
+        guard await Self.ensureAvailable("S100YCMP") else { return }
+        let (payload, _) = try await resolve("S100YCMP", decider: nil)
+        #expect(payload.needsReview == false)
+        #expect(payload.rows.last?.closing == 5_779_091_000_000)
+        func row(_ label: String, _ source: String) throws -> BreakdownRowPayload {
+            try #require(payload.rows.first { $0.labelRaw == label && $0.debtSource == source })
+        }
+        for (label, source, reason, amount) in [
+            ("信用取引借入金", ibdRowSourceBalanceSheet, ibdExcludedReasonScopeDiffers, 4_904_000_000.0),
+            ("現先取引借入金", ibdRowSourceBalanceSheet, ibdExcludedReasonScopeDiffers, 4_428_695_000_000),
+            ("信用取引借入金（１年内返済予定）", ibdRowSourceBorrowingsSchedule, ibdExcludedReasonScopeDiffers, 4_904_000_000),
+            ("有価証券貸借取引受入金", ibdRowSourceBalanceSheet, ibdExcludedReasonNonInterestBearing, 9_379_709_000_000),
+        ] {
+            let r = try row(label, source)
+            #expect(r.inTotal == false, "\(label)")
+            #expect(r.excludedReason == reason, "\(label)")
+            #expect(r.closing == amount, "\(label)")
+        }
+        expectSourceTags(payload, [
+            "信用取引借入金": "BorrowingsOnMarginTransactionsCLSEC",
+            "現先取引借入金": "BorrowingsOnGensakiTransactionCLSEC",
+            "信用取引借入金（１年内返済予定）": Self.jgaapSchedule,
+            "コマーシャル・ペーパー": "CommercialPapersLiabilities",
+        ])
+        expectInvariants(payload)
+    }
+
+    /// 住友ファーマ: リース注記の「リース負債（流動）／（非流動）」行（B/C 以外の形）を拾う。
+    @Test func sumitomoPharmaLeaseNoteCurrentNonCurrentRows() async throws {
+        guard await Self.ensureAvailable("S100YH3M") else { return }
+        let (payload, _) = try await resolve("S100YH3M", decider: nil)
+        #expect(payload.needsReview == false)
+        #expect(payload.rows.last?.closing == 224_216_000_000)
+        let current = try #require(payload.rows.first { $0.labelRaw == "リース負債（流動）" })
+        #expect(current.closing == 1_914_000_000)
+        #expect(current.maturityClass == ibdMaturityCurrent)
+        #expect(current.inTotal == true)
+        expectSourceTags(payload, [
+            "リース負債（流動）": Self.ifrsLeaseNote,
+            "リース負債（非流動）": Self.ifrsLeaseNote,
+            "借入金": "BorrowingsCLIFRS",
+            "短期借入金": Xbrl.ifrsBondsAndBorrowingsTextblockTag,
+        ])
+        expectInvariants(payload)
+    }
+
+    /// 丸紅: BS は社債及び借入金だけ。リース注記の流動 73,894 / 非流動 172,480 を足す（+246,374）。
+    @Test func marubeniLeaseNoteRowsAdded() async throws {
+        guard await Self.ensureAvailable("S100YAY4") else { return }
+        let (payload, _) = try await resolve("S100YAY4", decider: nil)
+        #expect(payload.needsReview == false)
+        #expect(payload.rows.last?.closing == 2_656_351_000_000)
+        let lease = payload.rows.filter { $0.debtSource == ibdRowSourceLeaseNote && $0.inTotal == true }
+        #expect(lease.map(\.closing) == [73_894_000_000, 172_480_000_000])
+        #expect(lease.allSatisfy { $0.sourceTag == Self.ifrsLeaseNote })
+    }
+
+    /// サワイ: リース注記の値の後ろの空 <td> を飛ばす（当期 3,967 を前期と読まない）。
+    @Test func sawaiLeaseNoteSpacerCells() async throws {
+        guard await Self.ensureAvailable("S100YITS") else { return }
+        let lease = IFRSLease.extractLeaseLiabilities(fieldSet: [:], xbrlDir: Self.xbrlDir("S100YITS"))
+        #expect(lease.current == 3_967_000_000)
+        #expect(lease.prior == 3_767_000_000)
+        let (payload, _) = try await resolve("S100YITS", decider: nil)
+        #expect(payload.needsReview == false)
+        #expect(payload.rows.last?.closing == 108_990_000_000)
+    }
+
+    /// 新日本科学: 明細表の「一年以内に返済予定の…」（漢数字）を流動と読む。
+    @Test func shinNipponBiomedicalKanjiOneYearMaturity() async throws {
+        guard await Self.ensureAvailable("S100YK73") else { return }
+        let (payload, _) = try await resolve("S100YK73", decider: nil)
+        #expect(payload.needsReview == false)
+        #expect(payload.rows.last?.closing == 41_391_601_000)
+        for label in ["一年以内に返済予定の長期借入金", "一年以内に返済予定のリース債務"] {
+            let row = try #require(payload.rows.first { $0.labelRaw == label })
+            #expect(row.maturityClass == ibdMaturityCurrent, "\(label)")
+        }
+        let nonCurrent = try #require(payload.rows.first { $0.labelRaw == "長期借入金(一年以内に返済予定のものを除く)" })
+        #expect(nonCurrent.maturityClass == ibdMaturityNonCurrent)
+        expectSourceTags(payload, [
+            "一年以内に返済予定のリース債務": Self.jgaapSchedule,
+            "リース債務": "LeaseObligationsNCL",
+        ])
+    }
+
+    /// SBI アルヒ: 流動性配列の IFRS BS（BorrowingsLiabilitiesIFRS / BondsPayableLiabilitiesIFRS /
+    /// LeaseLiabilitiesLiabilitiesIFRS）をコードで確定する。
+    @Test func sbiAruhiLiquidityOrderBalanceSheet() async throws {
+        guard await Self.ensureAvailable("S100YFMO") else { return }
+        let (payload, _) = try await resolve("S100YFMO", decider: nil)
+        #expect(payload.needsReview == false)
+        expectLedger(payload, total: 132_182_000_000, [
+            ("社債", ibdRowSourceBalanceSheet, 11_377_000_000, nil, true, nil, nil, nil),
+            ("借入債務", ibdRowSourceBalanceSheet, 120_313_000_000, nil, true, nil, nil, nil),
+            ("リース負債", ibdRowSourceBalanceSheet, 492_000_000, nil, true, nil, nil, nil),
+        ])
+        expectSourceTags(payload, [
+            "社債": "BondsPayableLiabilitiesIFRS",
+            "借入債務": "BorrowingsLiabilitiesIFRS",
+            "リース負債": "LeaseLiabilitiesLiabilitiesIFRS",
+        ])
+    }
+
     // MARK: - helpers
 
     private func resolve(
@@ -872,6 +1211,18 @@ private struct GoldenIBDDecider: InterestBearingDebtDeciding {
         let segments = payload.rows.filter { $0.rowKind == "segment" }
         let sum = segments.filter { $0.inTotal == true }.reduce(0.0) { $0 + ($1.closing ?? 0) }
         #expect(payload.rows.last?.closing == sum, sourceLocation: sourceLocation)
+        // source_tag: 合計行（コードで足した値）は null。明細行は XBRL 要素のローカル名
+        // （名前空間・URI なし）。明細表・注記の行は TextBlock か直接タグ経路の数値要素。
+        #expect(payload.rows.last?.sourceTag == nil, sourceLocation: sourceLocation)
+        for row in segments {
+            let tag = row.sourceTag ?? ""
+            #expect(!tag.isEmpty, "\(row.labelRaw)", sourceLocation: sourceLocation)
+            #expect(!tag.contains(":") && !tag.contains("/") && !tag.contains("{") && !tag.contains("#"),
+                "\(row.labelRaw) \(tag)", sourceLocation: sourceLocation)
+            if row.debtSource == ibdRowSourceLeaseNote {
+                #expect(tag.hasSuffix("TextBlock"), "\(row.labelRaw) \(tag)", sourceLocation: sourceLocation)
+            }
+        }
         for (index, row) in payload.rows.enumerated() where row.rowKind == "segment" {
             #expect(row.inTotal != nil, sourceLocation: sourceLocation)
             if row.inTotal == true {

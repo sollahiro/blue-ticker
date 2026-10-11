@@ -715,9 +715,10 @@ private struct StubIBDDecider: InterestBearingDebtDeciding {
                 axis: breakdownAxisInterestBearingDebt) == true)
     }
 
-    @Test func axisIsSupportedAndCacheVersionIsV1() {
+    @Test func axisIsSupportedAndCacheVersionIsV2() {
         #expect(isSupportedBreakdownAxis(breakdownAxisInterestBearingDebt))
-        #expect(interestBearingDebtBreakdownCacheVersion == "breakdown-interest-bearing-debt-v1")
+        // v2: タクソノミ preset・リース込み有利子負債・除外リスト・source_tag（行の金額が変わる）
+        #expect(interestBearingDebtBreakdownCacheVersion == "breakdown-interest-bearing-debt-v2")
     }
 
     @Test func financialsCanonicalInterestBearingDebtMapping() {
@@ -888,4 +889,223 @@ private struct StubIBDDecider: InterestBearingDebtDeciding {
     }
 
     private enum ResolutionError: Error { case notResolved }
+}
+
+// MARK: - タクソノミ preset・除外リスト・source_tag（2026-10-11）
+
+@Suite struct InterestBearingDebtPresetAndSourceTagTests {
+    @Test func scheduleRowPresetNewDebtWordsAndDeposits() {
+        #expect(InterestBearingDebtBreakdown.scheduleRowPreset("長期借入債務") == .interestBearingDebt)
+        #expect(InterestBearingDebtBreakdown.scheduleRowPreset("１年以内返済予定長期債務") == .interestBearingDebt)
+        #expect(InterestBearingDebtBreakdown.scheduleRowPreset("短期債務") == .interestBearingDebt)
+        #expect(InterestBearingDebtBreakdown.scheduleRowPreset("預り敷金") == .notInterestBearing)
+        // 引当金・債務保証は債務の語を含んでも確定しない（Jev）
+        #expect(InterestBearingDebtBreakdown.scheduleRowPreset("長期債務保証損失引当金") == nil)
+    }
+
+    @Test func balanceSheetExtensionPreset() {
+        let securities = InterestBearingDebtBreakdown.balanceSheetExtensionPreset("信用取引借入金")
+        #expect(securities.0 == .notInterestBearing)
+        #expect(securities.1 == ibdExcludedReasonScopeDiffers)
+        // リース込みの債務科目は債務（リース単独ではない）
+        #expect(InterestBearingDebtBreakdown.balanceSheetExtensionPreset("社債、借入金及びリース負債").0
+            == .interestBearingDebt)
+        #expect(InterestBearingDebtBreakdown.balanceSheetExtensionPreset("リース負債").0 == .leaseLiability)
+        #expect(InterestBearingDebtBreakdown.balanceSheetExtensionPreset("その他の金融負債").0 == nil)
+    }
+
+    @Test func maturityKanjiOneYear() {
+        #expect(InterestBearingDebtBreakdown.maturityClass(fromLabel: "一年以内に返済予定の長期借入金") == ibdMaturityCurrent)
+        #expect(InterestBearingDebtBreakdown.maturityClass(fromLabel: "長期借入金(一年以内に返済予定のものを除く)")
+            == ibdMaturityNonCurrent)
+        #expect(InterestBearingDebtBreakdown.maturityClass(fromTag: "LongTermDebtToSubsidiariesAndAffiliatesNCLGAS")
+            == ibdMaturityNonCurrent)
+        #expect(InterestBearingDebtBreakdown.maturityClass(fromTag: "PayablesUnderFluidityLeaseReceivablesCLLEA")
+            == ibdMaturityCurrent)
+    }
+
+    @Test func deadTagsRemovedAndNewPresetsPresent() {
+        let all = Set((Xbrl.ibdCurrentComponents + Xbrl.ibdNonCurrentComponents
+            + Xbrl.ibdLiquidityOrderComponents + [Xbrl.ibdIFRSCLTags, Xbrl.ibdIFRSNCLTags]).flatMap { $0 })
+        for dead in ["InterestBearingDebt", "InterestBearingLiabilities", "RedeemableBondsWithinOneYear",
+                     "CommercialPapersCLIFRS"] {
+            #expect(!all.contains(dead), "\(dead)")
+        }
+        for tag in ["CurrentPortionOfConvertibleBonds", "ConvertibleBondTypeBondsWithSubscriptionRightsToShares",
+                    "BorrowingsLiabilitiesINS", "PayablesUnderFluidityLeaseReceivablesCLLEA",
+                    "LeaseObligationsLiabilities", "LongTermLoansPayableToSubsidiariesAndAffiliates"] {
+            #expect(all.contains(tag), "\(tag)")
+        }
+        // 債権流動化は Lease を名前に含むが債務（リースタグではない）
+        #expect(!Xbrl.leaseLiabilitiesBSTags.contains("PayablesUnderFluidityLeaseReceivablesCLLEA"))
+        #expect(Xbrl.bankIBDComponents.contains { $0.tags.contains("DebenturesLiabilitiesBNK") })
+        // 除外リストと債務 preset は重ならない
+        #expect(Xbrl.ibdNonInterestBearingBSTags.isDisjoint(with: all))
+        #expect(Xbrl.ibdSecuritiesBusinessBorrowingTags.isDisjoint(with: all))
+    }
+
+    private func candidate(
+        _ label: String, tag: String?, closing: Double, source: String, maturity: String?,
+        preset: IBDRowClass, sourceTag: String?
+    ) -> IBDCandidate {
+        IBDCandidate(
+            labelRaw: label, label: label, tag: tag, opening: nil, closing: closing, source: source,
+            maturityClass: maturity, presetClass: preset, sourceTag: sourceTag)
+    }
+
+    /// BS に別建てのリースが無い「有利子負債」集約はリース込み。明細表（借入金＋リース）を内訳に
+    /// して BS を数え、注記のリースを足さない。source_tag は BS 要素・TextBlock、合計は null。
+    @Test func leaseInclusiveAggregateNestsScheduleAndCarriesSourceTags() async throws {
+        let schedTag = "NotesInterestBearingLiabilitiesConsolidatedFinancialStatementsIFRSTextBlock"
+        let inputs = IBDInputs(
+            consolidated: true,
+            balanceSheet: [
+                candidate("有利子負債", tag: "InterestBearingLiabilitiesCLIFRS", closing: 30_000_000_000,
+                          source: ibdRowSourceBalanceSheet, maturity: ibdMaturityCurrent,
+                          preset: .interestBearingDebt, sourceTag: "InterestBearingLiabilitiesCLIFRS"),
+                candidate("有利子負債", tag: "InterestBearingLiabilitiesNCLIFRS", closing: 50_000_000_000,
+                          source: ibdRowSourceBalanceSheet, maturity: ibdMaturityNonCurrent,
+                          preset: .interestBearingDebt, sourceTag: "InterestBearingLiabilitiesNCLIFRS"),
+            ],
+            schedule: [
+                candidate("短期借入金", tag: nil, closing: 25_000_000_000, source: ibdRowSourceBorrowingsSchedule,
+                          maturity: ibdMaturityCurrent, preset: .interestBearingDebt, sourceTag: schedTag),
+                candidate("１年内返済予定のリース負債", tag: nil, closing: 5_000_000_000,
+                          source: ibdRowSourceBorrowingsSchedule, maturity: ibdMaturityCurrent,
+                          preset: .leaseLiability, sourceTag: schedTag),
+                candidate("長期借入金", tag: nil, closing: 42_000_000_000, source: ibdRowSourceBorrowingsSchedule,
+                          maturity: nil, preset: .interestBearingDebt, sourceTag: schedTag),
+                candidate("長期リース負債", tag: nil, closing: 8_000_000_000, source: ibdRowSourceBorrowingsSchedule,
+                          maturity: nil, preset: .leaseLiability, sourceTag: schedTag),
+            ],
+            leaseNote: nil)
+        let resolution = await InterestBearingDebtBreakdown.resolve(inputs: inputs, decider: nil)
+        guard case .resolved(let payload, _) = resolution else {
+            Issue.record("expected resolved")
+            return
+        }
+        #expect(payload.needsReview == false)
+        #expect(payload.denominator == 80_000_000_000)
+        #expect(payload.rows.last?.closing == 80_000_000_000)
+        #expect(payload.rows.last?.sourceTag == nil)
+        let counted = payload.rows.filter { $0.inTotal == true }
+        #expect(counted.map(\.sourceTag) == ["InterestBearingLiabilitiesCLIFRS", "InterestBearingLiabilitiesNCLIFRS"])
+        let children = payload.rows.filter { $0.inTotal == false }
+        #expect(children.count == 4)
+        #expect(children.allSatisfy { $0.sourceTag == schedTag })
+        #expect(children.allSatisfy { $0.excludedReason == ibdExcludedReasonDuplicateOfBalanceSheet })
+        // JSON は source_tag キーを常に出す（合計行は null）
+        let json = payload.rows.last!.interestBearingDebtJsonObject()
+        #expect(json[ibdSourceTagKey] is NSNull)
+        #expect(counted[0].interestBearingDebtJsonObject()[ibdSourceTagKey] as? String
+            == "InterestBearingLiabilitiesCLIFRS")
+    }
+
+    @Test func sourceTagRoundTripsThroughPayloadCoding() throws {
+        let row = BreakdownRowPayload(
+            labelRaw: "短期借入金", label: "短期借入金", amount: 1, profit: nil, rowKind: "segment",
+            debtSource: ibdRowSourceBalanceSheet, inTotal: true, sourceTag: "ShortTermLoansPayable")
+        let data = try JSONEncoder().encode(row)
+        #expect(String(decoding: data, as: UTF8.self).contains("\"source_tag\":\"ShortTermLoansPayable\""))
+        let decoded = try JSONDecoder().decode(BreakdownRowPayload.self, from: data)
+        #expect(decoded.sourceTag == "ShortTermLoansPayable")
+    }
+
+    // MARK: - リース込み集約への入れ子の結果（一致・曖昧・不一致・探索上限）
+
+    private func aggregateParent(_ maturity: String, closing: Double) -> IBDCandidate {
+        IBDCandidate(
+            labelRaw: "有利子負債", label: "有利子負債",
+            tag: maturity == ibdMaturityCurrent ? "InterestBearingLiabilitiesCLIFRS" : "InterestBearingLiabilitiesNCLIFRS",
+            opening: nil, closing: closing, source: ibdRowSourceBalanceSheet,
+            maturityClass: maturity, presetClass: .interestBearingDebt)
+    }
+
+    private func scheduleChild(_ label: String, _ closing: Double, maturity: String? = nil) -> IBDCandidate {
+        IBDCandidate(
+            labelRaw: label, label: label, tag: nil, opening: nil, closing: closing,
+            source: ibdRowSourceBorrowingsSchedule, maturityClass: maturity, presetClass: .interestBearingDebt)
+    }
+
+    @Test func aggregateNestingUniqueMatchNests() {
+        let parents = [aggregateParent(ibdMaturityCurrent, closing: 30e9), aggregateParent(ibdMaturityNonCurrent, closing: 70e9)]
+        let outcome = InterestBearingDebtBreakdown.nestUnderLeaseInclusiveAggregates(
+            balanceSheet: parents, bsUnresolved: false,
+            children: [scheduleChild("短期借入金", 30e9), scheduleChild("長期借入金", 70e9)])
+        guard case .nested(_, let children, _) = outcome else {
+            Issue.record("expected nested, got \(outcome)")
+            return
+        }
+        #expect(children.map { $0.parent?.closing } == [30e9, 70e9])
+    }
+
+    @Test func aggregateNestingAmbiguousIsUnresolved() {
+        // 区分の無い同額の2行は、どちらの親にも入り得る（割り当てが2通り）
+        let parents = [aggregateParent(ibdMaturityCurrent, closing: 50e9), aggregateParent(ibdMaturityNonCurrent, closing: 50e9)]
+        let outcome = InterestBearingDebtBreakdown.nestUnderLeaseInclusiveAggregates(
+            balanceSheet: parents, bsUnresolved: false,
+            children: [scheduleChild("借入金", 50e9), scheduleChild("社債", 50e9)])
+        guard case .unresolved(let reason) = outcome else {
+            Issue.record("expected unresolved, got \(outcome)")
+            return
+        }
+        #expect(reason == "ambiguous_assignment")
+    }
+
+    @Test func aggregateNestingMismatchIsUnresolved() {
+        let parents = [aggregateParent(ibdMaturityCurrent, closing: 30e9), aggregateParent(ibdMaturityNonCurrent, closing: 70e9)]
+        let outcome = InterestBearingDebtBreakdown.nestUnderLeaseInclusiveAggregates(
+            balanceSheet: parents, bsUnresolved: false,
+            children: [scheduleChild("短期借入金", 31e9, maturity: ibdMaturityCurrent), scheduleChild("長期借入金", 70e9)])
+        guard case .unresolved(let reason) = outcome else {
+            Issue.record("expected unresolved, got \(outcome)")
+            return
+        }
+        #expect(reason.hasPrefix("no_matching_assignment"))
+    }
+
+    @Test func aggregateNestingSearchBudgetIsUnresolved() {
+        // 一致する割り当てが無く、枝刈りも効かない（各親 85 に対し 10 の行が 16 本）
+        let parents = [aggregateParent(ibdMaturityCurrent, closing: 85e9), aggregateParent(ibdMaturityNonCurrent, closing: 85e9)]
+        let children = (1...16).map { scheduleChild("借入金\($0)", 10e9) }
+        let outcome = InterestBearingDebtBreakdown.nestUnderLeaseInclusiveAggregates(
+            balanceSheet: parents, bsUnresolved: false, children: children, nodeBudget: 1_000)
+        guard case .unresolved(let reason) = outcome else {
+            Issue.record("expected unresolved, got \(outcome)")
+            return
+        }
+        #expect(reason.hasPrefix("search_budget_exceeded"))
+    }
+
+    @Test func aggregateNestingWithoutAggregateIsNotApplicable() {
+        let bsRow = IBDCandidate(
+            labelRaw: "短期借入金", label: "短期借入金", tag: "ShortTermLoansPayable", opening: nil, closing: 10e9,
+            source: ibdRowSourceBalanceSheet, maturityClass: ibdMaturityCurrent, presetClass: .interestBearingDebt)
+        let outcome = InterestBearingDebtBreakdown.nestUnderLeaseInclusiveAggregates(
+            balanceSheet: [bsRow], bsUnresolved: false, children: [scheduleChild("短期借入金", 10e9)])
+        guard case .notApplicable = outcome else {
+            Issue.record("expected notApplicable, got \(outcome)")
+            return
+        }
+    }
+
+    /// 入れ子にできない（不一致）ときは明細表の行を数えるが、needs_review と警告・監査を残す。
+    @Test func unresolvedAggregateNestingFailsClosedVisibly() async {
+        let inputs = IBDInputs(
+            consolidated: true,
+            balanceSheet: [aggregateParent(ibdMaturityCurrent, closing: 30e9), aggregateParent(ibdMaturityNonCurrent, closing: 70e9)],
+            schedule: [
+                scheduleChild("短期借入金", 31e9, maturity: ibdMaturityCurrent),
+                scheduleChild("長期借入金", 70e9, maturity: ibdMaturityNonCurrent),
+            ],
+            leaseNote: nil)
+        let resolution = await InterestBearingDebtBreakdown.resolve(inputs: inputs, decider: nil, docID: "TEST")
+        guard case .resolved(let payload, let audit) = resolution else {
+            Issue.record("expected resolved, got \(String(describing: resolution))")
+            return
+        }
+        #expect(payload.needsReview == true)
+        #expect(payload.warnings.contains(breakdownWarningIBDNestingParentUnresolved))
+        #expect(audit.sentences.contains { $0.hasPrefix("nesting_lease_inclusive_aggregate_unresolved no_matching_assignment") })
+    }
 }

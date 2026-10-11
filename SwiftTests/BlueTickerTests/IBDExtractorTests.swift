@@ -35,7 +35,9 @@ import Foundation
 
     // MARK: - 直接タグ
 
-    @Test func testDirectTagResolvesCurrentAndPriorTotals() {
+    /// `InterestBearingDebt` は FSA 標準タクソノミに無い（旧 ibdDirectTags。本番 XBRL にも fact 無し）。
+    /// 2026-10-11 に削除したので読まない。
+    @Test func testRemovedDirectTagIsNotRead() {
         let xml = XBRLTestSupport.makeXbrlInstant("""
             <jppfs_cor:InterestBearingDebt contextRef="CurrentYearInstant"
                 unitRef="JPY">500000000000</jppfs_cor:InterestBearingDebt>
@@ -44,10 +46,8 @@ import Foundation
         """)
         XBRLTestSupport.withXbrlDir(xml) { dir in
             let result = extract(in: dir)
-            #expect(result.method == "field_parser")
-            #expect(result.accountingStandard == "J-GAAP")
-            #expect(result.total == 500_000_000_000)
-            #expect(result.priorTotal == 450_000_000_000)
+            #expect(result.method == "not_found")
+            #expect(result.total == nil)
         }
     }
 
@@ -107,8 +107,8 @@ import Foundation
         let xml = XBRLTestSupport.makeXbrlInstant("""
             <jppfs_cor:BorrowingsCLIFRS contextRef="CurrentYearInstant"
                 unitRef="JPY">5923000000</jppfs_cor:BorrowingsCLIFRS>
-            <jppfs_cor:CommercialPapersCLIFRS contextRef="CurrentYearInstant"
-                unitRef="JPY">10000000000</jppfs_cor:CommercialPapersCLIFRS>
+            <jppfs_cor:CommercialPapersLiabilities contextRef="CurrentYearInstant"
+                unitRef="JPY">10000000000</jppfs_cor:CommercialPapersLiabilities>
             <jppfs_cor:CurrentPortionOfBondsCLIFRS contextRef="CurrentYearInstant"
                 unitRef="JPY">24989000000</jppfs_cor:CurrentPortionOfBondsCLIFRS>
             <jppfs_cor:CurrentPortionOfLongTermBorrowingsCLIFRS contextRef="CurrentYearInstant"
