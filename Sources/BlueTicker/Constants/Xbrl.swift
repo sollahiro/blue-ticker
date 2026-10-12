@@ -340,6 +340,30 @@ enum Xbrl {
         "SellingGeneralAndAdministrativeExpenses",
     ]
 
+    /// 業種別・非継続事業ありの販管費合計行（タグ, sga_label）。`sgaDirectTags`・保険が無いときだけ使う
+    /// （GP 構成・計算法 OP には使わない）。label nil は「販売費及び一般管理費」そのもの。
+    /// ガス「供給販売費及び一般管理費（合計）」、商品先物は営業総利益の下の「営業費用合計」、
+    /// IFRS で非継続事業を分けた PL の継続事業の販管費（ナブテスコ 6268）。
+    static let sgaIndustryTotalTags: [(tag: String, label: String?)] = [
+        ("SellingGeneralAndAdministrativeExpensesGAS", "供給販売費及び一般管理費"),
+        ("OperatingExpensesCMD", "営業費用"),
+        ("SellingGeneralAndAdministrativeExpensesIFRSContinuingOperationsIFRS", nil),
+    ]
+
+    /// 販売費の無い PL で売上総利益（営業総利益）と営業利益の間に1行だけある費用（タグ, sga_label, 売上総利益行が要るか）。
+    /// 海運・倉庫・運送・証券金融・不動産賃貸等の「一般管理費」、創薬ベンチャーの「事業費用」（4889）。
+    /// 「事業費用（合計）」は事業原価込みの総費用のこともある（ラクオリア 4579）ので、売上総利益行の下にあるときだけ。
+    /// 販売費の行（`sgaSellingLineTags`）が別にある PL では内訳の一部なので使わない。
+    static let sgaSingleLineFallbackTags: [(tag: String, label: String, requiresGrossProfit: Bool)] = [
+        ("GeneralAndAdministrativeExpensesSGA", "一般管理費", false),
+        ("BusinessExpenses", "事業費用", true),
+    ]
+
+    /// 一般管理費と並んで開示される販売費の行。これがあると一般管理費だけでは販管費にならない。
+    static let sgaSellingLineTags: [String] = [
+        "SellingExpenses", "SellingExpensesSGA", "SupplyAndSalesExpensesGAS", "SellingExpensesIFRS",
+    ]
+
     static let sgaSellingIFRSTags: [String] = ["SellingExpensesIFRS"]
     static let sgaGaIFRSTags: [String] = ["GeneralAndAdministrativeExpensesIFRS"]
 
@@ -451,6 +475,17 @@ enum Xbrl {
 
     /// 銀行業判定マーカー（BS の預金）。有利子負債には含めない。
     static let bankMarkerTag = "DepositsLiabilitiesBNK"
+
+    /// 銀行業か（BS 本表 Instant FieldSet に預金 `bankMarkerTag` がある）。
+    /// IBD（bank components・預金除外）と Summary 業務純益（`StatementFinancialsResolver`）の共通判定。
+    static func isBankFiling(_ instantFieldSet: FieldSet) -> Bool {
+        guard let deposits = instantFieldSet[bankMarkerTag] else { return false }
+        return deposits.current != nil || deposits.prior != nil
+    }
+
+    /// 銀行 PL の営業経費（業務純益 = 業務粗利益 − 営業経費）。
+    /// 無いときは業務純益・販管費（営業経費）とも null（経常利益や GP − OP の差額で埋めない）。
+    static let bankOperatingExpensesTags: [String] = ["GeneralAndAdministrativeExpensesOEBNK"]
 
     // 銀行業 有利子負債コンポーネント（Python: BANK_IBD_COMPONENT_DEFINITIONS）
     // 預金・譲渡性預金は銀行でも有利子負債に含めない（Sorahiro 判断 2026-10-11）。

@@ -43,13 +43,117 @@ import Foundation
 
     // MARK: - 営業利益分解: SGA・BusinessProfit の補完
 
-    @Test func sgaAndBusinessProfitDerivedFromGrossProfitAndOP() {
+    @Test func businessProfitUsesGrossProfitMinusOPResidualWithoutWritingSga() {
+        // 販管費が無い年は GrossProfit − OP の差額をウォーターフォール内でだけ使う。
+        // 公開 `sga`（sellingGeneralAdministrativeExpenses）へは書き戻さない（null のまま）。
         var years = [entry(fyEnd: "2024-03-31", sales: 1000, op: 150, grossProfit: 250)]
         applyOperatingProfitChangeToYears(&years)
         let cd = years[0].calculatedData
-        #expect(cd.sellingGeneralAdministrativeExpenses == 100)  // GrossProfit 250 − OP 150
-        #expect(cd.businessProfit == 150)                        // 250 − SGA 100
+        #expect(cd.sellingGeneralAdministrativeExpenses == nil)
+        #expect(cd.businessProfit == 150)                        // 250 − 差額 100
         #expect(approx(cd.businessProfitMargin, 15))             // 150 / 1000 × 100
+        #expect(FinancialsYear(years[0]).sga == nil)
+    }
+
+    @Test func residualSgaStaysWaterfallLocalAcrossYears() {
+        // 差額 SGA で前年差を分解しても、どの年の公開 sga にも差額が載らない。
+        var years = [
+            entry(fyEnd: "2023-03-31", sales: 1000, op: 150, grossProfit: 250),
+            entry(fyEnd: "2024-03-31", sales: 1200, op: 180, grossProfit: 300),
+        ]
+        applyOperatingProfitChangeToYears(&years)
+        #expect(years.allSatisfy { $0.calculatedData.sellingGeneralAdministrativeExpenses == nil })
+        let cd = years[1].calculatedData
+        #expect(cd.businessProfitChange == 30)
+        #expect(cd.sgaChangeImpact == -20)         // 差額 100 → 120（ウォーターフォール内）
+    }
+
+    // MARK: - 銀行: 業務純益の3要因（売上・粗利率・営業経費）
+
+    private func bankEntry(
+        fyEnd: String, sales: Double, grossProfit: Double, expenses: Double
+    ) -> YearEntry {
+        var e = entry(
+            fyEnd: fyEnd, sales: sales, op: grossProfit - expenses,
+            grossProfit: grossProfit, sga: expenses, opLabel: "業務純益", salesLabel: "経常収益")
+        e.calculatedData.sgaLabel = "営業経費"
+        return e
+    }
+
+    @Test func bankBusinessProfitEqualsNetBusinessProfitWithThreeFactors() {
+        var years = [
+            bankEntry(fyEnd: "2025-03-31", sales: 1000, grossProfit: 500, expenses: 300),
+            bankEntry(fyEnd: "2026-03-31", sales: 1200, grossProfit: 750, expenses: 350),
+        ]
+        applyOperatingProfitChangeToYears(&years)
+        // business_profit = 業務純益 = Summary operating_profit（差額なし）
+        for y in years { #expect(y.calculatedData.businessProfit == y.rawData.op) }
+        #expect(years[0].calculatedData.businessProfit == 200)  // 500 − 300
+        #expect(years[1].calculatedData.businessProfit == 400)  // 750 − 350
+        let cd = years[1].calculatedData
+        #expect(cd.businessProfitChange == 200)
+        #expect(cd.salesChangeImpact == 100)         // 200 × 0.5
+        #expect(cd.grossMarginChangeImpact == 150)   // 1200 × (0.625 − 0.5)
+        #expect(cd.sgaChangeImpact == -50)           // 営業経費 300 → 350
+        let sum = cd.salesChangeImpact! + cd.grossMarginChangeImpact! + cd.sgaChangeImpact!
+        #expect(sum == cd.businessProfitChange!)
+        // 公開 sga は営業経費のまま
+        #expect(years.map { $0.calculatedData.sellingGeneralAdministrativeExpenses } == [300, 350])
+    }
+
+    @Test func bankPriorYearWithoutOperatingExpensesFailsClosed() {
+        // 前期は営業経費が無く fail closed（op / op_label / sga とも nil）。差額や経常利益で埋めない。
+        var prior = entry(fyEnd: "2025-03-31", sales: 1000, grossProfit: 500, salesLabel: "経常収益")
+        prior.rawData.op = nil
+        var years = [prior, bankEntry(fyEnd: "2026-03-31", sales: 1200, grossProfit: 750, expenses: 350)]
+        applyOperatingProfitChangeToYears(&years)
+        #expect(years[0].calculatedData.businessProfit == nil)
+        let cd = years[1].calculatedData
+        #expect(cd.businessProfit == 400)
+        #expect(cd.businessProfitChange == nil)
+        #expect(cd.salesChangeImpact == nil)
+        #expect(cd.grossMarginChangeImpact == nil)
+        #expect(cd.sgaChangeImpact == nil)
+    }
+
+    @Test func bankNextToNonBankLabelledYearFailsClosed() {
+        // 前期が経常利益ラベル（差額販管費になる年）と混在するときも前年差を出さない。
+        let prior = entry(
+            fyEnd: "2025-03-31", sales: 1000, op: 260, grossProfit: 500,
+            opLabel: "経常利益", salesLabel: "経常収益")
+        var years = [prior, bankEntry(fyEnd: "2026-03-31", sales: 1200, grossProfit: 750, expenses: 350)]
+        applyOperatingProfitChangeToYears(&years)
+        #expect(years[1].calculatedData.businessProfitChange == nil)
+        #expect(years[1].calculatedData.sgaChangeImpact == nil)
+    }
+
+    @Test func bankWithoutOrdinaryRevenueFailsClosed() {
+        var cur = bankEntry(fyEnd: "2026-03-31", sales: 1200, grossProfit: 750, expenses: 350)
+        cur.rawData.sales = nil
+        var years = [bankEntry(fyEnd: "2025-03-31", sales: 1000, grossProfit: 500, expenses: 300), cur]
+        applyOperatingProfitChangeToYears(&years)
+        #expect(years[1].calculatedData.businessProfitChange == nil)
+        #expect(years[1].calculatedData.salesChangeImpact == nil)
+    }
+
+    @Test func bankWithoutGrossProfitFailsClosed() {
+        // 業務粗利益が無い年（op_label だけ残る異常系）でも BP+SGA で粗利を作らない。
+        var cur = bankEntry(fyEnd: "2026-03-31", sales: 1200, grossProfit: 750, expenses: 350)
+        cur.calculatedData.grossProfit = nil
+        var years = [bankEntry(fyEnd: "2025-03-31", sales: 1000, grossProfit: 500, expenses: 300), cur]
+        applyOperatingProfitChangeToYears(&years)
+        #expect(years[1].calculatedData.businessProfitChange == nil)
+        #expect(years[1].calculatedData.grossMarginChangeImpact == nil)
+    }
+
+    @Test func bankWithoutOperatingExpensesHasNoBusinessProfit() {
+        // 営業経費が無い銀行は Summary OP / sga とも null。差額でウォーターフォールも組まない。
+        var years = [entry(
+            fyEnd: "2026-03-31", sales: 1000, grossProfit: 500,
+            salesLabel: "経常収益")]
+        applyOperatingProfitChangeToYears(&years)
+        #expect(years[0].calculatedData.sellingGeneralAdministrativeExpenses == nil)
+        #expect(years[0].calculatedData.businessProfit == nil)
     }
 
     @Test func financialInstitutionUsesSalesAsProfitBase() {

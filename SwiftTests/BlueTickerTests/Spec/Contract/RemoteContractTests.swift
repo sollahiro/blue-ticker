@@ -8,7 +8,7 @@ import Testing
     private let emptyFinancialsYear = #"""
         {
           "fy_end": null, "financial_period": null, "cur_per_type": null, "doc_id": null,
-          "sales_label": null, "gross_profit_label": null, "op_label": null,
+          "sales_label": null, "gross_profit_label": null, "op_label": null, "sga_label": null,
           "sales": null, "gross_profit": null, "gross_profit_margin": null, "sga": null,
           "operating_profit": null, "operating_margin": null, "nopat": null,
           "net_profit": null, "effective_tax_rate": null, "roe": null, "roic": null,

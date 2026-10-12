@@ -162,6 +162,7 @@ struct IndividualAnalyzer {
             calc.grossProfitMargin = (gp_ / s) * percent
         }
         calc.sellingGeneralAdministrativeExpenses = statementMain?.sga.map { $0 / millionYen }
+        calc.sgaLabel = statementMain?.sgaLabel
         calc.opLabel = statementMain?.operatingProfitLabel
 
         calc.totalAssets = statementMain?.totalAssets.map { $0 / millionYen }

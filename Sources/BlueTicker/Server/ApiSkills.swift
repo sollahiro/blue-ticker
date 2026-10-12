@@ -231,6 +231,10 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                 金額単位は百万円（JPY）、比率は%、株主指標は円。
                 銀行業は有利子負債に預金を含めないため、net_cash / net_de / roic / nopat_margin /
                 invested_capital_turnover は null です（interest_bearing_debt は返します）。
+                営業利益行の無い銀行業は operating_profit が業務純益（業務粗利益 − 営業経費、op_label「業務純益」）、
+                sga が営業経費（sga_label「営業経費」）です。営業経費が無い場合は operating_profit / sga とも null です。
+                sga_label は販管費行が「販売費及び一般管理費」以外のときだけ入ります（例: 供給販売費及び一般管理費、一般管理費）。
+                販管費を開示しない会社の sga は null です（売上総利益 − 営業利益の差額では埋めません）。
                 """,
             method: "GET",
             path: "/v1/companies/{code}/financials",
@@ -284,6 +288,8 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                 金額単位は百万円（JPY）、比率は%、日数は日。
                 銀行業は net_cash / net_de / roic / nopat_margin / invested_capital_turnover と、
                 ネットキャッシュ前年差（net_cash_change / debt_change_impact）、ROIC 要因分解が null です。
+                銀行業の事業利益は業務純益（= operating_profit）で、同じ3項目に 経常収益差 / 業務粗利益率（業務粗利益 ÷ 経常収益）差 /
+                営業経費差 が入り、和が前年差に一致します。両期の経常収益・業務粗利益・営業経費が揃わない年は前年差が null です。
                 """,
             method: "GET",
             path: "/v1/companies/{code}/waterfall",
