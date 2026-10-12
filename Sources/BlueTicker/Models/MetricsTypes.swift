@@ -86,16 +86,12 @@ struct CalculatedData: Codable {
     var sellingGeneralAdministrativeExpenses: Double?
     /// 販管費の表示名（銀行は「営業経費」。null は販売費及び一般管理費）。
     var sgaLabel: String?
-    /// 銀行の持分法による投資損益（業務純益の構成要素）。銀行業務純益経路以外は nil。
-    var equityMethodIncome: Double?
     var businessProfit: Double?
     var businessProfitMargin: Double?
     var businessProfitChange: Double?
     var salesChangeImpact: Double?
     var grossMarginChangeImpact: Double?
     var sgaChangeImpact: Double?
-    /// 持分法による投資損益の前年差（銀行業務純益の第4要因）。
-    var equityMethodChangeImpact: Double?
     // 従業員・受注
     var employees: Int?
     var orderIntake: Double?
@@ -152,13 +148,12 @@ struct CalculatedData: Codable {
         case effectiveTaxRate = "EffectiveTaxRate"; case nopat = "NOPAT"
         case operatingMargin = "OperatingMargin"; case opLabel = "OPLabel"
         case sellingGeneralAdministrativeExpenses = "SellingGeneralAdministrativeExpenses"
-        case sgaLabel = "SGALabel"; case equityMethodIncome = "EquityMethodIncome"
+        case sgaLabel = "SGALabel"
         case businessProfit = "BusinessProfit"; case businessProfitMargin = "BusinessProfitMargin"
         case businessProfitChange = "BusinessProfitChange"
         case salesChangeImpact = "SalesChangeImpact"
         case grossMarginChangeImpact = "GrossMarginChangeImpact"
         case sgaChangeImpact = "SGAChangeImpact"
-        case equityMethodChangeImpact = "EquityMethodChangeImpact"
         case employees = "Employees"; case orderIntake = "OrderIntake"; case orderBacklog = "OrderBacklog"
         case ppeTotal = "PPETotal"; case ppeAccountingStandard = "PPEAccountingStandard"
         case docID = "DocID"; case amendmentDocID = "AmendmentDocID"

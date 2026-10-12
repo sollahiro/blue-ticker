@@ -7,12 +7,12 @@ private let financialSalesLabels: Set<String> = ["経常収益"]
 
 // MARK: - Operating Profit Waterfall
 
-/// 年次データに営業利益前年差分解（BusinessProfit, SGA, 3要因。銀行は持分法を加えた4要因）を付与する。
+/// 年次データに営業利益前年差分解（BusinessProfit, SGA, 3要因）を付与する。
 ///
 /// 販管費が無い年は GrossProfit − OP をウォーターフォール内でだけ使う。その差額は
 /// `sellingGeneralAdministrativeExpenses`（公開 `sga`）へ書き戻さない。
-/// 銀行（業務純益経路）は BusinessProfit = 業務粗利益 − 営業経費 + 持分法 = 業務純益（Summary OP と同値）で、
-/// 前年差 = 売上差 + 粗利率差 + 営業経費差 + 持分法差（差額項なし）。
+/// 銀行（業務純益経路）は BusinessProfit = 業務粗利益 − 営業経費 = 業務純益（Summary OP と同値）で、
+/// 前年差 = 売上差 + 粗利率差 + 営業経費差（差額項なし）。
 ///
 /// 前提: years が fyEnd 順に既ソートされていること。入力順は問わない。
 func applyOperatingProfitChangeToYears(_ years: inout [YearEntry]) {
@@ -24,7 +24,7 @@ func applyOperatingProfitChangeToYears(_ years: inout [YearEntry]) {
         // BusinessProfit 未設定の場合
         if cd.businessProfit == nil {
             if let base = profitBase(cd, rd), let s = waterfallSGA(cd, rd) {
-                years[i].calculatedData.businessProfit = base - s + (cd.equityMethodIncome ?? 0)
+                years[i].calculatedData.businessProfit = base - s
             }
         }
 
@@ -59,12 +59,9 @@ func applyOperatingProfitChangeToYears(_ years: inout [YearEntry]) {
               let priorSGA = waterfallSGA(priorCD, priorRD),
               curSales > 0, priorSales > 0 else { continue }
 
-        let curEquity = curCD.equityMethodIncome
-        let priorEquity = priorCD.equityMethodIncome
-
-        // 粗利ベース（GrossProfit または BP+SGA−持分法）
-        let curBase = curCD.grossProfit ?? (curBP + curSGA - (curEquity ?? 0))
-        let priorBase = priorCD.grossProfit ?? (priorBP + priorSGA - (priorEquity ?? 0))
+        // 粗利ベース（GrossProfit または BP+SGA）
+        let curBase = curCD.grossProfit ?? (curBP + curSGA)
+        let priorBase = priorCD.grossProfit ?? (priorBP + priorSGA)
 
         let curMargin = curBase / curSales
         let priorMargin = priorBase / priorSales
@@ -78,10 +75,6 @@ func applyOperatingProfitChangeToYears(_ years: inout [YearEntry]) {
         years[curIdx].calculatedData.salesChangeImpact = salesImpact
         years[curIdx].calculatedData.grossMarginChangeImpact = gmImpact
         years[curIdx].calculatedData.sgaChangeImpact = sgaImpact
-        // 持分法要因は銀行業務純益経路の年だけ（どちらかの期に持分法がある）。非銀行は null のまま。
-        if curEquity != nil || priorEquity != nil {
-            years[curIdx].calculatedData.equityMethodChangeImpact = (curEquity ?? 0) - (priorEquity ?? 0)
-        }
     }
 }
 

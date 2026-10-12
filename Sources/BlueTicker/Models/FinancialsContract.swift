@@ -85,7 +85,7 @@ public func isCurrentFinancialsAssemblyFingerprint(_ stored: String?) -> Bool {
 // | フィールド | 正本 | 現行 | 状態 |
 // |---|---|---|---|
 // | sales, operating_profit, net_profit | statement（PL。net_profit は親会社帰属が SS のみなら changes_in_equity） | StatementFinancialsResolver | done |
-// | （銀行業）operating_profit, op_label, sga, sga_label | 預金マーカー（`Xbrl.isBankFiling`、IBD と同じ）で営業利益行が無い銀行は operating_profit = 業務純益（業務粗利益 − 営業経費 `GeneralAndAdministrativeExpensesOEBNK` + 持分法による投資損益（CF `EquityInEarningsLossesOfAffiliatesOpeCF` の符号反転、無ければ 0））、op_label「業務純益」、sga = 営業経費、sga_label「営業経費」。営業経費か業務粗利益が無ければ operating_profit / sga とも null（経常利益・差額で埋めない）。sga_label は銀行以外 null（2026-10-12） | StatementFinancialsResolver.bankNetBusinessProfit | done |
+// | （銀行業）operating_profit, op_label, sga, sga_label | 預金マーカー（`Xbrl.isBankFiling`、IBD と同じ）で営業利益行が無い銀行は operating_profit = 業務純益（業務粗利益 − 営業経費 `GeneralAndAdministrativeExpensesOEBNK`。持分法は足さない）、op_label「業務純益」、sga = 営業経費、sga_label「営業経費」。営業経費か業務粗利益が無ければ operating_profit / sga とも null（経常利益・差額で埋めない）。sga_label は銀行以外 null（2026-10-12） | StatementFinancialsResolver.bankNetBusinessProfit | done |
 // | gross_profit, sga | statement（income_statement 行）。GP は売上総利益（売上高−売上原価。両方ある年だけ。原価欠測を売上コピーしない）。営業総利益（営業収益合計−営業原価合計）が併記され販管費がその直上なら営業総利益。無ければ営業収益−営業費用+販管費、その次に銀行業務粗利益。未開示は null | StatementFinancialsResolver（#5c） | done |
 // | total_assets, current_assets, non_current_assets | statement（balance_sheet 行） | StatementFinancialsResolver（#5b-1） | done |
 // | current_liabilities, non_current_liabilities, net_assets | statement | StatementFinancialsResolver（#5b-1） | done |
@@ -107,7 +107,7 @@ public func isCurrentFinancialsAssemblyFingerprint(_ stored: String?) -> Bool {
 // | gross_profit_margin, operating_margin, nopat, nopat_margin | 派生（入力フィールドの組立後に再計算） | IndividualAnalyzer 内計算 | derived |
 // | roe, roic, net_cash, net_de, cfc, working_capital, dso/dio/dpo/ccc | 派生 | IndividualAnalyzer / Waterfall 投影 | derived |
 // | （銀行業）net_cash, net_de, roic, nopat_margin, invested_capital_turnover | 銀行（IBD の `isBank` = `DepositsLiabilitiesBNK`）は null。預金を IBD に含めないため有利子負債ベースの比率は意味を持たない（2026-10-12）。interest_bearing_debt は残す。Waterfall の net_cash_change / debt_change_impact も null | IndividualAnalyzer.applyInterestBearingDebtRatios / FinancialsYear.withholdsBankRatios | derived |
-// | business_profit*, roic_delta*, roe_delta*, *_change_impact | Waterfall 専用派生。販管費が無い年の GP − OP 差額は Waterfall 内だけで使い sga へ書き戻さない。銀行は business_profit = 業務純益で equity_method_change_impact（持分法差）を第4要因に持つ（非銀行は null） | Waterfall 関数（analysisOnlyKeys） | derived |
+// | business_profit*, roic_delta*, roe_delta*, *_change_impact | Waterfall 専用派生。販管費が無い年の GP − OP 差額は Waterfall 内だけで使い sga へ書き戻さない。銀行は business_profit = 業務純益（= Summary operating_profit）で、売上差・粗利率差・営業経費差の3要因が前年差に一致する | Waterfall 関数（analysisOnlyKeys） | derived |
 //
 // Summary 非搭載（正本 API のみ、組立対象外）: goodwill 明細、PPE 区分明細、借入明細。
 
@@ -177,7 +177,6 @@ struct FinancialsYear: Codable, Sendable {
     var salesChangeImpact: Double?
     var grossMarginChangeImpact: Double?
     var sgaChangeImpact: Double?
-    var equityMethodChangeImpact: Double?
     var netMargin: Double?
     var assetTurnover: Double?
     var financialLeverage: Double?
@@ -252,7 +251,6 @@ struct FinancialsYear: Codable, Sendable {
         case salesChangeImpact = "sales_change_impact"
         case grossMarginChangeImpact = "gross_margin_change_impact"
         case sgaChangeImpact = "sga_change_impact"
-        case equityMethodChangeImpact = "equity_method_change_impact"
         case netMargin = "net_margin"
         case assetTurnover = "asset_turnover"
         case financialLeverage = "financial_leverage"
@@ -330,7 +328,6 @@ struct FinancialsYear: Codable, Sendable {
             case .salesChangeImpact: try container.encode(salesChangeImpact, forKey: key)
             case .grossMarginChangeImpact: try container.encode(grossMarginChangeImpact, forKey: key)
             case .sgaChangeImpact: try container.encode(sgaChangeImpact, forKey: key)
-            case .equityMethodChangeImpact: try container.encode(equityMethodChangeImpact, forKey: key)
             case .netMargin: try container.encode(netMargin, forKey: key)
             case .assetTurnover: try container.encode(assetTurnover, forKey: key)
             case .financialLeverage: try container.encode(financialLeverage, forKey: key)
@@ -417,7 +414,6 @@ extension FinancialsYear {
         salesChangeImpact = calc.salesChangeImpact
         grossMarginChangeImpact = calc.grossMarginChangeImpact
         sgaChangeImpact = calc.sgaChangeImpact
-        equityMethodChangeImpact = calc.equityMethodChangeImpact
         netMargin = calc.netMargin
         assetTurnover = calc.assetTurnover
         financialLeverage = calc.financialLeverage
@@ -495,7 +491,6 @@ extension FinancialsYear {
         calc.salesChangeImpact = salesChangeImpact
         calc.grossMarginChangeImpact = grossMarginChangeImpact
         calc.sgaChangeImpact = sgaChangeImpact
-        calc.equityMethodChangeImpact = equityMethodChangeImpact
         calc.netMargin = netMargin
         calc.assetTurnover = assetTurnover
         calc.financialLeverage = financialLeverage
@@ -532,7 +527,7 @@ extension FinancialsYear {
     static let analysisOnlyKeys: Set<String> = [
         "business_profit", "business_profit_margin",
         "business_profit_change", "sales_change_impact",
-        "gross_margin_change_impact", "sga_change_impact", "equity_method_change_impact",
+        "gross_margin_change_impact", "sga_change_impact",
         "net_margin", "asset_turnover", "financial_leverage",
         "roic_delta", "roic_margin_effect", "roic_turnover_effect",
         "roe_delta", "roe_net_margin_effect", "roe_asset_turnover_effect", "roe_leverage_effect",
@@ -821,7 +816,6 @@ extension FinancialsYear {
         salesChangeImpact = nil
         grossMarginChangeImpact = nil
         sgaChangeImpact = nil
-        equityMethodChangeImpact = nil
         roicDelta = nil
         roicMarginEffect = nil
         roicTurnoverEffect = nil
