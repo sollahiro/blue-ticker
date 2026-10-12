@@ -112,6 +112,13 @@ actor MasterDataManager {
         return map
     }
 
+    /// EDINET 提出者コードの提出者業種（例: 銀行業）。未収録・空は nil。
+    func industry(forEdinetCode edinetCode: String) async -> String? {
+        await loadIfNeeded()
+        guard let stock = stocks.first(where: { $0.edinetCode == edinetCode }) else { return nil }
+        return stock.s33nm.isEmpty ? nil : stock.s33nm
+    }
+
     /// 4 桁上場コードに対応する EDINET 提出者コード。未収録・空は nil。
     func edinetCode(forListedCode code: String) async -> String? {
         await loadIfNeeded()

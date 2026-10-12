@@ -100,9 +100,9 @@ enum BreakdownFinancialsResolver {
     /// 軸が needs_review / 解決不能のときは公開 JSON キーを増やさず旧 Extractor 値へ戻し、
     /// canonical value の method/warnings に印を残す（会社が null へ退行しないため）。
     static func financialsCanonicalInterestBearingDebt(
-        xbrlDir: URL
+        xbrlDir: URL, edinetIndustry: String? = nil
     ) async -> InterestBearingDebtCanonicalValue {
-        let inputs = InterestBearingDebtBreakdown.inputs(xbrlDir: xbrlDir)
+        let inputs = InterestBearingDebtBreakdown.inputs(xbrlDir: xbrlDir, edinetIndustry: edinetIndustry)
         let allTags = XBRLUtils.collectAllNumericElements(in: xbrlDir, nilAsZero: false)
         let accountingStandard = detectAccountingStandard(allTags)
         let resolution = await InterestBearingDebtBreakdown.resolve(inputs: inputs, decider: nil)

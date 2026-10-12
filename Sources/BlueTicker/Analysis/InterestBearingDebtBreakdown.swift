@@ -133,7 +133,8 @@ enum InterestBearingDebtBreakdown {
     // MARK: - inputs
 
     /// XBRL 展開ディレクトリから決定論の材料を集める（Jev は呼ばない）。
-    static func inputs(xbrlDir: URL) -> IBDInputs {
+    /// `edinetIndustry` は EDINET 提出者業種（銀行判定に使う。不明なら nil）。
+    static func inputs(xbrlDir: URL, edinetIndustry: String? = nil) -> IBDInputs {
         let tags = XBRLUtils.collectAllNumericElements(in: xbrlDir, nilAsZero: false)
         let consolidated = BorrowingsSchedule.filerHasConsolidatedStatements(xbrlDir: xbrlDir)
         let accountingStandard = detectAccountingStandard(tags)
@@ -141,7 +142,7 @@ enum InterestBearingDebtBreakdown {
         // 保険は通常パイプライン（資金調達の本業でも内訳を出す）。
         let instantFS = statementInstantFieldSet(
             xbrlDir: xbrlDir, allTags: tags, accountingStandard: accountingStandard)
-        let isBank = Xbrl.isBankFiling(instantFS)
+        let isBank = Xbrl.isBankFiling(instantFS, edinetIndustry: edinetIndustry)
         return IBDInputs(
             consolidated: consolidated,
             isBank: isBank,

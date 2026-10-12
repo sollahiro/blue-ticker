@@ -25,6 +25,8 @@ extension IndividualAnalyzeOutcome {
 struct IndividualAnalyzer {
     let edinetClient: EdinetAPIClient
     let cacheManager: CacheManager
+    /// EDINET コードリストの提出者業種（`MasterStock.s33nm`）。銀行判定 `Xbrl.isBankFiling` に渡す。
+    var edinetIndustry: String? = nil
 
     // MARK: - Public Entry Point
 
@@ -124,9 +126,10 @@ struct IndividualAnalyzer {
 
         // 本表水準値は statement 正本のみ（#5 / #5b-1 / #5c / #8）。旧 Extractor への
         // フィールド単位フォールバックはしない。US-GAAP は USGAAPStatementHtml。
-        let statementMain = StatementFinancialsResolver.resolve(xbrlDir: xbrlDir)
+        let statementMain = StatementFinancialsResolver.resolve(
+            xbrlDir: xbrlDir, edinetIndustry: edinetIndustry)
         let ibd = await BreakdownFinancialsResolver.financialsCanonicalInterestBearingDebt(
-            xbrlDir: xbrlDir)
+            xbrlDir: xbrlDir, edinetIndustry: edinetIndustry)
         let interestExpense = statementMain?.interestExpense
             ?? StatementNotesResolver.financialsCanonicalInterestExpense(xbrlDir: xbrlDir)
 
