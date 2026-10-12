@@ -449,16 +449,33 @@ enum Xbrl {
         let tags: [String]
     }
 
+    /// 銀行業判定マーカー（BS の預金）。有利子負債には含めない。
+    static let bankMarkerTag = "DepositsLiabilitiesBNK"
+
     // 銀行業 有利子負債コンポーネント（Python: BANK_IBD_COMPONENT_DEFINITIONS）
-    // DepositsLiabilitiesBNK の存在が銀行業判定マーカーを兼ねる
+    // 預金・譲渡性預金は銀行でも有利子負債に含めない（Sorahiro 判断 2026-10-11）。
+    // 銀行かどうかは `bankMarkerTag`（預金）の有無で判定する。
     static let bankIBDComponents: [BankIBDComponent] = [
-        .init(label: "預金",                   tags: ["DepositsLiabilitiesBNK"]),
-        .init(label: "譲渡性預金",             tags: ["NegotiableCertificatesOfDepositLiabilitiesBNK"]),
         .init(label: "コマーシャル・ペーパー", tags: ["CommercialPapersLiabilities"]),
         .init(label: "借用金",                 tags: ["BorrowedMoneyLiabilitiesBNK"]),
         .init(label: "短期社債",               tags: ["ShortTermBondsPayable"]),
-        .init(label: "社債",                   tags: ["BondsPayable"]),
+        .init(label: "社債",                   tags: ["BondsPayable", "BondsPayableNCLIFRS", "BondsPayableLiabilitiesIFRS"]),
         .init(label: "債券",                   tags: ["DebenturesLiabilitiesBNK"]),
+        // 一般事業会社の借入金・社債タグ。銀行子会社を持つ持株会社（HSホールディングス 8699
+        // S100YJQ6 実データ検証 2026-10-12: 預金 9,475 と並んで 短期借入金 13・1年内返済予定の
+        // 長期借入金 253・長期借入金 1,960）は BS にこちらで載せる。各タグは1コンポーネントだけに
+        // 置く（社債 BondsPayable・CP・短期社債は上の銀行行と共通なので重ねない）。リース債務タグと
+        // 「社債及び借入金」等の合算タグは入れない（リースは notes から足す。合算は内訳と二重になる）。
+        .init(label: "短期借入金",                     tags: ["ShortTermLoansPayable", "BorrowingsCLIFRS"]),
+        .init(label: "1年内償還予定の社債",            tags: ["CurrentPortionOfBonds", "BondsPayableCLIFRS", "CurrentPortionOfBondsCLIFRS"]),
+        .init(label: "1年内返済予定の長期借入金",      tags: ["CurrentPortionOfLongTermLoansPayable", "CurrentPortionOfLongTermBorrowingsCLIFRS", "CurrentPortionOfLongTermDebtCLIFRS"]),
+        .init(label: "1年内償還予定の新株予約権付社債", tags: ["CurrentPortionOfBondsWithSubscriptionRightsToShares"]),
+        .init(label: "1年内償還予定の転換社債",        tags: ["CurrentPortionOfConvertibleBonds"]),
+        .init(label: "長期借入金",                     tags: ["LongTermLoansPayable", "BorrowingsNCLIFRS", "LongTermDebtNCLIFRS"]),
+        .init(label: "新株予約権付社債",               tags: ["BondsWithSubscriptionRightsToSharesNCL"]),
+        .init(label: "転換社債型新株予約権付社債",     tags: ["ConvertibleBondTypeBondsWithSubscriptionRightsToShares"]),
+        .init(label: "転換社債",                       tags: ["ConvertibleBonds"]),
+        .init(label: "借入金",                         tags: ["BorrowingsLiabilitiesIFRS", "BorrowingsLiabilitiesINS"]),
     ]
 
     // MARK: - キャッシュフロータグ

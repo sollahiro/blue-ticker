@@ -6,6 +6,8 @@
 // `sales_cagr_3y` は Summary `years[]` に無い派生列（最新から売上 > 0 の 3 期・同一 fy_end は先勝ち）。
 // 行の `cache_version` に `screenIndexVersion` を刻む。公開床の financials は次回 ingest で投影（現行 fin-vN 一致は問わない）。
 // YoY（`sales_growth`）は許可リストに載せない。CAGR / YoY を Summary `years[]` に足さない。
+// 銀行業（Summary で net_cash / roic / net_de が null）は `roic` / `net_de` / `roic_cagr_3y` も null。
+// null の行はソート・min/max フィルタから落ちるため、ROIC 順・net_de 条件の結果に銀行は載らない（2026-10-12）。
 //
 // screen-v3（高CF・高効率・改善・高還元プリセット用の指標追加）:
 // - `cfo` / `cfo_margin` / `fcf` は高CF向け。`fcf` = cfo − capex（Summary の
@@ -129,7 +131,11 @@ extension FinancialsResponse {
         put(.cfoMargin, cfoMargin(cfo: latest.cfo, sales: latest.sales))
         put(.fcf, freeCashFlow(cfo: latest.cfo, capex: latest.capex))
         put(.operatingMarginCagr3y, metricCagr3y(from: dated.map(\.1), metric: \.operatingMargin))
-        put(.roicCagr3y, metricCagr3y(from: dated.map(\.1), metric: \.roic))
+        // 銀行業は roic / net_de を出さない（latest が null）。旧組立の期が混在しても
+        // roic の 3 期変化幅を出さないよう、最新期が銀行なら roic_cagr_3y も入れない。
+        if !latest.withholdsBankRatios {
+            put(.roicCagr3y, metricCagr3y(from: dated.map(\.1), metric: \.roic))
+        }
         let payout = payoutRatio3y(from: dated.map(\.1))
         put(.payoutRatio, payout.average)
         return ScreenRow(

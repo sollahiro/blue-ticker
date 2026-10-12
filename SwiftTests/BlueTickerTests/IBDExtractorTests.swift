@@ -184,6 +184,134 @@ import Foundation
         }
     }
 
+    // MARK: - 銀行（預金は有利子負債に含めない）
+
+    @Test func testBankExcludesDepositsAndNegotiableCDs() {
+        let xml = XBRLTestSupport.makeXbrlInstant("""
+            <jppfs_cor:DepositsLiabilitiesBNK contextRef="CurrentYearInstant"
+                unitRef="JPY">900000000000</jppfs_cor:DepositsLiabilitiesBNK>
+            <jppfs_cor:NegotiableCertificatesOfDepositLiabilitiesBNK contextRef="CurrentYearInstant"
+                unitRef="JPY">50000000000</jppfs_cor:NegotiableCertificatesOfDepositLiabilitiesBNK>
+            <jppfs_cor:BorrowedMoneyLiabilitiesBNK contextRef="CurrentYearInstant"
+                unitRef="JPY">30000000000</jppfs_cor:BorrowedMoneyLiabilitiesBNK>
+            <jppfs_cor:BondsPayable contextRef="CurrentYearInstant"
+                unitRef="JPY">20000000000</jppfs_cor:BondsPayable>
+        """)
+        XBRLTestSupport.withXbrlDir(xml) { dir in
+            let result = extract(in: dir)
+            #expect(result.method.hasPrefix("bank_components"))
+            #expect(result.total == 50_000_000_000)
+            #expect(!result.components.contains { $0.label.contains("預金") })
+        }
+    }
+
+    /// HSホールディングス 8699 S100YJQ6 型: 預金（銀行判定）に加えて一般事業会社の借入金タグ。
+    /// 預金は入れず、短期借入金 13 + 1年内返済予定の長期借入金 253 + 長期借入金 1,960 = 2,226。
+    @Test func testBankHoldingCountsOrdinaryBorrowingTags() {
+        let xml = XBRLTestSupport.makeXbrlInstant("""
+            <jppfs_cor:DepositsLiabilitiesBNK contextRef="CurrentYearInstant"
+                unitRef="JPY">9475000000</jppfs_cor:DepositsLiabilitiesBNK>
+            <jppfs_cor:DepositsLiabilitiesBNK contextRef="Prior1YearInstant"
+                unitRef="JPY">10241000000</jppfs_cor:DepositsLiabilitiesBNK>
+            <jppfs_cor:ShortTermLoansPayable contextRef="CurrentYearInstant"
+                unitRef="JPY">13000000</jppfs_cor:ShortTermLoansPayable>
+            <jppfs_cor:CurrentPortionOfLongTermLoansPayable contextRef="CurrentYearInstant"
+                unitRef="JPY">253000000</jppfs_cor:CurrentPortionOfLongTermLoansPayable>
+            <jppfs_cor:CurrentPortionOfLongTermLoansPayable contextRef="Prior1YearInstant"
+                unitRef="JPY">79000000</jppfs_cor:CurrentPortionOfLongTermLoansPayable>
+            <jppfs_cor:LongTermLoansPayable contextRef="CurrentYearInstant"
+                unitRef="JPY">1960000000</jppfs_cor:LongTermLoansPayable>
+            <jppfs_cor:LongTermLoansPayable contextRef="Prior1YearInstant"
+                unitRef="JPY">1235000000</jppfs_cor:LongTermLoansPayable>
+        """)
+        XBRLTestSupport.withXbrlDir(xml) { dir in
+            let result = extract(in: dir)
+            #expect(result.method.hasPrefix("bank_components"))
+            #expect(result.total == 2_226_000_000)
+            #expect(result.priorTotal == 1_314_000_000)
+            #expect(!result.components.contains { $0.label.contains("預金") })
+        }
+    }
+
+    /// 銀行の社債（BondsPayable）は一般事業会社のタグと共通。1回だけ数える。
+    @Test func testBankBondsPayableCountedOnce() {
+        let xml = XBRLTestSupport.makeXbrlInstant("""
+            <jppfs_cor:DepositsLiabilitiesBNK contextRef="CurrentYearInstant"
+                unitRef="JPY">900000000000</jppfs_cor:DepositsLiabilitiesBNK>
+            <jppfs_cor:BorrowedMoneyLiabilitiesBNK contextRef="CurrentYearInstant"
+                unitRef="JPY">30000000000</jppfs_cor:BorrowedMoneyLiabilitiesBNK>
+            <jppfs_cor:BondsPayable contextRef="CurrentYearInstant"
+                unitRef="JPY">20000000000</jppfs_cor:BondsPayable>
+        """)
+        XBRLTestSupport.withXbrlDir(xml) { dir in
+            #expect(extract(in: dir).total == 50_000_000_000)
+        }
+    }
+
+    @Test func testBankWithDepositsOnlyIsZeroDebt() {
+        let xml = XBRLTestSupport.makeXbrlInstant("""
+            <jppfs_cor:DepositsLiabilitiesBNK contextRef="CurrentYearInstant"
+                unitRef="JPY">900000000000</jppfs_cor:DepositsLiabilitiesBNK>
+        """)
+        XBRLTestSupport.withXbrlDir(xml) { dir in
+            let result = extract(in: dir)
+            #expect(result.method.hasPrefix("bank_components"))
+            #expect(result.total == 0)
+            #expect(result.components.isEmpty)
+        }
+    }
+
+    /// 宮崎太陽銀行 S100YG72 型: 借入金等明細表は「該当事項はありません」。リース注記は借手側が文章だけで、
+    /// 表は貸手側（リース料債権部分の金額・回収予定額）だけ。貸手の表をリース債務として読まない → 0。
+    @Test func testBankLeaseFallbackIgnoresLessorSideLeaseNote() {
+        func tr(_ cells: [String]) -> String {
+            "&lt;tr&gt;" + cells.map { "&lt;td&gt;\($0)&lt;/td&gt;" }.joined() + "&lt;/tr&gt;"
+        }
+        let header = tr(["", "前連結会計年度", "当連結会計年度"])
+        let html = "&lt;p&gt;（借手側）&lt;/p&gt;&lt;p&gt;リース資産の内容 車両であります。&lt;/p&gt;"
+            + "&lt;p&gt;（貸手側）&lt;/p&gt;&lt;table&gt;" + header
+            + tr(["リース料債権部分の金額", "5,894", "5,592"])
+            + tr(["見積残存価額部分の金額", "1", "2"])
+            + tr(["受取利息相当額", "557", "530"]) + "&lt;/table&gt;"
+            + "&lt;p&gt;リース料債権部分の金額の回収予定額&lt;/p&gt;&lt;table&gt;" + header
+            + tr(["１年以内", "1,870", "1,867"]) + tr(["１年超２年以内", "1,553", "1,504"])
+            + tr(["合計", "5,894", "5,592"]) + "&lt;/table&gt;"
+        let xml = XBRLTestSupport.makeXbrlInstant("""
+            <jppfs_cor:DepositsLiabilitiesBNK contextRef="CurrentYearInstant"
+                unitRef="JPY">774727000000</jppfs_cor:DepositsLiabilitiesBNK>
+            <jpcrp_cor:NotesLeasesConsolidatedFinancialStatementsTextBlock
+                contextRef="CurrentYearDuration">\(html)</jpcrp_cor:NotesLeasesConsolidatedFinancialStatementsTextBlock>
+            <jpcrp_cor:AnnexedConsolidatedDetailedScheduleOfBorrowingsTextBlock
+                contextRef="CurrentYearDuration">&lt;p&gt;該当事項はありません。&lt;/p&gt;</jpcrp_cor:AnnexedConsolidatedDetailedScheduleOfBorrowingsTextBlock>
+        """)
+        XBRLTestSupport.withXbrlDir(xml) { dir in
+            #expect(BorrowingsSchedule.extractRows(xbrlDir: dir) == nil)
+            let result = extract(in: dir)
+            #expect(result.total == 0)
+            #expect(!result.components.contains { $0.label.contains("リース") })
+        }
+    }
+
+    /// 借手側の表は従来どおり読む（貸手側の表が後ろにあっても）。
+    @Test func testLeaseOnlyNoteStillReadsLesseeTableBeforeLessorSection() {
+        func tr(_ cells: [String]) -> String {
+            "&lt;tr&gt;" + cells.map { "&lt;td&gt;\($0)&lt;/td&gt;" }.joined() + "&lt;/tr&gt;"
+        }
+        let header = tr(["", "前連結会計年度", "当連結会計年度"])
+        let html = "&lt;p&gt;（借手側）未経過リース料&lt;/p&gt;&lt;table&gt;" + header
+            + tr(["１年内", "100", "120"]) + tr(["１年超", "300", "280"]) + tr(["合計", "400", "400"])
+            + "&lt;/table&gt;&lt;p&gt;（貸手側）&lt;/p&gt;&lt;table&gt;" + header
+            + tr(["１年内", "9", "9"]) + tr(["合計", "9", "9"]) + "&lt;/table&gt;"
+        let xml = XBRLTestSupport.makeXbrlInstant("""
+            <jpcrp_cor:NotesLeasesConsolidatedFinancialStatementsTextBlock
+                contextRef="CurrentYearDuration">\(html)</jpcrp_cor:NotesLeasesConsolidatedFinancialStatementsTextBlock>
+        """)
+        XBRLTestSupport.withXbrlDir(xml) { dir in
+            let parsed = BorrowingsSchedule.extractRows(xbrlDir: dir)
+            #expect(parsed?.totalCurrent == 400 * Financial.millionYen)
+        }
+    }
+
     // MARK: - not_found
 
     @Test func testReturnsNotFoundWhenNoDebtTagsPresent() {
@@ -291,6 +419,107 @@ import Foundation
             #expect(lease.prior == nil)
             #expect(lease.components.isEmpty)
         }
+    }
+
+    @Test func testLeaseRecognisedAmountsTableWithNoteMarker() {
+        // パターンF（楽天 S100XTNW 型）: 使用権資産の行＋「リース負債(注)２」1行。注記マーカーは無視する。
+        func tr(_ cells: [String]) -> String {
+            "&lt;tr&gt;" + cells.map { "&lt;td&gt;\($0)&lt;/td&gt;" }.joined() + "&lt;/tr&gt;"
+        }
+        let rows = tr(["", "前連結会計年度", "当連結会計年度"])
+            + tr(["使用権資産", "", ""])
+            + tr(["オフィスを原資産とするもの", "53,355", "77,171"])
+            + tr(["その他を原資産とするもの", "274,130", "225,840"])
+            + tr(["使用権資産合計(注)１", "327,485", "303,011"])
+            + tr(["リース負債(注)２", "352,856", "361,443"])
+        let xml = makeXbrlWithLeaseTextblock(ifrsBorrowingsXml, leaseHtmlRows: rows)
+        XBRLTestSupport.withXbrlDir(xml) { dir in
+            let (fs, _) = XBRLTestSupport.instantFieldSet(in: dir)
+            let lease = IFRSLease.extractLeaseLiabilities(fieldSet: fs, xbrlDir: dir)
+            #expect(lease.current == 361_443 * Financial.millionYen)
+            #expect(lease.prior == 352_856 * Financial.millionYen)
+            #expect(lease.components.map(\.label) == ["リース負債"])
+        }
+    }
+
+    @Test func testLeaseRecognisedAmountsTableNegativeSignedLiability() {
+        // パターンF（LIFULL S100X8TY 型）: リース負債を △ 付きで載せる。残高は絶対値。
+        func tr(_ cells: [String]) -> String {
+            "&lt;tr&gt;" + cells.map { "&lt;td&gt;\($0)&lt;/td&gt;" }.joined() + "&lt;/tr&gt;"
+        }
+        let rows = tr(["", "前連結会計年度", "当連結会計年度"])
+            + tr(["使用権資産", "", ""])
+            + tr(["オフィスを原資産とするもの", "1,572", "778"])
+            + tr(["使用権資産合計", "1,654", "789"])
+            + tr(["リース負債", "△1,713", "△829"])
+        let xml = makeXbrlWithLeaseTextblock(ifrsBorrowingsXml, leaseHtmlRows: rows)
+        XBRLTestSupport.withXbrlDir(xml) { dir in
+            let (fs, _) = XBRLTestSupport.instantFieldSet(in: dir)
+            let lease = IFRSLease.extractLeaseLiabilities(fieldSet: fs, xbrlDir: dir)
+            #expect(lease.current == 829 * Financial.millionYen)
+            #expect(lease.prior == 1_713 * Financial.millionYen)
+        }
+    }
+
+    @Test func testLeaseRecognisedAmountsTableRejectsTwoLeaseRows() {
+        // リース負債の行が2つ以上なら読まない（どちらが残高か決められない）。
+        func tr(_ cells: [String]) -> String {
+            "&lt;tr&gt;" + cells.map { "&lt;td&gt;\($0)&lt;/td&gt;" }.joined() + "&lt;/tr&gt;"
+        }
+        let rows = tr(["使用権資産", "260,622", "270,880"])
+            + tr(["リース負債", "352,856", "361,443"])
+            + tr(["リース負債（注）３", "1,000", "2,000"])
+        let xml = makeXbrlWithLeaseTextblock(ifrsBorrowingsXml, leaseHtmlRows: rows)
+        XBRLTestSupport.withXbrlDir(xml) { dir in
+            let (fs, _) = XBRLTestSupport.instantFieldSet(in: dir)
+            let lease = IFRSLease.extractLeaseLiabilities(fieldSet: fs, xbrlDir: dir)
+            #expect(lease.current == nil)
+        }
+    }
+
+    @Test func testLeaseSplitMaturityTablesBookValueColumn() {
+        // パターンG（S100XSDT 型）: 前期・当期の満期表を分け、列「帳簿価額」に残高。
+        func tr(_ cells: [String]) -> String {
+            "&lt;tr&gt;" + cells.map { "&lt;td&gt;\($0)&lt;/td&gt;" }.joined() + "&lt;/tr&gt;"
+        }
+        let header = tr(["", "帳簿価額", "１年以内", "１年超２年以内", "５年超"])
+        let html = "&lt;table&gt;" + header + tr(["リース負債", "5,278", "1,302", "1,236", "1,651"]) + "&lt;/table&gt;"
+            + "&lt;table&gt;" + header + tr(["リース負債", "4,653", "1,289", "682", "1,679"]) + "&lt;/table&gt;"
+        let xml = makeXbrlWithLeaseTextblock(ifrsBorrowingsXml, leaseHtmlRows: html)
+        XBRLTestSupport.withXbrlDir(xml) { dir in
+            let (fs, _) = XBRLTestSupport.instantFieldSet(in: dir)
+            let lease = IFRSLease.extractLeaseLiabilities(fieldSet: fs, xbrlDir: dir)
+            #expect(lease.current == 4_653 * Financial.millionYen)
+            #expect(lease.prior == 5_278 * Financial.millionYen)
+        }
+    }
+
+    @Test func testLeaseSplitMaturityPeriodRowsBookBalanceColumn() {
+        // パターンG（S100YA84 型）: 1表の中を期間行で区切り、列「帳簿残高」に残高。
+        func tr(_ cells: [String]) -> String {
+            "&lt;tr&gt;" + cells.map { "&lt;td&gt;\($0)&lt;/td&gt;" }.joined() + "&lt;/tr&gt;"
+        }
+        let rows = tr(["", "帳簿残高", "契約上のキャッシュ・フロー", "１年以内", "１年超"])
+            + tr(["", "百万円", "百万円", "百万円", "百万円"])
+            + tr(["前連結会計年度末（2025年３月31日）", "", "", "", ""])
+            + tr(["リース負債", "584", "586", "586", "－"])
+            + tr(["当連結会計年度末（2026年３月31日）", "", "", "", ""])
+            + tr(["リース負債", "4,511", "4,542", "3,608", "932"])
+        let xml = makeXbrlWithLeaseTextblock(ifrsBorrowingsXml, leaseHtmlRows: rows)
+        XBRLTestSupport.withXbrlDir(xml) { dir in
+            let (fs, _) = XBRLTestSupport.instantFieldSet(in: dir)
+            let lease = IFRSLease.extractLeaseLiabilities(fieldSet: fs, xbrlDir: dir)
+            #expect(lease.current == 4_511 * Financial.millionYen)
+            #expect(lease.prior == 584 * Financial.millionYen)
+        }
+    }
+
+    @Test func testCleanedLeaseLabelStripsNoteMarkers() {
+        #expect(IFRSLease.cleanedLeaseLabel("リース負債(注)２") == "リース負債")
+        #expect(IFRSLease.cleanedLeaseLabel("リース負債（注３）") == "リース負債")
+        #expect(IFRSLease.cleanedLeaseLabel("リース負債※１") == "リース負債")
+        #expect(IFRSLease.cleanedLeaseLabel("支払期日が1年以内") == "支払期日が1年以内")
+        #expect(IFRSLease.cleanedLeaseLabel("リース負債（流動）") == "リース負債（流動）")
     }
 
     @Test func testLeaseNoTextblockReturnsNil() {

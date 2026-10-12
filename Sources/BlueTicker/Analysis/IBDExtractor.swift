@@ -58,7 +58,7 @@ enum IBDExtractor {
     }()
 
     static func extract(fieldSet: FieldSet, accountingStandard: String, xbrlDir: URL? = nil) -> IBDResult {
-        // 銀行業: DepositsLiabilitiesBNK が存在すれば銀行業コンポーネント積み上げ
+        // 銀行業: DepositsLiabilitiesBNK（預金）が存在すれば銀行業コンポーネント積み上げ（預金自体は含めない）
         if let bankResult = extractBankIBD(fieldSet: fieldSet, accountingStandard: accountingStandard) {
             return appendingNotesLeaseIfMissing(
                 bankResult, xbrlDir: xbrlDir, accountingStandard: accountingStandard)
@@ -254,6 +254,7 @@ enum IBDExtractor {
         for group in Xbrl.ibdNonCurrentComponents { tags.formUnion(group) }
         for group in Xbrl.ibdLiquidityOrderComponents { tags.formUnion(group) }
         for comp in Xbrl.bankIBDComponents { tags.formUnion(comp.tags) }
+        tags.insert(Xbrl.bankMarkerTag)
         return tags
     }()
 
@@ -352,13 +353,14 @@ enum IBDExtractor {
     }
 
     private static func extractBankIBD(fieldSet: FieldSet, accountingStandard: String) -> IBDResult? {
-        let marker = resolveItem(fieldSet, tags: ["DepositsLiabilitiesBNK"])
+        let marker = resolveItem(fieldSet, tags: [Xbrl.bankMarkerTag])
         guard marker.current != nil || marker.prior != nil else { return nil }
 
+        // 預金は有利子負債に含めない。預金がある期は、借用金・社債等が無ければ 0。
         var totalCurrent = 0.0
         var totalPrior = 0.0
-        var hasCurrentAny = false
-        var hasPriorAny = false
+        var hasCurrentAny = marker.current != nil
+        var hasPriorAny = marker.prior != nil
         var components: [(label: String, current: Double?, prior: Double?)] = []
 
         for comp in Xbrl.bankIBDComponents {

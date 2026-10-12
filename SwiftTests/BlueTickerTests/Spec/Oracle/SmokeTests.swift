@@ -576,7 +576,7 @@ import Foundation
     /// 組立ルール（statement で計算できればそれ、できなければ notes）を既存 smoke IBD 期待値と突合する。
     /// A: statement が非 nil なら採用（リース未加算でも採用）。
     /// B: statement が現行 Extractor 合計と一致するときだけ採用（BS だけで足りる場合）。それ以外は notes。
-    /// C: B と同じだが銀行 `bank_components`（預金込み）は statement 不足とみなし notes へ。
+    /// C: B と同じだが銀行 `bank_components` は statement 不足とみなし notes へ。
     @Test func testSummaryIbdAssemblyVsSmokeExpected() async throws {
         guard TestVerboseLog.enabled else { return }
         let projectRoot = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)

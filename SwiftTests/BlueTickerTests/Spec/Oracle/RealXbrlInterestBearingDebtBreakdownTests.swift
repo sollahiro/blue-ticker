@@ -260,22 +260,22 @@ private struct AllInterestBearingIBDDecider: InterestBearingDebtDeciding {
         }
     }
 
-    /// 三菱UFJ: 銀行は bank components を行にする。
+    /// 三菱UFJ: 銀行は bank components を行にする。預金 228,512,749・譲渡性預金 17,374,010 は
+    /// 有利子負債に含めない（Sorahiro 判断 2026-10-11）。旧合計 286,946,640 − 245,886,759 = 41,059,881。
     @Test func mufgUsesBankComponents() async throws {
         guard await Self.ensureAvailable("S100W4FB") else { return }
         let (payload, audit) = try await resolve("S100W4FB", decider: GoldenIBDDecider())
         #expect(payload.needsReview == false)
         #expect(payload.denominatorTag == "bank_components")
         expectRows(payload, [
-            ("預金", ibdRowSourceFinancialsBankComponents, 228_512_749_000_000, nil),
-            ("譲渡性預金", ibdRowSourceFinancialsBankComponents, 17_374_010_000_000, nil),
             ("コマーシャル・ペーパー", ibdRowSourceFinancialsBankComponents, 3_475_042_000_000, nil),
             ("借用金", ibdRowSourceFinancialsBankComponents, 22_101_954_000_000, nil),
             ("短期社債", ibdRowSourceFinancialsBankComponents, 1_373_236_000_000, ibdMaturityCurrent),
             ("社債", ibdRowSourceFinancialsBankComponents, 14_018_955_000_000, nil),
             ("リース債務", ibdRowSourceBorrowingsSchedule, 90_694_000_000, nil),  // 区分の分からない行は開示どおり
         ])
-        #expect(payload.rows.last?.closing == 286_946_640_000_000)
+        #expect(payload.rows.last?.closing == 41_059_881_000_000)
+        #expect(!payload.rows.contains { $0.labelRaw.contains("預金") })
         #expect(audit.sentences.contains("bank_components"))
     }
 
@@ -1091,6 +1091,45 @@ private struct AllInterestBearingIBDDecider: InterestBearingDebtDeciding {
         let lease = payload.rows.filter { $0.debtSource == ibdRowSourceLeaseNote && $0.inTotal == true }
         #expect(lease.map(\.closing) == [73_894_000_000, 172_480_000_000])
         #expect(lease.allSatisfy { $0.sourceTag == Self.ifrsLeaseNote })
+    }
+
+    /// 4755 楽天グループ: BS 4科目（社債及び借入金・証券/カード/銀行事業の借入金）に、リース注記
+    /// 「財政状態計算書で認識された金額」表の「リース負債(注)２」361,443 を足す（BS はその他の金融負債に含めて
+    /// 表示）。年度末 5,931,065 = 有報 注記28 の調整表合計。期首 5,461,713 + 352,856 = 5,814,569。
+    @Test func rakutenLeaseNoteRecognisedAmountsRow() async throws {
+        guard await Self.ensureAvailable("S100XTNW") else { return }
+        let lease = IFRSLease.extractLeaseLiabilities(fieldSet: [:], xbrlDir: Self.xbrlDir("S100XTNW"))
+        #expect(lease.current == 361_443_000_000)
+        #expect(lease.prior == 352_856_000_000)
+        let (payload, _) = try await resolve("S100XTNW", decider: nil)
+        #expect(payload.needsReview == false)
+        let rows = payload.rows.filter { $0.rowKind == "segment" }
+        #expect(rows.map(\.labelRaw) == ["社債及び借入金", "証券事業の借入金", "カード事業の社債及び借入金", "銀行事業の借入金", "リース負債"])
+        #expect(rows.map(\.closing) == [1_598_052_000_000, 269_228_000_000, 810_559_000_000, 2_891_783_000_000, 361_443_000_000])
+        #expect(rows.allSatisfy { $0.inTotal == true })
+        #expect(rows.last?.debtSource == ibdRowSourceLeaseNote)
+        #expect(payload.rows.last?.closing == 5_931_065_000_000)
+        #expect(payload.rows.last?.opening == 5_814_569_000_000)
+        expectInvariants(payload)
+    }
+
+    /// 8508 Ｊトラスト（S100XSDT）: 前期・当期で分けた満期表の列「帳簿価額」を読む。
+    @Test func splitMaturityTablesLeaseBookValue() async throws {
+        guard await Self.ensureAvailable("S100XSDT") else { return }
+        let lease = IFRSLease.extractLeaseLiabilities(fieldSet: [:], xbrlDir: Self.xbrlDir("S100XSDT"))
+        #expect(lease.current == 4_653_000_000)
+        #expect(lease.prior == 5_278_000_000)
+    }
+
+    /// 8697 日本取引所グループ（S100YA84）: 1表を期間行で区切った満期表の列「帳簿残高」を読む。
+    @Test func periodRowMaturityTableLeaseBookBalance() async throws {
+        guard await Self.ensureAvailable("S100YA84") else { return }
+        let lease = IFRSLease.extractLeaseLiabilities(fieldSet: [:], xbrlDir: Self.xbrlDir("S100YA84"))
+        #expect(lease.current == 4_511_000_000)
+        #expect(lease.prior == 584_000_000)
+        let (payload, _) = try await resolve("S100YA84", decider: nil)
+        #expect(payload.needsReview == false)
+        #expect(payload.rows.last?.closing == 57_004_000_000)
     }
 
     /// サワイ: リース注記の値の後ろの空 <td> を飛ばす（当期 3,967 を前期と読まない）。

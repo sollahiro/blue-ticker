@@ -105,6 +105,7 @@ public func isCurrentFinancialsAssemblyFingerprint(_ stored: String?) -> Bool {
 // | buyback, cf_treasury_stock | statement SS/CF 行（US-GAAP は HTML の取得行。△ はキャッシュアウト正） | StatementFinancialsResolver | done |
 // | gross_profit_margin, operating_margin, nopat, nopat_margin | 派生（入力フィールドの組立後に再計算） | IndividualAnalyzer 内計算 | derived |
 // | roe, roic, net_cash, net_de, cfc, working_capital, dso/dio/dpo/ccc | 派生 | IndividualAnalyzer / Waterfall 投影 | derived |
+// | （銀行業）net_cash, net_de, roic, nopat_margin, invested_capital_turnover | 銀行（IBD の `isBank` = `DepositsLiabilitiesBNK`）は null。預金を IBD に含めないため有利子負債ベースの比率は意味を持たない（2026-10-12）。interest_bearing_debt は残す。Waterfall の net_cash_change / debt_change_impact も null | IndividualAnalyzer.applyInterestBearingDebtRatios / FinancialsYear.withholdsBankRatios | derived |
 // | business_profit*, roic_delta*, roe_delta*, *_change_impact | Waterfall 専用派生 | Waterfall 関数（analysisOnlyKeys） | derived |
 //
 // Summary 非搭載（正本 API のみ、組立対象外）: goodwill 明細、PPE 区分明細、借入明細。
@@ -537,6 +538,11 @@ extension FinancialsYear {
         return dict.filter { kept.contains($0.key) }
     }
 
+    /// 銀行業の年か（`IndividualAnalyzer` は銀行の net_cash / net_de / roic 等を null にする）。
+    /// 公開キーは増やさず、組立済みの値から読む: 現金があるのに net_cash が null なのは銀行規則だけ
+    /// （非銀行は現金があれば net_cash = 現金 − 有利子負債(無ければ 0) を必ず出す）。
+    var withholdsBankRatios: Bool { cashEquivalents != nil && netCash == nil }
+
     /// Waterfall（waterfall）応答用 JSON。`jsonObject()` の全キーに加えて、CLI `ticker waterfall` の
     /// ④⑤ブロック（ネットキャッシュ差分・運転資本/CCC差分の要因分解）を `prior`（直前期。無ければ nil）
     /// との差分からその場で計算して追加する。DB には保存しない（read 時のみの投影）。
@@ -548,7 +554,10 @@ extension FinancialsYear {
         }
         dict["net_cash_change"] = delta(netCash, prior?.netCash)
         dict["cash_change_impact"] = delta(cashEquivalents, prior?.cashEquivalents)
-        dict["debt_change_impact"] = delta(prior?.interestBearingDebt, interestBearingDebt)
+        // ネットキャッシュ差分の有利子負債要因。銀行業は net_cash を出さない（預金を除く IBD では
+        // 意味が無い）ので、この要因も null にする（どちらかの期が銀行なら null）。
+        dict["debt_change_impact"] = (withholdsBankRatios || prior?.withholdsBankRatios == true)
+            ? NSNull() : delta(prior?.interestBearingDebt, interestBearingDebt)
         dict["working_capital_change"] = delta(workingCapital, prior?.workingCapital)
         dict["accounts_receivable_change_impact"] = delta(accountsReceivable, prior?.accountsReceivable)
         dict["inventory_change_impact"] = delta(inventory, prior?.inventory)

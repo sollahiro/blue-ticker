@@ -1136,6 +1136,40 @@ enum BorrowingsSchedule {
         return (components, sorted[1].total * scale, sorted[0].total * scale)
     }
 
+    /// 貸手側（リース債権・リース投資資産）の表か。借手のリース債務ではない。
+    static let lessorLeaseTableKeywords = [
+        "リース料債権", "リース投資資産", "見積残存価額", "受取利息相当額",
+        "正味リース投資", "未稼得金融収益", "無保証残存",
+    ]
+
+    static func isLessorLeaseTableText(_ text: String) -> Bool {
+        lessorLeaseTableKeywords.contains { text.contains($0) }
+    }
+
+    /// 文書順で表の外の見出し・本文を追い、直近が「貸手」（「借手」より後）の区分にある表。
+    private static func lessorSectionTables(in soup: Document) -> Set<ObjectIdentifier> {
+        var result: Set<ObjectIdentifier> = []
+        var inLessorSection = false
+        guard let elements = try? soup.getAllElements().array() else { return result }
+        for element in elements {
+            if element.tagName() == "table" {
+                if inLessorSection { result.insert(ObjectIdentifier(element)) }
+                continue
+            }
+            if !element.parents().array().filter({ $0.tagName() == "table" }).isEmpty { continue }
+            let own = element.ownText()
+            let lessor = own.range(of: "貸手")
+            let lessee = own.range(of: "借手")
+            switch (lessor, lessee) {
+            case let (l?, b?): inLessorSection = l.lowerBound > b.lowerBound
+            case (_?, nil): inLessorSection = true
+            case (nil, _?): inLessorSection = false
+            case (nil, nil): break
+            }
+        }
+        return result
+    }
+
     /// ディスコ S100YC6I・中外製薬 S100XTBJ 実データ検証（2026-08-04）: 借入金等明細表／社債・借入金
     /// 注記が無くても、リース負債のみ計上している会社がある（無借金だがオペレーティングリース資産を
     /// 保有）。「リース取引に関する注記」専用タグを最終フォールバックとして試す。この注記はリース
@@ -1150,9 +1184,16 @@ enum BorrowingsSchedule {
             // 表内キーワード必須にすると正当なケースまで壊れる。本タグはリース以外の話題を含まない
             // 単一トピック注記のため、`hasExplicitTotalRow` と同様「合計」行を持つ最初の表という
             // 制約のみに留める（`parseComparisonTable` 自体が合計行の無い表を弾く）。
+            // 宮崎太陽銀行 S100YG72 実データ検証（2026-10-12）: 借入金等明細表は「該当事項はありません」、
+            // リース注記の最初の前/当表は貸手側の「リース料債権部分の金額 5,894 / 5,592」で、
+            // 借手のリース債務として読んでいた。貸手側の表は候補にしない（無ければ nil）。
+            // 2表目「リース料債権部分の金額の回収予定額」（1年以内…）も貸手側なので、直前の見出しが
+            // 「貸手」の区分にある表も除く。
+            let lessorTables = lessorSectionTables(in: soup)
             let table = tables.first {
                 let t = (try? $0.text()) ?? ""
-                return t.contains("前") && t.contains("当")
+                return t.contains("前") && t.contains("当") && !isLessorLeaseTableText(t)
+                    && !lessorTables.contains(ObjectIdentifier($0))
             }
             if let table, let result = parseComparisonTable(table) {
                 return tagged(result, Xbrl.jGaapLeasesNoteTextblockTag)

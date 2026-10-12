@@ -230,12 +230,47 @@ enum IFRSLease {
             )
         }
 
+        // パターンF: 「財政状態計算書で認識された金額」型の表。使用権資産の行と並んで
+        // 「リース負債」（または「リース負債合計」）が1行だけある。楽天グループ S100XTNW
+        // 実データ検証（2026-10-11）: 「リース負債(注)２ | 352,856 | 361,443」。注記で
+        // その他の金融負債に含めると書かれ、BS にリース科目がないためリースが落ちていた。
+        for rows in tables {
+            let labels = rows.map(\.label)
+            guard labels.contains(where: { $0.contains("使用権資産") }) else { continue }
+            let joined = labels.joined(separator: "\n")
+            guard !joined.contains("正味リース投資"), !joined.contains("未稼得金融収益"),
+                  !joined.contains("無保証残存") else { continue }
+            let leaseRows = rows.filter {
+                let label = compactLeaseLabel($0.label)
+                return label == "リース負債" || label == "リース負債合計"
+            }
+            guard leaseRows.count == 1, let row = leaseRows.first,
+                  row.current != nil || row.prior != nil
+            else { continue }
+            // 負債を △ 付きで載せる会社がある（LIFULL S100X8TY 実データ検証 2026-10-12:
+            // 「リース負債 | △1,713 | △829」）。残高なので符号は捨てる。
+            let scale = textblockUnitScale(html)
+            let c = row.current.map { abs($0) * scale }
+            let p = row.prior.map { abs($0) * scale }
+            return (c, p, [(label: "リース負債", current: c, prior: p)], [])
+        }
+
         // パターンD: 列見出しが「帳簿価額｜将来リース料｜１年以内…」で、値が次の行に並ぶ表を
         // 前期・当期で2つ並べる様式。日機装 S100XU3R 実データ検証（2026-10-11）: 帳簿価額
         // 27,492 百万円 = BS リース負債 3,963 + 23,529。
         if let columnLayout = columnLayoutLeaseBookValues(html) {
             let c = columnLayout.current * Financial.millionYen
             let p = columnLayout.prior * Financial.millionYen
+            return (c, p, [(label: "リース負債", current: c, prior: p)], [])
+        }
+
+        // パターンG: 満期分析表の列見出しに「帳簿価額」「帳簿残高」の列があり、行「リース負債」の
+        // その列が帳簿価額。前期・当期は表を分けるか（Ｊトラスト S100XSDT 2026-10-11:
+        // 前期 5,278 / 当期 4,653）、同じ表の期間行で区切る（日本取引所グループ S100YA84: 前期 584 / 当期 4,511）。
+        if let split = splitMaturityLeaseBookValues(html) {
+            let scale = textblockUnitScale(html)
+            let c = split.current * scale
+            let p = split.prior * scale
             return (c, p, [(label: "リース負債", current: c, prior: p)], [])
         }
 
@@ -309,6 +344,99 @@ enum IFRSLease {
         return (prior: values[0], current: values[1])
     }
 
+    /// 「リース負債（注）２」「リース負債※１」等の注記マーカーを除いたラベル。
+    static func cleanedLeaseLabel(_ label: String) -> String {
+        var out = label
+        let patterns = [
+            #"[（(]\s*注\s*[0-9０-９]*(?:\s*[、,・]\s*[0-9０-９]+)*\s*[）)]\s*[0-9０-９]*(?:\s*[、,・]\s*[0-9０-９]+)*"#,
+            #"注\s*[0-9０-９]+(?:\s*[、,・]\s*[0-9０-９]+)*$"#,
+            #"[※＊*]\s*[0-9０-９]*(?:\s*[、,・]\s*[0-9０-９]+)*"#,
+        ]
+        for pattern in patterns {
+            out = out.replacingOccurrences(of: pattern, with: "", options: .regularExpression)
+        }
+        out = out.trimmingCharacters(in: .whitespaces)
+        return out.isEmpty ? label : out
+    }
+
+    private static func compactLeaseLabel(_ label: String) -> String {
+        cleanedLeaseLabel(label).replacingOccurrences(of: " ", with: "")
+            .replacingOccurrences(of: "　", with: "")
+            .replacingOccurrences(of: "(", with: "（").replacingOccurrences(of: ")", with: "）")
+    }
+
+    /// TextBlock の金額単位。「千円」だけが書かれていれば千円、それ以外は百万円。
+    static func textblockUnitScale(_ html: String) -> Double {
+        let text = html.replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression)
+        if text.contains("千円"), !text.contains("百万円") { return 1_000 }
+        return Financial.millionYen
+    }
+
+    /// パターンG の帳簿価額（生値）。期間ごとに1つずつ取れたときだけ返す。
+    private static func splitMaturityLeaseBookValues(_ html: String) -> (prior: Double, current: Double)? {
+        guard let soup = try? SwiftSoup.parse(html), let tables = try? soup.select("table") else {
+            return nil
+        }
+        func cellTexts(_ row: Element) -> [String] {
+            ((try? row.select("td, th").array()) ?? []).map {
+                ((try? $0.text(trimAndNormaliseWhitespace: true)) ?? "")
+                    .replacingOccurrences(of: " ", with: "").replacingOccurrences(of: "　", with: "")
+            }
+        }
+        var unlabelled: [Double] = []
+        var prior: Double?
+        var current: Double?
+        for table in tables {
+            guard let rows = try? table.select("tr").array(), rows.count >= 2 else { continue }
+            let tableText = (try? table.text()) ?? ""
+            if tableText.contains("正味リース投資") || tableText.contains("未稼得金融収益")
+                || tableText.contains("無保証残存") || tableText.contains("使用権資産")
+            {
+                continue
+            }
+            guard let headerIndex = rows.firstIndex(where: { row in
+                let cells = cellTexts(row)
+                return cells.contains { $0 == "帳簿価額" || $0 == "帳簿残高" }
+                    && cells.contains { $0.contains("年以内") }
+            }) else { continue }
+            let header = cellTexts(rows[headerIndex])
+            guard header.first?.isEmpty ?? true,
+                  let bookIndex = header.firstIndex(where: { $0 == "帳簿価額" || $0 == "帳簿残高" })
+            else { continue }
+            var period: String?
+            var tableValues: [(period: String?, value: Double)] = []
+            for row in rows[(headerIndex + 1)...] {
+                let cells = cellTexts(row)
+                guard let first = cells.first else { continue }
+                if first.hasPrefix("前連結会計年度") || first.hasPrefix("前事業年度") { period = "prior"; continue }
+                if first.hasPrefix("当連結会計年度") || first.hasPrefix("当事業年度") { period = "current"; continue }
+                let label = compactLeaseLabel(first)
+                guard label == "リース負債" || label == "リース負債合計" else { continue }
+                guard cells.count == header.count,
+                      let value = XBRLUtils.parseTextblockCellValue(cells[bookIndex])
+                else { return nil }
+                tableValues.append((period, value))
+            }
+            for entry in tableValues {
+                switch entry.period {
+                case "prior":
+                    guard prior == nil else { return nil }
+                    prior = entry.value
+                case "current":
+                    guard current == nil else { return nil }
+                    current = entry.value
+                default:
+                    unlabelled.append(entry.value)
+                }
+            }
+        }
+        if let prior, let current, unlabelled.isEmpty { return (prior, current) }
+        if prior == nil, current == nil, unlabelled.count == 2 {
+            return (prior: unlabelled[0], current: unlabelled[1])
+        }
+        return nil
+    }
+
     /// 借手のリース負債満期分析表か（貸手の正味投資未回収表と「１年以内」が衝突するため表単位判定）。
     /// 実データ: スズキ S100W4MT（帳簿価額＋契約上CF）、クボタ S100XR0M（現在価値＋割引前総額）。
     private static func isLesseeLeaseLiabilityMaturityTable(_ labels: [String]) -> Bool {
@@ -360,9 +488,10 @@ enum IFRSLease {
             var parsed: [(label: String, current: Double?, prior: Double?)] = []
             for row in rows {
                 guard let cells = try? row.select("td"), cells.count >= 3 else { continue }
-                guard let label = try? cells.first()?.text(trimAndNormaliseWhitespace: true),
-                    !label.isEmpty
+                guard let rawLabel = try? cells.first()?.text(trimAndNormaliseWhitespace: true),
+                    !rawLabel.isEmpty
                 else { continue }
+                let label = cleanedLeaseLabel(rawLabel)
                 // 値の後ろに空のスペーサー <td> を置く会社がある（サワイ S100YITS 実データ検証
                 // 2026-10-11: 当期 3,967 を前期と読み当期 nil になっていた）。空セルを除いてから
                 // 末尾2つを前期・当期とする。空でないセルが2つ未満なら従来どおり位置で読む。
