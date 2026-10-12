@@ -8,7 +8,7 @@ import Testing
     private let emptyFinancialsYear = #"""
         {
           "fy_end": null, "financial_period": null, "cur_per_type": null, "doc_id": null,
-          "sales_label": null, "gross_profit_label": null, "op_label": null,
+          "sales_label": null, "gross_profit_label": null, "op_label": null, "sga_label": null,
           "sales": null, "gross_profit": null, "gross_profit_margin": null, "sga": null,
           "operating_profit": null, "operating_margin": null, "nopat": null,
           "net_profit": null, "effective_tax_rate": null, "roe": null, "roic": null,
@@ -24,7 +24,7 @@ import Testing
           "issued_shares": null, "employees": null, "business_profit": null,
           "business_profit_margin": null, "business_profit_change": null,
           "sales_change_impact": null, "gross_margin_change_impact": null,
-          "sga_change_impact": null, "net_margin": null, "asset_turnover": null,
+          "sga_change_impact": null, "equity_method_change_impact": null, "net_margin": null, "asset_turnover": null,
           "financial_leverage": null, "roic_delta": null, "roic_margin_effect": null,
           "roic_turnover_effect": null, "roe_delta": null, "roe_net_margin_effect": null,
           "roe_asset_turnover_effect": null, "roe_leverage_effect": null,

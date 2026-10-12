@@ -80,7 +80,7 @@ private func makeResponse(code: String, years: Int, newestYear: Int = 2025) thro
 /// trim 後の最古年でこれらが null 化されることを検証するために使う。
 private let priorDependentKeys = [
     "business_profit_change", "sales_change_impact", "gross_margin_change_impact",
-    "sga_change_impact", "roic_delta", "roic_margin_effect", "roic_turnover_effect",
+    "sga_change_impact", "equity_method_change_impact", "roic_delta", "roic_margin_effect", "roic_turnover_effect",
     "roe_delta", "roe_net_margin_effect", "roe_asset_turnover_effect", "roe_leverage_effect",
 ]
 /// フェイク計算器のヘルパー: makeResponse の結果を FinancialsComputeResult でラップする。

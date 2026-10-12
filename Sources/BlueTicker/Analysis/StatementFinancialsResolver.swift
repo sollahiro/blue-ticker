@@ -26,6 +26,11 @@ struct StatementFinancialsValues {
     var grossProfit: Double?
     var grossProfitLabel: String?
     var sga: Double?
+    /// 販管費の表示名。null は通常の販売費及び一般管理費。銀行（業務純益経路）は「営業経費」。
+    var sgaLabel: String? = nil
+    /// 銀行の持分法による投資損益（業務純益の構成要素。CF の △ を反転済み、無ければ 0）。
+    /// 銀行業務純益経路以外は nil。Waterfall の持分法要因に使う。
+    var equityMethodIncome: Double? = nil
     var cfo: Double?
     var cfi: Double?
     var pretaxIncome: Double?
@@ -149,6 +154,22 @@ enum StatementFinancialsResolver {
             operatingProfit = bp
             operatingProfitLabel = "事業利益"
         }
+        var sga = remaining.sga
+        var sgaLabel: String? = nil
+        var equityMethodIncome: Double? = nil
+        // 銀行（預金マーカー。IBD と同じ判定）で営業利益行が無く経常利益に落ちた会社は
+        // 業務純益 = 業務粗利益 − 営業経費 + 持分法による投資損益 を営業利益とし、販管費は営業経費。
+        // 営業利益行を持つ銀行子会社持株（HSホールディングス 8699）は対象外。
+        if op.method == "ordinary_income", Xbrl.isBankFiling(instantFS) {
+            let bank = bankNetBusinessProfit(
+                grossProfit: remaining.grossProfit, grossProfitLabel: remaining.grossProfitLabel,
+                durationFS: durationFS, cashFlow: year.cashFlow)
+            operatingProfit = bank.netBusinessProfit
+            operatingProfitLabel = bank.netBusinessProfit == nil ? nil : bankNetBusinessProfitLabel
+            sga = bank.operatingExpenses
+            sgaLabel = bank.operatingExpenses == nil ? nil : bankOperatingExpensesLabel
+            equityMethodIncome = bank.netBusinessProfit == nil ? nil : bank.equityMethodIncome
+        }
 
         return StatementFinancialsValues(
             sales: sales,
@@ -173,7 +194,9 @@ enum StatementFinancialsResolver {
             dividendPaidCF: divPaid.current,
             grossProfit: remaining.grossProfit,
             grossProfitLabel: remaining.grossProfitLabel,
-            sga: remaining.sga,
+            sga: sga,
+            sgaLabel: sgaLabel,
+            equityMethodIncome: equityMethodIncome,
             cfo: remaining.cfo,
             cfi: remaining.cfi,
             pretaxIncome: remaining.pretaxIncome,
@@ -326,6 +349,28 @@ enum StatementFinancialsResolver {
             geographyCoverageSalesLabel: geographyCoverageSalesLabel(
                 summaryLabel: resolvedSalesLabel, fieldSet: durationFS)
         )
+    }
+
+    // MARK: - 銀行 業務純益
+
+    static let bankNetBusinessProfitLabel = "業務純益"
+    static let bankOperatingExpensesLabel = "営業経費"
+
+    /// 銀行の業務純益 = 業務粗利益（`GrossProfitExtractor` の連結業務粗利益）− 営業経費 + 持分法による投資損益。
+    /// 業務粗利益か営業経費が無ければ業務純益は nil（経常利益や差額で埋めない）。
+    /// 持分法は CF 本表の調整行（利益は △）を反転し、無ければ 0。
+    static func bankNetBusinessProfit(
+        grossProfit: Double?, grossProfitLabel: String?, durationFS: FieldSet,
+        cashFlow: [StatementLineItem]
+    ) -> (netBusinessProfit: Double?, operatingExpenses: Double?, equityMethodIncome: Double) {
+        let operatingExpenses = resolveItem(durationFS, tags: Xbrl.bankOperatingExpensesTags).current
+        let equityMethodIncome = Xbrl.bankEquityMethodCashFlowTags.lazy
+            .compactMap { tag in cashFlow.first(where: { $0.tag == tag })?.value }
+            .first.map { -$0 } ?? 0
+        guard let grossProfit, grossProfitLabel == "連結業務粗利益", let operatingExpenses else {
+            return (nil, operatingExpenses, equityMethodIncome)
+        }
+        return (grossProfit - operatingExpenses + equityMethodIncome, operatingExpenses, equityMethodIncome)
     }
 
     /// statement 行に載る #5c / #8 フィールド。HTML/TextBlock フォールバックは付けない。

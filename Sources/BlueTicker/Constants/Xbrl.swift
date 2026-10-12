@@ -452,6 +452,21 @@ enum Xbrl {
     /// 銀行業判定マーカー（BS の預金）。有利子負債には含めない。
     static let bankMarkerTag = "DepositsLiabilitiesBNK"
 
+    /// 銀行業か（BS 本表 Instant FieldSet に預金 `bankMarkerTag` がある）。
+    /// IBD（bank components・預金除外）と Summary 業務純益（`StatementFinancialsResolver`）の共通判定。
+    static func isBankFiling(_ instantFieldSet: FieldSet) -> Bool {
+        guard let deposits = instantFieldSet[bankMarkerTag] else { return false }
+        return deposits.current != nil || deposits.prior != nil
+    }
+
+    /// 銀行 PL の営業経費（業務純益 = 業務粗利益 − 営業経費 + 持分法による投資損益）。
+    /// 無いときは業務純益・販管費（営業経費）とも null（経常利益や GP − OP の差額で埋めない）。
+    static let bankOperatingExpensesTags: [String] = ["GeneralAndAdministrativeExpensesOEBNK"]
+
+    /// 銀行の持分法による投資損益（営業 CF の調整行）。CF では利益が △ なので符号を反転して使う。
+    /// 無いとき（持分法適用会社なし）は 0。
+    static let bankEquityMethodCashFlowTags: [String] = ["EquityInEarningsLossesOfAffiliatesOpeCF"]
+
     // 銀行業 有利子負債コンポーネント（Python: BANK_IBD_COMPONENT_DEFINITIONS）
     // 預金・譲渡性預金は銀行でも有利子負債に含めない（Sorahiro 判断 2026-10-11）。
     // 銀行かどうかは `bankMarkerTag`（預金）の有無で判定する。

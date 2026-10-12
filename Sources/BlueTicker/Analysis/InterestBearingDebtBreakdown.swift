@@ -141,8 +141,7 @@ enum InterestBearingDebtBreakdown {
         // 保険は通常パイプライン（資金調達の本業でも内訳を出す）。
         let instantFS = statementInstantFieldSet(
             xbrlDir: xbrlDir, allTags: tags, accountingStandard: accountingStandard)
-        let deposits = instantFS[Xbrl.bankMarkerTag]
-        let isBank = deposits?.current != nil || deposits?.prior != nil
+        let isBank = Xbrl.isBankFiling(instantFS)
         return IBDInputs(
             consolidated: consolidated,
             isBank: isBank,
