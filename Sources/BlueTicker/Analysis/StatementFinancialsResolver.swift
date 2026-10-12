@@ -456,7 +456,8 @@ enum StatementFinancialsResolver {
     /// US-GAAP CF 本表の活動区分合計行の後半（空白除去後、「営業活動」「投資活動」の直後）。
     /// 実データ: キヤノン／オムロン「によるキャッシュ・フロー」、村田「による キャッシュ・フロー合計」、
     /// 小松「による現金及び現金同等物の増加（純額）」、野村「に使用された現金（純額）」、
-    /// オリックス「から得た現金（純額）」「に使用した現金（純額）」。
+    /// オリックス「から得た現金（純額）」「に使用した現金（純額）」、
+    /// ソニー（米国基準期）「から得た現金・預金及び現金同等物（純額）」、TDK（同）「による純現金収入」。
     static let usgaapCashFlowTotalSuffixes: [String] = [
         "によるキャッシュ・フロー合計",
         "によるキャッシュ・フロー",
@@ -473,7 +474,23 @@ enum StatementFinancialsResolver {
         "から得た(に使用した)現金（純額）",
         "に使用された（から得た）現金（純額）",
         "から得た（に使用された）現金（純額）",
+        "から得た現金・預金及び現金同等物（純額）",
+        "に使用した現金・預金及び現金同等物（純額）",
+        "に使用された現金・預金及び現金同等物（純額）",
+        "による純現金収入",
+        "による純現金支出",
     ]
+
+    /// 活動名を括弧内で繰り返す合計行（野村 2021〜2025 年 3 月期
+    /// 「営業活動から得た（△営業活動に使用された）現金（純額）」）。
+    static func usgaapCashFlowRepeatedActivityTotals(_ activity: USGAAPCashFlowActivity) -> [String] {
+        let p = activity.prefix
+        return [
+            "\(p)から得た（△\(p)に使用された）現金（純額）",
+            "\(p)から得た（\(p)に使用された）現金（純額）",
+            "\(p)から得た（△\(p)に使用した）現金（純額）",
+        ]
+    }
 
     /// 空白（全角含む）を除き、Ⅰ／１．等の区分接頭辞を落とした比較用ラベル。
     static func compactCashFlowLabel(_ label: String) -> String {
@@ -491,6 +508,7 @@ enum StatementFinancialsResolver {
         _ items: [StatementLineItem], activity: USGAAPCashFlowActivity
     ) -> Double? {
         let targets = Set(usgaapCashFlowTotalSuffixes.map { activity.prefix + $0 })
+            .union(usgaapCashFlowRepeatedActivityTotals(activity))
         var firstZero: Double?
         for item in items {
             guard let label = item.label else { continue }

@@ -24,6 +24,10 @@ import Testing
         Expected(docID: "S100YG5L", cfo: 1_369_567_000_000, cfi: -1_114_671_000_000),
         // 村田 6981（US-GAAP 期）「営業活動による␣キャッシュ・フロー合計」（セル内改行）
         Expected(docID: "S100R773", cfo: 276_278_000_000, cfi: -157_850_000_000),
+        // 野村 8604（2025 年 3 月期）「営業活動から得た（△営業活動に使用された）現金（純額）」
+        Expected(docID: "S100VXTD", cfo: -678_611_000_000, cfi: -848_647_000_000),
+        // ソニー 6758（米国基準の 2021 年 3 月期）「営業活動から得た現金・預金及び現金同等物（純額）」
+        Expected(docID: "S100LM4N", cfo: 1_350_150_000_000, cfi: -1_781_516_000_000),
     ]
 
     /// 修正前から本番で値が出ている会社。値が変わらないこと（本番 /financials と一致）。
@@ -137,6 +141,18 @@ import Testing
             row("営業活動による現金及び現金同等物の増加（純額）", 42, .operating),
         ]
         #expect(StatementFinancialsResolver.usgaapCashFlowActivityTotal(rows, activity: .operating) == 42)
+    }
+
+    @Test func activityTotalMatchesRepeatedActivityAndCashDepositVariants() {
+        let rows = [
+            row("営業活動から得た（△営業活動に使用された）現金（純額）", -9, .operating),
+            row("投資活動に使用した 現金・預金及び現金同等物（純額）", -4, .investing),
+        ]
+        #expect(StatementFinancialsResolver.usgaapCashFlowActivityTotal(rows, activity: .operating) == -9)
+        #expect(StatementFinancialsResolver.usgaapCashFlowActivityTotal(rows, activity: .investing) == -4)
+        // 他区分の名前を括弧内に持つ行は拾わない。
+        let crossed = [row("営業活動から得た（△投資活動に使用された）現金（純額）", 1, .operating)]
+        #expect(StatementFinancialsResolver.usgaapCashFlowActivityTotal(crossed, activity: .operating) == nil)
     }
 
     @Test func activityTotalRespectsSection() {
