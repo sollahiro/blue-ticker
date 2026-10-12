@@ -340,6 +340,22 @@ enum Xbrl {
         "SellingGeneralAndAdministrativeExpenses",
     ]
 
+    /// 業種別の販管費合計行。ガスは「供給販売費及び一般管理費（合計）」、商品先物は営業総利益の下の「営業費用合計」。
+    /// `sgaDirectTags` が無いときだけ使う（GP 構成・計算法 OP には使わない）。
+    static let sgaIndustryTotalTags: [String] = [
+        "SellingGeneralAndAdministrativeExpensesGAS",
+        "OperatingExpensesCMD",
+    ]
+
+    /// 販売費の無い PL の「一般管理費（合計）」行（海運・倉庫・運送・証券金融・不動産賃貸等）。
+    /// 販売費の行（`sgaSellingLineTags`）が別にある PL では内訳の一部なので使わない。
+    static let sgaGeneralAdministrativeOnlyTags: [String] = ["GeneralAndAdministrativeExpensesSGA"]
+
+    /// 一般管理費と並んで開示される販売費の行。これがあると一般管理費だけでは販管費にならない。
+    static let sgaSellingLineTags: [String] = [
+        "SellingExpenses", "SellingExpensesSGA", "SupplyAndSalesExpensesGAS", "SellingExpensesIFRS",
+    ]
+
     static let sgaSellingIFRSTags: [String] = ["SellingExpensesIFRS"]
     static let sgaGaIFRSTags: [String] = ["GeneralAndAdministrativeExpensesIFRS"]
 
