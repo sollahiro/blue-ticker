@@ -157,10 +157,12 @@ enum StatementFinancialsResolver {
         var sga = remaining.sga
         var sgaLabel: String? = nil
         var equityMethodIncome: Double? = nil
-        // 銀行（預金マーカー。IBD と同じ判定）で営業利益行が無く経常利益に落ちた会社は
+        // 銀行（預金マーカー。IBD と同じ判定）で連結の営業利益値が無い会社（経常利益に落ちる、または
+        // 単体だけの OperatingIncome タグで値が空になる みずほ 8411 S100YF8Y）は
         // 業務純益 = 業務粗利益 − 営業経費 + 持分法による投資損益 を営業利益とし、販管費は営業経費。
         // 営業利益行を持つ銀行子会社持株（HSホールディングス 8699）は対象外。
-        if op.method == "ordinary_income", Xbrl.isBankFiling(instantFS) {
+        if op.method == "ordinary_income" || op.operatingProfit == nil,
+           !Xbrl.isInsuranceFiling(durationFS), Xbrl.isBankFiling(instantFS) {
             let bank = bankNetBusinessProfit(
                 grossProfit: remaining.grossProfit, grossProfitLabel: remaining.grossProfitLabel,
                 durationFS: durationFS, cashFlow: year.cashFlow)

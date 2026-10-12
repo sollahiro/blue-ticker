@@ -7,6 +7,8 @@
 //
 // - 三菱UFJ 8306 / S100YJQO（26/03）: 5,944,287 − 3,489,570 + 845,545 = 3,300,262
 // - 千葉銀行 8331 / S100YDSE（26/03）: 223,275 − 104,888 + 623 = 119,010
+// - みずほ 8411 / S100YF8Y（26/03）: 単体 OperatingIncome タグだけあり連結 OP 値が空（旧: 経常利益・op_label null）
+//   3,477,300 − 2,103,458 + 52,266 = 1,426,108
 // - 七十七銀行 8341 / S100YAM0（26/03）: 持分法なし 106,460 − 55,360 = 51,100
 // - 信金中央金庫 8421 / S100YH59（26/03）: 営業経費タグ無し（「経費」GeneralAndAdministrativeExpenses）
 //   → operating_profit / sga とも null（経常利益・差額で埋めない）
@@ -61,6 +63,12 @@ import Testing
         try await expectBank(
             "S100YDSE", grossProfit: 223_275, expenses: 104_888, equity: 623,
             netBusinessProfit: 119_010)
+    }
+
+    @Test func mizuhoS100YF8YWithNonConsolidatedOperatingIncomeTagStillUsesNetBusinessProfit() async throws {
+        try await expectBank(
+            "S100YF8Y", grossProfit: 3_477_300, expenses: 2_103_458, equity: 52_266,
+            netBusinessProfit: 1_426_108)
     }
 
     @Test func shichijushichiS100YAM0WithoutEquityMethodUsesZero() async throws {
