@@ -12,7 +12,9 @@ private let financialSalesLabels: Set<String> = ["経常収益"]
 /// 販管費が無い年は GrossProfit − OP をウォーターフォール内でだけ使う。その差額は
 /// `sellingGeneralAdministrativeExpenses`（公開 `sga`）へ書き戻さない。
 /// 銀行（業務純益経路）は BusinessProfit = 業務粗利益 − 営業経費 = 業務純益（Summary OP と同値）で、
-/// 前年差 = 売上差 + 粗利率差 + 営業経費差（差額項なし）。
+/// 既存の3スロットをそのまま使う: 売上差 = 経常収益差、粗利率差 = 業務粗利益率（業務粗利益 ÷ 経常収益）差、
+/// 販管費差 = 営業経費差。3要因の和は Δ業務純益 に一致する（差額項なし）。
+/// どちらかの期が銀行で、両期の経常収益・業務粗利益・営業経費（開示値）が揃わないときは前年差を出さない。
 ///
 /// 前提: years が fyEnd 順に既ソートされていること。入力順は問わない。
 func applyOperatingProfitChangeToYears(_ years: inout [YearEntry]) {
@@ -59,6 +61,14 @@ func applyOperatingProfitChangeToYears(_ years: inout [YearEntry]) {
               let priorSGA = waterfallSGA(priorCD, priorRD),
               curSales > 0, priorSales > 0 else { continue }
 
+        // 銀行: 差額の販管費や非銀行年との混在で埋めない（fail closed）。
+        if isBankNetBusinessProfit(curCD) || isBankNetBusinessProfit(priorCD) {
+            guard isBankNetBusinessProfit(curCD), isBankNetBusinessProfit(priorCD),
+                  curCD.grossProfit != nil, priorCD.grossProfit != nil,
+                  curCD.sellingGeneralAdministrativeExpenses != nil,
+                  priorCD.sellingGeneralAdministrativeExpenses != nil else { continue }
+        }
+
         // 粗利ベース（GrossProfit または BP+SGA）
         let curBase = curCD.grossProfit ?? (curBP + curSGA)
         let priorBase = priorCD.grossProfit ?? (priorBP + priorSGA)
@@ -76,6 +86,11 @@ func applyOperatingProfitChangeToYears(_ years: inout [YearEntry]) {
         years[curIdx].calculatedData.grossMarginChangeImpact = gmImpact
         years[curIdx].calculatedData.sgaChangeImpact = sgaImpact
     }
+}
+
+/// 銀行業務純益経路の年か（Summary op_label が「業務純益」）。
+private func isBankNetBusinessProfit(_ cd: CalculatedData) -> Bool {
+    cd.opLabel == StatementFinancialsResolver.bankNetBusinessProfitLabel
 }
 
 /// ウォーターフォールで使う販管費。開示値が無い年は GrossProfit − OP の差額（ここでだけ使い、公開 `sga` には書かない）。
