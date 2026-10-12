@@ -25,6 +25,8 @@ extension IndividualAnalyzeOutcome {
 struct IndividualAnalyzer {
     let edinetClient: EdinetAPIClient
     let cacheManager: CacheManager
+    /// EDINET コードリストの提出者業種（`MasterStock.s33nm`）。銀行判定 `Xbrl.isBankFiling` に渡す。
+    var edinetIndustry: String? = nil
 
     // MARK: - Public Entry Point
 
@@ -124,9 +126,10 @@ struct IndividualAnalyzer {
 
         // 本表水準値は statement 正本のみ（#5 / #5b-1 / #5c / #8）。旧 Extractor への
         // フィールド単位フォールバックはしない。US-GAAP は USGAAPStatementHtml。
-        let statementMain = StatementFinancialsResolver.resolve(xbrlDir: xbrlDir)
+        let statementMain = StatementFinancialsResolver.resolve(
+            xbrlDir: xbrlDir, edinetIndustry: edinetIndustry)
         let ibd = await BreakdownFinancialsResolver.financialsCanonicalInterestBearingDebt(
-            xbrlDir: xbrlDir)
+            xbrlDir: xbrlDir, edinetIndustry: edinetIndustry)
         let interestExpense = statementMain?.interestExpense
             ?? StatementNotesResolver.financialsCanonicalInterestExpense(xbrlDir: xbrlDir)
 
@@ -291,7 +294,8 @@ func individualCacheIsReusable(_ cached: [String: Any]?, cacheVersion: String, r
 extension IndividualAnalyzer {
     /// 有利子負債ベースの比率（net_cash / net_de / roic / nopat_margin / invested_capital_turnover）を埋める。
     ///
-    /// 銀行業（`InterestBearingDebtBreakdown.inputs` の `isBank` = 預金の銀行マーカータグあり。
+    /// 銀行業（`InterestBearingDebtBreakdown.inputs` の `isBank` = 預金の銀行マーカータグあり、または
+    /// EDINET 提出者業種が銀行業。
     /// IBD を bank components で出す判定と同じ）は預金を有利子負債に含めないため、これらの比率は
     /// 意味を持たない。値を出さずに null のままにする（Maintainer 判断 2026-10-12。キーは増やさない）。
     /// `interest_bearing_debt` 自体（預金を除く）は呼び出し側で残す。

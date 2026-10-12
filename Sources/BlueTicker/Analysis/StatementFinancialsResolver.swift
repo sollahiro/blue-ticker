@@ -52,7 +52,8 @@ enum StatementFinancialsResolver {
     /// 例外: 本表が業種別営業収益に分割され合計行が無い会社は、
     /// `statementSalesSummaryTotalTags` を売上 FieldSet へ載せる。それも無ければ
     /// `operatingRevenueSplitGroups` の内訳を合算する（9127 S100Y90D）。
-    static func resolve(xbrlDir: URL) -> StatementFinancialsValues? {
+    /// `edinetIndustry` は EDINET 提出者業種（銀行判定 `Xbrl.isBankFiling` に渡す。不明なら nil）。
+    static func resolve(xbrlDir: URL, edinetIndustry: String? = nil) -> StatementFinancialsValues? {
         let tagElements = XBRLUtils.collectAllNumericElements(in: xbrlDir, nilAsZero: false)
         guard !tagElements.isEmpty else { return nil }
         let accountingStandard = detectAccountingStandard(tagElements)
@@ -67,13 +68,15 @@ enum StatementFinancialsResolver {
             return resolveFromUSGAAPStatement(year, tagElements: tagElements)
         }
         return resolveFromStructuredStatement(
-            year, tagElements: tagElements, accountingStandard: accountingStandard)
+            year, tagElements: tagElements, accountingStandard: accountingStandard,
+            edinetIndustry: edinetIndustry)
     }
 
     // MARK: - J-GAAP / IFRS（構造化 XBRL タグ）
 
     private static func resolveFromStructuredStatement(
-        _ year: StatementYear, tagElements: XbrlTagElements, accountingStandard: String
+        _ year: StatementYear, tagElements: XbrlTagElements, accountingStandard: String,
+        edinetIndustry: String?
     ) -> StatementFinancialsValues {
         // Statement 行のタグを許可リストにし、元 fact のコンテキストを保った FieldSet を組む。
         // CF の期首/期末で同タグが並ぶ会社でも Instant CurrentYear を正しく拾える
@@ -153,12 +156,12 @@ enum StatementFinancialsResolver {
         }
         var sga = remaining.sga
         var sgaLabel = remaining.sgaLabel
-        // 銀行（預金マーカー。IBD と同じ判定）で連結の営業利益値が無い会社（経常利益に落ちる、または
+        // 銀行（預金マーカーまたは EDINET 提出者業種＝銀行業。IBD と同じ判定）で連結の営業利益値が無い会社（経常利益に落ちる、または
         // 単体だけの OperatingIncome タグで値が空になる みずほ 8411 S100YF8Y）は
         // 業務純益 = 業務粗利益 − 営業経費 を営業利益とし、販管費は営業経費。
         // 営業利益行を持つ銀行子会社持株（HSホールディングス 8699）は対象外。
         if op.method == "ordinary_income" || op.operatingProfit == nil,
-           !Xbrl.isInsuranceFiling(durationFS), Xbrl.isBankFiling(instantFS) {
+           !Xbrl.isInsuranceFiling(durationFS), Xbrl.isBankFiling(instantFS, edinetIndustry: edinetIndustry) {
             let bank = bankNetBusinessProfit(
                 grossProfit: remaining.grossProfit, grossProfitLabel: remaining.grossProfitLabel,
                 durationFS: durationFS)

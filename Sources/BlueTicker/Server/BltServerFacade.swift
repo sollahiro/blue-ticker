@@ -229,13 +229,14 @@ public extension BltServerContext {
     /// EDINET 取得・XBRL パースを伴う高コスト処理。「有価証券報告書未提出」（対象外）と
     /// 「抽出失敗」を区別して返す（戻り値パターン、issue #86）。
     func computeFinancials(code: String, years: Int) async -> FinancialsComputeResult {
-        let analyzer = IndividualAnalyzer(edinetClient: edinetClient, cacheManager: cacheManager)
+        let stock = await masterDataManager.getByCode(code)
+        let analyzer = IndividualAnalyzer(
+            edinetClient: edinetClient, cacheManager: cacheManager, edinetIndustry: stock?.s33nm)
         // Ingest は derived `individual_analysis_*` を使わない。そのキーは
         // `blueTickerVersion` であり `companyFinancialsCacheVersion`（fin-vN）ではない。
         // 既定 `useCache: true` のままだと fin-vN ingest が古 IBD/ROIC を現行として書く。
         switch await analyzer.analyze(code: code, analysisYears: years, useCache: false) {
         case .result(let result):
-            let stock = await masterDataManager.getByCode(code)
             return .success(
                 FinancialsResponse(
                     code: code,
@@ -1222,7 +1223,10 @@ private extension BltServerContext {
         guard let xbrlDir = await downloadAnnualFilingXbrl(
             docID: docID, correctionDocIDs: correctionDocIDs)
         else { return .failed }
-        let inputs = InterestBearingDebtBreakdown.inputs(xbrlDir: xbrlDir)
+        // 銀行判定に EDINET 提出者業種を渡す（financials の IBD と同じ判定にする）。
+        // 内訳取り込みは docID だけなので、DEI の EDINET コードから master を引く。
+        let edinetIndustry = await edinetIndustry(xbrlDir: xbrlDir)
+        let inputs = InterestBearingDebtBreakdown.inputs(xbrlDir: xbrlDir, edinetIndustry: edinetIndustry)
         switch await InterestBearingDebtBreakdown.resolve(
             inputs: inputs, decider: interestBearingDebtDecider, docID: docID)
         {
@@ -1266,6 +1270,14 @@ public extension BltServerContext {
     }
 
     /// 有利子負債の内訳（axis=`interest_bearing_debt`）を解決する。
+    /// XBRL の DEI EDINET コード（`EDINETCodeDEI`）に対応する master の提出者業種。無ければ nil。
+    func edinetIndustry(xbrlDir: URL) async -> String? {
+        guard let edinetCode = XBRLUtils.extractTextblockHtml(in: xbrlDir, textblockTag: Xbrl.edinetCodeDEITag)?
+            .trimmingCharacters(in: .whitespacesAndNewlines), !edinetCode.isEmpty
+        else { return nil }
+        return await masterDataManager.industry(forEdinetCode: edinetCode)
+    }
+
     func resolveInterestBearingDebtBreakdown(docID: String, correctionDocIDs: [String] = []) async -> BreakdownResolveResult {
         await resolveInterestBearingDebtBreakdownImpl(
             docID: docID, correctionDocIDs: correctionDocIDs)

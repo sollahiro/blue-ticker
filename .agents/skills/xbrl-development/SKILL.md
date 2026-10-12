@@ -203,7 +203,7 @@ J-GAAP / IFRS:
 /financials の interest_bearing_debt は軸の合計行（decider 無し）。
 needs_review は null（fail closed）。not_found でインスタンスが大きければ 0。
 
-銀行（DepositsLiabilitiesBNK が statement Instant FieldSet にある）:
+銀行（DepositsLiabilitiesBNK が statement Instant FieldSet にある、または EDINET 提出者業種が銀行業）:
   Xbrl.bankIBDComponents を1行ずつ。source = financials_bank_components。
   独立 coverage は無い。notes のリースだけ足す。
 
@@ -225,7 +225,7 @@ needs_review は null（fail closed）。not_found でインスタンスが大�
 3. 経常利益フォールバック: Xbrl.ordinaryIncomeTags（J-GAAP 金融機関向け。IFRS企業では抑止）
 ```
 
-銀行（`Xbrl.isBankFiling` = BS に `DepositsLiabilitiesBNK`。IBD と同じ判定）で 3 に落ちた会社は、
+銀行（`Xbrl.isBankFiling` = BS に `DepositsLiabilitiesBNK`、または呼び出し元が渡す EDINET 提出者業種（`MasterStock.s33nm`）が銀行業。IBD と同じ判定）で 3 に落ちた会社は、
 `StatementFinancialsResolver` が Summary の営業利益を **業務純益** に置き換える:
 業務粗利益（`GrossProfitExtractor` の連結業務粗利益）− 営業経費（`GeneralAndAdministrativeExpensesOEBNK`）。
 持分法は足さない。Waterfall は既存3スロット（sales / gross_margin / sga _change_impact）に

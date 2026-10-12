@@ -16,7 +16,8 @@ enum BreakdownFinancialsResolver {
         let method: String
         let accountingStandard: String
         let warnings: [String]
-        /// 銀行業（statement BS に `Xbrl.bankMarkerTag`＝預金がある。bank components へ回す判定と同じ）。
+        /// 銀行業（`Xbrl.isBankFiling`: statement BS に `Xbrl.bankMarkerTag`＝預金がある、または EDINET 提出者業種が銀行業。
+        /// bank components へ回す判定と同じ）。
         /// 公開キーではない。派生指標（net_cash / net_de / roic 等）を null にするためだけに使う。
         var isBank: Bool = false
     }
@@ -100,9 +101,9 @@ enum BreakdownFinancialsResolver {
     /// 軸が needs_review / 解決不能のときは公開 JSON キーを増やさず旧 Extractor 値へ戻し、
     /// canonical value の method/warnings に印を残す（会社が null へ退行しないため）。
     static func financialsCanonicalInterestBearingDebt(
-        xbrlDir: URL
+        xbrlDir: URL, edinetIndustry: String? = nil
     ) async -> InterestBearingDebtCanonicalValue {
-        let inputs = InterestBearingDebtBreakdown.inputs(xbrlDir: xbrlDir)
+        let inputs = InterestBearingDebtBreakdown.inputs(xbrlDir: xbrlDir, edinetIndustry: edinetIndustry)
         let allTags = XBRLUtils.collectAllNumericElements(in: xbrlDir, nilAsZero: false)
         let accountingStandard = detectAccountingStandard(allTags)
         let resolution = await InterestBearingDebtBreakdown.resolve(inputs: inputs, decider: nil)

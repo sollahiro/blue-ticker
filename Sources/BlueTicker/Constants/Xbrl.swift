@@ -476,9 +476,15 @@ enum Xbrl {
     /// 銀行業判定マーカー（BS の預金）。有利子負債には含めない。
     static let bankMarkerTag = "DepositsLiabilitiesBNK"
 
-    /// 銀行業か（BS 本表 Instant FieldSet に預金 `bankMarkerTag` がある）。
+    /// EDINET コードリスト「提出者業種」の銀行業。
+    static let bankEdinetIndustry = "銀行業"
+
+    /// 銀行業か。BS 本表 Instant FieldSet に預金 `bankMarkerTag` がある、または EDINET コードリストの
+    /// 提出者業種が銀行業（ゆうちょ銀行 7182 は貯金を `DepositsLiabilities` で載せ BNK マーカーが無い）。
     /// IBD（bank components・預金除外）と Summary 業務純益（`StatementFinancialsResolver`）の共通判定。
-    static func isBankFiling(_ instantFieldSet: FieldSet) -> Bool {
+    /// `edinetIndustry` は呼び出し元が master（`MasterStock.s33nm`）から渡す。不明なら nil（マーカーだけで判定）。
+    static func isBankFiling(_ instantFieldSet: FieldSet, edinetIndustry: String? = nil) -> Bool {
+        if edinetIndustry == bankEdinetIndustry { return true }
         guard let deposits = instantFieldSet[bankMarkerTag] else { return false }
         return deposits.current != nil || deposits.prior != nil
     }
@@ -489,7 +495,8 @@ enum Xbrl {
 
     // 銀行業 有利子負債コンポーネント（Python: BANK_IBD_COMPONENT_DEFINITIONS）
     // 預金・譲渡性預金は銀行でも有利子負債に含めない（Sorahiro 判断 2026-10-11）。
-    // 銀行かどうかは `bankMarkerTag`（預金）の有無で判定する。
+    // 銀行かどうかは `isBankFiling`（`bankMarkerTag`＝預金、または EDINET 提出者業種が銀行業）で判定する。
+    // ゆうちょ銀行の貯金（`DepositsLiabilities`）もこの一覧に無いので含まれない。
     static let bankIBDComponents: [BankIBDComponent] = [
         .init(label: "コマーシャル・ペーパー", tags: ["CommercialPapersLiabilities"]),
         .init(label: "借用金",                 tags: ["BorrowedMoneyLiabilitiesBNK"]),
@@ -778,6 +785,8 @@ enum Xbrl {
     static let borrowingsScheduleTextblockTag = "AnnexedConsolidatedDetailedScheduleOfBorrowingsTextBlock"
     /// DEI「連結財務諸表の有無」（true/false。単体だけの会社は false）。
     static let consolidatedStatementsPreparedDEITag = "WhetherConsolidatedFinancialStatementsArePreparedDEI"
+    /// DEI の EDINET コード（例: E31775）。master の提出者業種を引く。
+    static let edinetCodeDEITag = "EDINETCodeDEI"
     /// DEI が無いときの連結判定に使う連結 BS の TextBlock（J-GAAP / IFRS）。
     static let consolidatedBalanceSheetTextblockTags = [
         "ConsolidatedBalanceSheetTextBlock",
