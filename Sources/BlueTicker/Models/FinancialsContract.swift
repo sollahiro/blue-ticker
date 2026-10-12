@@ -107,7 +107,7 @@ public func isCurrentFinancialsAssemblyFingerprint(_ stored: String?) -> Bool {
 // | gross_profit_margin, operating_margin, nopat, nopat_margin | 派生（入力フィールドの組立後に再計算） | IndividualAnalyzer 内計算 | derived |
 // | roe, roic, net_cash, net_de, cfc, working_capital, dso/dio/dpo/ccc | 派生 | IndividualAnalyzer / Waterfall 投影 | derived |
 // | （銀行業）net_cash, net_de, roic, nopat_margin, invested_capital_turnover | 銀行（IBD の `isBank` = `DepositsLiabilitiesBNK`）は null。預金を IBD に含めないため有利子負債ベースの比率は意味を持たない（2026-10-12）。interest_bearing_debt は残す。Waterfall の net_cash_change / debt_change_impact も null | IndividualAnalyzer.applyInterestBearingDebtRatios / FinancialsYear.withholdsBankRatios | derived |
-// | business_profit*, roic_delta*, roe_delta*, *_change_impact | Waterfall 専用派生。販管費が無い年の GP − OP 差額は Waterfall 内だけで使い sga へ書き戻さない。銀行は business_profit = 業務純益（= Summary operating_profit）で、売上差・粗利率差・営業経費差の3要因が前年差に一致する | Waterfall 関数（analysisOnlyKeys） | derived |
+// | business_profit*, roic_delta*, roe_delta*, *_change_impact | Waterfall 専用派生。販管費が無い年の GP − OP 差額は Waterfall 内だけで使い sga へ書き戻さない。銀行は business_profit = 業務純益（= Summary operating_profit）で、既存3スロットに経常収益差・業務粗利益率差・営業経費差を入れ、和が前年差に一致する。両期の経常収益・業務粗利益・営業経費が揃わなければ前年差は null | Waterfall 関数（analysisOnlyKeys） | derived |
 //
 // Summary 非搭載（正本 API のみ、組立対象外）: goodwill 明細、PPE 区分明細、借入明細。
 

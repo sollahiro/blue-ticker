@@ -286,7 +286,8 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                 金額単位は百万円（JPY）、比率は%、日数は日。
                 銀行業は net_cash / net_de / roic / nopat_margin / invested_capital_turnover と、
                 ネットキャッシュ前年差（net_cash_change / debt_change_impact）、ROIC 要因分解が null です。
-                銀行業の事業利益は業務純益（= operating_profit）で、売上差/粗利率差/営業経費差の3要因の和が前年差に一致します。
+                銀行業の事業利益は業務純益（= operating_profit）で、同じ3項目に 経常収益差 / 業務粗利益率（業務粗利益 ÷ 経常収益）差 /
+                営業経費差 が入り、和が前年差に一致します。両期の経常収益・業務粗利益・営業経費が揃わない年は前年差が null です。
                 """,
             method: "GET",
             path: "/v1/companies/{code}/waterfall",
