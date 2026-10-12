@@ -83,6 +83,14 @@ enum GeographyBreakdownLLMNormalizer {
         docID: String,
         salesLabel: String? = nil
     ) async -> (snapshot: BreakdownSnapshot?, audit: LLMBreakdownAudit?) {
+        // 1つの表に「売上（収益）：」「税引前当期純利益：」等の指標セクションが縦に積まれた表
+        // （野村 S100YC5C［地域別情報］）は、最初の売上相当セクションだけを残す（BLT-143）。
+        var result = result
+        result.tables = result.tables.map { table in
+            var copy = table
+            copy.markdown = trimToSalesMetricSection(table.markdown)
+            return copy
+        }
         guard !result.tables.isEmpty,
               let consolidatedSales, consolidatedSales != 0 else { return (nil, nil) }
 
@@ -394,6 +402,47 @@ enum GeographyBreakdownLLMNormalizer {
         return (snapshot, audit)
     }
 
+    /// 純収益（金融費用控除後）の表見出し・行ラベル。
+    static func isNetRevenueCell(_ text: String) -> Bool {
+        let compact = text.filter { !$0.isWhitespace }
+        return compact.contains("金融費用控除後")
+    }
+
+    /// 指標セクション見出し行（「収益合計（金融費用控除後）(1)：」「税引前当期純利益（△損失）：」）。
+    /// 非空セルが1つだけ・数値なし・末尾がコロンで、指標語を含む行。
+    private static func metricSectionHeader(_ row: [String]) -> String? {
+        let nonEmpty = row.filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
+        guard nonEmpty.count == 1, let cell = nonEmpty.first,
+              XBRLUtils.parseHtmlNumber(cell) == nil
+        else { return nil }
+        let compact = cell.filter { !$0.isWhitespace }
+        guard compact.hasSuffix("：") || compact.hasSuffix(":") else { return nil }
+        let metricWords = ["収益", "売上", "利益", "損失", "資産"]
+        return metricWords.contains(where: compact.contains) ? compact : nil
+    }
+
+    /// 指標セクションが2つ以上縦に積まれた表を、最初の売上相当セクション（収益／売上を含み、
+    /// 利益・損失・資産を含まない見出し）だけに切り詰める。該当しない表は markdown をそのまま返す。
+    /// 後続セクション（税引前当期純利益 等）の「連結」行を売上の小計として拾わない（BLT-143）。
+    static func trimToSalesMetricSection(_ markdown: String) -> String {
+        let grid = BreakdownExtractor.markdownToGrid(markdown)
+        let headers = grid.indices.compactMap { i in metricSectionHeader(grid[i]).map { (i, $0) } }
+        guard headers.count >= 2 else { return markdown }
+        guard let k = headers.firstIndex(where: { _, label in
+            (label.contains("収益") || label.contains("売上"))
+                && !label.contains("利益") && !label.contains("損失") && !label.contains("資産")
+        }) else { return markdown }
+        let start = headers[k].0
+        let end = k + 1 < headers.count ? headers[k + 1].0 : grid.count
+        let section = Array(grid[start..<end])
+        let numericRows = section.filter { row in
+            row.contains { XBRLUtils.parseHtmlNumber($0) != nil }
+        }
+        guard numericRows.count >= 2 else { return markdown }
+        let preamble = Array(grid[..<headers[0].0])
+        return BreakdownExtractor.gridToMarkdown(preamble + section)
+    }
+
     /// 抽出済み subtotal が segment / reconciling の一部の和と一致しないときの警告。
     /// 公開面は `needs_review` で隠す。
     static let subtotalMismatchWarning = "subtotal_mismatch"
@@ -441,6 +490,8 @@ enum GeographyBreakdownLLMNormalizer {
         let compact = RevenueRecognitionCandidates.compactCell(label)
         if compact.contains("小計") { return false }
         if compact == "海外計" || compact == "海外合計" { return false }
+        // 「連 結」（野村: 地域行の総合計）。空白を全て除いて比較する（BLT-143）。
+        if compact.filter({ !$0.isWhitespace }) == "連結" { return true }
         return compact == "計" || compact == "合計" || compact == "連結合計"
             || compact == "連結計" || compact == "売上高合計" || compact == "総合計"
             || compact == "連結売上高" || compact == "連結売上"
@@ -494,9 +545,14 @@ enum GeographyBreakdownLLMNormalizer {
     }
 
     /// 銀行・保険など、地理注記の行が売上高ではなく経常収益／営業収益／保険収益のとき。
+    /// 証券業の「収益合計（金融費用控除後）」（純収益。損益計算書の収益合計＝総額とは基準が違う）
+    /// も同じく表の総合計をアンカーにする（野村 S100YC5C、BLT-143）。
     static func tableUsesNonSalesRevenueLine(
         _ table: RevenueRecognitionCandidates.ParsedTable
     ) -> Bool {
+        if table.grid.contains(where: { row in row.contains(where: isNetRevenueCell) }) {
+            return true
+        }
         let labels = [table.heading, table.precedingCaption ?? ""]
             + Array(table.columnHeaders.values)
             + table.items.map(\.label) + table.totals.map(\.label)

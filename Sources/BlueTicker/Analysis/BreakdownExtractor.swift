@@ -699,6 +699,24 @@ enum BreakdownExtractor {
     /// `shouldPreferRevenueRecognition` で製品・サービス表へ swap する相補関係）。
     static func extractGeographyInfo(xbrlDir: URL) -> ExtractedBreakdown {
         let dedicated = Xbrl.geographyTextBlockTags.subtracting(Xbrl.geographyMixedTextBlockTags)
+        // 野村 US-GAAP 注記23 型（BLT-143）: 小見出し「［地域別情報］」があればその下の表だけを使う。
+        // 既定キーワード「地域別」は散文（耐用年数・トレーディング資産・国内/海外税引前利益）にも
+        // 当たり、無関係な表が候補の先頭に並ぶ。見出し型（句点なし）の一致に限る。
+        let note23Tables = extractFromTextBlocks(
+            xbrlDir: xbrlDir,
+            dedicatedTags: [],
+            mixedTags: Xbrl.usgaapNotesGeographyMixedTextBlockTags,
+            dedicatedHeading: "地域ごとの情報",
+            mixedKeywords: Xbrl.usgaapNote23GeographyHeadingKeywords,
+            skipGeographyAssetMetricTables: true,
+            mixedHeadingLikeOnly: true,
+            dropOfWhichRegionColumns: true
+        )
+        if !note23Tables.isEmpty {
+            return buildResult(
+                xbrlDir: xbrlDir, tables: note23Tables,
+                dimensionKeywords: Xbrl.geographyDimensionKeywords)
+        }
         var tables = extractFromTextBlocks(
             xbrlDir: xbrlDir,
             dedicatedTags: dedicated,

@@ -1581,31 +1581,91 @@ import Testing
         #expect(publiclyServable(snapshot))
     }
 
-    /// 8604 型: 同じ地域ラベルが売上と資産で二度出るときは先の売上だけ残す。
+    /// 8604 型（野村 S100YC5C［地域別情報］の実表どおり、BLT-143）: 1つの表に
+    /// 「収益合計（金融費用控除後）：」と「税引前当期純利益（△損失）：」の指標セクションが縦に積まれ、
+    /// 同じ地域ラベル・「連　結」が二度出る。先の売上セクションだけ残し、後続セクションの
+    /// 連結 539,821 を小計にしない。損益計算書売上は総額「収益合計」4,758,486 で、表は純収益
+    /// （金融費用控除後）なので、分母と被覆率は表の総合計「連　結」2,167,713 で見る。
     @Test func duplicateRegionLabelsKeepFirstSalesBlock() async throws {
-        let html = """
-            <p>当連結会計年度</p>
-            <table>
-              <tr><td></td><td>前連結会計年度</td><td>当連結会計年度</td></tr>
-              <tr><td>日本</td><td>1,000,000</td><td>1,087,778</td></tr>
-              <tr><td>米州</td><td>600,000</td><td>669,998</td></tr>
-              <tr><td>欧州</td><td>240,000</td><td>261,522</td></tr>
-              <tr><td>アジア・オセアニア</td><td>140,000</td><td>148,415</td></tr>
-              <tr><td>合計</td><td>1,980,000</td><td>2,167,713</td></tr>
-              <tr><td>日本</td><td>800,000</td><td>820,000</td></tr>
-              <tr><td>米州</td><td>100,000</td><td>110,000</td></tr>
-              <tr><td>欧州</td><td>50,000</td><td>55,000</td></tr>
-              <tr><td>アジア・オセアニア</td><td>40,000</td><td>42,000</td></tr>
-            </table>
-            """
-        let (snapshotOrNil, _) = await normalize(
-            html: html, sales: yen(2_167_713), docID: "S100YC5C")
+        let html = Self.nomuraGeographyHTML
+        var tables = BreakdownExtractor.allTablesFromHtml(html, defaultHeading: "［地域別情報］")
+        tables[0].period = "当期"
+        let (snapshotOrNil, _) = await GeographyBreakdownLLMNormalizer.normalize(
+            ExtractedBreakdown(method: "html_table", tables: tables, facts: []),
+            consolidatedSales: yen(4_758_486),
+            decider: FakeRevenueRecognitionColumnDecider(containing: "2026年"),
+            fiscalYearEnd: "2026-03-31",
+            docID: "S100YC5C",
+            salesLabel: "収益合計")
         let snapshot = try #require(snapshotOrNil)
         #expect(Set(segmentLabels(snapshot)) == Set(["日本", "米州", "欧州", "アジア・オセアニア"]))
         #expect(snapshot.rows.filter { $0.labelRaw == "日本" && $0.rowKind == "segment" }.count == 1)
         #expect(snapshot.rows.first { $0.labelRaw == "日本" }?.amount == yen(1_087_778))
+        #expect(snapshot.rows.first { $0.labelRaw == "米州" }?.amount == yen(669_998))
+        #expect(snapshot.rows.first { $0.labelRaw == "欧州" }?.amount == yen(261_522))
+        #expect(snapshot.rows.first { $0.labelRaw == "アジア・オセアニア" }?.amount == yen(148_415))
+        #expect(!snapshot.rows.contains { $0.amount == yen(539_821) })
+        #expect(snapshot.denominator == yen(2_167_713))
+        #expect(!snapshot.warnings.contains(GeographyBreakdownLLMNormalizer.subtotalMismatchWarning))
+        #expect(!snapshot.warnings.contains("llm_row_sum_mismatch"))
         #expect(!snapshot.needsReview)
         #expect(publiclyServable(snapshot))
+    }
+
+    /// 野村 S100YC5C［地域別情報］の表（金額は原本どおり、BLT-143）。
+    static let nomuraGeographyHTML = """
+        <p>［地域別情報］</p>
+        <table>
+          <tr><td></td><td></td><td></td><td>（単位：百万円）</td></tr>
+          <tr><td></td><td>2025年３月期</td><td></td><td>2026年３月期</td></tr>
+          <tr><td>収益合計（金融費用控除後）(1)：</td><td></td><td></td><td></td></tr>
+          <tr><td>米　州</td><td>589,122</td><td></td><td>669,998</td></tr>
+          <tr><td>欧　州</td><td>375,648</td><td></td><td>261,522</td></tr>
+          <tr><td>アジア・オセアニア</td><td>61,730</td><td></td><td>148,415</td></tr>
+          <tr><td>小計</td><td>1,026,500</td><td></td><td>1,079,935</td></tr>
+          <tr><td>日　本</td><td>865,985</td><td></td><td>1,087,778</td></tr>
+          <tr><td>連　結</td><td>1,892,485</td><td></td><td>2,167,713</td></tr>
+          <tr><td></td><td></td><td></td><td></td></tr>
+          <tr><td>税引前当期純利益（△損失）：</td><td></td><td></td><td></td></tr>
+          <tr><td>米　州</td><td>65,753</td><td></td><td>61,868</td></tr>
+          <tr><td>欧　州</td><td>20,348</td><td></td><td>△31,128</td></tr>
+          <tr><td>アジア・オセアニア</td><td>50,878</td><td></td><td>60,790</td></tr>
+          <tr><td>小計</td><td>136,979</td><td></td><td>91,530</td></tr>
+          <tr><td>日　本</td><td>334,985</td><td></td><td>448,291</td></tr>
+          <tr><td>連　結</td><td>471,964</td><td></td><td>539,821</td></tr>
+        </table>
+        """
+
+    /// 指標セクションが1つしか無い表は切り詰めない（他社の既存表を変えない）。
+    @Test func trimToSalesMetricSectionLeavesSingleSectionTablesUntouched() {
+        let md = BreakdownExtractor.gridToMarkdown([
+            ["", "当連結会計年度"],
+            ["売上高：", ""],
+            ["日本", "600"],
+            ["北米", "400"],
+            ["合計", "1,000"],
+        ])
+        #expect(GeographyBreakdownLLMNormalizer.trimToSalesMetricSection(md) == md)
+    }
+
+    /// 2セクション表は最初の売上（収益）セクションだけになる。
+    @Test func trimToSalesMetricSectionDropsFollowingProfitSection() throws {
+        let tables = BreakdownExtractor.allTablesFromHtml(
+            Self.nomuraGeographyHTML, defaultHeading: "［地域別情報］")
+        let md = try #require(tables.first).markdown
+        let trimmed = GeographyBreakdownLLMNormalizer.trimToSalesMetricSection(md)
+        #expect(trimmed.contains("2,167,713"))
+        #expect(trimmed.contains("1,079,935"))
+        #expect(!trimmed.contains("539,821"))
+        #expect(!trimmed.contains("税引前"))
+    }
+
+    /// 「連　結」は表の総合計。「小計」「海外計」は総合計ではない。
+    @Test func bareConsolidatedLabelIsGrandTotal() {
+        #expect(GeographyBreakdownLLMNormalizer.isTableGrandTotalLabel("連　結"))
+        #expect(GeographyBreakdownLLMNormalizer.isTableGrandTotalLabel("連結"))
+        #expect(!GeographyBreakdownLLMNormalizer.isTableGrandTotalLabel("小計"))
+        #expect(!GeographyBreakdownLLMNormalizer.isTableGrandTotalLabel("海外計"))
     }
 
     /// 6473 型: 北米/アジアの空見出しのあとの その他 は親に付け、続く全社その他は残す。

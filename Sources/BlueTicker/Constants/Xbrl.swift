@@ -1178,6 +1178,13 @@ enum Xbrl {
         "RelatedInformationTextBlock",                            // J-GAAP 関連情報（セグメント・地域が混在）
         notesToConsolidatedFinancialStatementsUSGAAPTextBlock,  // US-GAAP 連結財務諸表注記（地域別を内包）
     ]
+    /// US-GAAP 注記23 型（野村 S100YC5C）の地域小見出し。見出し型一致があれば既定キーワードより優先する（BLT-143）。
+    static let usgaapNote23GeographyHeadingKeywords: [String] = [
+        "［地域別情報］",
+    ]
+    static let usgaapNotesGeographyMixedTextBlockTags: Set<String> = [
+        notesToConsolidatedFinancialStatementsUSGAAPTextBlock,
+    ]
     static let geographyHeadingKeywords: [String] = [
         "地域ごとの情報",
         "地域別",
