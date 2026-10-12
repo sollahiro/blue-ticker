@@ -101,6 +101,51 @@ import Foundation
         #expect(years.map { $0.calculatedData.sellingGeneralAdministrativeExpenses } == [300, 350])
     }
 
+    @Test func bankPriorYearWithoutOperatingExpensesFailsClosed() {
+        // 前期は営業経費が無く fail closed（op / op_label / sga とも nil）。差額や経常利益で埋めない。
+        var prior = entry(fyEnd: "2025-03-31", sales: 1000, grossProfit: 500, salesLabel: "経常収益")
+        prior.rawData.op = nil
+        var years = [prior, bankEntry(fyEnd: "2026-03-31", sales: 1200, grossProfit: 750, expenses: 350)]
+        applyOperatingProfitChangeToYears(&years)
+        #expect(years[0].calculatedData.businessProfit == nil)
+        let cd = years[1].calculatedData
+        #expect(cd.businessProfit == 400)
+        #expect(cd.businessProfitChange == nil)
+        #expect(cd.salesChangeImpact == nil)
+        #expect(cd.grossMarginChangeImpact == nil)
+        #expect(cd.sgaChangeImpact == nil)
+    }
+
+    @Test func bankNextToNonBankLabelledYearFailsClosed() {
+        // 前期が経常利益ラベル（差額販管費になる年）と混在するときも前年差を出さない。
+        let prior = entry(
+            fyEnd: "2025-03-31", sales: 1000, op: 260, grossProfit: 500,
+            opLabel: "経常利益", salesLabel: "経常収益")
+        var years = [prior, bankEntry(fyEnd: "2026-03-31", sales: 1200, grossProfit: 750, expenses: 350)]
+        applyOperatingProfitChangeToYears(&years)
+        #expect(years[1].calculatedData.businessProfitChange == nil)
+        #expect(years[1].calculatedData.sgaChangeImpact == nil)
+    }
+
+    @Test func bankWithoutOrdinaryRevenueFailsClosed() {
+        var cur = bankEntry(fyEnd: "2026-03-31", sales: 1200, grossProfit: 750, expenses: 350)
+        cur.rawData.sales = nil
+        var years = [bankEntry(fyEnd: "2025-03-31", sales: 1000, grossProfit: 500, expenses: 300), cur]
+        applyOperatingProfitChangeToYears(&years)
+        #expect(years[1].calculatedData.businessProfitChange == nil)
+        #expect(years[1].calculatedData.salesChangeImpact == nil)
+    }
+
+    @Test func bankWithoutGrossProfitFailsClosed() {
+        // 業務粗利益が無い年（op_label だけ残る異常系）でも BP+SGA で粗利を作らない。
+        var cur = bankEntry(fyEnd: "2026-03-31", sales: 1200, grossProfit: 750, expenses: 350)
+        cur.calculatedData.grossProfit = nil
+        var years = [bankEntry(fyEnd: "2025-03-31", sales: 1000, grossProfit: 500, expenses: 300), cur]
+        applyOperatingProfitChangeToYears(&years)
+        #expect(years[1].calculatedData.businessProfitChange == nil)
+        #expect(years[1].calculatedData.grossMarginChangeImpact == nil)
+    }
+
     @Test func bankWithoutOperatingExpensesHasNoBusinessProfit() {
         // 営業経費が無い銀行は Summary OP / sga とも null。差額でウォーターフォールも組まない。
         var years = [entry(

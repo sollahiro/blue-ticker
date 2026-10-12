@@ -13,6 +13,11 @@
 //   → operating_profit / sga とも null（経常利益・差額で埋めない）
 // - HSホールディングス 8699 / S100YJQ6: 預金はあるが営業利益行がある → 営業利益のまま（銀行経路にしない）
 //
+//
+// Waterfall（2期の実書類）: 既存3スロット = 経常収益差 / 業務粗利益率差 / 営業経費差 の和が Δ業務純益 に一致。
+// - 三菱UFJ S100W4FB（25/03）→ S100YJQO（26/03）
+// - 豊和銀行 8559 S100W0EY（25/03）→ S100YF85（26/03）
+//
 // `BLT_EDINET_API_KEY` があれば不足キャッシュを取得し、無ければ SKIP。
 
 import Foundation
@@ -89,5 +94,57 @@ import Testing
         let v = try #require(StatementFinancialsResolver.resolve(xbrlDir: dir))
         #expect(v.operatingProfitLabel == "営業利益")
         #expect(v.sgaLabel == nil)
+    }
+
+    // MARK: - Waterfall（2期）
+
+    private func bankYear(_ docID: String, fyEnd: String) async throws -> YearEntry? {
+        guard let dir = await Self.ensureAvailable(docID) else { return nil }
+        let v = try #require(StatementFinancialsResolver.resolve(xbrlDir: dir))
+        var raw = RawData()
+        raw.sales = v.sales.map { $0 / Self.million }
+        raw.op = v.operatingProfit.map { $0 / Self.million }
+        raw.salesLabel = v.salesLabel
+        var calc = CalculatedData()
+        calc.grossProfit = v.grossProfit.map { $0 / Self.million }
+        calc.sellingGeneralAdministrativeExpenses = v.sga.map { $0 / Self.million }
+        calc.opLabel = v.operatingProfitLabel
+        calc.sgaLabel = v.sgaLabel
+        return YearEntry(fyEnd: fyEnd, financialPeriod: "FY", rawData: raw, calculatedData: calc)
+    }
+
+    private func expectExactBankWaterfall(prior: String, current: String) async throws {
+        guard let p = try await bankYear(prior, fyEnd: "2025-03-31"),
+              let c = try await bankYear(current, fyEnd: "2026-03-31") else { return }
+        var years = [c, p]
+        applyOperatingProfitChangeToYears(&years)
+        let cur = years[0], pri = years[1]
+        #expect(cur.calculatedData.opLabel == "業務純益" && pri.calculatedData.opLabel == "業務純益")
+        #expect(cur.rawData.salesLabel == "経常収益" && pri.rawData.salesLabel == "経常収益")
+        // business_profit = 業務純益 = Summary operating_profit
+        #expect(cur.calculatedData.businessProfit == cur.rawData.op)
+        #expect(pri.calculatedData.businessProfit == pri.rawData.op)
+        let cd = cur.calculatedData
+        let change = try #require(cd.businessProfitChange)
+        let sales = try #require(cd.salesChangeImpact)
+        let margin = try #require(cd.grossMarginChangeImpact)
+        let sga = try #require(cd.sgaChangeImpact)
+        #expect(abs(change - (cur.rawData.op! - pri.rawData.op!)) < 1e-6)
+        #expect(abs(sales + margin + sga - change) < 1e-6)
+        // 各スロットの中身: 経常収益差 × 前期業務粗利益率 / 当期経常収益 × 業務粗利益率差 / −営業経費差
+        let cs = cur.rawData.sales!, ps = pri.rawData.sales!
+        let cg = cur.calculatedData.grossProfit!, pg = pri.calculatedData.grossProfit!
+        #expect(abs(sales - (cs - ps) * (pg / ps)) < 1e-6)
+        #expect(abs(margin - cs * (cg / cs - pg / ps)) < 1e-6)
+        #expect(sga == -(cur.calculatedData.sellingGeneralAdministrativeExpenses!
+                         - pri.calculatedData.sellingGeneralAdministrativeExpenses!))
+    }
+
+    @Test func mufgWaterfallSumsExactlyToNetBusinessProfitChange() async throws {
+        try await expectExactBankWaterfall(prior: "S100W4FB", current: "S100YJQO")
+    }
+
+    @Test func howaRegionalWaterfallSumsExactlyToNetBusinessProfitChange() async throws {
+        try await expectExactBankWaterfall(prior: "S100W0EY", current: "S100YF85")
     }
 }
