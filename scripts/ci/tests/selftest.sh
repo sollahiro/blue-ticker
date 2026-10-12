@@ -174,5 +174,51 @@ echo "let app = 2" > Sources/App/Routes.swift && git commit -qam tweak
 expect_out "^not structural" "structure: small edit is not structural" $S
 expect_out "not labelling" "structure: structural without PR env does not call GitHub" bash -c "git checkout -q s-module && $S"
 
+# ---- structure: webhook (fake gh on PATH + local capture server)
+mkdir -p "$T/bin" "$T/hook"
+cat > "$T/bin/gh" <<'GH'
+#!/usr/bin/env bash
+# fake gh: label list comes from $FAKE_LABEL_PRESENT
+if [[ "$*" == *"--jq"* ]]; then echo "${FAKE_LABEL_PRESENT:-false}"; fi
+exit 0
+GH
+chmod +x "$T/bin/gh"
+cat > "$T/hook/server.py" <<'PY'
+import http.server, json, sys
+class H(http.server.BaseHTTPRequestHandler):
+    def do_POST(self):
+        body = self.rfile.read(int(self.headers.get("Content-Length", 0))).decode()
+        with open(sys.argv[2], "a") as f:
+            f.write(json.dumps({"auth": self.headers.get("Authorization"), "ctype": self.headers.get("Content-Type"), "body": body}) + "\n")
+        self.send_response(204); self.end_headers()
+    def log_message(self, *a): pass
+s = http.server.HTTPServer(("127.0.0.1", 0), H)
+open(sys.argv[1], "w").write(str(s.server_port))
+s.serve_forever()
+PY
+python3 "$T/hook/server.py" "$T/hook/port" "$T/hook/req.log" & SRV=$!
+for _ in $(seq 50); do [[ -s "$T/hook/port" ]] && break; sleep 0.1; done
+HOOK="http://127.0.0.1:$(cat "$T/hook/port")/hook"; AUTH="Token s3cr3t-value"
+git checkout -q s-module
+run_hook() { env PATH="$T/bin:$PATH" PR_NUMBER=7 GH_TOKEN=x GITHUB_REPOSITORY=o/r "$@" scripts/ci/structure.sh --base "$BASE" --head HEAD; }
+: > "$T/hook/req.log"
+out="$(run_hook FAKE_LABEL_PRESENT=false ARCHITECT_WEBHOOK_URL="$HOOK" ARCHITECT_WEBHOOK_AUTH="$AUTH" 2>&1)"; rc=$?
+req="$(cat "$T/hook/req.log")"
+if [[ $rc == 0 ]] && python3 -c 'import json,sys; r=[json.loads(l) for l in sys.argv[1].splitlines()]; assert len(r)==1 and r[0]["auth"]=="Token s3cr3t-value" and r[0]["ctype"]=="application/json" and json.loads(r[0]["body"])=={"pr":7}' "$req" 2>/dev/null; then
+  pass=$((pass+1)); echo "ok   structure: new label -> one POST {\"pr\":7} with Authorization sent as-is"
+else fail=$((fail+1)); echo "FAIL structure: webhook POST"; echo "$out $req" | sed 's/^/     /'; fi
+if grep -qE "s3cr3t|127\.0\.0\.1" <<<"$out"; then fail=$((fail+1)); echo "FAIL structure: secret printed"; else pass=$((pass+1)); echo "ok   structure: secrets never printed"; fi
+: > "$T/hook/req.log"
+out="$(run_hook FAKE_LABEL_PRESENT=true ARCHITECT_WEBHOOK_URL="$HOOK" ARCHITECT_WEBHOOK_AUTH="$AUTH" 2>&1)"; rc=$?
+if [[ $rc == 0 && ! -s "$T/hook/req.log" ]]; then pass=$((pass+1)); echo "ok   structure: label already present -> no POST"
+else fail=$((fail+1)); echo "FAIL structure: label present still posted"; fi
+out="$(run_hook FAKE_LABEL_PRESENT=false ARCHITECT_WEBHOOK_URL= ARCHITECT_WEBHOOK_AUTH= 2>&1)"; rc=$?
+if [[ $rc == 0 ]] && grep -q "::warning::ARCHITECT_WEBHOOK_URL / ARCHITECT_WEBHOOK_AUTH not set" <<<"$out"; then pass=$((pass+1)); echo "ok   structure: missing secrets -> warning, exit 0"
+else fail=$((fail+1)); echo "FAIL structure: missing secrets"; echo "$out" | sed 's/^/     /'; fi
+out="$(run_hook FAKE_LABEL_PRESENT=false ARCHITECT_WEBHOOK_URL="http://127.0.0.1:1/x" ARCHITECT_WEBHOOK_AUTH="$AUTH" 2>&1)"; rc=$?
+if [[ $rc == 0 ]] && grep -q "webhook POST failed" <<<"$out"; then pass=$((pass+1)); echo "ok   structure: unreachable webhook -> warning, exit 0"
+else fail=$((fail+1)); echo "FAIL structure: unreachable webhook"; echo "$out" | sed 's/^/     /'; fi
+kill $SRV 2>/dev/null
+
 echo; echo "selftest: $pass passed, $fail failed"
 [[ $fail == 0 ]]

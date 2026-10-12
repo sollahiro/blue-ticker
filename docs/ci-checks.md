@@ -85,8 +85,9 @@ A change counts as structural when any of these holds:
 - a large move: 15 or more renames (`STRUCTURE_MOVE_MIN_FILES`)
 
 When it triggers on a PR, the script adds the label `needs-architect` (creating it if
-needed). It then POSTs `{"repo","pr_number","head_sha","reasons"}` to
-`BLT_ARCHITECT_WEBHOOK_URL` with `Authorization: Bearer $BLT_ARCHITECT_WEBHOOK_KEY`,
-once (when the label is first added). The URL and key go to curl on stdin and never
+needed). Right after the label is newly added (never when it was already on the PR),
+it POSTs `{"pr": N}` to `ARCHITECT_WEBHOOK_URL` with header
+`Authorization: $ARCHITECT_WEBHOOK_AUTH`. The secret is the full header value and is sent
+as-is, with no `Bearer` prefix added. The URL and key go to curl on stdin and never
 reach argv or logs. If either secret is missing, the script skips the POST with a
 warning and does not fail.

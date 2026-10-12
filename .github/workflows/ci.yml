@@ -314,8 +314,8 @@ jobs:
           CI_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           GH_TOKEN: ${{ github.token }}
-          BLT_ARCHITECT_WEBHOOK_URL: ${{ secrets.BLT_ARCHITECT_WEBHOOK_URL }}
-          BLT_ARCHITECT_WEBHOOK_KEY: ${{ secrets.BLT_ARCHITECT_WEBHOOK_KEY }}
+          ARCHITECT_WEBHOOK_URL: ${{ secrets.ARCHITECT_WEBHOOK_URL }}
+          ARCHITECT_WEBHOOK_AUTH: ${{ secrets.ARCHITECT_WEBHOOK_AUTH }}
         run: scripts/ci/structure.sh
 
   repo-invariants:

@@ -2,8 +2,9 @@
 # Structural-change heuristic (docs/ci-checks.md). Never fails the build.
 # When structural and running on a PR (PR_NUMBER + GH_TOKEN set):
 #   - adds label needs-architect
-#   - POSTs the PR number to $BLT_ARCHITECT_WEBHOOK_URL with $BLT_ARCHITECT_WEBHOOK_KEY
-#     (skipped with a warning when either secret is absent). Secrets are never printed.
+#   - only if the label was newly added: POSTs {"pr": N} to $ARCHITECT_WEBHOOK_URL with
+#     "Authorization: $ARCHITECT_WEBHOOK_AUTH" (value sent as-is). Skipped with a warning
+#     when either secret is absent. Never fails; secrets are never printed.
 # Usage: scripts/ci/structure.sh [--base SHA] [--head SHA]
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
@@ -22,21 +23,25 @@ if [[ "$already" != "true" ]]; then
   if gh api -X POST "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/labels" -f 'labels[]=needs-architect' >/dev/null; then
     echo "added label needs-architect"
   else
-    echo "::warning::could not add label needs-architect (token lacks write access?)"
+    echo "::warning::could not add label needs-architect (token lacks write access?); not notifying"
+    exit 0
   fi
 else
   echo "label needs-architect already present; not re-notifying"
   exit 0
 fi
-if [[ -z "${BLT_ARCHITECT_WEBHOOK_URL:-}" || -z "${BLT_ARCHITECT_WEBHOOK_KEY:-}" ]]; then
-  echo "::warning::BLT_ARCHITECT_WEBHOOK_URL / BLT_ARCHITECT_WEBHOOK_KEY not set; skipping architect webhook"
+if [[ -z "${ARCHITECT_WEBHOOK_URL:-}" || -z "${ARCHITECT_WEBHOOK_AUTH:-}" ]]; then
+  echo "::warning::ARCHITECT_WEBHOOK_URL / ARCHITECT_WEBHOOK_AUTH not set; skipping architect webhook"
   exit 0
 fi
-payload="$(python3 -c 'import json,os,sys; print(json.dumps({"repo": os.environ["GITHUB_REPOSITORY"], "pr_number": int(os.environ["PR_NUMBER"]), "head_sha": os.environ.get("CI_HEAD_SHA",""), "reasons": json.loads(sys.argv[1])["reasons"]}, ensure_ascii=False))' "$result")"
-# URL and key go through a curl config on stdin so they never appear in argv or logs.
-code="$(printf 'url = "%s"\nheader = "Authorization: Bearer %s"\n' "$BLT_ARCHITECT_WEBHOOK_URL" "$BLT_ARCHITECT_WEBHOOK_KEY" |
+payload="$(python3 -c 'import json,os; print(json.dumps({"pr": int(os.environ["PR_NUMBER"])}))')"
+# URL and Authorization value (sent as-is) go through a curl config on stdin so they
+# never appear in argv or logs. Equivalent to:
+#   curl -X POST "$ARCHITECT_WEBHOOK_URL" -H "Authorization: $ARCHITECT_WEBHOOK_AUTH" \
+#     -H "Content-Type: application/json" -d '{"pr": N}'
+code="$(printf 'url = "%s"\nheader = "Authorization: %s"\n' "$ARCHITECT_WEBHOOK_URL" "$ARCHITECT_WEBHOOK_AUTH" |
   curl -sS -o /dev/null -w '%{http_code}' --max-time 20 -K - -X POST \
-    -H 'Content-Type: application/json' --data "$payload" 2>/dev/null || echo 000)"
+    -H 'Content-Type: application/json' -d "$payload" 2>/dev/null || echo 000)"
 if [[ "$code" =~ ^2 ]]; then
   echo "notified architect webhook (HTTP $code)"
 else
