@@ -121,7 +121,11 @@ func runFinancialsIngest(
                 try await CompanyFinancials.find(code, on: db)
             }
         }
-        if let row = existing, row.cacheVersion == companyFinancialsCacheVersion,
+        // force 指定（--doc-ids 由来の codes・override 対象）は行が現行（cache_version・high_water・
+        // assembly_fingerprint 一致）でも skip せず必ず再計算・格納する。指定したのに黙って skip されると
+        // 再取り込みの意図が反映されない（--doc-ids 100 件で 14 社が skip された）。縮小ガードは下で通常どおり効く。
+        if !forceCodes.contains(code), let row = existing,
+            row.cacheVersion == companyFinancialsCacheVersion,
             row.requestedYears >= years, row.highWater == highWater,
             isCurrentFinancialsAssemblyFingerprint(row.assemblyFingerprint)
         {
