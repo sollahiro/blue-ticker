@@ -203,6 +203,22 @@ import Testing
         ])
     }
 
+    // 8593 三菱HCキャピタル: セグメント利益又は損失（△）（行ラベルでセグメント利益と定義。調整額 4,144・連結 162,206）
+    // source: code=8593 fy_end=2026-03-31 doc_id=S100YF4V page=167 field=segment_profit
+    @Test func mitsubishiHCCapitalSegmentProfitRowLabel() async throws {
+        try await expectProfits("S100YF4V", [
+            "AviationReportableSegmentsMember": 54538,
+            "CustomerSolutionsUnitReportableSegmentsMember": 41117,
+            "EntityTotal": 162206,
+            "EnvironmentEnergyAndInfrastructureBusinessReportableSegmentsMember": -4852,
+            "LogisticsReportableSegmentsMember": 29313,
+            "MobilityReportableSegmentsMember": 3382,
+            "OverseasCustomersReportableSegmentsMember": 8384,
+            "RealEstateReportableSegmentsMember": 26176,
+            "ReconcilingItemsMember": 4144,
+        ])
+    }
+
     // 東京海上・MS&AD: 親会社所有者帰属利益の PL 行は、セグメント表用ロールのラベル
     // （「セグメント利益…」）ではなく標準ラベル「親会社の所有者」（連結損益計算書「当期利益の帰属」）。
     // source: code=8766 fy_end=2026-03-31 doc_id=S100YLS8 page=123 field=income_statement.ProfitLossAttributableToOwnersOfParentIFRS.label
