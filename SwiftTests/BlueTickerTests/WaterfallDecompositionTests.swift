@@ -66,40 +66,36 @@ import Foundation
         let cd = years[1].calculatedData
         #expect(cd.businessProfitChange == 30)
         #expect(cd.sgaChangeImpact == -20)         // 差額 100 → 120（ウォーターフォール内）
-        #expect(cd.equityMethodChangeImpact == nil)  // 非銀行は持分法要因なし
     }
 
-    // MARK: - 銀行: 業務純益の4要因（売上・粗利率・営業経費・持分法）
+    // MARK: - 銀行: 業務純益の3要因（売上・粗利率・営業経費）
 
     private func bankEntry(
-        fyEnd: String, sales: Double, grossProfit: Double, expenses: Double, equity: Double
+        fyEnd: String, sales: Double, grossProfit: Double, expenses: Double
     ) -> YearEntry {
         var e = entry(
-            fyEnd: fyEnd, sales: sales, op: grossProfit - expenses + equity,
+            fyEnd: fyEnd, sales: sales, op: grossProfit - expenses,
             grossProfit: grossProfit, sga: expenses, opLabel: "業務純益", salesLabel: "経常収益")
         e.calculatedData.sgaLabel = "営業経費"
-        e.calculatedData.equityMethodIncome = equity
         return e
     }
 
-    @Test func bankBusinessProfitEqualsNetBusinessProfitWithFourFactors() {
+    @Test func bankBusinessProfitEqualsNetBusinessProfitWithThreeFactors() {
         var years = [
-            bankEntry(fyEnd: "2025-03-31", sales: 1000, grossProfit: 500, expenses: 300, equity: 40),
-            bankEntry(fyEnd: "2026-03-31", sales: 1200, grossProfit: 750, expenses: 350, equity: 60),
+            bankEntry(fyEnd: "2025-03-31", sales: 1000, grossProfit: 500, expenses: 300),
+            bankEntry(fyEnd: "2026-03-31", sales: 1200, grossProfit: 750, expenses: 350),
         ]
         applyOperatingProfitChangeToYears(&years)
         // business_profit = 業務純益 = Summary operating_profit（差額なし）
         for y in years { #expect(y.calculatedData.businessProfit == y.rawData.op) }
-        #expect(years[0].calculatedData.businessProfit == 240)  // 500 − 300 + 40
-        #expect(years[1].calculatedData.businessProfit == 460)  // 750 − 350 + 60
+        #expect(years[0].calculatedData.businessProfit == 200)  // 500 − 300
+        #expect(years[1].calculatedData.businessProfit == 400)  // 750 − 350
         let cd = years[1].calculatedData
-        #expect(cd.businessProfitChange == 220)
+        #expect(cd.businessProfitChange == 200)
         #expect(cd.salesChangeImpact == 100)         // 200 × 0.5
         #expect(cd.grossMarginChangeImpact == 150)   // 1200 × (0.625 − 0.5)
         #expect(cd.sgaChangeImpact == -50)           // 営業経費 300 → 350
-        #expect(cd.equityMethodChangeImpact == 20)   // 持分法 40 → 60
         let sum = cd.salesChangeImpact! + cd.grossMarginChangeImpact! + cd.sgaChangeImpact!
-            + cd.equityMethodChangeImpact!
         #expect(sum == cd.businessProfitChange!)
         // 公開 sga は営業経費のまま
         #expect(years.map { $0.calculatedData.sellingGeneralAdministrativeExpenses } == [300, 350])
@@ -107,11 +103,9 @@ import Foundation
 
     @Test func bankWithoutOperatingExpensesHasNoBusinessProfit() {
         // 営業経費が無い銀行は Summary OP / sga とも null。差額でウォーターフォールも組まない。
-        var e = entry(
+        var years = [entry(
             fyEnd: "2026-03-31", sales: 1000, grossProfit: 500,
-            salesLabel: "経常収益")
-        e.calculatedData.equityMethodIncome = nil
-        var years = [e]
+            salesLabel: "経常収益")]
         applyOperatingProfitChangeToYears(&years)
         #expect(years[0].calculatedData.sellingGeneralAdministrativeExpenses == nil)
         #expect(years[0].calculatedData.businessProfit == nil)

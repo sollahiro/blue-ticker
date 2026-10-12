@@ -1,15 +1,14 @@
 // 実 EDINET XBRL（analysis_cache）での銀行 Summary 業務純益 / 営業経費 golden。
 //
 // 業務純益 = 連結業務粗利益（資金・信託・役務・特定・その他業務の各純額）
-//          − 営業経費（GeneralAndAdministrativeExpensesOEBNK）
-//          + 持分法による投資損益（CF EquityInEarningsLossesOfAffiliatesOpeCF の符号反転。無ければ 0）
+//          − 営業経費（GeneralAndAdministrativeExpensesOEBNK）。持分法は足さない。
 // 期待値は原本 CurrentYearDuration の円単位（百万円 × 1e6）。
 //
-// - 三菱UFJ 8306 / S100YJQO（26/03）: 5,944,287 − 3,489,570 + 845,545 = 3,300,262
-// - 千葉銀行 8331 / S100YDSE（26/03）: 223,275 − 104,888 + 623 = 119,010
+// - 三菱UFJ 8306 / S100YJQO（26/03）: 5,944,287 − 3,489,570 = 2,454,717
+// - 千葉銀行 8331 / S100YDSE（26/03）: 223,275 − 104,888 = 118,387
 // - みずほ 8411 / S100YF8Y（26/03）: 単体 OperatingIncome タグだけあり連結 OP 値が空（旧: 経常利益・op_label null）
-//   3,477,300 − 2,103,458 + 52,266 = 1,426,108
-// - 七十七銀行 8341 / S100YAM0（26/03）: 持分法なし 106,460 − 55,360 = 51,100
+//   3,477,300 − 2,103,458 = 1,373,842
+// - 七十七銀行 8341 / S100YAM0（26/03）: 106,460 − 55,360 = 51,100
 // - 信金中央金庫 8421 / S100YH59（26/03）: 営業経費タグ無し（「経費」GeneralAndAdministrativeExpenses）
 //   → operating_profit / sga とも null（経常利益・差額で埋めない）
 // - HSホールディングス 8699 / S100YJQ6: 預金はあるが営業利益行がある → 営業利益のまま（銀行経路にしない）
@@ -39,7 +38,7 @@ import Testing
     private static let million = 1_000_000.0
 
     private func expectBank(
-        _ docID: String, grossProfit: Double, expenses: Double, equity: Double, netBusinessProfit: Double
+        _ docID: String, grossProfit: Double, expenses: Double, netBusinessProfit: Double
     ) async throws {
         guard let dir = await Self.ensureAvailable(docID) else { return }
         let v = try #require(StatementFinancialsResolver.resolve(xbrlDir: dir))
@@ -47,7 +46,6 @@ import Testing
         #expect(v.grossProfitLabel == "連結業務粗利益")
         #expect(v.sga == expenses * Self.million)
         #expect(v.sgaLabel == "営業経費")
-        #expect(v.equityMethodIncome == equity * Self.million)
         #expect(v.operatingProfit == netBusinessProfit * Self.million)
         #expect(v.operatingProfitLabel == "業務純益")
         #expect(v.salesLabel == "経常収益")
@@ -55,25 +53,25 @@ import Testing
 
     @Test func mufgS100YJQONetBusinessProfit() async throws {
         try await expectBank(
-            "S100YJQO", grossProfit: 5_944_287, expenses: 3_489_570, equity: 845_545,
-            netBusinessProfit: 3_300_262)
+            "S100YJQO", grossProfit: 5_944_287, expenses: 3_489_570,
+            netBusinessProfit: 2_454_717)
     }
 
     @Test func chibaBankS100YDSERegionalNetBusinessProfit() async throws {
         try await expectBank(
-            "S100YDSE", grossProfit: 223_275, expenses: 104_888, equity: 623,
-            netBusinessProfit: 119_010)
+            "S100YDSE", grossProfit: 223_275, expenses: 104_888,
+            netBusinessProfit: 118_387)
     }
 
     @Test func mizuhoS100YF8YWithNonConsolidatedOperatingIncomeTagStillUsesNetBusinessProfit() async throws {
         try await expectBank(
-            "S100YF8Y", grossProfit: 3_477_300, expenses: 2_103_458, equity: 52_266,
-            netBusinessProfit: 1_426_108)
+            "S100YF8Y", grossProfit: 3_477_300, expenses: 2_103_458,
+            netBusinessProfit: 1_373_842)
     }
 
-    @Test func shichijushichiS100YAM0WithoutEquityMethodUsesZero() async throws {
+    @Test func shichijushichiS100YAM0RegionalNetBusinessProfit() async throws {
         try await expectBank(
-            "S100YAM0", grossProfit: 106_460, expenses: 55_360, equity: 0,
+            "S100YAM0", grossProfit: 106_460, expenses: 55_360,
             netBusinessProfit: 51_100)
     }
 
@@ -84,7 +82,6 @@ import Testing
         #expect(v.operatingProfitLabel == nil)
         #expect(v.sga == nil)
         #expect(v.sgaLabel == nil)
-        #expect(v.equityMethodIncome == nil)
     }
 
     @Test func hsHoldingsS100YJQ6WithOperatingIncomeLineStaysOperatingProfit() async throws {
@@ -92,6 +89,5 @@ import Testing
         let v = try #require(StatementFinancialsResolver.resolve(xbrlDir: dir))
         #expect(v.operatingProfitLabel == "営業利益")
         #expect(v.sgaLabel == nil)
-        #expect(v.equityMethodIncome == nil)
     }
 }

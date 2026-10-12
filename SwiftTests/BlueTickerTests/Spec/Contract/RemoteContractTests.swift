@@ -24,7 +24,7 @@ import Testing
           "issued_shares": null, "employees": null, "business_profit": null,
           "business_profit_margin": null, "business_profit_change": null,
           "sales_change_impact": null, "gross_margin_change_impact": null,
-          "sga_change_impact": null, "equity_method_change_impact": null, "net_margin": null, "asset_turnover": null,
+          "sga_change_impact": null, "net_margin": null, "asset_turnover": null,
           "financial_leverage": null, "roic_delta": null, "roic_margin_effect": null,
           "roic_turnover_effect": null, "roe_delta": null, "roe_net_margin_effect": null,
           "roe_asset_turnover_effect": null, "roe_leverage_effect": null,
