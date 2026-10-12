@@ -124,7 +124,10 @@ enum StatementClassifier {
             let label = resolvedLabel(
                 for: tag, ctx: fact.contextRef, sectionType: sectionType, plainLabel: fact.label,
                 preferredLabelRole: preferredLabelRoleByTag?[tag],
-                labelRoleVariantsByTag: labelRoleVariantsByTag)
+                labelRoleVariantsByTag: labelRoleVariantsByTag,
+                preferredLabelRolesElsewhere: Set(preferredLabelByRoleTag.compactMap { role, byTag in
+                    role == primaryRole ? nil : byTag[tag]
+                }))
             let calcComponents = componentsByTag?[tag]
             let components = calcComponents.map {
                 $0.map { StatementLineComponent(tag: $0.tag, weight: $0.weight) }
@@ -160,7 +163,8 @@ enum StatementClassifier {
     /// 残高行だけなので、それ以外では従来どおり `preferredLabelRole` を優先する。
     private static func resolvedLabel(
         for tag: String, ctx: String, sectionType: StatementSectionType, plainLabel: String?,
-        preferredLabelRole: String?, labelRoleVariantsByTag: [String: [String: String]]
+        preferredLabelRole: String?, labelRoleVariantsByTag: [String: [String: String]],
+        preferredLabelRolesElsewhere: Set<String> = []
     ) -> String? {
         let variants = labelRoleVariantsByTag[tag] ?? [:]
         if sectionType == .cashFlow || sectionType == .changesInEquity {
@@ -174,12 +178,24 @@ enum StatementClassifier {
                 return periodEnd
             }
         }
-        // preferredLabel の無い arc は標準ラベルロールを指す。`plainLabel` は提出ラベルを
-        // 1つに収束させたもので、提出側に標準ロールが無いと他ロール（セグメント表用の
-        // positiveLabel 等）の文言が入る（実データ: 東京海上 S100YLS8 / MS&AD S100YNCJ の
-        // 親会社所有者帰属利益が PL で「セグメント利益…」になる）。標準ロールの文言
-        // （提出側、無ければ標準タクソノミ）があればそれを使う。
-        guard let variant = variants[preferredLabelRole ?? xbrlStandardLabelRole] else {
+        guard let preferredLabelRole else {
+            // `plainLabel` は提出ラベルを1つに収束させたもの。提出側に標準ロールが無いと
+            // 他ロールの文言が入る。そのロールを別の表の arc が `preferredLabel` で指している
+            // （= その表のために作った文言）なら本表には出さず、標準ロールの文言を使う
+            // （実データ: 東京海上 S100YLS8 / MS&AD S100YNCJ の親会社所有者帰属利益は
+            // セグメント表用ロールが「セグメント利益…」、PL arc は preferredLabel 無し）。
+            // どの arc も指していない別ロール（エムスリー S100YJ25 の BS「短期借入金」alt）は従来どおり。
+            if let plainLabel, variants[xbrlStandardLabelRole] != plainLabel,
+               let standard = variants[xbrlStandardLabelRole],
+               variants.contains(where: { role, text in
+                   text == plainLabel && preferredLabelRolesElsewhere.contains(role)
+               })
+            {
+                return standard
+            }
+            return plainLabel
+        }
+        guard let variant = variants[preferredLabelRole] else {
             return plainLabel
         }
         return variant

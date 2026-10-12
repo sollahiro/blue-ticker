@@ -27,7 +27,7 @@
 
 `StatementContract.swift`: `statementCacheVersion` / min servable、`StatementLineItem`（tag, label, value, unit, order, section?, is_total?, components?）。SS は合計列のみ（`changes_in_equity`）。
 
-行の `label` は presentation の `preferredLabel` が指すロールの文言。`preferredLabel` が無い arc は標準ラベルロール（提出側、無ければ標準タクソノミ）。提出側に標準ロールが無く別ロール（セグメント表用の positiveLabel 等）だけがあるとき、その文言を本表に出さない（8766 S100YLS8 / 8725 S100YNCJ の `ProfitLossAttributableToOwnersOfParentIFRS` は「親会社の所有者」）。
+行の `label` は presentation の `preferredLabel` が指すロールの文言。`preferredLabel` が無い arc は提出ラベル（標準ロール優先で1つに収束）を使う。ただし収束したラベルが別の表の arc が `preferredLabel` で指すロール（セグメント表用の positiveLabel / alt 等）の文言なら、本表には標準ロールの文言（提出側、無ければ標準タクソノミ）を出す（8766 S100YLS8 / 8725 S100YNCJ の `ProfitLossAttributableToOwnersOfParentIFRS` は「親会社の所有者」。どの arc も指さない alt だけの BS 科目 2413 S100YJ25「短期借入金」は従来どおり）。
 
 ## notes
 
