@@ -16,6 +16,9 @@ enum BreakdownFinancialsResolver {
         let method: String
         let accountingStandard: String
         let warnings: [String]
+        /// 銀行業（statement BS に `Xbrl.bankMarkerTag`＝預金がある。bank components へ回す判定と同じ）。
+        /// 公開キーではない。派生指標（net_cash / net_de / roic 等）を null にするためだけに使う。
+        var isBank: Bool = false
     }
 
     /// geography 軸と Summary の売上分母。正本は statement PL の連結売上（`StatementFinancialsResolver`）。
@@ -112,6 +115,19 @@ enum BreakdownFinancialsResolver {
 
     /// `financialsCanonicalInterestBearingDebt` の純粋な写像部分（unit test 用）。
     static func canonicalInterestBearingDebt(
+        resolution: IBDResolution,
+        inputs: IBDInputs,
+        accountingStandard: String,
+        legacy: () -> IBDResult
+    ) -> InterestBearingDebtCanonicalValue {
+        var value = canonicalInterestBearingDebtValue(
+            resolution: resolution, inputs: inputs, accountingStandard: accountingStandard,
+            legacy: legacy)
+        value.isBank = inputs.isBank
+        return value
+    }
+
+    private static func canonicalInterestBearingDebtValue(
         resolution: IBDResolution,
         inputs: IBDInputs,
         accountingStandard: String,

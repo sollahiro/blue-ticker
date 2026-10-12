@@ -175,6 +175,36 @@ import Testing
         #expect(resp["unit"] as? String == "百万円")
     }
 
+    /// 銀行業の期（cash はあるが net_cash を出さない）は有利子負債ベースの Waterfall 差分も null。
+    @Test func analysisJsonObjectNullsDebtDeltasForBankYears() throws {
+        let result = try decodeResult(#"""
+        {"code":"8306","years":[
+          {"fy_end":"2025-03","FinancialPeriod":"FY",
+           "RawData":{"CashEq":150},
+           "CalculatedData":{"InterestBearingDebt":40}},
+          {"fy_end":"2024-03","FinancialPeriod":"FY",
+           "RawData":{"CashEq":100},
+           "CalculatedData":{"InterestBearingDebt":60}}
+        ]}
+        """#)
+        let resp = FinancialsResponse(
+            code: "8306", name: "三菱UFJ", sector: "銀行業", market: "プライム", result: result)
+        #expect(resp.years.allSatisfy { $0.withholdsBankRatios })
+        let years = try #require(resp.analysisJsonObject()["years"] as? [[String: Any]])
+        let newer = years[0]
+        #expect(newer["net_cash"] is NSNull)
+        #expect(newer["net_cash_change"] is NSNull)
+        #expect(newer["debt_change_impact"] is NSNull)
+        // 預金を除く有利子負債と現金の差分自体は残す。
+        #expect(newer["interest_bearing_debt"] as? Double == 40)
+        #expect(newer["cash_change_impact"] as? Double == 50)
+    }
+
+    @Test func nonBankYearsDoNotWithholdRatios() throws {
+        let years = try financialsResponse().years
+        #expect(years.allSatisfy { !$0.withholdsBankRatios })
+    }
+
     @Test func analysisJsonObjectComputesFourthAndFifthBlockDeltas() throws {
         let years = try #require(financialsResponse().analysisJsonObject()["years"] as? [[String: Any]])
         #expect(years.count == 2)

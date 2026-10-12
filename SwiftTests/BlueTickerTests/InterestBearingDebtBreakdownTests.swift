@@ -770,6 +770,62 @@ private struct StubIBDDecider: InterestBearingDebtDeciding {
         #expect(zeroDebt.warnings.isEmpty)
     }
 
+    /// 銀行判定（inputs.isBank）は canonical 値に乗り、legacy fallback でも落ちない。
+    @Test func financialsCanonicalInterestBearingDebtCarriesBankFlag() {
+        let bank = BreakdownFinancialsResolver.canonicalInterestBearingDebt(
+            resolution: .resolved(
+                payload: canonicalPayload(total: 123, prior: 45, needsReview: false),
+                audit: canonicalAudit(needsReview: false)),
+            inputs: IBDInputs(consolidated: true, isBank: true, balanceSheet: [], schedule: [], leaseNote: nil),
+            accountingStandard: "J-GAAP",
+            legacy: { IBDResult(total: 9, priorTotal: 8, components: [], method: "old", accountingStandard: "J-GAAP") })
+        #expect(bank.isBank)
+        #expect(bank.total == 123)
+
+        let bankFallback = BreakdownFinancialsResolver.canonicalInterestBearingDebt(
+            resolution: .notApplicable(reason: breakdownNotApplicableNotFound),
+            inputs: IBDInputs(consolidated: true, isBank: true, balanceSheet: [], schedule: [], leaseNote: nil),
+            accountingStandard: "J-GAAP",
+            legacy: { IBDResult(total: 15, priorTotal: 8, components: [], method: "field_parser", accountingStandard: "J-GAAP") })
+        #expect(bankFallback.isBank)
+        #expect(bankFallback.total == 15)
+
+        let nonBank = BreakdownFinancialsResolver.canonicalInterestBearingDebt(
+            resolution: .notApplicable(reason: breakdownNotApplicableNotFound),
+            inputs: IBDInputs(consolidated: true, balanceSheet: [], schedule: [], leaseNote: nil),
+            accountingStandard: "J-GAAP",
+            legacy: { IBDResult(total: 15, priorTotal: 8, components: [], method: "field_parser", accountingStandard: "J-GAAP") })
+        #expect(nonBank.isBank == false)
+    }
+
+    /// 銀行業は net_cash / net_de / roic / nopat_margin / invested_capital_turnover を null。非銀行は従来どおり。
+    @Test func interestBearingDebtRatiosAreWithheldForBanks() {
+        var raw = RawData()
+        raw.cashEq = 150
+        raw.sales = 1000
+        var base = CalculatedData()
+        base.interestBearingDebt = 40
+        base.netAssets = 200
+        base.nopat = 48
+
+        var nonBank = base
+        IndividualAnalyzer.applyInterestBearingDebtRatios(to: &nonBank, raw: raw, isBank: false)
+        #expect(nonBank.netCash == 110)
+        #expect(nonBank.netDE == -0.55)
+        #expect(nonBank.roic == 20)
+        #expect(nonBank.nopatMargin == 4.8)
+        #expect(nonBank.investedCapitalTurnover.map { abs($0 - 1000.0 / 240.0) < 1e-12 } == true)
+
+        var bank = base
+        IndividualAnalyzer.applyInterestBearingDebtRatios(to: &bank, raw: raw, isBank: true)
+        #expect(bank.netCash == nil)
+        #expect(bank.netDE == nil)
+        #expect(bank.roic == nil)
+        #expect(bank.nopatMargin == nil)
+        #expect(bank.investedCapitalTurnover == nil)
+        #expect(bank.interestBearingDebt == 40)
+    }
+
     // MARK: - helpers
 
     private func bs(

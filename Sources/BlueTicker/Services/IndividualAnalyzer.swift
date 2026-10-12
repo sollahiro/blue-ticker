@@ -211,15 +211,6 @@ struct IndividualAnalyzer {
             calc.nopat = op_ * (1.0 - Financial.nopatFallbackTaxRate)
         }
 
-        // ネットキャッシュ・ネットD/E
-        if let cash = raw.cashEq {
-            let ibdM = calc.interestBearingDebt ?? 0
-            calc.netCash = cash - ibdM
-            if let na = calc.netAssets, na > 0 {
-                calc.netDE = (ibdM - cash) / na
-            }
-        }
-
         // FCF
         if let cfo = raw.cfo, let cfi = raw.cfi {
             calc.cfc = cfo + cfi
@@ -230,19 +221,7 @@ struct IndividualAnalyzer {
             calc.roe = (np / eq) * percent
         }
 
-        // ROIC (NOPAT / 投下資本)
-        if let nopat = calc.nopat,
-           let ibd = calc.interestBearingDebt,
-           let na = calc.netAssets {
-            let investedCapital = ibd + na
-            if investedCapital > 0 {
-                calc.roic = (nopat / investedCapital) * percent
-                if let s = raw.sales, s > 0 {
-                    calc.nopatMargin = (nopat / s) * percent
-                    calc.investedCapitalTurnover = s / investedCapital
-                }
-            }
-        }
+        Self.applyInterestBearingDebtRatios(to: &calc, raw: raw, isBank: ibd.isBank)
 
         let period = formatFinancialPeriod(fyEnd: fyEnd, perType: raw.curPerType ?? "FY")
 
@@ -306,4 +285,39 @@ func individualCacheIsReusable(_ cached: [String: Any]?, cacheVersion: String, r
           (c["_cache_version"] as? String) == cacheVersion,
           (c["_requested_years"] as? Int ?? 0) >= requestedYears else { return false }
     return true
+}
+
+extension IndividualAnalyzer {
+    /// 有利子負債ベースの比率（net_cash / net_de / roic / nopat_margin / invested_capital_turnover）を埋める。
+    ///
+    /// 銀行業（`InterestBearingDebtBreakdown.inputs` の `isBank` = 預金の銀行マーカータグあり。
+    /// IBD を bank components で出す判定と同じ）は預金を有利子負債に含めないため、これらの比率は
+    /// 意味を持たない。値を出さずに null のままにする（Maintainer 判断 2026-10-12。キーは増やさない）。
+    /// `interest_bearing_debt` 自体（預金を除く）は呼び出し側で残す。
+    static func applyInterestBearingDebtRatios(to calc: inout CalculatedData, raw: RawData, isBank: Bool) {
+        guard !isBank else { return }
+
+        // ネットキャッシュ・ネットD/E
+        if let cash = raw.cashEq {
+            let ibdM = calc.interestBearingDebt ?? 0
+            calc.netCash = cash - ibdM
+            if let na = calc.netAssets, na > 0 {
+                calc.netDE = (ibdM - cash) / na
+            }
+        }
+
+        // ROIC (NOPAT / 投下資本)
+        if let nopat = calc.nopat,
+           let ibd = calc.interestBearingDebt,
+           let na = calc.netAssets {
+            let investedCapital = ibd + na
+            if investedCapital > 0 {
+                calc.roic = (nopat / investedCapital) * percent
+                if let s = raw.sales, s > 0 {
+                    calc.nopatMargin = (nopat / s) * percent
+                    calc.investedCapitalTurnover = s / investedCapital
+                }
+            }
+        }
+    }
 }

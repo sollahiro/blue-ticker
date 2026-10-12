@@ -129,7 +129,11 @@ extension FinancialsResponse {
         put(.cfoMargin, cfoMargin(cfo: latest.cfo, sales: latest.sales))
         put(.fcf, freeCashFlow(cfo: latest.cfo, capex: latest.capex))
         put(.operatingMarginCagr3y, metricCagr3y(from: dated.map(\.1), metric: \.operatingMargin))
-        put(.roicCagr3y, metricCagr3y(from: dated.map(\.1), metric: \.roic))
+        // 銀行業は roic / net_de を出さない（latest が null）。旧組立の期が混在しても
+        // roic の 3 期変化幅を出さないよう、最新期が銀行なら roic_cagr_3y も入れない。
+        if !latest.withholdsBankRatios {
+            put(.roicCagr3y, metricCagr3y(from: dated.map(\.1), metric: \.roic))
+        }
         let payout = payoutRatio3y(from: dated.map(\.1))
         put(.payoutRatio, payout.average)
         return ScreenRow(
