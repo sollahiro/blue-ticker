@@ -209,9 +209,15 @@ jobs:
         # 同一プロセス並列だとタイムアウト用 Task が遅延し、elapsed < 45 が Linux でも
         # flake する（run 32031247211: elapsed 160s）。加えて MCP の 200 秒打ち切りと
         # in-memory SQLite の接続分裂が起きる（run 32125967324）。テスト内容は維持する。
+        #
+        # ゴールデンスイート（SmokeTests / SegmentParityTests / *GoldenTests / Spec/Oracle/**）は
+        # 必須チェック `golden-suite` ジョブ（scripts/ci/golden-suite.sh）で別プロセス実行する。
+        # ここでは同じフィルタで skip して二重実行しない（docs/ci-checks.md）。
         run: |
-          swift test -Xswiftc -disable-upcoming-feature -Xswiftc MemberImportVisibility --skip StatelessTransportHangMitigationTests --skip SmokeTests --skip SegmentParityTests
-          swift test -Xswiftc -disable-upcoming-feature -Xswiftc MemberImportVisibility --filter 'SmokeTests|SegmentParityTests'
+          command -v python3 >/dev/null || (apt-get update -qq && apt-get install -y -qq python3 >/dev/null)
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          GOLDEN_FILTER="$(scripts/ci/golden-suite.sh --print-filter)"
+          swift test -Xswiftc -disable-upcoming-feature -Xswiftc MemberImportVisibility --skip StatelessTransportHangMitigationTests --skip "$GOLDEN_FILTER"
           swift test -Xswiftc -disable-upcoming-feature -Xswiftc MemberImportVisibility --filter StatelessTransportHangMitigationTests
 
       - name: Test HAPIS iOS consumer client
@@ -225,6 +231,92 @@ jobs:
       - name: Test iOS fund look-through math
         working-directory: Apps/BlueTicker/FundMath
         run: swift test -Xswiftc -disable-upcoming-feature -Xswiftc MemberImportVisibility
+
+  # ---- 必須チェック（scripts/ci/*.sh。ローカルでも同じコマンドで実行できる。docs/ci-checks.md）
+  golden-suite:
+    # ゴールデン（smoke/smoke_expected + .checksums.json、smoke/*_expected.json、
+    # *GoldenTests、Spec/Oracle/**）をフル実行。不一致は即失敗。
+    runs-on: ubuntu-latest
+    container: swift:6.1
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache SwiftPM dependencies
+        uses: actions/cache@v4
+        with:
+          path: .build
+          key: swiftpm-linux-${{ hashFiles('Package.resolved') }}
+
+      - name: Golden suite
+        env:
+          BLT_EDINET_API_KEY: ${{ secrets.BLT_EDINET_API_KEY }}
+        run: |
+          command -v python3 >/dev/null || (apt-get update -qq && apt-get install -y -qq python3 >/dev/null)
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          scripts/ci/golden-suite.sh
+
+  ci-scripts-selftest:
+    # 各チェックを意図的に壊した diff とクリーンな diff で検証する。
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Self-test scripts/ci
+        run: scripts/ci/tests/selftest.sh
+
+  diff-flags:
+    # issuer 単位の contains 照合 / 全件 .all() / トラッカー ID・URL の「新規」追加を hard fail。
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Flags (new occurrences only, baseline may only shrink)
+        env:
+          CI_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          CI_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: scripts/ci/flags.sh
+
+  golden-rules:
+    # ゴールデン変更時: 出典ノート / .checksums.json 更新 / 一括再生成の禁止。
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Golden checksums
+        run: scripts/ci/golden-suite.sh --checksums-only
+      - name: Golden-change rules
+        env:
+          CI_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          CI_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          GOLDEN_BULK_APPROVED: ${{ contains(github.event.pull_request.labels.*.name, 'golden-bulk-approved') }}
+        run: scripts/ci/golden-rules.sh
+
+  structure:
+    # 構造変更ヒューリスティック。該当時は needs-architect ラベル + BLT_Architect webhook。
+    # secrets 未設定なら警告のみで成功する。このジョブ自体は失敗させない。
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Structure check
+        env:
+          CI_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          CI_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          GH_TOKEN: ${{ github.token }}
+          BLT_ARCHITECT_WEBHOOK_URL: ${{ secrets.BLT_ARCHITECT_WEBHOOK_URL }}
+          BLT_ARCHITECT_WEBHOOK_KEY: ${{ secrets.BLT_ARCHITECT_WEBHOOK_KEY }}
+        run: scripts/ci/structure.sh
 
   repo-invariants:
     # 方式A（Cloudflare Access・エッジ信頼）は「Tunnel 経由限定 + 公開ポート閉鎖 + Access ポリシー」の

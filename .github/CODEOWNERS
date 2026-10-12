@@ -1,0 +1,9 @@
+# Golden data and golden/oracle suites (docs/ci-checks.md). workers/feed-rss/test-fixtures is NOT golden.
+/smoke/smoke_expected/                          @sollahiro
+/smoke/breakdown_*_expected.json                @sollahiro
+/smoke/breakdown_expected.json                  @sollahiro
+/smoke/statement_notes_*_expected.json          @sollahiro
+/SwiftTests/BlueTickerTests/*GoldenTests.swift  @sollahiro
+/SwiftTests/BlueTickerTests/Spec/Oracle/        @sollahiro
+# The checks that guard them.
+/scripts/ci/                                    @sollahiro
