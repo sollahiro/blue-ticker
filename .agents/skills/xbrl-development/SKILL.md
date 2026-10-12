@@ -227,8 +227,8 @@ needs_review は null（fail closed）。not_found でインスタンスが大�
 
 銀行（`Xbrl.isBankFiling` = BS に `DepositsLiabilitiesBNK`。IBD と同じ判定）で 3 に落ちた会社は、
 `StatementFinancialsResolver` が Summary の営業利益を **業務純益** に置き換える:
-業務粗利益（`GrossProfitExtractor` の連結業務粗利益）− 営業経費（`GeneralAndAdministrativeExpensesOEBNK`）
-+ 持分法による投資損益（CF `EquityInEarningsLossesOfAffiliatesOpeCF` の符号反転、無ければ 0）。
+業務粗利益（`GrossProfitExtractor` の連結業務粗利益）− 営業経費（`GeneralAndAdministrativeExpensesOEBNK`）。
+持分法は足さない。Waterfall は売上差・粗利率差・営業経費差の3要因で前年差に一致する。
 `op_label`「業務純益」、`sga` = 営業経費・`sga_label`「営業経費」。営業経費が無ければ OP / sga とも null。
 Waterfall の GP − OP 差額は Waterfall 内だけで使い、公開 `sga` へ書き戻さない。
 
