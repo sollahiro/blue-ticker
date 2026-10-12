@@ -45,4 +45,15 @@ import Testing
         #expect(!Xbrl.isBankFiling(["DepositsLiabilitiesBNK": FieldValue(current: nil, prior: nil)]))
         #expect(!Xbrl.isBankFiling([:]))
     }
+
+    @Test func bankDetectionAlsoUsesEdinetIndustry() {
+        // EDINET 提出者業種が銀行業なら預金マーカーが無くても銀行（ゆうちょ 7182）。
+        let japanPostBankLike: FieldSet = ["DepositsLiabilities": FieldValue(current: 1, prior: nil)]
+        #expect(Xbrl.isBankFiling(japanPostBankLike, edinetIndustry: "銀行業"))
+        #expect(!Xbrl.isBankFiling(japanPostBankLike))
+        #expect(!Xbrl.isBankFiling(japanPostBankLike, edinetIndustry: "その他金融業"))
+        // マーカーがある会社は業種に関係なく従来どおり銀行（8421 / 8699 / 8729）。
+        #expect(Xbrl.isBankFiling(
+            ["DepositsLiabilitiesBNK": FieldValue(current: 1, prior: nil)], edinetIndustry: "保険業"))
+    }
 }
