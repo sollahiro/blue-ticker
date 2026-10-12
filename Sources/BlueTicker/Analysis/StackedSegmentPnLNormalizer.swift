@@ -232,7 +232,9 @@ enum StackedSegmentPnLNormalizer {
         {
             denominator = consolidatedSales
             denominatorTag = salesDenominatorTag ?? "income_statement.sales"
-        } else if consolidatedSales == nil || isNetRevenueLabel(salesLabel) {
+        } else if consolidatedSales == nil
+            || GeographyBreakdownLLMNormalizer.isNetRevenueCell(salesLabel)
+        {
             denominator = salesTotal
             denominatorTag = "stacked_table_sales_total"
         } else {
@@ -319,12 +321,6 @@ enum StackedSegmentPnLNormalizer {
         return c.hasPrefix("営業利益") || c.hasPrefix("セグメント利益") || c.hasPrefix("セグメント損益")
             || c.hasPrefix("事業利益") || c.hasPrefix("税引前当期純利益") || c.hasPrefix("税引前利益")
             || c.hasPrefix("税金等調整前当期純利益")
-    }
-
-    /// 証券業の純収益（金融費用控除後）。損益計算書「収益合計」（総額）とは基準が違う。
-    private static func isNetRevenueLabel(_ label: String) -> Bool {
-        let c = compactLabel(label)
-        return c.contains("金融費用控除後") || c.hasPrefix("純収益") || c.hasPrefix("純営業収益")
     }
 
     // MARK: - グリッド / ブロック

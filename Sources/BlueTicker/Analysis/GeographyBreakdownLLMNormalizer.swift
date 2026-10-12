@@ -83,8 +83,8 @@ enum GeographyBreakdownLLMNormalizer {
         docID: String,
         salesLabel: String? = nil
     ) async -> (snapshot: BreakdownSnapshot?, audit: LLMBreakdownAudit?) {
-        // 1つの表に「売上（収益）：」「税引前当期純利益：」等の指標セクションが縦に積まれた表
-        // （野村 S100YC5C［地域別情報］）は、最初の売上相当セクションだけを残す。
+        // 純収益（金融費用控除後）の表で「収益合計…：」「税引前当期純利益：」等の指標セクションが
+        // 縦に積まれたもの（野村 S100YC5C［地域別情報］）は、最初の売上相当セクションだけを残す。
         var result = result
         result.tables = result.tables.map { table in
             var copy = table
@@ -326,7 +326,8 @@ enum GeographyBreakdownLLMNormalizer {
         var denominator = consolidatedSales
         var denominatorTag = "income_statement.sales"
         let fromPublishedSubtotals = tableGrandTotalAmount(
-            rows: rows, transposedWhole: transposedWhole, unitMultiplier: unitMultiplier)
+            rows: rows, transposedWhole: transposedWhole, unitMultiplier: unitMultiplier,
+            netRevenueTable: gridHasNetRevenueCell(selectedTable.grid))
         let fromTableTotal = tableTotalAmount.map { $0 * unitMultiplier }
         let tableGrandTotal: Double? = {
             switch (fromPublishedSubtotals, fromTableTotal) {
@@ -402,10 +403,17 @@ enum GeographyBreakdownLLMNormalizer {
         return (snapshot, audit)
     }
 
-    /// 純収益（金融費用控除後）の表見出し・行ラベル。
+    /// 純収益（金融費用控除後）の表見出し・行ラベル。証券業（野村）の注記表だけに出る。
+    /// product_service の期間積み上げ表（StackedSegmentPnLNormalizer）も同じ判定を使う。
     static func isNetRevenueCell(_ text: String) -> Bool {
         let compact = text.filter { !$0.isWhitespace }
         return compact.contains("金融費用控除後")
+    }
+
+    /// 表のどこかに純収益（金融費用控除後）のセルがあるか。指標セクションの切り詰め・
+    /// 「連結」総合計・分母の表総合計切替は、この表に限る（他社の表は従来どおり）。
+    static func gridHasNetRevenueCell(_ grid: [[String]]) -> Bool {
+        grid.contains { row in row.contains(where: isNetRevenueCell) }
     }
 
     /// 指標セクション見出し行（「収益合計（金融費用控除後）(1)：」「税引前当期純利益（△損失）：」）。
@@ -421,11 +429,14 @@ enum GeographyBreakdownLLMNormalizer {
         return metricWords.contains(where: compact.contains) ? compact : nil
     }
 
-    /// 指標セクションが2つ以上縦に積まれた表を、最初の売上相当セクション（収益／売上を含み、
-    /// 利益・損失・資産を含まない見出し）だけに切り詰める。該当しない表は markdown をそのまま返す。
+    /// 純収益（金融費用控除後）の表で、指標セクションが2つ以上縦に積まれたものを、最初の売上相当
+    /// セクション（収益／売上を含み、利益・損失・資産を含まない見出し）だけに切り詰める。
+    /// 該当しない表（純収益セルの無い表を含む）は markdown をそのまま返す。
     /// 後続セクション（税引前当期純利益 等）の「連結」行を売上の小計として拾わない。
+    /// IFRS の「売上収益：」「非流動資産：」積み上げ表（リコー S100YBFF）は対象外。
     static func trimToSalesMetricSection(_ markdown: String) -> String {
         let grid = BreakdownExtractor.markdownToGrid(markdown)
+        guard gridHasNetRevenueCell(grid) else { return markdown }
         let headers = grid.indices.compactMap { i in metricSectionHeader(grid[i]).map { (i, $0) } }
         guard headers.count >= 2 else { return markdown }
         guard let k = headers.firstIndex(where: { _, label in
@@ -486,12 +497,12 @@ enum GeographyBreakdownLLMNormalizer {
     }
 
     /// 表の総合計ラベル（計／合計）。小計・海外計は総合計ではない。
-    static func isTableGrandTotalLabel(_ label: String) -> Bool {
+    /// 素の「連結」は純収益（金融費用控除後）の表でだけ総合計とみなす（野村: 地域行の総合計「連　結」）。
+    static func isTableGrandTotalLabel(_ label: String, netRevenueTable: Bool = false) -> Bool {
         let compact = RevenueRecognitionCandidates.compactCell(label)
         if compact.contains("小計") { return false }
         if compact == "海外計" || compact == "海外合計" { return false }
-        // 「連 結」（野村: 地域行の総合計）。空白を全て除いて比較する。
-        if compact.filter({ !$0.isWhitespace }) == "連結" { return true }
+        if netRevenueTable, compact.filter({ !$0.isWhitespace }) == "連結" { return true }
         return compact == "計" || compact == "合計" || compact == "連結合計"
             || compact == "連結計" || compact == "売上高合計" || compact == "総合計"
             || compact == "連結売上高" || compact == "連結売上"
@@ -501,10 +512,13 @@ enum GeographyBreakdownLLMNormalizer {
     static func tableGrandTotalAmount(
         rows: [BreakdownRow],
         transposedWhole: Double?,
-        unitMultiplier: Double
+        unitMultiplier: Double,
+        netRevenueTable: Bool = false
     ) -> Double? {
         let subtotals = rows.filter { $0.rowKind == "subtotal" && $0.amount > 0 }
-        let grandLabeled = subtotals.filter { isTableGrandTotalLabel($0.labelRaw) }
+        let grandLabeled = subtotals.filter {
+            isTableGrandTotalLabel($0.labelRaw, netRevenueTable: netRevenueTable)
+        }
         // 公開行に合う内部小計へフォールバックしない（計が subtotal_mismatch で落ちたあとの小計）。
         let fromRows = grandLabeled.max(by: { $0.amount < $1.amount })?.amount
         let fromTransposed: Double? = {
@@ -550,7 +564,7 @@ enum GeographyBreakdownLLMNormalizer {
     static func tableUsesNonSalesRevenueLine(
         _ table: RevenueRecognitionCandidates.ParsedTable
     ) -> Bool {
-        if table.grid.contains(where: { row in row.contains(where: isNetRevenueCell) }) {
+        if gridHasNetRevenueCell(table.grid) {
             return true
         }
         let labels = [table.heading, table.precedingCaption ?? ""]

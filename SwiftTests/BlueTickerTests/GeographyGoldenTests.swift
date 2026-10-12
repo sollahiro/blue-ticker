@@ -1660,12 +1660,32 @@ import Testing
         #expect(!trimmed.contains("税引前"))
     }
 
-    /// 「連　結」は表の総合計。「小計」「海外計」は総合計ではない。
-    @Test func bareConsolidatedLabelIsGrandTotal() {
-        #expect(GeographyBreakdownLLMNormalizer.isTableGrandTotalLabel("連　結"))
-        #expect(GeographyBreakdownLLMNormalizer.isTableGrandTotalLabel("連結"))
-        #expect(!GeographyBreakdownLLMNormalizer.isTableGrandTotalLabel("小計"))
-        #expect(!GeographyBreakdownLLMNormalizer.isTableGrandTotalLabel("海外計"))
+    /// 純収益（金融費用控除後）の表では「連　結」は表の総合計。それ以外の表では従来どおり総合計にしない。
+    /// 「小計」「海外計」はどちらでも総合計ではない。
+    @Test func bareConsolidatedLabelIsGrandTotalOnlyInNetRevenueTables() {
+        #expect(GeographyBreakdownLLMNormalizer.isTableGrandTotalLabel("連　結", netRevenueTable: true))
+        #expect(GeographyBreakdownLLMNormalizer.isTableGrandTotalLabel("連結", netRevenueTable: true))
+        #expect(!GeographyBreakdownLLMNormalizer.isTableGrandTotalLabel("連　結"))
+        #expect(!GeographyBreakdownLLMNormalizer.isTableGrandTotalLabel("連結"))
+        #expect(!GeographyBreakdownLLMNormalizer.isTableGrandTotalLabel("小計", netRevenueTable: true))
+        #expect(!GeographyBreakdownLLMNormalizer.isTableGrandTotalLabel("海外計", netRevenueTable: true))
+    }
+
+    /// IFRS の「売上収益：」「非流動資産：」積み上げ表（7752 リコー S100YBFF 型）は純収益の表ではないので
+    /// 切り詰めない（後段の資産表判定・小計抽出を従来どおりに保つ）。
+    @Test func trimToSalesMetricSectionLeavesNonNetRevenueStackedTablesUntouched() {
+        let md = BreakdownExtractor.gridToMarkdown([
+            ["", "当連結会計年度"],
+            ["売上収益：", ""],
+            ["日本", "600"],
+            ["米国", "400"],
+            ["合計", "1,000"],
+            ["非流動資産：", ""],
+            ["日本", "300"],
+            ["米国", "127"],
+            ["合計", "427"],
+        ])
+        #expect(GeographyBreakdownLLMNormalizer.trimToSalesMetricSection(md) == md)
     }
 
     /// 6473 型: 北米/アジアの空見出しのあとの その他 は親に付け、続く全社その他は残す。
