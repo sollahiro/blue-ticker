@@ -225,6 +225,13 @@ needs_review は null（fail closed）。not_found でインスタンスが大�
 3. 経常利益フォールバック: Xbrl.ordinaryIncomeTags（J-GAAP 金融機関向け。IFRS企業では抑止）
 ```
 
+銀行（`Xbrl.isBankFiling` = BS に `DepositsLiabilitiesBNK`。IBD と同じ判定）で 3 に落ちた会社は、
+`StatementFinancialsResolver` が Summary の営業利益を **業務純益** に置き換える:
+業務粗利益（`GrossProfitExtractor` の連結業務粗利益）− 営業経費（`GeneralAndAdministrativeExpensesOEBNK`）
++ 持分法による投資損益（CF `EquityInEarningsLossesOfAffiliatesOpeCF` の符号反転、無ければ 0）。
+`op_label`「業務純益」、`sga` = 営業経費・`sga_label`「営業経費」。営業経費が無ければ OP / sga とも null。
+Waterfall の GP − OP 差額は Waterfall 内だけで使い、公開 `sga` へ書き戻さない。
+
 ---
 
 ## 5. US-GAAP固有の制約とHTMLパース
