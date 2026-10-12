@@ -131,7 +131,10 @@ enum OperatingProfitExtractor {
         guard selling.current != nil || ga.current != nil else {
             // 販売費の行が別にある PL では一般管理費だけを販管費にしない。
             guard resolveItem(fieldSet, tags: Xbrl.sgaSellingLineTags).tag == nil else { return (nil, nil, nil) }
-            for (tag, label) in Xbrl.sgaSingleLineFallbackTags {
+            let hasGrossProfit = resolveItem(
+                fieldSet, tags: Xbrl.grossProfitDirectTags + Xbrl.operatingGrossProfitDirectTags).tag != nil
+            for (tag, label, requiresGrossProfit) in Xbrl.sgaSingleLineFallbackTags
+            where hasGrossProfit || !requiresGrossProfit {
                 let item = resolveItem(fieldSet, tags: [tag])
                 if item.tag != nil { return (item.current, item.prior, label) }
             }

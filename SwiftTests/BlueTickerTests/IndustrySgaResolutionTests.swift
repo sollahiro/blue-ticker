@@ -109,4 +109,16 @@ import Foundation
         #expect(r.sga == 421_093_000)
         #expect(r.sgaLabel == "事業費用")
     }
+
+    @Test func businessExpensesTotalWithoutGrossProfitIsNotSga() {
+        // ラクオリア創薬 4579: 事業収益の直下の「事業費用合計」は事業原価込みの総費用。販管費にしない。
+        let r = sga([
+            ("jpcrp030000-asr_E25466-000", "BusinessRevenue", 3_980e6),
+            ("jpcrp030000-asr_E25466-000", "CostOfBusinessRevenueBusinessExpenses", 712e6),
+            ("jpcrp030000-asr_E25466-000", "BusinessExpenses", 3_496e6),
+            ("jppfs_cor", "OperatingIncome", 484e6),
+        ])
+        #expect(r.sga == nil)
+        #expect(r.sgaLabel == nil)
+    }
 }

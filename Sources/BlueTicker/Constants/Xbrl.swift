@@ -350,12 +350,13 @@ enum Xbrl {
         ("SellingGeneralAndAdministrativeExpensesIFRSContinuingOperationsIFRS", nil),
     ]
 
-    /// 販売費の無い PL で売上総利益（営業総利益）と営業利益の間に1行だけある費用（タグ, sga_label）。
+    /// 販売費の無い PL で売上総利益（営業総利益）と営業利益の間に1行だけある費用（タグ, sga_label, 売上総利益行が要るか）。
     /// 海運・倉庫・運送・証券金融・不動産賃貸等の「一般管理費」、創薬ベンチャーの「事業費用」（4889）。
+    /// 「事業費用（合計）」は事業原価込みの総費用のこともある（ラクオリア 4579）ので、売上総利益行の下にあるときだけ。
     /// 販売費の行（`sgaSellingLineTags`）が別にある PL では内訳の一部なので使わない。
-    static let sgaSingleLineFallbackTags: [(tag: String, label: String)] = [
-        ("GeneralAndAdministrativeExpensesSGA", "一般管理費"),
-        ("BusinessExpenses", "事業費用"),
+    static let sgaSingleLineFallbackTags: [(tag: String, label: String, requiresGrossProfit: Bool)] = [
+        ("GeneralAndAdministrativeExpensesSGA", "一般管理費", false),
+        ("BusinessExpenses", "事業費用", true),
     ]
 
     /// 一般管理費と並んで開示される販売費の行。これがあると一般管理費だけでは販管費にならない。
