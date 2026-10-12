@@ -214,7 +214,7 @@ enum BreakdownExtractor {
             // opt-in は business のみ。
             mixedHeadingLikeOnly: true
         )
-        // 野村 US-GAAP 注記23 型（BLT-143）:「23　セグメントおよび地域別情報：」の下に
+        // US-GAAP 注記23 型（野村）:「23　セグメントおよび地域別情報：」の下に
         // 「［事業別セグメント］」「［地域別情報］」が並び、既定キーワード（セグメント情報 等）に
         // 当たる見出しが無い。既定で1表も取れないときだけ、US-GAAP 注記ブロックに限り
         // 注記23 型の見出しを順に試す（他社の既存抽出・golden を変えない）。
@@ -699,7 +699,7 @@ enum BreakdownExtractor {
     /// `shouldPreferRevenueRecognition` で製品・サービス表へ swap する相補関係）。
     static func extractGeographyInfo(xbrlDir: URL) -> ExtractedBreakdown {
         let dedicated = Xbrl.geographyTextBlockTags.subtracting(Xbrl.geographyMixedTextBlockTags)
-        // 野村 US-GAAP 注記23 型（BLT-143）: 小見出し「［地域別情報］」があればその下の表だけを使う。
+        // US-GAAP 注記23 型（野村）: 小見出し「［地域別情報］」があればその下の表だけを使う。
         // 既定キーワード「地域別」は散文（耐用年数・トレーディング資産・国内/海外税引前利益）にも
         // 当たり、無関係な表が候補の先頭に並ぶ。見出し型（句点なし）の一致に限る。
         let note23Tables = extractFromTextBlocks(

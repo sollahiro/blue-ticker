@@ -94,7 +94,7 @@ import Foundation
                 markdown, consolidatedSales: 150 * Financial.millionYen) == nil)
     }
 
-    // MARK: - 期間積み上げ・事業列型（野村 S100YC5C［事業別セグメント］、BLT-143）
+    // MARK: - 期間積み上げ・事業列型（野村 S100YC5C［事業別セグメント］: 期間を縦に積んだ事業列の表）
 
     /// 野村 S100YC5C［事業別セグメント］の表（金額は原本どおり）。
     static let nomuraSegmentHTML = """

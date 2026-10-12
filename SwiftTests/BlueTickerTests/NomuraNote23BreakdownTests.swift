@@ -3,7 +3,7 @@ import Testing
 
 @testable import BlueTickerCore
 
-/// BLT-143: 野村 8604 S100YC5C（US-GAAP）注記23「セグメントおよび地域別情報」の実データ回帰。
+/// 野村 8604 S100YC5C（US-GAAP）注記23「セグメントおよび地域別情報」の実データ回帰。
 /// 既定の見出しキーワードでは事業別の表が取れず（product_service 404）、地域別は散文の
 /// 「地域別」一致で無関係な表が先頭に並んでいた。
 @Suite struct NomuraNote23BreakdownTests {

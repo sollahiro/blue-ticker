@@ -3,7 +3,8 @@ import Testing
 
 @testable import BlueTickerCore
 
-/// BLT-143: US-GAAP の CF 本表合計（営業／投資）のラベル揺れと Summary タグフォールバック。
+/// US-GAAP の CF 本表合計（営業／投資）のラベル揺れ（「営業活動に使用された現金（純額）」
+/// 「営業活動による キャッシュ・フロー合計」等）と Summary タグフォールバック。
 /// 正本は statement 本表行。`CashFlowsFromUsedIn*ActivitiesUSGAAPSummaryOfBusinessResults` は
 /// 本表ラベルで取れないときだけ使う最終フォールバック。
 @Suite struct USGAAPCashFlowTotalsTests {

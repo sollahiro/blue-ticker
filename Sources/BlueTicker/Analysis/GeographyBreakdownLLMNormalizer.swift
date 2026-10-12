@@ -84,7 +84,7 @@ enum GeographyBreakdownLLMNormalizer {
         salesLabel: String? = nil
     ) async -> (snapshot: BreakdownSnapshot?, audit: LLMBreakdownAudit?) {
         // 1つの表に「売上（収益）：」「税引前当期純利益：」等の指標セクションが縦に積まれた表
-        // （野村 S100YC5C［地域別情報］）は、最初の売上相当セクションだけを残す（BLT-143）。
+        // （野村 S100YC5C［地域別情報］）は、最初の売上相当セクションだけを残す。
         var result = result
         result.tables = result.tables.map { table in
             var copy = table
@@ -423,7 +423,7 @@ enum GeographyBreakdownLLMNormalizer {
 
     /// 指標セクションが2つ以上縦に積まれた表を、最初の売上相当セクション（収益／売上を含み、
     /// 利益・損失・資産を含まない見出し）だけに切り詰める。該当しない表は markdown をそのまま返す。
-    /// 後続セクション（税引前当期純利益 等）の「連結」行を売上の小計として拾わない（BLT-143）。
+    /// 後続セクション（税引前当期純利益 等）の「連結」行を売上の小計として拾わない。
     static func trimToSalesMetricSection(_ markdown: String) -> String {
         let grid = BreakdownExtractor.markdownToGrid(markdown)
         let headers = grid.indices.compactMap { i in metricSectionHeader(grid[i]).map { (i, $0) } }
@@ -490,7 +490,7 @@ enum GeographyBreakdownLLMNormalizer {
         let compact = RevenueRecognitionCandidates.compactCell(label)
         if compact.contains("小計") { return false }
         if compact == "海外計" || compact == "海外合計" { return false }
-        // 「連 結」（野村: 地域行の総合計）。空白を全て除いて比較する（BLT-143）。
+        // 「連 結」（野村: 地域行の総合計）。空白を全て除いて比較する。
         if compact.filter({ !$0.isWhitespace }) == "連結" { return true }
         return compact == "計" || compact == "合計" || compact == "連結合計"
             || compact == "連結計" || compact == "売上高合計" || compact == "総合計"
@@ -546,7 +546,7 @@ enum GeographyBreakdownLLMNormalizer {
 
     /// 銀行・保険など、地理注記の行が売上高ではなく経常収益／営業収益／保険収益のとき。
     /// 証券業の「収益合計（金融費用控除後）」（純収益。損益計算書の収益合計＝総額とは基準が違う）
-    /// も同じく表の総合計をアンカーにする（野村 S100YC5C、BLT-143）。
+    /// も同じく表の総合計をアンカーにする（野村 S100YC5C: 収益合計の下に「金融費用控除後」の純収益行がある表）。
     static func tableUsesNonSalesRevenueLine(
         _ table: RevenueRecognitionCandidates.ParsedTable
     ) -> Bool {

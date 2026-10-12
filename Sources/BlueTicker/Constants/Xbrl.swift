@@ -1090,7 +1090,7 @@ enum Xbrl {
         "報告セグメント",
     ]
     /// US-GAAP 注記23 型（野村 S100YC5C）の事業別見出し。`businessSegmentHeadingKeywords` で
-    /// 1表も取れないときだけ、先頭から順に試す（BLT-143）。小見出し「［事業別セグメント］」を
+    /// 1表も取れないときだけ、先頭から順に試す。小見出し「［事業別セグメント］」を
     /// 先に、包括見出し「セグメントおよび地域別情報」は最後の手段。
     static let usgaapNote23BusinessSegmentHeadingKeywords: [String] = [
         "事業別セグメント",
@@ -1178,7 +1178,7 @@ enum Xbrl {
         "RelatedInformationTextBlock",                            // J-GAAP 関連情報（セグメント・地域が混在）
         notesToConsolidatedFinancialStatementsUSGAAPTextBlock,  // US-GAAP 連結財務諸表注記（地域別を内包）
     ]
-    /// US-GAAP 注記23 型（野村 S100YC5C）の地域小見出し。見出し型一致があれば既定キーワードより優先する（BLT-143）。
+    /// US-GAAP 注記23 型（野村 S100YC5C）の地域小見出し。見出し型一致があれば既定キーワードより優先する。
     static let usgaapNote23GeographyHeadingKeywords: [String] = [
         "［地域別情報］",
     ]

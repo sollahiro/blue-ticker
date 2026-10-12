@@ -192,7 +192,7 @@ enum StatementFinancialsResolver {
     private static func resolveFromUSGAAPStatement(
         _ year: StatementYear, tagElements: XbrlTagElements = [:]
     ) -> StatementFinancialsValues {
-        // CF 合計の最終フォールバック用（本表ラベルで取れないときだけ使う。BLT-143）。
+        // CF 合計の最終フォールバック用（本表ラベルで取れないときだけ使う）。
         let summaryTags = fieldSetFromDuration(tagElements.filter {
             $0.key == usgaapSummaryOperatingCashFlowTag || $0.key == usgaapSummaryInvestingCashFlowTag
         })
@@ -426,7 +426,7 @@ enum StatementFinancialsResolver {
     }
 
     /// ラベル部分一致の先頭行。値の無い見出し行（「－」= 0 で出る行）で打ち切らず、
-    /// 非ゼロ値の一致があればそれを、無ければ最初の一致（真の 0）を返す（BLT-143）。
+    /// 非ゼロ値の一致があればそれを、無ければ最初の一致（真の 0）を返す。
     private static func firstByLabel(
         _ items: [StatementLineItem], contains: String, excluding: [String] = []
     ) -> Double? {
@@ -484,7 +484,7 @@ enum StatementFinancialsResolver {
             .trimmingCharacters(in: CharacterSet(charactersIn: "：:"))
     }
 
-    /// US-GAAP CF 本表の営業／投資活動合計（BLT-143）。ラベルは空白を無視して
+    /// US-GAAP CF 本表の営業／投資活動合計（「営業活動に使用された現金（純額）」等のラベル揺れ）。ラベルは空白を無視して
     /// 「<活動><合計サフィックス>」と完全一致するものだけ。区分が付いた行は同じ区分に限る。
     /// 値 0 の一致（見出しが「－」で出た行）は飛ばし、非ゼロの一致が無いときだけ 0 を返す。
     static func usgaapCashFlowActivityTotal(
