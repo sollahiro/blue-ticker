@@ -6,6 +6,8 @@ struct OperatingProfitResult {
     var operatingProfitPrior: Double?
     var sga: Double?
     var sgaPrior: Double?
+    /// 販管費の行ラベルが「販売費及び一般管理費」以外のとき（例: 供給販売費及び一般管理費、一般管理費）。
+    var sgaLabel: String? = nil
     var label: String
     var method: String
     var accountingStandard: String
@@ -42,7 +44,7 @@ enum OperatingProfitExtractor {
             let sga = resolveSGA(fieldSet)
             return OperatingProfitResult(
                 operatingProfit: nil, operatingProfitPrior: nil,
-                sga: sga.current, sgaPrior: sga.prior,
+                sga: sga.current, sgaPrior: sga.prior, sgaLabel: sga.label,
                 label: "営業利益", method: "not_found",
                 accountingStandard: accountingStandard
             )
@@ -57,6 +59,7 @@ enum OperatingProfitExtractor {
                 operatingProfitPrior: opItem.prior,
                 sga: sga.current,
                 sgaPrior: sga.prior,
+                sgaLabel: sga.label,
                 label: "営業利益",
                 method: "direct",
                 accountingStandard: accountingStandard
@@ -76,6 +79,7 @@ enum OperatingProfitExtractor {
                 operatingProfitPrior: computed.prior,
                 sga: sga.current,
                 sgaPrior: sga.prior,
+                sgaLabel: sga.label,
                 label: "営業利益",
                 method: "computed",
                 accountingStandard: accountingStandard
@@ -107,28 +111,35 @@ enum OperatingProfitExtractor {
     }
 
     /// SGA を解決する。結合タグ優先、なければ保険販管相当、なければ業種別の販管費合計、
-    /// なければ販売費＋一般管理費（IFRS）を合算、それも無ければ販売費の無い PL の一般管理費。
-    private static func resolveSGA(_ fieldSet: FieldSet) -> (current: Double?, prior: Double?) {
+    /// なければ販売費＋一般管理費（IFRS）を合算、それも無ければ販売費の無い PL の1行（一般管理費等）。
+    private static func resolveSGA(
+        _ fieldSet: FieldSet
+    ) -> (current: Double?, prior: Double?, label: String?) {
         let combined = resolveItem(fieldSet, tags: Xbrl.sgaDirectTags)
-        if combined.tag != nil { return (combined.current, combined.prior) }
+        if combined.tag != nil { return (combined.current, combined.prior, nil) }
 
         let insurance = resolveItem(fieldSet, tags: Xbrl.insuranceSgaTags)
-        if insurance.tag != nil { return (insurance.current, insurance.prior) }
+        if insurance.tag != nil { return (insurance.current, insurance.prior, nil) }
 
-        let industry = resolveItem(fieldSet, tags: Xbrl.sgaIndustryTotalTags)
-        if industry.tag != nil { return (industry.current, industry.prior) }
+        for (tag, label) in Xbrl.sgaIndustryTotalTags {
+            let item = resolveItem(fieldSet, tags: [tag])
+            if item.tag != nil { return (item.current, item.prior, label) }
+        }
 
         let selling = resolveItem(fieldSet, tags: Xbrl.sgaSellingIFRSTags)
         let ga = resolveItem(fieldSet, tags: Xbrl.sgaGaIFRSTags)
         guard selling.current != nil || ga.current != nil else {
-            // 販売費の行が無い PL の一般管理費（合計）だけを販管費とみなす。
-            guard resolveItem(fieldSet, tags: Xbrl.sgaSellingLineTags).tag == nil else { return (nil, nil) }
-            let gaOnly = resolveItem(fieldSet, tags: Xbrl.sgaGeneralAdministrativeOnlyTags)
-            return (gaOnly.current, gaOnly.prior)
+            // 販売費の行が別にある PL では一般管理費だけを販管費にしない。
+            guard resolveItem(fieldSet, tags: Xbrl.sgaSellingLineTags).tag == nil else { return (nil, nil, nil) }
+            for (tag, label) in Xbrl.sgaSingleLineFallbackTags {
+                let item = resolveItem(fieldSet, tags: [tag])
+                if item.tag != nil { return (item.current, item.prior, label) }
+            }
+            return (nil, nil, nil)
         }
         let current = (selling.current ?? 0.0) + (ga.current ?? 0.0)
         let prior: Double? = (selling.prior != nil || ga.prior != nil)
             ? (selling.prior ?? 0.0) + (ga.prior ?? 0.0) : nil
-        return (current, prior)
+        return (current, prior, nil)
     }
 }

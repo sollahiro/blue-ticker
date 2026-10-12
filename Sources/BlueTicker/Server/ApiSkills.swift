@@ -233,6 +233,8 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                 invested_capital_turnover は null です（interest_bearing_debt は返します）。
                 営業利益行の無い銀行業は operating_profit が業務純益（業務粗利益 − 営業経費、op_label「業務純益」）、
                 sga が営業経費（sga_label「営業経費」）です。営業経費が無い場合は operating_profit / sga とも null です。
+                sga_label は販管費行が「販売費及び一般管理費」以外のときだけ入ります（例: 供給販売費及び一般管理費、一般管理費）。
+                販管費を開示しない会社の sga は null です（売上総利益 − 営業利益の差額では埋めません）。
                 """,
             method: "GET",
             path: "/v1/companies/{code}/financials",

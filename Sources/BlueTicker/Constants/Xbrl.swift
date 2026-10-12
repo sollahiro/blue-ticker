@@ -340,16 +340,23 @@ enum Xbrl {
         "SellingGeneralAndAdministrativeExpenses",
     ]
 
-    /// 業種別の販管費合計行。ガスは「供給販売費及び一般管理費（合計）」、商品先物は営業総利益の下の「営業費用合計」。
-    /// `sgaDirectTags` が無いときだけ使う（GP 構成・計算法 OP には使わない）。
-    static let sgaIndustryTotalTags: [String] = [
-        "SellingGeneralAndAdministrativeExpensesGAS",
-        "OperatingExpensesCMD",
+    /// 業種別・非継続事業ありの販管費合計行（タグ, sga_label）。`sgaDirectTags`・保険が無いときだけ使う
+    /// （GP 構成・計算法 OP には使わない）。label nil は「販売費及び一般管理費」そのもの。
+    /// ガス「供給販売費及び一般管理費（合計）」、商品先物は営業総利益の下の「営業費用合計」、
+    /// IFRS で非継続事業を分けた PL の継続事業の販管費（ナブテスコ 6268）。
+    static let sgaIndustryTotalTags: [(tag: String, label: String?)] = [
+        ("SellingGeneralAndAdministrativeExpensesGAS", "供給販売費及び一般管理費"),
+        ("OperatingExpensesCMD", "営業費用"),
+        ("SellingGeneralAndAdministrativeExpensesIFRSContinuingOperationsIFRS", nil),
     ]
 
-    /// 販売費の無い PL の「一般管理費（合計）」行（海運・倉庫・運送・証券金融・不動産賃貸等）。
+    /// 販売費の無い PL で売上総利益（営業総利益）と営業利益の間に1行だけある費用（タグ, sga_label）。
+    /// 海運・倉庫・運送・証券金融・不動産賃貸等の「一般管理費」、創薬ベンチャーの「事業費用」（4889）。
     /// 販売費の行（`sgaSellingLineTags`）が別にある PL では内訳の一部なので使わない。
-    static let sgaGeneralAdministrativeOnlyTags: [String] = ["GeneralAndAdministrativeExpensesSGA"]
+    static let sgaSingleLineFallbackTags: [(tag: String, label: String)] = [
+        ("GeneralAndAdministrativeExpensesSGA", "一般管理費"),
+        ("BusinessExpenses", "事業費用"),
+    ]
 
     /// 一般管理費と並んで開示される販売費の行。これがあると一般管理費だけでは販管費にならない。
     static let sgaSellingLineTags: [String] = [

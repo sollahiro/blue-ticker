@@ -31,6 +31,7 @@ import Foundation
         ])
         #expect(r.method == "direct")
         #expect(r.sga == 147_511e6)
+        #expect(r.sgaLabel == "供給販売費及び一般管理費")
     }
 
     @Test func gasTotalWinsOverItsComponents() {
@@ -52,6 +53,7 @@ import Foundation
             ("jppfs_cor", "OperatingIncome", 3_427e6),
         ])
         #expect(r.sga == 2_185e6)
+        #expect(r.sgaLabel == "一般管理費")
     }
 
     @Test func generalAdministrativeNextToSellingLineIsNotSga() {
@@ -72,6 +74,7 @@ import Foundation
             ("jppfs_cor", "OperatingIncome", 182_347_000),
         ])
         #expect(r.sga == 3_210_396_000)
+        #expect(r.sgaLabel == "営業費用")
     }
 
     @Test func directSgaTagStillWins() {
@@ -82,5 +85,28 @@ import Foundation
             ("jppfs_cor", "OperatingIncome", 50e6),
         ])
         #expect(r.sga == 100e6)
+        #expect(r.sgaLabel == nil)
+    }
+
+    @Test func ifrsContinuingOperationsSga() {
+        // ナブテスコ 6268 FY2025: 非継続事業を分けた IFRS PL の販管費 71,964（ラベルは販売費及び一般管理費）
+        let r = sga([
+            ("jpigp_cor", "GrossProfitIFRS", 93_781e6),
+            ("jpcrp030000-asr_E01726-000", "SellingGeneralAndAdministrativeExpensesIFRSContinuingOperationsIFRS", 71_964e6),
+            ("jpigp_cor", "OperatingProfitLossIFRS", 20_726e6),
+        ])
+        #expect(r.sga == 71_964e6)
+        #expect(r.sgaLabel == nil)
+    }
+
+    @Test func singleBusinessExpensesLine() {
+        // レナサイエンス 4889: 売上総利益 64 − 事業費用 421 = 営業損失 △357（百万円）
+        let r = sga([
+            ("jppfs_cor", "GrossProfit", 64_207_000),
+            ("jpcrp030000-asr_E36825-000", "BusinessExpenses", 421_093_000),
+            ("jppfs_cor", "OperatingIncome", -356_885_000),
+        ])
+        #expect(r.sga == 421_093_000)
+        #expect(r.sgaLabel == "事業費用")
     }
 }

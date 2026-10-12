@@ -152,7 +152,7 @@ enum StatementFinancialsResolver {
             operatingProfitLabel = "事業利益"
         }
         var sga = remaining.sga
-        var sgaLabel: String? = nil
+        var sgaLabel = remaining.sgaLabel
         // 銀行（預金マーカー。IBD と同じ判定）で連結の営業利益値が無い会社（経常利益に落ちる、または
         // 単体だけの OperatingIncome タグで値が空になる みずほ 8411 S100YF8Y）は
         // 業務純益 = 業務粗利益 − 営業経費 を営業利益とし、販管費は営業経費。
@@ -371,7 +371,8 @@ enum StatementFinancialsResolver {
         accountingStandard: String, operating: OperatingProfitResult,
         cashFlow: [StatementLineItem]
     ) -> (
-        grossProfit: Double?, grossProfitLabel: String?, sga: Double?, cfo: Double?, cfi: Double?,
+        grossProfit: Double?, grossProfitLabel: String?, sga: Double?, sgaLabel: String?,
+        cfo: Double?, cfi: Double?,
         pretaxIncome: Double?, incomeTax: Double?, dividendSS: Double?,
         interestExpense: Double?, cfTreasuryStock: Double?, buyback: Double?
     ) {
@@ -411,6 +412,7 @@ enum StatementFinancialsResolver {
             grossProfit: gp.grossProfit,
             grossProfitLabel: gp.grossProfitLabel,
             sga: operating.sga,
+            sgaLabel: operating.sgaLabel,
             cfo: cfo,
             cfi: cfi,
             pretaxIncome: tax.pretaxIncome,
