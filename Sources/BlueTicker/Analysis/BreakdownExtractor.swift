@@ -64,6 +64,10 @@ struct ExtractedBreakdown: Equatable {
     var method: String  // "html_table" | "xbrl_facts" | "not_found"
     var tables: [BreakdownTable]
     var facts: [BreakdownFact]
+    /// セグメント注記の表の行名（tag → 行名集合。当期のセグメント member fact の行）。
+    /// `BreakdownNormalizer.segmentProfitTag` が会社定義のセグメント利益の行を知るために使う。
+    /// 事業セグメント（xbrl_facts）だけで埋める。辞書往復・公開 payload には含めない。
+    var rowLabelsByTag: [String: Set<String>] = [:]
 
     /// JSONSerialization 互換の辞書に変換する（Python 出力と同じキー構造）。
     func toDictionary() -> [String: Any] {
@@ -258,7 +262,10 @@ enum BreakdownExtractor {
                 tables = tables + etcTables
             }
         }
-        let result = buildResult(xbrlDir: xbrlDir, tables: tables, dimensionKeywords: Xbrl.businessSegmentDimensionKeywords)
+        var result = buildResult(xbrlDir: xbrlDir, tables: tables, dimensionKeywords: Xbrl.businessSegmentDimensionKeywords)
+        if result.method == "xbrl_facts" {
+            result.rowLabelsByTag = StatementNotesResolver.segmentNoteRowLabels(xbrlDir: xbrlDir)
+        }
 
         if shouldPreferRevenueRecognition(over: result)
             || (detectSingleSegmentDisclosure(xbrlDir: xbrlDir) != nil && result.method != "xbrl_facts")

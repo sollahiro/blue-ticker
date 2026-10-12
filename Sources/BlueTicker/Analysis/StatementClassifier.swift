@@ -174,7 +174,12 @@ enum StatementClassifier {
                 return periodEnd
             }
         }
-        guard let preferredLabelRole, let variant = variants[preferredLabelRole] else {
+        // preferredLabel の無い arc は標準ラベルロールを指す。`plainLabel` は提出ラベルを
+        // 1つに収束させたもので、提出側に標準ロールが無いと他ロール（セグメント表用の
+        // positiveLabel 等）の文言が入る（実データ: 東京海上 S100YLS8 / MS&AD S100YNCJ の
+        // 親会社所有者帰属利益が PL で「セグメント利益…」になる）。標準ロールの文言
+        // （提出側、無ければ標準タクソノミ）があればそれを使う。
+        guard let variant = variants[preferredLabelRole ?? xbrlStandardLabelRole] else {
             return plainLabel
         }
         return variant

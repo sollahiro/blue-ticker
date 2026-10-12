@@ -362,6 +362,46 @@ enum StatementNotesResolver {
         return merged
     }
 
+    /// セグメント注記の表で、当期のセグメント member context を持つ数値 fact の行名（tag → 行名集合）。
+    /// 販管費明細の行名（`sgaExpenseBreakdownHtmlRowLabels`）と同じ生 HTML 走査で、context の
+    /// 絞り込みだけが違う（連結/個別の当期 Duration ではなく、当期 Duration × セグメント member）。
+    /// 会社がセグメント表で「セグメント利益」と書いた行のタグを知るために使う
+    /// （`BreakdownNormalizer.segmentProfitTag`）。
+    static func segmentNoteRowLabels(xbrlDir: URL) -> [String: Set<String>] {
+        var labels: [String: Set<String>] = [:]
+        for file in sgaExpenseBreakdownHtmlFiles(in: xbrlDir) {
+            guard let raw = try? String(contentsOf: file, encoding: .utf8),
+                  raw.contains("SegmentsMember") || raw.contains("SegmentMember")
+            else { continue }
+            let ns = NSRange(raw.startIndex..., in: raw)
+            for fact in sgaNonFractionPattern.matches(in: raw, range: ns) {
+                guard let attrsRange = Range(fact.range(at: 1), in: raw) else { continue }
+                let attrs = String(raw[attrsRange])
+                let attrsNS = NSRange(attrs.startIndex..., in: attrs)
+                guard let nameMatch = sgaFactNamePattern.firstMatch(in: attrs, range: attrsNS),
+                      let nameRange = Range(nameMatch.range(at: 1), in: attrs),
+                      let ctxMatch = sgaContextRefPattern.firstMatch(in: attrs, range: attrsNS),
+                      let ctxRange = Range(ctxMatch.range(at: 1), in: attrs)
+                else { continue }
+                let ctx = String(attrs[ctxRange])
+                guard ctx.hasPrefix("CurrentYearDuration"), ctx.contains("Segment") else { continue }
+                guard let factRange = Range(fact.range, in: raw) else { continue }
+                let before = raw[..<factRange.lowerBound]
+                guard let trStart = before.range(of: "<tr", options: [.backwards, .caseInsensitive]),
+                      let trEnd = raw.range(
+                        of: "</tr>", options: [.caseInsensitive],
+                        range: factRange.lowerBound..<raw.endIndex)
+                else { continue }
+                let row = String(raw[trStart.lowerBound..<trEnd.upperBound])
+                guard let label = sgaExpenseBreakdownLabelFromRowHTML(
+                    row, cellPattern: sgaTableCellPattern)
+                else { continue }
+                labels[String(attrs[nameRange]), default: []].insert(label)
+            }
+        }
+        return labels
+    }
+
     /// inline XBRL（`.htm` / `.html`）を優先し、無ければ通常の XBRL インスタンスも見る。
     private static func sgaExpenseBreakdownHtmlFiles(in dir: URL) -> [URL] {
         let fm = FileManager.default
