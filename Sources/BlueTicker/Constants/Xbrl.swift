@@ -1089,6 +1089,13 @@ enum Xbrl {
         "事業の種類別",
         "報告セグメント",
     ]
+    /// US-GAAP 注記23 型（野村 S100YC5C）の事業別見出し。`businessSegmentHeadingKeywords` で
+    /// 1表も取れないときだけ、先頭から順に試す（BLT-143）。小見出し「［事業別セグメント］」を
+    /// 先に、包括見出し「セグメントおよび地域別情報」は最後の手段。
+    static let usgaapNote23BusinessSegmentHeadingKeywords: [String] = [
+        "事業別セグメント",
+        "セグメントおよび地域別情報",
+    ]
     // 事業別セグメントの見出し候補文字列に含まれていたら除外する（「地域別セグメント情報」等、
     // 地域別注記の見出しが「セグメント情報」を部分文字列として含むため誤って拾わないようにする）。
     static let businessSegmentHeadingExclusionKeywords: [String] = [

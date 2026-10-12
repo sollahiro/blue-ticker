@@ -32,6 +32,9 @@ enum StackedSegmentPnLNormalizer {
             guard let candidate = normalizeMarkdown(
                 table.markdown, consolidatedSales: consolidatedSales,
                 salesDenominatorTag: salesDenominatorTag)
+                ?? normalizePeriodStackedColumns(
+                    table.markdown, consolidatedSales: consolidatedSales,
+                    salesDenominatorTag: salesDenominatorTag)
             else { continue }
             let score = candidate.rows.filter { $0.rowKind == "segment" }.count
             let denScore = consolidatedSales.map { sales in
@@ -137,6 +140,191 @@ enum StackedSegmentPnLNormalizer {
             sourceKind: "stacked_segment_pnl",
             needsReview: false,
             warnings: [])
+    }
+
+    // MARK: - 期間積み上げ・事業列型（野村 US-GAAP 注記23 型、BLT-143）
+
+    /// 列＝事業（末尾「計」）、行＝指標、前期ブロック→当期ブロックが「2026年３月期」等の期間行で
+    /// 縦に積まれた表（野村 S100YC5C［事業別セグメント］）。当期（最新年度）ブロックの売上相当行と
+    /// 利益行を事業ごとに取る。パターン非該当・分母不整合は nil（LLM 経路へフォールバック）。
+    ///
+    /// 分母: 損益計算書売上と整合すればそれ。証券業の「収益合計（金融費用控除後）」（純収益）表は
+    /// 損益計算書の「収益合計」（総額、金融費用控除前）と基準が違うため整合しない。そのときだけ、
+    /// 事業列の和が表の「計」列と一致することを確かめて「計」を分母にする（fail closed）。
+    static func normalizePeriodStackedColumns(
+        _ markdown: String, consolidatedSales: Double?,
+        salesDenominatorTag: String? = nil
+    ) -> BreakdownSnapshot? {
+        let grid = parseMarkdownGrid(markdown)
+        guard grid.count >= 5 else { return nil }
+        let unitMultiplier = unitMultiplier(fromHeader: markdown)
+
+        // 事業見出し行: 数値セルが無く、非空セルが3つ以上で末尾が「計」「合計」。
+        guard let headerIndex = grid.firstIndex(where: isSegmentColumnHeaderRow) else { return nil }
+        let header = grid[headerIndex]
+        var segmentColumns: [(col: Int, label: String)] = []
+        var totalColumn: Int?
+        for (col, cell) in header.enumerated() where col > 0 && !cell.isEmpty {
+            if isTotalColumnLabel(cell) {
+                totalColumn = col
+            } else {
+                segmentColumns.append((col, cell))
+            }
+        }
+        guard segmentColumns.count >= 2, let totalCol = totalColumn,
+              segmentColumns.allSatisfy({ $0.col < totalCol })
+        else { return nil }
+
+        // 期間行で区切った指標ブロック。
+        var blocks: [(year: Int, rows: [[String]])] = []
+        for row in grid[(headerIndex + 1)...] {
+            if let year = periodMarkerYear(row) {
+                blocks.append((year, []))
+                continue
+            }
+            guard !blocks.isEmpty else { continue }
+            blocks[blocks.count - 1].rows.append(row)
+        }
+        guard blocks.count >= 2 else { return nil }
+        let metricLabelSets = blocks.map { Set($0.rows.compactMap { rowLabel($0) }) }
+        guard let firstSet = metricLabelSets.first, !firstSet.isEmpty,
+              metricLabelSets.allSatisfy({ $0 == firstSet })
+        else { return nil }
+        guard let current = blocks.max(by: { $0.year < $1.year }),
+              blocks.filter({ $0.year == current.year }).count == 1
+        else { return nil }
+
+        guard let salesRow = current.rows.first(where: { isStackedColumnSalesLabel(rowLabel($0)) })
+                ?? current.rows.first(where: { isLooseStackedColumnSalesLabel(rowLabel($0)) }),
+              let profitRow = current.rows.first(where: { isStackedColumnProfitLabel(rowLabel($0)) }),
+              let salesLabel = rowLabel(salesRow)
+        else { return nil }
+
+        func value(_ row: [String], _ col: Int) -> Double? {
+            col < row.count ? XBRLUtils.parseHtmlNumber(row[col]) : nil
+        }
+        var rows: [BreakdownRow] = []
+        for (col, label) in segmentColumns {
+            guard let sales = value(salesRow, col), let profit = value(profitRow, col) else {
+                return nil
+            }
+            rows.append(BreakdownRow(
+                labelRaw: label, label: label, amount: sales * unitMultiplier, share: nil,
+                profit: profit * unitMultiplier, rowKind: "segment"))
+        }
+        guard let salesTotalRaw = value(salesRow, totalCol) else { return nil }
+        let salesTotal = salesTotalRaw * unitMultiplier
+        let profitTotal = value(profitRow, totalCol).map { $0 * unitMultiplier }
+        rows.append(BreakdownRow(
+            labelRaw: header[totalCol], label: header[totalCol], amount: salesTotal, share: nil,
+            profit: profitTotal, rowKind: "subtotal"))
+
+        let segmentSum = rows.filter { $0.rowKind == "segment" }.reduce(0.0) { $0 + $1.amount }
+        // 事業列の和が「計」列と一致しない表（列の取り違え・内数列）は採用しない。
+        guard salesTotal != 0, abs(segmentSum - salesTotal) / abs(salesTotal) <= 0.005 else {
+            return nil
+        }
+
+        let denominator: Double
+        let denominatorTag: String
+        if let consolidatedSales, consolidatedSales != 0,
+           denominatorTolerance.contains(segmentSum / consolidatedSales)
+        {
+            denominator = consolidatedSales
+            denominatorTag = salesDenominatorTag ?? "income_statement.sales"
+        } else if consolidatedSales == nil || isNetRevenueLabel(salesLabel) {
+            denominator = salesTotal
+            denominatorTag = "stacked_table_sales_total"
+        } else {
+            return nil
+        }
+
+        return BreakdownSnapshot(
+            axis: breakdownAxisProductService,
+            denominator: denominator,
+            denominatorTag: denominatorTag,
+            rows: rows.map { row in
+                var r = row
+                r.share = r.amount / denominator
+                return r
+            },
+            sourceKind: "stacked_segment_pnl",
+            needsReview: false,
+            warnings: [])
+    }
+
+    private static func compactLabel(_ text: String) -> String {
+        String(text.unicodeScalars.filter {
+            !CharacterSet.whitespacesAndNewlines.contains($0)
+        }.map(Character.init))
+    }
+
+    private static func isSegmentColumnHeaderRow(_ row: [String]) -> Bool {
+        let nonEmpty = row.filter { !$0.isEmpty }
+        guard nonEmpty.count >= 3,
+              !row.contains(where: { XBRLUtils.parseHtmlNumber($0) != nil }),
+              let last = nonEmpty.last
+        else { return false }
+        return isTotalColumnLabel(last)
+    }
+
+    private static func isTotalColumnLabel(_ text: String) -> Bool {
+        let c = compactLabel(text)
+        return c == "計" || c == "合計" || c == "連結" || c == "総計"
+    }
+
+    /// 「2026年３月期」「2025年3月期」等、先頭セルだけに期間があり他セルが空の行の年。
+    private static func periodMarkerYear(_ row: [String]) -> Int? {
+        guard let first = row.first(where: { !$0.isEmpty }),
+              row.filter({ !$0.isEmpty }).count == 1
+        else { return nil }
+        let c = halfwidthDigits(compactLabel(first))
+        guard c.hasSuffix("月期"), let r = c.range(of: "年") else { return nil }
+        let yearText = c[c.startIndex..<r.lowerBound]
+        guard yearText.count == 4, let year = Int(yearText) else { return nil }
+        return year
+    }
+
+    private static func halfwidthDigits(_ text: String) -> String {
+        String(text.unicodeScalars.map { scalar -> Character in
+            if (0xFF10...0xFF19).contains(scalar.value),
+               let half = Unicode.Scalar(scalar.value - 0xFF10 + 0x30)
+            {
+                return Character(half)
+            }
+            return Character(scalar)
+        })
+    }
+
+    /// 売上相当行（合計系を優先）。「金融収益以外の収益」「純金融収益」等の内訳は除く。
+    private static func isStackedColumnSalesLabel(_ label: String?) -> Bool {
+        guard let label else { return false }
+        let c = compactLabel(label)
+        if c.contains("以外") { return false }
+        return c.hasPrefix("収益合計") || c.hasPrefix("売上高合計") || c.hasPrefix("営業収益合計")
+            || c.hasPrefix("純収益合計")
+    }
+
+    private static func isLooseStackedColumnSalesLabel(_ label: String?) -> Bool {
+        guard let label else { return false }
+        let c = compactLabel(label)
+        if c.contains("以外") || c.contains("費用") || c.contains("原価") { return false }
+        return c.hasPrefix("売上高") || c.hasPrefix("売上収益") || c.hasPrefix("営業収益")
+    }
+
+    private static func isStackedColumnProfitLabel(_ label: String?) -> Bool {
+        guard let label else { return false }
+        let c = compactLabel(label)
+        if c.contains("連結") || c.contains("研究開発") { return false }
+        return c.hasPrefix("営業利益") || c.hasPrefix("セグメント利益") || c.hasPrefix("セグメント損益")
+            || c.hasPrefix("事業利益") || c.hasPrefix("税引前当期純利益") || c.hasPrefix("税引前利益")
+            || c.hasPrefix("税金等調整前当期純利益")
+    }
+
+    /// 証券業の純収益（金融費用控除後）。損益計算書「収益合計」（総額）とは基準が違う。
+    private static func isNetRevenueLabel(_ label: String) -> Bool {
+        let c = compactLabel(label)
+        return c.contains("金融費用控除後") || c.hasPrefix("純収益") || c.hasPrefix("純営業収益")
     }
 
     // MARK: - グリッド / ブロック

@@ -214,6 +214,26 @@ enum BreakdownExtractor {
             // opt-in は business のみ。
             mixedHeadingLikeOnly: true
         )
+        // 野村 US-GAAP 注記23 型（BLT-143）:「23　セグメントおよび地域別情報：」の下に
+        // 「［事業別セグメント］」「［地域別情報］」が並び、既定キーワード（セグメント情報 等）に
+        // 当たる見出しが無い。既定で1表も取れないときだけ、US-GAAP 注記ブロックに限り
+        // 注記23 型の見出しを順に試す（他社の既存抽出・golden を変えない）。
+        if tables.isEmpty {
+            for keyword in Xbrl.usgaapNote23BusinessSegmentHeadingKeywords {
+                let fallback = extractFromTextBlocks(
+                    xbrlDir: xbrlDir,
+                    dedicatedTags: [],
+                    mixedTags: Xbrl.businessSegmentMixedTextBlockTags,
+                    dedicatedHeading: "セグメント情報",
+                    mixedKeywords: [keyword],
+                    mixedHeadingLikeOnly: true
+                )
+                if !fallback.isEmpty {
+                    tables = fallback
+                    break
+                }
+            }
+        }
         let productOrServiceTables = extractFromTextBlocks(
             xbrlDir: xbrlDir,
             dedicatedTags: Xbrl.productOrServiceTextBlockTags,
