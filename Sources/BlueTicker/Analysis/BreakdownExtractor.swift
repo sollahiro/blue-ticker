@@ -705,7 +705,7 @@ enum BreakdownExtractor {
         let note23Tables = extractFromTextBlocks(
             xbrlDir: xbrlDir,
             dedicatedTags: [],
-            mixedTags: Xbrl.usgaapNotesGeographyMixedTextBlockTags,
+            mixedTags: [Xbrl.notesToConsolidatedFinancialStatementsUSGAAPTextBlock],
             dedicatedHeading: "地域ごとの情報",
             mixedKeywords: Xbrl.usgaapNote23GeographyHeadingKeywords,
             skipGeographyAssetMetricTables: true,

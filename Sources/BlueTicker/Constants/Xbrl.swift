@@ -1182,9 +1182,6 @@ enum Xbrl {
     static let usgaapNote23GeographyHeadingKeywords: [String] = [
         "［地域別情報］",
     ]
-    static let usgaapNotesGeographyMixedTextBlockTags: Set<String> = [
-        notesToConsolidatedFinancialStatementsUSGAAPTextBlock,
-    ]
     static let geographyHeadingKeywords: [String] = [
         "地域ごとの情報",
         "地域別",
