@@ -495,7 +495,8 @@ enum Xbrl {
 
     // 銀行業 有利子負債コンポーネント（Python: BANK_IBD_COMPONENT_DEFINITIONS）
     // 預金・譲渡性預金は銀行でも有利子負債に含めない（Sorahiro 判断 2026-10-11）。
-    // 銀行かどうかは `bankMarkerTag`（預金）の有無で判定する。
+    // 銀行かどうかは `isBankFiling`（`bankMarkerTag`＝預金、または EDINET 提出者業種が銀行業）で判定する。
+    // ゆうちょ銀行の貯金（`DepositsLiabilities`）もこの一覧に無いので含まれない。
     static let bankIBDComponents: [BankIBDComponent] = [
         .init(label: "コマーシャル・ペーパー", tags: ["CommercialPapersLiabilities"]),
         .init(label: "借用金",                 tags: ["BorrowedMoneyLiabilitiesBNK"]),

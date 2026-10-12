@@ -16,7 +16,8 @@ enum BreakdownFinancialsResolver {
         let method: String
         let accountingStandard: String
         let warnings: [String]
-        /// 銀行業（statement BS に `Xbrl.bankMarkerTag`＝預金がある。bank components へ回す判定と同じ）。
+        /// 銀行業（`Xbrl.isBankFiling`: statement BS に `Xbrl.bankMarkerTag`＝預金がある、または EDINET 提出者業種が銀行業。
+        /// bank components へ回す判定と同じ）。
         /// 公開キーではない。派生指標（net_cash / net_de / roic 等）を null にするためだけに使う。
         var isBank: Bool = false
     }

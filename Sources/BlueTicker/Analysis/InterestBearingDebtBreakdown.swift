@@ -53,7 +53,7 @@ struct IBDLeaseNote: Equatable, Sendable {
 /// `inputs(xbrlDir:)` の出力。XBRL から決定論で取れる材料一式。
 struct IBDInputs: Sendable {
     var consolidated: Bool
-    /// 銀行（`DepositsLiabilitiesBNK` が statement Instant FieldSet にある）。
+    /// 銀行（`Xbrl.isBankFiling`: `DepositsLiabilitiesBNK` が statement Instant FieldSet にある、または EDINET 提出者業種が銀行業）。
     /// 保険は通常パイプライン（除外しない）。
     var isBank: Bool
     /// 銀行の BS コンポーネント行。`source` は `financials_bank_components`。

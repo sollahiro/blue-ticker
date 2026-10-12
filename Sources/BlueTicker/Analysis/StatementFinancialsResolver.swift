@@ -156,7 +156,7 @@ enum StatementFinancialsResolver {
         }
         var sga = remaining.sga
         var sgaLabel = remaining.sgaLabel
-        // 銀行（預金マーカー。IBD と同じ判定）で連結の営業利益値が無い会社（経常利益に落ちる、または
+        // 銀行（預金マーカーまたは EDINET 提出者業種＝銀行業。IBD と同じ判定）で連結の営業利益値が無い会社（経常利益に落ちる、または
         // 単体だけの OperatingIncome タグで値が空になる みずほ 8411 S100YF8Y）は
         // 業務純益 = 業務粗利益 − 営業経費 を営業利益とし、販管費は営業経費。
         // 営業利益行を持つ銀行子会社持株（HSホールディングス 8699）は対象外。

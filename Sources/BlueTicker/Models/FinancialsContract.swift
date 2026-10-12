@@ -85,7 +85,7 @@ public func isCurrentFinancialsAssemblyFingerprint(_ stored: String?) -> Bool {
 // | フィールド | 正本 | 現行 | 状態 |
 // |---|---|---|---|
 // | sales, operating_profit, net_profit | statement（PL。net_profit は親会社帰属が SS のみなら changes_in_equity） | StatementFinancialsResolver | done |
-// | （銀行業）operating_profit, op_label, sga, sga_label | 預金マーカー（`Xbrl.isBankFiling`、IBD と同じ）で営業利益行が無い銀行は operating_profit = 業務純益（業務粗利益 − 営業経費 `GeneralAndAdministrativeExpensesOEBNK`。持分法は足さない）、op_label「業務純益」、sga = 営業経費、sga_label「営業経費」。営業経費か業務粗利益が無ければ operating_profit / sga とも null（経常利益・差額で埋めない）。sga_label は販管費行のラベルが「販売費及び一般管理費」以外のときだけ入る（銀行「営業経費」、ガス「供給販売費及び一般管理費」、商品先物「営業費用」、一般管理費だけの PL「一般管理費」、「事業費用」）。それ以外は null（2026-10-12） | StatementFinancialsResolver.bankNetBusinessProfit | done |
+// | （銀行業）operating_profit, op_label, sga, sga_label | 銀行判定（`Xbrl.isBankFiling`、IBD と同じ。預金マーカー `DepositsLiabilitiesBNK` または EDINET 提出者業種＝銀行業。ゆうちょ 7182 は後者）で営業利益行が無い銀行は operating_profit = 業務純益（業務粗利益 − 営業経費 `GeneralAndAdministrativeExpensesOEBNK`。持分法は足さない）、op_label「業務純益」、sga = 営業経費、sga_label「営業経費」。営業経費か業務粗利益が無ければ operating_profit / sga とも null（経常利益・差額で埋めない）。sga_label は販管費行のラベルが「販売費及び一般管理費」以外のときだけ入る（銀行「営業経費」、ガス「供給販売費及び一般管理費」、商品先物「営業費用」、一般管理費だけの PL「一般管理費」、「事業費用」）。それ以外は null（2026-10-12） | StatementFinancialsResolver.bankNetBusinessProfit | done |
 // | gross_profit, sga | statement（income_statement 行）。GP は売上総利益（売上高−売上原価。両方ある年だけ。原価欠測を売上コピーしない）。営業総利益（営業収益合計−営業原価合計）が併記され販管費がその直上なら営業総利益。無ければ営業収益−営業費用+販管費、その次に銀行業務粗利益。sga は販管費合計タグ、無ければ保険の営業費・事業費、業種別合計（ガス「供給販売費及び一般管理費」、商品先物「営業費用合計」、IFRS 継続事業の販管費）、IFRS 販売費＋一般管理費、販売費行の無い PL の1行（「一般管理費」「事業費用」）の順。未開示は null（GP − OP の差額で埋めない） | StatementFinancialsResolver（#5c） | done |
 // | total_assets, current_assets, non_current_assets | statement（balance_sheet 行） | StatementFinancialsResolver（#5b-1） | done |
 // | current_liabilities, non_current_liabilities, net_assets | statement | StatementFinancialsResolver（#5b-1） | done |
@@ -106,7 +106,7 @@ public func isCurrentFinancialsAssemblyFingerprint(_ stored: String?) -> Bool {
 // | buyback, cf_treasury_stock | statement SS/CF 行（US-GAAP は HTML の取得行。△ はキャッシュアウト正） | StatementFinancialsResolver | done |
 // | gross_profit_margin, operating_margin, nopat, nopat_margin | 派生（入力フィールドの組立後に再計算） | IndividualAnalyzer 内計算 | derived |
 // | roe, roic, net_cash, net_de, cfc, working_capital, dso/dio/dpo/ccc | 派生 | IndividualAnalyzer / Waterfall 投影 | derived |
-// | （銀行業）net_cash, net_de, roic, nopat_margin, invested_capital_turnover | 銀行（IBD の `isBank` = `DepositsLiabilitiesBNK`）は null。預金を IBD に含めないため有利子負債ベースの比率は意味を持たない（2026-10-12）。interest_bearing_debt は残す。Waterfall の net_cash_change / debt_change_impact も null | IndividualAnalyzer.applyInterestBearingDebtRatios / FinancialsYear.withholdsBankRatios | derived |
+// | （銀行業）net_cash, net_de, roic, nopat_margin, invested_capital_turnover | 銀行（IBD の `isBank` = `DepositsLiabilitiesBNK` または EDINET 提出者業種＝銀行業）は null。預金を IBD に含めないため有利子負債ベースの比率は意味を持たない（2026-10-12）。interest_bearing_debt は残す。Waterfall の net_cash_change / debt_change_impact も null | IndividualAnalyzer.applyInterestBearingDebtRatios / FinancialsYear.withholdsBankRatios | derived |
 // | business_profit*, roic_delta*, roe_delta*, *_change_impact | Waterfall 専用派生。販管費が無い年の GP − OP 差額は Waterfall 内だけで使い sga へ書き戻さない。銀行は business_profit = 業務純益（= Summary operating_profit）で、既存3スロットに経常収益差・業務粗利益率差・営業経費差を入れ、和が前年差に一致する。両期の経常収益・業務粗利益・営業経費が揃わなければ前年差は null | Waterfall 関数（analysisOnlyKeys） | derived |
 //
 // Summary 非搭載（正本 API のみ、組立対象外）: goodwill 明細、PPE 区分明細、借入明細。
