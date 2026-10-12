@@ -7,7 +7,7 @@ T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
 cd "$T"
 git init -q -b main . && git config user.email ci@example.invalid && git config user.name ci
 mkdir -p scripts smoke/smoke_expected Sources/App SwiftTests/BlueTickerTests/Spec/Oracle docs
-cp -R "$SRC" scripts/ci && rm -rf scripts/ci/__pycache__
+cp -R "$SRC" scripts/ci && rm -rf scripts/ci/__pycache__ scripts/ci/flags-baseline.tsv
 TR="B""LT-42"; URL="https://""linear"".app/x/issue/1"   # assembled: never stored literally
 sha() { python3 -c 'import hashlib,sys; print(hashlib.sha256(open(sys.argv[1],"rb").read()).hexdigest())' "$1"; }
 manifest() { python3 - <<'PY'
