@@ -229,6 +229,8 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                 損益・CF・バランスシート・収益性指標（水準値）を含みます。直近\(Api.financialsYearsDefault)年分を返します。
                 前年差・要因分解（増減分析）は get_waterfall を使ってください。
                 金額単位は百万円（JPY）、比率は%、株主指標は円。
+                銀行業は有利子負債に預金を含めないため、net_cash / net_de / roic / nopat_margin /
+                invested_capital_turnover は null です（interest_bearing_debt は返します）。
                 """,
             method: "GET",
             path: "/v1/companies/{code}/financials",
@@ -280,6 +282,8 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                 ROIC・ROE前年差の要因分解、ネットキャッシュ前年差（現金差/負債差影響）、
                 運転資本・CCC前年差（売掛金/棚卸資産/買掛金差影響、DSO/DIO/DPO差影響）を含みます。直近\(Api.financialsYearsDefault)年分を返します。
                 金額単位は百万円（JPY）、比率は%、日数は日。
+                銀行業は net_cash / net_de / roic / nopat_margin / invested_capital_turnover と、
+                ネットキャッシュ前年差（net_cash_change / debt_change_impact）、ROIC 要因分解が null です。
                 """,
             method: "GET",
             path: "/v1/companies/{code}/waterfall",

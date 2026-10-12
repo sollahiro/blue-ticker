@@ -105,6 +105,7 @@ public func isCurrentFinancialsAssemblyFingerprint(_ stored: String?) -> Bool {
 // | buyback, cf_treasury_stock | statement SS/CF 行（US-GAAP は HTML の取得行。△ はキャッシュアウト正） | StatementFinancialsResolver | done |
 // | gross_profit_margin, operating_margin, nopat, nopat_margin | 派生（入力フィールドの組立後に再計算） | IndividualAnalyzer 内計算 | derived |
 // | roe, roic, net_cash, net_de, cfc, working_capital, dso/dio/dpo/ccc | 派生 | IndividualAnalyzer / Waterfall 投影 | derived |
+// | （銀行業）net_cash, net_de, roic, nopat_margin, invested_capital_turnover | 銀行（IBD の `isBank` = `DepositsLiabilitiesBNK`）は null。預金を IBD に含めないため有利子負債ベースの比率は意味を持たない（2026-10-12）。interest_bearing_debt は残す。Waterfall の net_cash_change / debt_change_impact も null | IndividualAnalyzer.applyInterestBearingDebtRatios / FinancialsYear.withholdsBankRatios | derived |
 // | business_profit*, roic_delta*, roe_delta*, *_change_impact | Waterfall 専用派生 | Waterfall 関数（analysisOnlyKeys） | derived |
 //
 // Summary 非搭載（正本 API のみ、組立対象外）: goodwill 明細、PPE 区分明細、借入明細。
