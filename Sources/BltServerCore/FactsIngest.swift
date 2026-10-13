@@ -116,19 +116,6 @@ func storeXbrlFacts(
     }
 }
 
-/// `cache_version` のみを対象にした軽量射影（`facts` の JSONB を転送しない。分類の N+1 find 回避用）。
-final class EdinetXbrlFactsCacheVersionOnly: Model, @unchecked Sendable {
-    static let schema = EdinetXbrlFacts.schema
-
-    @ID(custom: "doc_id", generatedBy: .user)
-    var id: String?
-
-    @Field(key: "cache_version")
-    var cacheVersion: String
-
-    init() {}
-}
-
 // MARK: - CLI エントリ
 
 /// 財務取り込みで格納する年数。要求が増えても再計算が走らないよう余裕を持たせる
