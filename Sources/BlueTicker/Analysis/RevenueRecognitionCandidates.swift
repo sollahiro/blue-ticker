@@ -319,7 +319,9 @@ enum RevenueRecognitionCandidates {
                 return text.isEmpty ? nil : text
             }
             let joined = joinHeaderParts(parts)
-            if !joined.isEmpty, isGeographyRegionColumnHeader(joined) {
+            if isColumnZeroAmountHeader(
+                joined, dataRows: Array(table.grid.dropFirst(table.headerRowCount)))
+            {
                 headers[0] = joined
             }
         }
@@ -897,7 +899,9 @@ enum RevenueRecognitionCandidates {
             // 日本 / その他 自体が金額列。stub 前提で飛ばすと 合計だけが候補になる。
             // 単位だけの見出しは join が空でも金額列として残す（デンソー t0_c2）。
             if column == 0 {
-                if joined.isEmpty || !isGeographyRegionColumnHeader(joined) { continue }
+                if !isColumnZeroAmountHeader(joined, dataRows: Array(rows.dropFirst(firstData))) {
+                    continue
+                }
             }
             headers[column] = joined
         }
@@ -1053,6 +1057,22 @@ enum RevenueRecognitionCandidates {
         if leftover.contains("金額") || leftover.contains("単位") { return false }
         if leftover.contains("自") && leftover.contains("至") { return false }
         return true
+    }
+
+    /// 列0が金額列か。地域語彙に無い国名（オランダ・カタール・インドネシア・大韓民国）でも、
+    /// 見出しが項目・期間・単位・合計でなく、データ行の列0が全て金額ならスタブ無しの横並び表。
+    static func isColumnZeroAmountHeader(_ joined: String, dataRows: [[String]]) -> Bool {
+        if joined.isEmpty { return false }
+        if isGeographyRegionColumnHeader(joined) { return true }
+        let token = collapsedCell(joined)
+        if isStubAxisHeader(token) || isPeriodHeadingLabel(token) || isUnitCaptionHeader(token)
+            || isAggregateColumnHeader(token) || isGeographySalesMetricLabel(token)
+        {
+            return false
+        }
+        let cells = dataRows.compactMap { $0.first }
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+        return !cells.isEmpty && cells.allSatisfy { parseAmount($0) != nil }
     }
 
     /// 横並び地域表の列見出し（日本 / その他）。項目・売上高・年度は含めない。
