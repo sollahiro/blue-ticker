@@ -544,6 +544,7 @@ import Testing
     @Test func ownMediaAdIsCategoryNotPeriodHeading() {
         #expect(RevenueRecognitionCandidates.isPeriodHeadingLabel("自社メディア広告") == false)
         #expect(RevenueRecognitionCandidates.isPeriodHeadingLabel("当連結会計年度") == true)
+        // source: code=6762 fy_end=2021-03-31 doc_id=S100LMH9 page=139 field=geography year-sliced header 2021年度 / 日本
         #expect(RevenueRecognitionCandidates.isPeriodHeadingLabel("2021年度") == true)
         #expect(RevenueRecognitionCandidates.isPeriodHeadingLabel("2021年度 / 日本") == true)
         #expect(RevenueRecognitionCandidates.isPeriodHeadingLabel("日本") == false)

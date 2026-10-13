@@ -2033,6 +2033,7 @@ import Testing
         #expect(!snapshot.warnings.contains("llm_row_sum_mismatch"))
     }
 
+    /// source: code=4228 fy_end=2026-03-31 doc_id=S100YI2M page=96 field=geography 当連結会計年度 ドイツ=6,836 (sibling of その他欧州=7,716)
     /// 4228 型: ドイツはその他欧州の残余ではなく並列の地域。加算に残して IS の 95% を満たす。
     @Test func germanyIsNotOfWhichChildOfOtherEurope() async throws {
         let html = """
