@@ -1222,6 +1222,12 @@ enum Xbrl {
         "RelatedInformationTextBlock",                            // J-GAAP 関連情報（セグメント・地域が混在）
         notesToConsolidatedFinancialStatementsUSGAAPTextBlock,  // US-GAAP 連結財務諸表注記（地域別を内包）
     ]
+    /// IFRS セグメント注記に地域表が同居する型（専用 TextBlock 無し）。geography が他経路で
+    /// not_found のときだけ走査する（`BreakdownExtractor.extractGeographyInfo`）。
+    static let ifrsSegmentNoteGeographyFallbackTextBlockTags: Set<String> = [
+        "NotesSegmentInformationConsolidatedFinancialStatementsIFRSTextBlock",
+        "SegmentInformationIFRSTextBlock",
+    ]
     /// US-GAAP 注記23 型（野村 S100YC5C）の地域小見出し。見出し型一致があれば既定キーワードより優先する。
     static let usgaapNote23GeographyHeadingKeywords: [String] = [
         "［地域別情報］",
