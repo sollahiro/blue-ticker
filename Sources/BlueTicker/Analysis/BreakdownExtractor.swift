@@ -772,7 +772,8 @@ enum BreakdownExtractor {
         // IFRS で地域別の専用 TextBlock が無く、セグメント注記の小見出し
         // 「(2）営業収益の地域別内訳」の下に地域表だけがある型（8698 S100YM8I）。
         // 地域注記・報告セグメントのどちらからも取れないときだけ、IFRS セグメント注記を
-        // 見出し型一致で走査する（資産表は既定の除外語で落とし、地域ラベル行のある表に限る）。
+        // 見出し型一致で走査する（資産表は見出しの除外語と直近の指標キャプションで落とし、
+        // 地域ラベル行のある表に限る。テクマトリックス S100YL8T は売上省略＋非流動資産表のみ）。
         if result.method == "not_found" {
             let segmentNoteTables = extractFromTextBlocks(
                 xbrlDir: xbrlDir,
@@ -782,7 +783,8 @@ enum BreakdownExtractor {
                 mixedKeywords: Xbrl.geographyHeadingKeywords,
                 skipGeographyAssetMetricTables: true,
                 mixedHeadingLikeOnly: true,
-                dropOfWhichRegionColumns: true
+                dropOfWhichRegionColumns: true,
+                mixedSkipNearestAssetCaptionTables: true
             ).filter(tableHasGeographyRegionLabels)
             if !segmentNoteTables.isEmpty {
                 return buildResult(
@@ -2433,6 +2435,7 @@ enum BreakdownExtractor {
         headingExclusionKeywords: [String] = [],
         headingLikeOnly: Bool = false,
         dropOfWhichRegionColumns: Bool = false,
+        skipNearestAssetCaptionTables: Bool = false,
         fiscalYearEnd: String? = nil
     ) -> [BreakdownTable] {
         guard let soup = try? SwiftSoup.parse(html) else { return [] }
@@ -2466,6 +2469,15 @@ enum BreakdownExtractor {
                         continue
                     }
                     seen.insert(ObjectIdentifier(table))
+                    // 見出し（「(4) 地域別情報」）と表の間に資産の小見出し（「②非流動資産」）が
+                    // 挟まる型は、見出しの除外語では落ちない。直近の指標キャプションで判定する。
+                    if skipNearestAssetCaptionTables,
+                        let caption = nearestGeographyMetricCaption(before: table),
+                        isGeographyAssetMetricCaption(caption)
+                    {
+                        candidate = findNextTable(after: table)
+                        continue
+                    }
                     let grid = expandTable(table)
                     if isUnitCaptionOrDecorativeStub(grid) {
                         // この経路は表を即 append するため、後続スタブが既出表の unitCaption を
@@ -2576,7 +2588,8 @@ enum BreakdownExtractor {
         mixedHeadingExclusionKeywords: [String] = [],
         skipGeographyAssetMetricTables: Bool = false,
         mixedHeadingLikeOnly: Bool = false,
-        dropOfWhichRegionColumns: Bool = false
+        dropOfWhichRegionColumns: Bool = false,
+        mixedSkipNearestAssetCaptionTables: Bool = false
     ) -> [BreakdownTable] {
         var tables: [BreakdownTable] = []
         let targets = dedicatedTags.union(mixedTags)
@@ -2633,6 +2646,7 @@ enum BreakdownExtractor {
                                 ? Xbrl.geographyAssetMetricCaptionKeywords : []),
                         headingLikeOnly: mixedHeadingLikeOnly,
                         dropOfWhichRegionColumns: dropOfWhichRegionColumns,
+                        skipNearestAssetCaptionTables: mixedSkipNearestAssetCaptionTables,
                         fiscalYearEnd: fiscalYearEnd
                     ))
                 }
