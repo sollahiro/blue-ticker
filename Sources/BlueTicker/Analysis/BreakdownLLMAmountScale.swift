@@ -245,7 +245,8 @@ enum BreakdownLLMAmountScale {
             return (1, false)
         case "million_yen":
             return (
-                millionYenMultiplier(rawAmounts: rawAmounts, consolidatedSales: consolidatedSales),
+                legacyMillionYenTowardYen(
+                    rawAmounts: rawAmounts, consolidatedSales: consolidatedSales),
                 false
             )
         default:
@@ -299,6 +300,21 @@ enum BreakdownLLMAmountScale {
     ) -> Double {
         scaleTowardYen(
             proposed: Financial.millionYen, rawAmounts: rawAmounts, consolidatedSales: consolidatedSales)
+    }
+
+    /// 旧: asIs と ×1e6 の log 距離だけ。千円の一意選択は入れない（スキャン old vs new）。
+    private static func legacyMillionYenTowardYen(
+        rawAmounts: [Double],
+        consolidatedSales: Double?
+    ) -> Double {
+        let proposed = Financial.millionYen
+        guard let sales = consolidatedSales, sales != 0 else { return proposed }
+        let rawRef = rawAmounts.map { abs($0) }.max() ?? 0
+        guard rawRef != 0 else { return proposed }
+        let asIs = rawRef / abs(sales)
+        let asScaled = rawRef * proposed / abs(sales)
+        if closerToUnity(asIs, than: asScaled) { return 1 }
+        return proposed
     }
 
     /// LLM 正規化器の分母許容と同じ。食い違い時の候補採否に使う。

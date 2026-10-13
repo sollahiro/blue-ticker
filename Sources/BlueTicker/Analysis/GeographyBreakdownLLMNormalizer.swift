@@ -648,8 +648,8 @@ enum GeographyBreakdownLLMNormalizer {
             }
             let header = RevenueRecognitionCandidates.collapsedCell(column.header)
             if RevenueRecognitionCandidates.isOfWhichColumnHeader(column.header) { return false }
-            // 2021年度 / 日本 は年スライス。当連結会計年度列は YYYY年度 を含まないので残す。
-            if header.range(of: #"[0-9０-９]{4}年度"#, options: .regularExpression) != nil {
+            // 2021年度 / 日本 は年スライス。裸の 2025年度 は前期/当期列として残す（6758）。
+            if RevenueRecognitionCandidates.isYearSlicedGeographyColumnHeader(header) {
                 return false
             }
             if header.contains("％") || header.contains("%") || header.contains("構成比") {

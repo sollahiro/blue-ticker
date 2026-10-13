@@ -1037,6 +1037,21 @@ enum RevenueRecognitionCandidates {
             && (compact.contains("連結") || compact.contains("事業年度") || compact.contains("年度"))
     }
 
+    /// `2021年度 / 日本` のように年度と地域が同居した列。裸の `2025年度` は含めない。
+    static func isYearSlicedGeographyColumnHeader(_ label: String) -> Bool {
+        let compact = collapsedCell(label)
+        guard compact.range(of: #"[0-9０-９]{4}年度"#, options: .regularExpression) != nil else {
+            return false
+        }
+        let leftover = collapsedCell(
+            compact.replacingOccurrences(
+                of: #"[0-9０-９]{4}年度"#, with: "", options: .regularExpression)
+        )
+        if leftover.isEmpty { return false }
+        if leftover.contains("金額") || leftover.contains("単位") { return false }
+        return true
+    }
+
     /// 横並び地域表の列見出し（日本 / その他）。項目・売上高・年度は含めない。
     static func isGeographyRegionColumnHeader(_ label: String) -> Bool {
         let token = collapsedCell(label)

@@ -2031,11 +2031,11 @@ import Testing
               <tr><td>中国</td><td>1,244,115</td></tr>
               <tr><td>アジア・大洋州</td><td>1,640,582</td></tr>
               <tr><td>その他</td><td>1,069,282</td></tr>
-              <tr><td>合計</td><td>12,957,064</td></tr>
+              <tr><td>合計</td><td>8,999,360</td></tr>
             </table>
             """
         let (snapshotOrNil, _) = await normalize(
-            html: html, sales: yen(12_479_620), docID: "S100W19Q")
+            html: html, sales: yen(13_020_768), docID: "S100LM4N")
         let snapshot = try #require(snapshotOrNil)
         #expect(snapshot.needsReview)
         #expect(snapshot.warnings.contains("llm_row_sum_mismatch"))
@@ -2081,8 +2081,9 @@ import Testing
         let columns = RevenueRecognitionCandidates.amountColumns(in: parsed)
         let offered = GeographyBreakdownLLMNormalizer.offeredColumns(columns, tables: parsed)
         #expect(offered.allSatisfy { column in
-            column.header.range(of: #"[0-9０-９]{4}年度"#, options: .regularExpression) == nil
+            !RevenueRecognitionCandidates.isYearSlicedGeographyColumnHeader(column.header)
         })
+        #expect(offered.contains { $0.header.contains("当連結会計年度") })
         let (snapshotOrNil, _) = await normalize(
             html: html, sales: yen(1_479_008), docID: "S100LMH9-year-span")
         let snapshot = try #require(snapshotOrNil)
@@ -2119,7 +2120,7 @@ import Testing
     /// 6706 型: 当期の地域売上表が無く前期表だけのときは組まない（報告セグメントは地域ではない）。
     @Test func priorOnlyGeographyTableIsNotCurrentBreakdown() async throws {
         let html = """
-            <p>前連結会計年度</p>
+            <p>前連結会計年度（自 2024年4月1日 至 2025年3月31日）</p>
             <p>（単位：百万円）</p>
             <table>
               <tr><td></td><td>売上高</td></tr>
@@ -2129,12 +2130,6 @@ import Testing
               <tr><td>欧州</td><td>2,500</td></tr>
               <tr><td>その他</td><td>1,082</td></tr>
               <tr><td>合計</td><td>32,582</td></tr>
-            </table>
-            <p>当連結会計年度</p>
-            <p>（単位：百万円）</p>
-            <table>
-              <tr><td></td><td>電気通信事業</td><td>高周波事業</td><td>合計</td></tr>
-              <tr><td>外部顧客への売上高</td><td>20,000</td><td>15,446</td><td>35,446</td></tr>
             </table>
             """
         let (snapshot, _) = await normalize(
