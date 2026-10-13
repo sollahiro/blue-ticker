@@ -893,10 +893,12 @@ enum RevenueRecognitionCandidates {
                 return text.isEmpty ? nil : text
             }
             let joined = joinHeaderParts(parts)
-            if joined.isEmpty { continue }
             // 列0はラベル域（項目・売上高）のことが多いが、横並び地域表では
             // 日本 / その他 自体が金額列。stub 前提で飛ばすと 合計だけが候補になる。
-            if column == 0, !isGeographyRegionColumnHeader(joined) { continue }
+            // 単位だけの見出しは join が空でも金額列として残す（デンソー t0_c2）。
+            if column == 0 {
+                if joined.isEmpty || !isGeographyRegionColumnHeader(joined) { continue }
+            }
             headers[column] = joined
         }
 
@@ -1049,6 +1051,7 @@ enum RevenueRecognitionCandidates {
         )
         if leftover.isEmpty { return false }
         if leftover.contains("金額") || leftover.contains("単位") { return false }
+        if leftover.contains("自") && leftover.contains("至") { return false }
         return true
     }
 

@@ -685,8 +685,21 @@ enum GeographyBreakdownLLMNormalizer {
     static func regionColumnCount(
         _ table: RevenueRecognitionCandidates.ParsedTable
     ) -> Int {
-        let headers = table.columnHeaders.values
-            + table.grid.prefix(table.headerRowCount).flatMap { $0 }
+        let headerBlock = table.grid.prefix(table.headerRowCount)
+        let yearSlicedHeader = headerBlock.contains { row in
+            row.contains {
+                $0.range(of: #"[0-9０-９]{4}年度"#, options: .regularExpression) != nil
+            }
+        }
+        let headerValues = table.columnHeaders.values.filter {
+            !RevenueRecognitionCandidates.isYearSlicedGeographyColumnHeader($0)
+        }
+        // 2021年度 / 日本 の下段セル「日本」を地域列に数えると、年スライス表が
+        // offeredColumns を独占して単純な 当連結会計年度 表が落ちる（6762）。
+        let gridValues: [String] = yearSlicedHeader
+            ? []
+            : headerBlock.flatMap { $0 }
+        let headers = Array(headerValues) + gridValues
         return Set(headers.filter {
             RevenueRecognitionCandidates.isGeographyRegionColumnHeader($0)
                 && !RevenueRecognitionCandidates.isOfWhichColumnHeader($0)

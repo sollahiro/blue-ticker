@@ -2026,11 +2026,11 @@ import Testing
             <table>
               <tr><td></td><td>売上高</td></tr>
               <tr><td>日本</td><td>2,244,356</td></tr>
-              <tr><td>米国</td><td>4,127,795</td></tr>
-              <tr><td>欧州</td><td>2,630,934</td></tr>
+              <tr><td>米国</td><td>2,000,000</td></tr>
+              <tr><td>欧州</td><td>1,500,000</td></tr>
               <tr><td>中国</td><td>1,244,115</td></tr>
-              <tr><td>アジア・大洋州</td><td>1,640,582</td></tr>
-              <tr><td>その他</td><td>1,069,282</td></tr>
+              <tr><td>アジア・大洋州</td><td>1,000,000</td></tr>
+              <tr><td>その他</td><td>1,010,889</td></tr>
               <tr><td>合計</td><td>8,999,360</td></tr>
             </table>
             """
@@ -2039,7 +2039,9 @@ import Testing
         let snapshot = try #require(snapshotOrNil)
         #expect(snapshot.needsReview)
         #expect(snapshot.warnings.contains("llm_row_sum_mismatch"))
-        #expect(snapshot.denominatorTag == "income_statement.sales")
+        // 公開分母は表の計に寄っても、カバレッジは IS。表の計では NR を外さない。
+        #expect(snapshot.warnings.contains("llm_denominator_from_internal_subtotal"))
+        #expect(snapshot.denominatorTag == "llm_table_subtotal")
         #expect(!publiclyServable(snapshot))
     }
 
