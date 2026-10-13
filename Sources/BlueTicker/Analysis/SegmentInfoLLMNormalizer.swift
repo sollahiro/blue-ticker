@@ -473,7 +473,7 @@ enum SegmentInfoLLMNormalizer {
     }
 
     /// ヘッダー単位が無い表（キヤノン注23 の smoke 抽出など）は、表合計と連結売上の比が
-    /// 百万円または円の一方だけに入るときだけその単位を使う。両方・どちらでもなければ
+    /// 円 / 千円 / 百万円の一方だけに入るときだけその単位を使う。複数・どれでもなければ
     /// `other` のまま fail closed（推測百万円は掛けない）。
     static func inferredDeclaredUnit(
         tableTotal: Double?,
@@ -483,11 +483,14 @@ enum SegmentInfoLLMNormalizer {
               let sales = consolidatedSales, sales != 0
         else { return "other" }
         let yenOK = denominatorTolerance.contains(abs(total / sales))
+        let thousandOK = denominatorTolerance.contains(
+            abs(total * BreakdownLLMAmountScale.thousandYen / sales))
         let millionOK = denominatorTolerance.contains(
             abs(total * Financial.millionYen / sales))
-        if millionOK != yenOK {
-            return millionOK ? "million_yen" : "yen"
-        }
+        let hits = [
+            (yenOK, "yen"), (thousandOK, "thousand_yen"), (millionOK, "million_yen"),
+        ].filter(\.0)
+        if hits.count == 1 { return hits[0].1 }
         return "other"
     }
 

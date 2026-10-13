@@ -1,6 +1,7 @@
 // SPEC_INVARIANT: LLM 内訳の金額単位は表ヘッダーを正とし、LLM 申告はフォールバック。
 // 千円ヘッダー × LLM million_yen は ×1000（×1e6 で約 1e12 に膨らませない）。
-// 単位が一つも決まらないときは倍率 1 のまま unresolved（推測スケールを trusted にしない）。
+// ヘッダーも申告も無いとき、円 / 千円 / 百万円のどれか1つだけが分母帯に入るならそれを使う。
+// どれも帯に入らないときだけ倍率 1 の unresolved。
 
 import Foundation
 import Testing
@@ -51,10 +52,39 @@ import Testing
         let scale = BreakdownLLMAmountScale.yenMultiplier(
             declaredUnit: "other",
             rawAmounts: [100],
-            consolidatedSales: 100 * Financial.millionYen
+            consolidatedSales: 50_000_000_000
         )
         #expect(scale.unresolved == true)
         #expect(scale.multiplier == 1)
+    }
+
+    /// 千円表の数値に百万円ヘッダーが付いても、分母が一意に千円なら ×1000（×1e6 しない）。
+    @Test func millionYenHeaderOnThousandYenAmountsUsesThousandScale() {
+        let sales = 38_720.538 * Financial.millionYen
+        let raw = [31_033_122.0, 7_687_415.0, 38_720_538.0]
+        let resolved = BreakdownLLMAmountScale.resolve(
+            headerToken: "百万円",
+            declaredUnit: "million_yen",
+            rawAmounts: raw,
+            consolidatedSales: sales
+        )
+        #expect(resolved.unresolved == false)
+        #expect(resolved.multiplier == BreakdownLLMAmountScale.thousandYen)
+        #expect(abs(38_720_538 * resolved.multiplier - sales) < 1)
+    }
+
+    /// ヘッダーも申告も無い千円表は、分母帯に千円だけ入るとき unresolved にしない。
+    @Test func thousandYenInferredWhenNoHeaderOrDeclaredUnit() {
+        let sales = 38_720.538 * Financial.millionYen
+        let raw = [31_033_122.0, 7_687_415.0, 38_720_538.0]
+        let resolved = BreakdownLLMAmountScale.resolve(
+            headerToken: nil,
+            declaredUnit: "other",
+            rawAmounts: raw,
+            consolidatedSales: sales
+        )
+        #expect(resolved.unresolved == false)
+        #expect(resolved.multiplier == BreakdownLLMAmountScale.thousandYen)
     }
 
     /// 332A / S100YKM2 型: 表は「単位：千円」、LLM は million_yen。ヘッダーが勝ち ×1000。

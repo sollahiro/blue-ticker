@@ -9,6 +9,9 @@
 // 低確信 NR は一致した confident correct かつハードガード無しのときだけ回復する。
 // 分母整合は既存の llm_row_sum_mismatch。アンカーは損益計算書売上、無ければ表の総合計。
 // 同じ表の内部小計では満たさない。95–105% の外は NR（correct では覆さない）。
+// 遡及修正で PL と表の計が食い違うときは IS（提出時点の報告ベース）をアンカーにする。
+// 表の計が完全でも IS の外なら NR（6758 の比較年度）。当期が一致する提出は公開する。
+// 横並び地域表の列0が日本など地域名なら金額列にする（8518）。合計列だけを Jev に出す。
 // 表 markdown が reviewMarkdownLimit 字で切れたときは table_truncated を渡し、correct 回復はしない。
 // docs/breakdown.md。BreakdownNormalizer.swift（xbrl_facts 経路）とは別経路。
 
@@ -536,6 +539,8 @@ enum GeographyBreakdownLLMNormalizer {
     /// 分母整合のアンカー。損益計算書売上があればそれ、無ければ表の総合計。
     /// 経常収益／営業収益／保険収益の表、および PL ラベルがそれら（売上高と営業収益が
     /// 並ぶときはトップラインの営業収益）のときは表の総合計を先に使う。
+    /// 遡及修正で表の計と IS がずれても IS を維持する（3382 の穴を内部小計で塞がない。
+    /// 6758 の比較年度は表の計が完全でも報告ベースが違うので NR）。
     static func coverageCheckAnchor(
         table: RevenueRecognitionCandidates.ParsedTable,
         consolidatedSales: Double,
@@ -713,6 +718,10 @@ enum GeographyBreakdownLLMNormalizer {
             }
             let header = RevenueRecognitionCandidates.collapsedCell(column.header)
             if RevenueRecognitionCandidates.isOfWhichColumnHeader(column.header) { return false }
+            // 2021年度 / 日本 は年スライス。裸の 2025年度 は前期/当期列として残す（6758）。
+            if RevenueRecognitionCandidates.isYearSlicedGeographyColumnHeader(header) {
+                return false
+            }
             if header.contains("％") || header.contains("%") || header.contains("構成比") {
                 return false
             }
@@ -746,10 +755,23 @@ enum GeographyBreakdownLLMNormalizer {
     static func regionColumnCount(
         _ table: RevenueRecognitionCandidates.ParsedTable
     ) -> Int {
-        let headers = table.columnHeaders.values
-            + table.grid.prefix(table.headerRowCount).flatMap { $0 }
+        let headerBlock = table.grid.prefix(table.headerRowCount)
+        let yearSlicedHeader = headerBlock.contains { row in
+            row.contains {
+                $0.range(of: #"[0-9０-９]{4}年度"#, options: .regularExpression) != nil
+            }
+        }
+        let headerValues = table.columnHeaders.values.filter {
+            !RevenueRecognitionCandidates.isYearSlicedGeographyColumnHeader($0)
+        }
+        // 2021年度 / 日本 の下段セル「日本」を地域列に数えると、年スライス表が
+        // offeredColumns を独占して単純な 当連結会計年度 表が落ちる（6762）。
+        let gridValues: [String] = yearSlicedHeader
+            ? []
+            : headerBlock.flatMap { $0 }
+        let headers = Array(headerValues) + gridValues
         return Set(headers.filter {
-            looksLikeGeographyLabel($0) && !RevenueRecognitionCandidates.isAggregateColumnHeader($0)
+            RevenueRecognitionCandidates.isGeographyRegionColumnHeader($0)
                 && !RevenueRecognitionCandidates.isOfWhichColumnHeader($0)
         }.map { RevenueRecognitionCandidates.collapsedCell($0) }).count
     }
@@ -1192,6 +1214,8 @@ enum GeographyBreakdownLLMNormalizer {
     }
 
     private static func matchesOfWhichLabelPair(parent: String, child: String) -> Bool {
+        // その他欧州 は欧州の残余であり、ドイツの親大陸ではない（4228）。
+        if parent.contains("その他") { return false }
         let pairs: [(parents: [String], children: [String])] = [
             (["北米", "米州", "米大陸", "アメリカ"], ["米国", "アメリカ合衆国"]),
             (["欧州", "ヨーロッパ"], ["フランス", "ドイツ", "英国", "イギリス", "イタリア", "スペイン"]),
@@ -1263,11 +1287,14 @@ enum GeographyBreakdownLLMNormalizer {
               let sales = consolidatedSales, sales != 0
         else { return "other" }
         let yenOK = unitScaleTolerance.contains(abs(total / sales))
+        let thousandOK = unitScaleTolerance.contains(
+            abs(total * BreakdownLLMAmountScale.thousandYen / sales))
         let millionOK = unitScaleTolerance.contains(
             abs(total * Financial.millionYen / sales))
-        if millionOK != yenOK {
-            return millionOK ? "million_yen" : "yen"
-        }
+        let hits = [
+            (yenOK, "yen"), (thousandOK, "thousand_yen"), (millionOK, "million_yen"),
+        ].filter(\.0)
+        if hits.count == 1 { return hits[0].1 }
         return "other"
     }
 

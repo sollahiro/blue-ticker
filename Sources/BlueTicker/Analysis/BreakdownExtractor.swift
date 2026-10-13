@@ -2148,6 +2148,19 @@ enum BreakdownExtractor {
                     tables[i].periodBasis = .pair
                     i += 2
                     continue
+                case ("当期", "当期"):
+                    // 同一ブロックの比較2表がどちらも CurrentYearDuration / 当期キャプション
+                    // のとき（1963）。レイアウトが同じなら先が前期。売上と固定資産は組まない。
+                    if markdownLooksLikeAssetTable(a.markdown) != markdownLooksLikeAssetTable(b.markdown)
+                        || !markdownMagnitudesComparable(a.markdown, b.markdown)
+                    {
+                        break
+                    }
+                    tables[i].period = "前期"
+                    tables[i].periodBasis = .pair
+                    tables[i + 1].periodBasis = .pair
+                    i += 2
+                    continue
                 default:
                     break
                 }
@@ -2171,6 +2184,25 @@ enum BreakdownExtractor {
             }
         }
         return true
+    }
+
+    /// 前期・当期の比較表なら最大金額は概ね同じ桁（0.5〜2倍）。売上高表の直後に見出しの無い
+    /// 有形固定資産表（S100VYA0 3.2倍 / S100W0S7 11.9倍）が同じ地域列で並ぶと、レイアウト一致だけでは
+    /// 先の当期売上を前期にしてしまう。
+    private static func markdownMagnitudesComparable(_ a: String, _ b: String) -> Bool {
+        func maxAmount(_ markdown: String) -> Double? {
+            markdown.split(separator: "\n").flatMap { $0.split(separator: "|") }
+                .compactMap { XBRLUtils.parseHtmlNumber(String($0).trimmingCharacters(in: .whitespaces)) }
+                .map { abs($0) }.max()
+        }
+        guard let x = maxAmount(a), let y = maxAmount(b), x > 0, y > 0 else { return false }
+        return (0.5...2.0).contains(x / y)
+    }
+
+    /// 売上高表と有形固定資産表が同じ地域見出しでも、当期×当期の対にしない。
+    private static func markdownLooksLikeAssetTable(_ markdown: String) -> Bool {
+        markdown.contains("固定資産") || markdown.contains("非流動資産")
+            || markdown.contains("長期性資産")
     }
 
     private static func isIgnorablePeriodLayoutAmount(_ cell: String) -> Bool {
