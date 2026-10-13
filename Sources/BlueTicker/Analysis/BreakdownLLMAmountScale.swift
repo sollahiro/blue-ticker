@@ -16,7 +16,7 @@ enum BreakdownLLMAmountScale {
     static let headerLlmMismatchWarning = "unit_header_llm_mismatch"
 
     struct Resolution: Equatable {
-        /// 行金額に掛ける円換算倍率。単位が一つも決まらず分母帯にも一意に入らないときは 1。
+        /// 行金額に掛ける円換算倍率。単位が一つも決まらず分母帯が一意に千円でもないときは 1。
         var multiplier: Double
         /// ヘッダーにも LLM にも信頼できる単位が無い。格納してよいが trusted ではない。
         var unresolved: Bool
@@ -62,8 +62,8 @@ enum BreakdownLLMAmountScale {
     /// 表ヘッダーの単位を優先し、無ければ LLM 申告。食い違い時は
     /// {ヘッダー倍率, LLM 申告倍率, ×1} のうち分母比が 0.90...1.10 に入り 1 に最も近いものを選ぶ。
     /// 分母が無い・許容内に入らない・同距離ならヘッダー倍率。mismatch フラグは立てる。
-    /// どちらからも円倍率が決まらなければ、円 / 千円 / 百万円の一意の分母帯一致を使い、
-    /// それも無ければ fail closed（unresolved、倍率 1）。
+    /// どちらからも円倍率が決まらなければ、分母帯に一意に入るのが千円のときだけ ×1000、
+    /// それ以外は fail closed（unresolved、倍率 1。百万円は推測しない）。
     static func resolve(
         headerToken: String?,
         declaredUnit: String,
@@ -125,13 +125,15 @@ enum BreakdownLLMAmountScale {
                 headerBorrowed: false
             )
         }
-        // ヘッダーも LLM も無いとき、円 / 千円 / 百万円のどれか1つだけが分母帯に入るならそれを使う
-        // （千円表を million_yen と誤認して ×1e6 する 1000 倍を、推測 million フォールバックより先に止める）。
+        // ヘッダーも LLM も無いとき、円 / 千円 / 百万円のうち分母帯に一意に入るのが千円のときだけ ×1000。
+        // 百万円は推測しない（旧来の fail closed。100 を 1e8 にしない）。×1 は既定倍率なので unresolved のまま。
+        // 千円だけを許すのは、千円表を ×1 のまま公開すると 1/1000 になる実害（5607 型）が
+        // 単位欠落の千円表で起き、かつ ×1000 と ×1e6 が同時に分母帯に入ることは無いため。
         if let inferred = uniqueScaleAgainstDenominator(
             candidates: [1, thousandYen, Financial.millionYen],
             rawAmounts: rawAmounts,
             consolidatedSales: consolidatedSales
-        ) {
+        ), inferred == thousandYen {
             return Resolution(
                 multiplier: inferred,
                 unresolved: false,
