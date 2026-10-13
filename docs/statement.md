@@ -27,6 +27,8 @@
 
 `StatementContract.swift`: `statementCacheVersion` / min servable、`StatementLineItem`（tag, label, value, unit, order, section?, is_total?, components?）。SS は合計列のみ（`changes_in_equity`）。
 
+行の `label` は presentation の `preferredLabel` が指すロールの文言。`preferredLabel` が無い arc は提出ラベル（標準ロール優先で1つに収束）を使う。ただし収束したラベルが別の表の arc が `preferredLabel` で指すロール（セグメント表用の positiveLabel / alt 等）の文言なら、本表には標準ロールの文言（提出側、無ければ標準タクソノミ）を出す（8766 S100YLS8 / 8725 S100YNCJ の `ProfitLossAttributableToOwnersOfParentIFRS` は「親会社の所有者」。どの arc も指さない alt だけの BS 科目 2413 S100YJ25「短期借入金」は従来どおり）。
+
 ## notes
 
 決定論の公開 note_type 群（詳細はコードと smoke/golden）。`research_and_development` は breakdown 軸へ集約（発生支出）。販管費の**費目**内訳 `sga_expense_breakdown` は実装済みだが **未公開・未配線**（ingest / REST / 開発用 MCP / job-03 に載せない）。ingest の現在地は Linear Team `blue-ticker`。
