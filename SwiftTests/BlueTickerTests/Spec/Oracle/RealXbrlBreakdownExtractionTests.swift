@@ -215,6 +215,21 @@ import Foundation
         #expect(joined.contains("2,511,108") || joined.contains("2511108"))
     }
 
+    // MARK: - マネックスG S100YM8I geography（IFRS セグメント注記内の地域表）
+
+    // 地域別の専用 TextBlock が無く、セグメント注記 (2）営業収益の地域別内訳（当期）:
+    // 日本 25,962 / 米国 54,462 / その他 3,181 / 合計 83,606 百万円（= 連結営業収益）。
+    // source: code=8698 fy_end=2026-03-31 doc_id=S100YM8I page=101 field=geography.operating_revenue
+    @Test func monexGeographyFromIFRSSegmentNoteRevenueTable() async throws {
+        guard await Self.ensureAvailable("S100YM8I") else { return }
+        let result = BreakdownExtractor.extractGeographyInfo(xbrlDir: Self.xbrlDir("S100YM8I"))
+        #expect(result.method == "html_table")
+        let revenue = try #require(result.tables.first { containsAmount($0.markdown, "83,606") })
+        for amount in ["25,962", "54,462", "3,181"] {
+            #expect(containsAmount(revenue.markdown, amount), Comment(rawValue: amount))
+        }
+    }
+
     // MARK: - 資生堂 S100XSCU business（2026-08-14）
 
     @Test func shiseidoExtractsGeographicNamedBusinessSegmentTable() async throws {

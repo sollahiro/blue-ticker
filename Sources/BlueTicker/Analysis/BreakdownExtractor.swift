@@ -769,6 +769,27 @@ enum BreakdownExtractor {
         {
             return segmentGeography
         }
+        // IFRS で地域別の専用 TextBlock が無く、セグメント注記の小見出し
+        // 「(2）営業収益の地域別内訳」の下に地域表だけがある型（8698 S100YM8I）。
+        // 地域注記・報告セグメントのどちらからも取れないときだけ、IFRS セグメント注記を
+        // 見出し型一致で走査する（資産表は既定の除外語で落とし、地域ラベル行のある表に限る）。
+        if result.method == "not_found" {
+            let segmentNoteTables = extractFromTextBlocks(
+                xbrlDir: xbrlDir,
+                dedicatedTags: [],
+                mixedTags: Xbrl.ifrsSegmentNoteGeographyFallbackTextBlockTags,
+                dedicatedHeading: "地域ごとの情報",
+                mixedKeywords: Xbrl.geographyHeadingKeywords,
+                skipGeographyAssetMetricTables: true,
+                mixedHeadingLikeOnly: true,
+                dropOfWhichRegionColumns: true
+            ).filter(tableHasGeographyRegionLabels)
+            if !segmentNoteTables.isEmpty {
+                return buildResult(
+                    xbrlDir: xbrlDir, tables: segmentNoteTables,
+                    dimensionKeywords: Xbrl.geographyDimensionKeywords)
+            }
+        }
         return result
     }
 
@@ -791,7 +812,10 @@ enum BreakdownExtractor {
     /// markdown 表のデータ行先頭セル（行ラベル）に地域名キーワードが十分あるか。
     /// 列が地域・行が事業の表（収益分解の転置形）は落とす。
     static func tableHasGeographyRegionLabels(_ table: BreakdownTable) -> Bool {
-        let labels = rowLabelsFromMarkdown(table.markdown)
+        // 均等割りの全角空白（「日　　　本」「米　　　国」）は詰めてから照合する（8698 S100YM8I）。
+        let labels = rowLabelsFromMarkdown(table.markdown).map {
+            $0.filter { !$0.isWhitespace }
+        }
         let hits = labels.filter { label in
             Xbrl.segmentSpecificGeographyLabelKeywordsJa.contains(where: label.contains)
         }
