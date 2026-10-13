@@ -58,6 +58,7 @@ public func financialsAssemblyFingerprint() -> String {
         leaseLiabilitiesNoteCacheVersion,
         employeesBreakdownCacheVersion,
         researchAndDevelopmentBreakdownCacheVersion,
+        interestBearingDebtBreakdownCacheVersion,
     ].joined(separator: "|")
 }
 
@@ -84,7 +85,8 @@ public func isCurrentFinancialsAssemblyFingerprint(_ stored: String?) -> Bool {
 // | フィールド | 正本 | 現行 | 状態 |
 // |---|---|---|---|
 // | sales, operating_profit, net_profit | statement（PL。net_profit は親会社帰属が SS のみなら changes_in_equity） | StatementFinancialsResolver | done |
-// | gross_profit, sga | statement（income_statement 行）。GP は売上総利益（売上高−売上原価。両方ある年だけ。原価欠測を売上コピーしない）。営業総利益（営業収益合計−営業原価合計）が併記され販管費がその直上なら営業総利益。無ければ営業収益−営業費用+販管費、その次に銀行業務粗利益。未開示は null | StatementFinancialsResolver（#5c） | done |
+// | （銀行業）operating_profit, op_label, sga, sga_label | 銀行判定（`Xbrl.isBankFiling`、IBD と同じ。預金マーカー `DepositsLiabilitiesBNK` または EDINET 提出者業種＝銀行業。ゆうちょ 7182 は後者）で営業利益行が無い銀行は operating_profit = 業務純益（業務粗利益 − 営業経費 `GeneralAndAdministrativeExpensesOEBNK`。持分法は足さない）、op_label「業務純益」、sga = 営業経費、sga_label「営業経費」。営業経費か業務粗利益が無ければ operating_profit / sga とも null（経常利益・差額で埋めない）。sga_label は販管費行のラベルが「販売費及び一般管理費」以外のときだけ入る（銀行「営業経費」、ガス「供給販売費及び一般管理費」、商品先物「営業費用」、一般管理費だけの PL「一般管理費」、「事業費用」）。それ以外は null（2026-10-12） | StatementFinancialsResolver.bankNetBusinessProfit | done |
+// | gross_profit, sga | statement（income_statement 行）。GP は売上総利益（売上高−売上原価。両方ある年だけ。原価欠測を売上コピーしない）。営業総利益（営業収益合計−営業原価合計）が併記され販管費がその直上なら営業総利益。無ければ営業収益−営業費用+販管費、その次に銀行業務粗利益。sga は販管費合計タグ、無ければ保険の営業費・事業費、業種別合計（ガス「供給販売費及び一般管理費」、商品先物「営業費用合計」、IFRS 継続事業の販管費）、IFRS 販売費＋一般管理費、販売費行の無い PL の1行（「一般管理費」「事業費用」）の順。未開示は null（GP − OP の差額で埋めない） | StatementFinancialsResolver（#5c） | done |
 // | total_assets, current_assets, non_current_assets | statement（balance_sheet 行） | StatementFinancialsResolver（#5b-1） | done |
 // | current_liabilities, non_current_liabilities, net_assets | statement | StatementFinancialsResolver（#5b-1） | done |
 // | ppe_total | statement | StatementFinancialsResolver（#5b-1） | done |
@@ -99,12 +101,13 @@ public func isCurrentFinancialsAssemblyFingerprint(_ stored: String?) -> Bool {
 // | dividend_ss | statement SS 行（US-GAAP も HTML SS 合計列。減少額は負 → キャッシュアウト正） | StatementFinancialsResolver（#5c） | done |
 // | employees | breakdown `employees` 分母 | BreakdownFinancialsResolver.financialsCanonicalEmployees | done |
 // | rd | breakdown `research_and_development` 分母 | BreakdownFinancialsResolver.financialsCanonicalRd | done |
-// | interest_bearing_debt | statement の有利子負債項目（集約なら集約のまま）＋足りない notes 項目タグ（リース帳簿）。notes 内訳の二重計上・合計行での代用はしない | IBDExtractor.extractCanonical | done |
+// | interest_bearing_debt | breakdown `interest_bearing_debt` 軸の合計（decider 無し。銀行は bank components 行）。軸が needs_review / not_found / 解決不能なら既存 IBDExtractor.extractCanonical 値をそのまま使い、内部 method `legacy_ibd_extractor_fallback` と warnings に理由を残す（公開フィールドは増やさない。null へ退行させない）。無借金の 0 は旧 Extractor の zero_debt のまま | BreakdownFinancialsResolver.financialsCanonicalInterestBearingDebt | done |
 // | interest_expense | statement PL 行（US-GAAP は △ を絶対値）。無ければ IFRS notes の支払利息タグ / TextBlock（PL の FinanceCostsIFRS は使わない） | StatementFinancialsResolver / StatementNotesResolver.financialsCanonicalInterestExpense | done |
 // | buyback, cf_treasury_stock | statement SS/CF 行（US-GAAP は HTML の取得行。△ はキャッシュアウト正） | StatementFinancialsResolver | done |
 // | gross_profit_margin, operating_margin, nopat, nopat_margin | 派生（入力フィールドの組立後に再計算） | IndividualAnalyzer 内計算 | derived |
 // | roe, roic, net_cash, net_de, cfc, working_capital, dso/dio/dpo/ccc | 派生 | IndividualAnalyzer / Waterfall 投影 | derived |
-// | business_profit*, roic_delta*, roe_delta*, *_change_impact | Waterfall 専用派生 | Waterfall 関数（analysisOnlyKeys） | derived |
+// | （銀行業）net_cash, net_de, roic, nopat_margin, invested_capital_turnover | 銀行（IBD の `isBank` = `DepositsLiabilitiesBNK` または EDINET 提出者業種＝銀行業）は null。預金を IBD に含めないため有利子負債ベースの比率は意味を持たない（2026-10-12）。interest_bearing_debt は残す。Waterfall の net_cash_change / debt_change_impact も null | IndividualAnalyzer.applyInterestBearingDebtRatios / FinancialsYear.withholdsBankRatios | derived |
+// | business_profit*, roic_delta*, roe_delta*, *_change_impact | Waterfall 専用派生。販管費が無い年の GP − OP 差額は Waterfall 内だけで使い sga へ書き戻さない。銀行は business_profit = 業務純益（= Summary operating_profit）で、既存3スロットに経常収益差・業務粗利益率差・営業経費差を入れ、和が前年差に一致する。両期の経常収益・業務粗利益・営業経費が揃わなければ前年差は null | Waterfall 関数（analysisOnlyKeys） | derived |
 //
 // Summary 非搭載（正本 API のみ、組立対象外）: goodwill 明細、PPE 区分明細、借入明細。
 
@@ -118,6 +121,7 @@ struct FinancialsYear: Codable, Sendable {
     var salesLabel: String?
     var grossProfitLabel: String?
     var opLabel: String?
+    var sgaLabel: String?
 
     var sales: Double?
     var grossProfit: Double?
@@ -198,6 +202,7 @@ struct FinancialsYear: Codable, Sendable {
         case salesLabel = "sales_label"
         case grossProfitLabel = "gross_profit_label"
         case opLabel = "op_label"
+        case sgaLabel = "sga_label"
         case sales
         case grossProfit = "gross_profit"
         case grossProfitMargin = "gross_profit_margin"
@@ -274,6 +279,7 @@ struct FinancialsYear: Codable, Sendable {
             case .salesLabel: try container.encode(salesLabel, forKey: key)
             case .grossProfitLabel: try container.encode(grossProfitLabel, forKey: key)
             case .opLabel: try container.encode(opLabel, forKey: key)
+            case .sgaLabel: try container.encode(sgaLabel, forKey: key)
             case .sales: try container.encode(sales, forKey: key)
             case .grossProfit: try container.encode(grossProfit, forKey: key)
             case .grossProfitMargin: try container.encode(grossProfitMargin, forKey: key)
@@ -353,6 +359,7 @@ extension FinancialsYear {
         salesLabel = raw.salesLabel
         grossProfitLabel = calc.grossProfitLabel
         opLabel = calc.opLabel
+        sgaLabel = calc.sgaLabel
 
         sales = raw.sales
         grossProfit = calc.grossProfit
@@ -451,6 +458,7 @@ extension FinancialsYear {
         calc.sellingGeneralAdministrativeExpenses = sga
         calc.operatingMargin = operatingMargin
         calc.opLabel = opLabel
+        calc.sgaLabel = sgaLabel
         calc.nopat = nopat
         calc.effectiveTaxRate = effectiveTaxRate
         calc.roe = roe
@@ -536,6 +544,11 @@ extension FinancialsYear {
         return dict.filter { kept.contains($0.key) }
     }
 
+    /// 銀行業の年か（`IndividualAnalyzer` は銀行の net_cash / net_de / roic 等を null にする）。
+    /// 公開キーは増やさず、組立済みの値から読む: 現金があるのに net_cash が null なのは銀行規則だけ
+    /// （非銀行は現金があれば net_cash = 現金 − 有利子負債(無ければ 0) を必ず出す）。
+    var withholdsBankRatios: Bool { cashEquivalents != nil && netCash == nil }
+
     /// Waterfall（waterfall）応答用 JSON。`jsonObject()` の全キーに加えて、CLI `ticker waterfall` の
     /// ④⑤ブロック（ネットキャッシュ差分・運転資本/CCC差分の要因分解）を `prior`（直前期。無ければ nil）
     /// との差分からその場で計算して追加する。DB には保存しない（read 時のみの投影）。
@@ -547,7 +560,10 @@ extension FinancialsYear {
         }
         dict["net_cash_change"] = delta(netCash, prior?.netCash)
         dict["cash_change_impact"] = delta(cashEquivalents, prior?.cashEquivalents)
-        dict["debt_change_impact"] = delta(prior?.interestBearingDebt, interestBearingDebt)
+        // ネットキャッシュ差分の有利子負債要因。銀行業は net_cash を出さない（預金を除く IBD では
+        // 意味が無い）ので、この要因も null にする（どちらかの期が銀行なら null）。
+        dict["debt_change_impact"] = (withholdsBankRatios || prior?.withholdsBankRatios == true)
+            ? NSNull() : delta(prior?.interestBearingDebt, interestBearingDebt)
         dict["working_capital_change"] = delta(workingCapital, prior?.workingCapital)
         dict["accounts_receivable_change_impact"] = delta(accountsReceivable, prior?.accountsReceivable)
         dict["inventory_change_impact"] = delta(inventory, prior?.inventory)
@@ -666,6 +682,18 @@ extension FinancialsResponse {
     /// 格納済み `years` の件数。public: 財務取り込み read 経路（BltServerCore）が
     /// notApplicable プレースホルダ（`years` 空）を検出して 404 を維持するために使う（issue #86）。
     public var yearCount: Int { years.count }
+
+    /// 格納 `years` のうち最新の fy_end（先頭 10 文字 YYYY-MM-DD）とその年の doc_id。years 空なら nil。
+    /// public: 財務取り込み（BltServerCore）が、最新 FY を失う縮小上書きを拒否する判定に使う。
+    public var newestFiscalYearEnd: (fyEnd: String, docID: String?)? {
+        var newest: (fyEnd: String, docID: String?)?
+        for year in years {
+            guard let raw = year.fyEnd, !raw.isEmpty else { continue }
+            let fyEnd = String(raw.prefix(10))
+            if fyEnd > (newest?.fyEnd ?? "") { newest = (fyEnd, year.docId) }
+        }
+        return newest
+    }
 
     /// 全キーを含む JSON オブジェクト（years 各要素も null 補完する）。サーバー応答用。
     /// public: BltServerCore の 財務取り込み read 経路が格納済みレスポンスを JSON へ落とすために使う。

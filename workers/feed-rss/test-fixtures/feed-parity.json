@@ -1,0 +1,155 @@
+{
+  "docTypeLabels": {
+    "120": "有価証券報告書",
+    "130": "訂正有価証券報告書",
+    "140": "四半期報告書",
+    "150": "訂正四半期報告書",
+    "160": "半期報告書",
+    "170": "訂正半期報告書"
+  },
+  "feedDocTypes": ["120", "130", "140", "160"],
+  "ordinanceCompanyDisclosure": "010",
+  "listedTickerCode": [
+    { "secCode": "72030", "code": "7203" },
+    { "secCode": "208A0", "code": "208A" },
+    { "secCode": "477A0", "code": "477A" },
+    { "secCode": "00000", "code": null },
+    { "secCode": "7203", "code": null },
+    { "secCode": "72031", "code": null },
+    { "secCode": "720300", "code": null },
+    { "secCode": null, "code": null },
+    { "secCode": "", "code": null }
+  ],
+  "feedItems": [
+    {
+      "record": {
+        "docID": "S100AAA",
+        "edinetCode": "E00001",
+        "secCode": "72030",
+        "filerName": "テスト株式会社",
+        "docTypeCode": "120",
+        "ordinanceCode": "010",
+        "periodEnd": "2026-03-31",
+        "submitDateTime": "2026-10-09 15:30",
+        "docDescription": "有価証券報告書－第100期"
+      },
+      "item": {
+        "code": "7203",
+        "name": "テスト株式会社",
+        "doc_id": "S100AAA",
+        "doc_type": "120",
+        "doc_type_label": "有価証券報告書",
+        "fy_end": "2026-03",
+        "submitted_at": "2026-10-09 15:30"
+      }
+    },
+    {
+      "record": {
+        "docID": "S100BBB",
+        "edinetCode": "E00002",
+        "secCode": "208A0",
+        "filerName": "サンプル商事株式会社",
+        "docTypeCode": "160",
+        "ordinanceCode": "010",
+        "periodEnd": "2026-09-30",
+        "submitDateTime": "2026-10-08 12:00",
+        "docDescription": "半期報告書－第50期"
+      },
+      "item": {
+        "code": "208A",
+        "name": "サンプル商事株式会社",
+        "doc_id": "S100BBB",
+        "doc_type": "160",
+        "doc_type_label": "半期報告書",
+        "fy_end": "2026-09",
+        "submitted_at": "2026-10-08 12:00"
+      }
+    },
+    {
+      "record": {
+        "docID": "S100CCC",
+        "edinetCode": "E00003",
+        "secCode": "477A0",
+        "filerName": "未知書類株式会社",
+        "docTypeCode": "999",
+        "ordinanceCode": "010",
+        "periodEnd": "2026-03-31",
+        "submitDateTime": "2026-10-07 09:00",
+        "docDescription": "その他の書類"
+      },
+      "item": {
+        "code": "477A",
+        "name": "未知書類株式会社",
+        "doc_id": "S100CCC",
+        "doc_type": "999",
+        "doc_type_label": "その他の書類",
+        "fy_end": "2026-03",
+        "submitted_at": "2026-10-07 09:00"
+      }
+    },
+    {
+      "record": {
+        "docID": "S100DDD",
+        "edinetCode": "E00004",
+        "secCode": "72030",
+        "filerName": "特定有価証券ファンド",
+        "docTypeCode": "120",
+        "ordinanceCode": "030",
+        "periodEnd": "2026-03-31",
+        "submitDateTime": "2026-10-06 10:00",
+        "docDescription": "有価証券報告書"
+      },
+      "item": null
+    },
+    {
+      "record": {
+        "docID": "S100EEE",
+        "edinetCode": "E00005",
+        "secCode": "72031",
+        "filerName": "非上場株式会社",
+        "docTypeCode": "120",
+        "ordinanceCode": "010",
+        "periodEnd": "2026-03-31",
+        "submitDateTime": "2026-10-05 11:00",
+        "docDescription": "有価証券報告書"
+      },
+      "item": null
+    },
+    {
+      "record": {
+        "docID": "S100FFF",
+        "edinetCode": "E00006",
+        "secCode": null,
+        "filerName": "コードなし株式会社",
+        "docTypeCode": "120",
+        "ordinanceCode": "010",
+        "periodEnd": "2026-03-31",
+        "submitDateTime": "2026-10-04 13:00",
+        "docDescription": "有価証券報告書"
+      },
+      "item": null
+    },
+    {
+      "record": {
+        "docID": "S100GGG",
+        "edinetCode": "E00007",
+        "secCode": "72030",
+        "filerName": "期間なし株式会社",
+        "docTypeCode": "120",
+        "ordinanceCode": "010",
+        "periodEnd": null,
+        "submitDateTime": "2026-10-03 14:00",
+        "docDescription": "有価証券報告書"
+      },
+      "item": {
+        "code": "7203",
+        "name": "期間なし株式会社",
+        "doc_id": "S100GGG",
+        "doc_type": "120",
+        "doc_type_label": "有価証券報告書",
+        "fy_end": "",
+        "submitted_at": "2026-10-03 14:00"
+      }
+    }
+  ]
+}

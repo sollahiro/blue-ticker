@@ -62,6 +62,7 @@ description: XBRL 抽出ロジック、Stage、statement・notes・breakdown 契
 17. 研究開発費で数値タグもセグメント fact も無いとき、`ResearchAndDevelopmentActivitiesTextBlock` の本文から当期の会社全体の総額だけを補う（`ResearchAndDevelopmentProseTotal`）。コードが円へ換算し、Jev は文の分類だけ（`current_company_total` / `prior_period` / `partial_amount` / `unrelated`）。確率 0.9 以上の当期総額がちょうど1文のときだけ source `research_and_development_prose`。1文に金額が2つ、0円、割合だけは候補にしない。配分不能の文言は `warnings` の `not_allocatable_to_segments`（404 にしない）。キーが無いときは数値タグの決定論のまま。応答が無いときは行を作らない。`cache_version` は上げない。Summary の `rd` は数値タグのまま。セグメント注記の省略 Choice とは別経路。全社合計タグがあり segment+reconciling が 5% 以上足りないときは、差額に一致する1文だけを別 Choice（`unallocated_remainder`）で確認し、`reconciling` 行を足す。5百万円で一致せず配分できない文が1つだけのときは、億円丸めとしてその文を見る。足した合計がまだ 5% を超えるときは足さない。セグメント行が無い合計のみは埋めない。複数文の組み合わせは対象外。source は `xbrl_facts` のまま。活動タグの全社合計が無く販管費タグに落ち、本文の研究開発費総額が1文だけで製造費用込みの注記と一致するときは、その注記を分母にする（Summary の `rd` も同じ）。活動タグがある書類は替えない。タグ付き合計が全社合計を 5% 以上超えるときは、総額と「このほか」の金額が同じ文の1組だけを別 Choice（`excluded_from_total`）で確認し、負の `reconciling` 行を足す。既存行は削らない。
 18. 設備投資は軸 `capex`（`breakdown-capex-v1`）。行は `segment` / `reconciling` / `EntityTotal`。セルは `segment_assets`（Instant）、`flow`（書類単位で `capital_expenditures` があればそれ、無ければ `noncurrent_asset_additions`。混ぜず足さない）、`capital_expenditures_overview`。各セルの分母は連結の無 dimension 総額タグ（EntityTotal）。加算した segment+reconciling は分母にしない。5%超ずれは `needs_review`。総額が無いときは Jev 本文総額、それも無ければそのセルの分母は null。欠測は null。旧 4 軸名は REST / MCP / skills から廃止。PPE と Summary `capex` / FCF は触らない。`fin-vN` / `screen-vN` は上げない。Overview HTML 表は正本（HTML 合計行が総額）。HTML ラベルと XBRL member は初期は結合しない。Jev は Role だけ（`CapexProseTotal`。`SegmentNoteDecision` には載せない）。円はコード。埋めるのは Overview の会社総額と、タグ付きセグメントがあるときの reconciling。セグメント別は埋めない。source `capex_prose` は公開面で研究開発費本文総額と同じ。応答無しは行を作らず再試行。
 19. 収益分解の 95% カバー床はカテゴリ行にその他の源泉 / その他の収益 / その他収益があるときだけ免除する。合計行・グリッドの「その他の収益（注）」では免除しない。単一行または明細合計 0 は `needs_review` で公開しない（6620）。`cache_version` は上げない。
+20. 有利子負債は軸 `interest_bearing_debt`（`breakdown-interest-bearing-debt-v2`）。社債・借入金＋リース負債。セルは `opening` / `closing`（平均利率は持たない）、行ごとに `source`（`balance_sheet` / `borrowings_schedule` / `lease_note` / `financials_bank_components`）と `maturity_class`（`current` / `non_current` / null。BS タグ・注記の区分・明細表ラベルだけから。推定しない、曖昧は null。「除く」は「1年以内/1年内 … 除く」だけ非流動。漢数字「一年」も同じ）、`source_tag`（値を読んだ XBRL 要素のローカル名。BS は数値要素、明細表・注記は TextBlock、会社拡張は提出どおりで会社間比較不可、合計行・コード計算は null。名前空間・URI は付けない）。BS 行は明示除外（`Xbrl.ibdNonInterestBearingBSTags` → `non_interest_bearing`）→ 証券業の営業借入（信用取引・有価証券担保・現先 → `scope_differs`、合計外）→ 既知債務 → 既知リース → キーワード（標準要素は Jev、会社拡張はラベル規則）の順。BS に別建てリースが無い `InterestBearingLiabilities*IFRS` はリース込み（注記リースを足さない。軸と旧 Extractor の両方）。明細表の行は集約（＋ラベル規則で確定した区分つき会社拡張の BS 債務科目）の内訳にする。割り当ては区分の制約のもと金額一致がただ1つのときだけ。明細表の区分見出し（流動負債／非流動負債）の下の行はその区分。区分の分からないリース行は開示どおりのラベル（「（非流動）」を作らない）。各行は `in_total`・`excluded_reason`（`duplicate_of_balance_sheet` / `scope_differs` / `non_interest_bearing` / `other_table` の 4 種。`in_total` の行は null）・`paired_row_index`（対応する `in_total` 行の payload 内 index）を持ち、合計は `in_total` 行の和なので、クライアントは全行を足してはいけない。合計行の `opening` は明細の期首が1つでも null なら null（部分合計しない）。連結がある会社は連結だけ、個別だけの会社は個別だけ（`BorrowingsSchedule.filerHasConsolidatedStatements`。DEI の連結有無。DEI が無いときは連結 BS TextBlock の有無。コンテキスト共存では判定しない）。Jev は行の分類と近似重複（2% 以内）だけ。金額は触らない。分母はコード分類の BS 有利子負債＋リース負債だけ（Jev 分類の BS 行は分母に入れない）。95〜105% 外は `needs_review`（Jev は覆せない）。明細表が帯外で BS 行が分類済みなら BS 行を使う。BS にリース科目が無く注記または明細表のリースを分母に足すときは `interest_bearing_debt_lease_denominator_from_notes`（`needs_review` にはしない）。明細表とリース注記が 2% 超で食い違うときは `needs_review`。銀行は `financials_bank_components` 行（`Xbrl.bankIBDComponents`。独立 coverage は無い。コンポーネントが1つも無ければ `not_found`）。保険は通常パイプライン。/financials の `interest_bearing_debt` は軸の合計（decider 無し）。`needs_review` / `not_found` / 解決不能は既存 `IBDExtractor.extractCanonical` の値をそのまま使い、内部 method `legacy_ibd_extractor_fallback` と warnings だけに印を残す（公開フィールドは増やさない。無借金の 0 は旧 Extractor の `zero_debt`）。公開面は `needs_review` を出さず、行があるときは 404 reason `unknown`（公開 reason は single_segment_disclosed / geography_only / not_found / unknown の 4 種）。現行版の再試行は Jev 未分類・近似重複未解決だけ（coverage だけでは再試行しない）。再試行は初回の後 3 回まで（`llm_audit.jev.sentences` の `jev_retry_attempt=N`）。
 
 ## Spec 層（テスト資産）
 
@@ -167,7 +168,7 @@ PublicDoc/
 | `CapexExtractor` | 設備投資額（設備投資等概要→CF順） |
 | `ShareBuybackExtractor` | 自己株式取得額（株主資本変動計算書→CF順） |
 | `BalanceSheetExtractor` | 総資産・流動/固定資産・流動/固定負債・純資産 |
-| `IBDExtractor` | 有利子負債合計（直接法→積み上げ法のフォールバック、銀行固有コンポーネント含む） |
+| `InterestBearingDebtBreakdown` | 有利子負債の内訳と /financials 合計（明細表優先、帯外は BS。銀行は bank components） |
 | `TangibleFixedAssetsExtractor`（PPE） | 有形固定資産合計・内訳 |
 | `EmployeesExtractor` | 従業員数（連結→個別フォールバック） |
 | `BreakdownExtractor`（`BreakdownExtractor.swift`） | セグメント情報・地域別情報（TextBlock HTML表 → dimension付きfact）。企業間比較向け正規化構想は `docs/breakdown.md` |
@@ -196,22 +197,19 @@ J-GAAP / IFRS:
   7. 連結値がなければ個別値にフォールバック
 ```
 
-### 4.4 有利子負債（`IBDExtractor`）
+### 4.4 有利子負債（`InterestBearingDebtBreakdown`）
 
 ```
-US-GAAP → USGAAP_HTML_IBDCurrent / IBDNonCurrent 仮想タグを取得（§5 参照）
-銀行業  → Xbrl.bankIBDComponents（預金・借用金等の銀行固有コンポーネント）
+/financials の interest_bearing_debt は軸の合計行（decider 無し）。
+needs_review は null（fail closed）。not_found でインスタンスが大きければ 0。
 
-J-GAAP / IFRS:
-  1. 直接法: Xbrl.ibdDirectTags（InterestBearingDebt / InterestBearingLiabilities）
-  2. 積み上げ法: Xbrl.ibdCurrentComponents + Xbrl.ibdNonCurrentComponents（7〜9コンポーネント）
-     - J-GAAP/IFRS 両タグを優先順で試行（ShortTermLoansPayable → BorrowingsCLIFRS 等）
-     - リース負債（LeaseObligationsCL / NCL、IFRS は IFRSLease.swift の TextBlock 抽出含む）
-  3. IFRS集約タグ: 粒度別タグ不在時は Xbrl.ibdIFRSCLTags / Xbrl.ibdIFRSNCLTags で代替
-     （BondsAndBorrowingsCLIFRS / BondsBorrowingsAndLeaseLiabilitiesCLIFRS 等）
-  4. 連結値がなければ個別値にフォールバック
-  5. statement にリース科目が無ければ notes のリースだけ足す
-     （`lease_liabilities` 帳簿、または借入金等明細表のリース区分。銀行の `bank_components` も同じ）
+銀行（DepositsLiabilitiesBNK が statement Instant FieldSet にある、または EDINET 提出者業種が銀行業）:
+  Xbrl.bankIBDComponents を1行ずつ。source = financials_bank_components。
+  独立 coverage は無い。notes のリースだけ足す。
+
+それ以外（保険も同じ）:
+  明細表の債務行が帯内なら明細表、帯外で BS が分類済みなら BS。
+  リースは明細表 / リース注記 / BS。Jev は分類と近似重複だけ。
 ```
 
 ### 4.5 営業利益（`OperatingProfitExtractor`）
@@ -226,6 +224,15 @@ J-GAAP / IFRS:
    - または SellingExpensesIFRS + GeneralAndAdministrativeExpensesIFRS を合算
 3. 経常利益フォールバック: Xbrl.ordinaryIncomeTags（J-GAAP 金融機関向け。IFRS企業では抑止）
 ```
+
+銀行（`Xbrl.isBankFiling` = BS に `DepositsLiabilitiesBNK`、または呼び出し元が渡す EDINET 提出者業種（`MasterStock.s33nm`）が銀行業。IBD と同じ判定）で 3 に落ちた会社は、
+`StatementFinancialsResolver` が Summary の営業利益を **業務純益** に置き換える:
+業務粗利益（`GrossProfitExtractor` の連結業務粗利益）− 営業経費（`GeneralAndAdministrativeExpensesOEBNK`）。
+持分法は足さない。Waterfall は既存3スロット（sales / gross_margin / sga _change_impact）に
+経常収益差・業務粗利益率（業務粗利益 ÷ 経常収益）差・営業経費差を入れ、和が Δ業務純益 に一致する。
+どちらかの期が銀行で、両期の経常収益・業務粗利益・営業経費が揃わなければ前年差は null（fail closed）。
+`op_label`「業務純益」、`sga` = 営業経費・`sga_label`「営業経費」。営業経費が無ければ OP / sga とも null。
+Waterfall の GP − OP 差額は Waterfall 内だけで使い、公開 `sga` へ書き戻さない。
 
 ---
 

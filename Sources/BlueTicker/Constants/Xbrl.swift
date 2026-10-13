@@ -340,6 +340,30 @@ enum Xbrl {
         "SellingGeneralAndAdministrativeExpenses",
     ]
 
+    /// 業種別・非継続事業ありの販管費合計行（タグ, sga_label）。`sgaDirectTags`・保険が無いときだけ使う
+    /// （GP 構成・計算法 OP には使わない）。label nil は「販売費及び一般管理費」そのもの。
+    /// ガス「供給販売費及び一般管理費（合計）」、商品先物は営業総利益の下の「営業費用合計」、
+    /// IFRS で非継続事業を分けた PL の継続事業の販管費（ナブテスコ 6268）。
+    static let sgaIndustryTotalTags: [(tag: String, label: String?)] = [
+        ("SellingGeneralAndAdministrativeExpensesGAS", "供給販売費及び一般管理費"),
+        ("OperatingExpensesCMD", "営業費用"),
+        ("SellingGeneralAndAdministrativeExpensesIFRSContinuingOperationsIFRS", nil),
+    ]
+
+    /// 販売費の無い PL で売上総利益（営業総利益）と営業利益の間に1行だけある費用（タグ, sga_label, 売上総利益行が要るか）。
+    /// 海運・倉庫・運送・証券金融・不動産賃貸等の「一般管理費」、創薬ベンチャーの「事業費用」（4889）。
+    /// 「事業費用（合計）」は事業原価込みの総費用のこともある（ラクオリア 4579）ので、売上総利益行の下にあるときだけ。
+    /// 販売費の行（`sgaSellingLineTags`）が別にある PL では内訳の一部なので使わない。
+    static let sgaSingleLineFallbackTags: [(tag: String, label: String, requiresGrossProfit: Bool)] = [
+        ("GeneralAndAdministrativeExpensesSGA", "一般管理費", false),
+        ("BusinessExpenses", "事業費用", true),
+    ]
+
+    /// 一般管理費と並んで開示される販売費の行。これがあると一般管理費だけでは販管費にならない。
+    static let sgaSellingLineTags: [String] = [
+        "SellingExpenses", "SellingExpensesSGA", "SupplyAndSalesExpensesGAS", "SellingExpensesIFRS",
+    ]
+
     static let sgaSellingIFRSTags: [String] = ["SellingExpensesIFRS"]
     static let sgaGaIFRSTags: [String] = ["GeneralAndAdministrativeExpensesIFRS"]
 
@@ -449,15 +473,51 @@ enum Xbrl {
         let tags: [String]
     }
 
+    /// 銀行業判定マーカー（BS の預金）。有利子負債には含めない。
+    static let bankMarkerTag = "DepositsLiabilitiesBNK"
+
+    /// EDINET コードリスト「提出者業種」の銀行業。
+    static let bankEdinetIndustry = "銀行業"
+
+    /// 銀行業か。BS 本表 Instant FieldSet に預金 `bankMarkerTag` がある、または EDINET コードリストの
+    /// 提出者業種が銀行業（ゆうちょ銀行 7182 は貯金を `DepositsLiabilities` で載せ BNK マーカーが無い）。
+    /// IBD（bank components・預金除外）と Summary 業務純益（`StatementFinancialsResolver`）の共通判定。
+    /// `edinetIndustry` は呼び出し元が master（`MasterStock.s33nm`）から渡す。不明なら nil（マーカーだけで判定）。
+    static func isBankFiling(_ instantFieldSet: FieldSet, edinetIndustry: String? = nil) -> Bool {
+        if edinetIndustry == bankEdinetIndustry { return true }
+        guard let deposits = instantFieldSet[bankMarkerTag] else { return false }
+        return deposits.current != nil || deposits.prior != nil
+    }
+
+    /// 銀行 PL の営業経費（業務純益 = 業務粗利益 − 営業経費）。
+    /// 無いときは業務純益・販管費（営業経費）とも null（経常利益や GP − OP の差額で埋めない）。
+    static let bankOperatingExpensesTags: [String] = ["GeneralAndAdministrativeExpensesOEBNK"]
+
     // 銀行業 有利子負債コンポーネント（Python: BANK_IBD_COMPONENT_DEFINITIONS）
-    // DepositsLiabilitiesBNK の存在が銀行業判定マーカーを兼ねる
+    // 預金・譲渡性預金は銀行でも有利子負債に含めない（Sorahiro 判断 2026-10-11）。
+    // 銀行かどうかは `isBankFiling`（`bankMarkerTag`＝預金、または EDINET 提出者業種が銀行業）で判定する。
+    // ゆうちょ銀行の貯金（`DepositsLiabilities`）もこの一覧に無いので含まれない。
     static let bankIBDComponents: [BankIBDComponent] = [
-        .init(label: "預金",                   tags: ["DepositsLiabilitiesBNK"]),
-        .init(label: "譲渡性預金",             tags: ["NegotiableCertificatesOfDepositLiabilitiesBNK"]),
         .init(label: "コマーシャル・ペーパー", tags: ["CommercialPapersLiabilities"]),
         .init(label: "借用金",                 tags: ["BorrowedMoneyLiabilitiesBNK"]),
         .init(label: "短期社債",               tags: ["ShortTermBondsPayable"]),
-        .init(label: "社債",                   tags: ["BondsPayable"]),
+        .init(label: "社債",                   tags: ["BondsPayable", "BondsPayableNCLIFRS", "BondsPayableLiabilitiesIFRS"]),
+        .init(label: "債券",                   tags: ["DebenturesLiabilitiesBNK"]),
+        // 一般事業会社の借入金・社債タグ。銀行子会社を持つ持株会社（HSホールディングス 8699
+        // S100YJQ6 実データ検証 2026-10-12: 預金 9,475 と並んで 短期借入金 13・1年内返済予定の
+        // 長期借入金 253・長期借入金 1,960）は BS にこちらで載せる。各タグは1コンポーネントだけに
+        // 置く（社債 BondsPayable・CP・短期社債は上の銀行行と共通なので重ねない）。リース債務タグと
+        // 「社債及び借入金」等の合算タグは入れない（リースは notes から足す。合算は内訳と二重になる）。
+        .init(label: "短期借入金",                     tags: ["ShortTermLoansPayable", "BorrowingsCLIFRS"]),
+        .init(label: "1年内償還予定の社債",            tags: ["CurrentPortionOfBonds", "BondsPayableCLIFRS", "CurrentPortionOfBondsCLIFRS"]),
+        .init(label: "1年内返済予定の長期借入金",      tags: ["CurrentPortionOfLongTermLoansPayable", "CurrentPortionOfLongTermBorrowingsCLIFRS", "CurrentPortionOfLongTermDebtCLIFRS"]),
+        .init(label: "1年内償還予定の新株予約権付社債", tags: ["CurrentPortionOfBondsWithSubscriptionRightsToShares"]),
+        .init(label: "1年内償還予定の転換社債",        tags: ["CurrentPortionOfConvertibleBonds"]),
+        .init(label: "長期借入金",                     tags: ["LongTermLoansPayable", "BorrowingsNCLIFRS", "LongTermDebtNCLIFRS"]),
+        .init(label: "新株予約権付社債",               tags: ["BondsWithSubscriptionRightsToSharesNCL"]),
+        .init(label: "転換社債型新株予約権付社債",     tags: ["ConvertibleBondTypeBondsWithSubscriptionRightsToShares"]),
+        .init(label: "転換社債",                       tags: ["ConvertibleBonds"]),
+        .init(label: "借入金",                         tags: ["BorrowingsLiabilitiesIFRS", "BorrowingsLiabilitiesINS"]),
     ]
 
     // MARK: - キャッシュフロータグ
@@ -575,24 +635,102 @@ enum Xbrl {
 
     // MARK: - 有利子負債タグ
 
-    static let ibdDirectTags: [String] = [
-        "InterestBearingDebt",
-        "InterestBearingLiabilities",
-    ]
-
+    // 2026-10-11 監査（FSA タクソノミ 2025-11-01 と最新 3,809 件の実 fact）: 旧 `ibdDirectTags`
+    // （InterestBearingDebt / InterestBearingLiabilities）と RedeemableBondsWithinOneYear・
+    // CommercialPapersCLIFRS は標準タクソノミに存在せず、本番の提出 XBRL にも fact が無いため削除した。
     static let ibdCurrentComponents: [[String]] = [
         ["ShortTermLoansPayable", "BorrowingsCLIFRS"],
-        ["CommercialPapersLiabilities", "CommercialPapersCLIFRS"],
+        ["CommercialPapersLiabilities"],
         ["ShortTermBondsPayable"],
-        ["CurrentPortionOfBonds", "RedeemableBondsWithinOneYear", "BondsPayableCLIFRS", "CurrentPortionOfBondsCLIFRS"],
+        ["CurrentPortionOfBonds", "BondsPayableCLIFRS", "CurrentPortionOfBondsCLIFRS"],
         ["CurrentPortionOfLongTermLoansPayable", "CurrentPortionOfLongTermBorrowingsCLIFRS", "CurrentPortionOfLongTermDebtCLIFRS"],
         ["LeaseObligationsCL", "LeaseLiabilitiesCLIFRS"],
+        // 転換社債・新株予約権付社債（１年内償還予定）
+        ["CurrentPortionOfBondsWithSubscriptionRightsToShares"],
+        ["CurrentPortionOfConvertibleBonds"],
+        // 関係会社・株主等からの借入（J-GAAP 個別 BS で多い）
+        ["ShortTermLoansPayableToSubsidiariesAndAffiliates"],
+        ["ShortTermLoansPayableToShareholdersDirectorsOrEmployees"],
+        ["CurrentPortionOfLongTermLoansPayableToSubsidiariesAndAffiliates",
+         "CurrentPortionOfLongTermLoansPayableToSubsidiariesAndAffiliatesCLELC"],
+        ["ShortTermDebtToSubsidiariesAndAffiliatesCLELE", "ShortTermDebtToSubsidiariesAndAffiliatesCLGAS"],
+        // リース会社（貸手）の債権流動化に伴う支払債務。名前に Lease を含むが借手のリース負債ではなく
+        // 資金調達（借入相当）なので debt として扱う（`ibdLessorSecuritizationTags`）。
+        ["PayablesUnderFluidityLeaseReceivablesCLLEA"],
+        ["CurrentPortionOfLongTermPayablesUnderFluidityLeaseReceivablesCLLEA"],
     ]
 
     static let ibdNonCurrentComponents: [[String]] = [
         ["BondsPayable", "BondsPayableNCLIFRS"],
         ["LongTermLoansPayable", "BorrowingsNCLIFRS", "LongTermDebtNCLIFRS"],
         ["LeaseObligationsNCL", "LeaseLiabilitiesNCLIFRS"],
+        ["BondsWithSubscriptionRightsToSharesNCL"],
+        ["ConvertibleBondTypeBondsWithSubscriptionRightsToShares"],
+        ["ConvertibleBonds"],
+        ["LongTermLoansPayableToSubsidiariesAndAffiliates"],
+        ["LongTermLoansPayableToShareholdersDirectorsOrEmployees"],
+        ["LongTermDebtToSubsidiariesAndAffiliatesNCLELE", "LongTermDebtToSubsidiariesAndAffiliatesNCLGAS"],
+        ["LongTermPayablesUnderFluidityLeaseReceivablesNCLLEA"],
+    ]
+
+    /// 流動性配列（流動／非流動の区分が無い）BS の有利子負債タグ。IFRS の金融・保険業
+    /// （SBI アルヒ等）と J-GAAP 保険業（BorrowingsLiabilitiesINS）・リース債務の非区分表示。
+    static let ibdLiquidityOrderComponents: [[String]] = [
+        ["InterestBearingLiabilitiesLiabilitiesIFRS"],
+        ["BondsAndBorrowingsLiabilitiesIFRS"],
+        ["BorrowingsLiabilitiesIFRS", "BorrowingsLiabilitiesINS"],
+        ["BondsPayableLiabilitiesIFRS"],
+        ["LeaseLiabilitiesLiabilitiesIFRS", "LeaseObligationsLiabilities"],
+    ]
+
+    /// 名前に Lease を含むが借手のリース負債ではない資金調達タグ（貸手の債権流動化）。
+    static let ibdLessorSecuritizationTags: Set<String> = [
+        "PayablesUnderFluidityLeaseReceivablesCLLEA",
+        "CurrentPortionOfLongTermPayablesUnderFluidityLeaseReceivablesCLLEA",
+        "LongTermPayablesUnderFluidityLeaseReceivablesNCLLEA",
+    ]
+
+    /// 「有利子負債」集約タグ（流動／非流動／流動性配列）。BS に別建てのリース負債行が無いときは
+    /// リース負債を含む集約として扱う（トヨタ・RIZAP 等、注記の残高表でリースが内訳に入っている）。
+    static let ibdInterestBearingAggregateTags: Set<String> = [
+        "InterestBearingLiabilitiesCLIFRS",
+        "InterestBearingLiabilitiesNCLIFRS",
+        "InterestBearingLiabilitiesLiabilitiesIFRS",
+    ]
+
+    /// 有利子負債に入れない BS 科目（キーワード規則より先に判定する明示除外）。名前やラベルに
+    /// Lease・Debt・借入・リース等を含むが利息を負担しない預り金・減損勘定・前受金・
+    /// 有価証券貸借の担保受入金。行は in_total=false / non_interest_bearing で残す。
+    static let ibdNonInterestBearingBSTags: Set<String> = [
+        "LongTermLeaseAndGuaranteeDeposited",
+        "LongTermLeaseDeposited",
+        "LeaseAndGuaranteeDepositsReceived",
+        "TenantLeaseholdAndSecurityDepositsINV",
+        "TenantLeaseholdAndSecurityDepositsInTrustINV",
+        "AdvancesReceivedLeaseCLLEA",
+        "AccumulatedImpairmentLossOnLeasedAssetsCL",
+        "AccumulatedImpairmentLossOnLongTermLeasedAssetsNCL",
+        "CashReceivedOnDebtCreditTransactionOfSecuritiesCLSEC",
+        "SecuritiesBorrowedLiabilitiesINS",
+        "SecuritiesBorrowedOtherLiabilitiesLiabilitiesBNK",
+        "BorrowedSecuritiesRelatedToTradingTransactionsLiabilitiesBNK",
+        "ShortTermSecuritiesBorrowedCLCMD",
+        "LongTermSecuritiesBorrowedNCLCMD",
+        "SalesOfSecuritiesBorrowedCLFND",
+        "DebtForAgencyCLWAT",
+    ]
+
+    /// 証券業の営業上の借入（信用取引・有価証券担保・現先）。利息は付くが事業会社の資金調達とは
+    /// 範囲が異なるため合計に入れず、行は in_total=false / scope_differs で残す（docs/breakdown.md）。
+    static let ibdSecuritiesBusinessBorrowingTags: Set<String> = [
+        "BorrowingsOnMarginTransactionsCLSEC",
+        "LoansPayableSecuredBySecuritiesCLSEC",
+        "BorrowingsOnGensakiTransactionCLSEC",
+    ]
+
+    /// 証券業の営業上の借入を表すラベル語（会社拡張タグ・借入金等明細表の行に使う）。
+    static let ibdSecuritiesBusinessBorrowingLabelWords: [String] = [
+        "信用取引借入金", "有価証券担保借入金", "現先取引借入金",
     ]
 
     /// 連結 BS のリース負債 構造化タグ（存在判定用。`lease_liabilities` note_type の
@@ -600,6 +738,7 @@ enum Xbrl {
     static let leaseLiabilitiesBSTags: [String] = [
         "LeaseLiabilitiesCLIFRS", "LeaseLiabilitiesNCLIFRS",
         "LeaseObligationsCL", "LeaseObligationsNCL",
+        "LeaseLiabilitiesLiabilitiesIFRS", "LeaseObligationsLiabilities",
     ]
 
     /// 連結／個別 BS の有形固定資産・区分別正味帳簿価額タグ（存在判定用。
@@ -644,6 +783,15 @@ enum Xbrl {
     /// 連結附属明細表「借入金等明細表」TextBlock タグ。
     /// 連結BSに有利子負債の数値タグが無い企業（リース債務が明細表のみに記載される等）のフォールバック源。
     static let borrowingsScheduleTextblockTag = "AnnexedConsolidatedDetailedScheduleOfBorrowingsTextBlock"
+    /// DEI「連結財務諸表の有無」（true/false。単体だけの会社は false）。
+    static let consolidatedStatementsPreparedDEITag = "WhetherConsolidatedFinancialStatementsArePreparedDEI"
+    /// DEI の EDINET コード（例: E31775）。master の提出者業種を引く。
+    static let edinetCodeDEITag = "EDINETCodeDEI"
+    /// DEI が無いときの連結判定に使う連結 BS の TextBlock（J-GAAP / IFRS）。
+    static let consolidatedBalanceSheetTextblockTags = [
+        "ConsolidatedBalanceSheetTextBlock",
+        "ConsolidatedStatementOfFinancialPositionIFRSTextBlock",
+    ]
     /// 単体（非連結）附属明細表「借入金等明細表」TextBlock タグ。連結財務諸表を作成しない小規模企業
     /// （東邦レマック S100XRD8 実データ検証、2026-08-08）はこちらのみ持つ。列構成・「合計」行の
     /// 判定は連結版と同じ（`parseJGaapScheduleTable` を共有）。
@@ -985,6 +1133,13 @@ enum Xbrl {
         "事業の種類別",
         "報告セグメント",
     ]
+    /// US-GAAP 注記23 型（野村 S100YC5C）の事業別見出し。`businessSegmentHeadingKeywords` で
+    /// 1表も取れないときだけ、先頭から順に試す。小見出し「［事業別セグメント］」を
+    /// 先に、包括見出し「セグメントおよび地域別情報」は最後の手段。
+    static let usgaapNote23BusinessSegmentHeadingKeywords: [String] = [
+        "事業別セグメント",
+        "セグメントおよび地域別情報",
+    ]
     // 事業別セグメントの見出し候補文字列に含まれていたら除外する（「地域別セグメント情報」等、
     // 地域別注記の見出しが「セグメント情報」を部分文字列として含むため誤って拾わないようにする）。
     static let businessSegmentHeadingExclusionKeywords: [String] = [
@@ -1066,6 +1221,16 @@ enum Xbrl {
     static let geographyMixedTextBlockTags: Set<String> = [
         "RelatedInformationTextBlock",                            // J-GAAP 関連情報（セグメント・地域が混在）
         notesToConsolidatedFinancialStatementsUSGAAPTextBlock,  // US-GAAP 連結財務諸表注記（地域別を内包）
+    ]
+    /// IFRS セグメント注記に地域表が同居する型（専用 TextBlock 無し）。geography が他経路で
+    /// not_found のときだけ走査する（`BreakdownExtractor.extractGeographyInfo`）。
+    static let ifrsSegmentNoteGeographyFallbackTextBlockTags: Set<String> = [
+        "NotesSegmentInformationConsolidatedFinancialStatementsIFRSTextBlock",
+        "SegmentInformationIFRSTextBlock",
+    ]
+    /// US-GAAP 注記23 型（野村 S100YC5C）の地域小見出し。見出し型一致があれば既定キーワードより優先する。
+    static let usgaapNote23GeographyHeadingKeywords: [String] = [
+        "［地域別情報］",
     ]
     static let geographyHeadingKeywords: [String] = [
         "地域ごとの情報",

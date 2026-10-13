@@ -80,8 +80,8 @@ import Foundation
     @Test func testBuildDocumentIndexFindsDocsAcrossFiscalYearChange() async throws {
         // 決算期変更（3月末→12月末）があっても edinetCode ベースで全履歴を取得できること
         let edinetCode = "E12345"
-        let year = support.currentUTCYear()
-        let todayStr = support.iso(support.utcToday())
+        let year = support.currentEdinetYear()
+        let todayStr = support.iso(support.edinetToday())
 
         // 最新: 12月末（9ヶ月移行期間）、本日提出 → 直近スキャンで発見できる
         let recent = makeAnnualDoc(
@@ -107,7 +107,7 @@ import Foundation
         let other = makeAnnualDoc(
             docID: "S100OTHER", edinetCode: "E99999",
             periodStart: "\(year - 1)-04-01", periodEnd: "\(year - 1)-12-31",
-            submit: "\(support.iso(support.addDays(support.utcToday(), -10))) 10:00"
+            submit: "\(support.iso(support.addDays(support.edinetToday(), -10))) 10:00"
         )
 
         seedIndexes((year - 3)...year, [
@@ -140,7 +140,7 @@ import Foundation
     }
 
     @Test func testBuildDocumentIndexReturnsEmptyWhenNoRecentDoc() async throws {
-        let year = support.currentUTCYear()
+        let year = support.currentEdinetYear()
         seedIndexes((year - 1)...year, [:])
 
         let docs = await EdinetDiscovery.buildDocumentIndexForCode(code: "9999", client: client)
@@ -149,8 +149,8 @@ import Foundation
     }
 
     @Test func testBuildDocumentIndexReturnsEmptyWhenEdinetCodeMissing() async throws {
-        let year = support.currentUTCYear()
-        let todayStr = support.iso(support.utcToday())
+        let year = support.currentEdinetYear()
+        let todayStr = support.iso(support.edinetToday())
         // edinetCode を持たない書類しか見つからない場合は空を返す
         let doc: [String: Any] = [
             "docID": "S100X",
@@ -169,8 +169,8 @@ import Foundation
     @Test func testBuildDocumentIndexAcceptsHalfYearAsSeed() async throws {
         // 半期報告書（160）が seed になっても edinetCode を取得して年次探索できること
         let edinetCode = "E12345"
-        let year = support.currentUTCYear()
-        let todayStr = support.iso(support.utcToday())
+        let year = support.currentEdinetYear()
+        let todayStr = support.iso(support.edinetToday())
         let halfYearSeed: [String: Any] = [
             "docID": "S100HALF",
             "edinetCode": edinetCode,
@@ -201,8 +201,8 @@ import Foundation
 
     @Test func testBuildDocumentIndexUsesCalculateFiscalYearWhenPeriodStartMissing() async throws {
         // periodStart がない書類は calculateFiscalYear(periodEnd) で fiscal_year を決める
-        let year = support.currentUTCYear()
-        let todayStr = support.iso(support.utcToday())
+        let year = support.currentEdinetYear()
+        let todayStr = support.iso(support.edinetToday())
 
         // 12月期: periodEnd 12/31 → fiscal_year = periodEnd の年（12月期は -1 しない）
         let docDec = makeAnnualDoc(
@@ -238,8 +238,8 @@ import Foundation
     @Test func testBuildDocumentIndexSlicesToAnalysisYears() async throws {
         // 年次インデックスに analysisYears を超える有報があっても上位 N 件に絞られる
         let edinetCode = "E12345"
-        let year = support.currentUTCYear()
-        let todayStr = support.iso(support.utcToday())
+        let year = support.currentEdinetYear()
+        let todayStr = support.iso(support.edinetToday())
 
         // スキャン対象年（year-3 〜 year）に1件ずつ配置。最新は本日提出
         var docsByYear: [Int: [[String: Any]]] = [:]
@@ -269,9 +269,9 @@ import Foundation
     @Test func testBuildDocumentIndexExcludesTrustBeneficiaryOrdinance030() async throws {
         // docType 120 でも特定有価証券府令(030)の信託受益証券等は会社有報の latest にしない
         let edinetCode = "E03041"
-        let year = support.currentUTCYear()
-        let todayStr = support.iso(support.utcToday())
-        let companySubmit = support.iso(support.addDays(support.utcToday(), -10))
+        let year = support.currentEdinetYear()
+        let todayStr = support.iso(support.edinetToday())
+        let companySubmit = support.iso(support.addDays(support.edinetToday(), -10))
 
         let company = makeAnnualDoc(
             docID: "S100YCDE", edinetCode: edinetCode,
@@ -464,8 +464,8 @@ import Foundation
     }
 
     @Test func testBuildDocumentIndexFindsFilingWhenSecCodeMissingButEdinetMatchesListed() async throws {
-        let year = support.currentUTCYear()
-        let todayStr = support.iso(support.utcToday())
+        let year = support.currentEdinetYear()
+        let todayStr = support.iso(support.edinetToday())
         let recent: [String: Any] = [
             "docID": "S100Y5S8",
             "edinetCode": "E41361",
@@ -487,8 +487,8 @@ import Foundation
     }
 
     @Test func testBuildDocumentIndexIgnoresEdinetSiblingsWithNonEmptySecCode() async throws {
-        let year = support.currentUTCYear()
-        let todayStr = support.iso(support.utcToday())
+        let year = support.currentEdinetYear()
+        let todayStr = support.iso(support.edinetToday())
         let sibling: [String: Any] = [
             "docID": "S100WRONG",
             "edinetCode": "E41361",

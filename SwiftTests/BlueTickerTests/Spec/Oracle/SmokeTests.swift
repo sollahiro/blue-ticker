@@ -77,7 +77,7 @@ import Foundation
             }
 
             // Swift 抽出
-            let actual = extractFromXBRL(xbrlDir: xbrlDir)
+            let actual = await extractFromXBRL(xbrlDir: xbrlDir)
 
             // 比較
             let gaps = Self.knownGaps[fixtureID] ?? []
@@ -141,11 +141,11 @@ import Foundation
         var shareBuyback: Double?
     }
 
-    private func extractFromXBRL(xbrlDir: URL) -> Extracted {
+    private func extractFromXBRL(xbrlDir: URL) async -> Extracted {
         let allTags = XBRLUtils.collectAllNumericElements(in: xbrlDir, nilAsZero: false)
         let std = detectAccountingStandard(allTags)
         let statementMain = StatementFinancialsResolver.resolve(xbrlDir: xbrlDir)
-        let ibd = IBDExtractor.extractCanonical(xbrlDir: xbrlDir)
+        let ibd = await BreakdownFinancialsResolver.financialsCanonicalInterestBearingDebt(xbrlDir: xbrlDir)
         let pretax = statementMain?.pretaxIncome
         let incomeTax = statementMain?.incomeTax
         let taxRate: Double? = {
@@ -431,7 +431,7 @@ import Foundation
                   !isAllNull(expected)
             else { continue }
 
-            let current = extractFromXBRL(xbrlDir: xbrlDir)
+            let current = await extractFromXBRL(xbrlDir: xbrlDir)
             let statementVals = statementRemainingValues(xbrlDir: xbrlDir)
             let summaryVals = summaryTagRemainingValues(xbrlDir: xbrlDir)
             checked += 1
@@ -576,7 +576,7 @@ import Foundation
     /// 組立ルール（statement で計算できればそれ、できなければ notes）を既存 smoke IBD 期待値と突合する。
     /// A: statement が非 nil なら採用（リース未加算でも採用）。
     /// B: statement が現行 Extractor 合計と一致するときだけ採用（BS だけで足りる場合）。それ以外は notes。
-    /// C: B と同じだが銀行 `bank_components`（預金込み）は statement 不足とみなし notes へ。
+    /// C: B と同じだが銀行 `bank_components` は statement 不足とみなし notes へ。
     @Test func testSummaryIbdAssemblyVsSmokeExpected() async throws {
         guard TestVerboseLog.enabled else { return }
         let projectRoot = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
@@ -653,7 +653,7 @@ import Foundation
     }
 
     /// statement の有利子負債項目 ＋ statement に無い notes 項目（合計行は使わない）が
-    /// 既存 smoke IBD と揃うか。`IBDExtractor.extractCanonical` が本番組立。
+    /// 既存 smoke IBD と揃うか。`BreakdownFinancialsResolver.financialsCanonicalInterestBearingDebt` が本番組立。
     @Test func testIbdItemTagsComposeVsSmoke() async throws {
         guard TestVerboseLog.enabled else { return }
         let projectRoot = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
@@ -680,13 +680,10 @@ import Foundation
             else { continue }
 
             let smoke = dbl((expected["interest_bearing_debt"] as? [String: Any])?["total"])
-            let composed = IBDExtractor.extractCanonical(xbrlDir: xbrlDir)
+            let composed = await BreakdownFinancialsResolver.financialsCanonicalInterestBearingDebt(xbrlDir: xbrlDir)
             checked += 1
             if closeEnoughOptional(smoke, composed.total) { match += 1 }
-            let parts = composed.components.compactMap { c -> String? in
-                guard let v = c.current else { return nil }
-                return "\(c.label)=\(yen(v))"
-            }.joined(separator: ", ")
+            let parts = composed.warnings.joined(separator: ", ")
             TestVerboseLog.print(
                 "\(fixtureID) | \(composed.accountingStandard) | \(yen(smoke)) | \(yen(composed.total)) | \(composed.method) | \(statusMark(exp: smoke, act: composed.total))"
             )
@@ -755,7 +752,7 @@ import Foundation
 
             let notes = notesRemainingFills(xbrlDir: xbrlDir)
             let breakdown = breakdownRemainingFills(xbrlDir: xbrlDir)
-            let current = extractFromXBRL(xbrlDir: xbrlDir)
+            let current = await extractFromXBRL(xbrlDir: xbrlDir)
             checked += 1
 
             var cells: [String] = [fixtureID]
@@ -853,7 +850,6 @@ import Foundation
         let fullIBD = IBDExtractor.extract(
             fieldSet: fullFS, accountingStandard: "IFRS", xbrlDir: xbrlDir)
 
-        let direct = resolveItem(instantFS, tags: Xbrl.ibdDirectTags)
         let ifrsAgg = resolveAggregate(
             instantFS, componentTagLists: [Xbrl.ibdIFRSCLTags, Xbrl.ibdIFRSNCLTags])
         let comp = resolveAggregate(
@@ -867,7 +863,7 @@ import Foundation
         TestVerboseLog.print("=== 味の素 S100VXJA statement IBD ===")
         TestVerboseLog.print("statement IBDExtractor total=\(yenLine(statementIBD.total)) method=\(statementIBD.method)")
         TestVerboseLog.print("full IBDExtractor total=\(yenLine(fullIBD.total)) method=\(fullIBD.method)")
-        TestVerboseLog.print("resolve path: direct.tag=\(direct.tag ?? "nil") ifrsAgg.tag=\(ifrsAgg.tag ?? "nil") comp.tag=\(comp.tag ?? "nil")")
+        TestVerboseLog.print("resolve path: ifrsAgg.tag=\(ifrsAgg.tag ?? "nil") comp.tag=\(comp.tag ?? "nil")")
         TestVerboseLog.print("ifrsAgg current=\(yenLine(ifrsAgg.current))")
         TestVerboseLog.print("component-stack current=\(yenLine(comp.current))")
 
@@ -881,7 +877,6 @@ import Foundation
         }
 
         var candidateTags: [String] = []
-        candidateTags.append(contentsOf: Xbrl.ibdDirectTags)
         candidateTags.append(contentsOf: Xbrl.ibdIFRSCLTags)
         candidateTags.append(contentsOf: Xbrl.ibdIFRSNCLTags)
         candidateTags.append(contentsOf: Xbrl.ibdCurrentComponents.flatMap { $0 })

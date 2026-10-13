@@ -364,7 +364,7 @@ public func runFactsIngestCommand(
             }
             logIngestSummary(
                 app.logger, target: "financials", attempted: s4.attempted, stored: s4.stored,
-                failed: s4.failed, skipped: s4.skipped,
+                failed: s4.failed, skipped: s4.skipped, refused: s4.refused,
                 servable: coverage?.servable, unservable: coverage?.unservable,
                 notApplicable: s4.notApplicable)
         }
@@ -481,6 +481,15 @@ public func runFactsIngestCommand(
                     candidateSets: unpublishedSets
                 ) { docID in
                     await context.resolveCapexBreakdown(
+                        docID: docID, correctionDocIDs: correctionIDsByOriginal[docID] ?? [])
+                },
+                BreakdownStage(
+                    axis: breakdownAxisInterestBearingDebt,
+                    target: "breakdowns-interest_bearing_debt",
+                    listedCodes: deterministicMetricsListed, limit: unpublishedLimit,
+                    candidateSets: unpublishedSets
+                ) { docID in
+                    await context.resolveInterestBearingDebtBreakdown(
                         docID: docID, correctionDocIDs: correctionIDsByOriginal[docID] ?? [])
                 },
             ]

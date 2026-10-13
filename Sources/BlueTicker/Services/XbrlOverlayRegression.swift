@@ -223,6 +223,11 @@ func overlayRegressionAffectsBreakdown(
         return isCapitalExpenditureOverlayTag(regression.tag)
             || regression.tag.contains("Assets")
             || regression.tag.contains("Addition")
+    case breakdownAxisInterestBearingDebt:
+        return regression.tag.contains("Borrow") || regression.tag.contains("Loan")
+            || regression.tag.contains("Bond") || regression.tag.contains("Debt")
+            || regression.tag.contains("Lease") || regression.tag.contains("CommercialPaper")
+            || regression.tag.contains("InterestBearing")
     default:
         return false
     }

@@ -18,6 +18,8 @@ public enum Api {
     /// 過去日の書類一覧は提出済みとしてほぼ不変のため長期キャッシュする。
     /// EDINET が提出当日に `secCode` を欠いたまま返すことがあり、TTL 内は欠落が残る。
     /// 欠落は master の EDINETコード→証券コードで補う（TTL 短縮は全日再取得になる）。
+    /// 確定扱いは「その EDINET 日が締まった後（翌日 0:00 JST 以降）に書いた」キャッシュだけ。
+    /// 締め前の同日スナップショットは過去日でも期限切れ（`EdinetCacheStore.isSearchCacheExpired`）。
     static let searchPastTTLDays = 3650
 
     /// 当日分キャッシュの有効期間（時間）。EDINET は当日の書類一覧を営業時間中随時更新するため、

@@ -84,6 +84,8 @@ struct CalculatedData: Codable {
     var opLabel: String?
     // SGA・営業利益分解
     var sellingGeneralAdministrativeExpenses: Double?
+    /// 販管費の表示名（銀行は「営業経費」。null は販売費及び一般管理費）。
+    var sgaLabel: String?
     var businessProfit: Double?
     var businessProfitMargin: Double?
     var businessProfitChange: Double?
@@ -146,6 +148,7 @@ struct CalculatedData: Codable {
         case effectiveTaxRate = "EffectiveTaxRate"; case nopat = "NOPAT"
         case operatingMargin = "OperatingMargin"; case opLabel = "OPLabel"
         case sellingGeneralAdministrativeExpenses = "SellingGeneralAdministrativeExpenses"
+        case sgaLabel = "SGALabel"
         case businessProfit = "BusinessProfit"; case businessProfitMargin = "BusinessProfitMargin"
         case businessProfitChange = "BusinessProfitChange"
         case salesChangeImpact = "SalesChangeImpact"

@@ -26,6 +26,8 @@ struct StatementFinancialsValues {
     var grossProfit: Double?
     var grossProfitLabel: String?
     var sga: Double?
+    /// 販管費の表示名。null は通常の販売費及び一般管理費。銀行（業務純益経路）は「営業経費」。
+    var sgaLabel: String? = nil
     var cfo: Double?
     var cfi: Double?
     var pretaxIncome: Double?
@@ -50,7 +52,8 @@ enum StatementFinancialsResolver {
     /// 例外: 本表が業種別営業収益に分割され合計行が無い会社は、
     /// `statementSalesSummaryTotalTags` を売上 FieldSet へ載せる。それも無ければ
     /// `operatingRevenueSplitGroups` の内訳を合算する（9127 S100Y90D）。
-    static func resolve(xbrlDir: URL) -> StatementFinancialsValues? {
+    /// `edinetIndustry` は EDINET 提出者業種（銀行判定 `Xbrl.isBankFiling` に渡す。不明なら nil）。
+    static func resolve(xbrlDir: URL, edinetIndustry: String? = nil) -> StatementFinancialsValues? {
         let tagElements = XBRLUtils.collectAllNumericElements(in: xbrlDir, nilAsZero: false)
         guard !tagElements.isEmpty else { return nil }
         let accountingStandard = detectAccountingStandard(tagElements)
@@ -62,16 +65,18 @@ enum StatementFinancialsResolver {
         ) else { return nil }
 
         if accountingStandard == "US-GAAP" {
-            return resolveFromUSGAAPStatement(year)
+            return resolveFromUSGAAPStatement(year, tagElements: tagElements)
         }
         return resolveFromStructuredStatement(
-            year, tagElements: tagElements, accountingStandard: accountingStandard)
+            year, tagElements: tagElements, accountingStandard: accountingStandard,
+            edinetIndustry: edinetIndustry)
     }
 
     // MARK: - J-GAAP / IFRS（構造化 XBRL タグ）
 
     private static func resolveFromStructuredStatement(
-        _ year: StatementYear, tagElements: XbrlTagElements, accountingStandard: String
+        _ year: StatementYear, tagElements: XbrlTagElements, accountingStandard: String,
+        edinetIndustry: String?
     ) -> StatementFinancialsValues {
         // Statement 行のタグを許可リストにし、元 fact のコンテキストを保った FieldSet を組む。
         // CF の期首/期末で同タグが並ぶ会社でも Instant CurrentYear を正しく拾える
@@ -149,6 +154,22 @@ enum StatementFinancialsResolver {
             operatingProfit = bp
             operatingProfitLabel = "事業利益"
         }
+        var sga = remaining.sga
+        var sgaLabel = remaining.sgaLabel
+        // 銀行（預金マーカーまたは EDINET 提出者業種＝銀行業。IBD と同じ判定）で連結の営業利益値が無い会社（経常利益に落ちる、または
+        // 単体だけの OperatingIncome タグで値が空になる みずほ 8411 S100YF8Y）は
+        // 業務純益 = 業務粗利益 − 営業経費 を営業利益とし、販管費は営業経費。
+        // 営業利益行を持つ銀行子会社持株（HSホールディングス 8699）は対象外。
+        if op.method == "ordinary_income" || op.operatingProfit == nil,
+           !Xbrl.isInsuranceFiling(durationFS), Xbrl.isBankFiling(instantFS, edinetIndustry: edinetIndustry) {
+            let bank = bankNetBusinessProfit(
+                grossProfit: remaining.grossProfit, grossProfitLabel: remaining.grossProfitLabel,
+                durationFS: durationFS)
+            operatingProfit = bank.netBusinessProfit
+            operatingProfitLabel = bank.netBusinessProfit == nil ? nil : bankNetBusinessProfitLabel
+            sga = bank.operatingExpenses
+            sgaLabel = bank.operatingExpenses == nil ? nil : bankOperatingExpensesLabel
+        }
 
         return StatementFinancialsValues(
             sales: sales,
@@ -173,7 +194,8 @@ enum StatementFinancialsResolver {
             dividendPaidCF: divPaid.current,
             grossProfit: remaining.grossProfit,
             grossProfitLabel: remaining.grossProfitLabel,
-            sga: remaining.sga,
+            sga: sga,
+            sgaLabel: sgaLabel,
             cfo: remaining.cfo,
             cfi: remaining.cfi,
             pretaxIncome: remaining.pretaxIncome,
@@ -189,7 +211,13 @@ enum StatementFinancialsResolver {
 
     // MARK: - US-GAAP（HTML Statement ラベル → 仮想タグ）
 
-    private static func resolveFromUSGAAPStatement(_ year: StatementYear) -> StatementFinancialsValues {
+    private static func resolveFromUSGAAPStatement(
+        _ year: StatementYear, tagElements: XbrlTagElements = [:]
+    ) -> StatementFinancialsValues {
+        // CF 合計の最終フォールバック用（本表ラベルで取れないときだけ使う）。
+        let summaryTags = fieldSetFromDuration(tagElements.filter {
+            $0.key == usgaapSummaryOperatingCashFlowTag || $0.key == usgaapSummaryInvestingCashFlowTag
+        })
         var durationFS: FieldSet = [:]
         var instantFS: FieldSet = [:]
 
@@ -308,11 +336,17 @@ enum StatementFinancialsResolver {
             cfo: statementCashFlowTotal(year.cashFlow, tags: statementOperatingCashFlowTags)
                 ?? firstByLabel(
                     year.cashFlow, contains: "営業活動によるキャッシュ・フロー",
-                    excluding: ["期首", "期末", "明細"]),
+                    excluding: ["期首", "期末", "明細"])
+                ?? usgaapCashFlowActivityTotal(year.cashFlow, activity: .operating)
+                ?? usgaapSummaryCashFlow(
+                    summaryTags, tag: usgaapSummaryOperatingCashFlowTag),
             cfi: statementCashFlowTotal(year.cashFlow, tags: statementInvestingCashFlowTags)
                 ?? firstByLabel(
                     year.cashFlow, contains: "投資活動によるキャッシュ・フロー",
-                    excluding: ["期首", "期末", "明細"]),
+                    excluding: ["期首", "期末", "明細"])
+                ?? usgaapCashFlowActivityTotal(year.cashFlow, activity: .investing)
+                ?? usgaapSummaryCashFlow(
+                    summaryTags, tag: usgaapSummaryInvestingCashFlowTag),
             pretaxIncome: tax.pretaxIncome
                 ?? firstByLabel(year.incomeStatement, contains: "税引前")
                 ?? firstByLabel(year.incomeStatement, contains: "税金等調整前"),
@@ -328,13 +362,32 @@ enum StatementFinancialsResolver {
         )
     }
 
+    // MARK: - 銀行 業務純益
+
+    static let bankNetBusinessProfitLabel = "業務純益"
+    static let bankOperatingExpensesLabel = "営業経費"
+
+    /// 銀行の業務純益 = 業務粗利益（`GrossProfitExtractor` の連結業務粗利益）− 営業経費。
+    /// 持分法による投資損益は足さない（2026-10-12 決定）。
+    /// 業務粗利益か営業経費が無ければ業務純益は nil（経常利益や差額で埋めない）。
+    static func bankNetBusinessProfit(
+        grossProfit: Double?, grossProfitLabel: String?, durationFS: FieldSet
+    ) -> (netBusinessProfit: Double?, operatingExpenses: Double?) {
+        let operatingExpenses = resolveItem(durationFS, tags: Xbrl.bankOperatingExpensesTags).current
+        guard let grossProfit, grossProfitLabel == "連結業務粗利益", let operatingExpenses else {
+            return (nil, operatingExpenses)
+        }
+        return (grossProfit - operatingExpenses, operatingExpenses)
+    }
+
     /// statement 行に載る #5c / #8 フィールド。HTML/TextBlock フォールバックは付けない。
     private static func remainingFromStatementExtractors(
         durationFS: FieldSet, equityDurationFS: FieldSet, maskedEquity: XbrlTagElements,
         accountingStandard: String, operating: OperatingProfitResult,
         cashFlow: [StatementLineItem]
     ) -> (
-        grossProfit: Double?, grossProfitLabel: String?, sga: Double?, cfo: Double?, cfi: Double?,
+        grossProfit: Double?, grossProfitLabel: String?, sga: Double?, sgaLabel: String?,
+        cfo: Double?, cfi: Double?,
         pretaxIncome: Double?, incomeTax: Double?, dividendSS: Double?,
         interestExpense: Double?, cfTreasuryStock: Double?, buyback: Double?
     ) {
@@ -374,6 +427,7 @@ enum StatementFinancialsResolver {
             grossProfit: gp.grossProfit,
             grossProfitLabel: gp.grossProfitLabel,
             sga: operating.sga,
+            sgaLabel: operating.sgaLabel,
             cfo: cfo,
             cfi: cfi,
             pretaxIncome: tax.pretaxIncome,
@@ -413,16 +467,92 @@ enum StatementFinancialsResolver {
         return nil
     }
 
+    /// ラベル部分一致の先頭行。値の無い見出し行（「－」= 0 で出る行）で打ち切らず、
+    /// 非ゼロ値の一致があればそれを、無ければ最初の一致（真の 0）を返す。
     private static func firstByLabel(
         _ items: [StatementLineItem], contains: String, excluding: [String] = []
     ) -> Double? {
+        var firstZero: Double?
         for item in items {
             let label = item.label ?? ""
             guard label.contains(contains) else { continue }
             if excluding.contains(where: { label.contains($0) }) { continue }
-            return item.value
+            if item.value != 0 { return item.value }
+            if firstZero == nil { firstZero = item.value }
         }
-        return nil
+        return firstZero
+    }
+
+    enum USGAAPCashFlowActivity {
+        case operating, investing
+
+        var prefix: String { self == .operating ? "営業活動" : "投資活動" }
+        var section: StatementLineSection { self == .operating ? .operating : .investing }
+    }
+
+    static let usgaapSummaryOperatingCashFlowTag =
+        "CashFlowsFromUsedInOperatingActivitiesUSGAAPSummaryOfBusinessResults"
+    static let usgaapSummaryInvestingCashFlowTag =
+        "CashFlowsFromUsedInInvestingActivitiesUSGAAPSummaryOfBusinessResults"
+
+    /// US-GAAP CF 本表の活動区分合計行の後半（空白除去後、「営業活動」「投資活動」の直後）。
+    /// 手元の US-GAAP 書類 40 件で実際に出たものだけを持つ（推測の揺れは足さない）:
+    /// キヤノン／オムロン／富士フイルム「によるキャッシュ・フロー」、村田「による キャッシュ・フロー合計」、
+    /// 小松「による現金及び現金同等物の増加（純額）」「…の減少（純額）」、野村「に使用された現金（純額）」、
+    /// オリックス「から得た現金（純額）」「に使用した現金（純額）」、
+    /// ソニー（米国基準期）「から得た現金・預金及び現金同等物（純額）」「に使用した現金・預金及び現金同等物（純額）」、
+    /// TDK（同）「による純現金収入」。
+    static let usgaapCashFlowTotalSuffixes: [String] = [
+        "によるキャッシュ・フロー合計",
+        "によるキャッシュ・フロー",
+        "による現金及び現金同等物の増加（純額）",
+        "による現金及び現金同等物の減少（純額）",
+        "から得た現金（純額）",
+        "に使用した現金（純額）",
+        "に使用された現金（純額）",
+        "から得た現金・預金及び現金同等物（純額）",
+        "に使用した現金・預金及び現金同等物（純額）",
+        "による純現金収入",
+    ]
+
+    /// 活動名を括弧内で繰り返す合計行（野村 2021〜2025 年 3 月期
+    /// 「営業活動から得た（△営業活動に使用された）現金（純額）」）。
+    static func usgaapCashFlowRepeatedActivityTotals(_ activity: USGAAPCashFlowActivity) -> [String] {
+        let p = activity.prefix
+        return ["\(p)から得た（△\(p)に使用された）現金（純額）"]
+    }
+
+    /// 空白（全角含む）を除き、Ⅰ／１．等の区分接頭辞を落とした比較用ラベル。
+    static func compactCashFlowLabel(_ label: String) -> String {
+        let noSpace = String(label.unicodeScalars.filter {
+            !CharacterSet.whitespacesAndNewlines.contains($0) && $0 != "\u{3000}"
+        }.map(Character.init))
+        return USGAAPHtml.stripSectionPrefix(noSpace)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "：:"))
+    }
+
+    /// US-GAAP CF 本表の営業／投資活動合計（「営業活動に使用された現金（純額）」等のラベル揺れ）。ラベルは空白を無視して
+    /// 「<活動><合計サフィックス>」と完全一致するものだけ。区分が付いた行は同じ区分に限る。
+    /// 値 0 の一致（見出しが「－」で出た行）は飛ばし、非ゼロの一致が無いときだけ 0 を返す。
+    static func usgaapCashFlowActivityTotal(
+        _ items: [StatementLineItem], activity: USGAAPCashFlowActivity
+    ) -> Double? {
+        let targets = Set(usgaapCashFlowTotalSuffixes.map { activity.prefix + $0 })
+            .union(usgaapCashFlowRepeatedActivityTotals(activity))
+        var firstZero: Double?
+        for item in items {
+            guard let label = item.label else { continue }
+            if let section = item.section, section != activity.section { continue }
+            guard targets.contains(compactCashFlowLabel(label)) else { continue }
+            if item.value != 0 { return item.value }
+            if firstZero == nil { firstZero = item.value }
+        }
+        return firstZero
+    }
+
+    /// 経営指標等（SummaryOfBusinessResults）の US-GAAP CF。本表ラベルで取れないときだけ使う。
+    static func usgaapSummaryCashFlow(_ fieldSet: FieldSet, tag: String) -> Double? {
+        fieldSet[tag]?.current
     }
 
     /// US-GAAP 法人税等。合計行（キヤノン「Ⅴ 法人税等」）を優先し、無ければ当期税＋繰延

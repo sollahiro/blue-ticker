@@ -16,20 +16,126 @@ enum BorrowingsSchedule {
         let current: Double?
         let prior: Double?
         let averageInterestRatePercent: Double?
+        /// displayLabel 正規化前のラベル（明細表・注記の開示表記そのまま）。
+        /// interest_bearing_debt 軸の label_raw / 分類の判定材料に使う。
+        var sourceLabel: String? = nil
+        /// 値を読んだ XBRL 要素のローカル名（表なら TextBlock、直接タグ経路なら数値要素）。
+        /// interest_bearing_debt 軸の `source_tag`。名前空間は付けない。
+        var sourceTag: String? = nil
+        /// 表の流動／非流動の区分見出し（値の無い「流動負債」「非流動負債」行）の下にある行の区分
+        /// （"current" / "non_current"）。区分見出しが無ければ nil（ラベルから推定しない）。
+        var sectionMaturity: String? = nil
+    }
+
+    typealias Parsed = (rows: [Row], totalCurrent: Double?, totalPrior: Double?)
+
+    /// 行の `sourceTag` が未設定なら `tag` を入れる（表を読んだ TextBlock のローカル名）。
+    private static func tagged(_ parsed: Parsed?, _ tag: String?) -> Parsed? {
+        guard var parsed, let tag else { return parsed }
+        parsed.rows = parsed.rows.map { row in
+            var row = row
+            if row.sourceTag == nil { row.sourceTag = tag }
+            return row
+        }
+        return parsed
+    }
+
+    /// 表の金額単位。表内に単位が無ければ直前の見出し（「（単位：千円）」等）の最後の単位を使う。
+    /// 東静 8923・ブロードリーフ 3673・夢展望 3185 実データ検証（2026-10-11）: IFRS 有利子負債注記の
+    /// 千円表で単位が表の外の段落にだけあり、百万円と読んで 1,000 倍になっていた。
+    private static func tableScale(_ table: Element, tableText: String) -> Double {
+        func scale(in text: String) -> Double? {
+            if text.contains("千円") { return 1_000 }
+            if text.contains("億円") { return 100_000_000 }
+            if text.contains("百万円") { return Financial.millionYen }
+            return nil
+        }
+        if let inTable = scale(in: tableText) { return inTable }
+        let heading = precedingText(of: table, maxChars: 80)
+        // 直前テキストに複数の単位があれば表に最も近い（最後の）ものを使う
+        var best: (index: String.Index, scale: Double)?
+        for (unit, value) in [("千円", 1_000.0), ("百万円", Financial.millionYen), ("億円", 100_000_000.0)] {
+            if let r = heading.range(of: unit, options: .backwards), best == nil || r.lowerBound > best!.index {
+                best = (r.lowerBound, value)
+            }
+        }
+        return best?.scale ?? Financial.millionYen
+    }
+
+    /// 連結財務諸表を作成する会社か。true のとき単体タグへのフォールバックを抑止する（連結優先）。
+    /// 正本は DEI `WhetherConsolidatedFinancialStatementsArePreparedDEI`。コンテキスト共存
+    /// （`ContextHelpers.hasNonConsolidatedContexts`）は使わない: 単体だけの会社でも経営指標等の
+    /// `…IFRSSummaryOfBusinessResults` 等で真になり、唯一の単体明細表を落とすため
+    /// （ニッカトー S100Y9NY、サイバーソリューションズ S100YRSR）。
+    /// DEI が無いときは連結 BS の TextBlock があるときだけ連結とみなす。
+    static func filerHasConsolidatedStatements(xbrlDir: URL) -> Bool {
+        if let flag = XBRLUtils.extractTextblockHtml(
+            in: xbrlDir, textblockTag: Xbrl.consolidatedStatementsPreparedDEITag)?
+            .trimmingCharacters(in: .whitespacesAndNewlines).lowercased(),
+            flag == "true" || flag == "false"
+        {
+            return flag == "true"
+        }
+        return Xbrl.consolidatedBalanceSheetTextblockTags.contains {
+            XBRLUtils.extractTextblockHtml(in: xbrlDir, textblockTag: $0) != nil
+        }
     }
 
     /// リース債務行は「リース負債（流動/非流動）」へ正規化し、コードベース全体の表示ラベルに揃える。
     /// それ以外の区分（短期借入金・社債・長期借入金等）は明細表の表記をそのまま使う。
-    private static func displayLabel(for normalizedLabel: String) -> String {
+    private static func displayLabel(for normalizedLabel: String, section: String? = nil) -> String {
         guard normalizedLabel.contains("リース") else { return normalizedLabel }
         // 「1年以内に返済予定のものを除く」は非流動。"1年以内" を含むため除外判定を先に行う。
         if normalizedLabel.contains("除く") { return "リース負債（非流動）" }
         // HOYA S100Y90T 実データ検証（2026-08-05）: 「短期リース負債」「長期リース負債」という
         // 対で開示する会社がある。"短期" が判定マーカーに無かったため両方とも「非流動」に
         // 誤分類され区別が失われていた（値も欠落したように見えるラベル重複を引き起こす）。
-        let currentMarkers = ["1年以内", "1年内", "１年以内", "１年内", "流動", "短期"]
-        let isCurrent = currentMarkers.contains { normalizedLabel.contains($0) }
-        return isCurrent ? "リース負債（流動）" : "リース負債（非流動）"
+        let currentMarkers = ["1年以内", "1年内", "１年以内", "１年内", "一年以内", "一年内", "非流動", "流動", "短期"]
+        if let marker = currentMarkers.first(where: { normalizedLabel.contains($0) }) {
+            return marker == "非流動" ? "リース負債（非流動）" : "リース負債（流動）"
+        }
+        // 表の区分見出し（流動負債／非流動負債）の下の行は、その区分
+        if section == "current" { return "リース負債（流動）" }
+        if section == "non_current" { return "リース負債（非流動）" }
+        let nonCurrentMarkers = ["長期", "1年超", "１年超", "固定"]
+        if nonCurrentMarkers.contains(where: { normalizedLabel.contains($0) }) { return "リース負債（非流動）" }
+        // ブロードリーフ S100XS43 実データ検証（2026-10-11）: 区分の印も区分見出しも無い素の
+        // 「リース負債」（実際は流動分）を「（非流動）」と作っていた。分からなければ開示どおり。
+        return normalizedLabel
+    }
+
+    /// 区分ごとに「合計」を置く表の合計（期末・期首のそれぞれ）。候補を内訳行の和と照合し、一致した
+    /// 最初のものを使う: 区分小計の和 → 区分の直後の真の合計行 → 最後の区分の「合計」（累計型）。
+    /// どれも一致しなければ内訳行の和。内訳に値が無ければ区分小計の和（照合できないため従来どおり）。
+    /// 許容差は表示単位の端数（内訳行数＋1 単位）。
+    static func reconciledSectionedTotal(
+        subtotals: [Double?], trailing: Double?, components: [Double?], scale: Double
+    ) -> Double? {
+        let values = components.compactMap { $0 }
+        let presentSubtotals = subtotals.compactMap { $0 }
+        let subtotalSum: Double? = presentSubtotals.isEmpty ? nil : presentSubtotals.reduce(0, +)
+        guard !values.isEmpty else { return subtotalSum }
+        let componentSum = values.reduce(0, +)
+        let tolerance = scale * Double(values.count + 1)
+        func reconciles(_ candidate: Double?) -> Bool {
+            guard let candidate else { return false }
+            return abs(candidate - componentSum) <= tolerance
+        }
+        if reconciles(subtotalSum) { return subtotalSum }
+        if reconciles(trailing) { return trailing }
+        if let last = subtotals.last ?? nil, reconciles(last) { return last }
+        return componentSum
+    }
+
+    /// 値の無い区分見出し行の流動／非流動（「流動負債」「非流動負債」「流動」「固定負債」等）。
+    private static func sectionHeaderMaturity(_ label: String) -> String? {
+        let compact = label.replacingOccurrences(of: " ", with: "").replacingOccurrences(of: "　", with: "")
+            .replacingOccurrences(of: "【", with: "").replacingOccurrences(of: "】", with: "")
+            .replacingOccurrences(of: "＜", with: "").replacingOccurrences(of: "＞", with: "")
+            .replacingOccurrences(of: "<", with: "").replacingOccurrences(of: ">", with: "")
+        if ["非流動負債", "非流動", "固定負債"].contains(compact) { return "non_current" }
+        if ["流動負債", "流動"].contains(compact) { return "current" }
+        return nil
     }
 
     /// フィルタ通過前の1行分（インデント深さつき）。`label` は displayLabel 適用前の生ラベル。
@@ -94,8 +200,12 @@ enum BorrowingsSchedule {
     /// （例: コンコルディア「　　借入金」、しずおかFG「　借入金」。①②のインデントが検出できない
     /// 場合はこちらにフォールバックする）。`<p>` が無い（インデント情報自体が無い）行は 0
     /// （トップレベル）として扱う。単位混在（px/pt）はテーブル間で比較しないため問題にならない。
+    /// テレビ東京HD S100YCRR 実データ検証（2026-10-11）: 同じ字下げを `padding-left:0pt` +
+    /// `text-indent:4.8pt` で書く行と `padding-left:4.8pt`（折り返しラベル）で書く行が混在する。
+    /// 片方だけを見ると折り返し行が直前行（１年以内に返済予定のリース債務）の「子」になり、
+    /// 直前行がカテゴリ小計として消えていた。3つの正の値の最大を字下げとみなす。
     private static let indentOffsetRegex = try! NSRegularExpression(
-        pattern: "(?:margin-left|padding-left):\\s*([\\d.]+)(?:px|pt)")
+        pattern: "(?:margin-left|padding-left|text-indent):\\s*([\\d.]+)(?:px|pt)")
     private static let jpDateRegex = try! NSRegularExpression(pattern: "\\d{4}年\\d{1,2}月\\d{1,2}日")
     private static let debtHeadingRegex = try! NSRegularExpression(pattern: "社債及び借入金.*(内訳|帳簿価額)")
 
@@ -105,11 +215,14 @@ enum BorrowingsSchedule {
 
     private static func indentLevel(of p: Element?) -> Double {
         guard let p else { return 0 }
-        if let style = try? p.attr("style"),
-           let match = indentOffsetRegex.firstMatch(in: style, range: NSRange(style.startIndex..., in: style)),
-           let numRange = Range(match.range(at: 1), in: style),
-           let value = Double(style[numRange]), value > 0 {
-            return value
+        if let style = try? p.attr("style") {
+            let values = indentOffsetRegex.matches(
+                in: style, range: NSRange(style.startIndex..., in: style)
+            ).compactMap { match -> Double? in
+                guard let numRange = Range(match.range(at: 1), in: style) else { return nil }
+                return Double(style[numRange])
+            }
+            if let value = values.max(), value > 0 { return value }
         }
         let raw = (try? p.text(trimAndNormaliseWhitespace: false)) ?? ""
         return Double(raw.prefix { $0 == " " || $0 == "\u{3000}" || $0 == "\u{00A0}" }.count)
@@ -159,12 +272,19 @@ enum BorrowingsSchedule {
         // 東邦レマック S100XRD8 実データ検証（2026-08-08）: 連結財務諸表を作成しない小規模企業は
         // 連結版タグを持たず、単体版タグのみに明細表が入る。列構成・「合計」行判定は共通のため、
         // 連結版が見つからない場合のみ単体版へフォールバックする。
-        guard let html = XBRLUtils.extractTextblockHtml(
-                in: xbrlDir, textblockTag: Xbrl.borrowingsScheduleTextblockTag)
-                ?? XBRLUtils.extractTextblockHtml(
-                    in: xbrlDir, textblockTag: Xbrl.borrowingsScheduleNonConsolidatedTextblockTag),
+        // 連結財務諸表を作成する会社（連結＋単体コンテキストが共存）では単体版へフォールバックしない
+        // （単体の明細表を連結の有利子負債に誤って混ぜないため。連結優先）。
+        let consolidatedHtml = XBRLUtils.extractTextblockHtml(
+            in: xbrlDir, textblockTag: Xbrl.borrowingsScheduleTextblockTag)
+        let nonConsolidatedHtml = filerHasConsolidatedStatements(xbrlDir: xbrlDir)
+            ? nil
+            : XBRLUtils.extractTextblockHtml(
+                in: xbrlDir, textblockTag: Xbrl.borrowingsScheduleNonConsolidatedTextblockTag)
+        guard let html = consolidatedHtml ?? nonConsolidatedHtml,
               let soup = try? SwiftSoup.parse(html),
               let tables = (try? soup.select("table"))?.array() else { return nil }
+        let sourceTag = consolidatedHtml != nil
+            ? Xbrl.borrowingsScheduleTextblockTag : Xbrl.borrowingsScheduleNonConsolidatedTextblockTag
 
         // 「計」を含む表が本体明細表（"合計" 表記の会社も "計" を含むため、この1条件で両対応）。
         // 後続の返済予定額の別表を除外するために選別する。
@@ -261,7 +381,8 @@ enum BorrowingsSchedule {
                 label: displayLabel(for: r.label),
                 current: r.current.map { $0 * scale },
                 prior: r.prior.map { $0 * scale },
-                averageInterestRatePercent: r.rate
+                averageInterestRatePercent: r.rate,
+                sourceLabel: r.label
             ))
         }
 
@@ -274,7 +395,7 @@ enum BorrowingsSchedule {
         }
 
         guard totalCurrent != nil || totalPrior != nil else { return nil }
-        return (components, totalCurrent, totalPrior)
+        return tagged((components, totalCurrent, totalPrior), sourceTag)
     }
 
     /// IFRS連結企業向け「社債及び借入金」／「有利子負債」注記からの抽出。J-GAAP附属明細表タグが
@@ -294,15 +415,30 @@ enum BorrowingsSchedule {
     /// するか"合計"で終わるラベル（"有利子負債合計"等）に達したら真の合計として確定し打ち切る。
     /// こうしないとHOYAの参考内訳がコンポーネントに紛れ込み二重計上になる。
     private static func parseIFRSNotesTable(xbrlDir: URL) -> (rows: [Row], totalCurrent: Double?, totalPrior: Double?)? {
-        let html = XBRLUtils.extractTextblockHtml(in: xbrlDir, textblockTag: Xbrl.ifrsBondsAndBorrowingsTextblockTag)
-            ?? XBRLUtils.extractTextblockHtml(in: xbrlDir, textblockTag: Xbrl.ifrsInterestBearingLiabilitiesTextblockTag)
-            ?? XBRLUtils.extractTextblockHtml(in: xbrlDir, textblockTag: Xbrl.ifrsBorrowingsOnlyTextblockTag)
-            ?? XBRLUtils.extractTextblockHtml(in: xbrlDir, textblockTag: Xbrl.ifrsBondsBorrowingsAndOtherFinancialLiabilitiesTextblockTag)
-            ?? XBRLUtils.extractTextblockHtml(in: xbrlDir, textblockTag: Xbrl.ifrsBondsIssuedBorrowingsAndInvestmentContractLiabilitiesTextblockTag)
-            ?? XBRLUtils.extractTextblockHtml(in: xbrlDir, textblockTag: Xbrl.ifrsOtherFinancialLiabilitiesTextblockTag)
-            ?? XBRLUtils.extractTextblockHtml(in: xbrlDir, textblockTag: Xbrl.ifrsDisclosuresAboutFinancialAndOtherTradeLiabilitiesTextblockTag)
-            ?? XBRLUtils.extractTextblockHtml(in: xbrlDir, textblockTag: Xbrl.ifrsOtherFinancialAssetsAndOtherFinancialLiabilitiesTextblockTag)
-        guard let html, let soup = try? SwiftSoup.parse(html),
+        guard let found = ifrsNoteCandidateTables(xbrlDir: xbrlDir) else { return nil }
+        return tagged(parseIFRSNotesCandidateTables(soup: found.0, candidateTables: found.1), found.2)
+    }
+
+    /// IFRS 社債及び借入金注記の TextBlock と、残高内訳表の候補（銘柄別表・担保の対応債務表を除く）。
+    private static func ifrsNoteCandidateTables(xbrlDir: URL) -> (Document, [Element], String)? {
+        let textblockTags = [
+            Xbrl.ifrsBondsAndBorrowingsTextblockTag,
+            Xbrl.ifrsInterestBearingLiabilitiesTextblockTag,
+            Xbrl.ifrsBorrowingsOnlyTextblockTag,
+            Xbrl.ifrsBondsBorrowingsAndOtherFinancialLiabilitiesTextblockTag,
+            Xbrl.ifrsBondsIssuedBorrowingsAndInvestmentContractLiabilitiesTextblockTag,
+            Xbrl.ifrsOtherFinancialLiabilitiesTextblockTag,
+            Xbrl.ifrsDisclosuresAboutFinancialAndOtherTradeLiabilitiesTextblockTag,
+            Xbrl.ifrsOtherFinancialAssetsAndOtherFinancialLiabilitiesTextblockTag,
+        ]
+        var found: (tag: String, html: String)?
+        for tag in textblockTags {
+            if let html = XBRLUtils.extractTextblockHtml(in: xbrlDir, textblockTag: tag) {
+                found = (tag, html)
+                break
+            }
+        }
+        guard let found, let soup = try? SwiftSoup.parse(found.html),
               let tables = (try? soup.select("table"))?.array() else { return nil }
 
         // 実データ検証（2026-08-03）: 平均利率・返済期限のどちらも列に持たない会社もある
@@ -321,12 +457,70 @@ enum BorrowingsSchedule {
         // 金融負債」のように資産・負債セクションが同一タグ内に併存する会社がある。資産側の表も
         // 「前」「当」列を持つため銘柄除外だけでは資産表を誤選択する。社債・借入金・リース・
         // 有利子負債のいずれかを含む表のみを対象にする。
+        // 豊田合成 S100YC23・すかいらーく S100XUBI・日清食品 S100YEWB 実データ検証（2026-10-11）:
+        // 同じ注記の「担保に供している資産」に続く「対応する債務」表（担保付の借入金だけの再掲）も
+        // 前/当列と借入金ラベル・「合計」行を持つ。本体表と（注n）付きラベルが一致しないため重複排除を
+        // すり抜けて合算され（豊田合成 285、すかいらーく 1,259 / 2,823）、日清食品では本体表に
+        // 長期受入保証金があるため「借入金だけの表」優先でこちらが選ばれていた。直前の見出しで除外する。
         let candidateTables = tables.filter {
             let t = (try? $0.text()) ?? ""
             guard !t.contains("銘柄") else { return false }
             guard t.contains("社債") || t.contains("借入金") || t.contains("リース") || t.contains("有利子負債") else { return false }
+            guard !isCollateralSecuredDebtTable($0) else { return false }
             return (t.contains("前") && t.contains("当")) || jpDateMatchCount(t) >= 2
         }
+        return (soup, candidateTables, found.tag)
+    }
+
+    /// 「担保に供している資産」に対応する債務の表か（直前60文字の見出しで判定）。
+    private static func isCollateralSecuredDebtTable(_ table: Element) -> Bool {
+        let heading = precedingText(of: table, maxChars: 60)
+        // JFE S100YCUD 実データ検証（2026-10-11）: 「（注）上記債務のうち、工場財団抵当等に係るもの」
+        // という見出しの担保付債務の内訳表。以前は本体表の素の「リース負債」を「（非流動）」と作って
+        // いたためラベル重複で合算を免れていた。見出しで除外する。
+        return heading.contains("対応する債務") || heading.contains("担保付債務")
+            || heading.contains("上記債務のうち") || heading.contains("抵当")
+            // INEST S100YJEX 実データ検証（2026-10-11）: 「これらの担保差入資産に対応する負債は、以下の
+            // とおりであります。」の表（1年内返済予定の長期借入金 480・長期借入金 1,086）が有利子負債
+            // 注記の表に合算されていた（main から）。素の「対応する負債」はソフトバンクグループの表選択を
+            // 変えるので、担保差入資産の文言に限る。
+            || heading.contains("担保差入資産に対応する負債")
+    }
+
+    /// 表の直前のテキスト。兄弟要素をさかのぼり、尽きたら親の兄弟へ上がる（親自身の本文は読まない）。
+    private static func precedingText(of element: Element, maxChars: Int) -> String {
+        var collected = ""
+        var current: Element? = element
+        while let node = current, collected.count < maxChars {
+            if let previous = try? node.previousElementSibling() {
+                collected = ((try? previous.text()) ?? "").replacingOccurrences(of: " ", with: "") + collected
+                current = previous
+            } else {
+                current = node.parent()
+                if current == nil || current?.tagName() == "body" { break }
+            }
+        }
+        return String(collected.suffix(maxChars))
+    }
+
+    /// 注記の残高表で「合計」の後に続く「（その他の金融負債）」区分のリース負債行。
+    /// すかいらーく S100XUBI 実データ検証（2026-10-11）: BS はリースを「その他の金融負債」に含め、
+    /// リース注記にも残高表が無い。リース負債は社債及び借入金注記の合計の後の区分にだけある。
+    /// 注記（borrowings_schedule）の行・合計は変えず、有利子負債軸のリース行の材料にだけ使う。
+    static func ifrsNoteOtherFinancialLiabilityLeaseRows(xbrlDir: URL) -> [Row] {
+        guard let found = ifrsNoteCandidateTables(xbrlDir: xbrlDir) else { return [] }
+        return found.1.flatMap { table -> [Row] in
+            (parseComparisonTableDetailed(table)?.trailingLeaseRows ?? []).map { row in
+                var row = row
+                if row.sourceTag == nil { row.sourceTag = found.2 }
+                return row
+            }
+        }
+    }
+
+    private static func parseIFRSNotesCandidateTables(
+        soup: Document, candidateTables: [Element]
+    ) -> (rows: [Row], totalCurrent: Double?, totalPrior: Double?)? {
         // 三井物産 S100YAVT 実データ検証（2026-08-04）: 「短期銀行借入金等」と「長期債務」が別々の表
         // に分かれる（短期表のみを拾うと不完全な合計になる）。該当する表が複数あれば全て解析し、
         // 行を連結・合計を合算する。三菱重工業 S100YHZG 実データ検証（2026-08-04）: 相殺（ネッティング）
@@ -352,7 +546,12 @@ enum BorrowingsSchedule {
         // ラベルが重複しない前提のため、行ラベルに重複が無い場合のみ合算する。重複があれば
         // 合算せず、`hasExplicitTotalRow` を満たす最初の1件のみを使う（ロールフォワード表は
         // 後述の他経路で無視される）。
-        let allLabels = parsedCombinable.flatMap { $0.rows.map(\.label) }
+        // 重複判定のキーは従来の正規化（区分の分からないリース行も「（非流動）」とみなす）。表示ラベルを
+        // 開示どおりに残すようにしても、合算するかどうかの判定は変えない。
+        func dedupeKey(_ row: Row) -> String {
+            row.label.contains("リース") && !row.label.hasSuffix("（流動）") ? "リース負債（非流動）" : row.label
+        }
+        let allLabels = parsedCombinable.flatMap { $0.rows.map(dedupeKey) }
         let hasDuplicateLabels = Set(allLabels).count != allLabels.count
         // ＳＢＩホールディングス S100YK3R 実データ検証（2026-08-06）: 同一テキストブロック内に
         // 「社債及び借入金の内訳」表（合計＝連結BSの社債及び借入金と一致する正解）とは別に、
@@ -397,12 +596,26 @@ enum BorrowingsSchedule {
     /// `parseHeadingAnchoredComparisonTable`（汎用タグ配下で見出しアンカーによりテーブルを選ぶ）の
     /// 両方から、テーブル選択後の解析ロジックとして共有する。
     private static func parseComparisonTable(_ table: Element) -> (rows: [Row], totalCurrent: Double?, totalPrior: Double?)? {
+        guard let parsed = parseComparisonTableDetailed(table) else { return nil }
+        return (parsed.rows, parsed.totalCurrent, parsed.totalPrior)
+    }
+
+    /// HTML 断片の最初の表を `parseComparisonTable` で読む（表の形のユニットテスト用）。
+    static func parseComparisonTableHtml(_ html: String) -> (rows: [Row], totalCurrent: Double?, totalPrior: Double?)? {
+        guard let document = try? SwiftSoup.parse(html),
+              let table = try? document.select("table").first() else { return nil }
+        return parseComparisonTable(table)
+    }
+
+    /// `parseComparisonTable` 本体。合計行の後の「（その他の金融負債）」区分のリース負債行も返す
+    /// （本体の行・合計には入れない）。
+    private static func parseComparisonTableDetailed(_ table: Element) -> (
+        rows: [Row], totalCurrent: Double?, totalPrior: Double?, trailingLeaseRows: [Row]
+    )? {
         guard let trs = (try? table.select("tr"))?.array() else { return nil }
 
         let tableText = (try? table.text()) ?? ""
-        let scale: Double = tableText.contains("千円") ? 1_000
-            : tableText.contains("億円") ? 100_000_000
-            : Financial.millionYen
+        let scale = tableScale(table, tableText: tableText)
 
         // ヘッダー行（前期/当期/平均利率列を持つ行）から列位置を解決する。固定インデックス禁止
         // （スペーサー列の有無で位置が会社ごとに変わるため）。
@@ -494,8 +707,65 @@ enum BorrowingsSchedule {
         var components: [Row] = []
         var totalCurrent: Double?
         var totalPrior: Double?
+        var trailingLeaseRows: [Row] = []
+        var pastGrandTotal = false
+        var inOtherFinancialLiabilities = false
+        // 東静 S100XMC1 実データ検証（2026-10-11）: 「流動負債」見出し → 行 → 合計、「非流動負債」
+        // 見出し → 行 → 合計、と区分ごとに合計を置く表。最初の「合計」で打ち切ると非流動を落とす。
+        // 区分見出しの下の「合計」は、後ろに別区分の見出しがあるときだけ区分小計として読む。
+        // 表の合計は内訳行の和と照合して決める（`reconciledSectionedTotal`）: 区分小計の和、
+        // 区分の直後に置かれた真の合計行、最後の区分の「合計」そのもの（流動 → 小計、非流動 →
+        // 全体の累計合計、という表）の順に、内訳の和と一致する最初のもの。どれも一致しなければ
+        // 内訳の和（区分小計の和をそのまま使うと、累計型の表で流動分を二重に数える）。
+        func rowLabel(_ tr: Element) -> (label: String, hasValue: Bool)? {
+            guard let cells = (try? tr.select("td, th"))?.array(), !cells.isEmpty else { return nil }
+            var label = normalizeLabel((try? cells[0].text(trimAndNormaliseWhitespace: true)) ?? "")
+            if label.isEmpty, cells.count > 1 {
+                label = normalizeLabel((try? cells[1].text(trimAndNormaliseWhitespace: true)) ?? "")
+            }
+            let hasValue = cells.count > max(priorIdx, currentIdx)
+                && (XBRLUtils.parseTextblockCellValue(try? cells[priorIdx].text()) != nil
+                    || XBRLUtils.parseTextblockCellValue(try? cells[currentIdx].text()) != nil)
+            return (label, hasValue)
+        }
+        let bodyRows = Array(trs[(headerRowIndex + 1)...])
+        let sectionHeaderPositions: [(index: Int, maturity: String)] = bodyRows.enumerated().compactMap { i, tr in
+            guard let parsed = rowLabel(tr), !parsed.hasValue,
+                  let maturity = sectionHeaderMaturity(parsed.label) else { return nil }
+            return (i, maturity)
+        }
+        var section: String?
+        var sectionTotals: [(current: Double?, prior: Double?)] = []
 
-        rowLoop: for tr in trs[(headerRowIndex + 1)...] {
+        rowLoop: for (rowIndex, tr) in bodyRows.enumerated() {
+            if pastGrandTotal {
+                // 合計の後は「（その他の金融負債）」見出しの下のリース負債行だけ拾う
+                let rowText = normalizeLabel((try? tr.text()) ?? "")
+                guard let cells = (try? tr.select("td, th"))?.array(),
+                      cells.count > max(priorIdx, currentIdx) else {
+                    if rowText.contains("その他の金融負債") { inOtherFinancialLiabilities = true }
+                    continue
+                }
+                var label = normalizeLabel((try? cells[0].text(trimAndNormaliseWhitespace: true)) ?? "")
+                if label.isEmpty, cells.count > 1 {
+                    label = normalizeLabel((try? cells[1].text(trimAndNormaliseWhitespace: true)) ?? "")
+                }
+                let prior = XBRLUtils.parseTextblockCellValue(try? cells[priorIdx].text())
+                let current = XBRLUtils.parseTextblockCellValue(try? cells[currentIdx].text())
+                if current == nil, prior == nil {
+                    if label.contains("その他の金融負債") { inOtherFinancialLiabilities = true }
+                    continue
+                }
+                if inOtherFinancialLiabilities, isLeaseDebtScheduleRowLabel(label) {
+                    trailingLeaseRows.append(Row(
+                        label: displayLabel(for: label),
+                        current: current.map { $0 * scale },
+                        prior: prior.map { $0 * scale },
+                        averageInterestRatePercent: nil,
+                        sourceLabel: label))
+                }
+                continue
+            }
             guard let cells = (try? tr.select("td, th"))?.array(),
                   cells.count > max(priorIdx, currentIdx) else { continue }
             // 日東電工 S100VYH3 実データ検証（2026-08-03）: ラベル列の前に幅の狭いインデント専用の
@@ -508,8 +778,11 @@ enum BorrowingsSchedule {
 
             let prior = XBRLUtils.parseTextblockCellValue(try? cells[priorIdx].text())
             let current = XBRLUtils.parseTextblockCellValue(try? cells[currentIdx].text())
-            // 区分見出し（「非流動」「流動」等、値なし）を除外する。
-            guard current != nil || prior != nil else { continue }
+            // 区分見出し（「非流動」「流動」等、値なし）を除外する（区分は覚えておく）。
+            guard current != nil || prior != nil else {
+                if let maturity = sectionHeaderMaturity(label) { section = maturity }
+                continue
+            }
             let rate = rateIdx.flatMap { idx in
                 cells.count > idx ? XBRLUtils.parseTextblockCellValue(try? cells[idx].text()) : nil
             }
@@ -525,16 +798,51 @@ enum BorrowingsSchedule {
                 totalPrior = prior.map { $0 * scale }
                 break rowLoop
             }
+            if isGrandTotalLabel(label), let currentSection = section,
+               sectionHeaderPositions.contains(where: { $0.index > rowIndex && $0.maturity != currentSection }) {
+                // 区分小計（後ろに別区分の見出しがある）
+                sectionTotals.append((current.map { $0 * scale }, prior.map { $0 * scale }))
+                section = nil
+                continue
+            }
+            if isGrandTotalLabel(label), section != nil, !sectionTotals.isEmpty {
+                // 最後の区分の「合計」。区分小計か表全体の累計かは表記で区別できないので、内訳の和と照合する
+                sectionTotals.append((current.map { $0 * scale }, prior.map { $0 * scale }))
+                // 区分の直後（値のある次の行）が真の合計行なら、それも候補にする
+                var trailing: (current: Double?, prior: Double?)?
+                if let nextTr = bodyRows[(rowIndex + 1)...].first(where: { rowLabel($0)?.hasValue == true }),
+                   let next = rowLabel(nextTr), isGrandTotalLabel(next.label),
+                   let nextCells = (try? nextTr.select("td, th"))?.array(),
+                   nextCells.count > max(priorIdx, currentIdx) {
+                    trailing = (
+                        XBRLUtils.parseTextblockCellValue(try? nextCells[currentIdx].text()).map { $0 * scale },
+                        XBRLUtils.parseTextblockCellValue(try? nextCells[priorIdx].text()).map { $0 * scale })
+                }
+                totalCurrent = reconciledSectionedTotal(
+                    subtotals: sectionTotals.map(\.current), trailing: trailing?.current,
+                    components: components.map(\.current), scale: scale)
+                totalPrior = reconciledSectionedTotal(
+                    subtotals: sectionTotals.map(\.prior), trailing: trailing?.prior,
+                    components: components.map(\.prior), scale: scale)
+                section = nil
+                pastGrandTotal = true
+                continue
+            }
             if isGrandTotalLabel(label) {
                 totalCurrent = current.map { $0 * scale }
                 totalPrior = prior.map { $0 * scale }
-                break rowLoop   // 真の合計に到達。以降の参考内訳は無視する
+                // 真の合計に到達。以降の参考内訳は行・合計に使わない（その他の金融負債の
+                // リース負債行だけ trailingLeaseRows に分けて拾う）
+                pastGrandTotal = true
+                continue
             }
             components.append(Row(
-                label: displayLabel(for: label),
+                label: displayLabel(for: label, section: section),
                 current: current.map { $0 * scale },
                 prior: prior.map { $0 * scale },
-                averageInterestRatePercent: rate
+                averageInterestRatePercent: rate,
+                sourceLabel: label,
+                sectionMaturity: section
             ))
         }
 
@@ -546,7 +854,7 @@ enum BorrowingsSchedule {
         }
 
         guard totalCurrent != nil || totalPrior != nil else { return nil }
-        return (components, totalCurrent, totalPrior)
+        return (components, totalCurrent, totalPrior, trailingLeaseRows)
     }
 
     /// 「社債及び借入金の内訳は次のとおりです」等の見出し段落の直後にある表を、前/当の内訳表として
@@ -743,12 +1051,16 @@ enum BorrowingsSchedule {
     private static func parseIFRSFinancialInstrumentsNote(xbrlDir: URL) -> (rows: [Row], totalCurrent: Double?, totalPrior: Double?)? {
         if let html = XBRLUtils.extractTextblockHtml(in: xbrlDir, textblockTag: Xbrl.ifrsFinancialInstrumentsTextblockTag),
            let soup = try? SwiftSoup.parse(html) {
-            if let anchored = parseHeadingAnchoredComparisonTable(in: soup) { return anchored }
-            if let paired = parseMaturityBucketPairTables(in: soup) { return paired }
+            if let anchored = parseHeadingAnchoredComparisonTable(in: soup) {
+                return tagged(anchored, Xbrl.ifrsFinancialInstrumentsTextblockTag)
+            }
+            if let paired = parseMaturityBucketPairTables(in: soup) {
+                return tagged(paired, Xbrl.ifrsFinancialInstrumentsTextblockTag)
+            }
         }
         if let html = XBRLUtils.extractTextblockHtml(in: xbrlDir, textblockTag: Xbrl.ifrsShortTermBorrowingsAndLongTermDebtTextblockTag),
            let soup = try? SwiftSoup.parse(html) {
-            return parseMaturityBucketPairTables(in: soup)
+            return tagged(parseMaturityBucketPairTables(in: soup), Xbrl.ifrsShortTermBorrowingsAndLongTermDebtTextblockTag)
         }
         return nil
     }
@@ -817,10 +1129,45 @@ enum BorrowingsSchedule {
                 label: displayLabel(for: label),
                 current: currentMap[label].map { $0 * scale },
                 prior: priorMap[label].map { $0 * scale },
-                averageInterestRatePercent: nil
+                averageInterestRatePercent: nil,
+                sourceLabel: label
             )
         }
         return (components, sorted[1].total * scale, sorted[0].total * scale)
+    }
+
+    /// 貸手側（リース債権・リース投資資産）の表か。借手のリース債務ではない。
+    static let lessorLeaseTableKeywords = [
+        "リース料債権", "リース投資資産", "見積残存価額", "受取利息相当額",
+        "正味リース投資", "未稼得金融収益", "無保証残存",
+    ]
+
+    static func isLessorLeaseTableText(_ text: String) -> Bool {
+        lessorLeaseTableKeywords.contains { text.contains($0) }
+    }
+
+    /// 文書順で表の外の見出し・本文を追い、直近が「貸手」（「借手」より後）の区分にある表。
+    private static func lessorSectionTables(in soup: Document) -> Set<ObjectIdentifier> {
+        var result: Set<ObjectIdentifier> = []
+        var inLessorSection = false
+        guard let elements = try? soup.getAllElements().array() else { return result }
+        for element in elements {
+            if element.tagName() == "table" {
+                if inLessorSection { result.insert(ObjectIdentifier(element)) }
+                continue
+            }
+            if !element.parents().array().filter({ $0.tagName() == "table" }).isEmpty { continue }
+            let own = element.ownText()
+            let lessor = own.range(of: "貸手")
+            let lessee = own.range(of: "借手")
+            switch (lessor, lessee) {
+            case let (l?, b?): inLessorSection = l.lowerBound > b.lowerBound
+            case (_?, nil): inLessorSection = true
+            case (nil, _?): inLessorSection = false
+            case (nil, nil): break
+            }
+        }
+        return result
     }
 
     /// ディスコ S100YC6I・中外製薬 S100XTBJ 実データ検証（2026-08-04）: 借入金等明細表／社債・借入金
@@ -837,11 +1184,20 @@ enum BorrowingsSchedule {
             // 表内キーワード必須にすると正当なケースまで壊れる。本タグはリース以外の話題を含まない
             // 単一トピック注記のため、`hasExplicitTotalRow` と同様「合計」行を持つ最初の表という
             // 制約のみに留める（`parseComparisonTable` 自体が合計行の無い表を弾く）。
+            // 宮崎太陽銀行 S100YG72 実データ検証（2026-10-12）: 借入金等明細表は「該当事項はありません」、
+            // リース注記の最初の前/当表は貸手側の「リース料債権部分の金額 5,894 / 5,592」で、
+            // 借手のリース債務として読んでいた。貸手側の表は候補にしない（無ければ nil）。
+            // 2表目「リース料債権部分の金額の回収予定額」（1年以内…）も貸手側なので、直前の見出しが
+            // 「貸手」の区分にある表も除く。
+            let lessorTables = lessorSectionTables(in: soup)
             let table = tables.first {
                 let t = (try? $0.text()) ?? ""
-                return t.contains("前") && t.contains("当")
+                return t.contains("前") && t.contains("当") && !isLessorLeaseTableText(t)
+                    && !lessorTables.contains(ObjectIdentifier($0))
             }
-            if let table, let result = parseComparisonTable(table) { return result }
+            if let table, let result = parseComparisonTable(table) {
+                return tagged(result, Xbrl.jGaapLeasesNoteTextblockTag)
+            }
         }
         // 中外製薬 S100XTBJ 実データ検証（2026-08-04）: このタグはリース以外の話題を含まないため
         // 「リース負債」1行のみでも有効な満期構成ペアテーブルとみなす（通常経路の2行以上要件
@@ -849,7 +1205,7 @@ enum BorrowingsSchedule {
         if let html = XBRLUtils.extractTextblockHtml(in: xbrlDir, textblockTag: Xbrl.ifrsLeasesTextblockTag),
            let soup = try? SwiftSoup.parse(html),
            let paired = parseMaturityBucketPairTables(in: soup, minMatchingRows: 1) {
-            return paired
+            return tagged(paired, Xbrl.ifrsLeasesTextblockTag)
         }
         return nil
     }
@@ -871,7 +1227,9 @@ enum BorrowingsSchedule {
         for (tag, label) in tagLabels {
             guard let currentFact = facts[tag]?["CurrentYearInstant"] else { continue }
             let priorValue = facts[tag]?["Prior1YearInstant"]?.value
-            rows.append(Row(label: label, current: currentFact.value, prior: priorValue, averageInterestRatePercent: nil))
+            rows.append(Row(
+                label: label, current: currentFact.value, prior: priorValue, averageInterestRatePercent: nil,
+                sourceTag: tag))
         }
         guard rows.count == tagLabels.count else { return nil }
         let totalCurrent = rows.compactMap(\.current).reduce(0, +)
@@ -905,7 +1263,7 @@ enum BorrowingsSchedule {
         guard let html = XBRLUtils.extractTextblockHtml(
             in: xbrlDir, textblockTag: Xbrl.notesToConsolidatedFinancialStatementsUSGAAPTextBlock)
         else { return nil }
-        return parseUSGAAPNotesHtml(html)
+        return tagged(parseUSGAAPNotesHtml(html), Xbrl.notesToConsolidatedFinancialStatementsUSGAAPTextBlock)
     }
 
     /// テスト用に HTML 文字列からも同じ経路を踏めるようにする（CI は EDINET キャッシュ無しでも
@@ -1105,7 +1463,8 @@ enum BorrowingsSchedule {
                 label: displayLabel(for: cleanedUSGAAPLabel(useLabel)),
                 current: current.map { $0 * scale },
                 prior: prior.map { $0 * scale },
-                averageInterestRatePercent: rate
+                averageInterestRatePercent: rate,
+                sourceLabel: cleanedUSGAAPLabel(useLabel)
             ))
         }
         return rows.isEmpty ? nil : rows
@@ -1146,7 +1505,8 @@ enum BorrowingsSchedule {
                 label: displayLabel(for: label),
                 current: current * Financial.millionYen,
                 prior: prior * Financial.millionYen,
-                averageInterestRatePercent: nil
+                averageInterestRatePercent: nil,
+                sourceLabel: label
             ))
         }
         return rows
@@ -1187,7 +1547,7 @@ enum BorrowingsSchedule {
     private static func parseRollforwardNote(xbrlDir: URL) -> (rows: [Row], totalCurrent: Double?, totalPrior: Double?)? {
         guard let html = XBRLUtils.extractTextblockHtml(in: xbrlDir, textblockTag: Xbrl.ifrsInterestBearingLiabilitiesTextblockTag),
               let soup = try? SwiftSoup.parse(html) else { return nil }
-        return parseRollforwardEndingBalancePairTables(in: soup)
+        return tagged(parseRollforwardEndingBalancePairTables(in: soup), Xbrl.ifrsInterestBearingLiabilitiesTextblockTag)
     }
 
     /// 借入金等明細表の区分行にリース債務／リース負債があるか（金額の有無は問わない）。
@@ -1195,10 +1555,15 @@ enum BorrowingsSchedule {
     /// 区分ラベルのみを見る（「リース債務を除く」等の除外文言・注記文への誤ヒットを避ける）。
     /// 東邦レマック S100XRD8 のように残高がすべて「－」の行も、区分が開示されていれば true。
     static func hasLeaseDebtRowLabel(xbrlDir: URL) -> Bool {
-        guard let html = XBRLUtils.extractTextblockHtml(
-                in: xbrlDir, textblockTag: Xbrl.borrowingsScheduleTextblockTag)
-                ?? XBRLUtils.extractTextblockHtml(
-                    in: xbrlDir, textblockTag: Xbrl.borrowingsScheduleNonConsolidatedTextblockTag),
+        // 連結財務諸表を作成する会社では単体明細表へフォールバックしない
+        // （`parseJGaapScheduleTable` と同じ連結優先）。
+        let consolidatedHtml = XBRLUtils.extractTextblockHtml(
+            in: xbrlDir, textblockTag: Xbrl.borrowingsScheduleTextblockTag)
+        let nonConsolidatedHtml = filerHasConsolidatedStatements(xbrlDir: xbrlDir)
+            ? nil
+            : XBRLUtils.extractTextblockHtml(
+                in: xbrlDir, textblockTag: Xbrl.borrowingsScheduleNonConsolidatedTextblockTag)
+        guard let html = consolidatedHtml ?? nonConsolidatedHtml,
               let soup = try? SwiftSoup.parse(html),
               let tables = (try? soup.select("table"))?.array() else { return false }
 
@@ -1223,6 +1588,13 @@ enum BorrowingsSchedule {
     /// 区分ラベルがリース債務／リース負債の明細行か。
     /// 「借入金（リース債務を除く）」のようにリースを母数から除外する文言は false。
     /// 「リース債務（１年以内返済予定のものを除く）」は長期リース行なので true。
+    /// 明細表の行がリース行か（表示ラベルで判定する従来の規則）。表示ラベルは以前「リース」を含む行を
+    /// すべて「リース負債（流動／非流動）」にしていたので、その判定を表示ラベルの変更後も保つ
+    /// （区分の分からない行を開示どおりのラベルにしても、リース行の範囲は変えない）。
+    static func isLeaseScheduleRow(_ row: Row) -> Bool {
+        row.label.contains("リース")
+    }
+
     static func isLeaseDebtScheduleRowLabel(_ label: String) -> Bool {
         guard !label.isEmpty else { return false }
         if label.contains("リース債務を除") || label.contains("リース負債を除")

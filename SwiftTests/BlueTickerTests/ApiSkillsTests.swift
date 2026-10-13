@@ -111,6 +111,8 @@ import Testing
         #expect(skill.description.contains("capex"))
         #expect(skill.description.contains("product_service"))
         #expect(!skill.description.contains("axis=business"))
+        #expect(skill.description.contains("needs_review"))
+        #expect(skill.description.contains("interest_bearing_debt_lease_denominator_from_notes"))
         #expect(apiSkillsSchemaVersion == 3)
     }
 }

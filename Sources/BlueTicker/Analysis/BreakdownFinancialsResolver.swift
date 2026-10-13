@@ -10,6 +10,18 @@ enum BreakdownFinancialsResolver {
         let tag: String?
     }
 
+    struct InterestBearingDebtCanonicalValue {
+        let total: Double?
+        let priorTotal: Double?
+        let method: String
+        let accountingStandard: String
+        let warnings: [String]
+        /// 銀行業（`Xbrl.isBankFiling`: statement BS に `Xbrl.bankMarkerTag`＝預金がある、または EDINET 提出者業種が銀行業。
+        /// bank components へ回す判定と同じ）。
+        /// 公開キーではない。派生指標（net_cash / net_de / roic 等）を null にするためだけに使う。
+        var isBank: Bool = false
+    }
+
     /// geography 軸と Summary の売上分母。正本は statement PL の連結売上（`StatementFinancialsResolver`）。
     /// 三菱商事等の本表 `Revenue2IFRS`「収益」も含む。product_service 軸は
     /// `breakdownBusinessSalesDenominatorItem`（収益認識表なら顧客契約）。
@@ -83,6 +95,88 @@ enum BreakdownFinancialsResolver {
             return CanonicalValue(value: fieldSet[noteTag]?.current, tag: noteTag)
         }
         return CanonicalValue(value: result.current, tag: result.tag)
+    }
+
+    /// financials の `interest_bearing_debt`。正本は breakdown `interest_bearing_debt` 軸の合計。
+    /// 軸が needs_review / 解決不能のときは公開 JSON キーを増やさず旧 Extractor 値へ戻し、
+    /// canonical value の method/warnings に印を残す（会社が null へ退行しないため）。
+    static func financialsCanonicalInterestBearingDebt(
+        xbrlDir: URL, edinetIndustry: String? = nil
+    ) async -> InterestBearingDebtCanonicalValue {
+        let inputs = InterestBearingDebtBreakdown.inputs(xbrlDir: xbrlDir, edinetIndustry: edinetIndustry)
+        let allTags = XBRLUtils.collectAllNumericElements(in: xbrlDir, nilAsZero: false)
+        let accountingStandard = detectAccountingStandard(allTags)
+        let resolution = await InterestBearingDebtBreakdown.resolve(inputs: inputs, decider: nil)
+        return canonicalInterestBearingDebt(
+            resolution: resolution,
+            inputs: inputs,
+            accountingStandard: accountingStandard,
+            legacy: { IBDExtractor.extractCanonical(xbrlDir: xbrlDir) })
+    }
+
+    /// `financialsCanonicalInterestBearingDebt` の純粋な写像部分（unit test 用）。
+    static func canonicalInterestBearingDebt(
+        resolution: IBDResolution,
+        inputs: IBDInputs,
+        accountingStandard: String,
+        legacy: () -> IBDResult
+    ) -> InterestBearingDebtCanonicalValue {
+        var value = canonicalInterestBearingDebtValue(
+            resolution: resolution, inputs: inputs, accountingStandard: accountingStandard,
+            legacy: legacy)
+        value.isBank = inputs.isBank
+        return value
+    }
+
+    private static func canonicalInterestBearingDebtValue(
+        resolution: IBDResolution,
+        inputs: IBDInputs,
+        accountingStandard: String,
+        legacy: () -> IBDResult
+    ) -> InterestBearingDebtCanonicalValue {
+        func legacyFallback(reason: String, extra: [String] = []) -> InterestBearingDebtCanonicalValue {
+            let result = legacy()
+            let warning = (["legacy_ibd_extractor_fallback", "reason=\(reason)"] + extra)
+            return InterestBearingDebtCanonicalValue(
+                total: result.total,
+                priorTotal: result.priorTotal,
+                method: "legacy_ibd_extractor_fallback",
+                accountingStandard: result.accountingStandard,
+                warnings: warning)
+        }
+        switch resolution {
+        case .resolved(let payload, let audit):
+            guard !payload.needsReview else {
+                let unclassified = audit.sentences.filter { $0.hasPrefix("unclassified ") }
+                return legacyFallback(reason: "needs_review", extra: payload.warnings + unclassified)
+            }
+            guard let total = payload.rows.last(where: { $0.rowKind == "subtotal" && $0.label == "合計" }) else {
+                return legacyFallback(reason: "missing_total_row")
+            }
+            let bank = payload.rows.contains { $0.debtSource == ibdRowSourceFinancialsBankComponents }
+            return InterestBearingDebtCanonicalValue(
+                total: total.closing,
+                priorTotal: total.opening,
+                method: bank
+                    ? "breakdown.interest_bearing_debt.bank_components"
+                    : "breakdown.interest_bearing_debt",
+                accountingStandard: accountingStandard,
+                warnings: payload.warnings)
+        case .notApplicable(let reason):
+            // 軸が債務行を見つけられないときも旧 Extractor をそのまま使う。軸の not_found は
+            // 旧 Extractor より狭く（会社独自タグ・TextBlock 等）、ここで 0 にすると実在する
+            // 債務が消える。無借金の判定（大きなインスタンスに IBD タグが皆無 → 0）は旧
+            // Extractor 自身の zero_debt に任せ、その場合は従来どおり印を付けない。
+            let result = legacy()
+            if result.method == "zero_debt" {
+                return InterestBearingDebtCanonicalValue(
+                    total: result.total, priorTotal: result.priorTotal, method: "zero_debt",
+                    accountingStandard: result.accountingStandard, warnings: [])
+            }
+            return legacyFallback(reason: reason)
+        case .unavailable:
+            return legacyFallback(reason: "unavailable")
+        }
     }
 
     /// financials の `capex`。正本は breakdown の

@@ -5,7 +5,7 @@
   "fy_end": "2025-03-31",
   "income_statement": {
     "sales": 13629997000000.0,
-    "operating_profit": 2669483000000.0,
+    "operating_profit": 1653176000000.0,
     "net_profit": 1862946000000.0,
     "accounting_standard": "J-GAAP"
   },
@@ -14,7 +14,7 @@
     "method": "business_gross_profit"
   },
   "sga": {
-    "current": null
+    "current": 3166035000000.0
   },
   "balance_sheet": {
     "total_assets": 413113501000000.0,
@@ -26,7 +26,7 @@
     "accounting_standard": "J-GAAP"
   },
   "interest_bearing_debt": {
-    "total": 286946640000000.0,
+    "total": 41059881000000.0,
     "method": "bank_components+lease_notes"
   },
   "cash_flow": {

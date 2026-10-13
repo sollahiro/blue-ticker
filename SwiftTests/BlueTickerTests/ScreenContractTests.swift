@@ -174,6 +174,24 @@ import Testing
         #expect(unwrapped.payoutRatio3y == [20.0, 25.0, 45.0])
     }
 
+    /// 銀行業（cash はあるが net_cash を出さない期）は roic / net_de / roic_cagr_3y を入れない。
+    @Test func screenRowWithholdsRoicAndNetDeForBanks() throws {
+        let bank = try response(years: [
+            ["fy_end": "2023-03-31", "sales": 1000.0, "roic": 1.0, "net_cash": 5.0, "cash_equivalents": 50.0],
+            ["fy_end": "2024-03-31", "sales": 1100.0, "roic": 2.0, "net_cash": 5.0, "cash_equivalents": 50.0],
+            ["fy_end": "2025-03-31", "sales": 1210.0, "cash_equivalents": 50.0, "interest_bearing_debt": 10.0,
+             "operating_margin": 9.5, "roe": 8.0],
+        ]).screenRow()
+        let row = try #require(bank)
+        #expect(row[.roic] == nil)
+        #expect(row[.netDe] == nil)
+        #expect(row[.roicCagr3y] == nil)
+        // ROIC / net_de 以外はそのまま。
+        #expect(row[.roe] == 8)
+        #expect(row[.operatingMargin] == 9.5)
+        #expect(row[.salesCagr3y] != nil)
+    }
+
     @Test func screenRowScreenV3NullPolicies() throws {
         // 3 期に満たない → CAGR は null（新規上場は sales_cagr_3y と同じ null 方針）。
         let noPrior = try response(years: [

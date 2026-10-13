@@ -229,6 +229,12 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                 損益・CF・バランスシート・収益性指標（水準値）を含みます。直近\(Api.financialsYearsDefault)年分を返します。
                 前年差・要因分解（増減分析）は get_waterfall を使ってください。
                 金額単位は百万円（JPY）、比率は%、株主指標は円。
+                銀行業は有利子負債に預金を含めないため、net_cash / net_de / roic / nopat_margin /
+                invested_capital_turnover は null です（interest_bearing_debt は返します）。
+                営業利益行の無い銀行業は operating_profit が業務純益（業務粗利益 − 営業経費、op_label「業務純益」）、
+                sga が営業経費（sga_label「営業経費」）です。営業経費が無い場合は operating_profit / sga とも null です。
+                sga_label は販管費行が「販売費及び一般管理費」以外のときだけ入ります（例: 供給販売費及び一般管理費、一般管理費）。
+                販管費を開示しない会社の sga は null です（売上総利益 − 営業利益の差額では埋めません）。
                 """,
             method: "GET",
             path: "/v1/companies/{code}/financials",
@@ -280,6 +286,10 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                 ROIC・ROE前年差の要因分解、ネットキャッシュ前年差（現金差/負債差影響）、
                 運転資本・CCC前年差（売掛金/棚卸資産/買掛金差影響、DSO/DIO/DPO差影響）を含みます。直近\(Api.financialsYearsDefault)年分を返します。
                 金額単位は百万円（JPY）、比率は%、日数は日。
+                銀行業は net_cash / net_de / roic / nopat_margin / invested_capital_turnover と、
+                ネットキャッシュ前年差（net_cash_change / debt_change_impact）、ROIC 要因分解が null です。
+                銀行業の事業利益は業務純益（= operating_profit）で、同じ3項目に 経常収益差 / 業務粗利益率（業務粗利益 ÷ 経常収益）差 /
+                営業経費差 が入り、和が前年差に一致します。両期の経常収益・業務粗利益・営業経費が揃わない年は前年差が null です。
                 """,
             method: "GET",
             path: "/v1/companies/{code}/waterfall",
@@ -367,14 +377,38 @@ public func apiSkillsCatalog() -> [ApiSkill] {
             description: """
                 有価証券報告書から製品・サービス別/地域別売上高、従業員数、研究開発費、のれん、
                 報告セグメント別ののれんの償却額・持分法会計処理される投資、
-                設備投資マトリクス（capex）を取得します（格納済みデータのみ）。
+                設備投資マトリクス（capex）、有利子負債（interest_bearing_debt）を取得します（格納済みデータのみ）。
                 対象は取り込み済みの上場企業です。doc_id を省略すると最新の有価証券報告書を使用します。
                 axis は product_service（既定）/ geography / employees / research_and_development / goodwill /
-                goodwill_amortization / equity_method_investments / capex に対応。
+                goodwill_amortization / equity_method_investments / capex / interest_bearing_debt に対応。
                 数値タグとセグメント fact から解決します。合計のみの開示は分母だけの行になります。
                 axis=capex は名前付きセル（segment_assets / flow / capital_expenditures_overview）で、
                 行の amount は使いません。flow は書類単位で capital_expenditures があればそれ、
                 無ければ noncurrent_asset_additions です。混ぜず足しません。欠測セルは null です。
+                interest_bearing_debt は社債・借入金とリース負債を1表にした有利子負債です。
+                行は名前付きセル opening（期首残高）/ closing（期末残高）、
+                source（balance_sheet / borrowings_schedule / lease_note / financials_bank_components）、maturity_class（current / non_current / null。
+                BS 科目・注記の流動/非流動・明細表の区分名や区分見出しから取るだけで計算しません。
+                区分の分からないリース行の label は開示どおりで「（流動）/（非流動）」を付けません）、
+                source_tag（値を読んだ XBRL 要素のローカル名。BS 行は科目の要素名（例 BorrowingsCLIFRS）、
+                明細表・注記の行は読んだ表の TextBlock 要素名（例 AnnexedConsolidatedDetailedScheduleOfBorrowingsTextBlock）。
+                名前空間・URI は付きません。会社拡張要素は提出どおりの名前で会社間で比較できません。合計行は null）。
+                証券業の営業上の借入（信用取引借入金・有価証券担保借入金・現先取引借入金）は合計に入れず、
+                in_total=false・excluded_reason=scope_differs の行として残します。
+                各行の in_total が true の行だけが合計に入ります（合計行の closing = in_total 行の closing の和）。
+                全行を足さないでください。BS と明細表の両方の値を行として残し、数えない方は in_total=false です。
+                in_total=false の行の excluded_reason は duplicate_of_balance_sheet / scope_differs /
+                non_interest_bearing / other_table のいずれかで、in_total=true の行は null です。
+                paired_row_index はその除外行が対応する数える行の rows 配列の添字（0 始まり、決まらなければ null）です。
+                BS 科目が明細表の複数行を含む（入れ子）ときは BS 科目を数え、明細表の行はその内訳として
+                category_group（親の BS 科目名）/ category（内訳名）を持ちます。親行は category_group が自分の名前、category が null です。
+                流動と非流動の親が同じ名前だと category_group での集計は両方の内訳をまとめるので、正確な親は paired_row_index で引いてください。
+                連結がある会社は連結だけ、無い会社は単体だけです。
+                denominator は同じ財務諸表の BS 有利子負債（リース含む、コードが分類した科目だけ）です。
+                BS にリース科目が無く注記または明細表のリースを分母に足すときは warnings に
+                interest_bearing_debt_lease_denominator_from_notes が付きます（404 にはしません）。
+                要確認（needs_review）の行は出しません。行があるのに needs_review で出さないときは
+                404 reason unknown（メッセージは「公開していません」。未算出の reason 無し 404 とは別）です。
                 research_and_development は、数値タグが無いとき本文の当期の会社全体の総額だけを補うことがあります。
                 capex も Overview 本文から会社全体の総額、またはタグ付き行の不足分を補うことがあります。
                 その行の warnings に not_allocatable_to_segments があっても 404 にはしません。
@@ -390,6 +424,8 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                 unknown（原因未特定・要再調査）。
                 axis=geography: not_found（地域別情報の注記自体が存在しない）、unknown（抽出失敗・要再調査）。
                 決定論軸: not_found（セグメント別内訳が非開示）。
+                axis=interest_bearing_debt: not_found（有利子負債の開示が無い）、
+                unknown（行はあるが公開していない。未算出ではない）。銀行は financials_bank_components 行。
                 """,
             method: "GET",
             path: "/v1/companies/{code}/breakdown",
@@ -414,7 +450,7 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                     name: "axis",
                     location: .query,
                     type: .string,
-                    description: "内訳の軸（product_service / geography / employees / research_and_development / goodwill / goodwill_amortization / equity_method_investments / capex。省略時 product_service）",
+                    description: "内訳の軸（product_service / geography / employees / research_and_development / goodwill / goodwill_amortization / equity_method_investments / capex / interest_bearing_debt。省略時 product_service）",
                     required: false,
                     defaultValue: .string(breakdownAxisProductService)
                 ),
@@ -608,7 +644,7 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                 items はクエリ days 窓を新しい暦日から limit 件埋める（既定 90 日・10 件）。同日が残り枠を超えるとその日から安定サンプリングする。
                 `date` は集計した UTC 暦日。`total.day` はその日、`total.week` は直近7日の上場提出件数（limit で切る前。days とは独立）。
                 空でも 200（items=[]）。DB 非接続は 503。ライブ EDINET へはフォールバックしない。
-                RSS は未提供（REST が契約の正。MCP は追従）。
+                RSS は静的フィード（https://feed.sollahiro.com/blue-ticker/edinet-filings.xml。日次 19:15 JST・ヘッドラインのみ・直近7日 120/130/140/160）。REST が契約の正。MCP は追従。
                 例: GET /v1/feed/updates?days=90&limit=10
                 例: GET /v1/feed/updates?doc_type=120,160
                 """,
@@ -666,7 +702,7 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                 顧客アカウントや IP は持たない。書き込みは origin からカウンターへ fire-and-forget（失敗しても本 API は 200/404/503 のまま）。
                 items は code ごとの件数降順。空でも 200（items=[]）。カウンター未設定・取得失敗は 503。
                 提出件数ランキングは出さない（それは get_feed_updates）。
-                RSS は未提供（REST が契約の正。MCP は追従）。
+                Trend の RSS は未提供（REST が契約の正。MCP は追従）。
                 例: GET /v1/feed/trend?days=7&limit=20
                 例: GET /v1/feed/trend?code=7203
                 """,

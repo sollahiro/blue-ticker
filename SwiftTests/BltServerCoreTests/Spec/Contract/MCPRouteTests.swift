@@ -165,6 +165,39 @@ private func toolCallBody(name: String, arguments: [String: Any]) -> [String: An
         }
     }
 
+    /// interest_bearing_debt の needs_review は isError に reason を載せる。未算出文言にしない。
+    @Test func getBreakdownWithholdsInterestBearingDebtNeedsReview() async throws {
+        try await withMcpApp(databases: true) { app in
+            let row = CompanyBreakdown(docID: "S_IBD", axis: breakdownAxisInterestBearingDebt)
+            row.code = "6758"
+            row.submitDateTime = "2025-06-20 09:00"
+            row.payload = BreakdownSnapshotPayload(
+                axis: breakdownAxisInterestBearingDebt, denominator: 1, denominatorTag: "bs",
+                rows: [], sourceKind: breakdownSourceXbrlFacts, needsReview: true,
+                warnings: [breakdownWarningIBDCoverageOutOfBand])
+            row.needsReview = true
+            row.source = breakdownSourceXbrlFacts
+            row.contentHash = ""
+            row.cacheVersion = interestBearingDebtBreakdownCacheVersion
+            try await row.create(on: app.db)
+
+            let (status, json) = try await postMcp(
+                app,
+                toolCallBody(
+                    name: "get_breakdown",
+                    arguments: ["code": "6758", "axis": "interest_bearing_debt"]))
+            #expect(status == .ok)
+            let result = json?["result"] as? [String: Any]
+            #expect(result?["isError"] as? Bool == true)
+            let content = result?["content"] as? [[String: Any]]
+            let text = content?.first?["text"] as? String
+            let body = text.flatMap { $0.data(using: .utf8) }
+                .flatMap { try? JSONSerialization.jsonObject(with: $0) } as? [String: Any]
+            #expect(body?["reason"] as? String == "unknown")
+            #expect(body?["error"] as? String == "有利子負債の内訳は公開していません")
+        }
+    }
+
     /// 2026-07-27 品質ゲート通過後、MCP get_breakdown も axis=geography で格納済みデータを返す。
     @Test func getBreakdownReturnsGeographyAxisWhenStored() async throws {
         try await withMcpApp(databases: true) { app in

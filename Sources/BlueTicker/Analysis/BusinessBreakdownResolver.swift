@@ -38,7 +38,9 @@ enum BusinessBreakdownResolver {
         docID: String = ""
     ) async -> (snapshot: BreakdownSnapshot?, source: BusinessBreakdownSource, audit: LLMBreakdownAudit?) {
         let factsSnapshot = BreakdownNormalizer.normalize(
-            ExtractedBreakdown(method: "xbrl_facts", tables: [], facts: segments.facts),
+            ExtractedBreakdown(
+                method: "xbrl_facts", tables: segments.tables, facts: segments.facts,
+                rowLabelsByTag: segments.rowLabelsByTag),
             consolidatedSales: consolidatedSales, labelsByTag: labelsByTag)
 
         // 1) xbrl_facts 経路（決定的、LLM不要）。axis が product_service かつ needs_review が

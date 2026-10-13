@@ -16,7 +16,8 @@ func bootstrapBltLogging(from environment: inout Environment) throws {
 }
 
 /// ingest 対象の完了を JSON metadata 付きで 1 行出す。
-/// `failed > 0` のときは warning（成功のみ notice）。
+/// `failed > 0` または `refused > 0` のときは warning（成功のみ notice）。
+/// `refused` は格納を保留した件数（財務取り込みの縮小ガード。failed とは別に数える）。区別しない対象は nil で省略する。
 /// `servable`/`unservable` は read 床（`*MinServableVersion`）で見た DB 全体のカバレッジ
 /// （今回の ingest 件数ではなくテーブル全件の集計）。床のある対象で付与し、
 /// 床の概念が無い対象は nil で省略する。
@@ -32,6 +33,7 @@ func logIngestSummary(
     stored: Int,
     failed: Int,
     skipped: Int,
+    refused: Int? = nil,
     servable: Int? = nil,
     unservable: Int? = nil,
     notApplicable: Int? = nil,
@@ -48,6 +50,7 @@ func logIngestSummary(
         "failed": .stringConvertible(failed),
         "skipped": .stringConvertible(skipped),
     ]
+    if let refused { metadata["refused"] = .stringConvertible(refused) }
     if let servable { metadata["servable"] = .stringConvertible(servable) }
     if let unservable { metadata["unservable"] = .stringConvertible(unservable) }
     if let notApplicable { metadata["not_applicable"] = .stringConvertible(notApplicable) }
@@ -61,7 +64,7 @@ func logIngestSummary(
         metadata["not_applicable_unknown"] = .stringConvertible(notApplicableUnknown)
     }
     if let purged { metadata["purged"] = .stringConvertible(purged) }
-    if failed > 0 {
+    if failed > 0 || (refused ?? 0) > 0 {
         logger.warning("ingest summary", metadata: metadata)
     } else {
         logger.notice("ingest summary", metadata: metadata)

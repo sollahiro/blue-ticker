@@ -56,35 +56,40 @@ enum BreakdownNormalizer {
 
         if let consolidatedSales, consolidatedSales != 0,
            let snapshot = normalizeSalesBasis(
-               facts: result.facts, consolidatedSales: consolidatedSales, labelsByTag: labelsByTag)
+               facts: result.facts, tables: result.tables, rowLabelsByTag: result.rowLabelsByTag,
+               consolidatedSales: consolidatedSales, labelsByTag: labelsByTag)
         {
             return snapshot
         }
         // 連結売上が取れないときでも、セグメント側の外部顧客売上タグで分母を組む
         // （財務取り込み sales=null の保険・一部事業会社向け。LLM 経路に落とさない）。
         if let external = normalizeInternalSubtotalBasis(
-            facts: result.facts, amountTags: Xbrl.segmentExternalRevenueTags,
+            facts: result.facts, tables: result.tables, rowLabelsByTag: result.rowLabelsByTag,
+            amountTags: Xbrl.segmentExternalRevenueTags,
             profitTags: Xbrl.segmentProfitTags, warningPrefix: "external_revenue",
             labelsByTag: labelsByTag)
         {
             return external
         }
         if let bank = normalizeInternalSubtotalBasis(
-            facts: result.facts, amountTags: Xbrl.segmentBankGrossProfitTags,
+            facts: result.facts, tables: result.tables, rowLabelsByTag: result.rowLabelsByTag,
+            amountTags: Xbrl.segmentBankGrossProfitTags,
             profitTags: Xbrl.segmentBankNetOperatingProfitTags, warningPrefix: "bank",
             labelsByTag: labelsByTag)
         {
             return bank
         }
         return normalizeInternalSubtotalBasis(
-            facts: result.facts, amountTags: Xbrl.segmentInsuranceRevenueTags,
+            facts: result.facts, tables: result.tables, rowLabelsByTag: result.rowLabelsByTag,
+            amountTags: Xbrl.segmentInsuranceRevenueTags,
             profitTags: Xbrl.segmentInsuranceServiceResultTags, warningPrefix: "insurance",
             labelsByTag: labelsByTag)
     }
 
     /// 外部売上高を分母とする通常経路（ホワイトリスト → カバレッジ発見フォールバック）。
     private static func normalizeSalesBasis(
-        facts: [BreakdownFact], consolidatedSales: Double, labelsByTag: [String: String] = [:]
+        facts: [BreakdownFact], tables: [BreakdownTable], rowLabelsByTag: [String: Set<String>],
+        consolidatedSales: Double, labelsByTag: [String: String] = [:]
     ) -> BreakdownSnapshot? {
         var denominatorNeedsReview = false
         let denominatorTag: String
@@ -106,9 +111,9 @@ enum BreakdownNormalizer {
         guard !perMember.isEmpty else { return nil }
 
         // 利益は任意フィールド（対応する利益タグが無い/取れない member は profit=nil のまま）。
-        let profitTag = Xbrl.segmentProfitTags.first(where: { tag in
-            facts.contains(where: { $0.tag == tag })
-        })
+        let profitTag = segmentProfitTag(
+            facts: facts, tables: tables, rowLabelsByTag: rowLabelsByTag, amountTag: denominatorTag,
+            fallbackTags: Xbrl.segmentProfitTags)
         var profitByMember = profitTag.map { resolvePerMember(facts: facts, tag: $0) } ?? [:]
         if let profitTag {
             profitByMember = withEntityTotal(profitByMember, facts: facts, tag: profitTag)
@@ -221,7 +226,8 @@ enum BreakdownNormalizer {
     /// 「Japanese...」のような事業本部名を地域名の部分一致で誤検知するため、この経路では
     /// 地域別開示が来る想定が無く再利用しない）。
     private static func normalizeInternalSubtotalBasis(
-        facts: [BreakdownFact], amountTags: [String], profitTags: [String], warningPrefix: String,
+        facts: [BreakdownFact], tables: [BreakdownTable], rowLabelsByTag: [String: Set<String>],
+        amountTags: [String], profitTags: [String], warningPrefix: String,
         labelsByTag: [String: String] = [:]
     ) -> BreakdownSnapshot? {
         guard let amountTag = amountTags.first(where: { tag in
@@ -269,9 +275,9 @@ enum BreakdownNormalizer {
         }
         guard denominator != 0 else { return nil }
 
-        let profitTag = profitTags.first(where: { tag in
-            facts.contains(where: { $0.tag == tag })
-        })
+        let profitTag = segmentProfitTag(
+            facts: facts, tables: tables, rowLabelsByTag: rowLabelsByTag, amountTag: amountTag,
+            fallbackTags: profitTags)
         var profitByMember = profitTag.map { resolvePerMember(facts: facts, tag: $0) } ?? [:]
         if let profitTag {
             profitByMember = withEntityTotal(profitByMember, facts: facts, tag: profitTag)
@@ -301,6 +307,111 @@ enum BreakdownNormalizer {
             needsReview: denominatorWarning != nil,
             warnings: warnings
         )
+    }
+
+    // MARK: - セグメント利益の行選択
+
+    /// セグメント利益に使うタグ。会社自身が「セグメント利益」と定義した測度を優先する。
+    ///
+    /// タグ名の優先リスト（`fallbackTags`）だけで選ぶと、会社がセグメント利益に使った測度と
+    /// 食い違う。経常利益基準の日本基準金融・電力（`OrdinaryIncome` はリスト外で profit が全行 null）、
+    /// 税引前利益と親会社所有者帰属利益を両方載せる IFRS 保険（リスト上位の税引前を拾う）、
+    /// 実質業務純益と与信費用控除後業務純益を両方載せる銀行（リストの実質業務純益を拾う）がその例。
+    /// 会社の定義は注記の表そのものにあるので、次の順に読む（タグ名・業種では分岐しない）。
+    /// 1. セグメント表で行名が「セグメント利益／損益／損失」の行のタグ（`rowLabelsByTag`、
+    ///    inline XBRL の当期セグメント member fact の行名）。
+    /// 2. 差異調整表の利益の部の「報告セグメント計」と `ReportableSegmentsMember` 値が一致するタグ
+    ///    （表の行名が測度名だけで、どれをセグメント利益とするかが本文にある会社。差異調整の起点は
+    ///    会社のセグメント利益）。
+    /// 3. どちらでも決まらなければ従来どおり `fallbackTags` の先頭一致。
+    static func segmentProfitTag(
+        facts: [BreakdownFact], tables: [BreakdownTable], rowLabelsByTag: [String: Set<String>],
+        amountTag: String, fallbackTags: [String]
+    ) -> String? {
+        let fallback = fallbackTags.first(where: { tag in facts.contains(where: { $0.tag == tag }) })
+        let candidateTags = Set(facts.map(\.tag)).subtracting([amountTag]).filter { tag in
+            !resolvePerMember(facts: facts, tag: tag).isEmpty
+        }
+
+        // 1. 行名がセグメント利益の行
+        let labelled = candidateTags.filter { tag in
+            (rowLabelsByTag[tag] ?? []).contains(where: isSegmentProfitRowLabel)
+        }
+        if let tag = labelled.min(by: { preferred($0, over: $1, in: fallbackTags) }) {
+            return tag
+        }
+
+        // 2. 差異調整表の利益の部の起点（報告セグメント計）
+        var reconciliationStarts: [Double] = []
+        for grid in tables.map({ BreakdownExtractor.markdownToGrid($0.markdown) }) {
+            var inProfitSection = false
+            for row in grid {
+                let (label, numbers) = splitRow(row)
+                if numbers.isEmpty {
+                    if !label.isEmpty { inProfitSection = isProfitSectionHeader(label) }
+                    continue
+                }
+                if inProfitSection, compact(label).hasPrefix("報告セグメント計") {
+                    reconciliationStarts.append(contentsOf: numbers)
+                }
+            }
+        }
+        if !reconciliationStarts.isEmpty {
+            let shown = Set(reconciliationStarts.map { $0.rounded() })
+            let matching = candidateTags.filter { tag in
+                guard let value = resolvePerMember(facts: facts, tag: tag)["ReportableSegmentsMember"]?.value,
+                      value != 0
+                else { return false }
+                // 表示単位（百万円・千円・円・億円）に丸めて照合する
+                return [1e6, 1e3, 1.0, 1e8].contains { shown.contains((value / $0).rounded()) }
+            }
+            if let tag = matching.min(by: { preferred($0, over: $1, in: fallbackTags) }) {
+                return tag
+            }
+        }
+        return fallback
+    }
+
+    /// 同順位の候補は `fallbackTags` の順、次にタグ名で決める（決定的）。
+    private static func preferred(_ lhs: String, over rhs: String, in order: [String]) -> Bool {
+        let l = order.firstIndex(of: lhs) ?? order.count
+        let r = order.firstIndex(of: rhs) ?? order.count
+        return l != r ? l < r : lhs < rhs
+    }
+
+    /// 行の先頭の非数値セル（行名。2列に割れた行名は連結）と数値セルに分ける。
+    private static func splitRow(_ row: [String]) -> (label: String, numbers: [Double]) {
+        var labelParts: [String] = []
+        var numbers: [Double] = []
+        for cell in row {
+            if let value = XBRLUtils.parseHtmlNumber(cell.replacingOccurrences(of: " ", with: "")) {
+                numbers.append(value)
+            } else if numbers.isEmpty {
+                labelParts.append(cell)
+            }
+        }
+        return (labelParts.joined(), numbers)
+    }
+
+    private static func compact(_ text: String) -> String {
+        text.filter { !$0.isWhitespace && $0 != "\u{3000}" }
+    }
+
+    /// 「セグメント利益」「セグメント利益又は損失（△）」「セグメント損益」等。
+    /// 「セグメント利益の調整額」のような調整行は測度の行ではない。
+    static func isSegmentProfitRowLabel(_ label: String) -> Bool {
+        let c = compact(label)
+        guard c.hasPrefix("セグメント利益") || c.hasPrefix("セグメント損益")
+            || c.hasPrefix("セグメント損失")
+        else { return false }
+        return !c.contains("調整")
+    }
+
+    /// 差異調整表の部見出し（「利益」「セグメント利益」「損益」等）。売上・資産・負債の部は除く。
+    private static func isProfitSectionHeader(_ label: String) -> Bool {
+        let c = compact(label)
+        guard c.contains("利益") || c.contains("損益") else { return false }
+        return !(c.contains("売上") || c.contains("収益") || c.contains("資産") || c.contains("負債"))
     }
 
     /// 従業員数のセグメント別内訳（内訳取り込み employees 軸）。`normalizeCountBasis` 参照。

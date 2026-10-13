@@ -9,7 +9,7 @@
 | REST `/v1` | **製品の契約の正**。段階 A は Access Service Token。段階 B の公開入口は HAPIS（併存は `public-api.md` / `api-auth.md`） |
 | iOS | 近傍の製品面（`Apps/BlueTicker`。REST `/v1` の HTTP クライアント。IA は `ios-client.md`、進捗は Linear Team `blue-ticker`） |
 | MCP（`POST /`） | **開発時のみ**（Cursor / 手元）。`BltMcpServerCore` は残す。製品として伸ばさない。ChatGPT Apps は凍結 |
-| Web / RSS | 将来候補（優先度低） |
+| Web / RSS | Web は将来候補（優先度低）。RSS は `workers/feed-rss` の静的フィード（日次 Cron → R2。REST が正。`public-api.md` の例外） |
 
 機能単位の有料マスクは採らない。公開ゲート（どの Feature をいつ外に出すか）は Linear。実装サイクルは `.agents/skills/xbrl-development/SKILL.md`。
 
@@ -106,6 +106,7 @@ flowchart LR
     svc --> edinet[("EDINET")]
     server -.->|DB read| pg[("Neon")]
     server -.->|"fire-and-forget POST"| trend["Feed Trend Worker / Analytics Engine"]
+    rss["Feed RSS Worker（cron 19:15 JST）"] -.->|"Neon read-only → R2"| r2[("feed.sollahiro.com")]
 ```
 
 認証: `CF_ACCESS_TEAM_DOMAIN` あり → Access（エッジ信頼） / なし → 無認証（loopback、または `BLT_ALLOW_UNAUTHENTICATED=1`）。非 loopback でどちらも無いと起動拒否。詳細は `api-auth.md` / `.agents/skills/deploy/SKILL.md`。

@@ -165,7 +165,7 @@ import Testing
         #expect(borrowings.currentBalance == 11_355_209_000_000)
         #expect(borrowings.averageInterestRatePercent == 1.66)
 
-        let lease = try #require(components.first { $0.label == "リース負債（非流動）" })
+        let lease = try #require(components.first { $0.label == "リース債務" })  // 区分の分からない行は開示どおり
         #expect(lease.priorBalance == 33_338_000_000)
         #expect(lease.currentBalance == 32_207_000_000)
         #expect(lease.averageInterestRatePercent == 4.94)

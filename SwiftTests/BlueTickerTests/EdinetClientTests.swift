@@ -79,7 +79,7 @@ import Foundation
         // today() は当日分 TTL（searchTodayTTLHours）で判定されるため、こちらも 0 にして即時失効させる。
         let staleStore = EdinetCacheStore(cacheDir: tmpDir, searchHitTTLDays: 0, searchTodayTTLHours: 0)
         let staleClient = EdinetAPIClient(apiKey: nil, cacheStore: staleStore)
-        let today = ServiceTestSupport.iso(Date())
+        let today = ServiceTestSupport.iso(ServiceTestSupport.edinetToday())
         let filename = staleStore.searchCacheKey(today)
         staleStore.saveSearchCache(filename, data: [["docID": "S100STALE", "docTypeCode": "120"]])
         #expect(staleStore.loadSearchCache(filename) == nil)  // 通常読み込みでは期限切れ
@@ -90,7 +90,7 @@ import Foundation
     }
 
     @Test func testDocumentIndexPrefersStaleIndex() async throws {
-        let year = ServiceTestSupport.currentUTCYear()
+        let year = ServiceTestSupport.currentEdinetYear()
         let documents: [[String: Any]] = [["docID": "S100STALE", "docTypeCode": "120"]]
         store.saveDocumentIndex(year, documents: documents, builtThrough: "\(year)-01-01")
 
@@ -104,7 +104,7 @@ import Foundation
 
     @Test func testDocumentIndexCatchupFetchesOnlyMissingDates() async throws {
         let support = ServiceTestSupport.self
-        let today = support.utcToday()
+        let today = support.edinetToday()
         let yesterday = support.addDays(today, -1)
         let year = support.utcCalendar.component(.year, from: today)
         store.saveDocumentIndex(
@@ -135,7 +135,7 @@ import Foundation
         // 財務取り込み の財務計算が恒久的に失敗し続けた）。当日は確定扱いにしないため、
         // 同日内に catchup を複数回呼んでも、後から追加された書類を拾えなければならない。
         let support = ServiceTestSupport.self
-        let today = support.utcToday()
+        let today = support.edinetToday()
         let yesterday = support.addDays(today, -1)
         let year = support.utcCalendar.component(.year, from: today)
         store.saveDocumentIndex(
@@ -161,6 +161,95 @@ import Foundation
         let secondPass = await client.catchupDocumentIndexForYear(year)
 
         #expect(secondPass.compactMap { $0["docID"] as? String } == ["OLD", "MORNING", "AFTERNOON"])
+    }
+
+    @Test func testCatchupRefetchesSameDaySnapshotAndKeepsBuiltThroughBeforeIt() async throws {
+        // 回帰テスト: 過去日の日次キャッシュが同日スナップショット（その日の締め＝翌日 0:00 JST 前に
+        // 書かれたもの）でも確定扱いされ、catchup が built_through をその日の先へ進めたため、
+        // 同日に後から提出された有報が年次インデックスに永久に入らなかった（2026-09-18）。
+        let support = ServiceTestSupport.self
+        let year = 2024
+        store.saveDocumentIndex(
+            year,
+            documents: [["docID": "OLD", "_edinet_list_date": "2024-12-27"]],
+            builtThrough: "2024-12-28"
+        )
+        let snapKey = store.searchCacheKey("2024-12-29")
+        store.saveSearchCache(snapKey, data: [["docID": "MORNING", "submitDateTime": "2024-12-29 09:00"]])
+        // 2024-12-29 09:02 JST（= 00:02 UTC）に書いた同日スナップショット
+        try support.setMtime(
+            store.documentsByDateDir.appendingPathComponent(snapKey),
+            support.utcCalendar.date(from: DateComponents(year: 2024, month: 12, day: 29, minute: 2))!)
+        store.saveSearchCache(store.searchCacheKey("2024-12-30"), data: [])
+        store.saveSearchCache(store.searchCacheKey("2024-12-31"), data: [])
+
+        // スナップショットは期限切れ → 再取得を試みる。API キーなしで失敗 → 期限切れキャッシュへ
+        // フォールバックするが、未確定の日なので built_through は進めない。
+        #expect(store.loadSearchCache(snapKey) == nil)
+        let firstPass = await client.catchupDocumentIndexForYear(year)
+        #expect(firstPass.compactMap { $0["docID"] as? String } == ["OLD", "MORNING"])
+        #expect(store.loadDocumentIndexInfo(year, allowStale: true)?["built_through"] as? String == "2024-12-28")
+
+        // 再取得に成功した（締め後に書き直された）状況: 同日午後の有報が拾われ、built_through も進む。
+        store.saveSearchCache(
+            snapKey,
+            data: [
+                ["docID": "MORNING", "submitDateTime": "2024-12-29 09:00"],
+                ["docID": "AFTERNOON", "submitDateTime": "2024-12-29 15:30"],
+            ])
+        let secondPass = await client.catchupDocumentIndexForYear(year)
+        #expect(secondPass.compactMap { $0["docID"] as? String } == ["OLD", "MORNING", "AFTERNOON"])
+        #expect(store.loadDocumentIndexInfo(year, allowStale: true)?["built_through"] as? String == "2024-12-31")
+    }
+
+    /// 過去年（2024）の全日に確定版（いま書いた）の日次キャッシュをシードする。
+    private func seedFinalDailyCaches2024() {
+        let support = ServiceTestSupport.self
+        var current = support.utcCalendar.date(from: DateComponents(year: 2024, month: 1, day: 1))!
+        let end = support.utcCalendar.date(from: DateComponents(year: 2024, month: 12, day: 31))!
+        while current <= end {
+            store.saveSearchCache(store.searchCacheKey(support.iso(current)), data: [])
+            current = support.addDays(current, 1)
+        }
+    }
+
+    /// 日次キャッシュを「その日 09:02 JST（= 00:02 UTC）に書いた同日スナップショット」にする。
+    private func makeSameDaySnapshot(_ dateStr: String) throws {
+        let support = ServiceTestSupport.self
+        let parts = dateStr.split(separator: "-").map { Int($0)! }
+        try support.setMtime(
+            store.documentsByDateDir.appendingPathComponent(store.searchCacheKey(dateStr)),
+            support.utcCalendar.date(from: DateComponents(year: parts[0], month: parts[1], day: parts[2], minute: 2))!)
+    }
+
+    @Test func testRefreshDocumentIndexStopsBuiltThroughBeforeSameDaySnapshot() async throws {
+        seedFinalDailyCaches2024()
+        store.saveSearchCache(store.searchCacheKey("2024-03-10"), data: [["docID": "SNAP"]])
+        try makeSameDaySnapshot("2024-03-10")
+
+        let docs = await client.refreshDocumentIndexForYear(2024)
+
+        // 取得失敗（API キーなし）→ 期限切れスナップショットへフォールバック: 書類は入るが built_through は前日まで
+        #expect(docs.compactMap { $0["docID"] as? String } == ["SNAP"])
+        #expect(store.loadDocumentIndexInfo(2024, allowStale: true)?["built_through"] as? String == "2024-03-09")
+    }
+
+    @Test func testRefreshDocumentIndexWithSnapshotOnJanuaryFirstFallsBackToPreviousYearEnd() async throws {
+        seedFinalDailyCaches2024()
+        try makeSameDaySnapshot("2024-01-01")
+
+        _ = await client.refreshDocumentIndexForYear(2024)
+
+        // 年初が未確定 → 前年末日（次回 catchup が 1/1 から取り直す）
+        #expect(store.loadDocumentIndexInfo(2024, allowStale: true)?["built_through"] as? String == "2023-12-31")
+    }
+
+    @Test func testRefreshDocumentIndexAdvancesToYearEndWhenAllDaysFinal() async throws {
+        seedFinalDailyCaches2024()
+
+        _ = await client.refreshDocumentIndexForYear(2024)
+
+        #expect(store.loadDocumentIndexInfo(2024, allowStale: true)?["built_through"] as? String == "2024-12-31")
     }
 
     // MARK: - XBRL ダウンロード

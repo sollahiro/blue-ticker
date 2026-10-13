@@ -64,6 +64,10 @@ struct ExtractedBreakdown: Equatable {
     var method: String  // "html_table" | "xbrl_facts" | "not_found"
     var tables: [BreakdownTable]
     var facts: [BreakdownFact]
+    /// セグメント注記の表の行名（tag → 行名集合。当期のセグメント member fact の行）。
+    /// `BreakdownNormalizer.segmentProfitTag` が会社定義のセグメント利益の行を知るために使う。
+    /// 事業セグメント（xbrl_facts）だけで埋める。辞書往復・公開 payload には含めない。
+    var rowLabelsByTag: [String: Set<String>] = [:]
 
     /// JSONSerialization 互換の辞書に変換する（Python 出力と同じキー構造）。
     func toDictionary() -> [String: Any] {
@@ -214,6 +218,26 @@ enum BreakdownExtractor {
             // opt-in は business のみ。
             mixedHeadingLikeOnly: true
         )
+        // US-GAAP 注記23 型（野村）:「23　セグメントおよび地域別情報：」の下に
+        // 「［事業別セグメント］」「［地域別情報］」が並び、既定キーワード（セグメント情報 等）に
+        // 当たる見出しが無い。既定で1表も取れないときだけ、US-GAAP 注記ブロックに限り
+        // 注記23 型の見出しを順に試す（他社の既存抽出・golden を変えない）。
+        if tables.isEmpty {
+            for keyword in Xbrl.usgaapNote23BusinessSegmentHeadingKeywords {
+                let fallback = extractFromTextBlocks(
+                    xbrlDir: xbrlDir,
+                    dedicatedTags: [],
+                    mixedTags: Xbrl.businessSegmentMixedTextBlockTags,
+                    dedicatedHeading: "セグメント情報",
+                    mixedKeywords: [keyword],
+                    mixedHeadingLikeOnly: true
+                )
+                if !fallback.isEmpty {
+                    tables = fallback
+                    break
+                }
+            }
+        }
         let productOrServiceTables = extractFromTextBlocks(
             xbrlDir: xbrlDir,
             dedicatedTags: Xbrl.productOrServiceTextBlockTags,
@@ -238,7 +262,10 @@ enum BreakdownExtractor {
                 tables = tables + etcTables
             }
         }
-        let result = buildResult(xbrlDir: xbrlDir, tables: tables, dimensionKeywords: Xbrl.businessSegmentDimensionKeywords)
+        var result = buildResult(xbrlDir: xbrlDir, tables: tables, dimensionKeywords: Xbrl.businessSegmentDimensionKeywords)
+        if result.method == "xbrl_facts" {
+            result.rowLabelsByTag = StatementNotesResolver.segmentNoteRowLabels(xbrlDir: xbrlDir)
+        }
 
         if shouldPreferRevenueRecognition(over: result)
             || (detectSingleSegmentDisclosure(xbrlDir: xbrlDir) != nil && result.method != "xbrl_facts")
@@ -679,6 +706,24 @@ enum BreakdownExtractor {
     /// `shouldPreferRevenueRecognition` で製品・サービス表へ swap する相補関係）。
     static func extractGeographyInfo(xbrlDir: URL) -> ExtractedBreakdown {
         let dedicated = Xbrl.geographyTextBlockTags.subtracting(Xbrl.geographyMixedTextBlockTags)
+        // US-GAAP 注記23 型（野村）: 小見出し「［地域別情報］」があればその下の表だけを使う。
+        // 既定キーワード「地域別」は散文（耐用年数・トレーディング資産・国内/海外税引前利益）にも
+        // 当たり、無関係な表が候補の先頭に並ぶ。見出し型（句点なし）の一致に限る。
+        let note23Tables = extractFromTextBlocks(
+            xbrlDir: xbrlDir,
+            dedicatedTags: [],
+            mixedTags: [Xbrl.notesToConsolidatedFinancialStatementsUSGAAPTextBlock],
+            dedicatedHeading: "地域ごとの情報",
+            mixedKeywords: Xbrl.usgaapNote23GeographyHeadingKeywords,
+            skipGeographyAssetMetricTables: true,
+            mixedHeadingLikeOnly: true,
+            dropOfWhichRegionColumns: true
+        )
+        if !note23Tables.isEmpty {
+            return buildResult(
+                xbrlDir: xbrlDir, tables: note23Tables,
+                dimensionKeywords: Xbrl.geographyDimensionKeywords)
+        }
         var tables = extractFromTextBlocks(
             xbrlDir: xbrlDir,
             dedicatedTags: dedicated,
@@ -724,6 +769,29 @@ enum BreakdownExtractor {
         {
             return segmentGeography
         }
+        // IFRS で地域別の専用 TextBlock が無く、セグメント注記の小見出し
+        // 「(2）営業収益の地域別内訳」の下に地域表だけがある型（8698 S100YM8I）。
+        // 地域注記・報告セグメントのどちらからも取れないときだけ、IFRS セグメント注記を
+        // 見出し型一致で走査する（資産表は見出しの除外語と直近の指標キャプションで落とし、
+        // 地域ラベル行のある表に限る。テクマトリックス S100YL8T は売上省略＋非流動資産表のみ）。
+        if result.method == "not_found" {
+            let segmentNoteTables = extractFromTextBlocks(
+                xbrlDir: xbrlDir,
+                dedicatedTags: [],
+                mixedTags: Xbrl.ifrsSegmentNoteGeographyFallbackTextBlockTags,
+                dedicatedHeading: "地域ごとの情報",
+                mixedKeywords: Xbrl.geographyHeadingKeywords,
+                skipGeographyAssetMetricTables: true,
+                mixedHeadingLikeOnly: true,
+                dropOfWhichRegionColumns: true,
+                mixedSkipNearestAssetCaptionTables: true
+            ).filter(tableHasGeographyRegionLabels)
+            if !segmentNoteTables.isEmpty {
+                return buildResult(
+                    xbrlDir: xbrlDir, tables: segmentNoteTables,
+                    dimensionKeywords: Xbrl.geographyDimensionKeywords)
+            }
+        }
         return result
     }
 
@@ -746,7 +814,10 @@ enum BreakdownExtractor {
     /// markdown 表のデータ行先頭セル（行ラベル）に地域名キーワードが十分あるか。
     /// 列が地域・行が事業の表（収益分解の転置形）は落とす。
     static func tableHasGeographyRegionLabels(_ table: BreakdownTable) -> Bool {
-        let labels = rowLabelsFromMarkdown(table.markdown)
+        // 均等割りの全角空白（「日　　　本」「米　　　国」）は詰めてから照合する（8698 S100YM8I）。
+        let labels = rowLabelsFromMarkdown(table.markdown).map {
+            $0.filter { !$0.isWhitespace }
+        }
         let hits = labels.filter { label in
             Xbrl.segmentSpecificGeographyLabelKeywordsJa.contains(where: label.contains)
         }
@@ -2382,6 +2453,7 @@ enum BreakdownExtractor {
         headingExclusionKeywords: [String] = [],
         headingLikeOnly: Bool = false,
         dropOfWhichRegionColumns: Bool = false,
+        skipNearestAssetCaptionTables: Bool = false,
         fiscalYearEnd: String? = nil
     ) -> [BreakdownTable] {
         guard let soup = try? SwiftSoup.parse(html) else { return [] }
@@ -2415,6 +2487,15 @@ enum BreakdownExtractor {
                         continue
                     }
                     seen.insert(ObjectIdentifier(table))
+                    // 見出し（「(4) 地域別情報」）と表の間に資産の小見出し（「②非流動資産」）が
+                    // 挟まる型は、見出しの除外語では落ちない。直近の指標キャプションで判定する。
+                    if skipNearestAssetCaptionTables,
+                        let caption = nearestGeographyMetricCaption(before: table),
+                        isGeographyAssetMetricCaption(caption)
+                    {
+                        candidate = findNextTable(after: table)
+                        continue
+                    }
                     let grid = expandTable(table)
                     if isUnitCaptionOrDecorativeStub(grid) {
                         // この経路は表を即 append するため、後続スタブが既出表の unitCaption を
@@ -2525,7 +2606,8 @@ enum BreakdownExtractor {
         mixedHeadingExclusionKeywords: [String] = [],
         skipGeographyAssetMetricTables: Bool = false,
         mixedHeadingLikeOnly: Bool = false,
-        dropOfWhichRegionColumns: Bool = false
+        dropOfWhichRegionColumns: Bool = false,
+        mixedSkipNearestAssetCaptionTables: Bool = false
     ) -> [BreakdownTable] {
         var tables: [BreakdownTable] = []
         let targets = dedicatedTags.union(mixedTags)
@@ -2582,6 +2664,7 @@ enum BreakdownExtractor {
                                 ? Xbrl.geographyAssetMetricCaptionKeywords : []),
                         headingLikeOnly: mixedHeadingLikeOnly,
                         dropOfWhichRegionColumns: dropOfWhichRegionColumns,
+                        skipNearestAssetCaptionTables: mixedSkipNearestAssetCaptionTables,
                         fiscalYearEnd: fiscalYearEnd
                     ))
                 }

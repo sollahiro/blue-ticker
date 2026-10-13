@@ -51,6 +51,17 @@ final class EdinetCacheStore: Sendable {
         return obj
     }
 
+    /// その日の日次検索キャッシュが確定版か（EDINET 日が締まった後＝翌日 0:00 JST 以降に書かれた過去日分）。
+    /// 年次インデックスの `built_through` は確定版の日だけを越えて進める（取得失敗時の期限切れ
+    /// フォールバックで同日スナップショットが返っても、その日を確定扱いにしない）。
+    func isSearchCacheFinal(_ dateStr: String, now: Date = Date()) -> Bool {
+        guard let date = parseDateString(dateStr), date < edinetToday(now) else { return false }
+        let path = documentsByDateDir.appendingPathComponent(searchCacheKey(dateStr))
+        guard let mtime = (try? fm.attributesOfItem(atPath: path.path))?[.modificationDate] as? Date
+        else { return false }
+        return mtime >= edinetDayClose(date)
+    }
+
     func saveSearchCache(_ filename: String, data: [[String: Any]]) {
         let path = documentsByDateDir.appendingPathComponent(filename)
         try? fm.createDirectory(at: documentsByDateDir, withIntermediateDirectories: true)
@@ -232,22 +243,29 @@ final class EdinetCacheStore: Sendable {
 
     private var fm: FileManager { .default }
 
-    private func isSearchCacheExpired(_ path: URL, hasResults: Bool) -> Bool {
+    private func isSearchCacheExpired(_ path: URL, hasResults: Bool, now: Date = Date()) -> Bool {
         guard let mtime = (try? fm.attributesOfItem(atPath: path.path))?[.modificationDate] as? Date
         else { return true }
         let stem = path.deletingPathExtension().lastPathComponent
         let datePart = stem.hasPrefix("search_") ? String(stem.dropFirst("search_".count)) : stem
-        // 当日分は EDINET が営業時間中随時更新するため、日単位 TTL（暦日境界でしか経過を
-        // 検知できない）では同日内の複数回 sync 実行で再取得されない。時間単位で区切る。
-        if let date = parseDateString(datePart), utcCalendar.isDate(date, inSameDayAs: Date()) {
-            return elapsedHoursUTC(since: mtime) >= Double(searchTodayTTLHours)
+        if let date = parseDateString(datePart) {
+            let today = edinetToday(now)
+            // 当日分は EDINET が営業時間中随時更新するため、日単位 TTL（暦日境界でしか経過を
+            // 検知できない）では同日内の複数回 sync 実行で再取得されない。時間単位で区切る。
+            if date == today {
+                return elapsedHoursUTC(since: mtime, now: now) >= Double(searchTodayTTLHours)
+            }
+            // 過去日でも、その EDINET 日が締まる前（翌日 0:00 JST 前）に書いた分は同日スナップショット。
+            // 長期 TTL で確定扱いにすると、その後に提出された書類が永久に欠落する
+            // （実例: 2026-09-18 09:02 JST 書き込みの 10 件で確定し、同日の有報が年次インデックスに入らなかった）。
+            if date < today && mtime < edinetDayClose(date) { return true }
         }
-        let ttl = searchCacheTTL(datePart, hasResults: hasResults)
-        return elapsedDaysUTC(since: mtime) >= ttl
+        let ttl = searchCacheTTL(datePart, hasResults: hasResults, now: now)
+        return elapsedDaysUTC(since: mtime, now: now) >= ttl
     }
 
-    private func searchCacheTTL(_ datePart: String, hasResults: Bool) -> Int {
-        if let date = parseDateString(datePart), date < utcCalendar.date(byAdding: .day, value: -1, to: Date())! {
+    private func searchCacheTTL(_ datePart: String, hasResults: Bool, now: Date) -> Int {
+        if let date = parseDateString(datePart), date < edinetToday(now) {
             return searchPastTTLDays
         }
         return hasResults ? searchHitTTLDays : searchEmptyTTLDays

@@ -159,4 +159,13 @@ import Testing
         let fields = parseCSVRow(#"477A0,"Foo, Bar K.K.",情報・通信業"#)
         #expect(fields == ["477A0", "Foo, Bar K.K.", "情報・通信業"])
     }
+
+    @Test func industryForEdinetCodeIsSubmitterIndustry() async throws {
+        let manager = MasterDataManager()
+        // ゆうちょ銀行 7182（貯金は DepositsLiabilities で BNK マーカーが無い）も銀行業。
+        #expect(await manager.industry(forEdinetCode: "E31775") == "銀行業")
+        #expect(await manager.industry(forEdinetCode: "E03606") == "銀行業")      // 三菱UFJ FG（銀行持株）
+        #expect(await manager.industry(forEdinetCode: "E03729") == "その他金融業")  // 信金中央金庫
+        #expect(await manager.industry(forEdinetCode: "E99999") == nil)
+    }
 }

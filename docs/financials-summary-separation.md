@@ -37,7 +37,8 @@ XBRL → statement / notes / breakdown（正本）
 | `fin-vN` | 存続。破壊的変更だけバンプ（`.agents/rules/versioning.md`）。IA 切替や既存の正しい値を保つ細粒度修正では上げない |
 | 新規生値 | まず正本へ。financials に足さない |
 | 組立 | statement → notes → breakdown。取れた源を1つ採用。**employees / rd は breakdown のみ** |
-| IBD | 有利子負債の**項目タグを合算**する。statement にある項目（内訳でも「社債及び借入金」のような集約でも、BS の粒度）を使う。その上に notes の内訳を足さない（二重計上）。statement に無い項目は notes のタグを足してよい（典型はリース帳簿。`borrowings_schedule` 区分 / `lease_liabilities`）。notes の合計行で IBD 全体を置き換えない。金融負債そのものは使わない |
+| IBD | breakdown `interest_bearing_debt` 軸の合計行（= `in_total=true` の行の和。全行の和ではない。decider 無し）。銀行は bank components 行の合計。軸が `needs_review`（公開保留）・`not_found`・解決不能のときは既存の `IBDExtractor.extractCanonical` 値をそのまま使い、内部の method `legacy_ibd_extractor_fallback` と warnings に理由（未確認の Jev 分類行など）を残す（公開フィールドは増やさない）。無借金の 0 は旧 Extractor の `zero_debt` のまま |
+| 銀行業の比率 | 銀行（IBD の銀行判定 `isBank` = statement Instant に `DepositsLiabilitiesBNK`、または EDINET コードリストの提出者業種が銀行業（ゆうちょ 7182）。bank components と同じ判定。保険・証券は対象外）は `net_cash` / `net_de` / `roic` / `nopat_margin` / `invested_capital_turnover` を null。預金を IBD に含めないため有利子負債ベースの比率は意味を持たない（2026-10-12 決定）。`interest_bearing_debt`（預金を除く）は残す。Waterfall の `net_cash_change` / `debt_change_impact` も null（`cash_change_impact` は残す）。キーは増やさない |
 | employees / rd | breakdown 軸の分母。financials はパススルー。PL 行は使わない |
 | ingest 依存 | 順序変更は採らない。同一 XBRL パスで resolver 直接呼び。正本 `cache_version` が変わったら `assembly_fingerprint` 不一致で financials を再組立する（`fin-vN` は上げない） |
 
@@ -51,7 +52,7 @@ XBRL → statement / notes / breakdown（正本）
 | 組立指紋 | `financialsAssemblyFingerprint`（`company_financials.assembly_fingerprint`） |
 | 組立 | `Services/IndividualAnalyzer.swift` |
 | statement パススルー | `Analysis/StatementFinancialsResolver.swift` |
-| IBD 組立 | `IBDExtractor.extractCanonical` |
+| IBD 組立 | `BreakdownFinancialsResolver.financialsCanonicalInterestBearingDebt` |
 | notes | `Analysis/StatementNotesResolver.swift` |
 | breakdown 分母 | `Analysis/BreakdownFinancialsResolver.swift`（sales / employees / rd） |
 

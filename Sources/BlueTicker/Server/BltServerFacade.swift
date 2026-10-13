@@ -47,6 +47,8 @@ public struct BltServerContext: Sendable {
     let researchAndDevelopmentProseDecider: (any ResearchAndDevelopmentProseDeciding)?
     /// 設備投資マトリクスの本文総額。同じキーが無いときは nil。
     let capexProseDecider: (any CapexProseDeciding)?
+    /// 有利子負債の行分類と近似重複判定。同じキーが無いときは nil（未分類行は needs_review）。
+    let interestBearingDebtDecider: (any InterestBearingDebtDeciding)?
     /// employees / rd / goodwill / 報告セグメント指標軸が同一 doc を軸ループで再パースしないためのメモ。
     let businessSegmentDimensionCache: BusinessSegmentDimensionCache
 
@@ -59,7 +61,8 @@ public struct BltServerContext: Sendable {
         geographyColumnDecider: (any RevenueRecognitionColumnDeciding)? = nil,
         segmentInfoDecider: (any SegmentInfoDeciding)? = nil,
         researchAndDevelopmentProseDecider: (any ResearchAndDevelopmentProseDeciding)? = nil,
-        capexProseDecider: (any CapexProseDeciding)? = nil
+        capexProseDecider: (any CapexProseDeciding)? = nil,
+        interestBearingDebtDecider: (any InterestBearingDebtDeciding)? = nil
     ) {
         self.cacheDir = cacheDir
         let store = EdinetCacheStore(cacheDir: edinetCacheDir(cacheDir))
@@ -76,6 +79,7 @@ public struct BltServerContext: Sendable {
         self.segmentInfoDecider = segmentInfoDecider
         self.researchAndDevelopmentProseDecider = researchAndDevelopmentProseDecider
         self.capexProseDecider = capexProseDecider
+        self.interestBearingDebtDecider = interestBearingDebtDecider
         self.businessSegmentDimensionCache = BusinessSegmentDimensionCache()
     }
 }
@@ -168,6 +172,9 @@ public func makeBltServerContext() async -> BltServerContext? {
     let capexProseDecider: (any CapexProseDeciding)? = decisionsClient.map {
         OpenRouterCapexProseDecider(client: $0)
     }
+    let interestBearingDebtDecider: (any InterestBearingDebtDeciding)? = decisionsClient.map {
+        OpenRouterInterestBearingDebtDecider(client: $0)
+    }
     return BltServerContext(
         apiKey: key, cacheDir: cacheDir, overviewChatClient: overviewChatClient,
         overviewModel: overviewEndpoint?.model ?? companyOverviewDefaultModel,
@@ -176,7 +183,8 @@ public func makeBltServerContext() async -> BltServerContext? {
         geographyColumnDecider: geographyColumnDecider,
         segmentInfoDecider: segmentInfoDecider,
         researchAndDevelopmentProseDecider: researchAndDevelopmentProseDecider,
-        capexProseDecider: capexProseDecider)
+        capexProseDecider: capexProseDecider,
+        interestBearingDebtDecider: interestBearingDebtDecider)
 }
 
 // MARK: - REST Facade
@@ -221,13 +229,14 @@ public extension BltServerContext {
     /// EDINET 取得・XBRL パースを伴う高コスト処理。「有価証券報告書未提出」（対象外）と
     /// 「抽出失敗」を区別して返す（戻り値パターン、issue #86）。
     func computeFinancials(code: String, years: Int) async -> FinancialsComputeResult {
-        let analyzer = IndividualAnalyzer(edinetClient: edinetClient, cacheManager: cacheManager)
+        let stock = await masterDataManager.getByCode(code)
+        let analyzer = IndividualAnalyzer(
+            edinetClient: edinetClient, cacheManager: cacheManager, edinetIndustry: stock?.s33nm)
         // Ingest は derived `individual_analysis_*` を使わない。そのキーは
         // `blueTickerVersion` であり `companyFinancialsCacheVersion`（fin-vN）ではない。
         // 既定 `useCache: true` のままだと fin-vN ingest が古 IBD/ROIC を現行として書く。
         switch await analyzer.analyze(code: code, analysisYears: years, useCache: false) {
         case .result(let result):
-            let stock = await masterDataManager.getByCode(code)
             return .success(
                 FinancialsResponse(
                     code: code,
@@ -1205,6 +1214,37 @@ private extension BltServerContext {
     }
 }
 
+private extension BltServerContext {
+    /// 有利子負債の内訳（axis=`interest_bearing_debt`）を解決する。
+    /// Jev の応答無し（`.unavailable`）は行を作らず `.failed`（再試行する）。
+    func resolveInterestBearingDebtBreakdownImpl(
+        docID: String, correctionDocIDs: [String] = []
+    ) async -> BreakdownResolveResult {
+        guard let xbrlDir = await downloadAnnualFilingXbrl(
+            docID: docID, correctionDocIDs: correctionDocIDs)
+        else { return .failed }
+        // 銀行判定に EDINET 提出者業種を渡す（financials の IBD と同じ判定にする）。
+        // 内訳取り込みは docID だけなので、DEI の EDINET コードから master を引く。
+        let edinetIndustry = await edinetIndustry(xbrlDir: xbrlDir)
+        let inputs = InterestBearingDebtBreakdown.inputs(xbrlDir: xbrlDir, edinetIndustry: edinetIndustry)
+        switch await InterestBearingDebtBreakdown.resolve(
+            inputs: inputs, decider: interestBearingDebtDecider, docID: docID)
+        {
+        case .resolved(let payload, let audit):
+            return breakdownByRecordingOverlayRegressions(
+                .resolved(
+                    payload: payload, source: breakdownSourceXbrlFacts,
+                    contentHash: ibdBreakdownContentHash(payload: payload),
+                    audit: .segmentNoteJev(audit)),
+                xbrlDir: xbrlDir)
+        case .notApplicable(let reason):
+            return .notApplicable(reason: reason)
+        case .unavailable:
+            return .failed
+        }
+    }
+}
+
 enum CapexProseFillResult {
     case resolved((payload: BreakdownSnapshotPayload, source: String, audit: LLMBreakdownAuditPayload?))
     case failed
@@ -1227,6 +1267,20 @@ public extension BltServerContext {
     /// 設備投資マトリクス（axis=`capex`）を解決する。
     func resolveCapexBreakdown(docID: String, correctionDocIDs: [String] = []) async -> BreakdownResolveResult {
         await resolveCapexBreakdownImpl(docID: docID, correctionDocIDs: correctionDocIDs)
+    }
+
+    /// 有利子負債の内訳（axis=`interest_bearing_debt`）を解決する。
+    /// XBRL の DEI EDINET コード（`EDINETCodeDEI`）に対応する master の提出者業種。無ければ nil。
+    func edinetIndustry(xbrlDir: URL) async -> String? {
+        guard let edinetCode = XBRLUtils.extractTextblockHtml(in: xbrlDir, textblockTag: Xbrl.edinetCodeDEITag)?
+            .trimmingCharacters(in: .whitespacesAndNewlines), !edinetCode.isEmpty
+        else { return nil }
+        return await masterDataManager.industry(forEdinetCode: edinetCode)
+    }
+
+    func resolveInterestBearingDebtBreakdown(docID: String, correctionDocIDs: [String] = []) async -> BreakdownResolveResult {
+        await resolveInterestBearingDebtBreakdownImpl(
+            docID: docID, correctionDocIDs: correctionDocIDs)
     }
 }
 
@@ -1302,6 +1356,47 @@ private func breakdownContentHash(
     }
     let input = HashInput(
         segments: extractedBreakdownPayload(from: extracted), consolidatedSales: consolidatedSales)
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = [.sortedKeys]
+    guard let data = try? encoder.encode(input) else { return "" }
+    var hash: UInt64 = 0xcbf2_9ce4_8422_2325
+    for byte in data {
+        hash ^= UInt64(byte)
+        hash = hash &* 0x0000_0100_0000_01b3
+    }
+    return String(format: "%016llx", hash)
+}
+
+/// interest_bearing_debt の content_hash。行（label_raw/source/source_tag/セル値/maturity_class）と
+/// 分母の安定文字列を `breakdownContentHash` と同じ FNV-1a で潰す。
+private func ibdBreakdownContentHash(payload: BreakdownSnapshotPayload) -> String {
+    struct HashInput: Codable {
+        struct Row: Codable {
+            let labelRaw: String
+            let source: String?
+            let opening: Double?
+            let closing: Double?
+            let maturityClass: String?
+            let sourceTag: String?
+            let inTotal: Bool?
+            let excludedReason: String?
+            let pairedRowIndex: Int?
+            let categoryGroup: String?
+            let category: String?
+        }
+        let denominator: Double
+        let rows: [Row]
+    }
+    let input = HashInput(
+        denominator: payload.denominator,
+        rows: payload.rows.map {
+            HashInput.Row(
+                labelRaw: $0.labelRaw, source: $0.debtSource, opening: $0.opening,
+                closing: $0.closing, maturityClass: $0.maturityClass,
+                sourceTag: $0.sourceTag, inTotal: $0.inTotal, excludedReason: $0.excludedReason,
+                pairedRowIndex: $0.pairedRowIndex,
+                categoryGroup: $0.categoryGroup, category: $0.category)
+        })
     let encoder = JSONEncoder()
     encoder.outputFormatting = [.sortedKeys]
     guard let data = try? encoder.encode(input) else { return "" }
