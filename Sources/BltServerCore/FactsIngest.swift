@@ -31,41 +31,20 @@ func runFactsIngest(
     db: Database, limit: Int?, cachedDocIDs: Set<String> = [], logger: Logger? = nil,
     parse: XbrlFactParser
 ) async throws -> FactsIngestSummary {
-    let documents = try await withDbRetry(logger: logger, context: "全書類一覧") {
-        try await EdinetDocumentListing.query(on: db)
-            .sort(\.$submitDateTime, .descending)
-            .all()
-    }
-
     var attempted = 0
     var stored = 0
     var failed = 0
-    var skipped = 0
     var unhealthyRetries = 0
-    var missing: [String] = []
-    var stale: [String] = []
 
-    let classifyRows = try await withDbRetry(
+    let worklist = try await withDbRetry(
         logger: logger, context: "数値 fact 取り込み 分類", onRetry: { unhealthyRetries += 1 }
     ) {
-        try await EdinetXbrlFactsCacheVersionOnly.query(on: db).all()
+        try await factsIngestClassifyWorklist(db: db)
     }
-    let classifyIndex = ingestIndexByID(classifyRows) { $0.id }
+    var skipped = worklist.skipped
 
-    for doc in documents {
-        guard let docID = doc.id else { continue }
-        guard let existing = classifyIndex[docID] else {
-            missing.append(docID)
-            continue
-        }
-        if existing.cacheVersion != xbrlFactsCacheVersion {
-            stale.append(docID)
-        } else {
-            skipped += 1
-        }
-    }
-
-    let candidates = prioritized(missing + stale, codeOf: { $0 }, priorityCodes: cachedDocIDs)
+    let candidates = prioritized(
+        worklist.missing + worklist.stale, codeOf: { $0 }, priorityCodes: cachedDocIDs)
     // 分類フェーズと実処理フェーズでリトライ予算を分ける。
     // 分類中の一過性リトライで処理フェーズが即中断しないようにする。
     unhealthyRetries = 0

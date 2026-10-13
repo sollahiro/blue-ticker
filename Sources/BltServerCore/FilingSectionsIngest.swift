@@ -190,7 +190,8 @@ struct FilingSectionCandidateSets {
 
 /// 会社有報（120・府令010）の候補書類一覧を 1 回だけ読む。対象府令・書類種別は SQL で絞る。
 /// ステージ間で候補集合を共有するときはこの一覧を `filingSectionCandidates(docs:...)` へ渡すと
-/// DB 再往復しない。
+/// DB 再往復しない。保持窓（社ごと直近 N 件）と purge は `filingSectionCandidates` が
+/// この一覧の上で決める。種類・府令以外の行は SQL で落とす（全表 hydrate しない）。
 func annualReportDisclosureDocs(db: Database, logger: Logger? = nil) async throws
     -> [EdinetDocumentListing]
 {
