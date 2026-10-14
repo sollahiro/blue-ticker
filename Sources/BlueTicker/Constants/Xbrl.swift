@@ -73,7 +73,7 @@ enum Xbrl {
         "OperatingRevenuesIFRSSummaryOfBusinessResults",
         "Revenues",
         "RevenuesUSGAAPSummaryOfBusinessResults",
-        "NetSales",
+        "NetSales",  // 営業収益合計より先。内訳の和が合計に一致するときは resolveNetSales が合計へ差し替える
         "NetSalesSummaryOfBusinessResults",
         "NetSalesOfCompletedConstructionContractsCNS",
         "NetSalesOfCompletedConstructionContractsSummaryOfBusinessResults",
@@ -179,6 +179,23 @@ enum Xbrl {
         let parts = tag.split(separator: "+", omittingEmptySubsequences: true).map(String.init)
         return parts.count >= 2 && parts.allSatisfy { operatingRevenueSplitComponentTags.contains($0) }
     }
+
+    /// 本表の営業収益合計。`netSalesTags` では `NetSales`（売上高）が先に並ぶため、
+    /// 小売様式（営業収益 = 売上高 + 営業収入）では内訳が先勝ちする。合計が内訳の
+    /// いずれか 2 つ以上の和に一致するときだけ `resolveNetSales` がこちらを使う。
+    static let operatingRevenueTotalTag = "OperatingRevenue1"
+
+    /// `OperatingRevenue1` の calculation 子（売上高・営業収入とその業種拡張）。
+    /// 会社コードでは分岐しない。未知の子タグは和が一致せず、先勝ちのまま残る。
+    static let operatingRevenueTotalComponentTags: Set<String> = [
+        "NetSales",
+        "OperatingRevenue2",
+        "OtherOperatingRevenue2RevOA",
+        "OtherOperatingRevenue1RevOA",
+        "OperatingRevenueFromFinancialServicesBusiness",
+        "RentIncomeOfRealEstateRevOA",
+        "FinancialRevenue",
+    ]
 
     /// 保険売上（J-GAAP 経常収益 / IFRS 保険収益）。業種名では切らず、FieldSet に
     /// これらのタグがある filing を保険とみなす。

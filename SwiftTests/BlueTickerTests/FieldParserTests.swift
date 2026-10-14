@@ -135,6 +135,92 @@ import Foundation
         #expect(result.prior == 900.0)
     }
 
+    /// 営業収益合計 = 売上高 + 営業収入。合計が内訳の和に一致するとき合計を使う。
+    @Test func testResolveNetSalesPrefersOperatingRevenueTotalWhenItEqualsComponents() {
+        let fs = makeFieldSet(
+            ("NetSales", 8_893_693_000_000.0, 10_342_323_000_000.0),
+            ("OperatingRevenue2", 1_536_575_000_000.0, 1_630_439_000_000.0),
+            ("OperatingRevenue1", 10_430_269_000_000.0, 11_972_762_000_000.0)
+        )
+        let result = resolveNetSales(fs)
+        #expect(result.tag == "OperatingRevenue1")
+        #expect(result.current == 10_430_269_000_000.0)
+        #expect(result.prior == 11_972_762_000_000.0)
+    }
+
+    /// 百万円開示の 1 単位丸め（売上高+営業収入が合計と 1 百万円ずれる）でも合計を使う。
+    @Test func testResolveNetSalesPrefersOperatingRevenueTotalWithinOneMillionYen() {
+        let fs = makeFieldSet(
+            ("NetSales", 8_893_693_000_000.0, nil),
+            ("OperatingRevenue2", 1_536_575_000_000.0, nil),
+            ("OperatingRevenue1", 10_430_269_000_000.0, nil)
+        )
+        let result = resolveNetSales(fs)
+        #expect(result.tag == "OperatingRevenue1")
+        #expect(result.current == 10_430_269_000_000.0)
+    }
+
+    /// 合計が内訳の和と一致しないときは売上高の先勝ちを残す。
+    @Test func testResolveNetSalesKeepsNetSalesWhenOperatingRevenueDoesNotEqualComponents() {
+        let fs = makeFieldSet(
+            ("NetSales", 1_000_000_000.0, nil),
+            ("OperatingRevenue2", 200_000_000.0, nil),
+            ("OperatingRevenue1", 2_000_000_000.0, nil)
+        )
+        let result = resolveNetSales(fs)
+        #expect(result.tag == "NetSales")
+        #expect(result.current == 1_000_000_000.0)
+    }
+
+    /// 営業収益合計だけが乗っていて内訳が1つのときは先勝ちのまま。
+    @Test func testResolveNetSalesDoesNotSwitchWhenOnlyNetSalesAndTotalPresent() {
+        let fs = makeFieldSet(
+            ("NetSales", 1_000_000_000.0, nil),
+            ("OperatingRevenue1", 1_000_000_000.0, nil)
+        )
+        let result = resolveNetSales(fs)
+        #expect(result.tag == "NetSales")
+        #expect(result.current == 1_000_000_000.0)
+    }
+
+    /// 内訳が `OperatingRevenue2` 以外（その他営業収入）でも、和が一致すれば合計。
+    @Test func testResolveNetSalesPrefersTotalForOtherOperatingRevenueComponent() {
+        let fs = makeFieldSet(
+            ("NetSales", 401_958_000_000.0, nil),
+            ("OtherOperatingRevenue2RevOA", 90_412_000_000.0, nil),
+            ("OperatingRevenue1", 492_370_000_000.0, nil)
+        )
+        let result = resolveNetSales(fs)
+        #expect(result.tag == "OperatingRevenue1")
+        #expect(result.current == 492_370_000_000.0)
+    }
+
+    /// 営業収入合計とその子（不動産賃貸収入）が両方あっても二重計上せず合計を使う。
+    @Test func testResolveNetSalesIgnoresNestedOperatingRevenueChildWhenSubsetSums() {
+        let fs = makeFieldSet(
+            ("NetSales", 7_761_467_000.0, nil),
+            ("OperatingRevenue2", 220_981_000.0, nil),
+            ("RentIncomeOfRealEstateRevOA", 220_981_000.0, nil),
+            ("OperatingRevenue1", 7_982_449_000.0, nil)
+        )
+        let result = resolveNetSales(fs)
+        #expect(result.tag == "OperatingRevenue1")
+        #expect(result.current == 7_982_449_000.0)
+    }
+
+    /// 内訳3つの百万円丸めで合計が 2 百万円ずれても合計を使う。
+    @Test func testResolveNetSalesPrefersTotalWhenThreeComponentsRoundByTwoMillionYen() {
+        let fs = makeFieldSet(
+            ("NetSales", 417_976_000_000.0, nil),
+            ("RentIncomeOfRealEstateRevOA", 17_117_000_000.0, nil),
+            ("OtherOperatingRevenue2RevOA", 20_915_000_000.0, nil),
+            ("OperatingRevenue1", 456_010_000_000.0, nil)
+        )
+        let result = resolveNetSales(fs)
+        #expect(result.tag == "OperatingRevenue1")
+        #expect(result.current == 456_010_000_000.0)
+    }
+
     // MARK: - resolveAggregate
 
     @Test func testAggregateSumsAllComponents() {

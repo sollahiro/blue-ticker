@@ -37,7 +37,7 @@ struct StatementFinancialsValues {
     var interestExpense: Double?
     var cfTreasuryStock: Double?
     var buyback: Double?
-    /// geography カバー判定に渡すラベル。Summary `sales_label` は変えない。
+    /// geography カバー判定に渡すラベル。Summary 組立とは独立。
     /// 本表に売上高（NetSales*）と営業収益（OperatingRevenue*）が並ぶときは営業収益
     /// （既存の `isNonSalesRevenueLabel` → 表の総合計アンカー）。
     var geographyCoverageSalesLabel: String? = nil
@@ -679,7 +679,7 @@ enum StatementFinancialsResolver {
         }
     }
 
-    /// geography カバー判定用の売上ラベル。Summary `sales_label` は変えない。
+    /// geography カバー判定用の売上ラベル。Summary 組立とは独立。
     /// 本表 FieldSet に売上高（NetSales*）と営業収益（OperatingRevenue*）が別タグであるときは
     /// PL トップラインの営業収益を返し、既存の `isNonSalesRevenueLabel` 経路で表の総合計を
     /// アンカーにする（3382 / 8233 / 8267。売上高は小計行）。
