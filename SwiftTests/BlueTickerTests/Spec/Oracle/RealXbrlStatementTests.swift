@@ -1916,4 +1916,24 @@ import Foundation
                     year.cashFlow, "現金、現金等価物および使途制限付現金期末残高") == closing)
         }
     }
+
+    // 8585 オリコ: 個別 PL role の loc 数が連結より多く、カバレッジだと個別木になり
+    // 連結専用の受取利息配当・NCI・親会社株主帰属利益が落ちていた。
+    // source: code=8585 fy_end=2026-03-31 doc_id=S100YCKH page=110 field=income_statement.InterestAndDividendIncomeRevOA
+    // source: code=8585 fy_end=2026-03-31 doc_id=S100YCKH page=110 field=income_statement.ProfitLossAttributableToNonControllingInterests
+    // source: code=8585 fy_end=2026-03-31 doc_id=S100YCKH page=110 field=income_statement.ProfitLossAttributableToOwnersOfParent
+    @Test func oricoConsolidatedIncomeKeepsInterestNciAndOwnersOfParent() async throws {
+        guard await Self.ensureAvailable("S100YCKH") else { return }
+        let year = try Self.requireResolved(
+            await Self.analyzer().extract(docID: "S100YCKH", statementTypes: [.incomeStatement]))
+        let byTag = Dictionary(uniqueKeysWithValues: year.incomeStatement.map { ($0.tag, $0) })
+        #expect(byTag["InterestAndDividendIncomeRevOA"]?.value == 434_000_000)
+        #expect(byTag["ProfitLossAttributableToNonControllingInterests"]?.value == -652_000_000)
+        #expect(byTag["ProfitLossAttributableToOwnersOfParent"]?.value == 12_889_000_000)
+        #expect(byTag["ProfitLoss"]?.value == 12_236_000_000)
+        #expect(byTag["InterestIncomeRevOA"] == nil)
+        #expect(
+            byTag["FinancialRevenue"]?.components?.map(\.tag)
+                .contains("InterestAndDividendIncomeRevOA") == true)
+    }
 }
