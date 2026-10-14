@@ -15,7 +15,10 @@ struct OperatingProfitResult {
 
 enum OperatingProfitExtractor {
 
-    static func extract(fieldSet: FieldSet, accountingStandard: String) -> OperatingProfitResult {
+    static func extract(
+        fieldSet: FieldSet, accountingStandard: String,
+        sgaTagPolicy: SgaTagPolicy = .all
+    ) -> OperatingProfitResult {
         // US-GAAP 企業: HTML 仮想タグ（USGAAPHtml.parsePLFields が注入）を使用
         if accountingStandard == "US-GAAP" {
             let opItem = resolveItem(fieldSet, tags: ["USGAAP_HTML_OperatingIncome"])
@@ -41,7 +44,7 @@ enum OperatingProfitExtractor {
         // 保険は営業利益を全年 null にする。経常利益・保険サービス損益・税引前は入れない。
         // 販管費は OP 成否と切り離して拾う（損保 J-GAAP 営業費、生保 J-GAAP 事業費、IFRS 一般管理費）。
         if Xbrl.isInsuranceFiling(fieldSet) {
-            let sga = resolveSGA(fieldSet)
+            let sga = resolveSGA(fieldSet, policy: sgaTagPolicy)
             return OperatingProfitResult(
                 operatingProfit: nil, operatingProfitPrior: nil,
                 sga: sga.current, sgaPrior: sga.prior, sgaLabel: sga.label,
@@ -53,7 +56,7 @@ enum OperatingProfitExtractor {
         // 直接法: OPERATING_PROFIT_DIRECT_TAGS
         let opItem = resolveItem(fieldSet, tags: Xbrl.operatingProfitDirectTags)
         if opItem.tag != nil {
-            let sga = resolveSGA(fieldSet)
+            let sga = resolveSGA(fieldSet, policy: sgaTagPolicy)
             return OperatingProfitResult(
                 operatingProfit: opItem.current,
                 operatingProfitPrior: opItem.prior,
@@ -73,7 +76,7 @@ enum OperatingProfitExtractor {
             subtrahendTags: Xbrl.sgaDirectTags
         )
         if computed.current != nil || computed.prior != nil {
-            let sga = resolveSGA(fieldSet)
+            let sga = resolveSGA(fieldSet, policy: sgaTagPolicy)
             return OperatingProfitResult(
                 operatingProfit: computed.current,
                 operatingProfitPrior: computed.prior,
@@ -112,8 +115,9 @@ enum OperatingProfitExtractor {
 
     /// SGA を解決する。結合タグ優先、なければ保険販管相当、なければ業種別の販管費合計、
     /// なければ販売費＋一般管理費（IFRS）を合算、それも無ければ販売費の無い PL の1行（一般管理費等）。
+    /// `omitIndustryAndSingleLine` は業種合計と1行を使わず、Jev フォールバックへ回す。
     private static func resolveSGA(
-        _ fieldSet: FieldSet
+        _ fieldSet: FieldSet, policy: SgaTagPolicy = .all
     ) -> (current: Double?, prior: Double?, label: String?) {
         let combined = resolveItem(fieldSet, tags: Xbrl.sgaDirectTags)
         if combined.tag != nil { return (combined.current, combined.prior, nil) }
@@ -121,14 +125,17 @@ enum OperatingProfitExtractor {
         let insurance = resolveItem(fieldSet, tags: Xbrl.insuranceSgaTags)
         if insurance.tag != nil { return (insurance.current, insurance.prior, nil) }
 
-        for (tag, label) in Xbrl.sgaIndustryTotalTags {
-            let item = resolveItem(fieldSet, tags: [tag])
-            if item.tag != nil { return (item.current, item.prior, label) }
+        if policy == .all {
+            for (tag, label) in Xbrl.sgaIndustryTotalTags {
+                let item = resolveItem(fieldSet, tags: [tag])
+                if item.tag != nil { return (item.current, item.prior, label) }
+            }
         }
 
         let selling = resolveItem(fieldSet, tags: Xbrl.sgaSellingIFRSTags)
         let ga = resolveItem(fieldSet, tags: Xbrl.sgaGaIFRSTags)
         guard selling.current != nil || ga.current != nil else {
+            guard policy == .all else { return (nil, nil, nil) }
             // 販売費の行が別にある PL では一般管理費だけを販管費にしない。
             guard resolveItem(fieldSet, tags: Xbrl.sgaSellingLineTags).tag == nil else { return (nil, nil, nil) }
             let hasGrossProfit = resolveItem(

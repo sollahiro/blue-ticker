@@ -86,6 +86,8 @@ struct CalculatedData: Codable {
     var sellingGeneralAdministrativeExpenses: Double?
     /// 販管費の表示名（銀行は「営業経費」。null は販売費及び一般管理費）。
     var sgaLabel: String?
+    /// Jev 販管費行選択の非公開監査。CodingKeys に出さず `/financials` にも載せない。
+    var sgaJevAudit: SegmentNoteJevAuditPayload? = nil
     var businessProfit: Double?
     var businessProfitMargin: Double?
     var businessProfitChange: Double?

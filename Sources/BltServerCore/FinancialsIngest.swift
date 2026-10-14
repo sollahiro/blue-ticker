@@ -325,6 +325,7 @@ func storeCompanyFinancials(
         row.requestedYears = years
         row.highWater = highWater
         row.assemblyFingerprint = financialsAssemblyFingerprint()
+        row.llmAudit = response.sgaJevLlmAudit
     }
     if let row = existing {
         applyFields(row)

@@ -86,7 +86,7 @@ public func isCurrentFinancialsAssemblyFingerprint(_ stored: String?) -> Bool {
 // |---|---|---|---|
 // | sales, operating_profit, net_profit | statement（PL。net_profit は親会社帰属が SS のみなら changes_in_equity） | StatementFinancialsResolver | done |
 // | （銀行業）operating_profit, op_label, sga, sga_label | 銀行判定（`Xbrl.isBankFiling`、IBD と同じ。預金マーカー `DepositsLiabilitiesBNK` または EDINET 提出者業種＝銀行業。ゆうちょ 7182 は後者）で営業利益行が無い銀行は operating_profit = 業務純益（業務粗利益 − 営業経費 `GeneralAndAdministrativeExpensesOEBNK`。持分法は足さない）、op_label「業務純益」、sga = 営業経費、sga_label「営業経費」。営業経費か業務粗利益が無ければ operating_profit / sga とも null（経常利益・差額で埋めない）。sga_label は販管費行のラベルが「販売費及び一般管理費」以外のときだけ入る（銀行「営業経費」、ガス「供給販売費及び一般管理費」、商品先物「営業費用」、一般管理費だけの PL「一般管理費」、「事業費用」）。それ以外は null（2026-10-12） | StatementFinancialsResolver.bankNetBusinessProfit | done |
-// | gross_profit, sga | statement（income_statement 行）。GP は売上総利益（売上高−売上原価。両方ある年だけ。原価欠測を売上コピーしない）。営業総利益（営業収益合計−営業原価合計）が併記され販管費がその直上なら営業総利益。無ければ営業収益−営業費用+販管費、その次に銀行業務粗利益。sga は販管費合計タグ、無ければ保険の営業費・事業費、業種別合計（ガス「供給販売費及び一般管理費」、商品先物「営業費用合計」、IFRS 継続事業の販管費）、IFRS 販売費＋一般管理費、販売費行の無い PL の1行（「一般管理費」「事業費用」）の順。未開示は null（GP − OP の差額で埋めない） | StatementFinancialsResolver（#5c） | done |
+// | gross_profit, sga | statement（income_statement 行）。GP は売上総利益（売上高−売上原価。両方ある年だけ。原価欠測を売上コピーしない）。営業総利益（営業収益合計−営業原価合計）が併記され販管費がその直上なら営業総利益。無ければ営業収益−営業費用+販管費、その次に銀行業務粗利益。sga は販管費合計タグ、無ければ保険の営業費・事業費、業種別合計（ガス「供給販売費及び一般管理費」、商品先物「営業費用合計」、IFRS 継続事業の販管費）、IFRS 販売費＋一般管理費、販売費行の無い PL の1行（「一般管理費」「事業費用」）、それも無ければ GP..OP 間の既存1行を Jev が選ぶ（値は発明しない。GP−OP ±1百万円、またはその他の収益・費用でギャップ説明。銀行・保険・失敗は null）。未開示は null（GP − OP の差額で埋めない） | StatementFinancialsResolver（#5c） / SgaLineJevPicker | done |
 // | total_assets, current_assets, non_current_assets | statement（balance_sheet 行） | StatementFinancialsResolver（#5b-1） | done |
 // | current_liabilities, non_current_liabilities, net_assets | statement | StatementFinancialsResolver（#5b-1） | done |
 // | ppe_total | statement | StatementFinancialsResolver（#5b-1） | done |
@@ -620,10 +620,21 @@ public struct FinancialsResponse: Codable, Sendable {
     var currency: String
     var unit: String
     var years: [FinancialsYear]
+    /// 非公開。Codable / `/financials` には出さない。ingest が `company_financials.llm_audit` へ書く。
+    var sgaJevAudits: [SegmentNoteJevAuditPayload] = []
 
     enum CodingKeys: String, CodingKey {
         case schemaVersion = "schema_version"
         case code, name, sector, market, currency, unit, years
+    }
+}
+
+/// `company_financials.llm_audit`。公開契約ではない。
+public struct FinancialsLlmAuditPayload: Codable, Sendable, Equatable {
+    public var sgaJev: [SegmentNoteJevAuditPayload]
+
+    public init(sgaJev: [SegmentNoteJevAuditPayload]) {
+        self.sgaJev = sgaJev
     }
 }
 
@@ -638,6 +649,11 @@ extension FinancialsResponse {
         currency = "JPY"
         unit = "百万円"
         years = uniquedYearsByFyEnd((result.years ?? []).map { FinancialsYear($0) })
+        sgaJevAudits = (result.years ?? []).compactMap { year in
+            guard var audit = year.calculatedData.sgaJevAudit else { return nil }
+            if audit.code.isEmpty { audit.code = code }
+            return audit
+        }
     }
 
     /// 公開契約レスポンス → 内部モデル（MetricsResult）。
@@ -682,6 +698,11 @@ extension FinancialsResponse {
     /// 格納済み `years` の件数。public: 財務取り込み read 経路（BltServerCore）が
     /// notApplicable プレースホルダ（`years` 空）を検出して 404 を維持するために使う（issue #86）。
     public var yearCount: Int { years.count }
+
+    /// Jev 販管費監査。空なら nil。public: 財務取り込みが `company_financials.llm_audit` へ書く。
+    public var sgaJevLlmAudit: FinancialsLlmAuditPayload? {
+        sgaJevAudits.isEmpty ? nil : FinancialsLlmAuditPayload(sgaJev: sgaJevAudits)
+    }
 
     /// 格納 `years` のうち最新の fy_end（先頭 10 文字 YYYY-MM-DD）とその年の doc_id。years 空なら nil。
     /// public: 財務取り込み（BltServerCore）が、最新 FY を失う縮小上書きを拒否する判定に使う。

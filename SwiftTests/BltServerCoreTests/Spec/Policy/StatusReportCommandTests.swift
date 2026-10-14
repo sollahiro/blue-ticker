@@ -22,6 +22,7 @@ private func withMigratedApp(_ body: (Application) async throws -> Void) async t
         app.migrations.add(CreateCompanyHalfFinancials())
         app.migrations.add(AddHighWaterToCompanyFinancials())
         app.migrations.add(AddAssemblyFingerprintToCompanyFinancials())
+        app.migrations.add(AddLlmAuditToCompanyFinancials())
         app.migrations.add(DropCompanyHalfFinancials())
         app.migrations.add(CreateCompanyFilingSections())
         app.migrations.add(CreateCompanyStatements())

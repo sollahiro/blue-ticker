@@ -27,6 +27,7 @@ private func withApp(_ body: (Application) async throws -> Void) async throws {
         app.migrations.add(CreateCompanyHalfFinancials())
         app.migrations.add(AddHighWaterToCompanyFinancials())
         app.migrations.add(AddAssemblyFingerprintToCompanyFinancials())
+        app.migrations.add(AddLlmAuditToCompanyFinancials())
         app.migrations.add(CreateScreenIndex())
         app.migrations.add(ReplaceScreenIndexGrowthWithCagr())
         app.migrations.add(AddCacheVersionToScreenIndex())

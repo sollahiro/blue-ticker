@@ -18,6 +18,7 @@ private func withOverrideApp(_ body: (Application) async throws -> Void) async t
         app.migrations.add(CreateCompanyHalfFinancials())
         app.migrations.add(AddHighWaterToCompanyFinancials())
         app.migrations.add(AddAssemblyFingerprintToCompanyFinancials())
+        app.migrations.add(AddLlmAuditToCompanyFinancials())
         app.migrations.add(CreateCompanyStatementNotes())
         app.migrations.add(CreateManualXbrlOverrides())
         app.migrations.add(RestrictManualXbrlOverridesToCapex())

@@ -357,7 +357,8 @@ enum Xbrl {
         "SellingGeneralAndAdministrativeExpenses",
     ]
 
-    /// 業種別・非継続事業ありの販管費合計行（タグ, sga_label）。`sgaDirectTags`・保険が無いときだけ使う
+    /// 業種別・非継続事業ありの販管費合計行（タグ, sga_label）。`sgaDirectTags`・保険が無いときだけ使う。
+    /// 新しい業種別名はここに足さず、タグが無い書類は `SgaLineJevPicker` が既存 PL 行を選ぶ。
     /// （GP 構成・計算法 OP には使わない）。label nil は「販売費及び一般管理費」そのもの。
     /// ガス「供給販売費及び一般管理費（合計）」、商品先物は営業総利益の下の「営業費用合計」、
     /// IFRS で非継続事業を分けた PL の継続事業の販管費（ナブテスコ 6268）。

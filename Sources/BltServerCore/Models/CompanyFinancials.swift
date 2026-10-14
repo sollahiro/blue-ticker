@@ -44,6 +44,10 @@ final class CompanyFinancials: Model, @unchecked Sendable {
     @OptionalField(key: "assembly_fingerprint")
     var assemblyFingerprint: String?
 
+    /// Summary `sga` の Jev 監査。公開契約 `/financials` には出さない。
+    @OptionalField(key: "llm_audit")
+    var llmAudit: FinancialsLlmAuditPayload?
+
     /// 最終更新時刻（計算・upsert したタイミング）。
     @Timestamp(key: "updated_at", on: .update)
     var updatedAt: Date?
