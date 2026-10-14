@@ -85,7 +85,8 @@ struct IndividualAnalyzer {
         ) { d in
             let docID = d.value["docID"] as? String ?? ""
             return await self.processDocument(
-                d.value, correctionDocIDs: correctionIDsByOriginal[docID] ?? [])
+                d.value, issuerCode: code,
+                correctionDocIDs: correctionIDsByOriginal[docID] ?? [])
         }
 
         guard !yearEntries.isEmpty else { return .failed }
@@ -109,7 +110,9 @@ struct IndividualAnalyzer {
 
     // MARK: - Document Processing
 
-    func processDocument(_ doc: [String: Any], correctionDocIDs: [String] = []) async -> YearEntry? {
+    func processDocument(
+        _ doc: [String: Any], issuerCode: String = "", correctionDocIDs: [String] = []
+    ) async -> YearEntry? {
         guard let docID = doc["docID"] as? String,
               let fyEnd = doc["edinet_fy_end"] as? String else { return nil }
 
@@ -118,6 +121,13 @@ struct IndividualAnalyzer {
             correctionDocIDs: correctionDocIDs,
             download: { await edinetClient.downloadDocument($0) }
         ) else { return nil }
+        for regression in readOverlayRegressions(in: xbrlDir) {
+            printError(
+                xbrlOverlayRegressionLogMessage(
+                    code: issuerCode, fy: fyEnd, originalDocID: regression.originalDocID,
+                    correctionDocID: regression.correctionDocID, reason: regression.reasonSummary)
+                    + "\n")
+        }
 
         let allTagElements = XBRLUtils.collectAllNumericElements(in: xbrlDir, nilAsZero: false)
         guard !allTagElements.isEmpty else { return nil }
