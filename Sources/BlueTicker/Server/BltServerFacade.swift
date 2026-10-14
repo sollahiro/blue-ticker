@@ -49,6 +49,8 @@ public struct BltServerContext: Sendable {
     let capexProseDecider: (any CapexProseDeciding)?
     /// 有利子負債の行分類と近似重複判定。同じキーが無いときは nil（未分類行は needs_review）。
     let interestBearingDebtDecider: (any InterestBearingDebtDeciding)?
+    /// Summary `sga` の Jev 行選択。同じキーが無いときは nil（タグ経路が空のまま）。
+    let sgaLineDecider: (any SgaLineDeciding)?
     /// employees / rd / goodwill / 報告セグメント指標軸が同一 doc を軸ループで再パースしないためのメモ。
     let businessSegmentDimensionCache: BusinessSegmentDimensionCache
 
@@ -62,7 +64,8 @@ public struct BltServerContext: Sendable {
         segmentInfoDecider: (any SegmentInfoDeciding)? = nil,
         researchAndDevelopmentProseDecider: (any ResearchAndDevelopmentProseDeciding)? = nil,
         capexProseDecider: (any CapexProseDeciding)? = nil,
-        interestBearingDebtDecider: (any InterestBearingDebtDeciding)? = nil
+        interestBearingDebtDecider: (any InterestBearingDebtDeciding)? = nil,
+        sgaLineDecider: (any SgaLineDeciding)? = nil
     ) {
         self.cacheDir = cacheDir
         let store = EdinetCacheStore(cacheDir: edinetCacheDir(cacheDir))
@@ -80,6 +83,7 @@ public struct BltServerContext: Sendable {
         self.researchAndDevelopmentProseDecider = researchAndDevelopmentProseDecider
         self.capexProseDecider = capexProseDecider
         self.interestBearingDebtDecider = interestBearingDebtDecider
+        self.sgaLineDecider = sgaLineDecider
         self.businessSegmentDimensionCache = BusinessSegmentDimensionCache()
     }
 }
@@ -175,6 +179,9 @@ public func makeBltServerContext() async -> BltServerContext? {
     let interestBearingDebtDecider: (any InterestBearingDebtDeciding)? = decisionsClient.map {
         OpenRouterInterestBearingDebtDecider(client: $0)
     }
+    let sgaLineDecider: (any SgaLineDeciding)? = decisionsClient.map {
+        OpenRouterSgaLineDecider(client: $0)
+    }
     return BltServerContext(
         apiKey: key, cacheDir: cacheDir, overviewChatClient: overviewChatClient,
         overviewModel: overviewEndpoint?.model ?? companyOverviewDefaultModel,
@@ -184,7 +191,8 @@ public func makeBltServerContext() async -> BltServerContext? {
         segmentInfoDecider: segmentInfoDecider,
         researchAndDevelopmentProseDecider: researchAndDevelopmentProseDecider,
         capexProseDecider: capexProseDecider,
-        interestBearingDebtDecider: interestBearingDebtDecider)
+        interestBearingDebtDecider: interestBearingDebtDecider,
+        sgaLineDecider: sgaLineDecider)
 }
 
 // MARK: - REST Facade
@@ -231,7 +239,8 @@ public extension BltServerContext {
     func computeFinancials(code: String, years: Int) async -> FinancialsComputeResult {
         let stock = await masterDataManager.getByCode(code)
         let analyzer = IndividualAnalyzer(
-            edinetClient: edinetClient, cacheManager: cacheManager, edinetIndustry: stock?.s33nm)
+            edinetClient: edinetClient, cacheManager: cacheManager,
+            edinetIndustry: stock?.s33nm, sgaLineDecider: sgaLineDecider)
         // Ingest は derived `individual_analysis_*` を使わない。そのキーは
         // `blueTickerVersion` であり `companyFinancialsCacheVersion`（fin-vN）ではない。
         // 既定 `useCache: true` のままだと fin-vN ingest が古 IBD/ROIC を現行として書く。

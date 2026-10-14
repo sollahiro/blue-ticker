@@ -28,6 +28,8 @@ struct StatementFinancialsValues {
     var sga: Double?
     /// 販管費の表示名。null は通常の販売費及び一般管理費。銀行（業務純益経路）は「営業経費」。
     var sgaLabel: String? = nil
+    /// Jev が販管費行を選んだ（または fail-closed した）ときの非公開監査。`/financials` には出さない。
+    var sgaJevAudit: SegmentNoteJevAuditPayload? = nil
     var cfo: Double?
     var cfi: Double?
     var pretaxIncome: Double?
@@ -53,7 +55,46 @@ enum StatementFinancialsResolver {
     /// `statementSalesSummaryTotalTags` を売上 FieldSet へ載せる。それも無ければ
     /// `operatingRevenueSplitGroups` の内訳を合算する（9127 S100Y90D）。
     /// `edinetIndustry` は EDINET 提出者業種（銀行判定 `Xbrl.isBankFiling` に渡す。不明なら nil）。
-    static func resolve(xbrlDir: URL, edinetIndustry: String? = nil) -> StatementFinancialsValues? {
+    static func resolve(
+        xbrlDir: URL, edinetIndustry: String? = nil,
+        sgaTagPolicy: SgaTagPolicy = .all
+    ) -> StatementFinancialsValues? {
+        resolveBundle(
+            xbrlDir: xbrlDir, edinetIndustry: edinetIndustry, sgaTagPolicy: sgaTagPolicy
+        )?.values
+    }
+
+    /// タグ経路が nil のときだけ Jev に既存 PL 行を選ばせる。銀行・保険・US-GAAP は呼ばない。
+    static func resolve(
+        xbrlDir: URL, edinetIndustry: String? = nil,
+        sgaTagPolicy: SgaTagPolicy = .all,
+        sgaLineDecider: (any SgaLineDeciding)?
+    ) async -> StatementFinancialsValues? {
+        guard var bundle = resolveBundle(
+            xbrlDir: xbrlDir, edinetIndustry: edinetIndustry, sgaTagPolicy: sgaTagPolicy)
+        else { return nil }
+        await SgaLineJevPicker.applyIfNeeded(
+            to: &bundle.values,
+            incomeStatement: bundle.incomeStatement,
+            skip: bundle.skipSgaJev,
+            decider: sgaLineDecider,
+            docID: docIDFromXbrlDir(xbrlDir))
+        return bundle.values
+    }
+
+    private struct ResolveBundle {
+        var values: StatementFinancialsValues
+        var incomeStatement: [StatementLineItem]
+        var skipSgaJev: Bool
+    }
+
+    private static func docIDFromXbrlDir(_ xbrlDir: URL) -> String {
+        xbrlDir.lastPathComponent.replacingOccurrences(of: "_xbrl", with: "")
+    }
+
+    private static func resolveBundle(
+        xbrlDir: URL, edinetIndustry: String?, sgaTagPolicy: SgaTagPolicy
+    ) -> ResolveBundle? {
         let tagElements = XBRLUtils.collectAllNumericElements(in: xbrlDir, nilAsZero: false)
         guard !tagElements.isEmpty else { return nil }
         let accountingStandard = detectAccountingStandard(tagElements)
@@ -65,19 +106,22 @@ enum StatementFinancialsResolver {
         ) else { return nil }
 
         if accountingStandard == "US-GAAP" {
-            return resolveFromUSGAAPStatement(year, tagElements: tagElements)
+            return ResolveBundle(
+                values: resolveFromUSGAAPStatement(year, tagElements: tagElements),
+                incomeStatement: year.incomeStatement,
+                skipSgaJev: true)
         }
         return resolveFromStructuredStatement(
             year, tagElements: tagElements, accountingStandard: accountingStandard,
-            edinetIndustry: edinetIndustry)
+            edinetIndustry: edinetIndustry, sgaTagPolicy: sgaTagPolicy)
     }
 
     // MARK: - J-GAAP / IFRS（構造化 XBRL タグ）
 
     private static func resolveFromStructuredStatement(
         _ year: StatementYear, tagElements: XbrlTagElements, accountingStandard: String,
-        edinetIndustry: String?
-    ) -> StatementFinancialsValues {
+        edinetIndustry: String?, sgaTagPolicy: SgaTagPolicy
+    ) -> ResolveBundle {
         // Statement 行のタグを許可リストにし、元 fact のコンテキストを保った FieldSet を組む。
         // CF の期首/期末で同タグが並ぶ会社でも Instant CurrentYear を正しく拾える
         // （行値だけを辞書化すると先勝ちで期首や計算派生値に引きずられる）。
@@ -117,7 +161,8 @@ enum StatementFinancialsResolver {
         let is_ = IncomeStatementExtractor.extract(
             fieldSet: salesFS, accountingStandard: accountingStandard)
         let op = OperatingProfitExtractor.extract(
-            fieldSet: durationFS, accountingStandard: accountingStandard)
+            fieldSet: durationFS, accountingStandard: accountingStandard,
+            sgaTagPolicy: sgaTagPolicy)
         let bs = BalanceSheetExtractor.extract(
             fieldSet: instantFS, accountingStandard: accountingStandard)
         let ppe = TangibleFixedAssetsExtractor.extract(
@@ -156,12 +201,14 @@ enum StatementFinancialsResolver {
         }
         var sga = remaining.sga
         var sgaLabel = remaining.sgaLabel
+        let isInsurance = Xbrl.isInsuranceFiling(durationFS)
+        let isBank = Xbrl.isBankFiling(instantFS, edinetIndustry: edinetIndustry)
         // 銀行（預金マーカーまたは EDINET 提出者業種＝銀行業。IBD と同じ判定）で連結の営業利益値が無い会社（経常利益に落ちる、または
         // 単体だけの OperatingIncome タグで値が空になる みずほ 8411 S100YF8Y）は
         // 業務純益 = 業務粗利益 − 営業経費 を営業利益とし、販管費は営業経費。
         // 営業利益行を持つ銀行子会社持株（HSホールディングス 8699）は対象外。
         if op.method == "ordinary_income" || op.operatingProfit == nil,
-           !Xbrl.isInsuranceFiling(durationFS), Xbrl.isBankFiling(instantFS, edinetIndustry: edinetIndustry) {
+           !isInsurance, isBank {
             let bank = bankNetBusinessProfit(
                 grossProfit: remaining.grossProfit, grossProfitLabel: remaining.grossProfitLabel,
                 durationFS: durationFS)
@@ -171,7 +218,7 @@ enum StatementFinancialsResolver {
             sgaLabel = bank.operatingExpenses == nil ? nil : bankOperatingExpensesLabel
         }
 
-        return StatementFinancialsValues(
+        let values = StatementFinancialsValues(
             sales: sales,
             salesLabel: salesLabel,
             operatingProfit: operatingProfit,
@@ -207,6 +254,10 @@ enum StatementFinancialsResolver {
             geographyCoverageSalesLabel: geographyCoverageSalesLabel(
                 summaryLabel: salesLabel, fieldSet: salesFS)
         )
+        return ResolveBundle(
+            values: values,
+            incomeStatement: year.incomeStatement,
+            skipSgaJev: isBank || isInsurance)
     }
 
     // MARK: - US-GAAP（HTML Statement ラベル → 仮想タグ）

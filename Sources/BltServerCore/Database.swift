@@ -52,6 +52,8 @@ func configureDatabase(_ app: Application) async throws {
     app.migrations.add(AddHighWaterToCompanyFinancials())
     // 財務取り込み: 正本 cache_version 指紋（タスク #11。fin-vN 非連動の再組立トリガ）。
     app.migrations.add(AddAssemblyFingerprintToCompanyFinancials())
+    // 財務取り込み: Summary sga の Jev 監査（公開 response には出さない）。
+    app.migrations.add(AddLlmAuditToCompanyFinancials())
     // 有報セクション取り込み: 有報セクション本文（company_filing_sections、書類単位 JSONB）。
     app.migrations.add(CreateCompanyFilingSections())
     // EDINET マスタデータ（コードリスト CSV）の正本スナップショット（単一行）。

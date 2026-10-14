@@ -43,6 +43,7 @@ private func withApp(
             app.migrations.add(CreateCompanyHalfFinancials())
             app.migrations.add(AddHighWaterToCompanyFinancials())
             app.migrations.add(AddAssemblyFingerprintToCompanyFinancials())
+            app.migrations.add(AddLlmAuditToCompanyFinancials())
             app.migrations.add(CreateCompanyFilingSections())
             app.migrations.add(CreateCompanySegmentBreakdowns())
             app.migrations.add(RenameCompanySegmentBreakdownsToCompanyBreakdowns())

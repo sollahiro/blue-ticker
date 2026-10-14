@@ -27,6 +27,8 @@ struct IndividualAnalyzer {
     let cacheManager: CacheManager
     /// EDINET コードリストの提出者業種（`MasterStock.s33nm`）。銀行判定 `Xbrl.isBankFiling` に渡す。
     var edinetIndustry: String? = nil
+    /// Summary `sga` の Jev フォールバック。キー未設定なら nil（タグ経路が空のまま）。
+    var sgaLineDecider: (any SgaLineDeciding)? = nil
 
     // MARK: - Public Entry Point
 
@@ -126,8 +128,9 @@ struct IndividualAnalyzer {
 
         // 本表水準値は statement 正本のみ（#5 / #5b-1 / #5c / #8）。旧 Extractor への
         // フィールド単位フォールバックはしない。US-GAAP は USGAAPStatementHtml。
-        let statementMain = StatementFinancialsResolver.resolve(
-            xbrlDir: xbrlDir, edinetIndustry: edinetIndustry)
+        let statementMain = await StatementFinancialsResolver.resolve(
+            xbrlDir: xbrlDir, edinetIndustry: edinetIndustry,
+            sgaLineDecider: sgaLineDecider)
         let ibd = await BreakdownFinancialsResolver.financialsCanonicalInterestBearingDebt(
             xbrlDir: xbrlDir, edinetIndustry: edinetIndustry)
         let interestExpense = statementMain?.interestExpense
@@ -166,6 +169,7 @@ struct IndividualAnalyzer {
         }
         calc.sellingGeneralAdministrativeExpenses = statementMain?.sga.map { $0 / millionYen }
         calc.sgaLabel = statementMain?.sgaLabel
+        calc.sgaJevAudit = statementMain?.sgaJevAudit
         calc.opLabel = statementMain?.operatingProfitLabel
 
         calc.totalAssets = statementMain?.totalAssets.map { $0 / millionYen }
