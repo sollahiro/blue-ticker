@@ -193,6 +193,85 @@ import Testing
                 == [35_239_338_000_000, -1_200_000_000_000, 36_878_913_000_000])
     }
 
+    @Test func prefersConsolidatedIncomeRoleWhenIndividualTreeCoversMoreChosenTags() {
+        // オリコ型: 個別 PL の loc 数が連結 PL より多い。カバレッジだけで選ぶと個別木になり、
+        // 連結にしか無い受取利息配当・NCI・親会社株主帰属利益が落ち、個別専用の受取利息が残る。
+        let cons = role("ConsolidatedStatementOfIncome")
+        let indiv = role("StatementOfIncome")
+        let facts: XbrlFactIndex = [
+            "OperatingRevenues": [
+                "CurrentYearDuration": XbrlFact(
+                    tag: "OperatingRevenues", contextRef: "CurrentYearDuration",
+                    value: 233_116_000_000, consolidation: "", roles: [cons, indiv],
+                    orderByRole: [cons: 12, indiv: 12])
+            ],
+            "InterestIncomeRevOA": [
+                "CurrentYearDuration": XbrlFact(
+                    tag: "InterestIncomeRevOA", contextRef: "CurrentYearDuration",
+                    value: 245_000_000, consolidation: "", roles: [indiv],
+                    orderByRole: [indiv: 14])
+            ],
+            "InterestAndDividendIncomeRevOA": [
+                "CurrentYearDuration": XbrlFact(
+                    tag: "InterestAndDividendIncomeRevOA", contextRef: "CurrentYearDuration",
+                    value: 434_000_000, consolidation: "", roles: [cons],
+                    orderByRole: [cons: 14])
+            ],
+            "ProfitLoss": [
+                "CurrentYearDuration": XbrlFact(
+                    tag: "ProfitLoss", contextRef: "CurrentYearDuration",
+                    value: 12_236_000_000, consolidation: "", roles: [cons, indiv],
+                    orderByRole: [cons: 40, indiv: 50])
+            ],
+            "ProfitLossAttributableToNonControllingInterests": [
+                "CurrentYearDuration": XbrlFact(
+                    tag: "ProfitLossAttributableToNonControllingInterests",
+                    contextRef: "CurrentYearDuration", value: -652_000_000, consolidation: "",
+                    roles: [cons], orderByRole: [cons: 41])
+            ],
+            "ProfitLossAttributableToOwnersOfParent": [
+                "CurrentYearDuration": XbrlFact(
+                    tag: "ProfitLossAttributableToOwnersOfParent",
+                    contextRef: "CurrentYearDuration", value: 12_889_000_000, consolidation: "",
+                    roles: [cons], orderByRole: [cons: 42])
+            ],
+            "ComputingWorkExpensesSGA": [
+                "CurrentYearDuration": XbrlFact(
+                    tag: "ComputingWorkExpensesSGA", contextRef: "CurrentYearDuration",
+                    value: 1_000_000, consolidation: "", roles: [indiv],
+                    orderByRole: [indiv: 30])
+            ],
+            "CreditCardsAndCashLoansRevOA": [
+                "CurrentYearDuration": XbrlFact(
+                    tag: "CreditCardsAndCashLoansRevOA", contextRef: "CurrentYearDuration",
+                    value: 2_000_000, consolidation: "", roles: [indiv],
+                    orderByRole: [indiv: 13])
+            ],
+            "FeesAndCommissionsRevOA": [
+                "CurrentYearDuration": XbrlFact(
+                    tag: "FeesAndCommissionsRevOA", contextRef: "CurrentYearDuration",
+                    value: 3_000_000, consolidation: "", roles: [indiv],
+                    orderByRole: [indiv: 15])
+            ],
+        ]
+        let items = StatementClassifier.extractLineItems(from: facts, sectionType: .incomeStatement)
+        #expect(
+            items.map(\.tag) == [
+                "OperatingRevenues", "InterestAndDividendIncomeRevOA", "ProfitLoss",
+                "ProfitLossAttributableToNonControllingInterests",
+                "ProfitLossAttributableToOwnersOfParent",
+            ])
+        #expect(!items.contains { $0.tag == "InterestIncomeRevOA" })
+        #expect(!items.contains { $0.tag == "ComputingWorkExpensesSGA" })
+        #expect(items.first { $0.tag == "InterestAndDividendIncomeRevOA" }?.value == 434_000_000)
+        #expect(
+            items.first { $0.tag == "ProfitLossAttributableToNonControllingInterests" }?.value
+                == -652_000_000)
+        #expect(
+            items.first { $0.tag == "ProfitLossAttributableToOwnersOfParent" }?.value
+                == 12_889_000_000)
+    }
+
     @Test func changesInEquityDropsProfitLossThatOnlyAppearsOnNonConsolidatedSsRole() {
         // 連結SSの行は ProfitLossAttributableToOwnersOfParent。個別SS role にだけ載る
         // ProfitLoss が連結 Duration fact に roles 経由で付いても混入させない。

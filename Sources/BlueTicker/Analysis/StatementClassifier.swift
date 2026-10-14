@@ -77,7 +77,9 @@ enum StatementClassifier {
         }
 
         let chosen = consolidated.isEmpty ? nonConsolidated : consolidated
-        let primaryRole = primaryRole(coveringTagsOf: chosen, sectionType: sectionType)
+        let primaryRole = primaryRole(
+            coveringTagsOf: chosen, sectionType: sectionType,
+            preferConsolidatedRole: !consolidated.isEmpty)
         // 代表 role の presentation 木に載っていないタグは落とす。
         // 実データ: J-GAAP 連結SSでは `ProfitLossAttributableToOwnersOfParent` が行項目なのに、
         // 個別SS role（`StatementOfChangesInEquity`）側の `ProfitLoss` が連結
@@ -267,14 +269,28 @@ enum StatementClassifier {
     /// 全行のorderがnilになりアルファベット順へサイレント劣化していた）。正しい基準は「採用済みタグを
     /// 実際にどれだけ説明できるか（カバレッジ）」であり、頻度ではない。同数の場合は role 名の昇順で
     /// 決定的に選ぶ。
+    ///
+    /// 連結 fact を採用しているときは、候補に `Consolidated*` 本表 role があればそちらに限る。
+    /// 個別 PL の loc 数が連結 PL を上回るとカバレッジだけで個別木が勝ち、連結にしか無い
+    /// 受取利息配当・NCI・親会社株主帰属利益が落ちる（オリコ 8585 S100YCKH）。
+    /// 個別のみの会社は連結 fact が無く、この制限は掛からない。
     private static func primaryRole(
-        coveringTagsOf items: [(tag: String, fact: XbrlFact)], sectionType: StatementSectionType
+        coveringTagsOf items: [(tag: String, fact: XbrlFact)], sectionType: StatementSectionType,
+        preferConsolidatedRole: Bool
     ) -> String? {
         var candidateRoles: Set<String> = []
         for (_, fact) in items {
             let roles = fact.roles ?? fact.role.map { [$0] } ?? []
             for r in roles where classify(role: r) == sectionType {
                 candidateRoles.insert(r)
+            }
+        }
+        if preferConsolidatedRole {
+            let consolidatedRoles = candidateRoles.filter {
+                XBRLUtils.sectionNameFromRole($0).hasPrefix("Consolidated")
+            }
+            if !consolidatedRoles.isEmpty {
+                candidateRoles = consolidatedRoles
             }
         }
 

@@ -32,7 +32,7 @@ description: XBRL 抽出ロジック、Stage、statement・notes・breakdown 契
 
 1. **role 分類**: `Notes*` 接頭辞を先に除外（注記ロールに `BalanceSheet` 等が含まれる）。
 2. **連結/非連結**: contextRef で判定。非連結は `isPureNonConsolidatedContext`（セグメント軸付きを拾わない）。
-3. **表示順 `order`**: 同一 presentation role 内でのみ比較。代表 role は**出現頻度ではなく採用タグ集合のカバレッジ**。取れないタグはアルファベット順フォールバック。
+3. **表示順 `order`**: 同一 presentation role 内でのみ比較。代表 role は**出現頻度ではなく採用タグ集合のカバレッジ**。連結 fact を採用しているときは候補に `Consolidated*` 本表 role があればそちらに限る（個別 PL の loc 数が勝って連結専用行が落ちるオリコ 8585）。取れないタグはアルファベット順フォールバック。
 4. **SS**: 別名 loc をマージし期首→変動→期末の order。連結で個別 SS 由来の stray `ProfitLoss` を除外（個別のみ企業は正当行として残す）。
 5. **`section`（BS/CF、科目縦 SS）**: BS/CF は presentation 祖先キーワード。BS 判定順は 純資産→負債→資産（`NetAssets` が `Asset` を部分一致するため）。複数区分に同時一致する祖先は曖昧として上へ。タグ自身名へのフォールバックは単一区分に曖昧さなく一致する場合のみ。US-GAAP 科目縦 SS は区分見出し（資本金 等）を同じキーに載せる（JSON 文字列）。label は開示どおり。
 6. **同一タグの二重 loc**: 親候補を集合で持ち BFS。
