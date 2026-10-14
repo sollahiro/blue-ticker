@@ -181,8 +181,8 @@ enum Xbrl {
     }
 
     /// 本表の営業収益合計。`netSalesTags` では `NetSales`（売上高）が先に並ぶため、
-    /// 小売様式（営業収益 = 売上高 + 営業収入）では内訳が先勝ちする。合計が内訳の和に
-    /// 一致するときだけ `resolveNetSales` がこちらを使う。
+    /// 小売様式（営業収益 = 売上高 + 営業収入）では内訳が先勝ちする。合計が内訳の
+    /// いずれか 2 つ以上の和に一致するときだけ `resolveNetSales` がこちらを使う。
     static let operatingRevenueTotalTag = "OperatingRevenue1"
 
     /// `OperatingRevenue1` の calculation 子（売上高・営業収入とその業種拡張）。

@@ -332,34 +332,31 @@ func resolveNetSales(_ fieldSet: FieldSet) -> ResolvedItem {
     return resolveAggregate(fieldSet, componentTagLists: group.map { [$0] })
 }
 
-/// 営業収益合計が、FieldSet 上の内訳（2つ以上）の和に百万円丸めで一致するとき合計を返す。
+/// 営業収益合計が、FieldSet 上の内訳のうち 2 つ以上の和に百万円丸めで一致するとき合計を返す。
+/// 入れ子（営業収入合計とその子）は全タグ加算だと二重計上になるので、一致する部分集合を探す。
 /// 一致しない・内訳が1つ以下のときは nil（先勝ちの `NetSales` 等を残す）。
 func operatingRevenueTotalIfEqualsComponents(_ fieldSet: FieldSet) -> ResolvedItem? {
     guard let totalFV = fieldSet[Xbrl.operatingRevenueTotalTag],
         totalFV.current != nil || totalFV.prior != nil
     else { return nil }
 
-    let present = Xbrl.operatingRevenueTotalComponentTags.filter { tag in
+    let present = Array(Xbrl.operatingRevenueTotalComponentTags.filter { tag in
         guard let fv = fieldSet[tag] else { return false }
         return fv.current != nil || fv.prior != nil
-    }
+    }).sorted()
     guard present.count >= 2 else { return nil }
 
-    func sum(_ pick: (FieldValue) -> Double?) -> Double? {
-        let vals = present.compactMap { tag in fieldSet[tag].flatMap(pick) }
-        guard vals.count >= 2 else { return nil }
-        return vals.reduce(0, +)
-    }
+    func pickCurrent(_ fv: FieldValue) -> Double? { fv.current }
+    func pickPrior(_ fv: FieldValue) -> Double? { fv.prior }
 
-    func close(_ a: Double?, _ b: Double?) -> Bool {
-        guard let a, let b else { return false }
-        return abs(a - b) <= Financial.millionYen
-    }
-
-    if totalFV.current != nil {
-        guard close(totalFV.current, sum(\.current)) else { return nil }
+    if let current = totalFV.current {
+        guard componentSubsetSums(to: current, tags: present, fieldSet: fieldSet, pick: pickCurrent)
+        else { return nil }
+    } else if let prior = totalFV.prior {
+        guard componentSubsetSums(to: prior, tags: present, fieldSet: fieldSet, pick: pickPrior)
+        else { return nil }
     } else {
-        guard close(totalFV.prior, sum(\.prior)) else { return nil }
+        return nil
     }
 
     return ResolvedItem(
@@ -367,6 +364,30 @@ func operatingRevenueTotalIfEqualsComponents(_ fieldSet: FieldSet) -> ResolvedIt
         current: totalFV.current,
         prior: totalFV.prior
     )
+}
+
+/// `tags` のうち 2 つ以上の部分集合が `total` に一致するか。
+/// 各開示値は百万円丸めなので、許容は `1百万円 × 選んだ内訳数`。
+func componentSubsetSums(
+    to total: Double, tags: [String], fieldSet: FieldSet, pick: (FieldValue) -> Double?
+) -> Bool {
+    let values = tags.compactMap { tag -> Double? in
+        fieldSet[tag].flatMap(pick)
+    }
+    guard values.count >= 2 else { return false }
+    let n = values.count
+    for mask in 1..<(1 << n) {
+        var count = 0
+        var sum = 0.0
+        for i in 0..<n where (mask & (1 << i)) != 0 {
+            count += 1
+            sum += values[i]
+        }
+        guard count >= 2 else { continue }
+        let tolerance = Financial.millionYen * Double(count)
+        if abs(sum - total) <= tolerance { return true }
+    }
+    return false
 }
 
 /// 複数コンポーネントを積み上げ合算する。
