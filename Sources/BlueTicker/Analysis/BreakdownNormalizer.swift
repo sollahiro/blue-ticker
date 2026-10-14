@@ -319,7 +319,9 @@ enum BreakdownNormalizer {
     /// 実質業務純益と与信費用控除後業務純益を両方載せる銀行（リストの実質業務純益を拾う）がその例。
     /// 会社の定義は注記の表そのものにあるので、次の順に読む（タグ名・業種では分岐しない）。
     /// 1. セグメント表で行名が「セグメント利益／損益／損失」の行のタグ（`rowLabelsByTag`、
-    ///    inline XBRL の当期セグメント member fact の行名）。
+    ///    inline XBRL の当期セグメント member fact の行名）。その行名が見出しで、下に
+    ///    営業利益・持分法投資損益等の内訳と「計」があるときは見出しの「計」行のタグ
+    ///    （計の報告セグメント計が差異調整表の起点と食い違うときは採用しない）。
     /// 2. 差異調整表の利益の部の「報告セグメント計」と `ReportableSegmentsMember` 値が一致するタグ
     ///    （表の行名が測度名だけで、どれをセグメント利益とするかが本文にある会社。差異調整の起点は
     ///    会社のセグメント利益）。
@@ -332,8 +334,17 @@ enum BreakdownNormalizer {
         let candidateTags = Set(facts.map(\.tag)).subtracting([amountTag]).filter { tag in
             !resolvePerMember(facts: facts, tag: tag).isEmpty
         }
+        let reconciliationStarts = profitReconciliationStarts(in: tables)
 
-        // 1. 行名がセグメント利益の行
+        // 1a. セグメント利益が見出しで、その下の「計」が会社の測度
+        if let tag = headingTotalSegmentProfitTag(
+            facts: facts, tables: tables, candidateTags: candidateTags,
+            reconciliationStarts: reconciliationStarts, fallbackTags: fallbackTags)
+        {
+            return tag
+        }
+
+        // 1b. 行名がセグメント利益の行（数値の載った測度行。見出しではない）
         let labelled = candidateTags.filter { tag in
             (rowLabelsByTag[tag] ?? []).contains(where: isSegmentProfitRowLabel)
         }
@@ -342,32 +353,10 @@ enum BreakdownNormalizer {
         }
 
         // 2. 差異調整表の利益の部の起点（報告セグメント計）
-        var reconciliationStarts: [Double] = []
-        for grid in tables.map({ BreakdownExtractor.markdownToGrid($0.markdown) }) {
-            var inProfitSection = false
-            for row in grid {
-                let (label, numbers) = splitRow(row)
-                if numbers.isEmpty {
-                    if !label.isEmpty { inProfitSection = isProfitSectionHeader(label) }
-                    continue
-                }
-                if inProfitSection, compact(label).hasPrefix("報告セグメント計") {
-                    reconciliationStarts.append(contentsOf: numbers)
-                }
-            }
-        }
-        if !reconciliationStarts.isEmpty {
-            let shown = Set(reconciliationStarts.map { $0.rounded() })
-            let matching = candidateTags.filter { tag in
-                guard let value = resolvePerMember(facts: facts, tag: tag)["ReportableSegmentsMember"]?.value,
-                      value != 0
-                else { return false }
-                // 表示単位（百万円・千円・円・億円）に丸めて照合する
-                return [1e6, 1e3, 1.0, 1e8].contains { shown.contains((value / $0).rounded()) }
-            }
-            if let tag = matching.min(by: { preferred($0, over: $1, in: fallbackTags) }) {
-                return tag
-            }
+        if let tag = tagMatchingShown(
+            reconciliationStarts, in: candidateTags, facts: facts, fallbackTags: fallbackTags)
+        {
+            return tag
         }
         return fallback
     }
@@ -377,6 +366,99 @@ enum BreakdownNormalizer {
         let l = order.firstIndex(of: lhs) ?? order.count
         let r = order.firstIndex(of: rhs) ?? order.count
         return l != r ? l < r : lhs < rhs
+    }
+
+    /// 差異調整表の利益の部にある「報告セグメント計」（会社のセグメント利益の起点）。
+    private static func profitReconciliationStarts(in tables: [BreakdownTable]) -> [Double] {
+        var starts: [Double] = []
+        for grid in tables.map({ BreakdownExtractor.markdownToGrid($0.markdown) }) {
+            var inProfitSection = false
+            for row in grid {
+                let (label, numbers) = splitRow(row)
+                if numbers.isEmpty {
+                    if !label.isEmpty { inProfitSection = isProfitSectionHeader(label) }
+                    continue
+                }
+                if inProfitSection, compact(label).hasPrefix("報告セグメント計") {
+                    starts.append(contentsOf: numbers)
+                }
+            }
+        }
+        return starts
+    }
+
+    /// セグメント利益の行名が数値の無い見出しで、直下の内訳のあと「計」があるときの「計」行タグ。
+    /// 差異調整の報告セグメント計があるときは、計行の報告セグメント計と一致するタグだけ採用する。
+    private static func headingTotalSegmentProfitTag(
+        facts: [BreakdownFact], tables: [BreakdownTable], candidateTags: Set<String>,
+        reconciliationStarts: [Double], fallbackTags: [String]
+    ) -> String? {
+        var totals: [Double] = []
+        for grid in tables.map({ BreakdownExtractor.markdownToGrid($0.markdown) }) {
+            var underHeading = false
+            for row in grid {
+                let (label, numbers) = splitRow(row)
+                if isSegmentProfitRowLabel(label) && numbers.isEmpty {
+                    underHeading = true
+                    continue
+                }
+                guard underHeading else { continue }
+                if isHeadingTotalRowLabel(label), !numbers.isEmpty {
+                    totals.append(contentsOf: numbers)
+                    underHeading = false
+                    continue
+                }
+                if isHeadingComponentSectionBreak(label) {
+                    underHeading = false
+                }
+            }
+        }
+        guard !totals.isEmpty else { return nil }
+        var matching = tagsMatchingShown(totals, in: candidateTags, facts: facts)
+        if !reconciliationStarts.isEmpty {
+            let confirmed = Set(
+                tagsMatchingShown(reconciliationStarts, in: Set(matching), facts: facts))
+            matching = matching.filter { confirmed.contains($0) }
+        }
+        return matching.min(by: { preferred($0, over: $1, in: fallbackTags) })
+    }
+
+    /// 「計」「合計」（注記マーカーだけが付いたもの含む）。報告セグメント計や事業セグメント合計は含めない。
+    static func isHeadingTotalRowLabel(_ label: String) -> Bool {
+        var c = compact(label)
+        if let range = c.range(of: "（注") ?? c.range(of: "(注") {
+            c = String(c[..<range.lowerBound])
+        }
+        return c == "計" || c == "合計"
+    }
+
+    /// 見出しの内訳ブロックを閉じる行（資産・減価償却など次の指標）。
+    private static func isHeadingComponentSectionBreak(_ label: String) -> Bool {
+        let c = compact(label)
+        return c.hasPrefix("セグメント資産") || c.hasPrefix("その他の項目") || c.hasPrefix("減価償却")
+            || c.hasPrefix("売上") || c.hasPrefix("営業収益") || c.hasPrefix("資本的支出")
+            || c.hasPrefix("有形固定資産") || c.hasPrefix("のれん")
+    }
+
+    /// 表示単位（百万円・千円・円・億円）に丸めて `shown` と照合するタグ。
+    private static func tagsMatchingShown(
+        _ shown: [Double], in candidateTags: Set<String>, facts: [BreakdownFact]
+    ) -> [String] {
+        guard !shown.isEmpty else { return [] }
+        let rounded = Set(shown.map { $0.rounded() })
+        return candidateTags.filter { tag in
+            guard let value = resolvePerMember(facts: facts, tag: tag)["ReportableSegmentsMember"]?.value,
+                  value != 0
+            else { return false }
+            return [1e6, 1e3, 1.0, 1e8].contains { rounded.contains((value / $0).rounded()) }
+        }
+    }
+
+    private static func tagMatchingShown(
+        _ shown: [Double], in candidateTags: Set<String>, facts: [BreakdownFact], fallbackTags: [String]
+    ) -> String? {
+        tagsMatchingShown(shown, in: candidateTags, facts: facts)
+            .min(by: { preferred($0, over: $1, in: fallbackTags) })
     }
 
     /// 行の先頭の非数値セル（行名。2列に割れた行名は連結）と数値セルに分ける。
