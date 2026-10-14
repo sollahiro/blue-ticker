@@ -359,6 +359,19 @@ import Foundation
         #expect(result.salesLabel == "営業収益")
     }
 
+    /// 営業収益合計 = 売上高 + 営業収入。合計を売上にし、ラベルは営業収益。
+    @Test func testOperatingRevenueTotalBeatsNetSalesWhenItEqualsComponents() {
+        let fs = makeFieldSet(
+            ("NetSales", 8_893_693_000_000.0, 10_342_323_000_000.0),
+            ("OperatingRevenue2", 1_536_575_000_000.0, 1_630_439_000_000.0),
+            ("OperatingRevenue1", 10_430_269_000_000.0, 11_972_762_000_000.0)
+        )
+        let result = IncomeStatementExtractor.extract(fieldSet: fs, accountingStandard: "J-GAAP")
+        #expect(result.sales == 10_430_269_000_000.0)
+        #expect(result.salesPrior == 11_972_762_000_000.0)
+        #expect(result.salesLabel == "営業収益")
+    }
+
     /// 通常の売上高企業は営業収益合計タグの追加で変わらない。
     @Test func testNetSalesUnchangedWhenNoOperatingRevenueComponents() {
         let fs = makeFieldSet(("NetSales", 1_000_000.0, 900_000.0))

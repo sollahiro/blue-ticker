@@ -312,7 +312,12 @@ func resolveItemPreferCurrent(_ fieldSet: FieldSet, tags: [String]) -> ResolvedI
 
 /// Summary 売上。`netSalesTags` の先勝ち。合計タグがあればそれを使う。
 /// 先勝ちが業種別内訳で、同一グループに2つ以上の値があるときだけ合算する。
+/// 本表に営業収益合計があり、それが売上高＋営業収入等の内訳の和に一致するときは
+/// 合計を使う（`NetSales` が `OperatingRevenue1` より先に並ぶため）。
 func resolveNetSales(_ fieldSet: FieldSet) -> ResolvedItem {
+    if let total = operatingRevenueTotalIfEqualsComponents(fieldSet) {
+        return total
+    }
     let current = resolveItemPreferCurrent(fieldSet, tags: Xbrl.netSalesTags)
     guard let tag = current.tag,
         let group = Xbrl.operatingRevenueSplitGroups.first(where: { $0.contains(tag) })
@@ -325,6 +330,43 @@ func resolveNetSales(_ fieldSet: FieldSet) -> ResolvedItem {
         return current
     }
     return resolveAggregate(fieldSet, componentTagLists: group.map { [$0] })
+}
+
+/// 営業収益合計が、FieldSet 上の内訳（2つ以上）の和に百万円丸めで一致するとき合計を返す。
+/// 一致しない・内訳が1つ以下のときは nil（先勝ちの `NetSales` 等を残す）。
+func operatingRevenueTotalIfEqualsComponents(_ fieldSet: FieldSet) -> ResolvedItem? {
+    guard let totalFV = fieldSet[Xbrl.operatingRevenueTotalTag],
+        totalFV.current != nil || totalFV.prior != nil
+    else { return nil }
+
+    let present = Xbrl.operatingRevenueTotalComponentTags.filter { tag in
+        guard let fv = fieldSet[tag] else { return false }
+        return fv.current != nil || fv.prior != nil
+    }
+    guard present.count >= 2 else { return nil }
+
+    func sum(_ pick: (FieldValue) -> Double?) -> Double? {
+        let vals = present.compactMap { tag in fieldSet[tag].flatMap(pick) }
+        guard vals.count >= 2 else { return nil }
+        return vals.reduce(0, +)
+    }
+
+    func close(_ a: Double?, _ b: Double?) -> Bool {
+        guard let a, let b else { return false }
+        return abs(a - b) <= Financial.millionYen
+    }
+
+    if totalFV.current != nil {
+        guard close(totalFV.current, sum(\.current)) else { return nil }
+    } else {
+        guard close(totalFV.prior, sum(\.prior)) else { return nil }
+    }
+
+    return ResolvedItem(
+        tag: Xbrl.operatingRevenueTotalTag,
+        current: totalFV.current,
+        prior: totalFV.prior
+    )
 }
 
 /// 複数コンポーネントを積み上げ合算する。

@@ -244,6 +244,41 @@ import Testing
         #expect(values.netProfit == 774_625_000)
     }
 
+    /// 3382 セブン＆アイ / S100Y4VB。本表は売上高 8,893,693 と営業収入 1,536,575 に分かれ、
+    /// 営業収益合計 `OperatingRevenue1` = 10,430,269。合計が内訳の和なので合計を使う。
+    @Test func sevenAndiS100Y4VBSummarySalesIsConsolidatedOperatingRevenueTotal() async throws {
+        let docID = "S100Y4VB"
+        guard let xbrlDir = await ensureCached(docID) else { return }
+
+        guard case .resolved(let year) = StatementAnalyzer.resolveFromXBRL(
+            xbrlDir: xbrlDir,
+            docID: docID,
+            statementTypes: [.incomeStatement]
+        ) else {
+            Issue.record("resolveFromXBRL failed for \(docID)")
+            return
+        }
+
+        #expect(
+            year.incomeStatement.contains {
+                $0.tag == "NetSales" && $0.value == 8_893_693_000_000
+            })
+        #expect(
+            year.incomeStatement.contains {
+                $0.tag == "OperatingRevenue2" && $0.value == 1_536_575_000_000
+            })
+        #expect(
+            year.incomeStatement.contains {
+                $0.tag == "OperatingRevenue1" && $0.value == 10_430_269_000_000 && $0.isTotal
+            })
+
+        let values = try #require(StatementFinancialsResolver.resolve(xbrlDir: xbrlDir))
+        #expect(values.sales == 10_430_269_000_000)
+        #expect(values.salesLabel == "営業収益")
+        #expect(values.grossProfit == 3_130_033_000_000)
+        #expect(values.grossProfitLabel == "営業総利益")
+    }
+
     /// 9107 川崎汽船 / S100YC6B。本表合計 `ShippingBusinessRevenueAndOtherOperatingRevenueWAT` を使う。
     /// 内訳合算に落とさない。
     @Test func klineS100YC6BSummarySalesStaysShippingAndOtherOperatingRevenueTotal() async throws {
@@ -254,8 +289,9 @@ import Testing
         #expect(values.salesLabel == "海運業収益")
     }
 
-    /// 3382 型: 本表に売上高と営業収益が並ぶ。Summary `sales_label` は売上高のまま、
-    /// geography カバー判定だけトップラインの営業収益を使う。
+    /// 3382 型: 本表に売上高と営業収益が並ぶ。Summary は営業収益合計を採る。
+    /// geography カバー判定も同じトップラインを使い、売上高だけの FieldSet では
+    /// summaryLabel のまま。
     @Test func geographyCoverageLabelPrefersOperatingRevenueWhenNetSalesAlsoPresent() {
         var both: FieldSet = [:]
         both["NetSales"] = FieldValue(current: 8_893_693, prior: nil)
