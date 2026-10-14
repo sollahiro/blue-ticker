@@ -358,6 +358,17 @@ import Foundation
         #expect(financials?.grossProfit == nil)
     }
 
+    // MARK: - 3382 セブン＆アイ S100Y4VB
+
+    @Test
+    func sevenAndiSummarySalesUsesOperatingRevenue1WhenItEqualsComponents() async throws {
+        // source: code=3382 fy_end=2026-02-28 doc_id=S100Y4VB page=126 field=sales
+        guard await Self.ensureAvailable("S100Y4VB") else { return }
+        let financials = StatementFinancialsResolver.resolve(
+            xbrlDir: Self.xbrlRoot.appendingPathComponent("S100Y4VB_xbrl"))
+        #expect(financials?.sales == 10_430_269_000_000)
+    }
+
     // MARK: - 業種別本表売上タグ（fin-v14）
 
     /// 東急: 本表行は `OperatingRevenueRWY`（`OperatingRevenue1` は本表行に出ない）。
