@@ -118,6 +118,92 @@ import Testing
         #expect(skipped.isEmpty)
     }
 
+    /// 130 が明示した売上高がおよそ 1000 倍（単位誤り）ならレイヤ全体を捨てる。
+    /// 10 倍の明示置換は `scaleJumpExplicitReplacementIsApplied` で採用する。
+    @Test func scaleJumpRegressionSkipsWholeLayer() {
+        let before: [String: [String: Double]] = [
+            "NetSales": ["CurrentYearDuration": 100, "Prior1YearDuration": 90],
+            "OperatingIncome": ["CurrentYearDuration": 20],
+        ]
+        let overlay: [String: [String: Double]] = [
+            "NetSales": ["CurrentYearDuration": 100_000, "Prior1YearDuration": 90],
+            "OperatingIncome": ["CurrentYearDuration": 21],
+        ]
+        let (facts, skipped) = applyGuardedXbrlOverlays(
+            base: before, layers: [(correctionDocID: "S100X7DX", facts: overlay)],
+            originalDocID: originalDocID)
+        #expect(facts["NetSales"]?["CurrentYearDuration"] == 100)
+        #expect(facts["NetSales"]?["Prior1YearDuration"] == 90)
+        #expect(facts["OperatingIncome"]?["CurrentYearDuration"] == 20)
+        #expect(skipped.contains { $0.kind == xbrlOverlayRegressionKindScaleJump })
+        #expect(skipped.contains { $0.tag == "NetSales" && $0.contextRef == "CurrentYearDuration" })
+        #expect(skipped.contains { $0.correctionDocID == "S100X7DX" })
+    }
+
+    /// 千円を円と取り違えた 1/1000 も同じ単位誤り。
+    @Test func scaleJumpFiledHeadlineThousandthSkipsWholeLayer() {
+        let before: [String: [String: Double]] = [
+            "ProfitLossAttributableToOwnersOfParent": ["CurrentYearDuration": 17_493_000_000],
+            "TotalAssets": ["CurrentYearInstant": 250_000_000_000],
+        ]
+        let overlay: [String: [String: Double]] = [
+            "ProfitLossAttributableToOwnersOfParent": ["CurrentYearDuration": 17_493_000],
+            "TotalAssets": ["CurrentYearInstant": 250_000_000],
+        ]
+        let (facts, skipped) = applyGuardedXbrlOverlays(
+            base: before, layers: [(correctionDocID: "S100X7DX", facts: overlay)],
+            originalDocID: originalDocID)
+        #expect(facts["ProfitLossAttributableToOwnersOfParent"]?["CurrentYearDuration"] == 17_493_000_000)
+        #expect(facts["TotalAssets"]?["CurrentYearInstant"] == 250_000_000_000)
+        #expect(skipped.contains { $0.kind == xbrlOverlayRegressionKindScaleJump })
+        #expect(skipped.contains { $0.tag == "ProfitLossAttributableToOwnersOfParent" })
+        #expect(skipped.contains { $0.tag == "TotalAssets" })
+    }
+
+    /// 売上・純利益・総資産以外の明示 1000 倍は単位誤りガードの対象外（設備投資 100 倍などと同じ）。
+    @Test func scaleJumpFiledNonHeadlineThousandXIsApplied() {
+        let before: [String: [String: Double]] = [
+            "OperatingIncome": ["CurrentYearDuration": 100],
+        ]
+        let overlay: [String: [String: Double]] = [
+            "OperatingIncome": ["CurrentYearDuration": 100_000],
+        ]
+        let (facts, skipped) = applyGuardedXbrlOverlays(
+            base: before, layers: [(correctionDocID: "S100X7DX", facts: overlay)],
+            originalDocID: originalDocID)
+        #expect(facts["OperatingIncome"]?["CurrentYearDuration"] == 100_000)
+        #expect(skipped.isEmpty)
+    }
+
+    /// 明示した梱包運賃のおよそ 10 倍訂正は採用する（S100YBL8 → S100YD52）。
+    @Test func scaleJumpFiledPackingFreightTenXIsApplied() {
+        let tag = "PackingAndTransportationExpensesSGA"
+        let before: [String: [String: Double]] = [
+            tag: ["CurrentYearDuration": 47_441_549_000],
+            "NetSales": ["CurrentYearDuration": 100],
+        ]
+        let overlay: [String: [String: Double]] = [
+            tag: ["CurrentYearDuration": 4_746_011_000],
+            "NetSales": ["CurrentYearDuration": 100],
+        ]
+        let (facts, skipped) = applyGuardedXbrlOverlays(
+            base: before, layers: [(correctionDocID: "S100YD52", facts: overlay)],
+            originalDocID: "S100YBL8")
+        #expect(facts[tag]?["CurrentYearDuration"] == 4_746_011_000)
+        #expect(facts["NetSales"]?["CurrentYearDuration"] == 100)
+        #expect(skipped.isEmpty)
+    }
+
+    @Test func headlineTotalTagSetCoversSalesProfitAssets() {
+        #expect(isXbrlOverlayHeadlineTotalTag("NetSales"))
+        #expect(isXbrlOverlayHeadlineTotalTag("RevenueIFRS"))
+        #expect(isXbrlOverlayHeadlineTotalTag("ProfitLossAttributableToOwnersOfParent"))
+        #expect(isXbrlOverlayHeadlineTotalTag("TotalAssets"))
+        #expect(!isXbrlOverlayHeadlineTotalTag("PackingAndTransportationExpensesSGA"))
+        #expect(!isXbrlOverlayHeadlineTotalTag("OperatingIncome"))
+        #expect(!isXbrlOverlayHeadlineTotalTag("ShippingBusinessRevenueWAT"))
+    }
+
     /// 130 が明示した OCI（32→776）と SS 変動行（65→809）がおよそ 10 倍動いても、
     /// 未変更の sibling context があるだけではレイヤを捨てない。親会社株主帰属当期純利益の
     /// 訂正が載り、売上・営業利益・経常利益は overlay に無いので原本のまま。

@@ -8,7 +8,12 @@ public let xbrlOverlayRowLossMinFraction = 0.30
 public let xbrlOverlayRowLossMinAbsolute = 5
 
 /// 同一 element+context の絶対値がだいたい 10 倍動いたとみなす下限比。
+/// 130 に無い継承 fact だけこの比で `scale_jump` する。
 public let xbrlOverlayScaleJumpMinRatio = 8.0
+
+/// 130 が明示した売上高・純利益・総資産の単位誤り（円と千円）とみなす下限比。
+/// 8.0 がおよそ 10 倍であるのと同じく、およそ 1000 倍の床。
+public let xbrlOverlayHeadlineScaleJumpMinRatio = 800.0
 
 /// 合計が内訳行の和と一致していたとみなす相対許容。
 public let xbrlOverlayReconcileRelativeTolerance = 0.02
@@ -109,8 +114,9 @@ public func xbrlOverlayRegressions(
 }
 
 /// 提出が古い順の訂正を重ねる。いずれかの回帰理由（`row_loss` / `reconcile` / `scale_jump`）が
-/// あればそのレイヤ全体を捨て、直前の fact を残す。130 が明示置換した項目のスケール変更は
-/// 回帰にしない（`scaleJumpRegressions`）。
+/// あればそのレイヤ全体を捨て、直前の fact を残す。130 が明示した売上高・純利益・総資産の
+/// およそ 1000 倍跳び（単位誤り）と、130 に無い継承 fact のおよそ 10 倍跳びだけ
+/// `scale_jump` する。その他の明示スケール変更（およそ 10 倍の訂正を含む）は回帰にしない。
 /// `base` / 各 `layers[].facts` はこの原本 `originalDocID` のパッケージ。他 doc は見ない。
 public func applyGuardedXbrlOverlays(
     base: [String: [String: Double]],
@@ -304,9 +310,9 @@ private func rowLossRegressions(
     return found
 }
 
-/// 明示置換（130 インスタンスに同じ tag+context がある）はスケール変更を許す。
-/// 未変更の sibling context があっても、130 自身が書いた fact は `scale_jump` にしない。
-/// 130 に無く値が動いた継承 fact だけ回帰（overlay が触るべきでない）。
+/// 130 が明示した fact は、売上高・純利益・総資産のおよそ 1000 倍跳びだけ回帰する。
+/// それ以外の明示スケール変更（梱包運賃のおよそ 10 倍訂正など）は回帰にしない。
+/// 130 に無く値が動いた継承 fact はおよそ 10 倍で回帰（overlay が触るべきでない）。
 private func scaleJumpRegressions(
     before: [String: [String: Double]], after: [String: [String: Double]],
     overlay: [String: [String: Double]],
@@ -321,8 +327,14 @@ private func scaleJumpRegressions(
                 continue
             }
             let ratio = max(abs(new / old), abs(old / new))
-            guard ratio >= xbrlOverlayScaleJumpMinRatio else { continue }
-            if overlayCtx[ctx] != nil { continue }
+            let filed = overlayCtx[ctx] != nil
+            if filed {
+                guard isXbrlOverlayHeadlineTotalTag(tag),
+                    ratio >= xbrlOverlayHeadlineScaleJumpMinRatio
+                else { continue }
+            } else {
+                guard ratio >= xbrlOverlayScaleJumpMinRatio else { continue }
+            }
             found.append(
                 XbrlOverlayRegression(
                     originalDocID: originalDocID, correctionDocID: correctionDocID,
@@ -332,6 +344,25 @@ private func scaleJumpRegressions(
     }
     return found
 }
+
+/// 売上高・収益合計、親会社株主帰属純利益、資産合計。業種別内訳タグは含めない。
+func isXbrlOverlayHeadlineTotalTag(_ tag: String) -> Bool {
+    xbrlOverlayHeadlineTotalTags.contains(tag)
+}
+
+private let xbrlOverlayHeadlineTotalTags: Set<String> = Set(Xbrl.netSalesTags)
+    .subtracting(Xbrl.operatingRevenueSplitComponentTags)
+    .union(Xbrl.parentAttributableNetProfitTags)
+    .union(Xbrl.netProfitTags)
+    .union([
+        "TotalAssets", "Assets",
+        "TotalAssetsIFRS", "AssetsIFRS",
+        "TotalAssetsIFRSSummaryOfBusinessResults",
+        "TotalAssetsJMISSummaryOfBusinessResults",
+        "TotalAssetsUSGAAP",
+        "TotalAssetsSummaryOfBusinessResults",
+        "TotalAssetsUSGAAPSummaryOfBusinessResults",
+    ])
 
 private func reconcileRegressions(
     before: [String: [String: Double]], after: [String: [String: Double]],
