@@ -118,24 +118,84 @@ import Testing
         #expect(skipped.isEmpty)
     }
 
-    @Test func scaleJumpRegressionSkipsWholeLayer() {
+    /// 130 が明示した OCI（32→776）と SS 変動行（65→809）がおよそ 10 倍動いても、
+    /// 未変更の sibling context があるだけではレイヤを捨てない。親会社株主帰属当期純利益の
+    /// 訂正が載り、売上・営業利益・経常利益は overlay に無いので原本のまま。
+    @Test func explicitLayerScaleChangeAppliesDespiteUnchangedSiblingContexts() {
+        let million = 1_000_000.0
+        let oci = "ValuationDifferenceOnAvailableForSaleSecuritiesNetOfTaxOCI"
+        let ssChange = "TotalChangesOfItemsDuringThePeriod"
+        let ssOther = "NetChangesOfItemsOtherThanShareholdersEquity"
+        let ociMember = "CurrentYearDuration_ValuationDifferenceOnAvailableForSaleSecuritiesMember"
+        let fxMember = "CurrentYearDuration_ForeignCurrencyTranslationAdjustmentMember"
+        let profit = "ProfitLossAttributableToOwnersOfParent"
+        let original: [String: [String: Double]] = [
+            oci: [
+                "CurrentYearDuration": 32 * million,
+                "Prior1YearDuration": -5_145 * million,
+            ],
+            ssChange: [
+                ociMember: 65 * million,
+                fxMember: 1_339 * million,
+            ],
+            ssOther: [
+                ociMember: 65 * million,
+                fxMember: 1_339 * million,
+            ],
+            profit: ["CurrentYearDuration": 18_237 * million],
+            "NetSales": ["CurrentYearDuration": 269_862 * million],
+            "OperatingIncome": ["CurrentYearDuration": 23_818 * million],
+            "OrdinaryIncome": ["CurrentYearDuration": 24_853 * million],
+        ]
+        let overlay: [String: [String: Double]] = [
+            oci: [
+                "CurrentYearDuration": 776 * million,
+                "Prior1YearDuration": -5_145 * million,
+            ],
+            ssChange: [
+                ociMember: 809 * million,
+                fxMember: 1_339 * million,
+            ],
+            ssOther: [
+                ociMember: 809 * million,
+                fxMember: 1_339 * million,
+            ],
+            profit: ["CurrentYearDuration": 17_493 * million],
+        ]
+        let (facts, skipped) = applyGuardedXbrlOverlays(
+            base: original,
+            layers: [(correctionDocID: "S100YVHV", facts: overlay)],
+            originalDocID: "S100YLI5")
+        #expect(facts[oci]?["CurrentYearDuration"] == 776 * million)
+        #expect(facts[ssChange]?[ociMember] == 809 * million)
+        #expect(facts[ssOther]?[ociMember] == 809 * million)
+        #expect(facts[profit]?["CurrentYearDuration"] == 17_493 * million)
+        #expect(facts["NetSales"]?["CurrentYearDuration"] == 269_862 * million)
+        #expect(facts["OperatingIncome"]?["CurrentYearDuration"] == 23_818 * million)
+        #expect(facts["OrdinaryIncome"]?["CurrentYearDuration"] == 24_853 * million)
+        #expect(skipped.isEmpty)
+    }
+
+    /// overlay に無い context の値がおよそ 10 倍動いたときだけ `scale_jump`。
+    @Test func scaleJumpOnFactNotFiledByLayerIsRegression() {
         let before: [String: [String: Double]] = [
             "NetSales": ["CurrentYearDuration": 100, "Prior1YearDuration": 90],
             "OperatingIncome": ["CurrentYearDuration": 20],
         ]
-        let overlay: [String: [String: Double]] = [
+        let after: [String: [String: Double]] = [
             "NetSales": ["CurrentYearDuration": 1_000, "Prior1YearDuration": 90],
             "OperatingIncome": ["CurrentYearDuration": 21],
         ]
-        let (facts, skipped) = applyGuardedXbrlOverlays(
-            base: before, layers: [(correctionDocID: "S100X7DX", facts: overlay)],
-            originalDocID: originalDocID)
-        #expect(facts["NetSales"]?["CurrentYearDuration"] == 100)
-        #expect(facts["NetSales"]?["Prior1YearDuration"] == 90)
-        #expect(facts["OperatingIncome"]?["CurrentYearDuration"] == 20)
-        #expect(skipped.contains { $0.kind == xbrlOverlayRegressionKindScaleJump })
-        #expect(skipped.contains { $0.tag == "NetSales" && $0.contextRef == "CurrentYearDuration" })
-        #expect(skipped.contains { $0.correctionDocID == "S100X7DX" })
+        let overlay: [String: [String: Double]] = [
+            "NetSales": ["Prior1YearDuration": 90],
+            "OperatingIncome": ["CurrentYearDuration": 21],
+        ]
+        let found = xbrlOverlayRegressions(
+            before: before, after: after, originalDocID: originalDocID,
+            correctionDocID: "S100X7DX", overlay: overlay)
+        #expect(found.contains { $0.kind == xbrlOverlayRegressionKindScaleJump })
+        #expect(found.contains { $0.tag == "NetSales" && $0.contextRef == "CurrentYearDuration" })
+        #expect(found.contains { $0.correctionDocID == "S100X7DX" })
     }
 
     @Test func brokenReconcileSkipsWholeLayer() {
@@ -270,6 +330,32 @@ import Testing
         }
         #expect(!other.needsReview)
         #expect(!hasOverlayRegressionWarning(other.warnings))
+    }
+
+    /// 実パッケージ: 120 + 130。明示 OCI / SS のスケール変更があっても 130 を採用し、
+    /// 親会社株主帰属当期純利益 17,493 百万円を載せる。
+    @Test func originalPlusAmendmentAppliesExplicitNetProfitCorrection() async throws {
+        let original = "S100YLI5"
+        let amendment = "S100YVHV"
+        await SmokeCacheSupport.ensureCached([original, amendment])
+        for docID in [original, amendment] {
+            guard StatementNotesOracleSupport.smokeCacheAvailable(docID) else { return }
+        }
+        let merged = try #require(
+            await resolveAnnualXbrlDirectory(
+                originalDocID: original,
+                correctionDocIDs: [amendment],
+                download: { StatementNotesOracleSupport.smokeXbrlDir($0) }))
+        #expect(
+            overlayDirectoryEntries(in: merged).compactMap(\.correctionDocID) == [amendment])
+        let facts = XBRLUtils.collectAllNumericFacts(in: merged, nilAsZero: false)
+        #expect(
+            facts["ProfitLossAttributableToOwnersOfParent"]?["CurrentYearDuration"]?.value
+                == 17_493_000_000)
+        #expect(facts["NetSales"]?["CurrentYearDuration"]?.value == 269_862_000_000)
+        #expect(facts["OperatingIncome"]?["CurrentYearDuration"]?.value == 23_818_000_000)
+        #expect(facts["OrdinaryIncome"]?["CurrentYearDuration"]?.value == 24_853_000_000)
+        #expect(readOverlayRegressions(in: merged).isEmpty)
     }
 
     /// 8316 FY2025 実パッケージ: 120 + WRZH + X7DX。X7DX はレイヤごと捨て、WRZH の

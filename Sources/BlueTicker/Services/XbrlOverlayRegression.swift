@@ -109,7 +109,7 @@ public func xbrlOverlayRegressions(
 }
 
 /// 提出が古い順の訂正を重ねる。いずれかの回帰理由（`row_loss` / `reconcile` / `scale_jump`）が
-/// あればそのレイヤ全体を捨て、直前の fact を残す。明示的で内部一貫した 130 のスケール変更は
+/// あればそのレイヤ全体を捨て、直前の fact を残す。130 が明示置換した項目のスケール変更は
 /// 回帰にしない（`scaleJumpRegressions`）。
 /// `base` / 各 `layers[].facts` はこの原本 `originalDocID` のパッケージ。他 doc は見ない。
 public func applyGuardedXbrlOverlays(
@@ -305,8 +305,8 @@ private func rowLossRegressions(
 }
 
 /// 明示置換（130 インスタンスに同じ tag+context がある）はスケール変更を許す。
-/// 同じタグの関連コンテキストが 130 にあり、片方だけおよそ 10 倍動いたときだけ回帰。
-/// 130 に無く値が動いた継承 fact も回帰（overlay が触るべきでない）。
+/// 未変更の sibling context があっても、130 自身が書いた fact は `scale_jump` にしない。
+/// 130 に無く値が動いた継承 fact だけ回帰（overlay が触るべきでない）。
 private func scaleJumpRegressions(
     before: [String: [String: Double]], after: [String: [String: Double]],
     overlay: [String: [String: Double]],
@@ -322,19 +322,7 @@ private func scaleJumpRegressions(
             }
             let ratio = max(abs(new / old), abs(old / new))
             guard ratio >= xbrlOverlayScaleJumpMinRatio else { continue }
-            if overlayCtx[ctx] != nil {
-                let siblings = overlayCtx.keys.filter {
-                    $0 != ctx && !isRowMemberContext($0) && beforeCtx[$0] != nil
-                        && afterCtx[$0] != nil
-                }
-                if siblings.isEmpty { continue }
-                let siblingJumpsInconsistently = siblings.contains { sib in
-                    guard let sOld = beforeCtx[sib], let sNew = afterCtx[sib], sOld != 0, sNew != 0
-                    else { return false }
-                    return max(abs(sNew / sOld), abs(sOld / sNew)) < xbrlOverlayScaleJumpMinRatio
-                }
-                guard siblingJumpsInconsistently else { continue }
-            }
+            if overlayCtx[ctx] != nil { continue }
             found.append(
                 XbrlOverlayRegression(
                     originalDocID: originalDocID, correctionDocID: correctionDocID,
