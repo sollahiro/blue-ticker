@@ -203,6 +203,24 @@ import Testing
         ])
     }
 
+    // 8804 東京建物: セグメント利益は数値の無い見出しで、営業利益 / 持分法投資損益等 /
+    // 固定資産売却損益の下の「計」が会社の測度（会社拡張 SegmentProfit。ビル 67,363）。
+    // リスト上位の営業利益行（ビル 67,059）ではない。
+    // source: code=8804 fy_end=2025-12-31 doc_id=S100XSKF page=129 field=segment_profit
+    @Test func tokyoTatemonoHeadingTotalSegmentProfit() async throws {
+        try await expectProfits("S100XSKF", [
+            "AssetServiceReportableSegmentsMember": 11494,
+            "CommercialPropertiesReportableSegmentsMember": 67363,
+            "EntityTotal": 89419,
+            "OperatingSegmentsNotIncludedInReportableSegmentsAndOtherRevenueGeneratingBusinessActivitiesMember":
+                -2512,
+            "ReconcilingItemsMember": -12495,
+            "ReportableSegmentsMember": 104427,
+            "ResidentialReportableSegmentsMember": 25569,
+            "TotalOfReportableSegmentsAndOthersMember": 101915,
+        ])
+    }
+
     // 8801 三井不動産: セグメント利益（事業利益）又は損失（△）。会社拡張 BusinessIncome。
     // 営業利益行（賃貸 181,565）ではなく事業利益（賃貸 177,011）。inline XBRL の name 接頭辞は
     // ハイフン付き会社拡張（jpcrp030000-asr_E03855-000:BusinessIncome）。
