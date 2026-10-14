@@ -397,7 +397,8 @@ enum BreakdownNormalizer {
         text.filter { !$0.isWhitespace && $0 != "\u{3000}" }
     }
 
-    /// 「セグメント利益」「セグメント利益又は損失（△）」「セグメント損益」等。
+    /// 「セグメント利益」「セグメント利益（事業利益）又は損失（△）」「セグメント損益」等。
+    /// 括弧で測度名を足した行も接頭辞がセグメント利益／損益／損失なら測度の行。
     /// 「セグメント利益の調整額」のような調整行は測度の行ではない。
     static func isSegmentProfitRowLabel(_ label: String) -> Bool {
         let c = compact(label)

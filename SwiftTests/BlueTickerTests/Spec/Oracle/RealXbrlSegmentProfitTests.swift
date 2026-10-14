@@ -203,6 +203,22 @@ import Testing
         ])
     }
 
+    // 8801 三井不動産: セグメント利益（事業利益）又は損失（△）。会社拡張 BusinessIncome。
+    // 営業利益行（賃貸 181,565）ではなく事業利益（賃貸 177,011）。inline XBRL の name 接頭辞は
+    // ハイフン付き会社拡張（jpcrp030000-asr_E03855-000:BusinessIncome）。
+    // source: code=8801 fy_end=2026-03-31 doc_id=S100YHUO page=166 field=segment_profit
+    @Test func mitsuiFudosanBusinessIncomeSegmentProfit() async throws {
+        try await expectProfits("S100YHUO", [
+            "EntityTotal": 445120,
+            "FacilityOperationsReportableSegmentsMember": 46345,
+            "LeasingReportableSegmentsMember": 177011,
+            "ManagementReportableSegmentsMember": 80891,
+            "OperatingSegmentsNotIncludedInReportableSegmentsAndOtherRevenueGeneratingBusinessActivitiesMember": 10178,
+            "ReconcilingItemsMember": -62488,
+            "PropertySalesReportableSegmentsMember": 193182,
+        ])
+    }
+
     // 8593 三菱HCキャピタル: セグメント利益又は損失（△）（行ラベルでセグメント利益と定義。調整額 4,144・連結 162,206）
     // source: code=8593 fy_end=2026-03-31 doc_id=S100YF4V page=167 field=segment_profit
     @Test func mitsubishiHCCapitalSegmentProfitRowLabel() async throws {
