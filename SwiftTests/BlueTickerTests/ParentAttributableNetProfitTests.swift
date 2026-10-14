@@ -5,7 +5,8 @@ import Testing
 
 /// Summary `net_profit` は親会社株主に帰属する当期純利益を優先する。
 /// PL に親会社帰属タグが無く、SS にだけある書類では `ProfitLoss`（当期純利益）へ
-/// 落ちてはならない。
+/// 落ちてはならない（下の fixture）。実書類で個別 PL 木がカバレッジで勝っていた
+/// タマホームは、連結 PL に親会社帰属行が載る（オリコと同型）。
 @Suite struct ParentAttributableNetProfitTests {
     private func line(_ tag: String, _ value: Double, unit: String = "JPY") -> StatementLineItem {
         StatementLineItem(tag: tag, label: nil, value: value, unit: unit, order: nil)
@@ -98,7 +99,10 @@ import Testing
             year.incomeStatement.contains {
                 $0.tag == "ProfitLoss" && $0.value == 1_223_000_000
             })
-        #expect(!year.incomeStatement.contains { $0.tag == "ProfitLossAttributableToOwnersOfParent" })
+        #expect(
+            year.incomeStatement.contains {
+                $0.tag == "ProfitLossAttributableToOwnersOfParent" && $0.value == 1_213_000_000
+            })
         #expect(
             year.changesInEquity.contains {
                 $0.tag == "ProfitLossAttributableToOwnersOfParent" && $0.value == 1_213_000_000
