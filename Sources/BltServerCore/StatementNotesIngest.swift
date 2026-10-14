@@ -78,12 +78,11 @@ func runStatementNotesIngest(
     var flaggedForReview: [FilingDocCandidate] = []
     var staleVersion: [FilingDocCandidate] = []
 
+    let classifyDocIDs = Set(baseCandidates.map(\.docID))
     let classifyRows = try await withDbRetry(
         logger: logger, context: "財務諸表注記取り込み(\(noteType)) 分類", onRetry: { unhealthyRetries += 1 }
     ) {
-        try await CompanyStatementNoteSourceVersionOnly.query(on: db)
-            .filter(\.$noteType == noteType)
-            .all()
+        try await statementNoteClassifyRows(db: db, noteType: noteType, docIDs: classifyDocIDs)
     }
     let classifyIndex = ingestIndexByID(classifyRows) { $0.id }
 
@@ -342,14 +341,32 @@ final class CompanyStatementNoteSourceVersionOnly: Model, @unchecked Sendable {
     @Field(key: "needs_review")
     var needsReview: Bool
 
+    /// 候補 `doc_id = ANY(...)` で分類を絞るために載せる。payload は持たない。
+    @Field(key: "doc_id")
+    var docID: String
+
     init() {}
 }
 
+/// 当該 note_type の分類行。`docIDs` が空ならクエリしない。
+/// `--codes` 時は keep がその集合なので、ここで `doc_id = ANY($1)` に落ちる。
+func statementNoteClassifyRows(
+    db: Database, noteType: String, docIDs: Set<String>
+) async throws -> [CompanyStatementNoteSourceVersionOnly] {
+    guard !docIDs.isEmpty else { return [] }
+    return try await CompanyStatementNoteSourceVersionOnly.query(on: db)
+        .filter(\.$noteType == noteType)
+        .filter(\.$docID ~~ Array(docIDs))
+        .all()
+}
+
 /// company_statement_notes 全件を read 可否（`isServableStatementNote`）で集計する。
+/// 行 hydrate せず `COUNT(*) GROUP BY source, cache_version, note_type` してから
+/// 既存の `isServableStatementNote` を当てる。
 func countServableStatementNotes(db: Database) async throws -> (servable: Int, unservable: Int) {
-    let rows = try await CompanyStatementNoteSourceVersionOnly.query(on: db).all()
-    let servable = rows.filter {
-        isServableStatementNote(source: $0.source, cacheVersion: $0.cacheVersion, noteType: $0.noteType)
-    }.count
-    return (servable, rows.count - servable)
+    let groups = try await sqlGroupedSourceVersionCounts(
+        db: db, schema: CompanyStatementNote.schema, groupColumn: "note_type")
+    return servableCounts(from: groups) { source, version, noteType in
+        isServableStatementNote(source: source, cacheVersion: version, noteType: noteType)
+    }
 }

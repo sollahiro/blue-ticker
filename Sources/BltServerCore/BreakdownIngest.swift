@@ -97,12 +97,11 @@ func runBreakdownIngest(
 
     // 分類は payload を含まない1クエリ。候補ごとに find すると上場全体×6年で
     // Neon 往復が数万回になり、実処理より分類がステージ timeout を食う。
+    let classifyDocIDs = Set(baseCandidates.map(\.docID))
     let classifyRows = try await withDbRetry(
         logger: logger, context: "内訳取り込み(\(axis)) 分類", onRetry: { unhealthyRetries += 1 }
     ) {
-        try await CompanyBreakdownSourceVersionOnly.query(on: db)
-            .filter(\.$axis == axis)
-            .all()
+        try await breakdownClassifyRows(db: db, axis: axis, docIDs: classifyDocIDs)
     }
     let classifyIndex = ingestIndexByID(classifyRows) { $0.id }
     // Jev 再試行の判定に payload.warnings が要る。分類クエリは payload を載せないので、
@@ -340,17 +339,33 @@ final class CompanyBreakdownSourceVersionOnly: Model, @unchecked Sendable {
     @Field(key: "needs_review")
     var needsReview: Bool
 
+    /// 候補 `doc_id = ANY(...)` で分類を絞るために載せる。payload は持たない。
+    @Field(key: "doc_id")
+    var docID: String
+
     init() {}
 }
 
+/// 当該軸の分類行。`docIDs` が空ならクエリしない。payload JSON は読まない。
+func breakdownClassifyRows(
+    db: Database, axis: String, docIDs: Set<String>
+) async throws -> [CompanyBreakdownSourceVersionOnly] {
+    guard !docIDs.isEmpty else { return [] }
+    return try await CompanyBreakdownSourceVersionOnly.query(on: db)
+        .filter(\.$axis == axis)
+        .filter(\.$docID ~~ Array(docIDs))
+        .all()
+}
+
 /// company_breakdowns 全件を read 可否（`isServableBreakdown`）で集計する。
-/// ingest サマリログに DB 全体のカバレッジを添えるため、`payload` を転送しない軽量クエリで行う。
+/// ingest サマリログに DB 全体のカバレッジを添えるため、`payload` を転送せず
+/// `COUNT(*) GROUP BY source, cache_version, axis` してから既存の `isServableBreakdown` を当てる。
 func countServableBreakdowns(db: Database) async throws -> (servable: Int, unservable: Int) {
-    let rows = try await CompanyBreakdownSourceVersionOnly.query(on: db).all()
-    let servable = rows.filter {
-        isServableBreakdown(source: $0.source, cacheVersion: $0.cacheVersion, axis: $0.axis)
-    }.count
-    return (servable, rows.count - servable)
+    let groups = try await sqlGroupedSourceVersionCounts(
+        db: db, schema: CompanyBreakdown.schema, groupColumn: "axis")
+    return servableCounts(from: groups) { source, version, axis in
+        isServableBreakdown(source: source, cacheVersion: version, axis: axis)
+    }
 }
 
 // MARK: - read 経路（REST/MCP breakdown）

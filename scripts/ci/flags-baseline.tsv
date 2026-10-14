@@ -1,11 +1,7 @@
 # Pre-existing occurrences allowed by scripts/ci/flags.sh. Generated once; may only shrink.
 # flag<TAB>path<TAB>sha256(whitespace-normalised line)[:16]. Text is hashed, never stored.
-full-table-all	Sources/BltServerCore/BreakdownIngest.swift	669030d07c17fe9c
-full-table-all	Sources/BltServerCore/FactsIngest.swift	3644108ea0e38672
-full-table-all	Sources/BltServerCore/FactsIngest.swift	8cc3f2ca23e54d60
 full-table-all	Sources/BltServerCore/FilingSectionsIngest.swift	405402eb69e63c2f
 full-table-all	Sources/BltServerCore/FilingSectionsIngest.swift	8083678b07671383
-full-table-all	Sources/BltServerCore/FinancialsIngest.swift	3f22023a316699f0
 full-table-all	Sources/BltServerCore/FinancialsIngest.swift	99ff55429b857c87
 full-table-all	Sources/BltServerCore/FinancialsIngest.swift	ac91fb254454e5b5
 full-table-all	Sources/BltServerCore/IconsIngest.swift	7eb5d0f38203ba76
@@ -13,7 +9,6 @@ full-table-all	Sources/BltServerCore/OverviewIngest.swift	a957cb40e58e52b8
 full-table-all	Sources/BltServerCore/ScreenIngest.swift	989f00c213037092
 full-table-all	Sources/BltServerCore/StatementIngest.swift	6ded062fdcdbcc8d
 full-table-all	Sources/BltServerCore/StatementIngest.swift	bc307069115b4233
-full-table-all	Sources/BltServerCore/StatementNotesIngest.swift	02c1771b2cbafa68
 full-table-all	Sources/BltServerCore/StatusReportCommand.swift	7a7377675243453d
 full-table-all	Sources/BltServerCore/StatusReportCommand.swift	b6c950a15b0e6912
 full-table-all	Sources/BltServerCore/StatusReportCommand.swift	ba0f50669e7e03ce

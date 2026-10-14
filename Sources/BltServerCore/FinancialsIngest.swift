@@ -10,7 +10,6 @@ import BlueTickerCore
 import Fluent
 import Foundation
 import Logging
-import SQLKit
 
 /// 財務取り込み結果のサマリ。`notApplicable`（有価証券報告書未提出等、設計通り）を
 /// `failed`（抽出できず要調査）と分けて数える（issue #86）。
@@ -273,70 +272,6 @@ func financialsStoreRefusal(
             databaseNewestPeriodEnd: newestAnnual?.periodEnd)
     }
     return nil
-}
-
-/// 発行体（sec_code × edinet_code の組）単位の集約行。`highWater` は
-/// `docTypes` ∩ 会社開示府令(010) の doc だけの `MAX(submit_date_time)`（無ければ nil）。
-/// `newestAnnual` は会社開示府令の有報(120) のうち period_end 最大の 1 件（`period_end|doc_id`、無ければ nil）。
-private typealias IssuerHighWater = (
-    secCode: String?, edinetCode: String, highWater: String?, newestAnnual: String?
-)
-
-/// edinet_documents を発行体組へ SQL 集約して読む（全行転送しない）。
-/// コード列挙は財務行の対象社集合を変えないため全 doc の DISTINCT 組を使い、
-/// high-water は `docTypes` ∩ 会社開示府令(010) の doc のみ条件付き MAX で取る。
-/// 非 SQL ドライバでは一覧射影を読んで同じ形へ畳む（テスト差し替え用のフォールバック）。
-private func issuerHighWaterRows(
-    db: Database, docTypes: Set<String>
-) async throws -> [IssuerHighWater] {
-    if let sql = db as? SQLDatabase {
-        let rows = try await sql.raw("""
-            SELECT \(ident: "sec_code") AS sec_code,
-                \(ident: "edinet_code") AS edinet_code,
-                MAX(CASE WHEN \(ident: "doc_type_code") IN (\(binds: Array(docTypes)))
-                        AND \(ident: "ordinance_code") = \(bind: Api.ordinanceCompanyDisclosure)
-                    THEN \(ident: "submit_date_time") END) AS high_water,
-                MAX(CASE WHEN \(ident: "doc_type_code") = \(bind: Api.docTypeAnnualReport)
-                        AND \(ident: "ordinance_code") = \(bind: Api.ordinanceCompanyDisclosure)
-                        AND \(ident: "period_end") IS NOT NULL AND \(ident: "period_end") <> ''
-                    THEN SUBSTR(\(ident: "period_end"), 1, 10) || '|' || \(ident: "doc_id") END) AS newest_annual
-            FROM \(ident: EdinetDocument.schema)
-            GROUP BY \(ident: "sec_code"), \(ident: "edinet_code")
-            ORDER BY \(ident: "edinet_code"), \(ident: "sec_code")
-            """).all()
-        return try rows.map { row in
-            (
-                try row.decode(column: "sec_code", as: String?.self),
-                try row.decode(column: "edinet_code", as: String.self),
-                try row.decode(column: "high_water", as: String?.self),
-                try row.decode(column: "newest_annual", as: String?.self)
-            )
-        }
-    }
-    let documents = try await EdinetDocumentListing.query(on: db).all()
-    var order: [String] = []
-    var byIssuer: [String: IssuerHighWater] = [:]
-    for doc in documents {
-        let key = "\(doc.secCode ?? "")\u{1F}\(doc.edinetCode)"
-        var row = byIssuer[key]
-            ?? (secCode: doc.secCode, edinetCode: doc.edinetCode, highWater: nil, newestAnnual: nil)
-        if byIssuer[key] == nil { order.append(key) }
-        if let docType = doc.docTypeCode, docTypes.contains(docType),
-            Api.isCompanyDisclosureOrdinance(doc.ordinanceCode),
-            doc.submitDateTime > (row.highWater ?? "")
-        {
-            row.highWater = doc.submitDateTime
-        }
-        if doc.docTypeCode == Api.docTypeAnnualReport,
-            Api.isCompanyDisclosureOrdinance(doc.ordinanceCode),
-            let periodEnd = doc.periodEnd, !periodEnd.isEmpty, let docID = doc.id
-        {
-            let candidate = "\(periodEnd.prefix(10))|\(docID)"
-            if candidate > (row.newestAnnual ?? "") { row.newestAnnual = candidate }
-        }
-        byIssuer[key] = row
-    }
-    return order.compactMap { byIssuer[$0] }
 }
 
 /// edinet_documents の secCode（5 桁・末尾 0）から 4 桁コードを導出し、重複排除して返す。
