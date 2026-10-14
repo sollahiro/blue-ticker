@@ -90,8 +90,49 @@ import Testing
     @Test func adjustmentRowIsNotTheMeasure() {
         #expect(BreakdownNormalizer.isSegmentProfitRowLabel("セグメント利益"))
         #expect(BreakdownNormalizer.isSegmentProfitRowLabel("セグメント利益又は損失（△）"))
+        #expect(BreakdownNormalizer.isSegmentProfitRowLabel("セグメント利益（事業利益）又は損失（△）"))
         #expect(BreakdownNormalizer.isSegmentProfitRowLabel("セグメント損益"))
         #expect(!BreakdownNormalizer.isSegmentProfitRowLabel("セグメント利益の調整額"))
         #expect(!BreakdownNormalizer.isSegmentProfitRowLabel("営業利益"))
+    }
+
+    @Test func parenthesizedBusinessProfitLabelBeatsOperatingIncomeList() {
+        // 三井不動産型: 行名は「セグメント利益（事業利益）」、タグは会社拡張 BusinessIncome。
+        // リスト上位の営業利益より、会社がセグメント利益と書いた行を採る。
+        let all = facts("OperatingRevenue1", [
+            "LeasingReportableSegmentsMember": 936_601, "SalesReportableSegmentsMember": 729_271,
+        ])
+            + facts("OperatingIncome", [
+                "LeasingReportableSegmentsMember": 181_565, "SalesReportableSegmentsMember": 143_501,
+            ])
+            + facts("BusinessIncome", [
+                "LeasingReportableSegmentsMember": 177_011, "SalesReportableSegmentsMember": 193_182,
+            ])
+        let tag = BreakdownNormalizer.segmentProfitTag(
+            facts: all, tables: [],
+            rowLabelsByTag: [
+                "OperatingIncome": ["営業利益又は損失（△）"],
+                "BusinessIncome": ["セグメント利益（事業利益）又は損失（△）"],
+            ],
+            amountTag: "OperatingRevenue1", fallbackTags: Xbrl.segmentProfitTags)
+        #expect(tag == "BusinessIncome")
+    }
+
+    @Test func ixbrlFactLocalNameReadsHyphenatedCompanyExtensionPrefix() {
+        #expect(
+            StatementNotesResolver.ixbrlFactLocalName(
+                fromAttributes: #"name="jpcrp030000-asr_E03855-000:BusinessIncome""#)
+                == "BusinessIncome")
+        #expect(
+            StatementNotesResolver.ixbrlFactLocalName(
+                fromAttributes: #"name="jppfs_cor:OperatingIncome""#)
+                == "OperatingIncome")
+        #expect(
+            StatementNotesResolver.ixbrlFactLocalName(
+                fromAttributes: #"name='OperatingIncome'"#)
+                == "OperatingIncome")
+        #expect(
+            StatementNotesResolver.ixbrlFactLocalName(fromAttributes: #"contextRef="CurrentYearDuration""#)
+                == nil)
     }
 }

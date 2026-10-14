@@ -309,7 +309,6 @@ enum StatementNotesResolver {
         var consolidated: [String: String] = [:]
         var nonconsolidated: [String: String] = [:]
         let factPattern = sgaNonFractionPattern
-        let namePattern = sgaFactNamePattern
         let ctxPattern = sgaContextRefPattern
         let cellPattern = sgaTableCellPattern
 
@@ -321,12 +320,10 @@ enum StatementNotesResolver {
                 guard let attrsRange = Range(fact.range(at: 1), in: raw) else { continue }
                 let attrs = String(raw[attrsRange])
                 let attrsNS = NSRange(attrs.startIndex..., in: attrs)
-                guard let nameMatch = namePattern.firstMatch(in: attrs, range: attrsNS),
-                      let nameRange = Range(nameMatch.range(at: 1), in: attrs),
+                guard let tag = ixbrlFactLocalName(fromAttributes: attrs),
                       let ctxMatch = ctxPattern.firstMatch(in: attrs, range: attrsNS),
                       let ctxRange = Range(ctxMatch.range(at: 1), in: attrs)
                 else { continue }
-                let tag = String(attrs[nameRange])
                 guard tags.contains(tag) else { continue }
                 let ctx = String(attrs[ctxRange])
                 let isCons = ContextHelpers.isConsolidatedDuration(ctx)
@@ -378,8 +375,7 @@ enum StatementNotesResolver {
                 guard let attrsRange = Range(fact.range(at: 1), in: raw) else { continue }
                 let attrs = String(raw[attrsRange])
                 let attrsNS = NSRange(attrs.startIndex..., in: attrs)
-                guard let nameMatch = sgaFactNamePattern.firstMatch(in: attrs, range: attrsNS),
-                      let nameRange = Range(nameMatch.range(at: 1), in: attrs),
+                guard let tag = ixbrlFactLocalName(fromAttributes: attrs),
                       let ctxMatch = sgaContextRefPattern.firstMatch(in: attrs, range: attrsNS),
                       let ctxRange = Range(ctxMatch.range(at: 1), in: attrs)
                 else { continue }
@@ -396,7 +392,7 @@ enum StatementNotesResolver {
                 guard let label = sgaExpenseBreakdownLabelFromRowHTML(
                     row, cellPattern: sgaTableCellPattern)
                 else { continue }
-                labels[String(attrs[nameRange]), default: []].insert(label)
+                labels[tag, default: []].insert(label)
             }
         }
         return labels
@@ -418,11 +414,22 @@ enum StatementNotesResolver {
         return html.isEmpty ? XBRLUtils.findXbrlFiles(in: dir) : html
     }
 
+    /// iXBRL `name` 属性のローカル名。EDINET の会社拡張接頭辞は
+    /// `jpcrp030000-asr_E03855-000:BusinessIncome` のようにハイフンを含むため、
+    /// `\w+:` ではコロンまで進めずタグを落としてしまう。
+    static func ixbrlFactLocalName(fromAttributes attrs: String) -> String? {
+        let attrsNS = NSRange(attrs.startIndex..., in: attrs)
+        guard let nameMatch = sgaFactNamePattern.firstMatch(in: attrs, range: attrsNS),
+              let nameRange = Range(nameMatch.range(at: 1), in: attrs)
+        else { return nil }
+        return String(attrs[nameRange])
+    }
+
     private static let sgaNonFractionPattern = try! NSRegularExpression(
         pattern: #"<ix:nonFraction\b([^>]*)>"#,
         options: [.caseInsensitive])
     private static let sgaFactNamePattern = try! NSRegularExpression(
-        pattern: #"name\s*=\s*["'](?:[\w]+:)?([A-Za-z0-9]+)["']"#)
+        pattern: #"name\s*=\s*["'](?:[^"':]+:)?([A-Za-z][A-Za-z0-9]*)["']"#)
     private static let sgaContextRefPattern = try! NSRegularExpression(
         pattern: #"contextRef\s*=\s*["']([^"']+)["']"#)
     private static let sgaTableCellPattern = try! NSRegularExpression(
