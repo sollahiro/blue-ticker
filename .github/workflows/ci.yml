@@ -255,6 +255,12 @@ jobs:
       - name: Golden suite
         env:
           BLT_EDINET_API_KEY: ${{ secrets.BLT_EDINET_API_KEY }}
+          # 生 XBRL は R2（読み取り専用トークン）から先に取り、無い docID だけ EDINET へ。
+          # CI は R2 へ書かない。secrets 未設定（fork 等）なら EDINET のみで動く。
+          BLT_R2_ACCOUNT_ID: ${{ secrets.BLT_R2_ACCOUNT_ID }}
+          BLT_R2_ACCESS_KEY_ID: ${{ secrets.BLT_R2_ACCESS_KEY_ID }}
+          BLT_R2_SECRET_ACCESS_KEY: ${{ secrets.BLT_R2_SECRET_ACCESS_KEY }}
+          BLT_R2_XBRL_BUCKET: blue-ticker-raw-xbrls
         run: |
           command -v python3 >/dev/null || (apt-get update -qq && apt-get install -y -qq python3 >/dev/null)
           git config --global --add safe.directory "$GITHUB_WORKSPACE"

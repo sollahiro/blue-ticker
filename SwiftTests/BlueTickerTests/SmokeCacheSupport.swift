@@ -1,11 +1,37 @@
-// スモークテスト用 XBRL キャッシュ（tmp_cache/edinet/）の自動取得ユーティリティ。
+// スモーク／ゴールデンテスト用 XBRL キャッシュの自動取得ユーティリティ。
 //
-// BLT_EDINET_API_KEY 環境変数（blt-server と共通）が設定されている場合のみ、
-// 不足している docID を EDINET からダウンロードする。未設定の場合は何もせず、
-// 呼び出し側（各スモークテスト）が既存のキャッシュ有無で SKIP 判定する。
+// 取得順: ローカル展開済み → R2（読み取り専用）→ EDINET。
+// - R2: `BLT_R2_ACCOUNT_ID` / `BLT_R2_ACCESS_KEY_ID` / `BLT_R2_SECRET_ACCESS_KEY` /
+//   `BLT_R2_XBRL_BUCKET` が揃っているときだけ GET する。PUT（書き戻し）は一切しない。
+// - EDINET: `BLT_EDINET_API_KEY` があるときだけ。R2 に無い docID のフォールバック。
+// どちらも未設定（fork からの PR 等）なら何もせず、呼び出し側が SKIP 判定する。
+//
+// docID ごとに `XBRL_SOURCE <docID> <local|r2|edinet|failed>` を出力する。
+// scripts/ci/golden-suite.sh がこの行を集計して run ごとの内訳を表示する。
 
 import Foundation
 @testable import BlueTickerCore
+
+/// R2 から読むだけのストア。`putObject` は何もせず false を返す（CI は本番バケットへ書かない）。
+/// 1 docID ごとに作り、R2 から取れたかを記録する。
+actor ReadOnlyXbrlObjectStore: XbrlObjectStoring {
+    private let base: any XbrlObjectStoring
+    private(set) var servedFromR2 = false
+
+    init(base: any XbrlObjectStoring) {
+        self.base = base
+    }
+
+    func getObject(key: String) async -> Data? {
+        let data = await base.getObject(key: key)
+        if data != nil { servedFromR2 = true }
+        return data
+    }
+
+    func putObject(_ data: Data, key: String, contentType: String) async -> Bool {
+        false
+    }
+}
 
 enum SmokeCacheSupport {
     static let cacheDir = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
@@ -14,20 +40,36 @@ enum SmokeCacheSupport {
     /// `cacheDir` 省略時は `tmp_cache/edinet`（従来通り）。`RealXbrlBreakdown*Tests` のような
     /// 別ディレクトリ（`~/.config/blue-ticker/analysis_cache/...`）を使う呼び出し元は明示指定する。
     static func ensureCached(_ docIDs: some Sequence<String>, cacheDir: URL? = nil) async {
-        guard let apiKey = ProcessInfo.processInfo.environment["BLT_EDINET_API_KEY"], !apiKey.isEmpty else {
-            return
-        }
+        let env = ProcessInfo.processInfo.environment
+        let apiKey = env["BLT_EDINET_API_KEY"].flatMap { $0.isEmpty ? nil : $0 }
+        let r2Config = R2StorageConfig.resolveXbrlFromEnvironment(env)
+        guard apiKey != nil || r2Config != nil else { return }
+
         let dir = cacheDir ?? self.cacheDir
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         let store = EdinetCacheStore(cacheDir: dir)
-        let client = EdinetAPIClient(apiKey: apiKey, cacheStore: store)
 
         for docID in docIDs {
-            // hasXbrlDir の事前判定は行わない。展開途中ディレクトリとの race を避け、
-            // downloadDocument 側のファイルロック内で完了済みか判定させる。
-            if await client.downloadDocument(docID, saveDir: dir) == nil {
-                print("FAIL   \(docID): ダウンロード失敗")
+            if store.hasXbrlDir(docID, saveDir: dir) {
+                print("XBRL_SOURCE \(docID) local")
+                continue
             }
+            let objectStore = r2Config.map { ReadOnlyXbrlObjectStore(base: R2XbrlObjectStore(config: $0)) }
+            let client = EdinetAPIClient(
+                apiKey: apiKey, cacheStore: store, xbrlObjectStore: objectStore)
+            // hasXbrlDir の事前判定は計数用。取得自体は downloadDocument 側のファイルロック内で
+            // 完了済みか判定させる（展開途中ディレクトリとの race を避ける）。
+            let result = await client.downloadDocument(docID, saveDir: dir)
+            let source: String
+            if result == nil {
+                source = "failed"
+                print("FAIL   \(docID): ダウンロード失敗")
+            } else if let objectStore, await objectStore.servedFromR2 {
+                source = "r2"
+            } else {
+                source = "edinet"
+            }
+            print("XBRL_SOURCE \(docID) \(source)")
         }
     }
 }
