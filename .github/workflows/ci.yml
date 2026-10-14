@@ -43,9 +43,13 @@ jobs:
         # が遅延し、DB テストが 200 秒タイムアウトや空の in-memory SQLite 接続を踏む
         # （run 32125967324: MCPRouteTests 500、FilingSectionsIngestTests purged=0）。
         # テスト内容は維持し、プロセスだけ分ける。
+        #
+        # ゴールデンスイート（SmokeTests / SegmentParityTests / *GoldenTests / Spec/Oracle/**）は
+        # Linux の必須チェック `golden-suite` ジョブだけで実行する。macOS では同じフィルタで
+        # skip し、二重実行と同一プロセス内の負荷による flake を避ける（docs/ci-checks.md）。
         run: |
-          swift test -Xswiftc -disable-upcoming-feature -Xswiftc MemberImportVisibility --skip StatelessTransportHangMitigationTests --skip SmokeTests --skip SegmentParityTests
-          swift test -Xswiftc -disable-upcoming-feature -Xswiftc MemberImportVisibility --filter 'SmokeTests|SegmentParityTests'
+          GOLDEN_FILTER="$(scripts/ci/golden-suite.sh --print-filter)"
+          swift test -Xswiftc -disable-upcoming-feature -Xswiftc MemberImportVisibility --skip StatelessTransportHangMitigationTests --skip "$GOLDEN_FILTER"
           swift test -Xswiftc -disable-upcoming-feature -Xswiftc MemberImportVisibility --filter StatelessTransportHangMitigationTests
 
       - name: Test HAPIS iOS consumer client
@@ -212,7 +216,7 @@ jobs:
         #
         # ゴールデンスイート（SmokeTests / SegmentParityTests / *GoldenTests / Spec/Oracle/**）は
         # 必須チェック `golden-suite` ジョブ（scripts/ci/golden-suite.sh）で別プロセス実行する。
-        # ここでは同じフィルタで skip して二重実行しない（docs/ci-checks.md）。
+        # ここでは swift-macos と同じフィルタで skip して二重実行しない（docs/ci-checks.md）。
         run: |
           command -v python3 >/dev/null || (apt-get update -qq && apt-get install -y -qq python3 >/dev/null)
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
