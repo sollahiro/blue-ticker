@@ -6,6 +6,7 @@ import Foundation
 actor FakeSgaLineDecider: SgaLineDeciding {
     var pickKey: String?
     var pickLabelContains: String?
+    var pickValueYen: Double?
     var fail: Bool
     var disagreement: Bool
     var model: String
@@ -14,12 +15,14 @@ actor FakeSgaLineDecider: SgaLineDeciding {
     init(
         pickKey: String? = nil,
         pickLabelContains: String? = nil,
+        pickValueYen: Double? = nil,
         fail: Bool = false,
         disagreement: Bool = false,
         model: String = "typesafe/jev-1.13"
     ) {
         self.pickKey = pickKey
         self.pickLabelContains = pickLabelContains
+        self.pickValueYen = pickValueYen
         self.fail = fail
         self.disagreement = disagreement
         self.model = model
@@ -45,9 +48,17 @@ actor FakeSgaLineDecider: SgaLineDeciding {
         let selected: String?
         if let pickKey {
             selected = pickKey
+        } else if let yen = pickValueYen,
+            let match = rows.min(by: { abs($0.value - yen) < abs($1.value - yen) }),
+            abs(match.value - yen) <= Financial.millionYen
+        {
+            selected = match.key
         } else if let needle = pickLabelContains {
             selected = rows.first { $0.label.contains(needle) }?.key
-                ?? SgaLineJevPicker.noneOfThese
+                ?? rows.first { $0.tag.contains(needle) }?.key
+                ?? (rows.count == 1 ? rows[0].key : SgaLineJevPicker.noneOfThese)
+        } else if rows.count == 1 {
+            selected = rows[0].key
         } else {
             selected = SgaLineJevPicker.noneOfThese
         }

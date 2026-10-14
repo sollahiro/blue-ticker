@@ -101,14 +101,24 @@ enum SgaLineJevPicker {
     static func candidates(in span: Span) -> [SgaLineCandidate] {
         span.between.enumerated().compactMap { index, row in
             guard otherIncomeOrExpenseKind(row.item) == nil else { return nil }
-            let label = (row.item.label ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
             return SgaLineCandidate(
                 key: "r\(index)",
                 tag: row.item.tag,
-                label: label.isEmpty ? row.item.tag : label,
+                label: disclosedLabel(for: row.item),
                 value: row.item.value,
                 order: row.order)
         }
+    }
+
+    /// 本表ラベルを優先し、空なら既知の業種別 sga_label、その次に標準タクソノミ。
+    static func disclosedLabel(for item: StatementLineItem) -> String {
+        let raw = (item.label ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        if !raw.isEmpty, raw.contains(where: { !$0.isASCII }) { return raw }
+        if let known = knownSgaLabels[item.tag] { return known }
+        if let standard = XBRLUtils.loadStandardTaxonomyLabels()[item.tag], !standard.isEmpty {
+            return standard
+        }
+        return raw.isEmpty ? item.tag : raw
     }
 
     /// 選んだ行を採るか。値は既存行そのもので、GP − OP ±1百万円、または
@@ -329,6 +339,17 @@ enum SgaLineJevPicker {
 
     private static let gpTags = Set(Xbrl.grossProfitDirectTags + Xbrl.operatingGrossProfitDirectTags)
     private static let opTags = Set(Xbrl.operatingProfitDirectTags)
+
+    private static let knownSgaLabels: [String: String] = {
+        var map: [String: String] = [:]
+        for (tag, label) in Xbrl.sgaIndustryTotalTags {
+            map[tag] = label ?? defaultSgaLabel
+        }
+        for (tag, label, _) in Xbrl.sgaSingleLineFallbackTags {
+            map[tag] = label
+        }
+        return map
+    }()
 }
 
 struct OpenRouterSgaLineDecider: SgaLineDeciding {

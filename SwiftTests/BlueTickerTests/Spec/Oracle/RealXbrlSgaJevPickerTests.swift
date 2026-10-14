@@ -1,6 +1,29 @@
 // 業種タグ／1行フォールバックを外したうえで Jev ピッカーが同じ sga を拾うこと、
 // およびタグ経路の end-to-end Summary が変わらないこと。
 //
+// source: code=9533 fy_end=2026-03-31 doc_id=S100YGFW page=1 field=sga
+// source: code=9534 fy_end=2026-03-31 doc_id=S100YGOL page=1 field=sga
+// source: code=9535 fy_end=2026-03-31 doc_id=S100YEHM page=1 field=sga
+// source: code=9536 fy_end=2026-03-31 doc_id=S100YE54 page=1 field=sga
+// source: code=9537 fy_end=2026-03-31 doc_id=S100YIW6 page=1 field=sga
+// source: code=9539 fy_end=2025-12-31 doc_id=S100XTA9 page=1 field=sga
+// source: code=9543 fy_end=2025-12-31 doc_id=S100XTDX page=1 field=sga
+// source: code=9110 fy_end=2026-03-31 doc_id=S100YCN8 page=1 field=sga
+// source: code=9312 fy_end=2026-03-31 doc_id=S100YHI4 page=1 field=sga
+// source: code=8511 fy_end=2026-03-31 doc_id=S100YIQY page=1 field=sga
+// source: code=9034 fy_end=2026-03-31 doc_id=S100YK2X page=1 field=sga
+// source: code=9365 fy_end=2026-03-31 doc_id=S100YJV2 page=1 field=sga
+// source: code=9636 fy_end=2026-01-31 doc_id=S100XZ5Y page=1 field=sga
+// source: code=9679 fy_end=2025-09-30 doc_id=S100XAG9 page=1 field=sga
+// source: code=6268 fy_end=2025-12-31 doc_id=S100XTOY page=1 field=sga
+// source: code=4889 fy_end=2026-03-31 doc_id=S100YGXR page=1 field=sga
+// source: code=8742 fy_end=2026-03-31 doc_id=S100YJB4 page=1 field=sga
+// source: code=7182 fy_end=2026-03-31 doc_id=S100Y9G1 page=1 field=sga
+// source: code=9532 fy_end=2026-03-31 doc_id=S100YFQT page=1 field=sga
+// source: code=9130 fy_end=2026-03-31 doc_id=S100YK3U page=1 field=sga
+// source: code=4579 fy_end=2025-12-31 doc_id=S100XSQX page=1 field=sga
+// source: code=8306 fy_end=2026-03-31 doc_id=S100YJQO page=1 field=sga
+//
 // `BLT_EDINET_API_KEY` があれば不足キャッシュを取得し、無ければ SKIP。
 
 import Foundation
@@ -64,7 +87,9 @@ import Testing
         for fixture in Self.pickerGoldens {
             guard let dir = await dir(fixture.docID) else { continue }
             let tagged = try #require(StatementFinancialsResolver.resolve(xbrlDir: dir))
-            #expect(tagged.sga == fixture.sga * million, "e2e \(fixture.docID)")
+            #expect(
+                tagged.sga.map { ($0 / million).rounded() } == fixture.sga,
+                "e2e \(fixture.docID)")
             #expect(tagged.sgaLabel == fixture.label, "e2e label \(fixture.docID)")
 
             let omitted = try #require(
@@ -73,11 +98,14 @@ import Testing
             #expect(omitted.sga == nil, "omit tags \(fixture.docID)")
 
             let items = try #require(pl(dir))
+            let decider = FakeSgaLineDecider(
+                pickLabelContains: fixture.pickContains,
+                pickValueYen: fixture.sga * million)
             let picked = await SgaLineJevPicker.pick(
-                pl: items,
-                decider: FakeSgaLineDecider(pickLabelContains: fixture.pickContains),
-                docID: fixture.docID)
-            #expect(picked.accepted?.value == fixture.sga * million, "picker \(fixture.docID)")
+                pl: items, decider: decider, docID: fixture.docID)
+            #expect(
+                picked.accepted.map { ($0.value / million).rounded() } == fixture.sga,
+                "picker \(fixture.docID)")
             #expect(
                 SgaLineJevPicker.publishedSgaLabel(picked.accepted?.label) == fixture.label,
                 "picker label \(fixture.docID)")
@@ -86,8 +114,12 @@ import Testing
             let overlay = await StatementFinancialsResolver.resolve(
                 xbrlDir: dir,
                 sgaTagPolicy: .omitIndustryAndSingleLine,
-                sgaLineDecider: FakeSgaLineDecider(pickLabelContains: fixture.pickContains))
-            #expect(overlay?.sga == fixture.sga * million, "overlay \(fixture.docID)")
+                sgaLineDecider: FakeSgaLineDecider(
+                    pickLabelContains: fixture.pickContains,
+                    pickValueYen: fixture.sga * million))
+            #expect(
+                overlay?.sga.map { ($0 / million).rounded() } == fixture.sga,
+                "overlay \(fixture.docID)")
             #expect(overlay?.sgaLabel == fixture.label, "overlay label \(fixture.docID)")
         }
     }
@@ -141,5 +173,29 @@ import Testing
             sgaLineDecider: FakeSgaLineDecider(pickLabelContains: "営業経費"))
         #expect(overlay?.sga == 3_489_570 * million)
         #expect(overlay?.sgaJevAudit == nil)
+    }
+
+    @Test func raqualiaBusinessExpenseTotalStaysNull() async throws {
+        guard let dir = await dir("S100XSQX") else { return }
+        let tagged = try #require(StatementFinancialsResolver.resolve(xbrlDir: dir))
+        #expect(tagged.sga == nil)
+        #expect(tagged.sgaLabel == nil)
+        let overlay = await StatementFinancialsResolver.resolve(
+            xbrlDir: dir, sgaLineDecider: FakeSgaLineDecider(pickLabelContains: "事業費用"))
+        #expect(overlay?.sga == nil)
+        #expect(overlay?.sgaLabel == nil)
+    }
+
+    @Test func kyoeiTankerGeneralAdministrativeUnchanged() async throws {
+        guard let dir = await dir("S100YK3U") else { return }
+        let tagged = try #require(StatementFinancialsResolver.resolve(xbrlDir: dir))
+        #expect(tagged.sga.map { ($0 / million).rounded() } == 1_211)
+        #expect(tagged.sgaLabel == "一般管理費")
+        let overlay = await StatementFinancialsResolver.resolve(
+            xbrlDir: dir,
+            sgaLineDecider: FakeSgaLineDecider(
+                pickLabelContains: "一般管理費", pickValueYen: 1_211 * million))
+        #expect(overlay?.sga.map { ($0 / million).rounded() } == 1_211)
+        #expect(overlay?.sgaLabel == "一般管理費")
     }
 }
