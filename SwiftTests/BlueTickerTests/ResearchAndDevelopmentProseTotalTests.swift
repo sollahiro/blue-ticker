@@ -101,7 +101,9 @@ import Testing
         #expect(total.audit.needsReview == false)
         #expect(total.audit.axis == breakdownAxisResearchAndDevelopment)
         #expect(total.audit.threshold == SegmentNoteDecision.applyProbabilityThreshold)
-        #expect(total.audit.calls.filter(\.applied).map(\.sentences) == [[current]])
+        #expect(
+            total.audit.calls.filter(\.applied).map(\.sentences)
+                == Array(repeating: [current], count: JevChoiceAggregate.sampleCount))
         let snapshot = ResearchAndDevelopmentProseTotalDecision.snapshot(
             axis: breakdownAxisResearchAndDevelopment, total: total)
         #expect(snapshot.rows.isEmpty)
@@ -327,7 +329,7 @@ import Testing
         #expect(filled.snapshot.sourceKind == breakdownSourceXbrlFacts)
         #expect(filled.snapshot.denominatorTag == snapshot.denominatorTag)
         #expect(filled.audit?.applied == true)
-        #expect(filled.audit?.calls.filter(\.applied).count == 1)
+        #expect(filled.audit?.calls.filter(\.applied).count == JevChoiceAggregate.sampleCount)
     }
 
     @Test func keepsTheTaggedSnapshotWhenTheRemainderSentenceDoesNotQualify() async {
