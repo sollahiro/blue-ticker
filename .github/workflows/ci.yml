@@ -261,6 +261,8 @@ jobs:
           BLT_R2_ACCESS_KEY_ID: ${{ secrets.BLT_R2_ACCESS_KEY_ID }}
           BLT_R2_SECRET_ACCESS_KEY: ${{ secrets.BLT_R2_SECRET_ACCESS_KEY }}
           BLT_R2_XBRL_BUCKET: blue-ticker-raw-xbrls
+          # 取得できない golden 書類は SKIP ではなく失敗にする（SmokeCacheSupport.isStrict）。
+          BLT_GOLDEN_STRICT: "1"
         run: |
           command -v python3 >/dev/null || (apt-get update -qq && apt-get install -y -qq python3 >/dev/null)
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
