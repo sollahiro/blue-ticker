@@ -17,6 +17,8 @@ import Foundation
 actor ReadOnlyXbrlObjectStore: XbrlObjectStoring {
     private let base: any XbrlObjectStoring
     private(set) var servedFromR2 = false
+    /// GET したが R2 に無かった（この後 EDINET へ進む）。
+    private(set) var missedR2 = false
 
     init(base: any XbrlObjectStoring) {
         self.base = base
@@ -24,7 +26,7 @@ actor ReadOnlyXbrlObjectStore: XbrlObjectStoring {
 
     func getObject(key: String) async -> Data? {
         let data = await base.getObject(key: key)
-        if data != nil { servedFromR2 = true }
+        if data != nil { servedFromR2 = true } else { missedR2 = true }
         return data
     }
 
@@ -64,8 +66,15 @@ enum SmokeCacheSupport {
             if result == nil {
                 source = "failed"
                 print("FAIL   \(docID): ダウンロード失敗")
-            } else if let objectStore, await objectStore.servedFromR2 {
-                source = "r2"
+            } else if let objectStore {
+                // R2 に問い合わせずに返った = 別スイートが同時に展開済み（ロック内でローカル判定）。
+                if await objectStore.servedFromR2 {
+                    source = "r2"
+                } else if await objectStore.missedR2 {
+                    source = "edinet"
+                } else {
+                    source = "local"
+                }
             } else {
                 source = "edinet"
             }
