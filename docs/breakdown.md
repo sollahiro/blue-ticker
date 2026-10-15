@@ -77,7 +77,7 @@ geography は変えない。本邦90％の `not_found` は既存の Jev ゲー�
 
 ## 有利子負債（`interest_bearing_debt`）
 
-- 社債・借入金とリース負債を1軸にまとめる。`cache_version` は `breakdown-interest-bearing-debt-v2`（v1 は新軸。銀行行の追加は互換追加で据え置き。v2 はタクソノミ preset の追加・リース込み「有利子負債」集約・除外リスト・証券業の営業借入・千円注記・`source_tag` で行と合計が変わるため）。`source_kind` は `xbrl_facts`。
+- 社債・借入金とリース負債を1軸にまとめる。`cache_version` は `breakdown-interest-bearing-debt-v2`（v1 は新軸。銀行行の追加は互換追加で据え置き。v2 はタクソノミ preset の追加・リース込み「有利子負債」集約・除外リスト・証券業の営業借入・千円注記・`source_tag` で行と合計が変わるため）。`source_kind` は `xbrl_facts`。公開 note_type としての `borrowings_schedule` / `lease_liabilities` は廃止した。軸の行 `source` 名（`borrowings_schedule` / `lease_note`）とパーサは残す。
 - 行は名前付きセル `opening`（前期末）/ `closing`（当期末）。平均利率は持たない（`average_rate` は廃止。書類ごとに別表・注記にあり行と対応しないため）。行ごとに `source`（`balance_sheet` / `borrowings_schedule` / `lease_note` / `financials_bank_components`）と `maturity_class`（`current` / `non_current` / null）を持つ。末尾に `合計` 行（`row_kind` `subtotal`）。返済期限列は持たない。
 - `source_tag`（nullable string）: その行の値を読んだ XBRL 要素の**ローカル名だけ**（名前空間・プレフィックス・URI は付けない）。
   - BS 行（`source=balance_sheet`）と銀行行は数値要素（例: `BorrowingsCLIFRS`、`ShortTermLoansPayable`）。US-GAAP の BS は HTML 表の行なので仮想名 `USGAAP_HTML_*`（提出要素ではない）。

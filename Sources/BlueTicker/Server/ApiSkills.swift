@@ -7,7 +7,7 @@ import Foundation
 // MARK: - 契約型
 
 /// REST skills 応答の `schema_version`。形を破壊的に変えたときのみ +1。
-public let apiSkillsSchemaVersion = 3
+public let apiSkillsSchemaVersion = 4
 
 /// パラメータの置き場所（REST パス変数 / クエリ）。
 public enum ApiSkillParameterLocation: String, Sendable {
@@ -537,19 +537,17 @@ public func apiSkillsCatalog() -> [ApiSkill] {
             name: "財務諸表注記",
             description: """
                 貸借対照表・損益計算書・キャッシュ・フロー計算書（get-statement）の外にある注記
-                （EPS・発行済株式数・
-                借入金等明細表・有形固定資産等明細表・のれん及び無形資産明細・
-                リース負債）を
+                （EPS・発行済株式数・有形固定資産等明細表・のれん及び無形資産明細）を
                 note_type 単位で取得します（格納済みデータのみ）。
                 対象は上場企業（日経225は ingest の処理順の優先のみ）。doc_id を省略すると最新の有価証券報告書を使用します。
                 注記が取得できない場合はエラー応答とともに reason が返ることがあります
                 （reason 無しは単に未取り込み。REST では 404、MCP では isError）。
                 not_found（当該 note_type の開示・XBRLタグが見つからない＝正当な欠測）、
                 available_via_statement（本 note_type の対象外だが同等の値は get-statement から取得可能。
-                例: property_plant_equipment_schedule / lease_liabilities で BS に区分・負債の
+                例: property_plant_equipment_schedule で BS に区分の
                 構造化タグ当期値がある場合。goodwill_and_intangibles は IFRS 注記限定のため非対象時も同様）、
-                available_via_notes（本 note_type の対象外だが同等の値は他の note_type から取得可能。
-                例: lease_liabilities のリース債務が borrowings_schedule＝借入金等明細表側にある場合）、
+                available_via_notes（本 note_type の対象外だが同等の値は他の公開 note_type から取得可能。
+                公開中の note_type はこの reason を出さない）、
                 us_gaap_unsupported（US-GAAP 連結で本 note_type の構造化タグ判定ができない場合）。
                 """,
             method: "GET",
@@ -570,9 +568,7 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                     type: .string,
                     description: """
                         注記種別: per_share_information / issued_shares_and_capital / \
-                        borrowings_schedule / \
-                        property_plant_equipment_schedule / goodwill_and_intangibles / \
-                        lease_liabilities
+                        property_plant_equipment_schedule / goodwill_and_intangibles
                         """,
                     required: true
                 ),
@@ -589,11 +585,10 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                 対象は上場企業（日経225は ingest の処理順の優先のみ）。格納済みデータのみ。未算出は 404（reason 無し）、
                 対象外・非開示は 404 + reason（not_found / available_via_statement /
                 available_via_notes / us_gaap_unsupported）、DB 非接続は 503。
-                property_plant_equipment_schedule / lease_liabilities は IFRS 注記（または TextBlock）を
-                優先し、それ以外は BS 構造化タグ当期値で available_via_statement（lease は借入金等明細表の
-                リース債務なら available_via_notes。US-GAAP は us_gaap_unsupported）。
+                property_plant_equipment_schedule は IFRS 注記を優先し、それ以外は BS 構造化タグ当期値で
+                available_via_statement（US-GAAP は us_gaap_unsupported）。
                 goodwill_and_intangibles は IFRS 注記限定。
-                例: GET /v1/companies/7203/statement/notes?note_type=borrowings_schedule
+                例: GET /v1/companies/7203/statement/notes?note_type=per_share_information
                 """,
             mcpOutputSchema:
                 """

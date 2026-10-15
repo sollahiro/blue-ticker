@@ -39,7 +39,7 @@
 |---|---|
 | `not_found` | 当該 note_type の開示・タグが無い（正当欠測） |
 | `available_via_statement` | 本 note_type 対象外だが同等値は statement から取得可 |
-| `available_via_notes` | 本 note_type 対象外だが同等値は他 note_type（例: `borrowings_schedule`）から取得可 |
+| `available_via_notes` | 本 note_type 対象外だが同等値は他の公開 note_type から取得可（公開中の note はこの reason を出さない） |
 | `us_gaap_unsupported` | US-GAAP 連結で本 note_type の構造化タグ判定ができない |
 
 公開 note_type:
@@ -48,10 +48,10 @@
 |---|---|
 | `per_share_information` | 1 株当たり情報 |
 | `issued_shares_and_capital` | 発行済株式・資本金等 |
-| `borrowings_schedule` | 借入金等明細 |
 | `property_plant_equipment_schedule` | 有形固定資産明細 |
 | `goodwill_and_intangibles` | のれん・無形資産 |
-| `lease_liabilities` | リース負債 |
+
+廃止（REST / MCP / skills / ingest から外した。未知 note_type と同じ 404。パーサは残し、有利子負債は breakdown 軸 `interest_bearing_debt`）: `borrowings_schedule` / `lease_liabilities`。
 
 未公開: `sga_expense_breakdown`（販管費の主要な費目内訳。発生支出の `research_and_development` 軸とは別。US-GAAP 非対応）。
 

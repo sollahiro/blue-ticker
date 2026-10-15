@@ -17,7 +17,7 @@
 | 0 | `scripts/jp/edinet/ingest-job-00-sync-foundation.sh` | `sync` → `filing-sections` | 上場 | 80 | 日次（軽） |
 | 1 | `scripts/jp/edinet/ingest-job-01-statements.sh` | `statements` | 上場（225は処理順） | 80 | 6h |
 | 2 | `scripts/jp/edinet/ingest-job-02-notes-core.sh` | `statement-notes`（per_share, issued_shares） | 上場（225は処理順） | 80 | 6h |
-| 3 | `scripts/jp/edinet/ingest-job-03-notes-heavy.sh` | `statement-notes`（残り4種: borrowings / lease / PPE / goodwill。`sga_expense_breakdown` は未公開のため省略） | 上場（225は処理順） | 80 | 日次 |
+| 3 | `scripts/jp/edinet/ingest-job-03-notes-heavy.sh` | `statement-notes`（PPE / goodwill。`borrowings_schedule` / `lease_liabilities` は公開廃止のため省略。`sga_expense_breakdown` は未公開のため省略） | 上場（225は処理順） | 80 | 日次 |
 | 4 | `scripts/jp/edinet/ingest-job-04-breakdowns.sh` | `breakdowns`（全13軸） | 上場（225は処理順） | 50 | 6h |
 | 5 | `scripts/jp/edinet/ingest-job-05-financials.sh` | `financials` | 上場 | 80 | 6h（2・3の後） |
 | 6 | `scripts/jp/edinet/ingest-job-06-overviews.sh` | `overviews` | 上場（225は処理順） | 80 | 日次 |
@@ -83,7 +83,7 @@ statements               … 上場正本（225は処理順）
         ↓
 notes-core               … BPS/EPS 供給源を優先
         ↓
-notes-heavy              … 重い note_type（borrowings / lease / PPE 等）
+notes-heavy              … 重い note_type（PPE / goodwill）
         ↓
 breakdowns               … LLM 軸は時間がかかるため financials と分離
         ↓
@@ -119,7 +119,7 @@ overviews                … 銘柄の短い会社説明（LLM。最新有報1�
 DATABASE_URL="$BLT_NEON_WRITE_DATABASE_URL" ./.build/release/blt-server ingest \
   --codes 7203 --doc-ids S100W0S7 \
   --stages financials,statements,statement-notes,breakdowns,filing-sections \
-  --note-types borrowings_schedule
+  --note-types per_share_information
 ```
 
 `--codes` / `--doc-ids` は `--limit` を無視して全件。`--doc-ids` は原本有報(120)の会社-FY 単位（他 FY は purge しない。financials は会社1行なので当該発行体を再計算し、overlay は訂正がある FY だけ）。指定 doc は cache_version / needs_review に関係なく書き直す（financials は格納行の cache_version・high_water・assembly_fingerprint が現行でも再計算して格納する。最新 FY を失う上書き・years 行へのプレースホルダ上書きは縮小ガードで保留されるのは同じ）。定期ジョブでは使わない。

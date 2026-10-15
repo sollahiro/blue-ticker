@@ -1,5 +1,5 @@
 // US-GAAP 借入金等明細（巨大注記 HTML）の表形状テスト。
-// 実データ回帰は StatementNotesOracleFormatTests（富士フイルム S100W3XJ / キヤノン S100XTLJ）。
+// 実データ回帰は RealXbrlStatementNotesTests（富士フイルム S100W3XJ / キヤノン S100XTLJ）。
 
 import Foundation
 import Testing

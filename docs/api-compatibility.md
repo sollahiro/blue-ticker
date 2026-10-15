@@ -67,6 +67,10 @@ breaking 再編時は可能な範囲で:
 - 互換追加も含め、契約に触る変更は短いメモを残す（PR 説明または関連 docs）
 - 開発用 MCP の入出力を変える必要が出ても、先に REST 契約を決める。MCP を製品面として拡張しない
 
+## 変更メモ（段階 A）
+
+- Notes の `lease_liabilities` / `borrowings_schedule` を REST / MCP / skills / `--note-types` / ingest から外した（breaking。`apiSkillsSchemaVersion` 4）。未知 note_type と同じ 404（reason 無し、retired breakdown 軸と同型）。パーサは残し、有利子負債の正本は breakdown 軸 `interest_bearing_debt`。`fin-vN` / `breakdown-interest-bearing-debt-v2` / 組立指紋は据え置き。
+
 ## Codable 応答への段階移行
 
 新規 REST エンドポイントは専用の `Codable` / `Sendable` 応答型を定義し、内部モデルから写像する。キー名は `CodingKeys` に集約する。開発用 MCP は同じ契約を再利用する。
