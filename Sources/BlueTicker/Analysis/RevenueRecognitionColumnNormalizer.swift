@@ -440,9 +440,8 @@ enum RevenueRecognitionColumnNormalizer {
         return table.items.contains { hit($0.label) || hit($0.group) }
     }
 
-    /// Audit `selected` is the published column. When Jev said `none_of_these`
-    /// and the deterministic fallback took a real column, that published key
-    /// is what goldens (and the old 1-call payload) stored — not the raw Choice.
+    /// Audit `selected` is the published column. A low-p_none `none_of_these`
+    /// fallback still records that column, matching the pre-sample payload.
     static func publishedColumnCalls(
         samples: [JevChoiceAggregate.Sample],
         options: [String],

@@ -211,7 +211,12 @@ enum JevDecisionSampler {
             }
             var slots: [T?] = Array(repeating: nil, count: count)
             for await (index, sample) in group { slots[index] = sample }
-            return slots.map { $0! }
+            return slots.enumerated().map { index, value in
+                guard let value else {
+                    preconditionFailure("JevDecisionSampler missing sample \(index)")
+                }
+                return value
+            }
         }
     }
 
