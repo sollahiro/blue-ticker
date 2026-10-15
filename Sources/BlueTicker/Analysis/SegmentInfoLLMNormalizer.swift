@@ -114,20 +114,34 @@ enum SegmentInfoLLMNormalizer {
             offered.contains { $0.tableIndex == table.tableIndex }
         }
         let metricRows = offeredTables.flatMap(metricRows(in:))
-        let choice = await decider.choose(
-            columns: offered, metricRows: metricRows, tables: offeredTables,
-            fiscalYearEnd: fiscalYearEnd, docID: docID)
+        let choiceSamples = await JevDecisionSampler.collect(
+            count: RevenueRecognitionColumnNormalizer.jevPolicy.sampling.sampleCount
+        ) {
+            await decider.choose(
+                columns: offered, metricRows: metricRows, tables: offeredTables,
+                fiscalYearEnd: fiscalYearEnd, docID: docID)
+        }
+        let columnAggregate = JevChoiceAggregate.combine(
+            choiceSamples.map { JevChoiceAggregate.fromColumn($0.column) })
+        let columnChoice = JevChoiceAggregate.columnChoice(from: columnAggregate)
+        let filledMetrics = choiceByFillingMetricRows(
+            column: columnChoice, metricRows: metricRows, fiscalYearEnd: fiscalYearEnd)
+        let choice = SegmentInfoChoice(
+            column: columnChoice,
+            salesRow: consensusMetricRow(choiceSamples.map(\.salesRow)) ?? filledMetrics.salesRow,
+            profitRow: consensusMetricRow(choiceSamples.map(\.profitRow)) ?? filledMetrics.profitRow)
         var resolved = RevenueRecognitionColumnNormalizer.resolveSelection(
             choice.column, columns: offered)
         resolved = RevenueRecognitionColumnNormalizer.preferProductAxis(
             resolved, columns: offered, tables: tablesForChoice, constraint: constraint)
 
         let columnJev = jevPayload(
-            docID: docID, choice: choice.column, resolvedKey: resolved?.key ?? choice.column.selected,
-            question: RevenueRecognitionColumnNormalizer.question)
+            docID: docID, samples: choiceSamples.map(\.column), aggregate: columnAggregate,
+            resolved: resolved)
         let pNoneNote = choice.column.pNone.map { String($0) } ?? "nil"
+        let medianNote = columnAggregate.probability.map { String($0) } ?? "nil"
         var notes =
-            "jev_column=\(choice.column.selected ?? "nil") confidence=\(choice.column.confidence.map { String($0) } ?? "nil") p_none=\(pNoneNote)"
+            "jev_column=\(choice.column.selected ?? "nil") samples=\(choiceSamples.count) \(columnAggregate.outcome.rawValue) median=\(medianNote) p_none=\(pNoneNote)"
         if let resolved, resolved.forceReview {
             notes += " overridden=\(resolved.key)"
         }
@@ -172,10 +186,19 @@ enum SegmentInfoLLMNormalizer {
 
         let belowThreshold = (choice.column.confidence ?? 0) < RevenueRecognitionColumnNormalizer
             .confidenceThreshold
+        let columnUncertain = !columnAggregate.isConfident
         var warnings: [String] = []
-        var needsReview = belowThreshold || groupSumReview || resolved.forceReview
-            || parallelUnresolved
+        var needsReview = belowThreshold || columnUncertain || groupSumReview
+            || resolved.forceReview || parallelUnresolved
         if belowThreshold { warnings.append(warningLowConfidence) }
+        switch columnAggregate.outcome {
+        case .disagreement:
+            warnings.append(JevDecision.warningSampleDisagreement)
+        case .insufficient:
+            warnings.append(JevDecision.warningSampleInsufficient)
+        case .allFailed, .agreed:
+            break
+        }
         if resolved.forceReview { warnings.append(warningNoneOfTheseOverridden) }
         if parallelUnresolved { warnings.append(warningParallelDimensions) }
 
@@ -236,7 +259,9 @@ enum SegmentInfoLLMNormalizer {
         audit.periodColumn = column.key
         audit.unit = scale.headerToken ?? table.unitCaption ?? ""
         audit.profitDisclosed = profitDisclosed
-        stampJev(&audit, applied: !belowThreshold, needsReview: needsReview)
+        stampJev(
+            &audit, applied: !belowThreshold && columnAggregate.isConfident,
+            needsReview: needsReview)
 
         let snapshot = BreakdownSnapshot(
             axis: breakdownAxisProductService,
@@ -889,22 +914,31 @@ enum SegmentInfoLLMNormalizer {
         return fallback
     }
 
+    private static func consensusMetricRow(
+        _ rows: [RevenueRecognitionColumnChoice?]
+    ) -> RevenueRecognitionColumnChoice? {
+        let present = rows.compactMap { $0 }
+        guard !present.isEmpty else { return nil }
+        let aggregate = JevChoiceAggregate.combine(present.map(JevChoiceAggregate.fromColumn))
+        guard aggregate.isConfident else { return nil }
+        return JevChoiceAggregate.columnChoice(from: aggregate)
+    }
+
     private static func jevPayload(
-        docID: String, choice: RevenueRecognitionColumnChoice, resolvedKey: String?, question: String
+        docID: String, samples: [RevenueRecognitionColumnChoice],
+        aggregate: JevChoiceAggregate.Result,
+        resolved: RevenueRecognitionColumnNormalizer.ResolvedColumn?
     ) -> SegmentNoteJevAuditPayload {
         SegmentNoteJevAuditPayload(
             code: "", docID: docID, axis: breakdownAxisProductService,
-            model: choice.model, threshold: RevenueRecognitionColumnNormalizer.confidenceThreshold,
+            model: aggregate.model.isEmpty
+                ? (samples.first?.model ?? "") : aggregate.model,
+            threshold: RevenueRecognitionColumnNormalizer.jevPolicy.auditThreshold,
             applied: false, needsReview: false, sentences: [],
-            calls: [
-                SegmentNoteJevCallPayload(
-                    question: question,
-                    options: choice.options,
-                    selected: resolvedKey ?? choice.selected,
-                    probability: choice.confidence,
-                    sentences: [],
-                    applied: false)
-            ])
+            calls: RevenueRecognitionColumnNormalizer.publishedColumnCalls(
+                samples: samples.map(JevChoiceAggregate.fromColumn),
+                options: samples.first?.options ?? aggregate.options,
+                resolved: resolved))
     }
 
     private static func stampJev(
@@ -914,8 +948,9 @@ enum SegmentInfoLLMNormalizer {
             guard var payload else { return nil }
             payload.applied = applied
             payload.needsReview = needsReview
-            if !payload.calls.isEmpty {
-                payload.calls[0].applied = applied
+            for index in payload.calls.indices
+            where payload.calls[index].question == RevenueRecognitionColumnNormalizer.question {
+                payload.calls[index].applied = applied
             }
             return payload
         }
@@ -945,35 +980,36 @@ struct OpenRouterSegmentInfoDecider: SegmentInfoDeciding {
             return SegmentInfoLLMNormalizer.choiceByFillingMetricRows(
                 column: unavailable, metricRows: metricRows, fiscalYearEnd: fiscalYearEnd)
         }
-        do {
-            let data = try await client.decide(requestJSON: body)
-            let answers = OpenRouterDecisionsCodec.answers(from: data)
-            func parsed(_ question: String, options: [String]) -> RevenueRecognitionColumnChoice {
-                let answer = answers[question]
-                let choice = answer?.choice
-                let probabilities = choice?.probabilities ?? [:]
-                let selected = choice?.selected
-                let fromProbabilities = selected.flatMap { probabilities[$0] }
-                return RevenueRecognitionColumnChoice(
-                    selected: selected,
-                    confidence: choice?.confidence ?? fromProbabilities,
-                    pNone: probabilities[RevenueRecognitionColumnNormalizer.noneOfThese],
-                    probabilities: probabilities,
-                    model: model,
-                    options: options)
-            }
-            let column = parsed(RevenueRecognitionColumnNormalizer.question, options: columnOptions)
-            let rowOptions = metricRows.map(\.key) + [RevenueRecognitionColumnNormalizer.noneOfThese]
-            let sales = metricRows.isEmpty
-                ? nil : parsed(SegmentInfoLLMNormalizer.salesRowQuestion, options: rowOptions)
-            let profit = metricRows.isEmpty
-                ? nil : parsed(SegmentInfoLLMNormalizer.profitRowQuestion, options: rowOptions)
-            return SegmentInfoChoice(column: column, salesRow: sales, profitRow: profit)
-        } catch {
-            printError("SegmentInfoLLMNormalizer: Jev呼び出し失敗: \(error)\n")
+        guard let data = await JevDecisionTransport.decide(
+            client: client, requestJSON: body,
+            retries: RevenueRecognitionColumnNormalizer.jevPolicy.transportRetries,
+            onFailure: "SegmentInfoLLMNormalizer: Jev呼び出し失敗")
+        else {
             return SegmentInfoLLMNormalizer.choiceByFillingMetricRows(
                 column: unavailable, metricRows: metricRows, fiscalYearEnd: fiscalYearEnd)
         }
+        let answers = OpenRouterDecisionsCodec.answers(from: data)
+        func parsed(_ question: String, options: [String]) -> RevenueRecognitionColumnChoice {
+            let answer = answers[question]
+            let choice = answer?.choice
+            let probabilities = choice?.probabilities ?? [:]
+            let selected = choice?.selected
+            let fromProbabilities = selected.flatMap { probabilities[$0] }
+            return RevenueRecognitionColumnChoice(
+                selected: selected,
+                confidence: choice?.confidence ?? fromProbabilities,
+                pNone: probabilities[RevenueRecognitionColumnNormalizer.noneOfThese],
+                probabilities: probabilities,
+                model: model,
+                options: options)
+        }
+        let column = parsed(RevenueRecognitionColumnNormalizer.question, options: columnOptions)
+        let rowOptions = metricRows.map(\.key) + [RevenueRecognitionColumnNormalizer.noneOfThese]
+        let sales = metricRows.isEmpty
+            ? nil : parsed(SegmentInfoLLMNormalizer.salesRowQuestion, options: rowOptions)
+        let profit = metricRows.isEmpty
+            ? nil : parsed(SegmentInfoLLMNormalizer.profitRowQuestion, options: rowOptions)
+        return SegmentInfoChoice(column: column, salesRow: sales, profitRow: profit)
     }
 
     static func requestJSON(

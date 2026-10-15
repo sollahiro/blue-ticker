@@ -107,6 +107,16 @@ enum InterestBearingDebtBreakdown {
     static let nearDuplicateTolerance = 0.02
     static let rowQuestion = "interest_bearing_debt_row"
     static let duplicateQuestion = "interest_bearing_debt_near_duplicate"
+    static let rowPolicy = JevDecisionPolicy(
+        kind: .classify,
+        question: rowQuestion,
+        noneOfTheseKey: nil,
+        confidenceThreshold: SegmentNoteDecision.applyProbabilityThreshold)
+    static let duplicatePolicy = JevDecisionPolicy(
+        kind: .classify,
+        question: duplicateQuestion,
+        noneOfTheseKey: nil,
+        confidenceThreshold: SegmentNoteDecision.applyProbabilityThreshold)
 
     private static let threshold = SegmentNoteDecision.applyProbabilityThreshold
 
@@ -658,24 +668,33 @@ enum InterestBearingDebtBreakdown {
                     "lease_near_duplicate schedule=\(yen(schedLeaseSum)) lease_note=\(yen(noteTotal)) decision=unresolved_no_decider")
                 return schedLease
             }
-            let choice = await decider.classifyNearDuplicate(
-                scheduleLabel: scheduleLabel, scheduleYen: schedLeaseSum,
-                leaseNoteLabel: noteLabel, leaseNoteYen: noteTotal)
-            let applied = SegmentNoteDecision.meetsThreshold(choice.probability)
+            let result = await JevDecisionSampler.decide(
+                policy: duplicatePolicy,
+                options: IBDDuplicateRole.optionKeys,
+                sentences: [
+                    "\(ibdRowSourceBorrowingsSchedule): \(scheduleLabel)",
+                    "\(ibdRowSourceLeaseNote): \(noteLabel)",
+                ]
+            ) {
+                let choice = await decider.classifyNearDuplicate(
+                    scheduleLabel: scheduleLabel, scheduleYen: schedLeaseSum,
+                    leaseNoteLabel: noteLabel, leaseNoteYen: noteTotal)
+                return JevChoiceAggregate.Sample(
+                    selected: choice.selected, probability: choice.probability)
+            }
+            let applied = result.status == .accepted(IBDDuplicateRole.sameLiability)
+                || result.status == .accepted(IBDDuplicateRole.differentLiabilities)
             if applied { anyApplied = true }
-            calls.append(
-                SegmentNoteJevCallPayload(
-                    question: duplicateQuestion, options: IBDDuplicateRole.optionKeys,
-                    selected: choice.selected, probability: choice.probability,
-                    sentences: [
-                        "\(ibdRowSourceBorrowingsSchedule): \(scheduleLabel)",
-                        "\(ibdRowSourceLeaseNote): \(noteLabel)",
-                    ],
-                    applied: applied))
-            let probabilityText = choice.probability.map { String(format: "%.2f", $0) } ?? "null"
+            calls.append(contentsOf: result.calls)
+            let probabilityText = result.aggregate.probability.map { String(format: "%.2f", $0) } ?? "null"
             sentences.append(
-                "lease_near_duplicate schedule=\(yen(schedLeaseSum)) lease_note=\(yen(noteTotal)) decision=\(choice.selected ?? "nil") p=\(probabilityText)")
-            guard let selected = choice.selected else { return nil }
+                "lease_near_duplicate schedule=\(yen(schedLeaseSum)) lease_note=\(yen(noteTotal)) decision=\(result.aggregate.selected ?? "nil") p=\(probabilityText)")
+            guard let selected = result.selectedKey else {
+                if result.isEmpty { return nil }
+                needsReview = true
+                warnings.append(breakdownWarningIBDNearDuplicateUnresolved)
+                return schedLease
+            }
             if selected == IBDDuplicateRole.sameLiability, applied {
                 leaseNoteSuperseded = true
                 return schedLease
@@ -1480,18 +1499,21 @@ enum InterestBearingDebtBreakdown {
                 classes.append(nil)
                 continue
             }
-            let choice = await decider.classifyRow(
-                label: candidate.labelRaw, source: candidate.source, tag: candidate.tag,
-                closingYen: candidate.closing, siblingLabels: siblings)
-            guard let selected = choice.selected else { return ([], calls, applied, true) }
-            let meets = SegmentNoteDecision.meetsThreshold(choice.probability)
-            if meets { applied = true }
-            calls.append(
-                SegmentNoteJevCallPayload(
-                    question: rowQuestion, options: IBDRowClass.allCases.map(\.rawValue),
-                    selected: selected, probability: choice.probability,
-                    sentences: ["\(candidate.source): \(candidate.labelRaw)"], applied: meets))
-            if meets, let rowClass = IBDRowClass(rawValue: selected) {
+            let result = await JevDecisionSampler.decide(
+                policy: rowPolicy,
+                options: IBDRowClass.allCases.map(\.rawValue),
+                sentences: ["\(candidate.source): \(candidate.labelRaw)"]
+            ) {
+                let choice = await decider.classifyRow(
+                    label: candidate.labelRaw, source: candidate.source, tag: candidate.tag,
+                    closingYen: candidate.closing, siblingLabels: siblings)
+                return JevChoiceAggregate.Sample(
+                    selected: choice.selected, probability: choice.probability)
+            }
+            if result.isEmpty { return ([], calls, applied, true) }
+            calls.append(contentsOf: result.calls)
+            if let selected = result.selectedKey, let rowClass = IBDRowClass(rawValue: selected) {
+                applied = true
                 classes.append(rowClass)
             } else {
                 classes.append(nil)
@@ -1533,17 +1555,17 @@ struct OpenRouterInterestBearingDebtDecider: InterestBearingDebtDeciding {
     private func choice(question: String, body: Data?) async -> IBDChoice {
         let unavailable = IBDChoice(selected: nil, probability: nil)
         guard let body else { return unavailable }
-        do {
-            let data = try await client.decide(requestJSON: body)
-            guard let choice = OpenRouterDecisionsCodec.answers(from: data)[question]?.choice
-            else { return unavailable }
-            return IBDChoice(
-                selected: choice.selected,
-                probability: OpenRouterSegmentNoteDecider.selectedProbability(
-                    selected: choice.selected, probabilities: choice.probabilities))
-        } catch {
-            return unavailable
-        }
+        guard let data = await JevDecisionTransport.decide(
+            client: client, requestJSON: body,
+            retries: InterestBearingDebtBreakdown.rowPolicy.transportRetries,
+            onFailure: "InterestBearingDebtBreakdown: Jev呼び出し失敗")
+        else { return unavailable }
+        guard let choice = OpenRouterDecisionsCodec.answers(from: data)[question]?.choice
+        else { return unavailable }
+        return IBDChoice(
+            selected: choice.selected,
+            probability: OpenRouterSegmentNoteDecider.selectedProbability(
+                selected: choice.selected, probabilities: choice.probabilities))
     }
 
     static func rowRequestJSON(

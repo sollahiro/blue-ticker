@@ -32,6 +32,11 @@ enum RevenueRecognitionColumnNormalizer {
 
     static let noneOfThese = "none_of_these"
     static let question = "col"
+    /// 3-sample consensus plus the existing 0.5 median gate (0.49 goldens stay NR).
+    static let jevPolicy = JevDecisionPolicy(
+        question: question,
+        noneOfTheseKey: noneOfThese,
+        confidenceThreshold: confidenceThreshold)
     static let warningLowConfidence = "jev_column_confidence_below_threshold"
     static let warningGroupSumMismatch = "revenue_recognition_group_sum_mismatch"
     static let warningTableSumMismatch = "revenue_recognition_table_sum_mismatch"
@@ -68,27 +73,29 @@ enum RevenueRecognitionColumnNormalizer {
         let offeredTables = parsed.filter { table in
             offered.contains { $0.tableIndex == table.tableIndex }
         }
-        let choice = await decider.chooseColumn(
-            columns: offered, tables: offeredTables, fiscalYearEnd: fiscalYearEnd, docID: docID)
+        let columnSamples = await JevDecisionSampler.collect(count: jevPolicy.sampling.sampleCount) {
+            await decider.chooseColumn(
+                columns: offered, tables: offeredTables, fiscalYearEnd: fiscalYearEnd, docID: docID)
+        }
+        let columnAggregate = JevChoiceAggregate.combine(
+            columnSamples.map(JevChoiceAggregate.fromColumn))
+        let choice = JevChoiceAggregate.columnChoice(from: columnAggregate)
         var resolved = resolveSelection(choice, columns: offered)
         resolved = preferProductAxis(
             resolved, columns: offered, tables: parsed, constraint: constraint)
         let jev = SegmentNoteJevAuditPayload(
             code: "", docID: docID, axis: breakdownAxisProductService,
-            model: choice.model, threshold: confidenceThreshold,
+            model: choice.model, threshold: jevPolicy.auditThreshold,
             applied: false, needsReview: false, sentences: [],
-            calls: [
-                SegmentNoteJevCallPayload(
-                    question: question,
-                    options: choice.options,
-                    selected: resolved?.key ?? choice.selected,
-                    probability: choice.confidence,
-                    sentences: [],
-                    applied: false)
-            ])
+            calls: publishedColumnCalls(
+                samples: columnSamples.map(JevChoiceAggregate.fromColumn),
+                options: choice.options.isEmpty
+                    ? offered.map(\.key) + [noneOfThese] : choice.options,
+                resolved: resolved))
         let pNoneNote = choice.pNone.map { String($0) } ?? "nil"
+        let medianNote = columnAggregate.probability.map { String($0) } ?? "nil"
         var notes =
-            "jev_column=\(choice.selected ?? "nil") confidence=\(choice.confidence.map { String($0) } ?? "nil") p_none=\(pNoneNote)"
+            "jev_column=\(choice.selected ?? "nil") samples=\(columnSamples.count) \(columnAggregate.outcome.rawValue) median=\(medianNote) p_none=\(pNoneNote)"
         if let resolved, resolved.forceReview {
             notes += " overridden=\(resolved.key)"
         }
@@ -109,6 +116,7 @@ enum RevenueRecognitionColumnNormalizer {
         let sourceHadCategoryRows = !table.items.isEmpty
         let confidence = choice.confidence
         let belowThreshold = confidence.map { $0 < confidenceThreshold } ?? true
+        let columnUncertain = !columnAggregate.isConfident
         var (built, groupSumReview) = RevenueRecognitionCandidates.buildRows(
             table: table, column: column.column)
         let parallelUnresolved = RevenueRecognitionCandidates.parallelDimensionsUnresolved(
@@ -141,10 +149,18 @@ enum RevenueRecognitionColumnNormalizer {
         let geographyReview = selectedAxis == .geography || constraint == .geographyOnly
         let priorReview = table.period == "前期" || isPriorOnlyColumn(column, table: table)
         let droppedCategoryRows = built.isEmpty && sourceHadCategoryRows
-        var needsReview = belowThreshold || groupSumReview || tableSumReview
+        var needsReview = belowThreshold || columnUncertain || groupSumReview || tableSumReview
             || resolved.forceReview || built.isEmpty || parallelUnresolved
             || customerReview || geographyReview || priorReview
         if belowThreshold { warnings.append(warningLowConfidence) }
+        switch columnAggregate.outcome {
+        case .disagreement:
+            warnings.append(JevDecision.warningSampleDisagreement)
+        case .insufficient:
+            warnings.append(JevDecision.warningSampleInsufficient)
+        case .allFailed, .agreed:
+            break
+        }
         if resolved.forceReview { warnings.append(warningNoneOfTheseOverridden) }
         if groupSumReview && !parallelUnresolved { warnings.append(warningGroupSumMismatch) }
         if tableSumReview { warnings.append(warningTableSumMismatch) }
@@ -243,7 +259,7 @@ enum RevenueRecognitionColumnNormalizer {
         audit.sourceTableIndex = table.tableIndex
         audit.periodColumn = column.key
         audit.unit = scale.headerToken ?? table.unitCaption ?? ""
-        stampJev(&audit, applied: !belowThreshold, needsReview: needsReview)
+        stampJev(&audit, applied: !belowThreshold && columnAggregate.isConfident, needsReview: needsReview)
 
         let snapshot = BreakdownSnapshot(
             axis: breakdownAxisProductService,
@@ -424,6 +440,23 @@ enum RevenueRecognitionColumnNormalizer {
         return table.items.contains { hit($0.label) || hit($0.group) }
     }
 
+    /// Audit `selected` is the published column. A low-p_none `none_of_these`
+    /// fallback still records that column, matching the pre-sample payload.
+    static func publishedColumnCalls(
+        samples: [JevChoiceAggregate.Sample],
+        options: [String],
+        resolved: ResolvedColumn?
+    ) -> [SegmentNoteJevCallPayload] {
+        var calls = JevDecision.auditCalls(
+            question: question, samples: samples, options: options)
+        if let resolved, resolved.forceReview {
+            for index in calls.indices {
+                calls[index].selected = resolved.key
+            }
+        }
+        return calls
+    }
+
     private static func stampJev(
         _ audit: inout LLMBreakdownAudit, applied: Bool, needsReview: Bool
     ) {
@@ -431,8 +464,9 @@ enum RevenueRecognitionColumnNormalizer {
             guard var payload else { return nil }
             payload.applied = applied
             payload.needsReview = needsReview
-            if !payload.calls.isEmpty {
-                payload.calls[0].applied = applied
+            for index in payload.calls.indices
+            where payload.calls[index].question == question {
+                payload.calls[index].applied = applied
             }
             return payload
         }
@@ -458,25 +492,24 @@ struct OpenRouterRevenueRecognitionColumnDecider: RevenueRecognitionColumnDecidi
             model: model, columns: columns, tables: tables,
             fiscalYearEnd: fiscalYearEnd, docID: docID)
         else { return unavailable }
-        do {
-            let data = try await client.decide(requestJSON: body)
-            let answer = OpenRouterDecisionsCodec.answers(from: data)[
-                RevenueRecognitionColumnNormalizer.question]
-            let choice = answer?.choice
-            let probabilities = choice?.probabilities ?? [:]
-            let selected = choice?.selected
-            let fromProbabilities = selected.flatMap { probabilities[$0] }
-            return RevenueRecognitionColumnChoice(
-                selected: selected,
-                confidence: choice?.confidence ?? fromProbabilities,
-                pNone: probabilities[RevenueRecognitionColumnNormalizer.noneOfThese],
-                probabilities: probabilities,
-                model: model,
-                options: options)
-        } catch {
-            printError("RevenueRecognitionColumnNormalizer: Jev呼び出し失敗: \(error)\n")
-            return unavailable
-        }
+        guard let data = await JevDecisionTransport.decide(
+            client: client, requestJSON: body,
+            retries: RevenueRecognitionColumnNormalizer.jevPolicy.transportRetries,
+            onFailure: "RevenueRecognitionColumnNormalizer: Jev呼び出し失敗")
+        else { return unavailable }
+        let answer = OpenRouterDecisionsCodec.answers(from: data)[
+            RevenueRecognitionColumnNormalizer.question]
+        let choice = answer?.choice
+        let probabilities = choice?.probabilities ?? [:]
+        let selected = choice?.selected
+        let fromProbabilities = selected.flatMap { probabilities[$0] }
+        return RevenueRecognitionColumnChoice(
+            selected: selected,
+            confidence: choice?.confidence ?? fromProbabilities,
+            pNone: probabilities[RevenueRecognitionColumnNormalizer.noneOfThese],
+            probabilities: probabilities,
+            model: model,
+            options: options)
     }
 
     static func requestJSON(

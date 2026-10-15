@@ -69,6 +69,21 @@ enum ResearchAndDevelopmentProseTotalDecision {
     static let question = "research_and_development_total"
     static let maxCandidates = 12
     static let maxSentenceLength = 4_000
+    static let classifyPolicy = JevDecisionPolicy(
+        kind: .classify,
+        question: question,
+        noneOfTheseKey: nil,
+        confidenceThreshold: SegmentNoteDecision.applyProbabilityThreshold)
+    static let remainderPolicy = JevDecisionPolicy(
+        kind: .classify,
+        question: OpenRouterResearchAndDevelopmentProseDecider.remainderQuestion,
+        noneOfTheseKey: nil,
+        confidenceThreshold: SegmentNoteDecision.applyProbabilityThreshold)
+    static let exclusionPolicy = JevDecisionPolicy(
+        kind: .classify,
+        question: OpenRouterResearchAndDevelopmentProseDecider.exclusionQuestion,
+        noneOfTheseKey: nil,
+        confidenceThreshold: SegmentNoteDecision.applyProbabilityThreshold)
 
     private static let notAllocatablePhrases = [
         "配分することが困難",
@@ -192,26 +207,30 @@ enum ResearchAndDevelopmentProseTotalDecision {
         } else {
             return (snapshot, nil)
         }
-        let choice = await decider.classifyRemainder(sentence: match.sentence)
-        guard let selected = choice.selected else { return (snapshot, nil) }
+        let result = await JevDecisionSampler.decide(
+            policy: remainderPolicy,
+            options: ResearchAndDevelopmentRemainderRole.optionKeys,
+            sentences: [match.sentence]
+        ) {
+            let choice = await decider.classifyRemainder(sentence: match.sentence)
+            return JevChoiceAggregate.Sample(
+                selected: choice.selected, probability: choice.probability)
+        }
+        let selected = result.selectedKey
         let applied = selected == ResearchAndDevelopmentRemainderRole.unallocatedRemainder
-            && meetsThreshold(choice.probability)
         guard applied else { return (snapshot, nil) }
         let filled = snapshotByAddingAdjustment(
             snapshot, yen: match.yen, label: remainderDisplayLabel(in: match.sentence),
             warning: breakdownWarningResearchAndDevelopmentProseRemainder)
         guard !filled.warnings.contains(segmentSumFarWarning) else { return (snapshot, nil) }
-        let call = SegmentNoteJevCallPayload(
-            question: OpenRouterResearchAndDevelopmentProseDecider.remainderQuestion,
-            options: ResearchAndDevelopmentRemainderRole.optionKeys,
-            selected: selected, probability: choice.probability,
-            sentences: [match.sentence], applied: true)
+        let call = result.calls
         let audit = SegmentNoteJevAuditPayload(
             code: code, docID: docID, axis: breakdownAxisResearchAndDevelopment,
-            model: Api.openrouterDecisionsModel,
-            threshold: SegmentNoteDecision.applyProbabilityThreshold,
+            model: result.aggregate.model.isEmpty
+                ? Api.openrouterDecisionsModel : result.aggregate.model,
+            threshold: remainderPolicy.auditThreshold,
             applied: true, needsReview: false,
-            sentences: [match.sentence], calls: [call])
+            sentences: [match.sentence], calls: call)
         return (filled, audit)
     }
 
@@ -276,26 +295,29 @@ enum ResearchAndDevelopmentProseTotalDecision {
         guard let over = excess(in: snapshot) else { return (snapshot, nil) }
         let matches = exclusionCandidates(in: plainText, total: snapshot.denominator, excess: over)
         guard matches.count == 1, let match = matches.first else { return (snapshot, nil) }
-        let choice = await decider.classifyExclusion(sentence: match.sentence)
-        guard let selected = choice.selected else { return (snapshot, nil) }
+        let result = await JevDecisionSampler.decide(
+            policy: exclusionPolicy,
+            options: ResearchAndDevelopmentExclusionRole.optionKeys,
+            sentences: [match.sentence]
+        ) {
+            let choice = await decider.classifyExclusion(sentence: match.sentence)
+            return JevChoiceAggregate.Sample(
+                selected: choice.selected, probability: choice.probability)
+        }
+        let selected = result.selectedKey
         let applied = selected == ResearchAndDevelopmentExclusionRole.excludedFromTotal
-            && meetsThreshold(choice.probability)
         guard applied else { return (snapshot, nil) }
         let filled = snapshotByAddingAdjustment(
             snapshot, yen: -match.yen, label: exclusionLabel(in: match.sentence),
             warning: breakdownWarningResearchAndDevelopmentProseExclusion)
         guard !filled.warnings.contains(segmentSumFarWarning) else { return (snapshot, nil) }
-        let call = SegmentNoteJevCallPayload(
-            question: OpenRouterResearchAndDevelopmentProseDecider.exclusionQuestion,
-            options: ResearchAndDevelopmentExclusionRole.optionKeys,
-            selected: selected, probability: choice.probability,
-            sentences: [match.sentence], applied: true)
         let audit = SegmentNoteJevAuditPayload(
             code: code, docID: docID, axis: breakdownAxisResearchAndDevelopment,
-            model: Api.openrouterDecisionsModel,
-            threshold: SegmentNoteDecision.applyProbabilityThreshold,
+            model: result.aggregate.model.isEmpty
+                ? Api.openrouterDecisionsModel : result.aggregate.model,
+            threshold: exclusionPolicy.auditThreshold,
             applied: true, needsReview: false,
-            sentences: [match.sentence], calls: [call])
+            sentences: [match.sentence], calls: result.calls)
         return (filled, audit)
     }
 
@@ -352,15 +374,22 @@ enum ResearchAndDevelopmentProseTotalDecision {
         var calls: [SegmentNoteJevCallPayload] = []
         var winners: [ResearchAndDevelopmentProseCandidate] = []
         for candidate in found {
-            let choice = await decider.classify(sentence: candidate.sentence)
-            guard let selected = choice.selected else { return .unavailable }
-            let applied = selected == ResearchAndDevelopmentProseRole.currentCompanyTotal
-                && meetsThreshold(choice.probability)
-            calls.append(
-                SegmentNoteJevCallPayload(
-                    question: question, options: ResearchAndDevelopmentProseRole.optionKeys,
-                    selected: selected, probability: choice.probability,
-                    sentences: [candidate.sentence], applied: applied))
+            let result = await JevDecisionSampler.decide(
+                policy: classifyPolicy,
+                options: ResearchAndDevelopmentProseRole.optionKeys,
+                sentences: [candidate.sentence]
+            ) {
+                let choice = await decider.classify(sentence: candidate.sentence)
+                return JevChoiceAggregate.Sample(
+                    selected: choice.selected, probability: choice.probability)
+            }
+            if result.isEmpty { return .unavailable }
+            var resultCalls = result.calls
+            let applied = result.selectedKey == ResearchAndDevelopmentProseRole.currentCompanyTotal
+            if !applied {
+                for index in resultCalls.indices { resultCalls[index].applied = false }
+            }
+            calls.append(contentsOf: resultCalls)
             if applied { winners.append(candidate) }
         }
         guard winners.count == 1, let winner = winners.first else { return .notApplied }
@@ -384,11 +413,6 @@ enum ResearchAndDevelopmentProseTotalDecision {
             denominatorTag: breakdownDenominatorTagResearchAndDevelopmentProse,
             rows: [], sourceKind: breakdownSourceResearchAndDevelopmentProse,
             needsReview: false, warnings: total.warnings)
-    }
-
-    private static func meetsThreshold(_ probability: Double?) -> Bool {
-        guard let probability else { return false }
-        return probability >= SegmentNoteDecision.applyProbabilityThreshold
     }
 
     private static func sentences(in text: String) -> [String] {
@@ -510,18 +534,18 @@ struct OpenRouterResearchAndDevelopmentProseDecider: ResearchAndDevelopmentProse
         let unavailable = ResearchAndDevelopmentProseChoice(
             sentence: sentence, selected: nil, probability: nil)
         guard let body else { return unavailable }
-        do {
-            let data = try await client.decide(requestJSON: body)
-            guard let choice = OpenRouterDecisionsCodec.answers(from: data)[question]?.choice else {
-                return unavailable
-            }
-            return ResearchAndDevelopmentProseChoice(
-                sentence: sentence, selected: choice.selected,
-                probability: OpenRouterSegmentNoteDecider.selectedProbability(
-                    selected: choice.selected, probabilities: choice.probabilities))
-        } catch {
+        guard let data = await JevDecisionTransport.decide(
+            client: client, requestJSON: body,
+            retries: ResearchAndDevelopmentProseTotalDecision.classifyPolicy.transportRetries,
+            onFailure: "ResearchAndDevelopmentProseTotal: Jev呼び出し失敗")
+        else { return unavailable }
+        guard let choice = OpenRouterDecisionsCodec.answers(from: data)[question]?.choice else {
             return unavailable
         }
+        return ResearchAndDevelopmentProseChoice(
+            sentence: sentence, selected: choice.selected,
+            probability: OpenRouterSegmentNoteDecider.selectedProbability(
+                selected: choice.selected, probabilities: choice.probabilities))
     }
 
     static func requestJSON(model: String, sentence: String) -> Data? {

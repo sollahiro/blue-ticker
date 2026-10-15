@@ -51,6 +51,12 @@ enum SgaLineJevPicker {
     static let axis = "sga"
     static let residualToleranceYen = Financial.millionYen
     static let defaultSgaLabel = "販売費及び一般管理費"
+    /// Consensus only; residual ±1百万円 is the deterministic gate. 0.9 is audit.
+    static let jevPolicy = JevDecisionPolicy(
+        question: question,
+        noneOfTheseKey: noneOfThese,
+        confidenceThreshold: nil,
+        auditThreshold: SegmentNoteDecision.applyProbabilityThreshold)
 
     struct Span: Sendable {
         var grossProfit: SgaSpanAnchor
@@ -188,24 +194,22 @@ enum SgaLineJevPicker {
                     calls: []))
         }
 
-        let samples = await sampleChoices(
-            decider: decider, rows: rows,
-            grossProfit: span.grossProfit, operatingProfit: span.operatingProfit,
-            docID: docID)
+        let samples = await JevDecisionSampler.collect(count: jevPolicy.sampling.sampleCount) {
+            await decider.chooseSgaLine(
+                rows: rows, grossProfit: span.grossProfit,
+                operatingProfit: span.operatingProfit, docID: docID)
+        }
         let aggregate = JevChoiceAggregate.combine(samples.map {
             JevChoiceAggregate.Sample(
                 selected: $0.selected, probability: $0.probability,
                 probabilities: $0.probabilities, options: $0.options, model: $0.model)
         })
-        let calls = samples.map { sample in
-            SegmentNoteJevCallPayload(
-                question: question,
-                options: sample.options.isEmpty ? options : sample.options,
-                selected: sample.selected,
-                probability: sample.probability,
-                sentences: [],
-                applied: false)
-        }
+        let calls = JevDecision.auditCalls(
+            question: question, samples: samples.map {
+                JevChoiceAggregate.Sample(
+                    selected: $0.selected, probability: $0.probability,
+                    probabilities: $0.probabilities, options: $0.options, model: $0.model)
+            }, options: options)
 
         var sentences = [
             "sga_jev_samples=\(samples.count) \(aggregate.outcome.rawValue) successful=\(aggregate.successfulCount)",
@@ -247,28 +251,6 @@ enum SgaLineJevPicker {
         return PickResult(accepted: accepted, audit: payload)
     }
 
-    private static func sampleChoices(
-        decider: any SgaLineDeciding,
-        rows: [SgaLineCandidate],
-        grossProfit: SgaSpanAnchor,
-        operatingProfit: SgaSpanAnchor,
-        docID: String
-    ) async -> [SgaLineChoice] {
-        await withTaskGroup(of: SgaLineChoice.self) { group in
-            for _ in 0..<JevChoiceAggregate.sampleCount {
-                group.addTask {
-                    await decider.chooseSgaLine(
-                        rows: rows, grossProfit: grossProfit,
-                        operatingProfit: operatingProfit, docID: docID)
-                }
-            }
-            var samples: [SgaLineChoice] = []
-            samples.reserveCapacity(JevChoiceAggregate.sampleCount)
-            for await choice in group { samples.append(choice) }
-            return samples
-        }
-    }
-
     private static func audit(
         docID: String, model: String, applied: Bool, sentences: [String],
         calls: [SegmentNoteJevCallPayload]
@@ -276,7 +258,7 @@ enum SgaLineJevPicker {
         SegmentNoteJevAuditPayload(
             code: "", docID: docID, axis: axis,
             model: model.isEmpty ? Api.openrouterDecisionsModel : model,
-            threshold: SegmentNoteDecision.applyProbabilityThreshold,
+            threshold: jevPolicy.auditThreshold,
             applied: applied, needsReview: !applied, sentences: sentences,
             calls: calls, withheldReason: applied ? nil : (sentences.last ?? "sga_jev=fail_closed"),
             decisionSource: applied ? "jev_sga_line" : nil)
@@ -368,22 +350,21 @@ struct OpenRouterSgaLineDecider: SgaLineDeciding {
             model: model, rows: rows, grossProfit: grossProfit,
             operatingProfit: operatingProfit, docID: docID)
         else { return unavailable }
-        do {
-            let data = try await client.decide(requestJSON: body)
-            guard let choice = OpenRouterDecisionsCodec.answers(from: data)[
-                SgaLineJevPicker.question]?.choice
-            else { return unavailable }
-            return SgaLineChoice(
-                selected: choice.selected,
-                probability: OpenRouterSegmentNoteDecider.selectedProbability(
-                    selected: choice.selected, probabilities: choice.probabilities),
-                probabilities: choice.probabilities,
-                options: options,
-                model: model)
-        } catch {
-            printError("SgaLineJevPicker: Jev呼び出し失敗: \(error)\n")
-            return unavailable
-        }
+        guard let data = await JevDecisionTransport.decide(
+            client: client, requestJSON: body,
+            retries: SgaLineJevPicker.jevPolicy.transportRetries,
+            onFailure: "SgaLineJevPicker: Jev呼び出し失敗")
+        else { return unavailable }
+        guard let choice = OpenRouterDecisionsCodec.answers(from: data)[
+            SgaLineJevPicker.question]?.choice
+        else { return unavailable }
+        return SgaLineChoice(
+            selected: choice.selected,
+            probability: OpenRouterSegmentNoteDecider.selectedProbability(
+                selected: choice.selected, probabilities: choice.probabilities),
+            probabilities: choice.probabilities,
+            options: options,
+            model: model)
     }
 
     static func requestJSON(
@@ -393,17 +374,20 @@ struct OpenRouterSgaLineDecider: SgaLineDeciding {
         operatingProfit: SgaSpanAnchor,
         docID: String
     ) -> Data? {
-        var criteria: [String: String] = [:]
-        for row in rows {
+        var candidates: [JevPresentedCandidate] = rows.map { row in
             let million = row.value / Financial.millionYen
-            criteria[row.key] = """
-                label=\(row.label); tag=\(row.tag); value_million_yen=\(million); order=\(row.order)
-                """
+            return JevPresentedCandidate(
+                key: row.key,
+                criterion: """
+                    label=\(row.label); tag=\(row.tag); value_million_yen=\(million); order=\(row.order)
+                    """)
         }
-        criteria[SgaLineJevPicker.noneOfThese] = """
-            No existing row in this span is the company's SG&A line. Use this when the span \
-            has no 販売費及び一般管理費 alias (供給販売費及び一般管理費 / 一般管理費 / 営業費用 / 事業費用 etc.).
-            """
+        candidates.append(JevPresentedCandidate(
+            key: SgaLineJevPicker.noneOfThese,
+            criterion: """
+                No existing row in this span is the company's SG&A line. Use this when the span \
+                has no 販売費及び一般管理費 alias (供給販売費及び一般管理費 / 一般管理費 / 営業費用 / 事業費用 etc.).
+                """))
         let state: [String: Any] = [
             "doc_id": docID,
             "gross_profit": [
@@ -438,10 +422,8 @@ struct OpenRouterSgaLineDecider: SgaLineDeciding {
             Do not add amounts. Do not invent a residual. Do not pick 売上原価, その他の収益, \
             その他の費用, or the profit rows themselves. If no such line exists, choose none_of_these.
             """
-        let questions: [String: Any] = [
-            SgaLineJevPicker.question: OpenRouterDecisionsCodec.choiceQuestion(
-                instructions: instructions, criteria: criteria),
-        ]
-        return OpenRouterDecisionsCodec.requestJSON(model: model, state: state, questions: questions)
+        return JevDecisionRequest.json(
+            model: model, question: SgaLineJevPicker.question,
+            instructions: instructions, candidates: candidates, state: state)
     }
 }

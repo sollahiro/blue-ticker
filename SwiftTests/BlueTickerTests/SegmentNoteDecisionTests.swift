@@ -146,7 +146,7 @@ import Testing
             axis: .geography, tables: tables, sentences: [domesticComprehensive],
             hasCleanDeterministicSnapshot: false, decider: decider)
         #expect(geography.action == .omitGeography)
-        #expect(await decider.tableCalls == 2)
+        #expect(await decider.tableCalls == 2 * JevChoiceAggregate.sampleCount)
     }
 
     @Test func productNinetyOmitsBusinessAndDuplicateDisclosureDoesNot() async {
@@ -180,7 +180,7 @@ import Testing
             hasCleanDeterministicSnapshot: true, decider: decider)
         #expect(skipped.action == .unchanged)
         #expect(skipped.audit == nil)
-        #expect(await decider.tableCalls == 1)
+        #expect(await decider.tableCalls == JevChoiceAggregate.sampleCount)
     }
 
     @Test func tablePickBelowOmissionThresholdIsStillKept() async throws {
@@ -444,7 +444,7 @@ import Testing
             let jev = try #require(json["jev"] as? [String: Any])
             #expect(jev["decision_source"] as? String == SegmentNoteDecision.dedicatedTagDecisionSource)
             #expect(await decider.tableCalls == 0)
-            #expect(await decider.reviewCalls == 1)
+            #expect(await decider.reviewCalls == JevChoiceAggregate.sampleCount)
 
             let withoutKey = await noteContext(decider: nil).segmentsAfterNoteDecision(
                 axis: .business, docID: "S100LS0U", extracted: extracted, xbrlDir: dir,
@@ -459,7 +459,7 @@ import Testing
             #expect(geography.outcome.audit?.axis == "geography")
             #expect(geography.outcome.audit?.decisionSource == nil)
             #expect(geography.outcome.omissionReason == nil)
-            #expect(await decider.tableCalls == 1)
+            #expect(await decider.tableCalls == JevChoiceAggregate.sampleCount)
 
             let geographyWithoutKey = await noteContext(decider: nil).segmentsAfterNoteDecision(
                 axis: .geography, docID: "S100LS0U", extracted: extracted, xbrlDir: dir,
@@ -484,7 +484,7 @@ import Testing
             #expect(business.outcome.omissionReason == breakdownNotApplicableSingleSegmentDisclosed)
             #expect(business.outcome.audit?.decisionSource == SegmentNoteDecision.dedicatedTagDecisionSource)
             #expect(await decider.tableCalls == 0)
-            #expect(await decider.reviewCalls == 1)
+            #expect(await decider.reviewCalls == JevChoiceAggregate.sampleCount)
         }
     }
 
@@ -505,7 +505,7 @@ import Testing
             #expect(business.extracted == nil)
             #expect(business.outcome.omissionReason == breakdownNotApplicableSingleSegmentDisclosed)
             #expect(business.outcome.audit?.decisionSource == nil)
-            #expect(await decider.tableCalls == 1)
+            #expect(await decider.tableCalls == JevChoiceAggregate.sampleCount)
         }
     }
 
@@ -528,7 +528,7 @@ import Testing
             #expect(business.outcome.action == .unchanged)
             #expect(business.outcome.omissionReason == nil)
             #expect(business.outcome.needsReview == true)
-            #expect(await decider.tableCalls == 1)
+            #expect(await decider.tableCalls == JevChoiceAggregate.sampleCount)
         }
     }
 
