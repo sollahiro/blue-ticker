@@ -14,7 +14,9 @@ public let breakdownAxisProductService = "product_service"
 public let breakdownAxisGeography = "geography"
 /// 従業員数のセグメント別内訳軸（2026-08-01追加）。決定論のみ（LLMフォールバックなし）。
 public let breakdownAxisEmployees = "employees"
-/// 研究開発費（全社合計）のセグメント別内訳軸（2026-08-01追加）。決定論のみ（LLMフォールバックなし）。
+/// 研究開発費（全社合計）のセグメント別内訳軸（2026-08-01追加）。
+/// 数値タグとセグメント fact は決定論。無いときは Jev が本文の文を分類して当期総額を選ぶ
+/// （金額はコードが円へ換算する。値の生成はしない）。
 public let breakdownAxisResearchAndDevelopment = "research_and_development"
 /// のれん（全社合計）のセグメント別内訳軸（2026-08-12追加）。決定論のみ
 /// （LLMフォールバックなし）。`goodwill_and_intangibles` note_type（IFRS連結限定の種類別明細）とは別物
