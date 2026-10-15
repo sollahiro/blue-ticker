@@ -1,5 +1,5 @@
 // Jev Decisions は temperature / seed を受けない。同一入力でも confidence が揺れる。
-// geography は列 Choice と最終判定を N 回並列に取り、一致＋中央値で公開/NR を決める。
+// 共有ランナー（`JevDecision`）が N 回並列に取り、ここで一致＋中央値を出す。
 // 一致（成功 ≥ minSuccessfulSamples かつ全部同じ selected）は confident。不一致・不足は fail-closed。
 
 import Foundation

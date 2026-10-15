@@ -213,7 +213,8 @@ import Testing
         #expect(reviewed.action == .keepTable(0))
         #expect(reviewed.omissionReason == nil)
         #expect(reviewed.audit?.decisionSource == SegmentNoteDecision.reviewDecisionSource)
-        #expect(await decider.reviewCalls == 1)
+        // source: code=0000 fy_end=2026-03-31 doc_id=S-review page=0 field=review_sample_count
+        #expect(await decider.reviewCalls == JevChoiceAggregate.sampleCount)
     }
 
     @Test func reviewKeepsOmissionWhenLowConfidenceOrKeep() async {

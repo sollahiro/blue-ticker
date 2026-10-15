@@ -98,6 +98,21 @@ enum CapexProseTotalDecision {
     static let question = "capex_total"
     static let maxCandidates = 12
     static let maxSentenceLength = 4_000
+    static let classifyPolicy = JevDecisionPolicy(
+        kind: .classify,
+        question: question,
+        noneOfTheseKey: nil,
+        confidenceThreshold: SegmentNoteDecision.applyProbabilityThreshold)
+    static let remainderPolicy = JevDecisionPolicy(
+        kind: .classify,
+        question: OpenRouterCapexProseDecider.remainderQuestion,
+        noneOfTheseKey: nil,
+        confidenceThreshold: SegmentNoteDecision.applyProbabilityThreshold)
+    static let exclusionPolicy = JevDecisionPolicy(
+        kind: .classify,
+        question: OpenRouterCapexProseDecider.exclusionQuestion,
+        noneOfTheseKey: nil,
+        confidenceThreshold: SegmentNoteDecision.applyProbabilityThreshold)
 
     private static let overviewTextBlockTags = [
         "OverviewOfCapitalExpendituresEtcOwnUsedAssetsLEATextBlock",
@@ -166,15 +181,22 @@ enum CapexProseTotalDecision {
         var calls: [SegmentNoteJevCallPayload] = []
         var winners: [CapexProseCandidate] = []
         for candidate in found {
-            let choice = await decider.classify(sentence: candidate.sentence)
-            guard let selected = choice.selected else { return .unavailable }
-            let applied = selected == CapexProseRole.currentCompanyTotal
-                && meetsThreshold(choice.probability)
-            calls.append(
-                SegmentNoteJevCallPayload(
-                    question: question, options: CapexProseRole.optionKeys,
-                    selected: selected, probability: choice.probability,
-                    sentences: [candidate.sentence], applied: applied))
+            let result = await JevDecisionSampler.decide(
+                policy: classifyPolicy,
+                options: CapexProseRole.optionKeys,
+                sentences: [candidate.sentence]
+            ) {
+                let choice = await decider.classify(sentence: candidate.sentence)
+                return JevChoiceAggregate.Sample(
+                    selected: choice.selected, probability: choice.probability)
+            }
+            if result.isEmpty { return .unavailable }
+            var resultCalls = result.calls
+            let applied = result.selectedKey == CapexProseRole.currentCompanyTotal
+            if !applied {
+                for index in resultCalls.indices { resultCalls[index].applied = false }
+            }
+            calls.append(contentsOf: resultCalls)
             if applied { winners.append(candidate) }
         }
         guard winners.count == 1, let winner = winners.first else { return .notApplied }
@@ -255,10 +277,17 @@ enum CapexProseTotalDecision {
         } else {
             return (payload, nil)
         }
-        let choice = await decider.classifyRemainder(sentence: match.sentence)
-        guard let selected = choice.selected else { return (payload, nil) }
+        let result = await JevDecisionSampler.decide(
+            policy: remainderPolicy,
+            options: CapexRemainderRole.optionKeys,
+            sentences: [match.sentence]
+        ) {
+            let choice = await decider.classifyRemainder(sentence: match.sentence)
+            return JevChoiceAggregate.Sample(
+                selected: choice.selected, probability: choice.probability)
+        }
+        let selected = result.selectedKey
         let applied = selected == CapexRemainderRole.unallocatedRemainder
-            && meetsThreshold(choice.probability)
         guard applied else { return (payload, nil) }
         let filled = payloadByAddingAdjustment(
             payload, cell: cell, yen: match.yen, label: remainderLabel(in: match.sentence),
@@ -266,17 +295,13 @@ enum CapexProseTotalDecision {
         guard !cell.farWarnings(flowMetric: filled.flowMetric).contains(where: {
             filled.warnings.contains($0)
         }) else { return (payload, nil) }
-        let call = SegmentNoteJevCallPayload(
-            question: OpenRouterCapexProseDecider.remainderQuestion,
-            options: CapexRemainderRole.optionKeys,
-            selected: selected, probability: choice.probability,
-            sentences: [match.sentence], applied: true)
         let audit = SegmentNoteJevAuditPayload(
             code: code, docID: docID, axis: breakdownAxisCapex,
-            model: Api.openrouterDecisionsModel,
-            threshold: SegmentNoteDecision.applyProbabilityThreshold,
+            model: result.aggregate.model.isEmpty
+                ? Api.openrouterDecisionsModel : result.aggregate.model,
+            threshold: remainderPolicy.auditThreshold,
             applied: true, needsReview: false,
-            sentences: [match.sentence], calls: [call])
+            sentences: [match.sentence], calls: result.calls)
         return (filled, audit)
     }
 
@@ -290,10 +315,17 @@ enum CapexProseTotalDecision {
         let matches = exclusionCandidates(
             in: plainText, total: totals.denominator, excess: over)
         guard matches.count == 1, let match = matches.first else { return (payload, nil) }
-        let choice = await decider.classifyExclusion(sentence: match.sentence)
-        guard let selected = choice.selected else { return (payload, nil) }
+        let result = await JevDecisionSampler.decide(
+            policy: exclusionPolicy,
+            options: CapexExclusionRole.optionKeys,
+            sentences: [match.sentence]
+        ) {
+            let choice = await decider.classifyExclusion(sentence: match.sentence)
+            return JevChoiceAggregate.Sample(
+                selected: choice.selected, probability: choice.probability)
+        }
+        let selected = result.selectedKey
         let applied = selected == CapexExclusionRole.excludedFromTotal
-            && meetsThreshold(choice.probability)
         guard applied else { return (payload, nil) }
         let filled = payloadByAddingAdjustment(
             payload, cell: cell, yen: -match.yen, label: exclusionLabel(in: match.sentence),
@@ -301,17 +333,13 @@ enum CapexProseTotalDecision {
         guard !cell.farWarnings(flowMetric: filled.flowMetric).contains(where: {
             filled.warnings.contains($0)
         }) else { return (payload, nil) }
-        let call = SegmentNoteJevCallPayload(
-            question: OpenRouterCapexProseDecider.exclusionQuestion,
-            options: CapexExclusionRole.optionKeys,
-            selected: selected, probability: choice.probability,
-            sentences: [match.sentence], applied: true)
         let audit = SegmentNoteJevAuditPayload(
             code: code, docID: docID, axis: breakdownAxisCapex,
-            model: Api.openrouterDecisionsModel,
-            threshold: SegmentNoteDecision.applyProbabilityThreshold,
+            model: result.aggregate.model.isEmpty
+                ? Api.openrouterDecisionsModel : result.aggregate.model,
+            threshold: exclusionPolicy.auditThreshold,
             applied: true, needsReview: false,
-            sentences: [match.sentence], calls: [call])
+            sentences: [match.sentence], calls: result.calls)
         return (filled, audit)
     }
 
@@ -426,11 +454,6 @@ enum CapexProseTotalDecision {
             .filter { $0.rowKind == "segment" || $0.rowKind == "reconciling" }
             .compactMap { cellAmount($0, cell: cell) }
             .contains { abs($0 - yen) <= 5_000_000 }
-    }
-
-    private static func meetsThreshold(_ probability: Double?) -> Bool {
-        guard let probability else { return false }
-        return probability >= SegmentNoteDecision.applyProbabilityThreshold
     }
 
     private static func sentences(in text: String) -> [String] {
@@ -548,18 +571,18 @@ struct OpenRouterCapexProseDecider: CapexProseDeciding {
     private func choice(question: String, body: Data?, sentence: String) async -> CapexProseChoice {
         let unavailable = CapexProseChoice(sentence: sentence, selected: nil, probability: nil)
         guard let body else { return unavailable }
-        do {
-            let data = try await client.decide(requestJSON: body)
-            guard let choice = OpenRouterDecisionsCodec.answers(from: data)[question]?.choice else {
-                return unavailable
-            }
-            return CapexProseChoice(
-                sentence: sentence, selected: choice.selected,
-                probability: OpenRouterSegmentNoteDecider.selectedProbability(
-                    selected: choice.selected, probabilities: choice.probabilities))
-        } catch {
+        guard let data = await JevDecisionTransport.decide(
+            client: client, requestJSON: body,
+            retries: CapexProseTotalDecision.classifyPolicy.transportRetries,
+            onFailure: "CapexProseTotal: Jev呼び出し失敗")
+        else { return unavailable }
+        guard let choice = OpenRouterDecisionsCodec.answers(from: data)[question]?.choice else {
             return unavailable
         }
+        return CapexProseChoice(
+            sentence: sentence, selected: choice.selected,
+            probability: OpenRouterSegmentNoteDecider.selectedProbability(
+                selected: choice.selected, probabilities: choice.probabilities))
     }
 
     static func requestJSON(model: String, sentence: String) -> Data? {

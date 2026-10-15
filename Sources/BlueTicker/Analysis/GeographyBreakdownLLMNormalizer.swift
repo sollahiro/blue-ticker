@@ -469,9 +469,9 @@ enum GeographyBreakdownLLMNormalizer {
     /// 組んだ金額が選んだ当期列と一致しないとき。最終判定の correct では覆さない。
     static let warningSelectedColumnMismatch = "geography_selected_column_mismatch"
     /// 列サンプルが同じ selected に揃わないとき。最終判定の correct では覆さない。
-    static let warningColumnSampleDisagreement = "jev_column_sample_disagreement"
+    static let warningColumnSampleDisagreement = JevDecision.warningSampleDisagreement
     /// 列サンプルの成功が足りないとき。最終判定の correct では覆さない。
-    static let warningColumnSampleInsufficient = "jev_column_sample_insufficient"
+    static let warningColumnSampleInsufficient = JevDecision.warningSampleInsufficient
     static let reviewCorrect = "correct"
     static let reviewWrong = "wrong"
     static let reviewOptions = [reviewCorrect, reviewWrong]
@@ -1344,18 +1344,10 @@ enum GeographyBreakdownLLMNormalizer {
         fiscalYearEnd: String?,
         docID: String
     ) async -> [RevenueRecognitionColumnChoice] {
-        await withTaskGroup(of: RevenueRecognitionColumnChoice.self) { group in
-            for _ in 0..<JevChoiceAggregate.sampleCount {
-                group.addTask {
-                    await decider.chooseColumn(
-                        columns: columns, tables: tables,
-                        fiscalYearEnd: fiscalYearEnd, docID: docID)
-                }
-            }
-            var samples: [RevenueRecognitionColumnChoice] = []
-            samples.reserveCapacity(JevChoiceAggregate.sampleCount)
-            for await choice in group { samples.append(choice) }
-            return samples
+        await JevDecisionSampler.collect {
+            await decider.chooseColumn(
+                columns: columns, tables: tables,
+                fiscalYearEnd: fiscalYearEnd, docID: docID)
         }
     }
 
@@ -1382,26 +1374,18 @@ enum GeographyBreakdownLLMNormalizer {
         }
         let clipped = clippedReviewMarkdown(BreakdownExtractor.gridToMarkdown(table.grid))
         let periodColumns = reviewPeriodColumnValues(table)
-        let reviewSamples = await withTaskGroup(of: SegmentNoteConsultedChoice.self) { group in
-            for _ in 0..<JevChoiceAggregate.sampleCount {
-                group.addTask {
-                    await reviewer.reviewExtractedGeography(
-                        rows: rows,
-                        tableMarkdown: clipped.text,
-                        heading: table.heading,
-                        caption: table.precedingCaption,
-                        warnings: snapshot.warnings,
-                        needsReview: snapshot.needsReview,
-                        periodColumns: periodColumns,
-                        tableTruncated: clipped.truncated,
-                        docID: docID,
-                        consolidatedSalesMillionYen: consolidatedSales / Financial.millionYen)
-                }
-            }
-            var samples: [SegmentNoteConsultedChoice] = []
-            samples.reserveCapacity(JevChoiceAggregate.sampleCount)
-            for await choice in group { samples.append(choice) }
-            return samples
+        let reviewSamples = await JevDecisionSampler.collect {
+            await reviewer.reviewExtractedGeography(
+                rows: rows,
+                tableMarkdown: clipped.text,
+                heading: table.heading,
+                caption: table.precedingCaption,
+                warnings: snapshot.warnings,
+                needsReview: snapshot.needsReview,
+                periodColumns: periodColumns,
+                tableTruncated: clipped.truncated,
+                docID: docID,
+                consolidatedSalesMillionYen: consolidatedSales / Financial.millionYen)
         }
         let aggregate = JevChoiceAggregate.combine(reviewSamples.map(JevChoiceAggregate.fromReview))
 
@@ -1471,25 +1455,24 @@ struct OpenRouterGeographyColumnDecider: RevenueRecognitionColumnDeciding, Geogr
             model: model, columns: columns, tables: tables,
             fiscalYearEnd: fiscalYearEnd, docID: docID)
         else { return unavailable }
-        do {
-            let data = try await client.decide(requestJSON: body)
-            let answer = OpenRouterDecisionsCodec.answers(from: data)[
-                RevenueRecognitionColumnNormalizer.question]
-            let choice = answer?.choice
-            let probabilities = choice?.probabilities ?? [:]
-            let selected = choice?.selected
-            let fromProbabilities = selected.flatMap { probabilities[$0] }
-            return RevenueRecognitionColumnChoice(
-                selected: selected,
-                confidence: choice?.confidence ?? fromProbabilities,
-                pNone: probabilities[RevenueRecognitionColumnNormalizer.noneOfThese],
-                probabilities: probabilities,
-                model: model,
-                options: options)
-        } catch {
-            printError("GeographyBreakdownLLMNormalizer: Jev呼び出し失敗: \(error)\n")
-            return unavailable
-        }
+        guard let data = await JevDecisionTransport.decide(
+            client: client, requestJSON: body,
+            retries: RevenueRecognitionColumnNormalizer.jevPolicy.transportRetries,
+            onFailure: "GeographyBreakdownLLMNormalizer: Jev呼び出し失敗")
+        else { return unavailable }
+        let answer = OpenRouterDecisionsCodec.answers(from: data)[
+            RevenueRecognitionColumnNormalizer.question]
+        let choice = answer?.choice
+        let probabilities = choice?.probabilities ?? [:]
+        let selected = choice?.selected
+        let fromProbabilities = selected.flatMap { probabilities[$0] }
+        return RevenueRecognitionColumnChoice(
+            selected: selected,
+            confidence: choice?.confidence ?? fromProbabilities,
+            pNone: probabilities[RevenueRecognitionColumnNormalizer.noneOfThese],
+            probabilities: probabilities,
+            model: model,
+            options: options)
     }
 
     static func requestJSON(
@@ -1574,15 +1557,14 @@ struct OpenRouterGeographyColumnDecider: RevenueRecognitionColumnDeciding, Geogr
         else {
             return unavailable
         }
-        do {
-            let data = try await client.decide(requestJSON: body)
-            return OpenRouterSegmentNoteDecider.consultedChoice(
-                from: data, question: OpenRouterSegmentNoteDecider.reviewDecisionQuestion,
-                options: GeographyBreakdownLLMNormalizer.reviewOptions, sentences: [])
-        } catch {
-            printError("GeographyBreakdownLLMNormalizer: 最終判定のJev呼び出し失敗: \(error)\n")
-            return unavailable
-        }
+        guard let data = await JevDecisionTransport.decide(
+            client: client, requestJSON: body,
+            retries: RevenueRecognitionColumnNormalizer.jevPolicy.transportRetries,
+            onFailure: "GeographyBreakdownLLMNormalizer: 最終判定のJev呼び出し失敗")
+        else { return unavailable }
+        return OpenRouterSegmentNoteDecider.consultedChoice(
+            from: data, question: OpenRouterSegmentNoteDecider.reviewDecisionQuestion,
+            options: GeographyBreakdownLLMNormalizer.reviewOptions, sentences: [])
     }
 
     static func reviewRequestJSON(

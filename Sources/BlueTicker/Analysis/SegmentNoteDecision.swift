@@ -150,6 +150,22 @@ enum SegmentNoteDecision {
     /// `confidence` では代用しない。校正値は PR 本文。誤った省略より needs_review を残す。
     static let applyProbabilityThreshold: Double = 0.9
 
+    static let tablePolicy = JevDecisionPolicy(
+        question: OpenRouterSegmentNoteDecider.breakdownTableQuestion,
+        noneOfTheseKey: OpenRouterSegmentNoteDecider.noneOfThese,
+        confidenceThreshold: nil,
+        auditThreshold: applyProbabilityThreshold)
+    static let omissionPolicy = JevDecisionPolicy(
+        kind: .classify,
+        question: OpenRouterSegmentNoteDecider.omissionQuestion,
+        noneOfTheseKey: nil,
+        confidenceThreshold: applyProbabilityThreshold)
+    static let reviewPolicy = JevDecisionPolicy(
+        kind: .select,
+        question: OpenRouterSegmentNoteDecider.reviewDecisionQuestion,
+        noneOfTheseKey: OpenRouterSegmentNoteDecider.reviewKeep,
+        confidenceThreshold: applyProbabilityThreshold)
+
     /// 表が分析すべき当期の内訳か。表を選んだときは確率に関係なくその表を残し、
     /// `needs_review` は列選択 0.5 と合計・軸チェックに任せる。
     /// `none_of_these` のときは省略の種類が軸に合い、確率が閾値以上で、
@@ -172,54 +188,87 @@ enum SegmentNoteDecision {
             SegmentNoteTableCandidate(
                 index: index, heading: table.heading, period: table.period, markdown: table.markdown)
         }
-        let tableChoice = await decider.selectBreakdownTable(tables: candidates, sentences: sentences)
-        guard tableChoice.selected != nil else { return .unchanged }
+        let tableOptions = candidates.map { "\($0.index)" } + [OpenRouterSegmentNoteDecider.noneOfThese]
+        let tableResult = await JevDecisionSampler.decide(
+            policy: tablePolicy, options: tableOptions, sentences: sentences
+        ) {
+            let choice = await decider.selectBreakdownTable(
+                tables: candidates, sentences: sentences)
+            return JevChoiceAggregate.fromReview(choice)
+        }
+        guard !tableResult.isEmpty else { return .unchanged }
 
-        if tableChoice.selected == OpenRouterSegmentNoteDecider.noneOfThese {
-            guard meetsThreshold(tableChoice.probability) else {
+        if tableResult.status == .noneOfThese {
+            guard meetsThreshold(tableResult.aggregate.probability) else {
                 return finish(
                     axis: axis, code: code, docID: docID, sentences: sentences,
                     action: .unchanged, needsReview: true,
-                    calls: [call(tableChoice, sentences: sentences, applied: false)])
+                    calls: tableResult.calls)
             }
             return await classifySentences(
                 axis: axis, code: code, docID: docID, sentences: sentences,
-                tableChoice: tableChoice, decider: decider)
+                tableCalls: tableResult.calls, decider: decider)
         }
-        if let selected = tableChoice.selected, let index = Int(selected), tables.indices.contains(index) {
+        if case .accepted(let selected) = tableResult.status,
+           let index = Int(selected), tables.indices.contains(index)
+        {
             return finish(
                 axis: axis, code: code, docID: docID, sentences: sentences,
                 action: .keepTable(index), needsReview: false,
-                calls: [call(tableChoice, sentences: sentences, applied: true)])
+                calls: tableResult.calls)
         }
         return finish(
             axis: axis, code: code, docID: docID, sentences: sentences,
             action: .unchanged, needsReview: true,
-            calls: [call(tableChoice, sentences: sentences, applied: false)])
+            calls: tableResult.calls)
     }
 
     private static func classifySentences(
         axis: SegmentNoteAxis, code: String, docID: String, sentences: [String],
-        tableChoice: SegmentNoteConsultedChoice, decider: any SegmentNoteDeciding
+        tableCalls: [SegmentNoteJevCallPayload],
+        decider: any SegmentNoteDeciding
     ) async -> SegmentNoteDecisionOutcome {
         struct Record {
             var choice: SegmentNoteConsultedChoice
             var omission: SegmentNoteOmission?
             var unparsable: Bool
             var sentence: String
+            var sampleCalls: [SegmentNoteJevCallPayload]
         }
         var records: [Record] = []
         for sentence in sentences {
-            let choice = await decider.classifyOmission(sentence: sentence)
-            if choice.selected == nil {
-                records.append(Record(choice: choice, omission: nil, unparsable: false, sentence: sentence))
+            let result = await JevDecisionSampler.decide(
+                policy: omissionPolicy,
+                options: OpenRouterSegmentNoteDecider.omissionOptionKeys,
+                sentences: [sentence]
+            ) {
+                let choice = await decider.classifyOmission(sentence: sentence)
+                return JevChoiceAggregate.fromReview(choice)
+            }
+            let choice = consultedChoice(
+                from: result, question: OpenRouterSegmentNoteDecider.omissionQuestion,
+                options: OpenRouterSegmentNoteDecider.omissionOptionKeys, sentences: [sentence])
+            if result.isEmpty || choice.selected == nil {
+                records.append(Record(
+                    choice: choice, omission: nil, unparsable: false, sentence: sentence,
+                    sampleCalls: result.calls))
+                continue
+            }
+            if result.status == .rejected, result.aggregate.outcome != .agreed {
+                records.append(Record(
+                    choice: choice, omission: nil, unparsable: true, sentence: sentence,
+                    sampleCalls: result.calls))
                 continue
             }
             let parsed = SegmentNoteOmission.fromChoiceKey(choice.selected ?? "")
             if parsed == .unavailable {
-                records.append(Record(choice: choice, omission: nil, unparsable: true, sentence: sentence))
+                records.append(Record(
+                    choice: choice, omission: nil, unparsable: true, sentence: sentence,
+                    sampleCalls: result.calls))
             } else {
-                records.append(Record(choice: choice, omission: parsed, unparsable: false, sentence: sentence))
+                records.append(Record(
+                    choice: choice, omission: parsed, unparsable: false, sentence: sentence,
+                    sampleCalls: result.calls))
             }
         }
 
@@ -236,10 +285,22 @@ enum SegmentNoteDecision {
             : (weak || conflict || sawUnparsable || sawTransportGap)
         let agreed = classes.count == 1 ? classes.first : nil
         let canOmit = !needsReview && agreed.map { omissionMatches(axis: axis, $0) } == true
-        var calls = [call(tableChoice, sentences: sentences, applied: canOmit)]
+        var calls = tableCalls.map { payload in
+            var copy = payload
+            copy.applied = canOmit
+            return copy
+        }
         for record in records {
             let applied = canOmit && record.omission.map { omissionMatches(axis: axis, $0) } == true
-            calls.append(call(record.choice, sentences: [record.sentence], applied: applied))
+            if record.sampleCalls.isEmpty {
+                calls.append(call(record.choice, sentences: [record.sentence], applied: applied))
+            } else {
+                calls.append(contentsOf: record.sampleCalls.map { payload in
+                    var copy = payload
+                    copy.applied = applied
+                    return copy
+                })
+            }
         }
         let action: SegmentNoteAction
         if canOmit {
@@ -274,26 +335,40 @@ enum SegmentNoteDecision {
             SegmentNoteTableCandidate(
                 index: index, heading: table.heading, period: table.period, markdown: table.markdown)
         }
-        let choice = await decider.reviewDecision(
-            proposal: proposal, tables: candidates, sentences: sentences)
+        let reviewOptions = candidates.map { "\($0.index)" } + [OpenRouterSegmentNoteDecider.reviewKeep]
+        let reviewResult = await JevDecisionSampler.decide(
+            policy: reviewPolicy, options: reviewOptions, sentences: sentences
+        ) {
+            let choice = await decider.reviewDecision(
+                proposal: proposal, tables: candidates, sentences: sentences)
+            return JevChoiceAggregate.fromReview(choice)
+        }
         let recoveredIndex: Int?
-        if let selected = choice.selected,
-           selected != OpenRouterSegmentNoteDecider.reviewKeep,
+        if case .accepted(let selected) = reviewResult.status,
            let index = Int(selected),
-           tables.indices.contains(index),
-           meetsThreshold(choice.probability)
+           tables.indices.contains(index)
         {
             recoveredIndex = index
         } else {
             recoveredIndex = nil
         }
-        let reviewCall = call(choice, sentences: sentences, applied: recoveredIndex != nil)
+        let reviewCalls = reviewResult.calls.isEmpty
+            ? [call(
+                consultedChoice(
+                    from: reviewResult, question: OpenRouterSegmentNoteDecider.reviewDecisionQuestion,
+                    options: reviewOptions, sentences: sentences),
+                sentences: sentences, applied: recoveredIndex != nil)]
+            : reviewResult.calls.map { payload in
+                var copy = payload
+                copy.applied = recoveredIndex != nil && payload.selected == reviewResult.selectedKey
+                return copy
+            }
         var audit = existing.audit ?? SegmentNoteJevAuditPayload(
             code: code, docID: docID, axis: axis.wire, model: Api.openrouterDecisionsModel,
             threshold: applyProbabilityThreshold, applied: existing.action != .unchanged,
             needsReview: existing.needsReview, sentences: sentences, calls: [],
             decisionSource: existing.audit?.decisionSource)
-        audit.calls.append(reviewCall)
+        audit.calls.append(contentsOf: reviewCalls)
         if let recoveredIndex {
             audit.applied = true
             audit.needsReview = false
@@ -386,8 +461,24 @@ enum SegmentNoteDecision {
 
     /// 選ばれたキーの確率だけを見る。欠ける、有限でない、0...1 の外は適用しない。
     static func meetsThreshold(_ probability: Double?) -> Bool {
-        guard let probability, probability.isFinite, (0.0...1.0).contains(probability) else { return false }
-        return probability >= applyProbabilityThreshold
+        JevDecision.meetsThreshold(applyProbabilityThreshold, probability)
+    }
+
+    private static func consultedChoice(
+        from result: JevDecisionResult, question: String, options: [String], sentences: [String]
+    ) -> SegmentNoteConsultedChoice {
+        let selected: String?
+        switch result.status {
+        case .accepted(let key):
+            selected = key
+        case .noneOfThese:
+            selected = result.aggregate.selected
+        case .rejected, .empty:
+            selected = result.isEmpty ? nil : result.aggregate.selected
+        }
+        return SegmentNoteConsultedChoice(
+            question: question, selected: selected, probability: result.aggregate.probability,
+            options: options, sentences: sentences)
     }
 
     private static func call(
@@ -441,13 +532,13 @@ struct OpenRouterSegmentNoteDecider: SegmentNoteDeciding {
         guard let body = Self.tableRequestJSON(model: model, tables: tables, sentences: sentences) else {
             return unavailable
         }
-        do {
-            let data = try await client.decide(requestJSON: body)
-            return Self.consultedChoice(
-                from: data, question: Self.breakdownTableQuestion, options: options, sentences: sentences)
-        } catch {
-            return unavailable
-        }
+        guard let data = await JevDecisionTransport.decide(
+            client: client, requestJSON: body,
+            retries: SegmentNoteDecision.tablePolicy.transportRetries,
+            onFailure: "SegmentNoteDecision: Jev呼び出し失敗")
+        else { return unavailable }
+        return Self.consultedChoice(
+            from: data, question: Self.breakdownTableQuestion, options: options, sentences: sentences)
     }
 
     func classifyOmission(sentence: String) async -> SegmentNoteConsultedChoice {
@@ -457,14 +548,14 @@ struct OpenRouterSegmentNoteDecider: SegmentNoteDeciding {
         guard let body = Self.omissionRequestJSON(model: model, sentence: sentence) else {
             return unavailable
         }
-        do {
-            let data = try await client.decide(requestJSON: body)
-            return Self.consultedChoice(
-                from: data, question: Self.omissionQuestion, options: Self.omissionOptionKeys,
-                sentences: [sentence])
-        } catch {
-            return unavailable
-        }
+        guard let data = await JevDecisionTransport.decide(
+            client: client, requestJSON: body,
+            retries: SegmentNoteDecision.omissionPolicy.transportRetries,
+            onFailure: "SegmentNoteDecision: Jev呼び出し失敗")
+        else { return unavailable }
+        return Self.consultedChoice(
+            from: data, question: Self.omissionQuestion, options: Self.omissionOptionKeys,
+            sentences: [sentence])
     }
 
     func reviewDecision(
@@ -481,14 +572,14 @@ struct OpenRouterSegmentNoteDecider: SegmentNoteDeciding {
         else {
             return unavailable
         }
-        do {
-            let data = try await client.decide(requestJSON: body)
-            return Self.consultedChoice(
-                from: data, question: Self.reviewDecisionQuestion, options: options,
-                sentences: sentences)
-        } catch {
-            return unavailable
-        }
+        guard let data = await JevDecisionTransport.decide(
+            client: client, requestJSON: body,
+            retries: SegmentNoteDecision.reviewPolicy.transportRetries,
+            onFailure: "SegmentNoteDecision: Jev呼び出し失敗")
+        else { return unavailable }
+        return Self.consultedChoice(
+            from: data, question: Self.reviewDecisionQuestion, options: options,
+            sentences: sentences)
     }
 
     static func tableRequestJSON(
