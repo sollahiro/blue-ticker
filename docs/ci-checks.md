@@ -13,6 +13,10 @@ default to `merge-base(origin/main, HEAD)..HEAD`; override with `--base/--head` 
 | `ci-scripts-selftest` | `scripts/ci/tests/selftest.sh` | any check misbehaving on crafted bad/clean diffs |
 | `structure` | `scripts/ci/structure.sh` | never (labels + notifies only) |
 
+`swift-macos` is not a required check. It only compiles the package on macOS
+(`swift build --build-tests`, no SwiftPM `.build` cache). Tests run on Linux
+(`swift-linux` and `golden-suite`).
+
 ## Golden set
 
 - `smoke/smoke_expected/*.json` and `smoke/smoke_expected/.checksums.json`
@@ -25,8 +29,8 @@ default to `merge-base(origin/main, HEAD)..HEAD`; override with `--base/--head` 
 `golden-suite.sh` checks every fixture against `.checksums.json` (no missing,
 extra, or stale entries) and then runs `swift test --filter` over every suite declared
 in the golden Swift files. The filter comes from those files, so a new Oracle suite is
-picked up automatically. `swift-linux` skips the same filter so the suites run only once.
-Print the filter with `scripts/ci/golden-suite.sh --print-filter`.
+picked up automatically. `swift-linux` skips the same filter so the suites run only once;
+`swift-macos` does not run tests. Print the filter with `scripts/ci/golden-suite.sh --print-filter`.
 
 ## Golden-change rules (`golden-rules.sh`)
 
