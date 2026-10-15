@@ -131,6 +131,15 @@ struct JevDecisionTests {
         #expect(result.status == .accepted("r1"))
         #expect(result.calls.count == JevChoiceAggregate.sampleCount)
     }
+
+    @Test("sampler returns samples in launch order")
+    func samplerPreservesLaunchOrder() async {
+        let values = await JevDecisionSampler.collect(count: 5) { index in
+            try? await Task.sleep(nanoseconds: UInt64((5 - index) * 2_000_000))
+            return index
+        }
+        #expect(values == [0, 1, 2, 3, 4])
+    }
 }
 
 @Suite("JevDecisionTransport")

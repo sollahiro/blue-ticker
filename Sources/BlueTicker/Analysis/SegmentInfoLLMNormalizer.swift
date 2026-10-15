@@ -136,7 +136,8 @@ enum SegmentInfoLLMNormalizer {
             resolved, columns: offered, tables: tablesForChoice, constraint: constraint)
 
         let columnJev = jevPayload(
-            docID: docID, samples: choiceSamples.map(\.column), aggregate: columnAggregate)
+            docID: docID, samples: choiceSamples.map(\.column), aggregate: columnAggregate,
+            resolved: resolved)
         let pNoneNote = choice.column.pNone.map { String($0) } ?? "nil"
         let medianNote = columnAggregate.probability.map { String($0) } ?? "nil"
         var notes =
@@ -925,7 +926,8 @@ enum SegmentInfoLLMNormalizer {
 
     private static func jevPayload(
         docID: String, samples: [RevenueRecognitionColumnChoice],
-        aggregate: JevChoiceAggregate.Result
+        aggregate: JevChoiceAggregate.Result,
+        resolved: RevenueRecognitionColumnNormalizer.ResolvedColumn?
     ) -> SegmentNoteJevAuditPayload {
         SegmentNoteJevAuditPayload(
             code: "", docID: docID, axis: breakdownAxisProductService,
@@ -933,10 +935,10 @@ enum SegmentInfoLLMNormalizer {
                 ? (samples.first?.model ?? "") : aggregate.model,
             threshold: RevenueRecognitionColumnNormalizer.jevPolicy.auditThreshold,
             applied: false, needsReview: false, sentences: [],
-            calls: JevDecision.auditCalls(
-                question: RevenueRecognitionColumnNormalizer.question,
+            calls: RevenueRecognitionColumnNormalizer.publishedColumnCalls(
                 samples: samples.map(JevChoiceAggregate.fromColumn),
-                options: samples.first?.options ?? aggregate.options))
+                options: samples.first?.options ?? aggregate.options,
+                resolved: resolved))
     }
 
     private static func stampJev(

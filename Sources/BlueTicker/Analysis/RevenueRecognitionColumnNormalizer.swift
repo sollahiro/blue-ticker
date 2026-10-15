@@ -87,11 +87,11 @@ enum RevenueRecognitionColumnNormalizer {
             code: "", docID: docID, axis: breakdownAxisProductService,
             model: choice.model, threshold: jevPolicy.auditThreshold,
             applied: false, needsReview: false, sentences: [],
-            calls: JevDecision.auditCalls(
-                question: question,
+            calls: publishedColumnCalls(
                 samples: columnSamples.map(JevChoiceAggregate.fromColumn),
                 options: choice.options.isEmpty
-                    ? offered.map(\.key) + [noneOfThese] : choice.options))
+                    ? offered.map(\.key) + [noneOfThese] : choice.options,
+                resolved: resolved))
         let pNoneNote = choice.pNone.map { String($0) } ?? "nil"
         let medianNote = columnAggregate.probability.map { String($0) } ?? "nil"
         var notes =
@@ -438,6 +438,24 @@ enum RevenueRecognitionColumnNormalizer {
             recognizedOtherRevenueMarkers.contains { text.contains($0) }
         }
         return table.items.contains { hit($0.label) || hit($0.group) }
+    }
+
+    /// Audit `selected` is the published column. When Jev said `none_of_these`
+    /// and the deterministic fallback took a real column, that published key
+    /// is what goldens (and the old 1-call payload) stored — not the raw Choice.
+    static func publishedColumnCalls(
+        samples: [JevChoiceAggregate.Sample],
+        options: [String],
+        resolved: ResolvedColumn?
+    ) -> [SegmentNoteJevCallPayload] {
+        var calls = JevDecision.auditCalls(
+            question: question, samples: samples, options: options)
+        if let resolved, resolved.forceReview {
+            for index in calls.indices {
+                calls[index].selected = resolved.key
+            }
+        }
+        return calls
     }
 
     private static func stampJev(

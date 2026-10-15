@@ -198,14 +198,20 @@ enum JevDecisionSampler {
         count: Int = JevChoiceAggregate.sampleCount,
         _ body: @Sendable @escaping () async -> T
     ) async -> [T] {
-        await withTaskGroup(of: T.self) { group in
-            for _ in 0..<count {
-                group.addTask { await body() }
+        await collect(count: count) { _ in await body() }
+    }
+
+    static func collect<T: Sendable>(
+        count: Int = JevChoiceAggregate.sampleCount,
+        _ body: @Sendable @escaping (Int) async -> T
+    ) async -> [T] {
+        await withTaskGroup(of: (Int, T).self) { group in
+            for index in 0..<count {
+                group.addTask { (index, await body(index)) }
             }
-            var samples: [T] = []
-            samples.reserveCapacity(count)
-            for await sample in group { samples.append(sample) }
-            return samples
+            var slots: [T?] = Array(repeating: nil, count: count)
+            for await (index, sample) in group { slots[index] = sample }
+            return slots.map { $0! }
         }
     }
 
