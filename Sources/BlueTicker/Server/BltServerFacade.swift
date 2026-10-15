@@ -928,11 +928,14 @@ public extension BltServerContext {
         else {
             return .notApplicable(reason: breakdownNotApplicableNotFound)
         }
+        // 表の一部の行に fact が付かない会社（純粋持株会社等）は、差額と整数一致する未タグ行だけ補う。
+        let filled = EmployeesUntaggedRowFill.fill(
+            snapshot: snapshot, facts: cached.facts, xbrlDir: xbrlDir)
         let extracted = ExtractedBreakdown(method: "xbrl_facts", tables: [], facts: cached.facts)
         let hash = breakdownContentHash(extracted: extracted, consolidatedSales: nil)
         return breakdownByRecordingOverlayRegressions(
             .resolved(
-                payload: breakdownSnapshotPayload(from: snapshot), source: breakdownSourceXbrlFacts,
+                payload: breakdownSnapshotPayload(from: filled), source: breakdownSourceXbrlFacts,
                 contentHash: hash, audit: nil),
             xbrlDir: xbrlDir)
     }
