@@ -150,6 +150,16 @@ import Testing
         }
     }
 
+    @Test func retiredBorrowingsAndLeaseNoteTypesAreUnknownOnPublishedList() {
+        for type in retiredStatementNoteTypes {
+            #expect(isKnownStatementNoteType(type) == false)
+            #expect(!allStatementNoteTypes.contains(type))
+            #expect(!statementNoteCacheVersion(forType: type).isEmpty)
+        }
+        #expect(retiredStatementNoteTypes.contains(statementNoteTypeBorrowingsSchedule))
+        #expect(retiredStatementNoteTypes.contains(statementNoteTypeLeaseLiabilities))
+    }
+
     @Test func notePayloadKeepsRetiredKeysAsNull() {
         let json = StatementNotePayload(value: 1, unit: "JPY").jsonObject()
         #expect(json["securities"] is NSNull)

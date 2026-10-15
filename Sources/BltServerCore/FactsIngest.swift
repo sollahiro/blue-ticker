@@ -518,9 +518,9 @@ public func runFactsIngestCommand(
         if targets.contains(.notes) {
             // 財務諸表注記取り込み: 対象母集団は上場全体（`listed`。日経225=`priority`は処理順の
             // 先頭寄せのみ。2026-09: 日経225限定を廃止し statements と同じ上場全体へ拡大）。
-            // EPS/発行済株式・資本金/borrowings_schedule/PPE・のれん/
-            // lease_liabilities は注記からXBRL直接抽出（決定論）。
-            // `sga_expense_breakdown` は未公開のためここにも job-03 にも載せない（進捗は Linear Team `blue-ticker`）。
+            // EPS/発行済株式・資本金/PPE・のれんは注記からXBRL直接抽出（決定論）。
+            // `borrowings_schedule` / `lease_liabilities` は公開面から廃止（パーサは IBD 軸が使う）。
+            // `sga_expense_breakdown` は未公開のためここにも job-03 にも載せない。
             let statementNotesListed = codes ?? listed
             if statementNotesListed.isEmpty {
                 app.logger.warning(
@@ -544,13 +544,6 @@ public func runFactsIngestCommand(
                         }
                     ),
                     (
-                        statementNoteTypeBorrowingsSchedule,
-                        { docID, _ in
-                            await context.resolveBorrowingsScheduleNote(
-                                docID: docID, correctionDocIDs: correctionIDsByOriginal[docID] ?? [])
-                        }
-                    ),
-                    (
                         statementNoteTypePropertyPlantEquipmentSchedule,
                         { docID, _ in
                             await context.resolvePropertyPlantEquipmentScheduleNote(
@@ -561,13 +554,6 @@ public func runFactsIngestCommand(
                         statementNoteTypeGoodwillAndIntangibles,
                         { docID, _ in
                             await context.resolveGoodwillAndIntangiblesNote(
-                                docID: docID, correctionDocIDs: correctionIDsByOriginal[docID] ?? [])
-                        }
-                    ),
-                    (
-                        statementNoteTypeLeaseLiabilities,
-                        { docID, _ in
-                            await context.resolveLeaseLiabilitiesNote(
                                 docID: docID, correctionDocIDs: correctionIDsByOriginal[docID] ?? [])
                         }
                     ),

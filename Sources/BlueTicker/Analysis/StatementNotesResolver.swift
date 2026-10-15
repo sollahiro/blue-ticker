@@ -133,9 +133,9 @@ enum StatementNotesResolver {
     /// 2. BS にリース負債タグ当期値あり → `available_via_statement`。
     /// 3. US-GAAP → `us_gaap_unsupported`（連結は HTML 経路で、`fieldSetFromInstant` の
     ///    構造化タグ判定では statement 案内ができない。PPE と同型）。
-    /// 4. 借入金等明細表の区分行にリース債務／リース負債あり → `available_via_notes`
-    ///    （`borrowings_schedule` 側。オークマ・東邦レマック・三菱UFJ・三井住友）。
-    /// 5. それ以外 → `not_found`。
+    /// 4. それ以外 → `not_found`。
+    /// 旧 4（借入金等明細表のリース債務 → `available_via_notes`）は公開先 note を廃止したので
+    /// `not_found` に倒す。IBD は `.resolved` のときだけこの結果をゲートに使う。
     static func resolveLeaseLiabilities(xbrlDir: URL) -> StatementNoteResolveResult {
         let tagElements = XBRLUtils.collectAllNumericElements(in: xbrlDir, nilAsZero: false)
         let accountingStandard = detectAccountingStandard(tagElements)
@@ -182,9 +182,6 @@ enum StatementNotesResolver {
         }
         if accountingStandard == "US-GAAP" {
             return .notApplicable(reason: statementNotApplicableUSGAAP)
-        }
-        if BorrowingsSchedule.hasLeaseDebtRowLabel(xbrlDir: xbrlDir) {
-            return .notApplicable(reason: statementNoteNotApplicableAvailableViaNotes)
         }
         return .notApplicable(reason: statementNoteNotApplicableNotFound)
     }

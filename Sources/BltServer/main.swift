@@ -5,7 +5,7 @@
 //   blt-server ingest [--limit N] [--with-facts] [--stages financials,
 //                     filing-sections,breakdowns,statements,statement-notes,icons,overviews]
 //                     [--codes 7203,6758] [--doc-ids S100W0S7]
-//                     [--note-types per_share_information,borrowings_schedule,...]
+//                     [--note-types per_share_information,property_plant_equipment_schedule,...]
 //                                                            対象を DB へ取り込み（--stages で選択、既定は全て）。
 //                                                            breakdowns: product_service/geography は上場全体（--limit 適用）、
 //                                                            employees/rd/goodwill 等の決定論指標軸も上場全体
@@ -23,7 +23,7 @@
 //                                                            statements/statement-notes では --codes を対象母集団にも使う
 //                                                            （nikkei225.csv 未配置でも手動再ingest可能）。
 //                                                            --note-types は statement-notes ステージで ingest する
-//                                                            note_type を絞る（未指定時は公開全6種）。
+//                                                            note_type を絞る（未指定時は公開全4種）。
 //                                                            バグ修正確認後の手動・単発再計算向け。定期実行では使わない）
 //   blt-server master-data-upload <path>                    EDINET コードリスト CSV を Neon へ反映
 //                                                            （正本を丸ごと差し替え。稼働中サーバーは定期ポーリングで自動反映）
@@ -116,7 +116,7 @@ do {
         let noteTypes = parseStatementNoteTypes(optionValue("--note-types", in: argv))
         if noteTypesPresent, noteTypes?.isEmpty ?? true {
             printError(
-                "blt-server error: --note-types は note_type のカンマ区切りで指定してください（例: per_share_information,borrowings_schedule）\n")
+                "blt-server error: --note-types は note_type のカンマ区切りで指定してください（例: per_share_information,issued_shares_and_capital）\n")
             exit(1)
         }
         try await runFactsIngestCommand(

@@ -91,6 +91,10 @@ import Testing
             #expect(!text.contains("販売費及び一般管理費の費目内訳"))
             #expect(!text.contains("dividends"))
             #expect(!text.contains("policy_holding_securities"))
+            #expect(!text.contains("borrowings_schedule"))
+            #expect(!text.contains("lease_liabilities"))
+            #expect(!text.contains("借入金等明細"))
+            #expect(!text.contains("リース負債"))
         }
         for published in allStatementNoteTypes {
             #expect(
@@ -113,6 +117,6 @@ import Testing
         #expect(!skill.description.contains("axis=business"))
         #expect(skill.description.contains("needs_review"))
         #expect(skill.description.contains("interest_bearing_debt_lease_denominator_from_notes"))
-        #expect(apiSkillsSchemaVersion == 3)
+        #expect(apiSkillsSchemaVersion == 4)
     }
 }

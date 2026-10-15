@@ -16,11 +16,13 @@ import Foundation
 /// v1 時点は全 note_type が決定論経路（xbrl_facts）。
 public let statementNoteTypePerShareInformation = "per_share_information"
 public let statementNoteTypeIssuedSharesAndCapital = "issued_shares_and_capital"
+/// 借入金等明細。公開面からは廃止（`retiredStatementNoteTypes`）。
+/// パーサ `BorrowingsSchedule` は IBD 軸が使う。
 public let statementNoteTypeBorrowingsSchedule = "borrowings_schedule"
 public let statementNoteTypePropertyPlantEquipmentSchedule = "property_plant_equipment_schedule"
 public let statementNoteTypeGoodwillAndIntangibles = "goodwill_and_intangibles"
 /// リース負債（連結）。IFRS リース注記 TextBlock（`IFRSLease`）から決定論で抽出する。
-/// BS 構造化タグは `available_via_statement`、借入金等明細表のリース債務は `available_via_notes`。
+/// 公開面からは廃止（`retiredStatementNoteTypes`）。パーサと IBD ゲートは残す。
 /// 使用権資産の増減表は対象外。
 public let statementNoteTypeLeaseLiabilities = "lease_liabilities"
 /// 販売費及び一般管理費の主要な費目内訳（連結損益計算書関係注記）。決定論（構造化 `*SGA` /
@@ -33,12 +35,19 @@ public let statementNoteTypeSgaExpenseBreakdown = "sga_expense_breakdown"
 
 /// ingest / `--note-types` バリデーション用の公開 note_type 一覧（`FactsIngest` の走査順）。
 /// `sga_expense_breakdown` は未公開のため含めない。
+/// `borrowings_schedule` / `lease_liabilities` は公開面から廃止（`retiredStatementNoteTypes`）。
 public let allStatementNoteTypes: [String] = [
     statementNoteTypePerShareInformation,
     statementNoteTypeIssuedSharesAndCapital,
-    statementNoteTypeBorrowingsSchedule,
     statementNoteTypePropertyPlantEquipmentSchedule,
     statementNoteTypeGoodwillAndIntangibles,
+]
+
+/// 旧公開 note_type。REST / MCP / skills は 404（`.absent`、retired breakdown 軸と同型）。
+/// `--note-types` / ingest は未知。パーサ（`BorrowingsSchedule` / `IFRSLease`）と
+/// `StatementNotesResolver.resolveLeaseLiabilities` の IBD ゲートは残す。
+public let retiredStatementNoteTypes = [
+    statementNoteTypeBorrowingsSchedule,
     statementNoteTypeLeaseLiabilities,
 ]
 
@@ -121,8 +130,8 @@ public let statementNoteNotApplicableNotFound = "not_found"
 public let statementNoteNotApplicableAvailableViaStatement = "available_via_statement"
 
 /// `.notApplicable` の理由（本note_typeの対象外だが、同等の値は他の statement note から取得できる）。
-/// `lease_liabilities` は BS にリース負債タグが無く、借入金等明細表（`borrowings_schedule`）の
-/// 区分行にリース債務／リース負債があるときこの reason を返す。
+/// 公開面に残る note_type は他 notes へ誘導しない（旧 `lease_liabilities` → `borrowings_schedule`
+/// は両方とも `retiredStatementNoteTypes` のため `not_found` に倒した）。
 public let statementNoteNotApplicableAvailableViaNotes = "available_via_notes"
 
 /// REST/MCP 404 の `reason` として返しうる statement-notes の既知コード一覧（公開契約）。
