@@ -872,5 +872,89 @@ import Foundation
                 ("WholesaleBusinessUnitReportableSegmentMember", "ホールセール事業部門", 8_745, "segment"),
             ])
     }
-}
+    // MARK: - 未タグ行の補完（純粋持株会社等）
 
+    /// 取り込みと同じ経路: `normalizeEmployees` の後に `EmployeesUntaggedRowFill`。
+    private static func filledEmployees(
+        docID: String, total: Double
+    ) throws -> BreakdownSnapshot {
+        let (facts, labels) = factsAndLabels(docID)
+        let dir = xbrlDir(docID)
+        let snapshot = try #require(
+            BreakdownNormalizer.normalizeEmployees(
+                facts: facts, total: total, axis: "employees", labelsByTag: labels,
+                memberParents: XBRLUtils.operatingSegmentMemberParents(in: dir)))
+        return EmployeesUntaggedRowFill.fill(snapshot: snapshot, facts: facts, xbrlDir: dir)
+    }
+
+    // source: code=8267 fy_end=2026-02-28 doc_id=S100Y5VH page=18 row=純粋持株会社等 3,523 (従業員の状況 連結会社の状況、合計179,230)
+    // 「純粋持株会社等」の値セルには ix:nonFraction が付かず、dimension 付き fact だけでは行が落ちる。
+    @Test func aeonEmployeesKeepsUntaggedPureHoldingCompanyRowAsReconciling() async throws {
+        guard await Self.ensureAvailable("S100Y5VH") else { return }
+        let snapshot = try Self.filledEmployees(docID: "S100Y5VH", total: 179_230)
+        #expect(snapshot.denominator == 179_230)
+        #expect(snapshot.needsReview == false)
+        #expect(snapshot.warnings.isEmpty)
+        #expect(snapshot.rows.count == 10)
+        #expect(
+            snapshot.rows.filter { $0.rowKind == "segment" || $0.rowKind == "reconciling" }
+                .map(\.amount).reduce(0, +) == 179_230)
+        let holding = try #require(snapshot.rows.first { $0.label == "純粋持株会社等" })
+        #expect(holding.amount == 3_523)
+        #expect(holding.rowKind == "reconciling")
+        let segments: [(String, Double)] = [
+            ("GMSReportableSegmentsMember", 34_470),
+            ("SupermarketReportableSegmentsMember", 26_209),
+            ("DiscountStoreReportableSegmentMember", 1_848),
+            ("HealthAndWellnessReportableSegmentMember", 28_105),
+            ("FinancialServicesReportableSegmentMember", 14_942),
+            ("SCDevelopmentReportableSegmentMember", 4_295),
+            ("ServiceSpecialtyStoreReportableSegmentsMember", 32_880),
+            ("InternationalReportableSegmentsMember", 30_683),
+            (
+                "OperatingSegmentsNotIncludedInReportableSegmentsAndOtherRevenueGeneratingBusinessActivitiesMember",
+                2_275),
+        ]
+        for (member, amount) in segments {
+            let row = try #require(snapshot.rows.first { $0.labelRaw == member })
+            #expect(row.amount == amount)
+            #expect(row.rowKind == "segment")
+        }
+    }
+
+    // source: code=3086 fy_end=2026-02-28 doc_id=S100Y6K0 page=18 row=全社（共通） 243 (従業員の状況 連結会社の状況、合計5,584)
+    // 全社（共通）が member 付き fact で開示される会社は、補完で行も値も変わらない。
+    @Test func jFrontEmployeesWithTaggedCorporateSharedUnchangedByUntaggedFill() async throws {
+        guard await Self.ensureAvailable("S100Y6K0") else { return }
+        let (facts, labels) = Self.factsAndLabels("S100Y6K0")
+        let dir = Self.xbrlDir("S100Y6K0")
+        let before = try #require(
+            BreakdownNormalizer.normalizeEmployees(
+                facts: facts, total: 5_584, axis: "employees", labelsByTag: labels,
+                memberParents: XBRLUtils.operatingSegmentMemberParents(in: dir)))
+        let after = EmployeesUntaggedRowFill.fill(snapshot: before, facts: facts, xbrlDir: dir)
+        #expect(after == before)
+        #expect(after.rows.count == 6)
+        #expect(after.rows.map(\.amount).reduce(0, +) == 5_584)
+        let shared = try #require(after.rows.first { $0.labelRaw == "CorporateSharedMember" })
+        #expect(shared.amount == 243)
+        #expect(shared.rowKind == "reconciling")
+    }
+
+    // source: code=3099 fy_end=2026-03-31 doc_id=S100YD7C page=18 row=従業員数合計 8,670 (従業員の状況 連結会社の状況)
+    // 表の全行が member 付き fact の会社は、補完で変わらない。
+    @Test func isetanMitsukoshiEmployeesFullyTaggedUnchangedByUntaggedFill() async throws {
+        guard await Self.ensureAvailable("S100YD7C") else { return }
+        let (facts, labels) = Self.factsAndLabels("S100YD7C")
+        let dir = Self.xbrlDir("S100YD7C")
+        let before = try #require(
+            BreakdownNormalizer.normalizeEmployees(
+                facts: facts, total: 8_670, axis: "employees", labelsByTag: labels,
+                memberParents: XBRLUtils.operatingSegmentMemberParents(in: dir)))
+        let after = EmployeesUntaggedRowFill.fill(snapshot: before, facts: facts, xbrlDir: dir)
+        #expect(after == before)
+        #expect(after.rows.count == 4)
+        #expect(after.rows.map(\.amount).reduce(0, +) == 8_670)
+        #expect(after.rows.allSatisfy { $0.rowKind == "segment" })
+    }
+}
