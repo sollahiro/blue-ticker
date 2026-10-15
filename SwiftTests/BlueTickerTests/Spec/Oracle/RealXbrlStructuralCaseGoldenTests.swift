@@ -105,9 +105,11 @@ import Foundation
         for row in snapshot.rows where row.rowKind == "segment" {
             if let profit = million(row) { byLabel[display(row)] = profit }
         }
-        let dump = snapshot.rows.map {
-            "\(display($0)) kind=\($0.rowKind) profit=\(million($0).map(String.init) ?? "nil")"
-        }.joined(separator: "; ")
+        let dumpParts: [String] = snapshot.rows.map { row in
+            let profitText = million(row).map { String($0) } ?? "nil"
+            return "\(display(row)) kind=\(row.rowKind) profit=\(profitText)"
+        }
+        let dump = dumpParts.joined(separator: "; ")
         #expect(byLabel["日本・東アジア"] == 62_584, Comment(rawValue: dump))
         #expect(byLabel["欧州"] == 79_386, Comment(rawValue: dump))
         #expect(byLabel["アジアパシフィック"] == 63_214, Comment(rawValue: dump))
