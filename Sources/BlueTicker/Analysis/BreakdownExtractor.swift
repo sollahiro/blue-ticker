@@ -297,7 +297,12 @@ enum BreakdownExtractor {
                     (tablesContainSalesEquivalent(result.tables) && !rrSubstantive)
                     || (hasProductTables && (rrContractStub || !rrSubstantive))
                 if !keepSegmentSide {
-                    return revenueRecognition
+                    // 報告セグメント facts は捨てない。収益認識の行が同じ内訳なら
+                    // BusinessBreakdownResolver が利益・調整行付きの facts を product_service に載せる。
+                    var swapped = revenueRecognition
+                    swapped.facts = result.facts
+                    swapped.rowLabelsByTag = result.rowLabelsByTag
+                    return swapped
                 }
             }
         }
