@@ -165,15 +165,28 @@ final class EdinetCacheStore: Sendable {
         let root = saveDir ?? xbrlRootDir
         try fm.createDirectory(at: root, withIntermediateDirectories: true)
         let dest = xbrlDir(docID, saveDir: root)
-        let zipPath = root.appendingPathComponent("\(docID).zip")
+        // 一時名で書き・展開してから rename で公開する。同じ docID を並行に保存しても
+        // ZIP や展開途中のディレクトリを互いに踏まない（dest は常に完成品か不在）。
+        let token = UUID().uuidString
+        let zipPath = root.appendingPathComponent(".\(docID).\(token).zip")
+        let staging = root.appendingPathComponent(".\(docID).\(token).partial", isDirectory: true)
         try content.write(to: zipPath)
-        defer { try? fm.removeItem(at: zipPath) }
+        defer {
+            try? fm.removeItem(at: zipPath)
+            try? fm.removeItem(at: staging)
+        }
+        try extractZip(at: zipPath, to: staging)
+        try Data().write(to: staging.appendingPathComponent(Self.xbrlExtractCompleteMarker))
+        if hasXbrlDir(docID, saveDir: root) {
+            // 先に別の保存が完了していればそれを使う。
+            return dest
+        }
+        // 完了マーカーの無い残骸（旧方式の展開途中・失敗跡）は置き換える。
+        try? fm.removeItem(at: dest)
         do {
-            try extractZip(at: zipPath, to: dest)
-            try Data().write(to: dest.appendingPathComponent(Self.xbrlExtractCompleteMarker))
+            try fm.moveItem(at: staging, to: dest)
         } catch {
-            // 展開失敗時に残る dest（多くは空）を消す。残すと hasXbrlDir が誤ヒットしてキャッシュが汚染される。
-            try? fm.removeItem(at: dest)
+            if hasXbrlDir(docID, saveDir: root) { return dest }
             throw error
         }
         evictXbrlIfNeeded(root: root)
