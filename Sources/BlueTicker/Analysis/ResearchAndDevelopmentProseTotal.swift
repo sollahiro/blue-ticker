@@ -5,151 +5,70 @@
 // セグメントへ配分できない開示は warnings に載せ、404 にはしない。
 // OPENROUTER_DECISION_API_KEY が無いときは呼ばない。cache_version は上げない。
 // Summary の rd は数値タグのまま（この経路は breakdown の分母だけ）。
+// 文の切り出し・円換算・残り行の照合は BreakdownProseToolkit に置く。
 
 import Foundation
-import SwiftSoup
 
-enum ResearchAndDevelopmentProseRole {
-    static let currentCompanyTotal = "current_company_total"
-    static let priorPeriod = "prior_period"
-    static let partialAmount = "partial_amount"
-    static let unrelated = "unrelated"
-    static let optionKeys = [currentCompanyTotal, priorPeriod, partialAmount, unrelated]
-}
-
-struct ResearchAndDevelopmentProseCandidate: Equatable, Sendable {
-    var sentence: String
-    var yen: Double
-}
-
-struct ResearchAndDevelopmentProseChoice: Equatable, Sendable {
-    var sentence: String
-    var selected: String?
-    var probability: Double?
-}
-
-protocol ResearchAndDevelopmentProseDeciding: Sendable {
-    func classify(sentence: String) async -> ResearchAndDevelopmentProseChoice
-    /// 差額と一致する文が、セグメントに載っていない当期の残りか。
-    func classifyRemainder(sentence: String) async -> ResearchAndDevelopmentProseChoice
-    /// 総額と同じ文にあるもう一つの金額が、研究開発費の外か。
-    func classifyExclusion(sentence: String) async -> ResearchAndDevelopmentProseChoice
-}
-
-enum ResearchAndDevelopmentRemainderRole {
-    static let unallocatedRemainder = "unallocated_remainder"
-    static let segmentAmount = "segment_amount"
-    static let priorPeriod = "prior_period"
-    static let unrelated = "unrelated"
-    static let optionKeys = [unallocatedRemainder, segmentAmount, priorPeriod, unrelated]
-}
-
-enum ResearchAndDevelopmentExclusionRole {
-    static let excludedFromTotal = "excluded_from_total"
-    static let includedInTotal = "included_in_total"
-    static let priorPeriod = "prior_period"
-    static let unrelated = "unrelated"
-    static let optionKeys = [excludedFromTotal, includedInTotal, priorPeriod, unrelated]
-}
-
-struct ResearchAndDevelopmentProseTotal: Equatable, Sendable {
-    var yen: Double
-    var warnings: [String]
-    var audit: SegmentNoteJevAuditPayload
-}
-
-enum ResearchAndDevelopmentProseDecision: Equatable, Sendable {
-    case applied(ResearchAndDevelopmentProseTotal)
-    case notApplied
-    /// 応答が無い。行は作らず、次回の欠測 ingest で再試行する。
-    case unavailable
-}
+typealias ResearchAndDevelopmentProseRole = BreakdownProseRole
+typealias ResearchAndDevelopmentRemainderRole = BreakdownProseRemainderRole
+typealias ResearchAndDevelopmentExclusionRole = BreakdownProseExclusionRole
+typealias ResearchAndDevelopmentProseCandidate = BreakdownProseCandidate
+typealias ResearchAndDevelopmentProseChoice = BreakdownProseChoice
+typealias ResearchAndDevelopmentProseDeciding = BreakdownProseDeciding
+typealias ResearchAndDevelopmentProseTotal = BreakdownProseTotal
+typealias ResearchAndDevelopmentProseDecision = BreakdownProseDecision
 
 enum ResearchAndDevelopmentProseTotalDecision {
     static let question = "research_and_development_total"
-    static let maxCandidates = 12
-    static let maxSentenceLength = 4_000
-    static let classifyPolicy = JevDecisionPolicy(
-        kind: .classify,
-        question: question,
-        noneOfTheseKey: nil,
-        confidenceThreshold: SegmentNoteDecision.applyProbabilityThreshold)
-    static let remainderPolicy = JevDecisionPolicy(
-        kind: .classify,
-        question: OpenRouterResearchAndDevelopmentProseDecider.remainderQuestion,
-        noneOfTheseKey: nil,
-        confidenceThreshold: SegmentNoteDecision.applyProbabilityThreshold)
-    static let exclusionPolicy = JevDecisionPolicy(
-        kind: .classify,
-        question: OpenRouterResearchAndDevelopmentProseDecider.exclusionQuestion,
-        noneOfTheseKey: nil,
-        confidenceThreshold: SegmentNoteDecision.applyProbabilityThreshold)
+    static let maxCandidates = BreakdownProseToolkit.maxCandidates
+    static let maxSentenceLength = BreakdownProseToolkit.maxSentenceLength
+    static let classifyPolicy = BreakdownProseToolkit.classifyPolicy(question: question)
+    static let remainderPolicy = BreakdownProseToolkit.classifyPolicy(
+        question: OpenRouterResearchAndDevelopmentProseDecider.remainderQuestion)
+    static let exclusionPolicy = BreakdownProseToolkit.classifyPolicy(
+        question: OpenRouterResearchAndDevelopmentProseDecider.exclusionQuestion)
+    static let segmentSumFarWarning = "research_and_development_segment_sum_far_from_total"
 
-    private static let notAllocatablePhrases = [
-        "配分することが困難",
-        "配分できない",
-        "関連付けることが困難",
-        "関連付けられない",
-        "関連づけることが困難",
-        "関連づけられない",
-        "セグメント別の記載は行っていません",
-        "セグメント別の記載は行っておりません",
-        "特定のセグメントに関連付けられない",
-        "特定のセグメントに関連づけられない",
-    ]
+    private static let preferredPhrases = ["研究開発費"]
 
     static func activityPlainText(in xbrlDir: URL) -> String? {
         guard let tag = xbrlSections["research_and_development"]?.xbrlElements.first,
             let html = XBRLUtils.extractTextblockHtml(in: xbrlDir, textblockTag: tag)
         else { return nil }
-        let text = plainText(from: html)
+        let text = BreakdownProseToolkit.plainText(from: html)
         return text.isEmpty ? nil : text
     }
 
     static func plainText(from html: String) -> String {
-        guard let document = try? SwiftSoup.parse(html),
-            let text = try? document.text(trimAndNormaliseWhitespace: true)
-        else { return "" }
-        return text
+        BreakdownProseToolkit.plainText(from: html)
     }
 
     /// 1文にちょうど1つの正の金額がある文だけ。長い文と、上限を超えたあとの文は落とす。
     /// 上限を超えるときは「研究開発費」を含む文を先に残す。`limit == nil` は上限なし（差額照合用）。
-    static func candidates(in text: String, limit: Int? = maxCandidates) -> [ResearchAndDevelopmentProseCandidate] {
-        var found: [ResearchAndDevelopmentProseCandidate] = []
-        for sentence in sentences(in: text) {
-            guard let yen = singlePositiveYen(in: sentence) else { continue }
-            found.append(ResearchAndDevelopmentProseCandidate(sentence: sentence, yen: yen))
-        }
-        guard let limit, found.count > limit else { return found }
-        let preferred = found.filter { $0.sentence.contains("研究開発費") }
-        let rest = found.filter { !$0.sentence.contains("研究開発費") }
-        return Array((preferred + rest).prefix(limit))
+    static func candidates(in text: String, limit: Int? = maxCandidates)
+        -> [ResearchAndDevelopmentProseCandidate]
+    {
+        BreakdownProseToolkit.candidates(
+            in: text, preferredPhrases: preferredPhrases, limit: limit)
     }
-
-    static let segmentSumFarWarning = "research_and_development_segment_sum_far_from_total"
 
     /// タグ付きの segment と reconciling が全社合計より 5% 以上少ないときの不足額。
     /// セグメント行が無い合計のみは nil（総額を残り行として二重に載せない）。
     static func shortfall(in snapshot: BreakdownSnapshot) -> Double? {
-        guard snapshot.denominator > 0 else { return nil }
-        let additive = snapshot.rows
-            .filter { $0.rowKind == "segment" || $0.rowKind == "reconciling" }
-            .map(\.amount)
-            .reduce(0, +)
-        let gap = snapshot.denominator - additive
-        guard additive > 0, gap > 0, gap / snapshot.denominator > 0.05 else { return nil }
-        return gap
+        BreakdownProseToolkit.shortfall(
+            denominator: snapshot.denominator, additive: additiveSum(snapshot))
     }
 
     /// 百万円の丸め（日揮の 2百万円、日清製粉の 3百万円）まで。5百万円を超える相対幅は、
     /// 別セグメントの金額を同じ差額として拾う（キヤノン S100VHZZ の 50百万円差）。
     static func matchesShortfall(_ yen: Double, gap: Double) -> Bool {
-        abs(yen - gap) <= 5_000_000
+        BreakdownProseToolkit.matchesShortfall(yen, gap: gap)
     }
 
     /// 億円表記は 0.5億円まで。332億円と注記 33,244百万円（神戸製鋼 S100OAOM）がこれ。
-    static func matchesRoundedProse(_ proseYen: Double, taggedYen: Double, sentence: String) -> Bool {
+    static func matchesRoundedProse(_ proseYen: Double, taggedYen: Double, sentence: String)
+        -> Bool
+    {
         let tolerance: Double = sentence.contains("億円") ? 50_000_000 : 5_000_000
         return abs(proseYen - taggedYen) <= tolerance
     }
@@ -164,25 +83,15 @@ enum ResearchAndDevelopmentProseTotalDecision {
         else { return false }
         let matches = candidates(in: plainText, limit: nil).filter { candidate in
             candidate.sentence.contains("研究開発費")
-                && matchesRoundedProse(candidate.yen, taggedYen: noteYen, sentence: candidate.sentence)
+                && matchesRoundedProse(
+                    candidate.yen, taggedYen: noteYen, sentence: candidate.sentence)
                 && abs(candidate.yen - noteYen) < abs(candidate.yen - extractedYen)
         }
         return matches.count == 1
     }
 
     static func remainderLabel(in sentence: String) -> String {
-        var label = sentence
-        if let range = label.range(of: "は") {
-            label = String(label[..<range.lowerBound])
-        }
-        for prefix in ["なお、", "また、", "ただし、"] where label.hasPrefix(prefix) {
-            label.removeFirst(prefix.count)
-        }
-        label = label.trimmingCharacters(in: .whitespacesAndNewlines)
-        if label.count > 80 {
-            label = String(label.prefix(80))
-        }
-        return label.isEmpty ? "配分不能" : label
+        BreakdownProseToolkit.remainderLabel(in: sentence)
     }
 
     /// 差額と一致する文がちょうど1つで、Jev が配分されていない残りと分類したときだけ行を足す。
@@ -194,49 +103,33 @@ enum ResearchAndDevelopmentProseTotalDecision {
     ) async -> (snapshot: BreakdownSnapshot, audit: SegmentNoteJevAuditPayload?) {
         guard let gap = shortfall(in: snapshot) else { return (snapshot, nil) }
         let pool = candidates(in: plainText, limit: nil)
-        let exact = pool.filter { matchesShortfall($0.yen, gap: gap) }
-        let match: ResearchAndDevelopmentProseCandidate
-        if exact.count == 1, let one = exact.first {
-            match = one
-        } else if exact.isEmpty {
-            let phrase = pool.filter {
-                mentionsNotAllocatableToSegments($0.sentence) && !matchesTaggedRow($0.yen, snapshot: snapshot)
-            }
-            guard phrase.count == 1, let one = phrase.first else { return (snapshot, nil) }
-            match = one
-        } else {
-            return (snapshot, nil)
-        }
-        let result = await JevDecisionSampler.decide(
-            policy: remainderPolicy,
-            options: ResearchAndDevelopmentRemainderRole.optionKeys,
-            sentences: [match.sentence]
-        ) {
-            let choice = await decider.classifyRemainder(sentence: match.sentence)
-            return JevChoiceAggregate.Sample(
-                selected: choice.selected, probability: choice.probability)
-        }
-        let selected = result.selectedKey
-        let applied = selected == ResearchAndDevelopmentRemainderRole.unallocatedRemainder
-        guard applied else { return (snapshot, nil) }
+        guard let match = BreakdownProseToolkit.matchRemainderCandidate(
+            pool: pool, gap: gap,
+            matchesTaggedRow: { matchesTaggedRow($0, snapshot: snapshot) })
+        else { return (snapshot, nil) }
+        guard let result = await BreakdownProseToolkit.acceptedClassification(
+            sentence: match.sentence, policy: remainderPolicy,
+            optionKeys: ResearchAndDevelopmentRemainderRole.optionKeys,
+            appliedKey: ResearchAndDevelopmentRemainderRole.unallocatedRemainder,
+            classify: { await decider.classifyRemainder(sentence: match.sentence) })
+        else { return (snapshot, nil) }
         let filled = snapshotByAddingAdjustment(
             snapshot, yen: match.yen, label: remainderDisplayLabel(in: match.sentence),
             warning: breakdownWarningResearchAndDevelopmentProseRemainder)
         guard !filled.warnings.contains(segmentSumFarWarning) else { return (snapshot, nil) }
-        let call = result.calls
-        let audit = SegmentNoteJevAuditPayload(
-            code: code, docID: docID, axis: breakdownAxisResearchAndDevelopment,
-            model: result.aggregate.model.isEmpty
-                ? Api.openrouterDecisionsModel : result.aggregate.model,
-            threshold: remainderPolicy.auditThreshold,
-            applied: true, needsReview: false,
-            sentences: [match.sentence], calls: call)
-        return (filled, audit)
+        return (
+            filled,
+            BreakdownProseToolkit.appliedSentenceAudit(
+                code: code, docID: docID, axis: breakdownAxisResearchAndDevelopment,
+                result: result, sentence: match.sentence, policy: remainderPolicy)
+        )
     }
 
     static func remainderDisplayLabel(in sentence: String) -> String {
         let label = remainderLabel(in: sentence)
-        if mentionsNotAllocatableToSegments(sentence), !label.contains("研究開発費") {
+        if BreakdownProseToolkit.mentionsNotAllocatableToSegments(sentence),
+            !label.contains("研究開発費")
+        {
             return "配分不能"
         }
         return label
@@ -244,14 +137,8 @@ enum ResearchAndDevelopmentProseTotalDecision {
 
     /// タグ付き合計が全社合計を 5% 以上超える額。
     static func excess(in snapshot: BreakdownSnapshot) -> Double? {
-        guard snapshot.denominator > 0 else { return nil }
-        let additive = snapshot.rows
-            .filter { $0.rowKind == "segment" || $0.rowKind == "reconciling" }
-            .map(\.amount)
-            .reduce(0, +)
-        let over = additive - snapshot.denominator
-        guard additive > 0, over > 0, over / snapshot.denominator > 0.05 else { return nil }
-        return over
+        BreakdownProseToolkit.excess(
+            denominator: snapshot.denominator, additive: additiveSum(snapshot))
     }
 
     /// 総額と、その外の金額が同じ文に1組だけあるときの外の金額。
@@ -259,31 +146,16 @@ enum ResearchAndDevelopmentProseTotalDecision {
     static func exclusionCandidates(
         in text: String, total: Double, excess: Double
     ) -> [ResearchAndDevelopmentProseCandidate] {
-        sentences(in: text).compactMap { sentence in
-            guard exclusionCues.contains(where: { sentence.contains($0) }) else { return nil }
-            let amounts = positiveYenAmounts(in: sentence)
-            let totals = amounts.filter {
-                matchesRoundedProse($0, taggedYen: total, sentence: sentence)
-            }
-            let overs = amounts.filter { matchesShortfall($0, gap: excess) }
-            guard totals.count == 1, overs.count == 1, let yen = overs.first else { return nil }
-            guard !matchesTaggedRow(yen, amounts: [total]) else { return nil }
-            return ResearchAndDevelopmentProseCandidate(sentence: sentence, yen: yen)
-        }
+        BreakdownProseToolkit.exclusionCandidates(
+            in: text, excess: excess,
+            matchesTotal: { yen, sentence in
+                matchesRoundedProse(yen, taggedYen: total, sentence: sentence)
+            },
+            acceptYen: { yen in !matchesTaggedRow(yen, amounts: [total]) })
     }
 
     static func exclusionLabel(in sentence: String) -> String {
-        let normalized = normalizeAmountText(sentence)
-        guard let regex = try? NSRegularExpression(
-            pattern: #"(?:億円|百万円|千円)の([^、。を\s]{1,20})"#)
-        else { return "研究開発費に含まれない費用" }
-        let range = NSRange(normalized.startIndex..., in: normalized)
-        guard let match = regex.firstMatch(in: normalized, range: range),
-            match.numberOfRanges >= 2,
-            let nameRange = Range(match.range(at: 1), in: normalized)
-        else { return "研究開発費に含まれない費用" }
-        let name = String(normalized[nameRange]).trimmingCharacters(in: .whitespacesAndNewlines)
-        return name.isEmpty ? "研究開発費に含まれない費用" : name
+        BreakdownProseToolkit.exclusionLabel(in: sentence, fallback: "研究開発費に含まれない費用")
     }
 
     /// 総額の外と Jev が分類した金額を、負の reconciling 行として足す。既存行は削らない。
@@ -293,45 +165,66 @@ enum ResearchAndDevelopmentProseTotalDecision {
         decider: any ResearchAndDevelopmentProseDeciding
     ) async -> (snapshot: BreakdownSnapshot, audit: SegmentNoteJevAuditPayload?) {
         guard let over = excess(in: snapshot) else { return (snapshot, nil) }
-        let matches = exclusionCandidates(in: plainText, total: snapshot.denominator, excess: over)
+        let matches = exclusionCandidates(
+            in: plainText, total: snapshot.denominator, excess: over)
         guard matches.count == 1, let match = matches.first else { return (snapshot, nil) }
-        let result = await JevDecisionSampler.decide(
-            policy: exclusionPolicy,
-            options: ResearchAndDevelopmentExclusionRole.optionKeys,
-            sentences: [match.sentence]
-        ) {
-            let choice = await decider.classifyExclusion(sentence: match.sentence)
-            return JevChoiceAggregate.Sample(
-                selected: choice.selected, probability: choice.probability)
-        }
-        let selected = result.selectedKey
-        let applied = selected == ResearchAndDevelopmentExclusionRole.excludedFromTotal
-        guard applied else { return (snapshot, nil) }
+        guard let result = await BreakdownProseToolkit.acceptedClassification(
+            sentence: match.sentence, policy: exclusionPolicy,
+            optionKeys: ResearchAndDevelopmentExclusionRole.optionKeys,
+            appliedKey: ResearchAndDevelopmentExclusionRole.excludedFromTotal,
+            classify: { await decider.classifyExclusion(sentence: match.sentence) })
+        else { return (snapshot, nil) }
         let filled = snapshotByAddingAdjustment(
             snapshot, yen: -match.yen, label: exclusionLabel(in: match.sentence),
             warning: breakdownWarningResearchAndDevelopmentProseExclusion)
         guard !filled.warnings.contains(segmentSumFarWarning) else { return (snapshot, nil) }
-        let audit = SegmentNoteJevAuditPayload(
-            code: code, docID: docID, axis: breakdownAxisResearchAndDevelopment,
-            model: result.aggregate.model.isEmpty
-                ? Api.openrouterDecisionsModel : result.aggregate.model,
-            threshold: exclusionPolicy.auditThreshold,
-            applied: true, needsReview: false,
-            sentences: [match.sentence], calls: result.calls)
-        return (filled, audit)
+        return (
+            filled,
+            BreakdownProseToolkit.appliedSentenceAudit(
+                code: code, docID: docID, axis: breakdownAxisResearchAndDevelopment,
+                result: result, sentence: match.sentence, policy: exclusionPolicy)
+        )
     }
 
-    private static let exclusionCues = ["このほか", "この他", "含まない", "含まれない", "除く"]
+    static func mentionsNotAllocatableToSegments(_ text: String) -> Bool {
+        BreakdownProseToolkit.mentionsNotAllocatableToSegments(text)
+    }
+
+    static func decide(
+        plainText: String, code: String = "", docID: String = "",
+        decider: any ResearchAndDevelopmentProseDeciding
+    ) async -> ResearchAndDevelopmentProseDecision {
+        await BreakdownProseToolkit.decideCompanyTotal(
+            plainText: plainText, code: code, docID: docID,
+            axis: breakdownAxisResearchAndDevelopment, preferredPhrases: preferredPhrases,
+            policy: classifyPolicy, decider: decider)
+    }
+
+    static func snapshot(axis: String, total: ResearchAndDevelopmentProseTotal) -> BreakdownSnapshot
+    {
+        BreakdownSnapshot(
+            axis: axis, denominator: total.yen,
+            denominatorTag: breakdownDenominatorTagResearchAndDevelopmentProse,
+            rows: [], sourceKind: breakdownSourceResearchAndDevelopmentProse,
+            needsReview: false, warnings: total.warnings)
+    }
+
+    private static func additiveSum(_ snapshot: BreakdownSnapshot) -> Double {
+        snapshot.rows
+            .filter { BreakdownProseToolkit.isAdditiveRowKind($0.rowKind) }
+            .map(\.amount)
+            .reduce(0, +)
+    }
 
     private static func matchesTaggedRow(_ yen: Double, snapshot: BreakdownSnapshot) -> Bool {
         matchesTaggedRow(
             yen,
-            amounts: snapshot.rows.filter { $0.rowKind == "segment" || $0.rowKind == "reconciling" }
+            amounts: snapshot.rows.filter { BreakdownProseToolkit.isAdditiveRowKind($0.rowKind) }
                 .map(\.amount))
     }
 
     private static func matchesTaggedRow(_ yen: Double, amounts: [Double]) -> Bool {
-        amounts.contains { abs($0 - yen) <= 5_000_000 }
+        BreakdownProseToolkit.matchesTaggedAmount(yen, amounts: amounts)
     }
 
     private static func snapshotByAddingAdjustment(
@@ -343,161 +236,16 @@ enum ResearchAndDevelopmentProseTotalDecision {
                 labelRaw: label, label: label, amount: yen,
                 share: snapshot.denominator > 0 ? yen / snapshot.denominator : nil,
                 profit: nil, rowKind: "reconciling"))
-        var warnings = filled.warnings.filter { $0 != segmentSumFarWarning }
-        let additive = filled.rows
-            .filter { $0.rowKind == "segment" || $0.rowKind == "reconciling" }
-            .map(\.amount)
-            .reduce(0, +)
-        if filled.denominator > 0, additive > 0,
-            abs(additive - filled.denominator) / filled.denominator > 0.05
-        {
-            warnings.append(segmentSumFarWarning)
-        }
-        if !warnings.contains(warning) {
-            warnings.append(warning)
-        }
-        filled.warnings = warnings
-        filled.needsReview = warnings.contains(segmentSumFarWarning)
+        let additive = additiveSum(filled)
+        let adjusted = BreakdownProseToolkit.adjustedWarnings(
+            existing: filled.warnings, farWarningNames: [segmentSumFarWarning],
+            primaryFarWarning: segmentSumFarWarning,
+            stillFar: BreakdownProseToolkit.stillFarFromTotal(
+                denominator: filled.denominator, additive: additive),
+            extraWarning: warning)
+        filled.warnings = adjusted.warnings
+        filled.needsReview = adjusted.needsReview
         return filled
-    }
-
-    static func mentionsNotAllocatableToSegments(_ text: String) -> Bool {
-        notAllocatablePhrases.contains { text.contains($0) }
-    }
-
-    static func decide(
-        plainText: String, code: String = "", docID: String = "",
-        decider: any ResearchAndDevelopmentProseDeciding
-    ) async -> ResearchAndDevelopmentProseDecision {
-        let found = candidates(in: plainText)
-        guard !found.isEmpty else { return .notApplied }
-        var calls: [SegmentNoteJevCallPayload] = []
-        var winners: [ResearchAndDevelopmentProseCandidate] = []
-        for candidate in found {
-            let result = await JevDecisionSampler.decide(
-                policy: classifyPolicy,
-                options: ResearchAndDevelopmentProseRole.optionKeys,
-                sentences: [candidate.sentence]
-            ) {
-                let choice = await decider.classify(sentence: candidate.sentence)
-                return JevChoiceAggregate.Sample(
-                    selected: choice.selected, probability: choice.probability)
-            }
-            if result.isEmpty { return .unavailable }
-            var resultCalls = result.calls
-            let applied = result.selectedKey == ResearchAndDevelopmentProseRole.currentCompanyTotal
-            if !applied {
-                for index in resultCalls.indices { resultCalls[index].applied = false }
-            }
-            calls.append(contentsOf: resultCalls)
-            if applied { winners.append(candidate) }
-        }
-        guard winners.count == 1, let winner = winners.first else { return .notApplied }
-        var warnings: [String] = []
-        if mentionsNotAllocatableToSegments(plainText) {
-            warnings.append(breakdownWarningNotAllocatableToSegments)
-        }
-        let audit = SegmentNoteJevAuditPayload(
-            code: code, docID: docID, axis: breakdownAxisResearchAndDevelopment,
-            model: Api.openrouterDecisionsModel,
-            threshold: SegmentNoteDecision.applyProbabilityThreshold,
-            applied: true, needsReview: false,
-            sentences: found.map(\.sentence), calls: calls)
-        return .applied(
-            ResearchAndDevelopmentProseTotal(yen: winner.yen, warnings: warnings, audit: audit))
-    }
-
-    static func snapshot(axis: String, total: ResearchAndDevelopmentProseTotal) -> BreakdownSnapshot {
-        BreakdownSnapshot(
-            axis: axis, denominator: total.yen,
-            denominatorTag: breakdownDenominatorTagResearchAndDevelopmentProse,
-            rows: [], sourceKind: breakdownSourceResearchAndDevelopmentProse,
-            needsReview: false, warnings: total.warnings)
-    }
-
-    private static func sentences(in text: String) -> [String] {
-        let flattened = text
-            .replacingOccurrences(of: "\r\n", with: " ")
-            .replacingOccurrences(of: "\n", with: " ")
-            .replacingOccurrences(of: "\r", with: " ")
-        return flattened.components(separatedBy: "。").compactMap { raw in
-            let sentence = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !sentence.isEmpty, sentence.count <= maxSentenceLength else { return nil }
-            return sentence
-        }
-    }
-
-    /// 単位付き金額がちょうど1つで、円換算が正のときだけその金額。
-    private static func singlePositiveYen(in sentence: String) -> Double? {
-        let amounts = positiveYenAmounts(in: sentence)
-        guard amounts.count == 1 else { return nil }
-        return amounts[0]
-    }
-
-    private static func positiveYenAmounts(in sentence: String) -> [Double] {
-        let normalized = normalizeAmountText(sentence)
-        guard let regex = try? NSRegularExpression(
-            pattern: #"([0-9]{1,3}(?:,[0-9]{3})+|[0-9]+)(?:\.([0-9]+))?\s*(億円|百万円|千円)"#)
-        else { return [] }
-        let range = NSRange(normalized.startIndex..., in: normalized)
-        return regex.matches(in: normalized, range: range).compactMap { match in
-            guard match.numberOfRanges >= 4, !hasNegativePrefix(in: normalized, match: match.range) else {
-                return nil
-            }
-            guard let wholeRange = Range(match.range(at: 1), in: normalized),
-                let unitRange = Range(match.range(at: 3), in: normalized)
-            else { return nil }
-            var digits = String(normalized[wholeRange]).replacingOccurrences(of: ",", with: "")
-            if match.range(at: 2).location != NSNotFound,
-                let fractionRange = Range(match.range(at: 2), in: normalized)
-            {
-                digits += "." + String(normalized[fractionRange])
-            }
-            guard let magnitude = Double(digits) else { return nil }
-            return yen(magnitude: magnitude, unit: String(normalized[unitRange]))
-        }
-    }
-
-    private static func yen(magnitude: Double, unit: String) -> Double? {
-        let scale: Double
-        switch unit {
-        case "億円": scale = 100_000_000
-        case "百万円": scale = Financial.millionYen
-        case "千円": scale = 1_000
-        default: return nil
-        }
-        let value = magnitude * scale
-        guard value.isFinite, value > 0 else { return nil }
-        return value
-    }
-
-    private static func hasNegativePrefix(in text: String, match: NSRange) -> Bool {
-        guard let range = Range(match, in: text), range.lowerBound > text.startIndex else { return false }
-        let previous = text[text.index(before: range.lowerBound)]
-        return previous == "△" || previous == "▲" || previous == "-" || previous == "－" || previous == "−"
-    }
-
-    private static func normalizeAmountText(_ text: String) -> String {
-        var scalars: [Unicode.Scalar] = []
-        let chars = Array(text.unicodeScalars)
-        for (index, scalar) in chars.enumerated() {
-            if (0xFF10...0xFF19).contains(scalar.value) {
-                scalars.append(Unicode.Scalar(scalar.value - 0xFF10 + 0x30)!)
-            } else if scalar.value == 0xFF0C {
-                scalars.append(",")
-            } else if scalar.value == 0x3001, index > 0, index + 1 < chars.count,
-                isAmountDigit(chars[index - 1]), isAmountDigit(chars[index + 1])
-            {
-                scalars.append(",")
-            } else {
-                scalars.append(scalar)
-            }
-        }
-        return String(String.UnicodeScalarView(scalars))
-    }
-
-    private static func isAmountDigit(_ scalar: Unicode.Scalar) -> Bool {
-        (0x30...0x39).contains(scalar.value) || (0xFF10...0xFF19).contains(scalar.value)
     }
 }
 
@@ -530,22 +278,13 @@ struct OpenRouterResearchAndDevelopmentProseDecider: ResearchAndDevelopmentProse
             sentence: sentence)
     }
 
-    private func choice(question: String, body: Data?, sentence: String) async -> ResearchAndDevelopmentProseChoice {
-        let unavailable = ResearchAndDevelopmentProseChoice(
-            sentence: sentence, selected: nil, probability: nil)
-        guard let body else { return unavailable }
-        guard let data = await JevDecisionTransport.decide(
-            client: client, requestJSON: body,
+    private func choice(question: String, body: Data?, sentence: String)
+        async -> ResearchAndDevelopmentProseChoice
+    {
+        await BreakdownProseOpenRouter.choice(
+            client: client, question: question, body: body, sentence: sentence,
             retries: ResearchAndDevelopmentProseTotalDecision.classifyPolicy.transportRetries,
             onFailure: "ResearchAndDevelopmentProseTotal: Jev呼び出し失敗")
-        else { return unavailable }
-        guard let choice = OpenRouterDecisionsCodec.answers(from: data)[question]?.choice else {
-            return unavailable
-        }
-        return ResearchAndDevelopmentProseChoice(
-            sentence: sentence, selected: choice.selected,
-            probability: OpenRouterSegmentNoteDecider.selectedProbability(
-                selected: choice.selected, probabilities: choice.probabilities))
     }
 
     static func requestJSON(model: String, sentence: String) -> Data? {
@@ -564,13 +303,11 @@ struct OpenRouterResearchAndDevelopmentProseDecider: ResearchAndDevelopmentProse
                 研究開発費の総額ではない。従業員数、売上、設備投資、割合だけ、注記番号への参照を含む。
                 """,
         ]
-        let questions: [String: Any] = [
-            ResearchAndDevelopmentProseTotalDecision.question: OpenRouterDecisionsCodec.choiceQuestion(
-                instructions: "この文に出てくる金額は、当期の会社全体の研究開発費の総額か。文の意味で一つ選ぶ。金額の数値は選ばない。",
-                criteria: criteria),
-        ]
-        return OpenRouterDecisionsCodec.requestJSON(
-            model: model, state: ["sentence": sentence], questions: questions)
+        return BreakdownProseOpenRouter.requestJSON(
+            model: model, question: ResearchAndDevelopmentProseTotalDecision.question,
+            sentence: sentence,
+            instructions: "この文に出てくる金額は、当期の会社全体の研究開発費の総額か。文の意味で一つ選ぶ。金額の数値は選ばない。",
+            criteria: criteria)
     }
 
     static func remainderRequestJSON(model: String, sentence: String) -> Data? {
@@ -590,13 +327,10 @@ struct OpenRouterResearchAndDevelopmentProseDecider: ResearchAndDevelopmentProse
                 研究開発費の残りではない。売上、従業員数、設備投資、割合だけ、注記番号への参照を含む。
                 """,
         ]
-        let questions: [String: Any] = [
-            remainderQuestion: OpenRouterDecisionsCodec.choiceQuestion(
-                instructions: "この文の金額は、報告セグメントに配分されていない当期の研究開発費の残りか。文の意味で一つ選ぶ。金額の数値は選ばない。",
-                criteria: criteria),
-        ]
-        return OpenRouterDecisionsCodec.requestJSON(
-            model: model, state: ["sentence": sentence], questions: questions)
+        return BreakdownProseOpenRouter.requestJSON(
+            model: model, question: remainderQuestion, sentence: sentence,
+            instructions: "この文の金額は、報告セグメントに配分されていない当期の研究開発費の残りか。文の意味で一つ選ぶ。金額の数値は選ばない。",
+            criteria: criteria)
     }
 
     static func exclusionRequestJSON(model: String, sentence: String) -> Data? {
@@ -615,12 +349,9 @@ struct OpenRouterResearchAndDevelopmentProseDecider: ResearchAndDevelopmentProse
                 研究開発費の総額の外の支出ではない。売上、従業員数、設備投資、割合だけを含む。
                 """,
         ]
-        let questions: [String: Any] = [
-            exclusionQuestion: OpenRouterDecisionsCodec.choiceQuestion(
-                instructions: "研究開発費の総額と一緒に出てくるもう一つの金額は、その総額の外の支出か。文の意味で一つ選ぶ。金額の数値は選ばない。",
-                criteria: criteria),
-        ]
-        return OpenRouterDecisionsCodec.requestJSON(
-            model: model, state: ["sentence": sentence], questions: questions)
+        return BreakdownProseOpenRouter.requestJSON(
+            model: model, question: exclusionQuestion, sentence: sentence,
+            instructions: "研究開発費の総額と一緒に出てくるもう一つの金額は、その総額の外の支出か。文の意味で一つ選ぶ。金額の数値は選ばない。",
+            criteria: criteria)
     }
 }

@@ -2,62 +2,18 @@
 // SegmentNoteDecision の表 Choice / 省略 Choice には載せない。
 // 埋めるのは会社全体の総額（Overview セル）と、タグ付きセグメント行があるときの
 // reconciling だけ。セグメント別セルは埋めない。
+// 文の切り出し・円換算・残り行の照合は BreakdownProseToolkit に置く。
 
 import Foundation
-import SwiftSoup
 
-enum CapexProseRole {
-    static let currentCompanyTotal = "current_company_total"
-    static let priorPeriod = "prior_period"
-    static let partialAmount = "partial_amount"
-    static let unrelated = "unrelated"
-    static let optionKeys = [currentCompanyTotal, priorPeriod, partialAmount, unrelated]
-}
-
-enum CapexRemainderRole {
-    static let unallocatedRemainder = "unallocated_remainder"
-    static let segmentAmount = "segment_amount"
-    static let priorPeriod = "prior_period"
-    static let unrelated = "unrelated"
-    static let optionKeys = [unallocatedRemainder, segmentAmount, priorPeriod, unrelated]
-}
-
-enum CapexExclusionRole {
-    static let excludedFromTotal = "excluded_from_total"
-    static let includedInTotal = "included_in_total"
-    static let priorPeriod = "prior_period"
-    static let unrelated = "unrelated"
-    static let optionKeys = [excludedFromTotal, includedInTotal, priorPeriod, unrelated]
-}
-
-struct CapexProseCandidate: Equatable, Sendable {
-    var sentence: String
-    var yen: Double
-}
-
-struct CapexProseChoice: Equatable, Sendable {
-    var sentence: String
-    var selected: String?
-    var probability: Double?
-}
-
-protocol CapexProseDeciding: Sendable {
-    func classify(sentence: String) async -> CapexProseChoice
-    func classifyRemainder(sentence: String) async -> CapexProseChoice
-    func classifyExclusion(sentence: String) async -> CapexProseChoice
-}
-
-struct CapexProseTotal: Equatable, Sendable {
-    var yen: Double
-    var warnings: [String]
-    var audit: SegmentNoteJevAuditPayload
-}
-
-enum CapexProseDecision: Equatable, Sendable {
-    case applied(CapexProseTotal)
-    case notApplied
-    case unavailable
-}
+typealias CapexProseRole = BreakdownProseRole
+typealias CapexRemainderRole = BreakdownProseRemainderRole
+typealias CapexExclusionRole = BreakdownProseExclusionRole
+typealias CapexProseCandidate = BreakdownProseCandidate
+typealias CapexProseChoice = BreakdownProseChoice
+typealias CapexProseDeciding = BreakdownProseDeciding
+typealias CapexProseTotal = BreakdownProseTotal
+typealias CapexProseDecision = BreakdownProseDecision
 
 enum CapexProseCell: Equatable, Sendable {
     case segmentAssets
@@ -96,40 +52,17 @@ enum CapexProseCell: Equatable, Sendable {
 
 enum CapexProseTotalDecision {
     static let question = "capex_total"
-    static let maxCandidates = 12
-    static let maxSentenceLength = 4_000
-    static let classifyPolicy = JevDecisionPolicy(
-        kind: .classify,
-        question: question,
-        noneOfTheseKey: nil,
-        confidenceThreshold: SegmentNoteDecision.applyProbabilityThreshold)
-    static let remainderPolicy = JevDecisionPolicy(
-        kind: .classify,
-        question: OpenRouterCapexProseDecider.remainderQuestion,
-        noneOfTheseKey: nil,
-        confidenceThreshold: SegmentNoteDecision.applyProbabilityThreshold)
-    static let exclusionPolicy = JevDecisionPolicy(
-        kind: .classify,
-        question: OpenRouterCapexProseDecider.exclusionQuestion,
-        noneOfTheseKey: nil,
-        confidenceThreshold: SegmentNoteDecision.applyProbabilityThreshold)
+    static let maxCandidates = BreakdownProseToolkit.maxCandidates
+    static let maxSentenceLength = BreakdownProseToolkit.maxSentenceLength
+    static let classifyPolicy = BreakdownProseToolkit.classifyPolicy(question: question)
+    static let remainderPolicy = BreakdownProseToolkit.classifyPolicy(
+        question: OpenRouterCapexProseDecider.remainderQuestion)
+    static let exclusionPolicy = BreakdownProseToolkit.classifyPolicy(
+        question: OpenRouterCapexProseDecider.exclusionQuestion)
 
     private static let overviewTextBlockTags = [
         "OverviewOfCapitalExpendituresEtcOwnUsedAssetsLEATextBlock",
         "OverviewOfCapitalExpendituresEtcTextBlock",
-    ]
-
-    private static let notAllocatablePhrases = [
-        "配分することが困難",
-        "配分できない",
-        "関連付けることが困難",
-        "関連付けられない",
-        "関連づけることが困難",
-        "関連づけられない",
-        "セグメント別の記載は行っていません",
-        "セグメント別の記載は行っておりません",
-        "特定のセグメントに関連付けられない",
-        "特定のセグメントに関連づけられない",
     ]
 
     private static let preferredPhrases = ["設備投資", "資本的支出", "固定資産"]
@@ -139,78 +72,32 @@ enum CapexProseTotalDecision {
             guard let html = XBRLUtils.extractTextblockHtml(in: xbrlDir, textblockTag: tag) else {
                 continue
             }
-            let text = plainText(from: html)
+            let text = BreakdownProseToolkit.plainText(from: html)
             if !text.isEmpty { return text }
         }
         return nil
     }
 
     static func plainText(from html: String) -> String {
-        guard let document = try? SwiftSoup.parse(html),
-            let text = try? document.text(trimAndNormaliseWhitespace: true)
-        else { return "" }
-        return text
+        BreakdownProseToolkit.plainText(from: html)
     }
 
     static func candidates(in text: String, limit: Int? = maxCandidates) -> [CapexProseCandidate] {
-        var found: [CapexProseCandidate] = []
-        for sentence in sentences(in: text) {
-            guard let yen = singlePositiveYen(in: sentence) else { continue }
-            found.append(CapexProseCandidate(sentence: sentence, yen: yen))
-        }
-        guard let limit, found.count > limit else { return found }
-        let preferred = found.filter { candidate in
-            preferredPhrases.contains { candidate.sentence.contains($0) }
-        }
-        let rest = found.filter { candidate in
-            !preferredPhrases.contains { candidate.sentence.contains($0) }
-        }
-        return Array((preferred + rest).prefix(limit))
+        BreakdownProseToolkit.candidates(
+            in: text, preferredPhrases: preferredPhrases, limit: limit)
     }
 
     static func matchesShortfall(_ yen: Double, gap: Double) -> Bool {
-        abs(yen - gap) <= 5_000_000
+        BreakdownProseToolkit.matchesShortfall(yen, gap: gap)
     }
 
     static func decide(
         plainText: String, code: String = "", docID: String = "",
         decider: any CapexProseDeciding
     ) async -> CapexProseDecision {
-        let found = candidates(in: plainText)
-        guard !found.isEmpty else { return .notApplied }
-        var calls: [SegmentNoteJevCallPayload] = []
-        var winners: [CapexProseCandidate] = []
-        for candidate in found {
-            let result = await JevDecisionSampler.decide(
-                policy: classifyPolicy,
-                options: CapexProseRole.optionKeys,
-                sentences: [candidate.sentence]
-            ) {
-                let choice = await decider.classify(sentence: candidate.sentence)
-                return JevChoiceAggregate.Sample(
-                    selected: choice.selected, probability: choice.probability)
-            }
-            if result.isEmpty { return .unavailable }
-            var resultCalls = result.calls
-            let applied = result.selectedKey == CapexProseRole.currentCompanyTotal
-            if !applied {
-                for index in resultCalls.indices { resultCalls[index].applied = false }
-            }
-            calls.append(contentsOf: resultCalls)
-            if applied { winners.append(candidate) }
-        }
-        guard winners.count == 1, let winner = winners.first else { return .notApplied }
-        var warnings: [String] = []
-        if mentionsNotAllocatableToSegments(plainText) {
-            warnings.append(breakdownWarningNotAllocatableToSegments)
-        }
-        let audit = SegmentNoteJevAuditPayload(
-            code: code, docID: docID, axis: breakdownAxisCapex,
-            model: Api.openrouterDecisionsModel,
-            threshold: SegmentNoteDecision.applyProbabilityThreshold,
-            applied: true, needsReview: false,
-            sentences: found.map(\.sentence), calls: calls)
-        return .applied(CapexProseTotal(yen: winner.yen, warnings: warnings, audit: audit))
+        await BreakdownProseToolkit.decideCompanyTotal(
+            plainText: plainText, code: code, docID: docID, axis: breakdownAxisCapex,
+            preferredPhrases: preferredPhrases, policy: classifyPolicy, decider: decider)
     }
 
     /// タグも表も無い Overview セルへ、当期総額 1 文を載せる。他セルは触らない。
@@ -242,19 +129,15 @@ enum CapexProseTotalDecision {
     }
 
     static func shortfall(in payload: BreakdownSnapshotPayload, cell: CapexProseCell) -> Double? {
-        guard let totals = totals(payload, cell: cell), totals.denominator > 0 else { return nil }
-        let additive = additiveSum(payload, cell: cell)
-        let gap = totals.denominator - additive
-        guard additive > 0, gap > 0, gap / totals.denominator > 0.05 else { return nil }
-        return gap
+        guard let totals = totals(payload, cell: cell) else { return nil }
+        return BreakdownProseToolkit.shortfall(
+            denominator: totals.denominator, additive: additiveSum(payload, cell: cell))
     }
 
     static func excess(in payload: BreakdownSnapshotPayload, cell: CapexProseCell) -> Double? {
-        guard let totals = totals(payload, cell: cell), totals.denominator > 0 else { return nil }
-        let additive = additiveSum(payload, cell: cell)
-        let over = additive - totals.denominator
-        guard additive > 0, over > 0, over / totals.denominator > 0.05 else { return nil }
-        return over
+        guard let totals = totals(payload, cell: cell) else { return nil }
+        return BreakdownProseToolkit.excess(
+            denominator: totals.denominator, additive: additiveSum(payload, cell: cell))
     }
 
     static func fillShortfall(
@@ -263,46 +146,28 @@ enum CapexProseTotalDecision {
     ) async -> (payload: BreakdownSnapshotPayload, audit: SegmentNoteJevAuditPayload?) {
         guard let gap = shortfall(in: payload, cell: cell) else { return (payload, nil) }
         let pool = candidates(in: plainText, limit: nil)
-        let exact = pool.filter { matchesShortfall($0.yen, gap: gap) }
-        let match: CapexProseCandidate
-        if exact.count == 1, let one = exact.first {
-            match = one
-        } else if exact.isEmpty {
-            let phrase = pool.filter {
-                mentionsNotAllocatableToSegments($0.sentence)
-                    && !matchesTaggedRow($0.yen, payload: payload, cell: cell)
-            }
-            guard phrase.count == 1, let one = phrase.first else { return (payload, nil) }
-            match = one
-        } else {
-            return (payload, nil)
-        }
-        let result = await JevDecisionSampler.decide(
-            policy: remainderPolicy,
-            options: CapexRemainderRole.optionKeys,
-            sentences: [match.sentence]
-        ) {
-            let choice = await decider.classifyRemainder(sentence: match.sentence)
-            return JevChoiceAggregate.Sample(
-                selected: choice.selected, probability: choice.probability)
-        }
-        let selected = result.selectedKey
-        let applied = selected == CapexRemainderRole.unallocatedRemainder
-        guard applied else { return (payload, nil) }
+        guard let match = BreakdownProseToolkit.matchRemainderCandidate(
+            pool: pool, gap: gap,
+            matchesTaggedRow: { matchesTaggedRow($0, payload: payload, cell: cell) })
+        else { return (payload, nil) }
+        guard let result = await BreakdownProseToolkit.acceptedClassification(
+            sentence: match.sentence, policy: remainderPolicy,
+            optionKeys: CapexRemainderRole.optionKeys,
+            appliedKey: CapexRemainderRole.unallocatedRemainder,
+            classify: { await decider.classifyRemainder(sentence: match.sentence) })
+        else { return (payload, nil) }
         let filled = payloadByAddingAdjustment(
             payload, cell: cell, yen: match.yen, label: remainderLabel(in: match.sentence),
             warning: breakdownWarningCapexProseRemainder)
         guard !cell.farWarnings(flowMetric: filled.flowMetric).contains(where: {
             filled.warnings.contains($0)
         }) else { return (payload, nil) }
-        let audit = SegmentNoteJevAuditPayload(
-            code: code, docID: docID, axis: breakdownAxisCapex,
-            model: result.aggregate.model.isEmpty
-                ? Api.openrouterDecisionsModel : result.aggregate.model,
-            threshold: remainderPolicy.auditThreshold,
-            applied: true, needsReview: false,
-            sentences: [match.sentence], calls: result.calls)
-        return (filled, audit)
+        return (
+            filled,
+            BreakdownProseToolkit.appliedSentenceAudit(
+                code: code, docID: docID, axis: breakdownAxisCapex,
+                result: result, sentence: match.sentence, policy: remainderPolicy)
+        )
     }
 
     static func fillExclusion(
@@ -315,79 +180,44 @@ enum CapexProseTotalDecision {
         let matches = exclusionCandidates(
             in: plainText, total: totals.denominator, excess: over)
         guard matches.count == 1, let match = matches.first else { return (payload, nil) }
-        let result = await JevDecisionSampler.decide(
-            policy: exclusionPolicy,
-            options: CapexExclusionRole.optionKeys,
-            sentences: [match.sentence]
-        ) {
-            let choice = await decider.classifyExclusion(sentence: match.sentence)
-            return JevChoiceAggregate.Sample(
-                selected: choice.selected, probability: choice.probability)
-        }
-        let selected = result.selectedKey
-        let applied = selected == CapexExclusionRole.excludedFromTotal
-        guard applied else { return (payload, nil) }
+        guard let result = await BreakdownProseToolkit.acceptedClassification(
+            sentence: match.sentence, policy: exclusionPolicy,
+            optionKeys: CapexExclusionRole.optionKeys,
+            appliedKey: CapexExclusionRole.excludedFromTotal,
+            classify: { await decider.classifyExclusion(sentence: match.sentence) })
+        else { return (payload, nil) }
         let filled = payloadByAddingAdjustment(
             payload, cell: cell, yen: -match.yen, label: exclusionLabel(in: match.sentence),
             warning: breakdownWarningCapexProseExclusion)
         guard !cell.farWarnings(flowMetric: filled.flowMetric).contains(where: {
             filled.warnings.contains($0)
         }) else { return (payload, nil) }
-        let audit = SegmentNoteJevAuditPayload(
-            code: code, docID: docID, axis: breakdownAxisCapex,
-            model: result.aggregate.model.isEmpty
-                ? Api.openrouterDecisionsModel : result.aggregate.model,
-            threshold: exclusionPolicy.auditThreshold,
-            applied: true, needsReview: false,
-            sentences: [match.sentence], calls: result.calls)
-        return (filled, audit)
+        return (
+            filled,
+            BreakdownProseToolkit.appliedSentenceAudit(
+                code: code, docID: docID, axis: breakdownAxisCapex,
+                result: result, sentence: match.sentence, policy: exclusionPolicy)
+        )
     }
 
     static func mentionsNotAllocatableToSegments(_ text: String) -> Bool {
-        notAllocatablePhrases.contains { text.contains($0) }
+        BreakdownProseToolkit.mentionsNotAllocatableToSegments(text)
     }
-
-    private static let exclusionCues = ["このほか", "この他", "含まない", "含まれない", "除く"]
 
     private static func exclusionCandidates(
         in text: String, total: Double, excess: Double
     ) -> [CapexProseCandidate] {
-        sentences(in: text).compactMap { sentence in
-            guard exclusionCues.contains(where: { sentence.contains($0) }) else { return nil }
-            let amounts = positiveYenAmounts(in: sentence)
-            let totals = amounts.filter { matchesShortfall($0, gap: total) }
-            let overs = amounts.filter { matchesShortfall($0, gap: excess) }
-            guard totals.count == 1, overs.count == 1, let yen = overs.first else { return nil }
-            return CapexProseCandidate(sentence: sentence, yen: yen)
-        }
+        BreakdownProseToolkit.exclusionCandidates(
+            in: text, excess: excess,
+            matchesTotal: { yen, _ in matchesShortfall(yen, gap: total) })
     }
 
     private static func remainderLabel(in sentence: String) -> String {
-        var label = sentence
-        if let range = label.range(of: "は") {
-            label = String(label[..<range.lowerBound])
-        }
-        for prefix in ["なお、", "また、", "ただし、"] where label.hasPrefix(prefix) {
-            label.removeFirst(prefix.count)
-        }
-        label = label.trimmingCharacters(in: .whitespacesAndNewlines)
-        if mentionsNotAllocatableToSegments(sentence) { return "配分不能" }
-        if label.count > 80 { label = String(label.prefix(80)) }
-        return label.isEmpty ? "配分不能" : label
+        BreakdownProseToolkit.remainderLabel(in: sentence, notAllocatableOverrides: true)
     }
 
     private static func exclusionLabel(in sentence: String) -> String {
-        let normalized = normalizeAmountText(sentence)
-        guard let regex = try? NSRegularExpression(
-            pattern: #"(?:億円|百万円|千円)の([^、。を\s]{1,20})"#)
-        else { return "総額に含まれない支出" }
-        let range = NSRange(normalized.startIndex..., in: normalized)
-        guard let match = regex.firstMatch(in: normalized, range: range),
-            match.numberOfRanges >= 2,
-            let nameRange = Range(match.range(at: 1), in: normalized)
-        else { return "総額に含まれない支出" }
-        let name = String(normalized[nameRange]).trimmingCharacters(in: .whitespacesAndNewlines)
-        return name.isEmpty ? "総額に含まれない支出" : name
+        BreakdownProseToolkit.exclusionLabel(in: sentence, fallback: "総額に含まれない支出")
     }
 
     private static func payloadByAddingAdjustment(
@@ -403,20 +233,16 @@ enum CapexProseTotalDecision {
         case .overview: row.capitalExpendituresOverview = yen
         }
         filled.rows.append(row)
-        var warnings = filled.warnings.filter { warning in
-            !cell.farWarnings(flowMetric: filled.flowMetric).contains(warning)
-        }
-        if let totals = totals(filled, cell: cell), totals.denominator > 0 {
-            let additive = additiveSum(filled, cell: cell)
-            if additive > 0, abs(additive - totals.denominator) / totals.denominator > 0.05 {
-                warnings.append(cell.farWarning)
-            }
-        }
-        if !warnings.contains(warning) { warnings.append(warning) }
-        filled.warnings = warnings
-        filled.needsReview = cell.farWarnings(flowMetric: filled.flowMetric).contains {
-            warnings.contains($0)
-        }
+        let denominator = totals(filled, cell: cell)?.denominator ?? 0
+        let adjusted = BreakdownProseToolkit.adjustedWarnings(
+            existing: filled.warnings,
+            farWarningNames: cell.farWarnings(flowMetric: filled.flowMetric),
+            primaryFarWarning: cell.farWarning,
+            stillFar: BreakdownProseToolkit.stillFarFromTotal(
+                denominator: denominator, additive: additiveSum(filled, cell: cell)),
+            extraWarning: warning)
+        filled.warnings = adjusted.warnings
+        filled.needsReview = adjusted.needsReview
         return filled
     }
 
@@ -442,7 +268,7 @@ enum CapexProseTotalDecision {
         _ payload: BreakdownSnapshotPayload, cell: CapexProseCell
     ) -> Double {
         payload.rows
-            .filter { $0.rowKind == "segment" || $0.rowKind == "reconciling" }
+            .filter { BreakdownProseToolkit.isAdditiveRowKind($0.rowKind) }
             .compactMap { cellAmount($0, cell: cell) }
             .reduce(0, +)
     }
@@ -450,96 +276,11 @@ enum CapexProseTotalDecision {
     private static func matchesTaggedRow(
         _ yen: Double, payload: BreakdownSnapshotPayload, cell: CapexProseCell
     ) -> Bool {
-        payload.rows
-            .filter { $0.rowKind == "segment" || $0.rowKind == "reconciling" }
-            .compactMap { cellAmount($0, cell: cell) }
-            .contains { abs($0 - yen) <= 5_000_000 }
-    }
-
-    private static func sentences(in text: String) -> [String] {
-        let flattened = text
-            .replacingOccurrences(of: "\r\n", with: " ")
-            .replacingOccurrences(of: "\n", with: " ")
-            .replacingOccurrences(of: "\r", with: " ")
-        return flattened.components(separatedBy: "。").compactMap { raw in
-            let sentence = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !sentence.isEmpty, sentence.count <= maxSentenceLength else { return nil }
-            return sentence
-        }
-    }
-
-    private static func singlePositiveYen(in sentence: String) -> Double? {
-        let amounts = positiveYenAmounts(in: sentence)
-        guard amounts.count == 1 else { return nil }
-        return amounts[0]
-    }
-
-    private static func positiveYenAmounts(in sentence: String) -> [Double] {
-        let normalized = normalizeAmountText(sentence)
-        guard let regex = try? NSRegularExpression(
-            pattern: #"([0-9]{1,3}(?:,[0-9]{3})+|[0-9]+)(?:\.([0-9]+))?\s*(億円|百万円|千円)"#)
-        else { return [] }
-        let range = NSRange(normalized.startIndex..., in: normalized)
-        return regex.matches(in: normalized, range: range).compactMap { match in
-            guard match.numberOfRanges >= 4, !hasNegativePrefix(in: normalized, match: match.range)
-            else { return nil }
-            guard let wholeRange = Range(match.range(at: 1), in: normalized),
-                let unitRange = Range(match.range(at: 3), in: normalized)
-            else { return nil }
-            var digits = String(normalized[wholeRange]).replacingOccurrences(of: ",", with: "")
-            if match.range(at: 2).location != NSNotFound,
-                let fractionRange = Range(match.range(at: 2), in: normalized)
-            {
-                digits += "." + String(normalized[fractionRange])
-            }
-            guard let magnitude = Double(digits) else { return nil }
-            return yen(magnitude: magnitude, unit: String(normalized[unitRange]))
-        }
-    }
-
-    private static func yen(magnitude: Double, unit: String) -> Double? {
-        let scale: Double
-        switch unit {
-        case "億円": scale = 100_000_000
-        case "百万円": scale = Financial.millionYen
-        case "千円": scale = 1_000
-        default: return nil
-        }
-        let value = magnitude * scale
-        guard value.isFinite, value > 0 else { return nil }
-        return value
-    }
-
-    private static func hasNegativePrefix(in text: String, match: NSRange) -> Bool {
-        guard let range = Range(match, in: text), range.lowerBound > text.startIndex else {
-            return false
-        }
-        let previous = text[text.index(before: range.lowerBound)]
-        return previous == "△" || previous == "▲" || previous == "-" || previous == "－"
-            || previous == "−"
-    }
-
-    private static func normalizeAmountText(_ text: String) -> String {
-        var scalars: [Unicode.Scalar] = []
-        let chars = Array(text.unicodeScalars)
-        for (index, scalar) in chars.enumerated() {
-            if (0xFF10...0xFF19).contains(scalar.value) {
-                scalars.append(Unicode.Scalar(scalar.value - 0xFF10 + 0x30)!)
-            } else if scalar.value == 0xFF0C {
-                scalars.append(",")
-            } else if scalar.value == 0x3001, index > 0, index + 1 < chars.count,
-                isAmountDigit(chars[index - 1]), isAmountDigit(chars[index + 1])
-            {
-                scalars.append(",")
-            } else {
-                scalars.append(scalar)
-            }
-        }
-        return String(String.UnicodeScalarView(scalars))
-    }
-
-    private static func isAmountDigit(_ scalar: Unicode.Scalar) -> Bool {
-        (0x30...0x39).contains(scalar.value) || (0xFF10...0xFF19).contains(scalar.value)
+        BreakdownProseToolkit.matchesTaggedAmount(
+            yen,
+            amounts: payload.rows
+                .filter { BreakdownProseToolkit.isAdditiveRowKind($0.rowKind) }
+                .compactMap { cellAmount($0, cell: cell) })
     }
 }
 
@@ -569,20 +310,10 @@ struct OpenRouterCapexProseDecider: CapexProseDeciding {
     }
 
     private func choice(question: String, body: Data?, sentence: String) async -> CapexProseChoice {
-        let unavailable = CapexProseChoice(sentence: sentence, selected: nil, probability: nil)
-        guard let body else { return unavailable }
-        guard let data = await JevDecisionTransport.decide(
-            client: client, requestJSON: body,
+        await BreakdownProseOpenRouter.choice(
+            client: client, question: question, body: body, sentence: sentence,
             retries: CapexProseTotalDecision.classifyPolicy.transportRetries,
             onFailure: "CapexProseTotal: Jev呼び出し失敗")
-        else { return unavailable }
-        guard let choice = OpenRouterDecisionsCodec.answers(from: data)[question]?.choice else {
-            return unavailable
-        }
-        return CapexProseChoice(
-            sentence: sentence, selected: choice.selected,
-            probability: OpenRouterSegmentNoteDecider.selectedProbability(
-                selected: choice.selected, probabilities: choice.probabilities))
     }
 
     static func requestJSON(model: String, sentence: String) -> Data? {
@@ -602,13 +333,10 @@ struct OpenRouterCapexProseDecider: CapexProseDeciding {
                 設備投資の総額ではない。従業員数、売上、研究開発費、割合だけ、注記番号への参照を含む。
                 """,
         ]
-        let questions: [String: Any] = [
-            CapexProseTotalDecision.question: OpenRouterDecisionsCodec.choiceQuestion(
-                instructions: "この文に出てくる金額は、当期の会社全体の設備投資の総額か。文の意味で一つ選ぶ。金額の数値は選ばない。",
-                criteria: criteria),
-        ]
-        return OpenRouterDecisionsCodec.requestJSON(
-            model: model, state: ["sentence": sentence], questions: questions)
+        return BreakdownProseOpenRouter.requestJSON(
+            model: model, question: CapexProseTotalDecision.question, sentence: sentence,
+            instructions: "この文に出てくる金額は、当期の会社全体の設備投資の総額か。文の意味で一つ選ぶ。金額の数値は選ばない。",
+            criteria: criteria)
     }
 
     static func remainderRequestJSON(model: String, sentence: String) -> Data? {
@@ -627,13 +355,10 @@ struct OpenRouterCapexProseDecider: CapexProseDeciding {
                 設備投資の残りではない。売上、従業員数、研究開発費、割合だけ、注記番号への参照を含む。
                 """,
         ]
-        let questions: [String: Any] = [
-            remainderQuestion: OpenRouterDecisionsCodec.choiceQuestion(
-                instructions: "この文の金額は、報告セグメントに配分されていない当期の設備投資の残りか。文の意味で一つ選ぶ。金額の数値は選ばない。",
-                criteria: criteria),
-        ]
-        return OpenRouterDecisionsCodec.requestJSON(
-            model: model, state: ["sentence": sentence], questions: questions)
+        return BreakdownProseOpenRouter.requestJSON(
+            model: model, question: remainderQuestion, sentence: sentence,
+            instructions: "この文の金額は、報告セグメントに配分されていない当期の設備投資の残りか。文の意味で一つ選ぶ。金額の数値は選ばない。",
+            criteria: criteria)
     }
 
     static func exclusionRequestJSON(model: String, sentence: String) -> Data? {
@@ -652,12 +377,9 @@ struct OpenRouterCapexProseDecider: CapexProseDeciding {
                 設備投資の総額の外の支出ではない。売上、従業員数、研究開発費、割合だけを含む。
                 """,
         ]
-        let questions: [String: Any] = [
-            exclusionQuestion: OpenRouterDecisionsCodec.choiceQuestion(
-                instructions: "設備投資の総額と一緒に出てくるもう一つの金額は、その総額の外の支出か。文の意味で一つ選ぶ。金額の数値は選ばない。",
-                criteria: criteria),
-        ]
-        return OpenRouterDecisionsCodec.requestJSON(
-            model: model, state: ["sentence": sentence], questions: questions)
+        return BreakdownProseOpenRouter.requestJSON(
+            model: model, question: exclusionQuestion, sentence: sentence,
+            instructions: "設備投資の総額と一緒に出てくるもう一つの金額は、その総額の外の支出か。文の意味で一つ選ぶ。金額の数値は選ばない。",
+            criteria: criteria)
     }
 }
