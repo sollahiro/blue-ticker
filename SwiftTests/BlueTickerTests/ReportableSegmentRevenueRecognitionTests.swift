@@ -93,6 +93,57 @@ import Foundation
             !ReportableSegmentRevenueRecognition.tablesMatchFacts([table], facts: geographyFacts()))
     }
 
+    @Test func carryFactsOnSwapOnlyWhenRevenueRecognitionRowsMatchSegments() {
+        let yen = Financial.millionYen
+        func fact(tag: String, member: String, value: Double) -> BreakdownFact {
+            BreakdownFact(
+                tag: tag, contextRef: "CurrentYearDuration_\(member)",
+                dimensions: ["OperatingSegmentsAxis": member], value: value,
+                label: nil, unitRef: "JPY", decimals: "-6")
+        }
+        let japan = "JapanEastAsiaReportableSegmentMember"
+        let europe = "EuropeReportableSegmentMember"
+        let segmentResult = ExtractedBreakdown(
+            method: "xbrl_facts", tables: [],
+            facts: [
+                fact(tag: "SalesToExternalCustomersIFRS", member: japan, value: 1_234 * yen),
+                fact(tag: "SalesToExternalCustomersIFRS", member: europe, value: 2_000 * yen),
+                fact(tag: "OperatingProfitLossIFRS", member: japan, value: 62_584 * yen),
+                fact(tag: "OperatingProfitLossIFRS", member: europe, value: 79_386 * yen),
+            ]
+        )
+        let labels = [
+            japan: "日本・東アジア",
+            europe: "欧州",
+        ]
+        let matching = BreakdownTable(
+            heading: BreakdownExtractor.revenueRecognitionHeading,
+            markdown: """
+            | 区分 | 酒類 | 合計 |
+            | 日本・東アジア | 800 | 1,234 |
+            | 欧州 | 1,200 | 2,000 |
+            | 合計 | 2,000 | 3,234 |
+            """,
+            period: "当期",
+            unitCaption: "百万円"
+        )
+        let productRows = BreakdownTable(
+            heading: BreakdownExtractor.revenueRecognitionHeading,
+            markdown: """
+            | 区分 | 当期 |
+            | ＮＣ旋盤 | 34,304 |
+            """,
+            period: "当期",
+            unitCaption: "百万円"
+        )
+        #expect(
+            ReportableSegmentRevenueRecognition.shouldCarryFactsOnRevenueRecognitionSwap(
+                segmentResult: segmentResult, rrTables: [matching], labelsByTag: labels))
+        #expect(
+            !ReportableSegmentRevenueRecognition.shouldCarryFactsOnRevenueRecognitionSwap(
+                segmentResult: segmentResult, rrTables: [productRows], labelsByTag: labels))
+    }
+
     private func geographyFacts() -> BreakdownSnapshot {
         BreakdownSnapshot(
             axis: "geography",

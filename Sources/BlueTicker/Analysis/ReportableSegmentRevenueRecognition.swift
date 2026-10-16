@@ -6,6 +6,18 @@
 import Foundation
 
 enum ReportableSegmentRevenueRecognition {
+    /// オークマ型（収益認識の行が製品）では facts を捨てる。アサヒ FY2025 型
+    /// （行が報告セグメントと同じラベル・同じ開示金額で、facts に利益がある）だけ残す。
+    static func shouldCarryFactsOnRevenueRecognitionSwap(
+        segmentResult: ExtractedBreakdown,
+        rrTables: [BreakdownTable],
+        labelsByTag: [String: String]
+    ) -> Bool {
+        guard let facts = factsSnapshotForMatch(from: segmentResult, labelsByTag: labelsByTag)
+        else { return false }
+        return tablesMatchFacts(rrTables, facts: facts)
+    }
+
     /// 収益認識スナップショットのセグメント行が、報告セグメント facts と名前・金額とも一致し、
     /// facts 側に利益があるとき、axis を product_service にした facts を返す。
     static func preferFactsIfSameBreakdown(
@@ -46,6 +58,26 @@ enum ReportableSegmentRevenueRecognition {
         facts.axis == "geography"
             && !facts.needsReview
             && facts.rows.contains { $0.rowKind == "segment" && $0.profit != nil }
+    }
+
+    private static func factsSnapshotForMatch(
+        from result: ExtractedBreakdown, labelsByTag: [String: String]
+    ) -> BreakdownSnapshot? {
+        let sales = result.facts.reduce(into: 0.0) { sum, fact in
+            guard Xbrl.segmentExternalRevenueTags.contains(fact.tag),
+                  BreakdownNormalizer.isCurrentPeriodContext(fact.contextRef),
+                  let member = XBRLUtils.primaryBreakdownMember(fact.dimensions),
+                  !Xbrl.segmentSubtotalMemberNames.contains(member),
+                  !Xbrl.segmentReconcilingMemberNames.contains(member)
+            else { return }
+            sum += fact.value
+        }
+        guard sales != 0 else { return nil }
+        return BreakdownNormalizer.normalize(
+            ExtractedBreakdown(
+                method: "xbrl_facts", tables: result.tables, facts: result.facts,
+                rowLabelsByTag: result.rowLabelsByTag),
+            consolidatedSales: sales, labelsByTag: labelsByTag)
     }
 
     private static func factsReconcile(_ facts: BreakdownSnapshot, with rr: BreakdownSnapshot) -> Bool {

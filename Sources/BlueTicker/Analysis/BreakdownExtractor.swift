@@ -297,11 +297,16 @@ enum BreakdownExtractor {
                     (tablesContainSalesEquivalent(result.tables) && !rrSubstantive)
                     || (hasProductTables && (rrContractStub || !rrSubstantive))
                 if !keepSegmentSide {
-                    // 報告セグメント facts は捨てない。収益認識の行が同じ内訳なら
-                    // BusinessBreakdownResolver が利益・調整行付きの facts を product_service に載せる。
+                    // オークマ型（行が NC旋盤 等の別次元）は facts を捨て html_table のまま。
+                    // 行が報告セグメントと同じ内訳なら facts を残し、リゾルバが利益・調整行を載せる。
                     var swapped = revenueRecognition
-                    swapped.facts = result.facts
-                    swapped.rowLabelsByTag = result.rowLabelsByTag
+                    if ReportableSegmentRevenueRecognition.shouldCarryFactsOnRevenueRecognitionSwap(
+                        segmentResult: result, rrTables: revenueRecognition.tables,
+                        labelsByTag: XBRLUtils.loadLabelsByTag(in: xbrlDir))
+                    {
+                        swapped.facts = result.facts
+                        swapped.rowLabelsByTag = result.rowLabelsByTag
+                    }
                     return swapped
                 }
             }

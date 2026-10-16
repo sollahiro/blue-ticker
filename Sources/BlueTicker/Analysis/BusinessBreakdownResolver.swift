@@ -6,9 +6,9 @@
 // 収益認識の Jev 列選択 / セグメント情報の Jev 列・行選択）に振り分けるかだけを判断する。
 //
 // swap 済みの html_table は見出しが `BreakdownExtractor.revenueRecognitionHeading`
-// （`extractRevenueRecognitionInfo` の dedicatedHeading）で判別できる。swap は facts を
-// 残す。収益認識の行が報告セグメントと名前・金額とも一致し利益があるときは
-// `ReportableSegmentRevenueRecognition` が facts を product_service に載せる。
+// （`extractRevenueRecognitionInfo` の dedicatedHeading）で判別できる。オークマ型は
+// facts を捨てる。収益認識の行が報告セグメントと名前・金額とも一致し利益があるときだけ
+// facts を残し、`ReportableSegmentRevenueRecognition` が product_service に載せる。
 // それ以外の html_table（例: キヤノンの US-GAAP 注23）は `SegmentInfoLLMNormalizer` に回す。
 // 見出し文字列は `BreakdownExtractor` 側の単一の真実源を参照する。
 
