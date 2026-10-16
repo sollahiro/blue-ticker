@@ -357,4 +357,118 @@ import Foundation
         #expect(snapshot == nil)
         #expect(source == .notFound)
     }
+
+    /// 収益認識の行が報告セグメントと同じ内訳・同じ開示金額なら、LLM 無しでも
+    /// geography facts を product_service に載せ、利益と調整行を残す。
+    @Test func geographyFactsWinWhenRevenueRecognitionRowsMatchSegments() async throws {
+        let yen = Financial.millionYen
+        let segments = ExtractedBreakdown(
+            method: "html_table",
+            tables: [Self.matchingRegionRevenueTable()],
+            facts: Self.japanEuropeFacts(japanSales: 1_234 * yen, europeSales: 2_000 * yen)
+        )
+        let (snapshot, source, _) = await BusinessBreakdownResolver.resolve(
+            segments: segments, consolidatedSales: 3_234 * yen,
+            labelsByTag: Self.japanEuropeLabels
+        )
+
+        #expect(source == .xbrlFacts)
+        let snap = try #require(snapshot)
+        #expect(snap.axis == breakdownAxisProductService)
+        #expect(snap.sourceKind == "xbrl_facts")
+        func profitMillion(_ label: String) -> Double? {
+            snap.rows.first { ($0.label ?? $0.labelRaw) == label }?.profit.map { $0 / yen }
+        }
+        #expect(profitMillion("日本・東アジア") == 62_584)
+        #expect(profitMillion("欧州") == 79_386)
+        #expect(
+            snap.rows.contains { $0.rowKind == "reconciling" && $0.profit == -23_592 * yen })
+        #expect(
+            snap.rows.contains {
+                $0.labelRaw == Xbrl.entityTotalMemberName && $0.profit == 185_870 * yen
+            })
+    }
+
+    /// 収益認識の行が酒類・飲料なら、同じ売上合計でも facts に切り替えない。
+    @Test func productRowRevenueRecognitionIsKeptWhenLabelsDifferFromSegments() async throws {
+        let yen = Financial.millionYen
+        let table = BreakdownTable(
+            heading: BreakdownExtractor.revenueRecognitionHeading,
+            markdown: """
+            | 区分 | 当期 |
+            | 酒類 | 1,234 |
+            | 飲料 | 2,000 |
+            | 合計 | 3,234 |
+            """,
+            period: "当期",
+            unitCaption: "百万円"
+        )
+        let segments = ExtractedBreakdown(
+            method: "html_table",
+            tables: [table],
+            facts: Self.japanEuropeFacts(japanSales: 1_234 * yen, europeSales: 2_000 * yen)
+        )
+        let decider = FakeRevenueRecognitionColumnDecider()
+        let (snapshot, source, _) = await BusinessBreakdownResolver.resolve(
+            segments: segments, consolidatedSales: 3_234 * yen,
+            labelsByTag: Self.japanEuropeLabels, columnDecider: decider
+        )
+
+        #expect(source == .revenueRecognitionLLM)
+        let snap = try #require(snapshot)
+        let labels = Set(snap.rows.map { $0.label ?? $0.labelRaw })
+        #expect(labels.contains("酒類"))
+        #expect(labels.contains("飲料"))
+        #expect(snap.rows.allSatisfy { $0.profit == nil })
+    }
+
+    private static let japanEuropeLabels: [String: String] = [
+        "JapanEastAsiaReportableSegmentMember": "日本・東アジア",
+        "EuropeReportableSegmentMember": "欧州",
+        "ReconcilingItemsMember": "調整額",
+        "ReportableSegmentsMember": "計",
+        Xbrl.entityTotalMemberName: "連結",
+    ]
+
+    private static func matchingRegionRevenueTable() -> BreakdownTable {
+        BreakdownTable(
+            heading: BreakdownExtractor.revenueRecognitionHeading,
+            markdown: """
+            | 区分 | 酒類 | 合計 |
+            | 日本・東アジア | 800 | 1,234 |
+            | 欧州 | 1,200 | 2,000 |
+            | 合計 | 2,000 | 3,234 |
+            """,
+            period: "当期",
+            unitCaption: "百万円"
+        )
+    }
+
+    private static func japanEuropeFacts(japanSales: Double, europeSales: Double) -> [BreakdownFact] {
+        let yen = Financial.millionYen
+        func fact(
+            tag: String, member: String?, value: Double
+        ) -> BreakdownFact {
+            var dimensions: [String: String] = [:]
+            if let member {
+                dimensions["OperatingSegmentsAxis"] = member
+            }
+            let ctx = member.map { "CurrentYearDuration_\($0)" } ?? "CurrentYearDuration"
+            return BreakdownFact(
+                tag: tag, contextRef: ctx, dimensions: dimensions, value: value,
+                label: nil, unitRef: "JPY", decimals: "-6")
+        }
+        return [
+            fact(tag: "SalesToExternalCustomersIFRS", member: "JapanEastAsiaReportableSegmentMember", value: japanSales),
+            fact(tag: "SalesToExternalCustomersIFRS", member: "EuropeReportableSegmentMember", value: europeSales),
+            fact(tag: "SalesToExternalCustomersIFRS", member: "ReportableSegmentsMember", value: japanSales + europeSales),
+            fact(tag: "SalesToExternalCustomersIFRS", member: "ReconcilingItemsMember", value: -100 * yen),
+            fact(tag: "SalesToExternalCustomersIFRS", member: nil, value: japanSales + europeSales - 100 * yen),
+            fact(tag: "OperatingProfitLossIFRS", member: "JapanEastAsiaReportableSegmentMember", value: 62_584 * yen),
+            fact(tag: "OperatingProfitLossIFRS", member: "EuropeReportableSegmentMember", value: 79_386 * yen),
+            fact(tag: "OperatingProfitLossIFRS", member: "ReportableSegmentsMember", value: 209_463 * yen),
+            fact(tag: "OperatingProfitLossIFRS", member: "ReconcilingItemsMember", value: -23_592 * yen),
+            fact(tag: "OperatingProfitLossIFRS", member: nil, value: 185_870 * yen),
+        ]
+    }
 }

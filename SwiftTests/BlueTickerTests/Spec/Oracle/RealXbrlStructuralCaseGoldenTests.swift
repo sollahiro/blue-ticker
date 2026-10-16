@@ -75,4 +75,57 @@ import Foundation
             xbrlDir: Self.xbrlRoot.appendingPathComponent("\(docID)_xbrl"))
         #expect(financials?.netProfit == 1_213_000_000)
     }
+
+    // 2502 アサヒグループHD: 報告セグメントは地域名（日本・東アジア / 欧州 /
+    // アジアパシフィック / その他）だが、収益認識の分解も同じ内訳で製品別マトリクスは無い。
+    // 収益認識へ寄せると売上は合うが profit が null、計 / 調整額 / 連結行が落ちる。
+    // PDF p.149 セグメント利益又は損失（△）。値は百万円。差額埋めはしない。
+    // source: code=2502 fy_end=2025-12-31 doc_id=S100YSGA page=149 field=segment_profit
+    @Test func asahiFY2025ProductServiceKeepsSegmentProfitAndReconcilingRows() async throws {
+        let docID = "S100YSGA"
+        guard await Self.ensureAvailable(docID) else { return }
+        let dir = Self.xbrlRoot.appendingPathComponent("\(docID)_xbrl")
+        let segments = BreakdownExtractor.extractSegmentInfo(xbrlDir: dir)
+        let denom = BreakdownFinancialsResolver.breakdownBusinessSalesDenominatorItem(
+            xbrlDir: dir, tables: segments.tables)
+        let result = await BusinessBreakdownResolver.resolve(
+            segments: segments, consolidatedSales: denom.value,
+            labelsByTag: XBRLUtils.loadLabelsByTag(in: dir), denominatorTag: denom.tag,
+            fiscalYearEnd: BreakdownExtractor.currentFiscalYearEnd(fromXbrlDir: dir),
+            docID: docID)
+        let snapshot = try #require(result.snapshot, "\(docID): product_service snapshot")
+        #expect(snapshot.axis == breakdownAxisProductService)
+        func million(_ row: BreakdownRow) -> Double? {
+            row.profit.map { $0 / Financial.millionYen }
+        }
+        func display(_ row: BreakdownRow) -> String {
+            RevenueRecognitionCandidates.compactCell(row.label ?? row.labelRaw)
+        }
+        var byLabel: [String: Double] = [:]
+        for row in snapshot.rows where row.rowKind == "segment" {
+            if let profit = million(row) { byLabel[display(row)] = profit }
+        }
+        let dumpParts: [String] = snapshot.rows.map { row in
+            let profitText = million(row).map { String($0) } ?? "nil"
+            return "\(display(row)) kind=\(row.rowKind) profit=\(profitText)"
+        }
+        let dump = dumpParts.joined(separator: "; ")
+        #expect(byLabel["日本・東アジア"] == 62_584, Comment(rawValue: dump))
+        #expect(byLabel["欧州"] == 79_386, Comment(rawValue: dump))
+        #expect(byLabel["アジアパシフィック"] == 63_214, Comment(rawValue: dump))
+        #expect(byLabel["その他"] == 4_277, Comment(rawValue: dump))
+        let consolidated = snapshot.rows.first {
+            $0.labelRaw == Xbrl.entityTotalMemberName || $0.rowKind == "EntityTotal"
+                || display($0).contains("連結")
+        }
+        #expect(million(try #require(consolidated)) == 185_870, Comment(rawValue: dump))
+        let reconciling = snapshot.rows.filter { $0.rowKind == "reconciling" }
+        #expect(
+            reconciling.contains { million($0) == -23_592 },
+            Comment(rawValue: dump))
+        let subtotals = snapshot.rows.filter { $0.rowKind == "subtotal" }
+        #expect(
+            subtotals.contains { million($0) == 209_463 },
+            Comment(rawValue: dump))
+    }
 }

@@ -6,10 +6,11 @@
 // 収益認識の Jev 列選択 / セグメント情報の Jev 列・行選択）に振り分けるかだけを判断する。
 //
 // swap 済みの html_table は見出しが `BreakdownExtractor.revenueRecognitionHeading`
-// （`extractRevenueRecognitionInfo` の dedicatedHeading）で判別できる（swap はその
-// ExtractedBreakdown をそのまま返すため）。それ以外の html_table（例: キヤノンの US-GAAP 注23）は
-// `SegmentInfoLLMNormalizer` に回す。見出し文字列は `BreakdownExtractor` 側の単一の真実源を
-// 参照する（同じリテラルをここで再定義すると、抽出側の改名に気づかず追従漏れする恐れがある）。
+// （`extractRevenueRecognitionInfo` の dedicatedHeading）で判別できる。オークマ型は
+// facts を捨てる。収益認識の行が報告セグメントと名前・金額とも一致し利益があるときだけ
+// facts を残し、`ReportableSegmentRevenueRecognition` が product_service に載せる。
+// それ以外の html_table（例: キヤノンの US-GAAP 注23）は `SegmentInfoLLMNormalizer` に回す。
+// 見出し文字列は `BreakdownExtractor` 側の単一の真実源を参照する。
 
 import Foundation
 
@@ -84,6 +85,11 @@ enum BusinessBreakdownResolver {
                         fiscalYearEnd: fiscalYearEnd, docID: docID, denominatorTag: denominatorTag)
                     lastAudit = audit
                     if let snapshot, hasUsableSegmentRows(snapshot) {
+                        if let facts = ReportableSegmentRevenueRecognition.preferFactsIfSameBreakdown(
+                            facts: factsSnapshot, rr: snapshot)
+                        {
+                            return (facts, .xbrlFacts, nil)
+                        }
                         return (snapshot, .revenueRecognitionLLM, audit)
                     }
                 }
@@ -112,6 +118,17 @@ enum BusinessBreakdownResolver {
         //    （INPEX旧filings型: tables が無く LLM 経路自体を試せない会社の挙動を変えない）。
         if let factsSnapshot, factsSnapshot.axis == breakdownAxisProductService {
             return (factsSnapshot, .xbrlFacts, nil)
+        }
+
+        // 収益認識へ寄せたが LLM が無い／失敗し、表の行が報告セグメントと同じ内訳のとき。
+        // 地理軸 facts を product_service に載せる（利益・計 / 調整 / 連結は開示セル）。
+        if let factsSnapshot,
+           segments.tables.first?.heading == BreakdownExtractor.revenueRecognitionHeading,
+           ReportableSegmentRevenueRecognition.tablesMatchFacts(segments.tables, facts: factsSnapshot)
+        {
+            var published = factsSnapshot
+            published.axis = breakdownAxisProductService
+            return (published, .xbrlFacts, lastAudit)
         }
 
         return (nil, .notFound, lastAudit)
