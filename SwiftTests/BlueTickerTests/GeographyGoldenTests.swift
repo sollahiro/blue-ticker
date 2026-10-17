@@ -2033,7 +2033,7 @@ import Testing
         #expect(!snapshot.warnings.contains("llm_row_sum_mismatch"))
     }
 
-    /// source: code=6138 fy_end=2026-03-31 doc_id=S100YHNC field=geography 当連結会計年度 アジア=中国 1,895,894+その他 865,309 合計=9,292,071
+    /// source: code=6138 fy_end=2026-03-31 doc_id=S100YHNC page=69 field=geography 当連結会計年度 アジア=中国 1,895,894+その他 865,309 合計=9,292,071
     /// 6138 型: 横並びのアジアが 中国 / その他 に分かれ、子見出しが縦結合の金額と同じ行にある。
     /// その行は見出しとして既存の入れ子見出しに乗せ、アジアの2列とも加算に残す。
     @Test func horizontalNestedChildHeadersBesideRowspanAmounts() async throws {
@@ -2067,7 +2067,7 @@ import Testing
         #expect(publiclyServable(snapshot))
     }
 
-    /// source: code=6237 fy_end=2026-03-31 doc_id=S100YHPM field=revenue_recognition 契約資産（期首残高）167,189千円 / －
+    /// source: code=6237 fy_end=2026-03-31 doc_id=S100YHPM page=79 field=revenue_recognition 契約資産（期首残高）167,189千円 / －
     /// 「－」が次の行と同じでも縦結合の写しとは限らない。子見出し行として扱わない。
     @Test func dashBesideAmountWithUnitIsNotNestedChildHeader() {
         let row = ["契約資産（期首残高）", "167,189千円", "－"]
