@@ -53,6 +53,8 @@ public struct BltServerContext: Sendable {
     let sgaLineDecider: (any SgaLineDeciding)?
     /// 会社拡張 member のうち調整・消去・全社の列の判定。同じキーが無いときは nil（標準一覧だけ）。
     let segmentMemberRoleDecider: (any SegmentMemberRoleDeciding)?
+    /// 事業別内訳 profit の行選択。決定論で利益タグが決まらないときだけ。キーが無いときは nil（profit は null）。
+    let segmentProfitDecider: (any SegmentProfitDeciding)?
     /// 合計だけタグの従業員表がセグメント別かの判定。同じキーが無いときは nil（not_found のまま）。
     let employeesTableDecider: (any EmployeesTableDeciding)?
     /// employees / rd / goodwill / 報告セグメント指標軸が同一 doc を軸ループで再パースしないためのメモ。
@@ -71,6 +73,7 @@ public struct BltServerContext: Sendable {
         interestBearingDebtDecider: (any InterestBearingDebtDeciding)? = nil,
         sgaLineDecider: (any SgaLineDeciding)? = nil,
         segmentMemberRoleDecider: (any SegmentMemberRoleDeciding)? = nil,
+        segmentProfitDecider: (any SegmentProfitDeciding)? = nil,
         employeesTableDecider: (any EmployeesTableDeciding)? = nil
     ) {
         self.cacheDir = cacheDir
@@ -91,6 +94,7 @@ public struct BltServerContext: Sendable {
         self.interestBearingDebtDecider = interestBearingDebtDecider
         self.sgaLineDecider = sgaLineDecider
         self.segmentMemberRoleDecider = segmentMemberRoleDecider
+        self.segmentProfitDecider = segmentProfitDecider
         self.employeesTableDecider = employeesTableDecider
         self.businessSegmentDimensionCache = BusinessSegmentDimensionCache()
     }
@@ -212,6 +216,9 @@ public func makeBltServerContext() async -> BltServerContext? {
     let segmentMemberRoleDecider: (any SegmentMemberRoleDeciding)? = decisionsClient.map {
         OpenRouterSegmentMemberRoleDecider(client: $0)
     }
+    let segmentProfitDecider: (any SegmentProfitDeciding)? = decisionsClient.map {
+        OpenRouterSegmentProfitDecider(client: $0)
+    }
     let employeesTableDecider: (any EmployeesTableDeciding)? = decisionsClient.map {
         OpenRouterEmployeesTableDecider(client: $0)
     }
@@ -227,6 +234,7 @@ public func makeBltServerContext() async -> BltServerContext? {
         interestBearingDebtDecider: interestBearingDebtDecider,
         sgaLineDecider: sgaLineDecider,
         segmentMemberRoleDecider: segmentMemberRoleDecider,
+        segmentProfitDecider: segmentProfitDecider,
         employeesTableDecider: employeesTableDecider)
 }
 
@@ -764,6 +772,7 @@ public extension BltServerContext {
             labelsByTag: labelsByTag, denominatorTag: denomItem.tag,
             columnDecider: revenueRecognitionColumnDecider,
             segmentInfoDecider: segmentInfoDecider,
+            segmentProfitDecider: segmentProfitDecider,
             fiscalYearEnd: BreakdownExtractor.currentFiscalYearEnd(fromXbrlDir: xbrlDir),
             docID: docID)
         let dedicatedTexts = BreakdownExtractor.dedicatedSingleSegmentDisclosureTexts(xbrlDir: xbrlDir)
@@ -789,6 +798,7 @@ public extension BltServerContext {
                     denominatorTag: denomItem.tag,
                     columnDecider: revenueRecognitionColumnDecider,
                     segmentInfoDecider: segmentInfoDecider,
+                    segmentProfitDecider: segmentProfitDecider,
                     fiscalYearEnd: BreakdownExtractor.currentFiscalYearEnd(fromXbrlDir: xbrlDir),
                     docID: docID)
                 if let recovered = retry.snapshot,
@@ -847,6 +857,7 @@ public extension BltServerContext {
                     denominatorTag: denomItem.tag,
                     columnDecider: revenueRecognitionColumnDecider,
                     segmentInfoDecider: segmentInfoDecider,
+                    segmentProfitDecider: segmentProfitDecider,
                     fiscalYearEnd: BreakdownExtractor.currentFiscalYearEnd(fromXbrlDir: xbrlDir),
                     docID: docID)
                 if let recovered = retry.snapshot,
