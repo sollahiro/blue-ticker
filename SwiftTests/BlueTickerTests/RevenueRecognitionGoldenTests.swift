@@ -596,6 +596,45 @@ import Testing
             total: 4_950_632)
     }
 
+    /// 7416 はるやまHD S100YLJD 0105010 当期表。品目の下の金額なし行 `[スーツ・礼服・コート]` 等は
+    /// 直前の品目の説明。次の品目の category_group にしない（1行下へのずれ）。
+    // source: code=7416 fy_end=2026-03-31 doc_id=S100YLJD page=72 field=product_service rows
+    @Test func yljd7416BracketDescriptionStaysWithPrecedingItem() async throws {
+        let blank = "<td>&#160;</td>"
+        func item(_ label: String, _ amount: String) -> String {
+            "<tr>\(blank)<td>\(label)</td><td>\(amount)</td></tr>"
+        }
+        func note(_ text: String) -> String { "<tr>\(blank)<td>\(text)</td>\(blank)</tr>" }
+        let current = """
+            <p>当連結会計年度（自　2025年４月１日　至　2026年３月31日）</p>
+            <p>（単位：千円）</p>
+            <table>
+            <thead><tr><td colspan="2" rowspan="2">&#160;</td><td>報告セグメント</td></tr>
+            <tr><td>衣料品販売事業</td></tr></thead>
+            <tbody>
+            \(item("重衣料", "15,047,573"))
+            \(note("[スーツ・礼服・コート]"))
+            \(item("中衣料", "3,453,633"))
+            \(note("[ジャケット・スラックス]"))
+            \(item("軽衣料", "15,795,876"))
+            \(note("[ワイシャツ・ネクタイ・カジュアル・小物・その他]"))
+            \(item("補修加工賃収入", "915,569"))
+            <tr><td colspan="2">合計</td><td>35,212,653</td></tr>
+            </tbody>
+            </table>
+            """
+        let snapshot = try await run(
+            html: priorThen(currentHTML: current), docID: "S100YLJD", fyEnd: "2026-03-31",
+            pick: "t1_c2")
+        try assertFlatRows(
+            snapshot, groups: ["重衣料", "中衣料", "軽衣料", "補修加工賃収入"],
+            amounts: [15_047_573, 3_453_633, 15_795_876, 915_569], unit: 1_000)
+        let bracketed: Bool = snapshot.rows.contains {
+            ($0.categoryGroup ?? "").hasPrefix("[") || ($0.category ?? "").hasPrefix("[")
+        }
+        #expect(bracketed == false)
+    }
+
     @Test func w6gr5237CandidatesAndRows() async throws {
         let cats = ["押出成形セメント製品関連", "スレート関連", "耐火被覆等", "その他"]
         let amounts = [17_202_907, 940_087, 1_085_092, 2_686_327]

@@ -135,6 +135,13 @@ enum RevenueRecognitionTableStructure {
             let colspan = area.columnCount >= 2 && labelCells.count >= 2
                 && !labelCells[0].isEmpty && labelCells[0] == labelCells[1]
             if !hasAmount {
+                // 金額のある品目の直下の括弧書きは、その品目の説明（7416 はるやまHD: 重衣料 /
+                // [スーツ・礼服・コート]）。見出しにすると説明が次の品目の group にずれる。
+                if isBracketedDescription(token), let previous = classified.last,
+                   previous.index == index - 1, previous.hasAmount, previous.labelKind == .category
+                {
+                    continue
+                }
                 if RevenueRecognitionCandidates.isOfWhichColumnHeader(token) {
                     classified.append(ClassifiedRow(
                         index: index, labelKind: .category,
@@ -185,6 +192,17 @@ enum RevenueRecognitionTableStructure {
             }
             return copy
         }
+    }
+
+    /// 行全体が角括弧で囲まれた説明（`[スーツ・礼服・コート]`）。丸括弧は見出しに使われる
+    ///（7532 パン・パシフィック「（ＵＮＹ事業）」は金額行の直後でも次ブロックの見出し）ので対象外。
+    /// 「［製品別］」のような区分見出しと「［うち〜］」の内数見出しも除く。
+    static func isBracketedDescription(_ token: String) -> Bool {
+        let pairs: [(Character, Character)] = [("[", "]"), ("［", "］")]
+        guard let first = token.first, let last = token.last, token.count > 2,
+              pairs.contains(where: { $0.0 == first && $0.1 == last })
+        else { return false }
+        return !(token.contains("別") || token.contains("区分") || token.contains("うち"))
     }
 
     static func isSubtotalLabel(_ label: String) -> Bool {
