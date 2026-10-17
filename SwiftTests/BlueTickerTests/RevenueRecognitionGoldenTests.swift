@@ -756,6 +756,15 @@ import Testing
         let needsReview: Bool = snapshot.needsReview
         #expect(denominator == expectedDenom)
         #expect(needsReview == false)
+        // source: code=7532 fy_end=2026-06-30 doc_id=S100Z42G page=137 field=product_service.その他の収益
+        // その他の収益（注）１ 79,554 は reconciling 行。明細＋この行が外部顧客への売上高に一致する。
+        let reconciling = snapshot.rows.filter { $0.rowKind == "reconciling" }
+        let reconcilingLabels: [String?] = reconciling.map(\.label)
+        #expect(reconcilingLabels == ["その他の収益"])
+        let reconcilingAmount: Double? = reconciling.first?.amount
+        #expect(reconcilingAmount == yen(79_554))
+        let covered: Double = segmentSum + (reconcilingAmount ?? 0)
+        #expect(abs(covered - expectedDenom) <= yen(1))
     }
 
     @Test func dedicatedSingleSegmentDoesNotSkipRevenueRecognitionTables() async throws {
@@ -1235,8 +1244,9 @@ import Testing
         let zeroSum: Bool = row.warnings.contains(
             RevenueRecognitionColumnNormalizer.warningZeroEmittedSum)
         let emitted: Double = row.rows.filter { $0.rowKind == "segment" }.reduce(0) { $0 + $1.amount }
+        // その他の収益（注）391 は reconciling 行で分母を覆う。公開しないのは単一行・明細 0 のため。
         #expect(needsReview)
-        #expect(undercoverage)
+        #expect(undercoverage == false)
         #expect(singleRow)
         #expect(zeroSum)
         #expect(emitted == 0)
@@ -1281,8 +1291,9 @@ import Testing
         let singleRow: Bool = row.warnings.contains(
             RevenueRecognitionColumnNormalizer.warningSingleRowTable)
         let emitted: Double = row.rows.filter { $0.rowKind == "segment" }.reduce(0) { $0 + $1.amount }
+        // その他の収益（注）1,130 は reconciling 行で分母を覆う。公開しないのは単一行のため。
         #expect(needsReview)
-        #expect(undercoverage)
+        #expect(undercoverage == false)
         #expect(singleRow)
         #expect(emitted == yen(7))
         #expect(row.denominator == yen(1_137))
@@ -1542,6 +1553,69 @@ import Testing
         let needsReview: Bool = snapshot.needsReview
         #expect(denominator == expectedDenom)
         #expect(needsReview == false)
+    }
+
+    /// 7464 S100YJG0（原本 0105010 収益認識関係）: 品目別 5 行の小計 4,505,400 の下に
+    /// その他の源泉から生じる収益（レンタル売上）5,605,648、合計 10,111,048。
+    /// その他の源泉は reconciling 行にし、明細＋reconciling が分母の合計と一致する。
+    // source: code=7464 fy_end=2026-03-31 doc_id=S100YJG0 page=56 field=product_service.その他の源泉から生じる収益
+    @Test func yjg07464OtherSourceRevenueIsReconcilingRow() async throws {
+        let html = """
+            <p>（単位：千円）</p>
+            <table>
+              <tr><td></td><td>前連結会計年度（自 2024年４月１日 至 2025年３月31日）</td><td>当連結会計年度（自 2025年４月１日 至 2026年３月31日）</td></tr>
+              <tr><td>顧客との契約から生じる収益</td><td></td><td></td></tr>
+              <tr><td>（品目別）</td><td></td><td></td></tr>
+              <tr><td>標識・標示板</td><td>1,400,256</td><td>1,377,658</td></tr>
+              <tr><td>安全機材</td><td>614,928</td><td>578,768</td></tr>
+              <tr><td>保安警告サイン</td><td>649,470</td><td>643,259</td></tr>
+              <tr><td>安全防災用品</td><td>797,868</td><td>832,457</td></tr>
+              <tr><td>その他</td><td>1,129,738</td><td>1,073,255</td></tr>
+              <tr><td>小 計</td><td>4,592,263</td><td>4,505,400</td></tr>
+              <tr><td>その他の源泉から生じる収益</td><td>5,719,819</td><td>5,605,648</td></tr>
+              <tr><td>合 計</td><td>10,312,082</td><td>10,111,048</td></tr>
+            </table>
+            """
+        let snapshot = try await run(html: html, docID: "S100YJG0", fyEnd: "2026-03-31", pick: "t0_c2")
+        let cats = ["標識・標示板", "安全機材", "保安警告サイン", "安全防災用品", "その他"]
+        let amounts = [1_377_658, 578_768, 643_259, 832_457, 1_073_255]
+        let segments = snapshot.rows.filter { $0.rowKind == "segment" }
+        let segmentCategories: [String?] = segments.map { $0.category ?? $0.categoryGroup }
+        #expect(segmentCategories == cats)
+        let segmentAmounts: [Double] = segments.map(\.amount)
+        #expect(segmentAmounts == amounts.map(sen))
+        let reconciling = snapshot.rows.filter { $0.rowKind == "reconciling" }
+        let reconcilingLabels: [String?] = reconciling.map(\.label)
+        #expect(reconcilingLabels == ["その他の源泉から生じる収益"])
+        let reconcilingAmounts: [Double] = reconciling.map(\.amount)
+        #expect(reconcilingAmounts == [sen(5_605_648)])
+        let denominator: Double = snapshot.denominator
+        #expect(denominator == sen(10_111_048))
+        // 明細の合計 4,505,397 と原本の小計 4,505,400 は千円丸めで 3 ずれる。
+        let covered: Double = (segments + reconciling).reduce(0) { $0 + $1.amount }
+        #expect(abs(covered - denominator) <= sen(6))
+        let needsReview: Bool = snapshot.needsReview
+        #expect(needsReview == false)
+    }
+
+    /// 顧客との契約の小計しか無い表では reconciling を足さない（足すと合計を超える）。
+    @Test func otherSourceRevenueIsNotAddedWhenTotalIsCustomerContractsOnly() async throws {
+        let html = """
+            <p>当連結会計年度（自 2025年4月1日 至 2026年3月31日）</p>
+            <p>（単位：百万円）</p>
+            <table>
+              <tr><td></td><td>金額</td></tr>
+              <tr><td>製品A</td><td>600</td></tr>
+              <tr><td>製品B</td><td>400</td></tr>
+              <tr><td>顧客との契約から生じる収益</td><td>1,000</td></tr>
+              <tr><td>その他の源泉から生じる収益</td><td>50</td></tr>
+            </table>
+            """
+        let snapshot = try await run(html: html, docID: "S100TEST", fyEnd: "2026-03-31", pick: "t0_c1")
+        let reconciling = snapshot.rows.filter { $0.rowKind == "reconciling" }
+        #expect(reconciling.isEmpty)
+        let denominator: Double = snapshot.denominator
+        #expect(denominator == yen(1_000))
     }
 
     /// 332A S100YKM2: 単位スタブ表 + 品目 2 行。表選択 0.88 相当でも出す。
