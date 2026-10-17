@@ -35,14 +35,48 @@ enum BusinessBreakdownResolver {
         denominatorTag: String? = nil,
         columnDecider: (any RevenueRecognitionColumnDeciding)? = nil,
         segmentInfoDecider: (any SegmentInfoDeciding)? = nil,
+        segmentProfitDecider: (any SegmentProfitDeciding)? = nil,
+        rowRoleDecider: (any RevenueRecognitionRowRoleDeciding)? = nil,
         fiscalYearEnd: String? = nil,
         docID: String = ""
     ) async -> (snapshot: BreakdownSnapshot?, source: BusinessBreakdownSource, audit: LLMBreakdownAudit?) {
-        let factsSnapshot = BreakdownNormalizer.normalize(
-            ExtractedBreakdown(
-                method: "xbrl_facts", tables: segments.tables, facts: segments.facts,
-                rowLabelsByTag: segments.rowLabelsByTag),
-            consolidatedSales: consolidatedSales, labelsByTag: labelsByTag)
+        let factsInput = ExtractedBreakdown(
+            method: "xbrl_facts", tables: segments.tables, facts: segments.facts,
+            rowLabelsByTag: segments.rowLabelsByTag)
+        var factsSnapshot = BreakdownNormalizer.normalize(
+            factsInput, consolidatedSales: consolidatedSales, labelsByTag: labelsByTag)
+        var profitAudit: LLMBreakdownAudit?
+
+        // 0) 決定論（表の行名・差異調整・標準タグ）で利益タグが決まらず profit が全行 null のとき、
+        //    セグメント値のある既存タグから会社のセグメント利益の行を Jev に選ばせる。
+        //    公開しない（needs_review）結果と、利益タグが専用の銀行・保険の経路では聞かない。
+        if let snapshot = factsSnapshot, let segmentProfitDecider,
+           snapshot.axis == breakdownAxisProductService, !snapshot.needsReview,
+           !snapshot.rows.contains(where: { $0.profit != nil }),
+           !BreakdownNormalizer.isFinancialBasisDenominatorTag(snapshot.denominatorTag)
+        {
+            let candidates = SegmentProfitJevPicker.candidates(
+                facts: segments.facts, rowLabelsByTag: segments.rowLabelsByTag,
+                memberLabels: labelsByTag, amountTag: snapshot.denominatorTag)
+            let picked = await SegmentProfitJevPicker.pick(
+                candidates: candidates, facts: segments.facts,
+                salesLabel: segments.rowLabelsByTag[snapshot.denominatorTag]?.sorted().first
+                    ?? snapshot.denominatorTag,
+                decider: segmentProfitDecider, docID: docID)
+            if !candidates.isEmpty {
+                profitAudit = LLMBreakdownAudit(
+                    sourceTableIndex: nil, periodColumn: nil, unit: "",
+                    profitDisclosed: picked.tag != nil, notes: "segment_profit_jev",
+                    jev: picked.audit)
+            }
+            if let tag = picked.tag,
+               let withProfit = BreakdownNormalizer.normalize(
+                   factsInput, consolidatedSales: consolidatedSales, labelsByTag: labelsByTag,
+                   profitTagOverride: tag)
+            {
+                factsSnapshot = withProfit
+            }
+        }
 
         // 1) xbrl_facts 経路（決定的、LLM不要）。axis が product_service かつ needs_review が
         //    立っていなければ確信度が高いのでそのまま採用する。
@@ -51,7 +85,7 @@ enum BusinessBreakdownResolver {
         //    採用せず、下の tables 経路へフォールバックする（住友ファーマ: 製品別表が
         //    セグメント注記 tables 側に残っている。実データ検証 2026-07-24）。
         if let factsSnapshot, factsSnapshot.axis == breakdownAxisProductService, !factsSnapshot.needsReview {
-            return (factsSnapshot, .xbrlFacts, nil)
+            return (factsSnapshot, .xbrlFacts, profitAudit)
         }
 
         // 2) 積み上げセグメント損益表の決定論寄せ（LLM より先）。
@@ -82,7 +116,8 @@ enum BusinessBreakdownResolver {
                 if let columnDecider {
                     let (snapshot, audit) = await RevenueRecognitionColumnNormalizer.normalize(
                         segments, consolidatedSales: consolidatedSales, decider: columnDecider,
-                        fiscalYearEnd: fiscalYearEnd, docID: docID, denominatorTag: denominatorTag)
+                        fiscalYearEnd: fiscalYearEnd, docID: docID, denominatorTag: denominatorTag,
+                        rowRoleDecider: rowRoleDecider)
                     lastAudit = audit
                     if let snapshot, hasUsableSegmentRows(snapshot) {
                         if let facts = ReportableSegmentRevenueRecognition.preferFactsIfSameBreakdown(

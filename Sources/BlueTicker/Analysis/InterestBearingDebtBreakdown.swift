@@ -414,7 +414,8 @@ enum InterestBearingDebtBreakdown {
                 opening: row.prior, closing: row.current,
                 source: ibdRowSourceBorrowingsSchedule,
                 maturityClass: maturityClass(fromLabel: labelRaw) ?? row.sectionMaturity,
-                presetClass: securities ? .notInterestBearing : scheduleRowPreset(labelRaw),
+                presetClass: securities
+                    ? .notInterestBearing : scheduleRowPreset(labelRaw, stackHeading: row.stackHeading),
                 sourceTag: row.sourceTag,
                 excludedReason: securities ? ibdExcludedReasonScopeDiffers : nil)
         }
@@ -452,6 +453,15 @@ enum InterestBearingDebtBreakdown {
     }
 
     // MARK: - helpers
+
+    /// 縦積みセルの内訳行（`stackHeading` あり）は、ラベルだけで決まらなければ見出しで決める。
+    /// 会社が「その他有利子負債」見出しの下に平均利率つきで載せた内訳（ニッスイ「関係会社預り金」、
+    /// 王子・東京ガスの CP）は有利子負債。受入保証金・預り保証金の明示除外はラベル側が先に勝つ。
+    static func scheduleRowPreset(_ label: String, stackHeading: String?) -> IBDRowClass? {
+        if let preset = scheduleRowPreset(label) { return preset }
+        guard let stackHeading, stackHeading.contains("有利子負債") else { return nil }
+        return .interestBearingDebt
+    }
 
     /// 明細表の区分ラベルからコードで確定できる分類。確定できない（Jev に聞く）とき nil。
     static func scheduleRowPreset(_ label: String) -> IBDRowClass? {

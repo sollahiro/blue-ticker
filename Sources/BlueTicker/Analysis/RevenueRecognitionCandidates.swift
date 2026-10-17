@@ -82,8 +82,10 @@ enum RevenueRecognitionCandidates {
     }
 
     /// 契約残高表を除き、金額列がある分解表だけを候補にする。
+    /// `descriptionRows`: 表 index → Jev が直前品目の説明と判定した行（見出しにしない）。
     static func parse(
-        tables: [BreakdownTable], skipBalanceTables: Bool = true
+        tables: [BreakdownTable], skipBalanceTables: Bool = true,
+        descriptionRows: [Int: Set<Int>] = [:]
     ) -> [ParsedTable] {
         var parsed: [ParsedTable] = []
         for (index, table) in tables.enumerated() {
@@ -91,7 +93,8 @@ enum RevenueRecognitionCandidates {
             guard !grid.isEmpty else { continue }
             if skipBalanceTables, isContractBalanceTable(grid) { continue }
             guard hasAmountColumn(grid) else { continue }
-            parsed.append(parseTable(index: index, grid: grid, table: table))
+            parsed.append(parseTable(
+                index: index, grid: grid, table: table, descriptionRows: descriptionRows[index] ?? []))
         }
         return parsed
     }
@@ -907,11 +910,11 @@ enum RevenueRecognitionCandidates {
     }
 
     private static func parseTable(
-        index: Int, grid: [[String]], table: BreakdownTable
+        index: Int, grid: [[String]], table: BreakdownTable, descriptionRows: Set<Int> = []
     ) -> ParsedTable {
         let ncol = grid.map(\.count).max() ?? 0
         let rows = grid.map { $0 + Array(repeating: "", count: max(0, ncol - $0.count)) }
-        let structure = RevenueRecognitionTableStructure.inspect(grid: rows)
+        let structure = RevenueRecognitionTableStructure.inspect(grid: rows, descriptionRows: descriptionRows)
         let firstData = structure.headerRowCount
         var headers: [Int: String] = [:]
         for column in 0..<ncol {

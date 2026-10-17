@@ -25,6 +25,9 @@ enum BorrowingsSchedule {
         /// 表の流動／非流動の区分見出し（値の無い「流動負債」「非流動負債」行）の下にある行の区分
         /// （"current" / "non_current"）。区分見出しが無ければ nil（ラベルから推定しない）。
         var sectionMaturity: String? = nil
+        /// 同一セルに縦積みされた内訳行の見出し（「その他有利子負債」）。見出しの無い行は nil。
+        /// 内訳のラベルだけでは分類が決まらないとき、会社が見出しで示した区分を使う。
+        var stackHeading: String? = nil
     }
 
     typealias Parsed = (rows: [Row], totalCurrent: Double?, totalPrior: Double?)
@@ -148,6 +151,7 @@ enum BorrowingsSchedule {
         let prior: Double?
         let rate: Double?
         let isVerticalStackItem: Bool
+        var stackHeading: String? = nil
     }
 
     /// ラベルセル内の `<p>` 分割が「カテゴリ名+内訳の縦積み」か「単に列幅で折り返しただけの
@@ -161,6 +165,25 @@ enum BorrowingsSchedule {
         let opens = firstSegment.filter { $0 == "（" || $0 == "(" }.count
         let closes = firstSegment.filter { $0 == "）" || $0 == ")" }.count
         return opens > closes
+    }
+
+    /// 縦積みセルの `i` 番目のラベル `<p>` に対応する値。値セルの `<p>` がラベルより少なく、2つ目以降の
+    /// ラベル `<p>` が括弧書きの続き（「（１年以内に返済予定のものを除く。）」）でないときは下揃えで対応させる
+    /// （先頭の見出し `<p>` には値の `<p>` が無い）。東京ガス S100YH8W 実データ検証（2026-10-17）: ラベル
+    /// 「その他有利子負債」「コマーシャル・ペーパー（１年以内返済予定）」に対し値セルは `<p>` 1つ（前期 10,000 /
+    /// 当期 50,000）。上揃えだと値が見出しに付き、CP の行名が消えていた。括弧書きの続きは上揃えのまま
+    /// （7906 S100YCTQ「長期借入金」＋「（１年以内に返済予定のものを除く。）」は先頭の科目名に値を付ける）。
+    private static func verticalStackValue(
+        _ valuePs: [Element], labelIndex: Int, labelPs: [Element]
+    ) -> Double? {
+        let continuesInBrackets = labelPs.dropFirst().contains { p in
+            let text = normalizeLabel((try? p.text(trimAndNormaliseWhitespace: true)) ?? "")
+            return text.hasPrefix("（") || text.hasPrefix("(")
+        }
+        let offset = continuesInBrackets ? 0 : max(0, labelPs.count - valuePs.count)
+        let index = labelIndex - offset
+        guard index >= 0, index < valuePs.count else { return nil }
+        return XBRLUtils.parseTextblockCellValue(try? valuePs[index].text())
     }
 
     /// ラベルの前後の全角/半角スペース・nbsp を除去する（"合計"／"計" 判定・displayLabel 適用の前処理）。
@@ -315,19 +338,23 @@ enum BorrowingsSchedule {
                 let priorPs = (try? cells[1].select("p"))?.array() ?? []
                 let currentPs = (try? cells[2].select("p"))?.array() ?? []
                 let ratePs = cells.count >= 4 ? (try? cells[3].select("p"))?.array() ?? [] : []
+                // 先頭の `<p>` に値が無ければ見出し（「その他有利子負債」）。後続の内訳行に持たせる。
+                let headingHasValue = verticalStackValue(priorPs, labelIndex: 0, labelPs: labelPs) != nil
+                    || verticalStackValue(currentPs, labelIndex: 0, labelPs: labelPs) != nil
+                let heading = headingHasValue ? nil : normalizeLabel(firstLabelSegment)
                 for i in labelPs.indices {
                     let label = normalizeLabel((try? labelPs[i].text(trimAndNormaliseWhitespace: true)) ?? "")
                     guard !label.isEmpty else { continue }
-                    let prior = i < priorPs.count ? XBRLUtils.parseTextblockCellValue(try? priorPs[i].text()) : nil
-                    let current = i < currentPs.count ? XBRLUtils.parseTextblockCellValue(try? currentPs[i].text()) : nil
+                    let prior = verticalStackValue(priorPs, labelIndex: i, labelPs: labelPs)
+                    let current = verticalStackValue(currentPs, labelIndex: i, labelPs: labelPs)
                     // カテゴリ名自体の行（値なし）を除外する。
                     guard current != nil || prior != nil else { continue }
-                    let rate = i < ratePs.count ? XBRLUtils.parseTextblockCellValue(try? ratePs[i].text()) : nil
+                    let rate = verticalStackValue(ratePs, labelIndex: i, labelPs: labelPs)
                     // 縦積みされた内訳行は常に末端（それ以上の階層を持たない）として扱う。直前の
                     // 無関係な行を「自分の子」と誤認させないよう `isVerticalStackItem` で区別する。
                     rawRows.append(RawRow(
                         label: label, indent: .infinity, current: current, prior: prior, rate: rate,
-                        isVerticalStackItem: true))
+                        isVerticalStackItem: true, stackHeading: i > 0 ? heading : nil))
                 }
                 continue
             }
@@ -382,7 +409,8 @@ enum BorrowingsSchedule {
                 current: r.current.map { $0 * scale },
                 prior: r.prior.map { $0 * scale },
                 averageInterestRatePercent: r.rate,
-                sourceLabel: r.label
+                sourceLabel: r.label,
+                stackHeading: r.stackHeading
             ))
         }
 

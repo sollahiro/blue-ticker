@@ -74,10 +74,10 @@ enum RevenueRecognitionTableStructure {
     static let undetermined = Result(
         labelArea: LabelArea(columnCount: 1, headerRowCount: 0), rows: [], blocks: [])
 
-    static func inspect(grid: [[String]]) -> Result {
+    static func inspect(grid: [[String]], descriptionRows: Set<Int> = []) -> Result {
         let rows = padded(grid)
         let area = stage1LabelArea(rows)
-        let labeled = stage2ClassifyLabels(rows, area: area)
+        let labeled = stage2ClassifyLabels(rows, area: area, descriptionRows: descriptionRows)
         let classified = stage3ClassifyAmounts(rows, labeled: labeled)
         return Result(
             labelArea: area, rows: classified, blocks: blocks(from: classified))
@@ -97,7 +97,7 @@ enum RevenueRecognitionTableStructure {
 
     /// (2) 各行は category_group か category。金額なし見出しと 2 列ラベル域の外側は group。
     static func stage2ClassifyLabels(
-        _ rows: [[String]], area: LabelArea
+        _ rows: [[String]], area: LabelArea, descriptionRows: Set<Int> = []
     ) -> [ClassifiedRow] {
         var classified: [ClassifiedRow] = []
         var currentGroup = ""
@@ -135,6 +135,9 @@ enum RevenueRecognitionTableStructure {
             let colspan = area.columnCount >= 2 && labelCells.count >= 2
                 && !labelCells[0].isEmpty && labelCells[0] == labelCells[1]
             if !hasAmount {
+                // Jev が直前の品目の説明と判定した行（7416 はるやまHD: 重衣料 / [スーツ・礼服・コート]）。
+                // 見出しにすると説明が次の品目の group にずれる。
+                if descriptionRows.contains(index) { continue }
                 if RevenueRecognitionCandidates.isOfWhichColumnHeader(token) {
                     classified.append(ClassifiedRow(
                         index: index, labelKind: .category,
@@ -185,6 +188,27 @@ enum RevenueRecognitionTableStructure {
             }
             return copy
         }
+    }
+
+    /// 金額のある品目（小計でない）の直後にあり、すぐ後ろに金額行が続く金額なし行。
+    /// 次の品目群の見出しか、直前の品目の説明かは構造では決まらない（7416 の [スーツ・礼服・コート] /
+    /// 7532 の（ＵＮＹ事業））ので、Jev に判定させる行。
+    static func ambiguousHeadingRows(grid: [[String]]) -> [Int] {
+        let rows = padded(grid)
+        let area = stage1LabelArea(rows)
+        let classified = stage2ClassifyLabels(rows, area: area)
+        var out: [Int] = []
+        for (position, row) in classified.enumerated() where position > 0 {
+            guard row.labelKind == .categoryGroup, !row.hasAmount else { continue }
+            let previous = classified[position - 1]
+            guard previous.index == row.index - 1, previous.hasAmount, previous.labelKind == .category,
+                  !isSubtotalLabel(previous.category ?? previous.categoryGroup ?? ""),
+                  row.index + 1 < rows.count,
+                  rows[row.index + 1].dropFirst(area.columnCount).contains(where: RevenueRecognitionCandidates.isAmountCell)
+            else { continue }
+            out.append(row.index)
+        }
+        return out
     }
 
     static func isSubtotalLabel(_ label: String) -> Bool {
