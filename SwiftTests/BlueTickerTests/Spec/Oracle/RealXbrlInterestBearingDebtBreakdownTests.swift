@@ -725,6 +725,7 @@ private struct AllInterestBearingIBDDecider: InterestBearingDebtDeciding {
     /// 9531 東京ガス: 明細表のラベルセルに「その他有利子負債」「コマーシャル・ペーパー（１年以内返済予定）」の
     /// 2つの `<p>`、値セルは `<p>` 1つ（前期 10,000 / 当期 50,000）。値は見出しではなく CP の行に付く。
     /// BS に CP 科目は無い（その他の流動負債に含む）ので明細表の CP を数える。
+    /// source: code=9531 fy_end=2026-03-31 doc_id=S100YH8W page=123 field=借入金等明細表.その他有利子負債.コマーシャル・ペーパー
     @Test func tokyoGasCommercialPaperKeepsItsLabel() async throws {
         guard await Self.ensureAvailable("S100YH8W") else { return }
         let (payload, _) = try await resolve("S100YH8W", decider: nil)
