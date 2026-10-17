@@ -36,6 +36,98 @@ import Testing
             docID: "S-seg-golden")
     }
 
+    /// 7752 S100LKDZ（US-GAAP 事業の種類別セグメント情報）: 子（オフィスプリンティング分野 /
+    /// オフィスサービス分野）の直後に親の小計（オフィス分野）が来る。親は subtotal にして足さない。
+    /// 金額は原本の当期列（その他分野は外部顧客向け、セグメント間取引の行は省き、期間見出しはテストの決算期に合わせた形）。
+    // source: code=7752 fy_end=2021-03-31 doc_id=S100LKDZ page=121 field=product_service.オフィス分野
+    @Test func trailingParentSubtotalIsNotAdded() async throws {
+        let html = """
+            <table>
+              <tr><td></td><td>前連結会計年度(自2024年４月１日 至2025年３月31日)(百万円)</td><td>当連結会計年度(自2025年４月１日 至2026年３月31日)(百万円)</td></tr>
+              <tr><td>損益情報：</td><td></td><td></td></tr>
+              <tr><td>売上高：</td><td></td><td></td></tr>
+              <tr><td>オフィスプリンティング分野</td><td>1,013,055</td><td>815,895</td></tr>
+              <tr><td>オフィスサービス分野</td><td>557,191</td><td>532,307</td></tr>
+              <tr><td>オフィス分野</td><td>1,570,246</td><td>1,348,202</td></tr>
+              <tr><td>商用印刷分野</td><td>178,396</td><td>134,661</td></tr>
+              <tr><td>産業印刷分野</td><td>23,006</td><td>24,689</td></tr>
+              <tr><td>サーマル分野</td><td>61,896</td><td>56,874</td></tr>
+              <tr><td>その他分野</td><td>175,036</td><td>117,643</td></tr>
+              <tr><td>合計</td><td>2,008,580</td><td>1,682,069</td></tr>
+            </table>
+            """
+        let sales = 1_682_069 * Financial.millionYen
+        let (snapshotOrNil, _) = await Self.snapshot(html: html, sales: sales)
+        let snapshot = try #require(snapshotOrNil)
+        let segments: [String] = snapshot.rows.filter { $0.rowKind == "segment" }.map(\.labelRaw)
+        #expect(segments == ["オフィスプリンティング分野", "オフィスサービス分野", "商用印刷分野", "産業印刷分野", "サーマル分野", "その他分野"])
+        let office = snapshot.rows.first { $0.labelRaw == "オフィス分野" }
+        let officeKind: String? = office?.rowKind
+        #expect(officeKind == "subtotal")
+        let warnings: [String] = snapshot.warnings
+        #expect(!warnings.contains("llm_row_sum_mismatch"))
+        let needsReview: Bool = snapshot.needsReview
+        #expect(needsReview == false)
+    }
+
+    /// 合計が既に売上の許容幅にあるときは、直前 2 行の和に一致する行でも落とさない。
+    @Test func rowEqualToPrecedingSumIsKeptWhenTotalAlreadyMatches() async throws {
+        let html = """
+            <p>（単位：百万円）</p>
+            <table>
+              <tr><td></td><td>当連結会計年度</td></tr>
+              <tr><td>売上高：</td><td></td></tr>
+              <tr><td>A事業</td><td>100</td></tr>
+              <tr><td>B事業</td><td>200</td></tr>
+              <tr><td>C事業</td><td>300</td></tr>
+              <tr><td>合計</td><td>600</td></tr>
+            </table>
+            """
+        let (snapshotOrNil, _) = await Self.snapshot(html: html, sales: 600 * Financial.millionYen)
+        let snapshot = try #require(snapshotOrNil)
+        let segments: [String] = snapshot.rows.filter { $0.rowKind == "segment" }.map(\.labelRaw)
+        #expect(segments == ["A事業", "B事業", "C事業"])
+    }
+
+    /// 4901 S100LV2D のセグメント損益と調整表、7062 S100YLVZ ののれん償却額及び未償却残高は
+    /// 売上の行が無いので売上内訳の候補にしない。
+    // source: code=7062 fy_end=2026-03-31 doc_id=S100YLVZ page=92 field=product_service.当期償却額
+    @Test func profitAndGoodwillOnlyTablesAreNotSalesCandidates() {
+        let profitHTML = """
+            <table>
+              <tr><td></td><td>前連結会計年度 (百万円)</td><td>当連結会計年度 (百万円)</td></tr>
+              <tr><td>営業利益：</td><td></td><td></td></tr>
+              <tr><td>イメージング ソリューション</td><td>25,076</td><td>15,591</td></tr>
+              <tr><td>ドキュメント ソリューション</td><td>105,045</td><td>73,284</td></tr>
+              <tr><td>計</td><td>130,121</td><td>88,875</td></tr>
+              <tr><td>全社費用及びセグメント間取引消去</td><td>△35,953</td><td>△30,909</td></tr>
+              <tr><td>営業外収益及び費用</td><td>△13,499</td><td>70,397</td></tr>
+              <tr><td>税金等調整前当期純利益</td><td>80,669</td><td>128,363</td></tr>
+            </table>
+            """
+        let goodwillHTML = """
+            <table>
+              <tr><td></td><td>マッサージ直営</td><td>メディカルケア</td><td>合計</td></tr>
+              <tr><td>当期償却額</td><td>2,980</td><td>8,615</td><td>11,595</td></tr>
+              <tr><td>当期末残高</td><td>5,489</td><td>－</td><td>5,489</td></tr>
+            </table>
+            """
+        let salesHTML = """
+            <table>
+              <tr><td></td><td>マッサージ直営</td><td>メディカルケア</td><td>合計</td></tr>
+              <tr><td>外部顧客への売上高</td><td>4,144,207</td><td>2,344,404</td><td>6,488,611</td></tr>
+              <tr><td>セグメント利益</td><td>1,154,272</td><td>△184,337</td><td>969,935</td></tr>
+            </table>
+            """
+        for (html, nonSales) in [(profitHTML, true), (goodwillHTML, true), (salesHTML, false)] {
+            let tables = BreakdownExtractor.allTablesFromHtml(html, defaultHeading: "セグメント情報")
+            let parsed = RevenueRecognitionCandidates.parse(tables: tables)
+            let table = parsed.first
+            let flagged: Bool? = table.map(SegmentInfoLLMNormalizer.isNonSalesMetricTable)
+            #expect(flagged == nonSales)
+        }
+    }
+
     /// 1. 事業別の報告セグメント（キヤノン注23型の列=事業マトリクス）。
     @Test func type1BusinessReportingSegmentsTakenAsIs() async throws {
         let html = """
