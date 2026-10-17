@@ -48,16 +48,19 @@ enum BreakdownNormalizer {
     /// （実データ: SOMPO / MS&AD / 第一生命 / T&D / 東宝、2026-07-24）。
     /// セグメント dimension が付かない全社合計 fact は `EntityTotal` 小計行として残す
     /// （第一生命: 計 11,373,330 ≠ 連結財務諸表計上額 9,873,251）。
+    /// `profitTagOverride` は決定論で利益タグが決まらず、Jev が既存の行から選んだタグ
+    ///（`SegmentProfitJevPicker`）。外部売上基準の経路だけに効く（銀行・保険は専用タグ）。
     static func normalize(
         _ result: ExtractedBreakdown, consolidatedSales: Double?,
-        labelsByTag: [String: String] = [:]
+        labelsByTag: [String: String] = [:], profitTagOverride: String? = nil
     ) -> BreakdownSnapshot? {
         guard result.method == "xbrl_facts", !result.facts.isEmpty else { return nil }
 
         if let consolidatedSales, consolidatedSales != 0,
            let snapshot = normalizeSalesBasis(
                facts: result.facts, tables: result.tables, rowLabelsByTag: result.rowLabelsByTag,
-               consolidatedSales: consolidatedSales, labelsByTag: labelsByTag)
+               consolidatedSales: consolidatedSales, labelsByTag: labelsByTag,
+               profitTagOverride: profitTagOverride)
         {
             return snapshot
         }
@@ -67,7 +70,7 @@ enum BreakdownNormalizer {
             facts: result.facts, tables: result.tables, rowLabelsByTag: result.rowLabelsByTag,
             amountTags: Xbrl.segmentExternalRevenueTags,
             profitTags: Xbrl.segmentProfitTags, warningPrefix: "external_revenue",
-            labelsByTag: labelsByTag)
+            labelsByTag: labelsByTag, profitTagOverride: profitTagOverride)
         {
             return external
         }
@@ -89,7 +92,8 @@ enum BreakdownNormalizer {
     /// 外部売上高を分母とする通常経路（ホワイトリスト → カバレッジ発見フォールバック）。
     private static func normalizeSalesBasis(
         facts: [BreakdownFact], tables: [BreakdownTable], rowLabelsByTag: [String: Set<String>],
-        consolidatedSales: Double, labelsByTag: [String: String] = [:]
+        consolidatedSales: Double, labelsByTag: [String: String] = [:],
+        profitTagOverride: String? = nil
     ) -> BreakdownSnapshot? {
         var denominatorNeedsReview = false
         let denominatorTag: String
@@ -111,7 +115,7 @@ enum BreakdownNormalizer {
         guard !perMember.isEmpty else { return nil }
 
         // 利益は任意フィールド（対応する利益タグが無い/取れない member は profit=nil のまま）。
-        let profitTag = segmentProfitTag(
+        let profitTag = profitTagOverride ?? segmentProfitTag(
             facts: facts, tables: tables, rowLabelsByTag: rowLabelsByTag, amountTag: denominatorTag,
             fallbackTags: Xbrl.segmentProfitTags)
         var profitByMember = profitTag.map { resolvePerMember(facts: facts, tag: $0) } ?? [:]
@@ -228,7 +232,7 @@ enum BreakdownNormalizer {
     private static func normalizeInternalSubtotalBasis(
         facts: [BreakdownFact], tables: [BreakdownTable], rowLabelsByTag: [String: Set<String>],
         amountTags: [String], profitTags: [String], warningPrefix: String,
-        labelsByTag: [String: String] = [:]
+        labelsByTag: [String: String] = [:], profitTagOverride: String? = nil
     ) -> BreakdownSnapshot? {
         guard let amountTag = amountTags.first(where: { tag in
             facts.contains(where: { $0.tag == tag })
@@ -275,7 +279,7 @@ enum BreakdownNormalizer {
         }
         guard denominator != 0 else { return nil }
 
-        let profitTag = segmentProfitTag(
+        let profitTag = profitTagOverride ?? segmentProfitTag(
             facts: facts, tables: tables, rowLabelsByTag: rowLabelsByTag, amountTag: amountTag,
             fallbackTags: profitTags)
         var profitByMember = profitTag.map { resolvePerMember(facts: facts, tag: $0) } ?? [:]
@@ -369,6 +373,16 @@ enum BreakdownNormalizer {
             return tag
         }
         return fallback
+    }
+
+    /// 当期のセグメント member 値（member → 値）。`SegmentProfitJevPicker` の候補作り用。
+    static func currentSegmentMemberValues(facts: [BreakdownFact], tag: String) -> [String: Double] {
+        resolvePerMember(facts: facts, tag: tag).mapValues(\.value)
+    }
+
+    /// 当期のセグメント dimension 無しの全社値（連結列）。
+    static func currentEntityTotalValue(facts: [BreakdownFact], tag: String) -> Double? {
+        resolveEntityTotal(facts: facts, tag: tag)?.value
     }
 
     /// 同順位の候補は `fallbackTags` の順、次にタグ名で決める（決定的）。

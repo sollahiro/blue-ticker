@@ -1324,9 +1324,6 @@ enum Xbrl {
         "SegmentProfitLossIFRS",
         "OperatingProfitLossIFRS",
         "OperatingIncome",
-        // 日本航空: セグメント利益は財務・法人所得税前利益（EBIT）の企業拡張タグ。同じ表の
-        // ProfitLossBeforeTaxIFRS はセグメント列が nil で連結列だけ（実データ検証: S100YFIO、2026-10-17）。
-        "ProfitBeforeFinancingAndIncomeTaxIFRS",
         "ProfitLossBeforeTaxIFRS",
         // INPEX: セグメント表の「セグメント利益」行が親会社所有者帰属利益タグに載る
         // （実データ検証 2026-07-24）。通常の営業利益タグより優先度は下（末尾）。
