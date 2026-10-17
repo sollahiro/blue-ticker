@@ -758,20 +758,33 @@ enum StatementFinancialsResolver {
     /// 連結 PL のトップライン収益。営業利益行より上の収益行のうち、他の収益行の構成要素でない行の和。
     /// 合計行があればそれ（6758 `SalesAndFinancialServicesRevenueIFRS`、3382 `OperatingRevenue1`）、
     /// 合計行が無く 売上高 と 営業収入 が並ぶときは和（9950）。`sales` より大きいときだけ返す。
+    /// 金融収益・その他の収益・持分法を含む IFRS の「収益合計」（HOYA 7741 / 6141 / 8698）は
+    /// 営業の収益ではないので合計に使わない。IFRS で収益行が並ぶだけ（電通 4324 の 売上高 と 収益）は
+    /// どれがトップラインか決まらないので立てない。
     static func incomeStatementTopLineRevenue(
         _ lines: [StatementLineItem], sales: Double?
     ) -> Double? {
         guard let sales, sales > 0 else { return nil }
+        var byTag: [String: StatementLineItem] = [:]
         var revenueLines: [StatementLineItem] = []
         for line in lines {
             if isOperatingProfitLine(line) { break }
-            guard line.unit != "JPYPerShares", isTopLineRevenueTag(line.tag) else { continue }
+            if byTag[line.tag] == nil { byTag[line.tag] = line }
+            guard line.unit != "JPYPerShares", isTopLineRevenueTag(line.tag),
+                  !isOfWhichLine(line)
+            else { continue }
             if revenueLines.contains(where: { $0.tag == line.tag }) { continue }
             revenueLines.append(line)
         }
+        revenueLines = revenueLines.filter { sumsOnlyRevenue($0, byTag: byTag, depth: 0) }
         let componentTags = Set(revenueLines.flatMap { ($0.components ?? []).map(\.tag) })
         let roots = revenueLines.filter { !componentTags.contains($0.tag) }
         guard !roots.isEmpty else { return nil }
+        if roots.count > 1,
+           !roots.allSatisfy({ $0.tag.hasPrefix("NetSales") || $0.tag.hasPrefix("OperatingRevenue") })
+        {
+            return nil
+        }
         let topLine = roots.reduce(0.0) { $0 + $1.value }
         return topLine > sales * (1 + topLineRevenueMinimumExcess) ? topLine : nil
     }
@@ -786,8 +799,45 @@ enum StatementFinancialsResolver {
             return false
         }
         if tag.hasSuffix("NOI") || tag.contains("NonOperating") { return false }
+        if isNonOperatingIncomeTag(tag) { return false }
         return tag.hasPrefix("NetSales") || tag.hasPrefix("OperatingRevenue")
             || tag.hasPrefix("Revenue") || tag.contains("Revenue")
+    }
+
+    /// 金融収益・その他の収益・受取利息など。`OtherFinancialIncomeRevenueIFRS`（8698）のように
+    /// Revenue を含んでも営業の収益ではない。
+    private static func isNonOperatingIncomeTag(_ tag: String) -> Bool {
+        let markers = [
+            "FinanceIncome", "FinancialIncome", "FinancialRevenue", "OtherIncome",
+            "ShareOfProfit", "InterestIncome", "DividendIncome", "GainOn",
+        ]
+        return markers.contains { tag.contains($0) }
+    }
+
+    /// 合計行の構成要素が（入れ子も含め）収益行だけか。
+    private static func sumsOnlyRevenue(
+        _ line: StatementLineItem, byTag: [String: StatementLineItem], depth: Int
+    ) -> Bool {
+        guard let components = line.components, !components.isEmpty else { return true }
+        guard depth < 4 else { return false }
+        for component in components {
+            guard isTopLineRevenueTag(component.tag) else { return false }
+            if let child = byTag[component.tag],
+               !sumsOnlyRevenue(child, byTag: byTag, depth: depth + 1)
+            {
+                return false
+            }
+        }
+        return true
+    }
+
+    /// 「（内、受取利息）」「うち、金利収益」は上の収益行の内数（8473 / 8253）。足さない。
+    private static func isOfWhichLine(_ line: StatementLineItem) -> Bool {
+        let tag = line.tag
+        if tag.hasPrefix("Of"), let next = tag.dropFirst(2).first, next.isUppercase { return true }
+        let label = (line.label ?? "").replacingOccurrences(of: " ", with: "")
+        return label.hasPrefix("うち") || label.hasPrefix("（うち") || label.hasPrefix("(うち")
+            || label.hasPrefix("（内") || label.hasPrefix("(内") || label.hasPrefix("内、")
     }
 
     private static func isOperatingProfitLine(_ line: StatementLineItem) -> Bool {

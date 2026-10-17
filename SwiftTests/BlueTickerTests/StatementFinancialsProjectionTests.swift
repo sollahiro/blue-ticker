@@ -365,6 +365,51 @@ import Testing
         #expect(StatementFinancialsResolver.incomeStatementTopLineRevenue(
             hakuhodo, sales: 58_457) == 861_003)
 
+        // 8473 S100YK3R: 収益の下の（内、受取利息）は内数。トップラインは 収益 のまま（立てない）。
+        let sbi = [
+            line("Revenue2IFRS", 1_896_607, label: "収益"),
+            line("OfInterestIncomeRevenueIFRS", 639_649, label: "（内、受取利息）"),
+            line("OfInsuranceRevenueIFRS", 108_303, label: "（内、保険収益）"),
+            line("CostOfSalesIFRS", 366_041, label: "売上原価"),
+        ]
+        #expect(StatementFinancialsResolver.incomeStatementTopLineRevenue(sbi, sales: 1_896_607) == nil)
+        // 8253 S100YCDE: 収益合計の下の「うち、金利収益」も内数。
+        let saison = [
+            line("IncomeFromThePaymentBusinessRevenue2IFRS", 270_726),
+            line("FinanceIncomeIFRS", 7_084),
+            line("Revenue2IFRS", 278_000, label: "収益合計",
+                 components: ["IncomeFromThePaymentBusinessRevenue2IFRS", "FinanceIncomeIFRS"]),
+            line("OfInterestIncomeRevenue2IFRS", 215_841, label: "うち、金利収益"),
+        ]
+        #expect(StatementFinancialsResolver.incomeStatementTopLineRevenue(saison, sales: 278_000) == nil)
+
+        // HOYA 型: IFRS 収益合計に金融収益・その他の収益が入る。売上収益を超える分は売上ではない。
+        let hoya = [
+            line("RevenueIFRS", 860_000, label: "売上収益"),
+            line("FinanceIncomeIFRS", 30_000, label: "金融収益"),
+            line("OtherIncomeIFRS", 5_000, label: "その他の収益"),
+            line("Revenue2IFRS", 895_000, label: "収益合計",
+                 components: ["RevenueIFRS", "FinanceIncomeIFRS", "OtherIncomeIFRS"]),
+            line("OperatingProfitLossIFRS", 250_000, label: "営業利益"),
+        ]
+        #expect(StatementFinancialsResolver.incomeStatementTopLineRevenue(hoya, sales: 860_000) == nil)
+        // 電通型: 総額の売上高（NetSalesIFRS）と純額の収益（Revenue2IFRS）が並ぶ。足すと二重計上。
+        let dentsu = [
+            line("NetSalesIFRS", 5_000_000, label: "売上高"),
+            line("Revenue2IFRS", 1_300_000, label: "収益"),
+            line("CostOfSalesIFRS", 200_000, label: "売上原価"),
+            line("OperatingProfitLossIFRS", 100_000, label: "営業利益"),
+        ]
+        #expect(StatementFinancialsResolver.incomeStatementTopLineRevenue(dentsu, sales: 1_300_000) == nil)
+        // マネックス型: 営業収益とは別建ての その他の金融収益 は売上に足さない。
+        let monex = [
+            line("OperatingRevenueIFRS", 100_000, label: "営業収益"),
+            line("OtherFinancialIncomeRevenueIFRS", 3_000, label: "その他の金融収益"),
+            line("Revenue2IFRS", 103_000, label: "収益合計",
+                 components: ["OperatingRevenueIFRS", "OtherFinancialIncomeRevenueIFRS"]),
+        ]
+        #expect(StatementFinancialsResolver.incomeStatementTopLineRevenue(monex, sales: 100_000) == nil)
+
         // 売上高だけの PL、営業外の収益行は見ない。
         let plain = [
             line("NetSales", 113_935),
