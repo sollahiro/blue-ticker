@@ -548,7 +548,7 @@ public func runFactsIngestCommand(
             // EPS/発行済株式・資本金は注記からXBRL直接抽出（決定論）。
             // `borrowings_schedule` / `lease_liabilities` は公開面から廃止（パーサは IBD 軸が使う）。
             // `property_plant_equipment_schedule` / `goodwill_and_intangibles` は Breakdown の
-            // `property_plant_equipment` / `goodwill_and_intangibles` 軸へ移した（BLT-137）。
+            // `property_plant_equipment` / `goodwill_and_intangibles` 軸へ移した。
             // `sga_expense_breakdown` は未公開のためここにも job-03 にも載せない。
             let statementNotesListed = codes ?? listed
             if statementNotesListed.isEmpty {

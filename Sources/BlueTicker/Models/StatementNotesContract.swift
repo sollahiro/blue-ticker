@@ -20,7 +20,7 @@ public let statementNoteTypeIssuedSharesAndCapital = "issued_shares_and_capital"
 /// パーサ `BorrowingsSchedule` は IBD 軸が使う。
 public let statementNoteTypeBorrowingsSchedule = "borrowings_schedule"
 /// 有形固定資産・のれん及び無形資産の種類別明細。公開面からは廃止（`retiredStatementNoteTypes`）。
-/// Breakdown の `property_plant_equipment` / `goodwill_and_intangibles` 軸へ移した（BLT-137）。
+/// Breakdown の `property_plant_equipment` / `goodwill_and_intangibles` 軸へ移した。
 public let statementNoteTypePropertyPlantEquipmentSchedule = "property_plant_equipment_schedule"
 public let statementNoteTypeGoodwillAndIntangibles = "goodwill_and_intangibles"
 /// リース負債（連結）。IFRS リース注記 TextBlock（`IFRSLease`）から決定論で抽出する。

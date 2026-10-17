@@ -35,10 +35,10 @@ public let breakdownAxisCapex = "capex"
 /// `breakdownSegmentMetricAxes` には入れない。`needs_review` の行は公開しない（fail closed）。
 public let breakdownAxisInterestBearingDebt = "interest_bearing_debt"
 /// 有形固定資産の種類別（土地・建物等の正味帳簿価額）。IFRS 連結の注記だけ。報告セグメント指標ではない。
-/// 旧 notes `property_plant_equipment_schedule` の置き換え（BLT-137）。
+/// 旧 notes `property_plant_equipment_schedule` の置き換え。
 public let breakdownAxisPropertyPlantEquipment = "property_plant_equipment"
 /// のれん及び無形資産の種類別（正味帳簿価額）。IFRS 連結の注記だけ。報告セグメント別の `goodwill` とは別物。
-/// 旧 notes `goodwill_and_intangibles` の置き換え（BLT-137）。
+/// 旧 notes `goodwill_and_intangibles` の置き換え。
 public let breakdownAxisGoodwillAndIntangibles = "goodwill_and_intangibles"
 /// 資産の種類別の2軸（有形固定資産、のれん及び無形資産）。
 public let breakdownAssetCategoryAxes = [

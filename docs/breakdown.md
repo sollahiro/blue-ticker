@@ -137,7 +137,7 @@ v2（`breakdown-interest-bearing-debt-v2`）: 行と合計が変わる変更（�
 
 ## 資産の種類別（`property_plant_equipment` / `goodwill_and_intangibles`）
 
-旧 notes `property_plant_equipment_schedule` / `goodwill_and_intangibles` の置き換え（BLT-137。notes の2種類は廃止）。切り口は報告セグメントではなく資産の種類。
+旧 notes `property_plant_equipment_schedule` / `goodwill_and_intangibles` の置き換え（notes の2種類は廃止）。切り口は報告セグメントではなく資産の種類。
 
 - 対象は IFRS 連結の注記 role（`NotesPropertyPlantAndEquipmentConsolidatedFinancialStatementsIFRS` / `NotesGoodwillAndIntangibleAssetsConsolidatedFinancialStatementsIFRS`）の正味帳簿価額 `{区分}IFRS` だけ。取得原価・累計償却・累計減損は載せない。注記の無い会社（日本基準・米国基準・のれん注記の無い IFRS 会社）は `not_found`。日本基準の区分は statement の BS 科目にある。
 - 行は表示順。直前の連続した2行以上の和に一致する行は小計（`row_kind=subtotal`、`category_group` が自分の名前）にし、その内訳行は `category_group` に小計の名前を持つ（ソニー 6758 の「コンテンツ資産」「その他の無形資産」）。和の比較は行数 × 表示単位（百万円）まで丸めを許す（JT 2914 は区分の和が合計と 1 百万円ずれる）。

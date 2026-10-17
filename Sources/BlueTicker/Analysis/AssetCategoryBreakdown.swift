@@ -1,5 +1,5 @@
 // 資産の種類別の内訳軸（property_plant_equipment / goodwill_and_intangibles）。
-// 旧 notes の `property_plant_equipment_schedule` / `goodwill_and_intangibles` を Breakdown に移したもの（BLT-137）。
+// 旧 notes の `property_plant_equipment_schedule` / `goodwill_and_intangibles` を Breakdown に移したもの。
 // 切り口は報告セグメントではなく資産の種類。のれんのセグメント別軸 `goodwill` とは別物。
 //
 // 対象は IFRS 連結の注記 role（正味帳簿価額の `{資産区分}IFRS` タグ）だけ。取得原価・累計償却は載せない。
