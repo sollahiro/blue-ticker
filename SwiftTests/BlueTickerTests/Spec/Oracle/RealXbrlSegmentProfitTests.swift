@@ -253,6 +253,34 @@ import Testing
         ])
     }
 
+    // 9201 日本航空: セグメント利益は財務・法人所得税前利益（EBIT、会社拡張
+    // ProfitBeforeFinancingAndIncomeTaxIFRS）。同じ表の税引前利益（ProfitLossBeforeTaxIFRS）は
+    // セグメント列が「－」（xsi:nil）で連結列だけなので、全セグメント 0 の profit にしない。
+    // source: code=9201 fy_end=2026-03-31 doc_id=S100YFIO page=133 field=segment_profit
+    // source: code=9201 fy_end=2025-03-31 doc_id=S100W1KL page=123 field=segment_profit
+    @Test func japanAirlinesEbitSegmentProfit() async throws {
+        try await expectProfits("S100YFIO", [
+            "EntityTotal": 218004,
+            "FullServiceCarrierReportableSegmentMember": 145056,
+            "LCCReportableSegmentMember": 9601,
+            "MileageFinanceAndCommerceReportableSegmentMember": 45535,
+            "OperatingSegmentsNotIncludedInReportableSegmentsAndOtherRevenueGeneratingBusinessActivitiesMember": 19176,
+            "ReconcilingItemsMember": -1365,
+            "ReportableSegmentsMember": 200193,
+            "TotalOfReportableSegmentsAndOthersMember": 219369,
+        ])
+        try await expectProfits("S100W1KL", [
+            "EntityTotal": 172452,
+            "FullServiceCarrierReportableSegmentMember": 111148,
+            "LCCReportableSegmentMember": 11586,
+            "MileageFinanceAndCommerceReportableSegmentMember": 38105,
+            "OperatingSegmentsNotIncludedInReportableSegmentsAndOtherRevenueGeneratingBusinessActivitiesMember": 12393,
+            "ReconcilingItemsMember": -782,
+            "ReportableSegmentsMember": 160841,
+            "TotalOfReportableSegmentsAndOthersMember": 173234,
+        ])
+    }
+
     // 東京海上・MS&AD: 親会社所有者帰属利益の PL 行は、セグメント表用ロールのラベル
     // （「セグメント利益…」）ではなく標準ラベル「親会社の所有者」（連結損益計算書「当期利益の帰属」）。
     // source: code=8766 fy_end=2026-03-31 doc_id=S100YLS8 page=123 field=income_statement.ProfitLossAttributableToOwnersOfParentIFRS.label

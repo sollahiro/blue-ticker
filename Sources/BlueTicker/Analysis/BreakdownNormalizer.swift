@@ -326,13 +326,23 @@ enum BreakdownNormalizer {
     ///    （表の行名が測度名だけで、どれをセグメント利益とするかが本文にある会社。差異調整の起点は
     ///    会社のセグメント利益）。
     /// 3. どちらでも決まらなければ従来どおり `fallbackTags` の先頭一致。
+    ///
+    /// 当期のセグメント member 値がすべて 0 のタグは候補にしない。表の「－」セルは `xsi:nil` で
+    /// 0 として読まれるため、測度が別タグの会社で税引前利益タグ（全セグメント nil）を拾い、
+    /// profit を 0 で公開してしまう（9201 日本航空 S100YFIO: セグメント利益は財務・法人所得税前利益）。
     static func segmentProfitTag(
         facts: [BreakdownFact], tables: [BreakdownTable], rowLabelsByTag: [String: Set<String>],
         amountTag: String, fallbackTags: [String]
     ) -> String? {
-        let fallback = fallbackTags.first(where: { tag in facts.contains(where: { $0.tag == tag }) })
+        let allMembersZero: (String) -> Bool = { tag in
+            let perMember = resolvePerMember(facts: facts, tag: tag)
+            return !perMember.isEmpty && perMember.values.allSatisfy { $0.value == 0 }
+        }
+        let fallback = fallbackTags.first(where: { tag in
+            facts.contains(where: { $0.tag == tag }) && !allMembersZero(tag)
+        })
         let candidateTags = Set(facts.map(\.tag)).subtracting([amountTag]).filter { tag in
-            !resolvePerMember(facts: facts, tag: tag).isEmpty
+            !resolvePerMember(facts: facts, tag: tag).isEmpty && !allMembersZero(tag)
         }
         let reconciliationStarts = profitReconciliationStarts(in: tables)
 
