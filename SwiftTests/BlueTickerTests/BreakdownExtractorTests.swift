@@ -1112,7 +1112,7 @@ import Foundation
     }
 
     @Test func segmentInfoDoesNotChainWhenSameShapeButNonYearHeaderTextDiffers() {
-        // Grok 4.5 レビュー指摘の回帰テスト: 列数は同じで年度以外の文言が異なる場合
+        // 回帰テスト: 列数は同じで年度以外の文言が異なる場合
         // （「2024年度｜売上」対「2025年度｜資産」）は、年度ラベル除去後も不一致のままであるべき
         // （年度ラベル正規化が過検出を広げていないことを、列構成が違う既存の負例より厳密に確認する）。
         let escaped =
@@ -1388,7 +1388,7 @@ import Foundation
     }
 
     @Test func segmentInfoDoesNotChainWhenRowLabelOverlapBelowMinimumCount() {
-        // Grok 4.5 監査指摘の回帰（2026-07-25）: 行ラベルが2件しか一致しない場合は
+        // 回帰（2026-07-25）: 行ラベルが2件しか一致しない場合は
         // `Xbrl.noteRowLabelMinOverlapCount`（3）未満のため Jaccard 経路も発火せず、
         // 見出し不一致の表として打ち切られるべき（「収益」「利益」等の一般的な財務語だけが
         // 偶然一致する誤チェーンを防ぐ安全弁）。
@@ -1415,7 +1415,7 @@ import Foundation
     }
 
     @Test func segmentInfoDoesNotChainWhenJaccardBelowThresholdDespiteThreeSharedLabels() {
-        // Grok 4.5 監査指摘の回帰（2026-07-25）: 一致件数が最低件数（3）を満たしていても、
+        // 回帰（2026-07-25）: 一致件数が最低件数（3）を満たしていても、
         // 和集合が大きく Jaccard が閾値（0.6）未満なら「同じ開示の続き」とはみなさない。
         let escaped =
             "&lt;p&gt;セグメント情報&lt;/p&gt;" +
@@ -1624,7 +1624,7 @@ import Foundation
         // 専用 TextBlock タグ（`NotesSegmentInformationConsolidatedFinancialStatementsIFRSTextBlock`
         // 等）由来の表と、`OperatingSegmentsAxis` 付き dimension fact の両方が存在する場合、
         // method は決定的な facts を優先する（html_table への表スクレイピングより信頼性が高いため）。
-        // ただし tables は破棄せず保持する（Grok 4.5 レビュー指摘: facts の正規化が失敗した場合に
+        // ただし tables は破棄せず保持する（facts の正規化が失敗した場合に
         // LLM の表フォールバックへ回せるようにするため）。
         let escapedTable =
             "&lt;table&gt;&lt;tr&gt;&lt;td&gt;ダミー&lt;/td&gt;&lt;td&gt;999&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;"

@@ -263,7 +263,7 @@ enum BreakdownNormalizer {
             abs(perMember[$0]!.value - internalSum) < abs(perMember[$1]!.value - internalSum)
         }) {
             denominator = perMember[closestToInternalSum]!.value
-            // Grok 4.5 レビュー指摘: 小計候補が1件しかない場合（例: 全社合計タグが名称未収載で
+            // 小計候補が1件しかない場合（例: 全社合計タグが名称未収載で
             // 部分合計しか無い）、距離チェックそのものがスキップされ needsReview が立たない穴が
             // あった。内部合計と大きく乖離する小計を採用したときは要確認とする。
             if abs(denominator) > 0, abs(denominator - internalSum) / abs(denominator) > 0.05 {
@@ -1208,7 +1208,7 @@ enum BreakdownNormalizer {
             })
             // 数値による小計除外の安全網（本処理と同じ非対称ルール、学び7）: 企業独自の合計行名が
             // 上記の標準語彙に無くても、候補が複数あるときは金額が連結売上高に一致する member を
-            // 小計とみなして除外する（Grok 4.5 レビュー指摘: 除外しないと合計が概ね2倍になり、
+            // 小計とみなして除外する（除外しないと合計が概ね2倍になり、
             // 正しい売上タグが ±5% 判定で誤って弾かれる）。
             let unnamedCandidates = perMember.keys.filter { !excluded.contains($0) }
             if unnamedCandidates.count > 1 {

@@ -293,9 +293,9 @@ struct GeographyProdBreakdownRow: Codable {
             }
             return "jev_worse"
         }
-        let lunaOverflow = prod.rows.contains { ($0.amount ?? 0) > 1e15 }
+        let prodOverflow = prod.rows.contains { ($0.amount ?? 0) > 1e15 }
         if !prodPublic && newPublic { return "jev_better" }
-        if prodPublic && newPublic && lunaOverflow { return "jev_better" }
+        if prodPublic && newPublic && prodOverflow { return "jev_better" }
         if labelsOnlyOfWhich { return "jev_better" }
         if prodPublic && newPublic, recoveredMissingRegions(prod: prod, snapshot: snapshot) {
             return "jev_better"
@@ -306,7 +306,7 @@ struct GeographyProdBreakdownRow: Codable {
             return "equivalent"
         }
         if why.contains("amounts") {
-            // Luna の桁コピー・年度取り違え。ラベル集合が同じなら Jev の表内金額を正とする。
+            // 本番行（旧経路）の桁コピー・年度取り違え。ラベル集合が同じなら Jev の表内金額を正とする。
             if prodPublic && newPublic {
                 let prodLabels = Set(
                     prod.rows.filter { $0.rowKind == "segment" }.compactMap(\.label))

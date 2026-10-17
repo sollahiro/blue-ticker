@@ -1208,7 +1208,7 @@ enum Xbrl {
     // 実データ（S100YG5L）では同一開示間で Jaccard 0.96〜1.00・別開示との境界で 0.0 と
     // 大きく開くため、「収益」「利益」等の一般的な財務語だけが偶然2件一致するような
     // 誤チェーン（例: {収益,利益,合計} vs {収益,利益,資産} は交差2/和4=0.5）を避けるため、
-    // 実測値に対して十分な余裕を持たせた値にしている（Grok 4.5 監査指摘、2026-07-25）。
+    // 実測値に対して十分な余裕を持たせた値にしている。
     static let noteRowLabelJaccardThreshold = 0.6
     // 偶然2項目だけ一致した場合の誤検出を避けるための最低一致件数。
     static let noteRowLabelMinOverlapCount = 3
@@ -1307,11 +1307,11 @@ enum Xbrl {
     /// 本リストに一致するタグが無い場合の候補発見（`BreakdownNormalizer` のカバレッジ/金額整合性
     /// ヒューリスティック）で、明らかに売上ではない概念を除外するための部分文字列ブラックリスト。
     /// 個別タグ名を都度追加するホワイトリストの Whac-A-Mole を避けつつ、銀行の NetRevenue 系や
-    /// 資産・利益・従業員数等の再入場を防ぐ（Grok 4.5 レビュー指摘、docs/breakdown.md）。
+    /// 資産・利益・従業員数等の再入場を防ぐ（docs/breakdown.md）。
     static let segmentNonRevenueTagKeywords: [String] = [
         "Profit", "Loss", "Asset", "Employee", "Equity", "Depreciation",
         "Impairment", "Expenditure", "Liabilit", "Capital", "Dividend",
-        "NetRevenue", "OrdinaryRevenue", "OrdinaryIncome",  // 銀行等金融機関の指標概念（Grok 4.5 レビュー指摘）
+        "NetRevenue", "OrdinaryRevenue", "OrdinaryIncome",  // 銀行等金融機関の指標概念
     ]
 
     /// セグメント別の利益タグ（優先順）。IFRS でも会社により表記が割れる

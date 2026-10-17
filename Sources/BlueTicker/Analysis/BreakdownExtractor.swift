@@ -2813,7 +2813,7 @@ enum BreakdownExtractor {
     /// html_table（US-GAAP注記の事業別セグメント表）を差し置いて解決不能な facts を選んでしまう。
     /// 認識可能なタグの有無で判定することで、この2社は従来どおり html_table のまま。
     ///
-    /// facts 優先時も tables は破棄せず保持する（Grok 4.5 レビュー指摘: 破棄すると、facts が
+    /// facts 優先時も tables は破棄せず保持する（破棄すると、facts が
     /// 何らかの理由で正規化に失敗した会社が LLM フォールバックの手段を永久に失う）。
     /// 呼び出し側（`BusinessBreakdownResolver` 等）は `method == "xbrl_facts"` を
     /// 優先しつつ、正規化失敗時は `tables` が非空なら LLM 経路へフォールバックする。
