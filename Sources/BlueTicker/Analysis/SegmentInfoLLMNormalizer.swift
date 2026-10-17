@@ -537,8 +537,10 @@ enum SegmentInfoLLMNormalizer {
     /// セグメント注記は製品表・報告セグメント・所在地表が混在するので、全体の axisConstraint
     /// をそのまま使うと製品表が geography_only で落ちる。
     static func preferredTables(
-        _ tables: [RevenueRecognitionCandidates.ParsedTable]
+        _ all: [RevenueRecognitionCandidates.ParsedTable]
     ) -> [RevenueRecognitionCandidates.ParsedTable] {
+        let salesTables = all.filter { !isNonSalesMetricTable($0) }
+        let tables = salesTables.isEmpty ? all : salesTables
         let product = tables.filter(isDedicatedProductTable)
         if !product.isEmpty { return product }
         let matrices = tables.filter { isSegmentColumnMatrix($0) }
@@ -548,6 +550,29 @@ enum SegmentInfoLLMNormalizer {
         }
         if !geography.isEmpty { return geography }
         return tables
+    }
+
+    static let nonSalesMetricHeads = [
+        "営業利益", "営業損益", "セグメント利益", "セグメント損益", "セグメント損失",
+        "当期償却額", "当期末残高", "のれんの償却額", "減損損失", "税金等調整前当期純利益",
+    ]
+    static let salesMarkers = ["売上", "顧客との契約", "外部顧客", "営業収益", "経常収益", "収益合計"]
+
+    /// 売上の行が無く、利益・のれん償却・残高の行だけの表（4901 S100LV2D のセグメント損益と
+    /// 調整表、7062 S100YLVZ ののれん償却額及び未償却残高）。売上内訳の候補にしない。
+    static func isNonSalesMetricTable(_ table: RevenueRecognitionCandidates.ParsedTable) -> Bool {
+        let labels = table.grid.dropFirst(table.headerRowCount).compactMap { row -> String? in
+            guard let first = row.first else { return nil }
+            let compact = RevenueRecognitionCandidates.compactCell(first)
+                .replacingOccurrences(of: " ", with: "")
+                .trimmingCharacters(in: CharacterSet(charactersIn: "：:"))
+            return compact.isEmpty ? nil : compact
+        }
+        let hasNonSalesHead = labels.contains { label in
+            nonSalesMetricHeads.contains { label.hasPrefix($0) }
+        }
+        guard hasNonSalesHead else { return false }
+        return !labels.contains { label in salesMarkers.contains { label.contains($0) } }
     }
 
     static func isDedicatedProductTable(
@@ -835,6 +860,10 @@ enum SegmentInfoLLMNormalizer {
             ))
         }
 
+        if let consolidatedSales, consolidatedSales != 0 {
+            rows = demotingTrailingParentSubtotals(
+                rows, consolidatedSales: consolidatedSales, unit: multiplier)
+        }
         let segmentSum = rows.filter { $0.rowKind == "segment" }.reduce(0.0) { $0 + $1.amount }
         let reconcilingSum = rows.filter { $0.rowKind == "reconciling" }.reduce(0.0) { $0 + $1.amount }
         var denom = initialDenominator
@@ -874,6 +903,45 @@ enum SegmentInfoLLMNormalizer {
             copy.share = denom == 0 ? nil : copy.amount / denom
             return copy
         }
+    }
+
+    /// 子の直後に親の小計が来る表（「オフィスプリンティング分野」「オフィスサービス分野」の後に
+    /// 「オフィス分野」）。セグメント合計が売上の許容幅を超え、直前の連続した 2 行以上の合計に
+    /// 一致する行を小計に落とすと許容幅に収まるときだけ、その行を `subtotal` にする（7752 S100LKDZ）。
+    /// ラベルは見ない。合計が既に許容幅にあるときは何もしない。
+    static func demotingTrailingParentSubtotals(
+        _ rows: [BreakdownRow], consolidatedSales: Double, unit: Double
+    ) -> [BreakdownRow] {
+        func segmentSum(_ rows: [BreakdownRow]) -> Double {
+            rows.filter { $0.rowKind == "segment" }.reduce(0.0) { $0 + $1.amount }
+        }
+        guard !denominatorTolerance.contains(segmentSum(rows) / consolidatedSales) else { return rows }
+        var result = rows
+        for index in result.indices where result[index].rowKind == "segment" {
+            var childSum = 0.0
+            var childCount = 0
+            var cursor = index - 1
+            while cursor >= 0, result[cursor].rowKind == "segment" {
+                childSum += result[cursor].amount
+                childCount += 1
+                cursor -= 1
+                guard childCount >= 2 else { continue }
+                if abs(childSum - result[index].amount) <= Double(childCount) * unit,
+                   result[index].amount != 0
+                {
+                    break
+                }
+            }
+            guard childCount >= 2,
+                  abs(childSum - result[index].amount) <= Double(childCount) * unit,
+                  result[index].amount != 0
+            else { continue }
+            result[index].rowKind = "subtotal"
+        }
+        guard denominatorTolerance.contains(segmentSum(result) / consolidatedSales) else {
+            return rows
+        }
+        return result
     }
 
     private static func flagGeographyLabels(
