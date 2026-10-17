@@ -2,7 +2,7 @@
 // 標準の調整 member（`Xbrl.segmentReconcilingMemberNames`）を使わず、会社拡張の member で
 // 「消去又は全社」などの列を立てる会社（7203 トヨタ `CorporateExpensesAndEliminationMember`）が
 // ある。会社拡張の member 名を一覧に足していかず、書類ごとに Jev に既存の member から選ばせる。
-// 採否はコード: 選んだ member の外部売上が売上合計の 1% を超えたら事業とみなして採らない。
+// 採否はコード: 選んだ member に外部売上の fact があり、売上合計の 1% 以下のときだけ採る。
 // 結果は書類単位で `BreakdownMemberRoles.extraReconciling`（TaskLocal）に載せ、各軸の
 // member 分類（`BreakdownMemberRoles.isReconciling`）が標準一覧と同じに扱う。
 
@@ -68,13 +68,14 @@ enum SegmentMemberRoleJevPicker {
         return out
     }
 
-    /// 外部売上が売上合計（候補の絶対値の和）の 1% 以下か。売上が無ければ通す。
+    /// 外部売上が売上合計（候補の絶対値の和）の 1% 以下か。選んだ member に外部売上の fact が
+    /// 無い・売上合計が出せない（銀行・保険など）ときは裏取りできないので採らない（fail-closed）。
     static func externalRevenueIsNegligible(
         _ chosen: SegmentMemberRoleCandidate, among candidates: [SegmentMemberRoleCandidate]
     ) -> Bool {
-        guard let own = chosen.externalRevenueMillionYen else { return true }
+        guard let own = chosen.externalRevenueMillionYen else { return false }
         let total = candidates.compactMap(\.externalRevenueMillionYen).map(abs).reduce(0, +)
-        guard total > 0 else { return true }
+        guard total > 0 else { return false }
         return abs(own) <= total * maxExternalRevenueShare
     }
 
