@@ -24,7 +24,9 @@ import Foundation
         return true
     }
 
-    private static func snapshot(_ docID: String) -> BreakdownSnapshotPayload? {
+    private static func snapshot(
+        _ docID: String, overviewFacts: BreakdownSnapshot? = nil
+    ) -> BreakdownSnapshotPayload? {
         let dir = xbrlDir(docID)
         let contextMap = BreakdownExtractor.loadDimensionContextMap(xbrlDir: dir)
         let facts = BreakdownExtractor.extractFactsByDimension(
@@ -68,7 +70,25 @@ import Foundation
                 guard let tag = overviewTotal.tag, value > 0 else { return nil }
                 return (value, tag)
             },
-            flowCompanyTotal: flowTotal, prebuiltAssets: assets)
+            flowCompanyTotal: flowTotal, prebuiltAssets: assets,
+            prebuiltOverviewFacts: overviewFacts)
+    }
+
+    /// facts 経路の Overview スナップショットに未タグ行の補完をかける（本番の resolveCapexBreakdown と同じ順）。
+    private static func filledOverview(
+        _ docID: String, decider: (any CapexOverviewRowDeciding)?
+    ) async -> CapexOverviewUntaggedRowFill.FillResult? {
+        let dir = xbrlDir(docID)
+        let contextMap = BreakdownExtractor.loadDimensionContextMap(xbrlDir: dir)
+        let facts = BreakdownExtractor.extractFactsByDimension(
+            xbrlDir: dir, dimensionKeywords: Xbrl.businessSegmentDimensionKeywords,
+            contextMap: contextMap)
+        guard let base = BreakdownNormalizer.normalizeCapitalExpendituresOverview(
+            facts: facts, labelsByTag: XBRLUtils.breakdownMemberLabels(in: dir),
+            memberParents: XBRLUtils.operatingSegmentMemberParents(in: dir))
+        else { return nil }
+        return await CapexOverviewUntaggedRowFill.fill(
+            snapshot: base, facts: facts, xbrlDir: dir, decider: decider, docID: docID)
     }
 
     /// 富士フイルム: Overview タグにセグメント dimension。資産・フローがあれば同じ member に載る。
@@ -157,6 +177,45 @@ import Foundation
             || snapshot.capitalExpendituresOverview != nil)
     }
 
+    /// パナソニックHD: 設備投資等の概要（億円）で「その他・全社」だけ ix:nonFraction が無い。報告セグメント・
+    /// 報告セグメント計・合計にはタグがある。未タグ行の和（表示値 × タグ付きセルの倍率 1億円）が
+    /// 「合計 − タグ付きセグメント」に一致し、Jev（ここではスタブ）が reconciling と分類したときだけ足す。
+    /// Jev 無し・合計と分類したときは従来どおり行を足さない（S100W0F3 / S100TQZC は乖離 NR のまま）。
+    // source: code=6752 fy_end=2026-03-31 doc_id=S100YETA page=45 field=capital_expenditures_overview row=その他・全社 276
+    // source: code=6752 fy_end=2025-03-31 doc_id=S100W0F3 field=capital_expenditures_overview row=その他・全社 540
+    // source: code=6752 fy_end=2024-03-31 doc_id=S100TQZC field=capital_expenditures_overview row=その他・全社 521
+    @Test(arguments: [
+        ("S100YETA", 629_100_000_000.0, 27_600_000_000.0),
+        ("S100W0F3", 768_900_000_000.0, 54_000_000_000.0),
+        ("S100TQZC", 568_000_000_000.0, 52_100_000_000.0),
+    ])
+    func panasonicUntaggedOtherAndCorporateOverviewRowIsReconciling(
+        docID: String, total: Double, otherAndCorporate: Double
+    ) async throws {
+        guard await Self.ensureAvailable(docID) else { return }
+        let filled = try #require(await Self.filledOverview(
+            docID, decider: StubCapexOverviewRowDecider(answer: CapexOverviewUntaggedRowFill.reconcilingKey)))
+        #expect(filled.audit?.applied == true)
+        let snapshot = try #require(Self.snapshot(docID, overviewFacts: filled.snapshot))
+        #expect(snapshot.capitalExpendituresOverview?.denominator == total)
+        let row = try #require(snapshot.rows.first { $0.labelRaw == "その他・全社" })
+        #expect(row.rowKind == "reconciling")
+        #expect(row.capitalExpendituresOverview == otherAndCorporate)
+        let additive = snapshot.rows
+            .filter { $0.rowKind == "segment" || $0.rowKind == "reconciling" }
+            .compactMap(\.capitalExpendituresOverview).reduce(0, +)
+        #expect(additive == total)
+        #expect(!snapshot.warnings.contains("capital_expenditures_overview_segment_sum_far_from_total"))
+        #expect(snapshot.needsReview == false)
+
+        for decider: (any CapexOverviewRowDeciding)? in [
+            nil, StubCapexOverviewRowDecider(answer: CapexOverviewUntaggedRowFill.totalKey),
+        ] {
+            let kept = try #require(await Self.filledOverview(docID, decider: decider))
+            #expect(!kept.snapshot.rows.contains { $0.labelRaw == "その他・全社" })
+        }
+    }
+
     /// 味の素: Overview 総額タグ 96,439百万円が分母。segment+reconciling 96,437 は分母にしない。
     @Test func ajinomotoOverviewDenominatorIsEntityTotalNotSegmentSum() async throws {
         guard await Self.ensureAvailable("S100VXJA") else { return }
@@ -172,6 +231,18 @@ import Foundation
             #expect(entity.rowKind == breakdownRowKindEntityTotal)
             #expect(entity.capitalExpendituresOverview == 96_439_000_000)
         }
+    }
+}
+
+/// 未タグ行の種別に固定の答えを返すスタブ（3 サンプルとも同じ答え）。
+struct StubCapexOverviewRowDecider: CapexOverviewRowDeciding {
+    var answer: String
+    func classifyOverviewRow(
+        table: CapexOverviewUntaggedRowFill.Table, row: CapexOverviewUntaggedRowFill.Row, docID: String
+    ) async -> JevChoiceAggregate.Sample {
+        JevChoiceAggregate.Sample(
+            selected: answer, probability: 0.97,
+            options: CapexOverviewUntaggedRowFill.optionKeys, model: "stub")
     }
 }
 

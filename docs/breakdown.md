@@ -73,7 +73,7 @@ geography は変えない。本邦90％の `not_found` は既存の Jev ゲー�
 - 売上分母・employees / rd の Summary 正本は breakdown 分母（ingest も同一 XBRL パスで直接解決）。
 - 報告セグメント別指標の分母は通常 segment + reconciling（表の小計・EntityTotal は行として保持）。`capex` の各セル（`segment_assets` / `flow` / `capital_expenditures_overview`）の分母は、その指標の連結の無 dimension 総額タグ（EntityTotal）である。加算した segment+reconciling は 100% 分母にしない（項目タグ漏れがシェアに出るようにする）。5% 超ずれは `needs_review`。総額が無いときは Jev 本文総額（Role のみ、円はコード）、それも無ければそのセルの分母は null。`segment_assets` だけ、銀行の固定資産など連結 EntityTotal が無いとき segment + reconciling を残す。差額表 HTML の非分類行が既存 segment 行と同額のときは、その行だけ落とす（ラベル非依存）。
   XBRL タグ付き reconciling member（`ReconcilingItemsMember` 等）には適用しない。
-- `capex` は名前付きセル。単一 `amount` は使わない。欠測セルは null。`flow` は書類単位で `capital_expenditures` があればそれ、無ければ `noncurrent_asset_additions`（混ぜず足さない）。Overview HTML 表は正本。HTML ラベルと XBRL member の結合は初期はしない。財務諸表計上額の `row_kind` は `EntityTotal`。
+- `capex` は名前付きセル。単一 `amount` は使わない。欠測セルは null。`flow` は書類単位で `capital_expenditures` があればそれ、無ければ `noncurrent_asset_additions`（混ぜず足さない）。Overview HTML 表は正本。HTML ラベルと XBRL member の結合は初期はしない。財務諸表計上額の `row_kind` は `EntityTotal`。Overview の表で一部の行だけタグが無いとき（6752「その他・全社」）は、未タグ行の和が総額 − タグ付き行に一致し、Jev が行の種別を reconciling / segment と分類したときだけその行を足す（`CapexOverviewUntaggedRowFill`。キーが無いときは足さない）。
 - 設備投資の本文総額は `OPENROUTER_DECISION_API_KEY` があるときだけ別 Choice（`capex_prose`）。Jev は Role だけ、円はコード。埋めるのは Overview の会社総額と、タグ付きセグメント行があるときの reconciling だけ。セグメント別は埋めない。`SegmentNoteDecision` の表/省略 Choice には載せない。source `capex_prose` は公開面で研究開発費本文総額と同じ扱い。`cache_version` は `breakdown-capex-v1`。
 
 ## 有利子負債（`interest_bearing_debt`）

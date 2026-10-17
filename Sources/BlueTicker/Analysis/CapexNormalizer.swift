@@ -17,7 +17,8 @@ enum CapexNormalizer {
         overviewHTML: BreakdownSnapshot? = nil,
         overviewCompanyTotal: (value: Double, tag: String)? = nil,
         flowCompanyTotal: (value: Double, tag: String)? = nil,
-        prebuiltAssets: BreakdownSnapshot? = nil
+        prebuiltAssets: BreakdownSnapshot? = nil,
+        prebuiltOverviewFacts: BreakdownSnapshot? = nil
     ) -> BreakdownSnapshotPayload? {
         let assets = prebuiltAssets ?? BreakdownNormalizer.normalizeSegmentAssets(
             facts: facts, labelsByTag: labelsByTag, memberParents: memberParents)
@@ -46,8 +47,9 @@ enum CapexNormalizer {
             flowSnapshot = nil
         }
 
-        let overviewFacts = BreakdownNormalizer.normalizeCapitalExpendituresOverview(
-            facts: facts, labelsByTag: labelsByTag, memberParents: memberParents)
+        let overviewFacts = prebuiltOverviewFacts
+            ?? BreakdownNormalizer.normalizeCapitalExpendituresOverview(
+                facts: facts, labelsByTag: labelsByTag, memberParents: memberParents)
         let overview: BreakdownSnapshot?
         if let overviewFacts {
             overview = withCompanyTotalDenominator(

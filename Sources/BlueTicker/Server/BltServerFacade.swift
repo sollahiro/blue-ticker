@@ -59,6 +59,8 @@ public struct BltServerContext: Sendable {
     let revenueRecognitionRowRoleDecider: (any RevenueRecognitionRowRoleDeciding)?
     /// 合計だけタグの従業員表がセグメント別かの判定。同じキーが無いときは nil（not_found のまま）。
     let employeesTableDecider: (any EmployeesTableDeciding)?
+    /// 設備投資等の概要で未タグ行の種別（reconciling / segment）の判定。同じキーが無いときは nil（行を足さない）。
+    let capexOverviewRowDecider: (any CapexOverviewRowDeciding)?
     /// employees / rd / goodwill / 報告セグメント指標軸が同一 doc を軸ループで再パースしないためのメモ。
     let businessSegmentDimensionCache: BusinessSegmentDimensionCache
 
@@ -77,7 +79,8 @@ public struct BltServerContext: Sendable {
         segmentMemberRoleDecider: (any SegmentMemberRoleDeciding)? = nil,
         segmentProfitDecider: (any SegmentProfitDeciding)? = nil,
         revenueRecognitionRowRoleDecider: (any RevenueRecognitionRowRoleDeciding)? = nil,
-        employeesTableDecider: (any EmployeesTableDeciding)? = nil
+        employeesTableDecider: (any EmployeesTableDeciding)? = nil,
+        capexOverviewRowDecider: (any CapexOverviewRowDeciding)? = nil
     ) {
         self.cacheDir = cacheDir
         let store = EdinetCacheStore(cacheDir: edinetCacheDir(cacheDir))
@@ -100,6 +103,7 @@ public struct BltServerContext: Sendable {
         self.segmentProfitDecider = segmentProfitDecider
         self.revenueRecognitionRowRoleDecider = revenueRecognitionRowRoleDecider
         self.employeesTableDecider = employeesTableDecider
+        self.capexOverviewRowDecider = capexOverviewRowDecider
         self.businessSegmentDimensionCache = BusinessSegmentDimensionCache()
     }
 }
@@ -229,6 +233,9 @@ public func makeBltServerContext() async -> BltServerContext? {
     let employeesTableDecider: (any EmployeesTableDeciding)? = decisionsClient.map {
         OpenRouterEmployeesTableDecider(client: $0)
     }
+    let capexOverviewRowDecider: (any CapexOverviewRowDeciding)? = decisionsClient.map {
+        OpenRouterCapexOverviewRowDecider(client: $0)
+    }
     return BltServerContext(
         apiKey: key, cacheDir: cacheDir, overviewChatClient: overviewChatClient,
         overviewModel: overviewEndpoint?.model ?? companyOverviewDefaultModel,
@@ -243,7 +250,8 @@ public func makeBltServerContext() async -> BltServerContext? {
         segmentMemberRoleDecider: segmentMemberRoleDecider,
         segmentProfitDecider: segmentProfitDecider,
         revenueRecognitionRowRoleDecider: revenueRecognitionRowRoleDecider,
-        employeesTableDecider: employeesTableDecider)
+        employeesTableDecider: employeesTableDecider,
+        capexOverviewRowDecider: capexOverviewRowDecider)
 }
 
 // MARK: - REST Facade
@@ -1198,12 +1206,23 @@ private extension BltServerContext {
             facts: cached.facts, labelsByTag: cached.labelsByTag, memberParents: memberParents)
         assets = BreakdownNormalizer.enrichSegmentAssetsWithDifferenceTable(
             snapshot: assets, xbrlDir: xbrlDir)
+        var overviewFacts = BreakdownNormalizer.normalizeCapitalExpendituresOverview(
+            facts: cached.facts, labelsByTag: cached.labelsByTag, memberParents: memberParents)
+        var overviewRowAudit: SegmentNoteJevAuditPayload?
+        if let snapshot = overviewFacts {
+            let filled = await CapexOverviewUntaggedRowFill.fill(
+                snapshot: snapshot, facts: cached.facts, xbrlDir: xbrlDir,
+                decider: capexOverviewRowDecider, docID: docID)
+            overviewFacts = filled.snapshot
+            overviewRowAudit = filled.audit
+        }
 
         let payload = CapexNormalizer.normalize(
             facts: cached.facts, labelsByTag: cached.labelsByTag, memberParents: memberParents,
             capitalExpendituresPresent: cePresent, noncurrentAssetAdditionsPresent: naaPresent,
             overviewHTML: overviewHTML, overviewCompanyTotal: overviewTotal,
-            flowCompanyTotal: flowTotal, prebuiltAssets: assets)
+            flowCompanyTotal: flowTotal, prebuiltAssets: assets,
+            prebuiltOverviewFacts: overviewFacts)
 
         let filled = await fillCapexProse(
             payload: payload, xbrlDir: xbrlDir, docID: docID)
@@ -1229,7 +1248,7 @@ private extension BltServerContext {
             return breakdownByRecordingOverlayRegressions(
                 .resolved(
                     payload: result.payload, source: result.source, contentHash: hash,
-                    audit: result.audit),
+                    audit: result.audit ?? overviewRowAudit.map { .segmentNoteJev($0) }),
                 xbrlDir: xbrlDir)
         }
     }

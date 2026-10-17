@@ -66,6 +66,7 @@ description: XBRL 抽出ロジック、Stage、statement・notes・breakdown 契
 21. 報告セグメントが地域名のため収益認識へ swap したあと、収益認識の**行**が報告セグメントと同じ日本語ラベルかつ同じ開示金額で、セグメント facts に利益があるときは product_service に `xbrl_facts`（利益と計 / 調整 / 連結）を載せる。行が酒類・飲料・NC旋盤のような別次元なら収益認識のまま、swap 時に facts も捨てる。どの値も開示セルからだけ読む（差額埋めはしない）。`cache_version` は上げない。
 22. 標準の調整 member（`segmentReconcilingMemberNames`）が無い書類だけ、会社拡張の member から調整・消去・全社の列を Jev に選ばせる（`SegmentMemberRoleJevPicker`。書類ごとに1回、3 回一致・0.9）。外部売上が売上合計の 1% を超える member は採らない。結果は TaskLocal `BreakdownMemberRoles.extraReconciling` で全軸の member 分類（`isReconciling`）に効く。会社拡張の member 名を一覧に足さない（7203 の「消去又は全社」）。キーが無いときは標準一覧だけ。`cache_version` は上げない。
 23. 事業別内訳の利益タグは、表の行名・差異調整・標準タグ一覧（当期のセグメント値がすべて 0 のタグは除く。xsi:nil は 0 で読まれる）の順で決める。決まらず profit が全行 null のときだけ、セグメント値のある既存タグの中から会社のセグメント利益の行を Jev に選ばせる（`SegmentProfitJevPicker`。3 回一致）。採否は報告セグメントの和と「報告セグメント計」の一致（セグメント数 × 1百万円）、計が無ければ確率 0.9 以上。会社拡張タグを一覧に足さない（9201 の財務・法人所得税前利益は Jev が選ぶ）。キーが無い・合意できない・整合しないときは profit を付けない。`cache_version` は上げない。
+24. capex の Overview セルで、設備投資等の概要の表の一部の行だけ ix:nonFraction が無い（6752 の「その他・全社」。報告セグメント・計・合計にはタグ）ときは、セグメント member 付き fact のある同じ表の同じ金額列から未タグ行を読む（`CapexOverviewUntaggedRowFill`）。円への倍率はタグ付きセルの fact 値 ÷ 表示値で、全セルで揃うときだけ（億円を固定しない）。未タグ行（3 行まで）の和が「総額 − タグ付き segment / reconciling」に 1 円未満で一致するときだけ、行の種別（`reconciling` / `segment` / `total_or_subtotal`）を Jev に分類させる（3 回一致・0.9）。合計・小計と分類された・合意できない・キーが無いときは足さない。値は開示セルそのまま（差額で埋めない）。行名で種別を決めない。`cache_version` は上げない。
 
 ## Spec 層（テスト資産）
 
