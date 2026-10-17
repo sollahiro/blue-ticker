@@ -68,7 +68,7 @@ enum ReportableSegmentRevenueRecognition {
                   BreakdownNormalizer.isCurrentPeriodContext(fact.contextRef),
                   let member = XBRLUtils.primaryBreakdownMember(fact.dimensions),
                   !Xbrl.segmentSubtotalMemberNames.contains(member),
-                  !Xbrl.segmentReconcilingMemberNames.contains(member)
+                  !BreakdownMemberRoles.isReconciling(member)
             else { return }
             sum += fact.value
         }

@@ -466,7 +466,12 @@ public func runFactsIngestCommand(
                     limit: stage.limit, explicitCodes: codes, priorityCodes: priority,
                     cachedDocIDs: cachedDocIDs, axis: stage.axis, candidateSets: stage.candidateSets,
                     forceDocIDs: forceDocIDs,
-                    logger: app.logger, resolve: stage.resolve)
+                    logger: app.logger,
+                    resolve: { docID in
+                        await context.withSegmentMemberRoles(
+                            docID: docID, correctionDocIDs: correctionIDsByOriginal[docID] ?? []
+                        ) { await stage.resolve(docID) }
+                    })
                 summaries.append((stage, summary))
             }
             let coverage = try? await withDbRetry(
