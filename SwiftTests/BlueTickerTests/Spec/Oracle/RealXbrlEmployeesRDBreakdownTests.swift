@@ -922,6 +922,32 @@ import Foundation
         }
     }
 
+    // source: code=8354 fy_end=2026-03-31 doc_id=S100YFNB page=94 field=employees row=銀行業務 6,895 / その他事業 1,155 (従業員の状況 連結会社、合計8,050)
+    // セグメント member 付きの fact が無く、横並び表の合計 8,050 だけにタグが付く。
+    @Test func fukuokaFGEmployeesFromTotalOnlyHorizontalTable() async throws {
+        guard await Self.ensureAvailable("S100YFNB") else { return }
+        let (facts, labels) = Self.factsAndLabels("S100YFNB")
+        let dir = Self.xbrlDir("S100YFNB")
+        let normalized = BreakdownNormalizer.normalizeEmployees(
+            facts: facts, total: 8_050, axis: "employees", labelsByTag: labels,
+            memberParents: XBRLUtils.operatingSegmentMemberParents(in: dir))
+        #expect(normalized == nil)
+        let snapshot = try #require(EmployeesUntaggedRowFill.fromTotalOnlyTable(total: 8_050, xbrlDir: dir))
+        #expect(snapshot.denominator == 8_050)
+        #expect(snapshot.needsReview == false)
+        let rows: [String: Double] = Dictionary(uniqueKeysWithValues: snapshot.rows.map { ($0.labelRaw, $0.amount) })
+        let expected: [String: Double] = ["銀行業務": 6_895, "その他事業": 1_155]
+        #expect(rows == expected)
+        #expect(snapshot.rows.allSatisfy { $0.rowKind == "segment" })
+    }
+
+    // source: code=8331 fy_end=2026-03-31 doc_id=S100YDSE page=102 field=employees row=従業員数 4,377 (単一セグメント。従業員表は合計のみ)
+    // 合計しか無い表からは行を作らない（not_found のまま）。
+    @Test func chibaBankTotalOnlyEmployeesStaysNotFound() async throws {
+        guard await Self.ensureAvailable("S100YDSE") else { return }
+        #expect(EmployeesUntaggedRowFill.fromTotalOnlyTable(total: 4_377, xbrlDir: Self.xbrlDir("S100YDSE")) == nil)
+    }
+
     // source: code=3086 fy_end=2026-02-28 doc_id=S100Y6K0 page=18 row=全社（共通） 243 (従業員の状況 連結会社の状況、合計5,584)
     // 全社（共通）が member 付き fact で開示される会社は、補完で行も値も変わらない。
     @Test func jFrontEmployeesWithTaggedCorporateSharedUnchangedByUntaggedFill() async throws {

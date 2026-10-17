@@ -7,6 +7,7 @@
 // セルそのまま。未タグ行の合計が差額とぴったり一致しなければ何も足さない（値を作らない）。
 // 全社（共通）が member 付きで開示される会社は差額が 0 のため、この経路は動かない。
 // 行の種別は、本社・全社共通・持株会社などのバケツ語を含めば reconciling、それ以外は segment。
+// セグメント member の fact が1つも無く合計だけにタグが付く表は `fromTotalOnlyTable` が読む（8354）。
 
 import Foundation
 
@@ -39,6 +40,90 @@ enum EmployeesUntaggedRowFill {
         guard !anchorRefs.isEmpty else { return snapshot }
         let tables = loadTables(in: xbrlDir, tag: tag, anchorRefs: anchorRefs)
         return apply(snapshot: snapshot, tables: tables)
+    }
+
+    /// セグメント member 付きの fact が1つも無く、表の全社合計だけにタグが付く会社
+    ///（8354 ふくおかFG: 銀行業務 6,895 / その他事業 1,155 / 合計 8,050 の横並び表）。
+    /// 見出しに「セグメント」がある表で、当期連結の合計セル（`CurrentYearInstant`）と同じ行
+    ///（横並び）または同じ列（縦並び）の未タグ値が 2 つ以上あり、和が合計とぴったり一致するときだけ
+    /// 行にする。値は開示のセルそのまま。部門別の表（セグメントでない）は見出しで外れる。
+    static func fromTotalOnlyTable(total: Double?, xbrlDir: URL) -> BreakdownSnapshot? {
+        guard let total, total > 0 else { return nil }
+        for tag in Xbrl.employeeTags {
+            for html in htmlFiles(in: xbrlDir, containing: tag) {
+                if let rows = totalOnlyRows(html: html, tag: tag, total: total) {
+                    return BreakdownSnapshot(
+                        axis: breakdownAxisEmployees, denominator: total, denominatorTag: tag,
+                        rows: rows.map {
+                            BreakdownRow(
+                                labelRaw: $0.label, label: $0.label, amount: $0.amount,
+                                share: $0.amount / total, profit: nil, rowKind: rowKind(forLabel: $0.label))
+                        },
+                        sourceKind: "xbrl_facts", needsReview: false, warnings: [])
+                }
+            }
+        }
+        return nil
+    }
+
+    static let totalOnlyContextRef = "CurrentYearInstant"
+
+    /// 純関数。`fromTotalOnlyTable` の表読み。条件を満たす表が無ければ nil。
+    static func totalOnlyRows(html: String, tag: String, total: Double) -> [TableRow]? {
+        let whole = NSRange(html.startIndex..., in: html)
+        for tableMatch in tablePattern.matches(in: html, range: whole) {
+            guard let tableRange = Range(tableMatch.range, in: html) else { continue }
+            let tableHTML = String(html[tableRange])
+            guard tableHTML.contains(tag) else { continue }
+            let grid = rowCells(in: tableHTML)
+            guard grid.contains(where: { $0.contains { plainText($0).contains("セグメント") } }) else { continue }
+            for (r, row) in grid.enumerated() {
+                for (c, cell) in row.enumerated()
+                where factInfo(in: cell, tag: tag) == [totalOnlyContextRef]
+                    && leadingNumber(plainText(cell)) == total
+                {
+                    let horizontal = horizontalRows(grid: grid, row: r, totalColumn: c, tag: tag)
+                    let vertical = verticalRows(grid: grid, row: r, totalColumn: c, tag: tag)
+                    for candidate in [horizontal, vertical] where candidate.count >= 2 {
+                        let sum = candidate.reduce(0.0) { $0 + $1.amount }
+                        if abs(sum - total) < equalityEpsilon { return candidate }
+                    }
+                }
+            }
+        }
+        return nil
+    }
+
+    /// 合計セルと同じ行の未タグ値。ラベルは同じ列数の直近の見出し行。
+    private static func horizontalRows(grid: [[String]], row r: Int, totalColumn c: Int, tag: String) -> [TableRow] {
+        let data = grid[r]
+        guard let header = grid[..<r].last(where: { $0.count == data.count }) else { return [] }
+        var out: [TableRow] = []
+        for i in 1..<data.count where i != c {
+            guard factInfo(in: data[i], tag: tag).isEmpty,
+                  let amount = leadingNumber(plainText(data[i])), amount > 0
+            else { continue }
+            let label = plainText(header[i])
+            let key = compact(label)
+            guard containsJapanese(label), !isTotalOrMeasureLabel(key) else { return [] }
+            out.append(TableRow(label: label, amount: amount, tagged: false))
+        }
+        return out
+    }
+
+    /// 合計セルと同じ列の未タグ値。ラベルは各行の先頭セル。
+    private static func verticalRows(grid: [[String]], row r: Int, totalColumn c: Int, tag: String) -> [TableRow] {
+        var out: [TableRow] = []
+        for (i, row) in grid.enumerated() where i != r && c < row.count && row.count >= 2 {
+            guard factInfo(in: row[c], tag: tag).isEmpty,
+                  let amount = leadingNumber(plainText(row[c])), amount > 0
+            else { continue }
+            let label = plainText(row[0])
+            let key = compact(label)
+            guard containsJapanese(label), !key.isEmpty, !isTotalOrMeasureLabel(key) else { continue }
+            out.append(TableRow(label: label, amount: amount, tagged: false))
+        }
+        return out
     }
 
     /// 純関数。未タグ行の合計が差額と一致するときだけ reconciling 行を足す。
@@ -120,20 +205,31 @@ enum EmployeesUntaggedRowFill {
         pattern: #"^([0-9][0-9,]*)(?:\s*[\[［〔(（].*)?$"#)
 
     static func loadTables(in dir: URL, tag: String, anchorRefs: Set<String>) -> [Table] {
+        htmlFiles(in: dir, containing: tag).flatMap {
+            parseTables(html: $0, tag: tag, anchorRefs: anchorRefs)
+        }
+    }
+
+    private static func htmlFiles(in dir: URL, containing tag: String) -> [String] {
         guard let enumerator = FileManager.default.enumerator(at: dir, includingPropertiesForKeys: nil)
         else { return [] }
-        var tables: [Table] = []
         var files: [URL] = []
         for case let url as URL in enumerator {
             let ext = url.pathExtension.lowercased()
             if ext == "htm" || ext == "html" { files.append(url) }
         }
-        for url in files.sorted(by: { $0.lastPathComponent < $1.lastPathComponent }) {
+        return files.sorted(by: { $0.lastPathComponent < $1.lastPathComponent }).compactMap { url in
             guard let html = try? String(contentsOf: url, encoding: .utf8), html.contains(tag)
-            else { continue }
-            tables.append(contentsOf: parseTables(html: html, tag: tag, anchorRefs: anchorRefs))
+            else { return nil }
+            return html
         }
-        return tables
+    }
+
+    private static func rowCells(in tableHTML: String) -> [[String]] {
+        let ns = NSRange(tableHTML.startIndex..., in: tableHTML)
+        return rowPattern.matches(in: tableHTML, range: ns).compactMap { match in
+            Range(match.range, in: tableHTML).map { cellBodies(in: String(tableHTML[$0])) }
+        }
     }
 
     static func parseTables(html: String, tag: String, anchorRefs: Set<String>) -> [Table] {

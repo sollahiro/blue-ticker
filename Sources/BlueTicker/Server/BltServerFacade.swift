@@ -925,6 +925,8 @@ public extension BltServerContext {
             let snapshot = BreakdownNormalizer.normalizeEmployees(
                 facts: cached.facts, total: total, axis: breakdownAxisEmployees,
                 labelsByTag: cached.labelsByTag, memberParents: memberParents)
+                // セグメント member の fact が無く、表の合計だけにタグが付く会社（8354）。
+                ?? EmployeesUntaggedRowFill.fromTotalOnlyTable(total: total, xbrlDir: xbrlDir)
         else {
             return .notApplicable(reason: breakdownNotApplicableNotFound)
         }

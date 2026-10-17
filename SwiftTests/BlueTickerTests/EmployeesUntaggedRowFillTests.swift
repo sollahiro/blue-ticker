@@ -90,4 +90,49 @@ import Testing
         #expect(filled.warnings.isEmpty)
         #expect(filled.needsReview == false)
     }
+
+    private func totalCell(_ amount: String) -> String {
+        "<td><ix:nonFraction contextRef=\"CurrentYearInstant\" decimals=\"0\" name=\"jpcrp_cor:NumberOfEmployees\" unitRef=\"pure\">\(amount)</ix:nonFraction></td>"
+    }
+
+    @Test func totalOnlyHorizontalSegmentTableBecomesRows() {
+        let html = """
+            <table><tr><td>セグメントの名称</td><td>銀行業務</td><td>その他事業</td><td>合計</td></tr>
+            <tr><td>従業員数(人)</td><td>6,895</td><td>1,155</td>\(totalCell("8,050"))</tr>
+            <tr><td></td><td>[2,538]</td><td>[336]</td><td>[2,874]</td></tr></table>
+            """
+        let rows = EmployeesUntaggedRowFill.totalOnlyRows(html: html, tag: "NumberOfEmployees", total: 8_050)
+        let expected: [EmployeesUntaggedRowFill.TableRow] = [
+            .init(label: "銀行業務", amount: 6_895, tagged: false),
+            .init(label: "その他事業", amount: 1_155, tagged: false),
+        ]
+        #expect(rows == expected)
+    }
+
+    @Test func totalOnlyVerticalSegmentTableBecomesRows() {
+        let html = """
+            <table><tr><td>セグメントの名称</td><td>従業員数(人)</td></tr>
+            <tr><td>Ａ事業</td><td>60</td></tr><tr><td>全社（共通）</td><td>7</td></tr>
+            <tr><td>合計</td>\(totalCell("67"))</tr></table>
+            """
+        let rows = EmployeesUntaggedRowFill.totalOnlyRows(html: html, tag: "NumberOfEmployees", total: 67)
+        #expect(rows?.map(\.label) == ["Ａ事業", "全社（共通）"])
+    }
+
+    @Test func totalOnlyDepartmentTableWithoutSegmentHeadingIsIgnored() {
+        let html = """
+            <table><tr><td>部門の名称</td><td>従業員数(人)</td></tr>
+            <tr><td>営業部門</td><td>60</td></tr><tr><td>管理部門</td><td>7</td></tr>
+            <tr><td>合計</td>\(totalCell("67"))</tr></table>
+            """
+        #expect(EmployeesUntaggedRowFill.totalOnlyRows(html: html, tag: "NumberOfEmployees", total: 67) == nil)
+    }
+
+    @Test func totalOnlyTableWhoseCellsDoNotSumToTotalIsIgnored() {
+        let html = """
+            <table><tr><td>セグメントの名称</td><td>Ａ事業</td><td>Ｂ事業</td><td>合計</td></tr>
+            <tr><td>従業員数(人)</td><td>60</td><td>5</td>\(totalCell("67"))</tr></table>
+            """
+        #expect(EmployeesUntaggedRowFill.totalOnlyRows(html: html, tag: "NumberOfEmployees", total: 67) == nil)
+    }
 }
