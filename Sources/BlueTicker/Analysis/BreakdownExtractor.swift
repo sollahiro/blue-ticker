@@ -2656,6 +2656,8 @@ enum BreakdownExtractor {
             }
         }
         for tag in tagOrder {
+            var contextPeriodIndices: [Int] = []
+            var contextPeriodRefs: [String] = []
             for block in blocksByTag[tag] ?? [] {
                 guard !block.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
                       block.content.lowercased().contains("<table") else { continue }
@@ -2669,14 +2671,22 @@ enum BreakdownExtractor {
                         dedicatedHeading == "地域ごとの情報"
                         || dedicatedHeading == productOrServiceHeading
                         ? periodLabel(fromContextRef: block.contextRef) : nil
-                    tables.append(contentsOf: allTablesFromHtml(
+                    let blockTables = allTablesFromHtml(
                         block.content, defaultHeading: dedicatedHeading,
                         includeFootnotes: includeFootnotes,
                         skipGeographyAssetMetricTables: skipGeographyAssetMetricTables,
                         defaultPeriod: contextPeriod,
                         dropOfWhichRegionColumns: dropOfWhichRegionColumns,
                         fiscalYearEnd: fiscalYearEnd
-                    ))
+                    )
+                    if contextPeriod != nil, dedicatedHeading == "地域ごとの情報",
+                       let ref = block.contextRef
+                    {
+                        contextPeriodIndices.append(
+                            contentsOf: tables.count..<(tables.count + blockTables.count))
+                        contextPeriodRefs.append(ref)
+                    }
+                    tables.append(contentsOf: blockTables)
                 } else if mixedTags.contains(block.tag) {
                     // mixed は1つの contextRef 配下に前期・当期 HTML が同居しうるため
                     // contextRef フォールバックは付けず、見出し直前テキストで判定する。
@@ -2691,6 +2701,16 @@ enum BreakdownExtractor {
                         skipNearestAssetCaptionTables: mixedSkipNearestAssetCaptionTables,
                         fiscalYearEnd: fiscalYearEnd
                     ))
+                }
+            }
+            // 地域の前期・当期の2ブロックがどちらも CurrentYearDuration で提出されたとき（1963 S100TVFX）、
+            // contextRef では期間が決まらない。ブロックをまたいで同一レイアウトの隣接表対
+            // （先が前期）に委ねる。contextRef が分かれている通常の提出は変えない。
+            if Set(contextPeriodRefs).count < contextPeriodRefs.count {
+                var paired = contextPeriodIndices.map { tables[$0] }
+                applyIdenticalPairPeriodLabels(&paired)
+                for (index, table) in zip(contextPeriodIndices, paired) {
+                    tables[index] = table
                 }
             }
         }

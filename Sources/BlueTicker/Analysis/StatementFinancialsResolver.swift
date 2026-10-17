@@ -42,7 +42,12 @@ struct StatementFinancialsValues {
     /// geography カバー判定に渡すラベル。Summary 組立とは独立。
     /// 本表に売上高（NetSales*）と営業収益（OperatingRevenue*）が並ぶときは営業収益
     /// （既存の `isNonSalesRevenueLabel` → 表の総合計アンカー）。
+    /// PL トップラインの金額（`geographyCoverageSales`）が取れたときはその金額で照らすので付けない。
     var geographyCoverageSalesLabel: String? = nil
+    /// geography カバー判定の分母に使う連結 PL のトップライン（円）。Summary `sales` より大きいときだけ。
+    /// 売上高の上に合計行がある（ソニー 6758: 売上高＋金融ビジネス収入＝売上高及び金融ビジネス収入合計）、
+    /// 合計行の無い 売上高＋営業収入（9950）、Summary が個別の営業収益を拾った（2433）など。
+    var geographyCoverageSales: Double? = nil
 }
 
 enum StatementFinancialsResolver {
@@ -218,7 +223,7 @@ enum StatementFinancialsResolver {
             sgaLabel = bank.operatingExpenses == nil ? nil : bankOperatingExpensesLabel
         }
 
-        let values = StatementFinancialsValues(
+        var values = StatementFinancialsValues(
             sales: sales,
             salesLabel: salesLabel,
             operatingProfit: operatingProfit,
@@ -254,6 +259,12 @@ enum StatementFinancialsResolver {
             geographyCoverageSalesLabel: geographyCoverageSalesLabel(
                 summaryLabel: salesLabel, fieldSet: salesFS)
         )
+        if !isBank, !isInsurance,
+           let topLine = incomeStatementTopLineRevenue(year.incomeStatement, sales: sales)
+        {
+            values.geographyCoverageSales = topLine
+            values.geographyCoverageSalesLabel = salesLabel
+        }
         return ResolveBundle(
             values: values,
             incomeStatement: year.incomeStatement,
@@ -742,6 +753,102 @@ enum StatementFinancialsResolver {
             return "営業収益"
         }
         return summaryLabel
+    }
+
+    /// 連結 PL のトップライン収益。営業利益行より上の収益行のうち、他の収益行の構成要素でない行の和。
+    /// 合計行があればそれ（6758 `SalesAndFinancialServicesRevenueIFRS`、3382 `OperatingRevenue1`）、
+    /// 合計行が無く 売上高 と 営業収入 が並ぶときは和（9950）。`sales` より大きいときだけ返す。
+    /// 金融収益・その他の収益・持分法を含む IFRS の「収益合計」（HOYA 7741 / 6141 / 8698）は
+    /// 営業の収益ではないので合計に使わない。IFRS で収益行が並ぶだけ（電通 4324 の 売上高 と 収益）は
+    /// どれがトップラインか決まらないので立てない。
+    static func incomeStatementTopLineRevenue(
+        _ lines: [StatementLineItem], sales: Double?
+    ) -> Double? {
+        guard let sales, sales > 0 else { return nil }
+        var byTag: [String: StatementLineItem] = [:]
+        var revenueLines: [StatementLineItem] = []
+        for line in lines {
+            if isOperatingProfitLine(line) { break }
+            if byTag[line.tag] == nil { byTag[line.tag] = line }
+            guard line.unit != "JPYPerShares", isTopLineRevenueTag(line.tag),
+                  !isOfWhichLine(line)
+            else { continue }
+            if revenueLines.contains(where: { $0.tag == line.tag }) { continue }
+            revenueLines.append(line)
+        }
+        revenueLines = revenueLines.filter { sumsOnlyRevenue($0, byTag: byTag, depth: 0) }
+        let componentTags = Set(revenueLines.flatMap { ($0.components ?? []).map(\.tag) })
+        let roots = revenueLines.filter { !componentTags.contains($0.tag) }
+        guard !roots.isEmpty else { return nil }
+        if roots.count > 1,
+           !roots.allSatisfy({ $0.tag.hasPrefix("NetSales") || $0.tag.hasPrefix("OperatingRevenue") })
+        {
+            return nil
+        }
+        let topLine = roots.reduce(0.0) { $0 + $1.value }
+        return topLine > sales * (1 + topLineRevenueMinimumExcess) ? topLine : nil
+    }
+
+    /// 端数の丸め差（百万円表示の1単位など）でトップラインを立てない。
+    private static let topLineRevenueMinimumExcess = 0.001
+
+    private static func isTopLineRevenueTag(_ tag: String) -> Bool {
+        if tag.contains("Cost") || tag.contains("Expense") || tag.contains("Profit")
+            || tag.contains("Income") && !tag.contains("Revenue")
+        {
+            return false
+        }
+        if tag.hasSuffix("NOI") || tag.contains("NonOperating") { return false }
+        if isNonOperatingIncomeTag(tag) { return false }
+        return tag.hasPrefix("NetSales") || tag.hasPrefix("OperatingRevenue")
+            || tag.hasPrefix("Revenue") || tag.contains("Revenue")
+    }
+
+    /// 金融収益・その他の収益・受取利息など。`OtherFinancialIncomeRevenueIFRS`（8698）のように
+    /// Revenue を含んでも営業の収益ではない。
+    private static func isNonOperatingIncomeTag(_ tag: String) -> Bool {
+        let markers = [
+            "FinanceIncome", "FinancialIncome", "FinancialRevenue", "OtherIncome",
+            "ShareOfProfit", "InterestIncome", "DividendIncome", "GainOn",
+        ]
+        return markers.contains { tag.contains($0) }
+    }
+
+    /// 合計行の構成要素が（入れ子も含め）収益行だけか。
+    private static func sumsOnlyRevenue(
+        _ line: StatementLineItem, byTag: [String: StatementLineItem], depth: Int
+    ) -> Bool {
+        guard let components = line.components, !components.isEmpty else { return true }
+        guard depth < 4 else { return false }
+        for component in components {
+            guard isTopLineRevenueTag(component.tag) else { return false }
+            if let child = byTag[component.tag],
+               !sumsOnlyRevenue(child, byTag: byTag, depth: depth + 1)
+            {
+                return false
+            }
+        }
+        return true
+    }
+
+    /// 「（内、受取利息）」「うち、金利収益」は上の収益行の内数（8473 / 8253）。足さない。
+    private static func isOfWhichLine(_ line: StatementLineItem) -> Bool {
+        let tag = line.tag
+        if tag.hasPrefix("Of"), let next = tag.dropFirst(2).first, next.isUppercase { return true }
+        let label = (line.label ?? "").replacingOccurrences(of: " ", with: "")
+        return label.hasPrefix("うち") || label.hasPrefix("（うち") || label.hasPrefix("(うち")
+            || label.hasPrefix("（内") || label.hasPrefix("(内") || label.hasPrefix("内、")
+    }
+
+    private static func isOperatingProfitLine(_ line: StatementLineItem) -> Bool {
+        let tag = line.tag
+        if tag.hasPrefix("OperatingIncome") || tag.hasPrefix("OperatingProfit")
+            || tag.hasPrefix("OperatingLoss")
+        {
+            return true
+        }
+        let label = line.label ?? ""
+        return label.hasPrefix("営業利益") || label.hasPrefix("営業損失")
     }
 
     /// 売上高タグと営業収益タグが両方、当期値付きで載っている。
