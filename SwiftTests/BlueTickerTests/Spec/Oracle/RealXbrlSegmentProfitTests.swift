@@ -26,7 +26,10 @@ import Testing
     }
 
     /// member（label_raw）→ profit（百万円）。
-    private func expectProfits(_ docID: String, _ expected: [String: Double]) async throws {
+    private func expectProfits(
+        _ docID: String, _ expected: [String: Double],
+        segmentProfitDecider: (any SegmentProfitDeciding)? = nil
+    ) async throws {
         guard let dir = await Self.ensureAvailable(docID) else { return }
         let segments = BreakdownExtractor.extractSegmentInfo(xbrlDir: dir)
         let denom = BreakdownFinancialsResolver.breakdownBusinessSalesDenominatorItem(
@@ -34,6 +37,7 @@ import Testing
         let result = await BusinessBreakdownResolver.resolve(
             segments: segments, consolidatedSales: denom.value,
             labelsByTag: XBRLUtils.loadLabelsByTag(in: dir), denominatorTag: denom.tag,
+            segmentProfitDecider: segmentProfitDecider,
             fiscalYearEnd: BreakdownExtractor.currentFiscalYearEnd(fromXbrlDir: dir), docID: docID)
         let snapshot = try #require(result.snapshot, "\(docID): product_service snapshot")
         #expect(snapshot.sourceKind == "xbrl_facts")
@@ -253,6 +257,53 @@ import Testing
         ])
     }
 
+    // 9201 日本航空: セグメント利益は財務・法人所得税前利益（EBIT、会社拡張
+    // ProfitBeforeFinancingAndIncomeTaxIFRS）。同じ表の税引前利益（ProfitLossBeforeTaxIFRS）は
+    // セグメント列が「－」（xsi:nil）で連結列だけ。決定論では決まらないので Jev が行を選ぶ
+    // （ここではスタブ）。Jev が無いときは全セグメント 0 ではなく profit 無し。
+    // source: code=9201 fy_end=2026-03-31 doc_id=S100YFIO page=133 field=segment_profit
+    // source: code=9201 fy_end=2025-03-31 doc_id=S100W1KL page=123 field=segment_profit
+    @Test func japanAirlinesEbitSegmentProfit() async throws {
+        let ebit = StubSegmentProfitDecider(tag: "ProfitBeforeFinancingAndIncomeTaxIFRS")
+        try await expectProfits("S100YFIO", [
+            "EntityTotal": 218004,
+            "FullServiceCarrierReportableSegmentMember": 145056,
+            "LCCReportableSegmentMember": 9601,
+            "MileageFinanceAndCommerceReportableSegmentMember": 45535,
+            "OperatingSegmentsNotIncludedInReportableSegmentsAndOtherRevenueGeneratingBusinessActivitiesMember": 19176,
+            "ReconcilingItemsMember": -1365,
+            "ReportableSegmentsMember": 200193,
+            "TotalOfReportableSegmentsAndOthersMember": 219369,
+        ], segmentProfitDecider: ebit)
+        try await expectProfits("S100W1KL", [
+            "EntityTotal": 172452,
+            "FullServiceCarrierReportableSegmentMember": 111148,
+            "LCCReportableSegmentMember": 11586,
+            "MileageFinanceAndCommerceReportableSegmentMember": 38105,
+            "OperatingSegmentsNotIncludedInReportableSegmentsAndOtherRevenueGeneratingBusinessActivitiesMember": 12393,
+            "ReconcilingItemsMember": -782,
+            "ReportableSegmentsMember": 160841,
+            "TotalOfReportableSegmentsAndOthersMember": 173234,
+        ], segmentProfitDecider: ebit)
+        try await expectProfits("S100YFIO", [:])
+    }
+
+    /// 候補はセグメント値のある既存タグ（全セグメント nil の税引前利益は出さない）。EBIT は報告セグメント計と整合する。
+    // source: code=9201 fy_end=2026-03-31 doc_id=S100YFIO page=133 field=segment_profit
+    @Test func japanAirlinesProfitCandidatesFromSegmentTable() async throws {
+        guard let dir = await Self.ensureAvailable("S100YFIO") else { return }
+        let segments = BreakdownExtractor.extractSegmentInfo(xbrlDir: dir)
+        let candidates = SegmentProfitJevPicker.candidates(
+            facts: segments.facts, rowLabelsByTag: segments.rowLabelsByTag, memberLabels: [:],
+            amountTag: "RevenueFromExternalCustomersIFRS")
+        let tags: Set<String> = Set(candidates.map(\.tag))
+        #expect(tags.contains("ProfitBeforeFinancingAndIncomeTaxIFRS"))
+        #expect(!tags.contains("ProfitLossBeforeTaxIFRS"))
+        let agrees = SegmentProfitJevPicker.reportableTotalAgrees(
+            facts: segments.facts, tag: "ProfitBeforeFinancingAndIncomeTaxIFRS")
+        #expect(agrees == true)
+    }
+
     // 東京海上・MS&AD: 親会社所有者帰属利益の PL 行は、セグメント表用ロールのラベル
     // （「セグメント利益…」）ではなく標準ラベル「親会社の所有者」（連結損益計算書「当期利益の帰属」）。
     // source: code=8766 fy_end=2026-03-31 doc_id=S100YLS8 page=123 field=income_statement.ProfitLossAttributableToOwnersOfParentIFRS.label
@@ -270,5 +321,18 @@ import Testing
             year.incomeStatement.first { $0.tag == "ProfitLossAttributableToOwnersOfParentIFRS" })
         #expect(row.label == "親会社の所有者")
         #expect(row.value == millions * 1_000_000)
+    }
+}
+
+/// 指定タグの候補キーを返すスタブ（3 サンプルとも同じ答え）。
+struct StubSegmentProfitDecider: SegmentProfitDeciding {
+    var tag: String
+    func chooseSegmentProfit(
+        candidates: [SegmentProfitCandidate], salesLabel: String, docID: String
+    ) async -> JevChoiceAggregate.Sample {
+        let key = candidates.first { $0.tag == tag }?.key ?? JevDecision.noneOfThese
+        return JevChoiceAggregate.Sample(
+            selected: key, probability: 0.97,
+            options: candidates.map(\.key) + [JevDecision.noneOfThese], model: "stub")
     }
 }
