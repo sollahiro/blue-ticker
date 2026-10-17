@@ -93,7 +93,9 @@ func registerMcpRoute(
             let httpResponse = try await withOperationTimeout(
                 label: "MCPリクエスト処理", seconds: Api.mcpRequestTimeoutSeconds
             ) {
-                await transport.handleRequest(httpRequest)
+                // 共有 transport は応答待ちを JSON-RPC id だけで照合するため、id を一意な内部 id に
+                // 差し替えて渡す（同じ id の同時リクエストで応答が取り違わる）。
+                await handleBltMcpRequest(transport, httpRequest)
             }
             let response =
                 reinitializeShimResponse(

@@ -593,6 +593,27 @@ import Foundation
         }
     }
 
+    /// 東京ガス S100YH8W 型: ラベルセルは見出し「その他有利子負債」と内訳の2つの `<p>`、値セルは `<p>` 1つ。
+    /// 値は下揃えで内訳に付け、見出しの行は出さない。
+    @Test func testBorrowingsScheduleVerticalStackBottomAlignsSingleValue() throws {
+        func p(_ text: String) -> String { "&lt;p&gt;\(text)&lt;/p&gt;" }
+        let stacked = "&lt;tr&gt;&lt;td&gt;" + p("その他有利子負債") + p("コマーシャル・ペーパー（１年以内返済予定）")
+            + "&lt;/td&gt;&lt;td&gt;" + p("10,000") + "&lt;/td&gt;&lt;td&gt;" + p("50,000")
+            + "&lt;/td&gt;&lt;td&gt;" + p("－") + "&lt;/td&gt;&lt;td&gt;" + p("－") + "&lt;/td&gt;&lt;/tr&gt;"
+        let rows = scheduleRow("短期借入金", "1,000", "2,000", rate: "0.5")
+            + stacked
+            + scheduleRow("合計", "11,000", "52,000")
+        let xml = makeXbrlWithBorrowingsSchedule(rows)
+        try XBRLTestSupport.withXbrlDir(xml) { dir in
+            let parsed = try #require(BorrowingsSchedule.extractRows(xbrlDir: dir))
+            #expect(parsed.rows.map { $0.sourceLabel ?? $0.label }
+                == ["短期借入金", "コマーシャル・ペーパー（１年以内返済予定）"])
+            let cp = parsed.rows.last
+            #expect(cp?.current == 50_000 * Financial.millionYen)
+            #expect(cp?.prior == 10_000 * Financial.millionYen)
+        }
+    }
+
     @Test func testBorrowingsScheduleExcludesMaturityTable() {
         // 本体明細表（合計を含む）の後に続く「返済予定額」別表をリース債務総額に混入させない。
         let mainRows = scheduleRow("リース債務", "17,684", "29,995", rate: "3.9")

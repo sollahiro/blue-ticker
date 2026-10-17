@@ -61,7 +61,8 @@ enum RevenueRecognitionColumnNormalizer {
         decider: any RevenueRecognitionColumnDeciding,
         fiscalYearEnd: String?,
         docID: String,
-        denominatorTag: String? = nil
+        denominatorTag: String? = nil,
+        rowRoleDecider: (any RevenueRecognitionRowRoleDeciding)? = nil
     ) async -> (snapshot: BreakdownSnapshot?, audit: LLMBreakdownAudit?) {
         guard !result.tables.isEmpty else { return (nil, nil) }
         let parsed = RevenueRecognitionCandidates.parse(tables: result.tables)
@@ -110,8 +111,24 @@ enum RevenueRecognitionColumnNormalizer {
             return (nil, audit)
         }
         guard let column = columns.first(where: { $0.key == resolved.key }),
-              let table = parsed.first(where: { $0.tableIndex == column.tableIndex })
+              var table = parsed.first(where: { $0.tableIndex == column.tableIndex })
         else { return (nil, audit) }
+        // 品目の直後の金額なし行で、見出しか直前品目の説明かが構造で決まらないものは Jev に聞く。
+        if let rowRoleDecider {
+            let (descriptions, roleNotes) = await RevenueRecognitionRowRoleJev.descriptionRows(
+                grid: table.grid, decider: rowRoleDecider, docID: docID)
+            if !roleNotes.isEmpty {
+                audit.notes += " row_role=\(roleNotes.joined(separator: ","))"
+            }
+            if !descriptions.isEmpty,
+               let reparsed = RevenueRecognitionCandidates.parse(
+                   tables: result.tables, descriptionRows: [table.tableIndex: descriptions]
+               ).first(where: { $0.tableIndex == table.tableIndex })
+            {
+                table = reparsed
+                audit.notes += " description_rows=\(descriptions.sorted())"
+            }
+        }
 
         let sourceHadCategoryRows = !table.items.isEmpty
         let confidence = choice.confidence
