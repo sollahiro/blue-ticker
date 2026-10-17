@@ -53,6 +53,8 @@ public struct BltServerContext: Sendable {
     let sgaLineDecider: (any SgaLineDeciding)?
     /// 会社拡張 member のうち調整・消去・全社の列の判定。同じキーが無いときは nil（標準一覧だけ）。
     let segmentMemberRoleDecider: (any SegmentMemberRoleDeciding)?
+    /// 事業別内訳 profit の行選択。決定論で利益タグが決まらないときだけ。キーが無いときは nil（profit は null）。
+    let segmentProfitDecider: (any SegmentProfitDeciding)?
     /// 収益分解表の金額なし行が見出しか説明かの判定。同じキーが無いときは nil（見出しのまま）。
     let revenueRecognitionRowRoleDecider: (any RevenueRecognitionRowRoleDeciding)?
     /// employees / rd / goodwill / 報告セグメント指標軸が同一 doc を軸ループで再パースしないためのメモ。
@@ -71,6 +73,7 @@ public struct BltServerContext: Sendable {
         interestBearingDebtDecider: (any InterestBearingDebtDeciding)? = nil,
         sgaLineDecider: (any SgaLineDeciding)? = nil,
         segmentMemberRoleDecider: (any SegmentMemberRoleDeciding)? = nil,
+        segmentProfitDecider: (any SegmentProfitDeciding)? = nil,
         revenueRecognitionRowRoleDecider: (any RevenueRecognitionRowRoleDeciding)? = nil
     ) {
         self.cacheDir = cacheDir
@@ -91,6 +94,7 @@ public struct BltServerContext: Sendable {
         self.interestBearingDebtDecider = interestBearingDebtDecider
         self.sgaLineDecider = sgaLineDecider
         self.segmentMemberRoleDecider = segmentMemberRoleDecider
+        self.segmentProfitDecider = segmentProfitDecider
         self.revenueRecognitionRowRoleDecider = revenueRecognitionRowRoleDecider
         self.businessSegmentDimensionCache = BusinessSegmentDimensionCache()
     }
@@ -212,6 +216,9 @@ public func makeBltServerContext() async -> BltServerContext? {
     let segmentMemberRoleDecider: (any SegmentMemberRoleDeciding)? = decisionsClient.map {
         OpenRouterSegmentMemberRoleDecider(client: $0)
     }
+    let segmentProfitDecider: (any SegmentProfitDeciding)? = decisionsClient.map {
+        OpenRouterSegmentProfitDecider(client: $0)
+    }
     let revenueRecognitionRowRoleDecider: (any RevenueRecognitionRowRoleDeciding)? = decisionsClient.map {
         OpenRouterRevenueRecognitionRowRoleDecider(client: $0)
     }
@@ -227,6 +234,7 @@ public func makeBltServerContext() async -> BltServerContext? {
         interestBearingDebtDecider: interestBearingDebtDecider,
         sgaLineDecider: sgaLineDecider,
         segmentMemberRoleDecider: segmentMemberRoleDecider,
+        segmentProfitDecider: segmentProfitDecider,
         revenueRecognitionRowRoleDecider: revenueRecognitionRowRoleDecider)
 }
 
@@ -764,6 +772,7 @@ public extension BltServerContext {
             labelsByTag: labelsByTag, denominatorTag: denomItem.tag,
             columnDecider: revenueRecognitionColumnDecider,
             segmentInfoDecider: segmentInfoDecider,
+            segmentProfitDecider: segmentProfitDecider,
             rowRoleDecider: revenueRecognitionRowRoleDecider,
             fiscalYearEnd: BreakdownExtractor.currentFiscalYearEnd(fromXbrlDir: xbrlDir),
             docID: docID)
@@ -790,6 +799,7 @@ public extension BltServerContext {
                     denominatorTag: denomItem.tag,
                     columnDecider: revenueRecognitionColumnDecider,
                     segmentInfoDecider: segmentInfoDecider,
+                    segmentProfitDecider: segmentProfitDecider,
                     rowRoleDecider: revenueRecognitionRowRoleDecider,
                     fiscalYearEnd: BreakdownExtractor.currentFiscalYearEnd(fromXbrlDir: xbrlDir),
                     docID: docID)
@@ -849,6 +859,7 @@ public extension BltServerContext {
                     denominatorTag: denomItem.tag,
                     columnDecider: revenueRecognitionColumnDecider,
                     segmentInfoDecider: segmentInfoDecider,
+                    segmentProfitDecider: segmentProfitDecider,
                     rowRoleDecider: revenueRecognitionRowRoleDecider,
                     fiscalYearEnd: BreakdownExtractor.currentFiscalYearEnd(fromXbrlDir: xbrlDir),
                     docID: docID)
