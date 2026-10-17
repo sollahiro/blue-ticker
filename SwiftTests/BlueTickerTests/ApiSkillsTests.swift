@@ -117,6 +117,22 @@ import Testing
         #expect(!skill.description.contains("axis=business"))
         #expect(skill.description.contains("needs_review"))
         #expect(skill.description.contains("interest_bearing_debt_lease_denominator_from_notes"))
-        #expect(apiSkillsSchemaVersion == 4)
+        #expect(apiSkillsSchemaVersion == 5)
+    }
+
+    @Test func breakdownCatalogListsAssetCategoryAxes() throws {
+        let skill = try #require(apiSkill(id: "get-breakdown"))
+        let axis = try #require(skill.parameters.first { $0.name == "axis" })
+        for name in breakdownAssetCategoryAxes {
+            #expect(axis.description.contains(name))
+            #expect(skill.description.contains(name))
+        }
+        #expect(skill.description.contains("subtotal"))
+        #expect(skill.description.contains("source_tag"))
+        // notes の引数説明からは外す
+        let notes = try #require(apiSkill(id: "get-statement-notes"))
+        let noteType = try #require(notes.parameters.first { $0.name == "note_type" })
+        #expect(!noteType.description.contains("property_plant_equipment_schedule"))
+        #expect(!noteType.description.contains("goodwill_and_intangibles"))
     }
 }

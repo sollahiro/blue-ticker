@@ -438,32 +438,6 @@ public extension BltServerContext {
             StatementNotesResolver.resolveBorrowingsSchedule(xbrlDir: xbrlDir), xbrlDir: xbrlDir)
     }
 
-    /// 財務諸表注記取り込み: 書類1件分の `property_plant_equipment_schedule` note_type を解決する
-    /// （IFRS 注記 role → BS 区分タグ当期値で `available_via_statement` → それ以外。
-    /// J-GAAP 附属明細表 TextBlock は未対応。`StatementNotesResolver` のドキュメント参照）。
-    func resolvePropertyPlantEquipmentScheduleNote(docID: String, correctionDocIDs: [String] = [])
-        async -> StatementNoteResolveResult
-    {
-        guard let xbrlDir = await downloadAnnualFilingXbrl(
-            docID: docID, correctionDocIDs: correctionDocIDs
-        ) else { return .failed }
-        return statementNoteByRecordingOverlayRegressions(
-            StatementNotesResolver.resolvePropertyPlantEquipmentSchedule(xbrlDir: xbrlDir),
-            xbrlDir: xbrlDir)
-    }
-
-    /// 財務諸表注記取り込み: 書類1件分の `goodwill_and_intangibles` note_type を解決する（IFRS連結企業限定、
-    /// J-GAAP単体には対応する法定附属明細表が無い）。
-    func resolveGoodwillAndIntangiblesNote(docID: String, correctionDocIDs: [String] = [])
-        async -> StatementNoteResolveResult
-    {
-        guard let xbrlDir = await downloadAnnualFilingXbrl(
-            docID: docID, correctionDocIDs: correctionDocIDs
-        ) else { return .failed }
-        return statementNoteByRecordingOverlayRegressions(
-            StatementNotesResolver.resolveGoodwillAndIntangibles(xbrlDir: xbrlDir), xbrlDir: xbrlDir)
-    }
-
     /// 財務諸表注記取り込み: 書類1件分の `lease_liabilities` note_type を解決する。
     /// 連結 BS タグまたは IFRS リース注記 TextBlock（`IFRSLease`）から決定論で抽出する。
     func resolveLeaseLiabilitiesNote(docID: String, correctionDocIDs: [String] = [])
@@ -1353,6 +1327,24 @@ private extension BltServerContext {
     }
 }
 
+extension BltServerContext {
+    func resolveAssetCategoryBreakdown(
+        docID: String, spec: AssetCategoryBreakdown.Spec, correctionDocIDs: [String]
+    ) async -> BreakdownResolveResult {
+        guard let xbrlDir = await downloadAnnualFilingXbrl(
+            docID: docID, correctionDocIDs: correctionDocIDs)
+        else { return .failed }
+        guard let payload = AssetCategoryBreakdown.resolve(xbrlDir: xbrlDir, spec: spec) else {
+            return .notApplicable(reason: breakdownNotApplicableNotFound)
+        }
+        return breakdownByRecordingOverlayRegressions(
+            .resolved(
+                payload: payload, source: breakdownSourceXbrlFacts,
+                contentHash: breakdownPayloadContentHash(payload), audit: nil),
+            xbrlDir: xbrlDir)
+    }
+}
+
 enum CapexProseFillResult {
     case resolved((payload: BreakdownSnapshotPayload, source: String, audit: LLMBreakdownAuditPayload?))
     case failed
@@ -1389,6 +1381,20 @@ public extension BltServerContext {
     func resolveInterestBearingDebtBreakdown(docID: String, correctionDocIDs: [String] = []) async -> BreakdownResolveResult {
         await resolveInterestBearingDebtBreakdownImpl(
             docID: docID, correctionDocIDs: correctionDocIDs)
+    }
+
+    /// 有形固定資産の種類別（IFRS 連結の注記だけ。`AssetCategoryBreakdown`）。
+    func resolvePropertyPlantEquipmentBreakdown(docID: String, correctionDocIDs: [String] = []) async -> BreakdownResolveResult {
+        await resolveAssetCategoryBreakdown(
+            docID: docID, spec: AssetCategoryBreakdown.propertyPlantEquipment,
+            correctionDocIDs: correctionDocIDs)
+    }
+
+    /// のれん及び無形資産の種類別（IFRS 連結の注記だけ。`AssetCategoryBreakdown`）。
+    func resolveGoodwillAndIntangiblesBreakdown(docID: String, correctionDocIDs: [String] = []) async -> BreakdownResolveResult {
+        await resolveAssetCategoryBreakdown(
+            docID: docID, spec: AssetCategoryBreakdown.goodwillAndIntangibles,
+            correctionDocIDs: correctionDocIDs)
     }
 }
 
@@ -1477,6 +1483,19 @@ private func breakdownContentHash(
 
 /// interest_bearing_debt の content_hash。行（label_raw/source/source_tag/セル値/maturity_class）と
 /// 分母の安定文字列を `breakdownContentHash` と同じ FNV-1a で潰す。
+/// 格納ペイロード全体の FNV-1a（キー順固定）。行と分母だけで決まる軸に使う。
+private func breakdownPayloadContentHash(_ payload: BreakdownSnapshotPayload) -> String {
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = [.sortedKeys]
+    guard let data = try? encoder.encode(payload) else { return "" }
+    var hash: UInt64 = 0xcbf2_9ce4_8422_2325
+    for byte in data {
+        hash ^= UInt64(byte)
+        hash = hash &* 0x0000_0100_0000_01b3
+    }
+    return String(format: "%016llx", hash)
+}
+
 private func ibdBreakdownContentHash(payload: BreakdownSnapshotPayload) -> String {
     struct HashInput: Codable {
         struct Row: Codable {

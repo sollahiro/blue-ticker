@@ -66,12 +66,8 @@ struct StatementNoteTypesParseTests {
 
     @Test("複数 note_type")
     func multipleTypes() {
-        let selected = parseStatementNoteTypes(
-            "per_share_information,property_plant_equipment_schedule,goodwill_and_intangibles")
-        #expect(selected == [
-            "per_share_information", "property_plant_equipment_schedule",
-            "goodwill_and_intangibles",
-        ])
+        let selected = parseStatementNoteTypes("per_share_information,issued_shares_and_capital")
+        #expect(selected == ["per_share_information", "issued_shares_and_capital"])
     }
 
     @Test("未知トークンは nil")
@@ -85,6 +81,8 @@ struct StatementNoteTypesParseTests {
         #expect(parseStatementNoteTypes("policy_holding_securities") == nil)
         #expect(parseStatementNoteTypes("borrowings_schedule") == nil)
         #expect(parseStatementNoteTypes("lease_liabilities") == nil)
+        #expect(parseStatementNoteTypes("property_plant_equipment_schedule") == nil)
+        #expect(parseStatementNoteTypes("goodwill_and_intangibles") == nil)
     }
 
     @Test("空選択は nil")

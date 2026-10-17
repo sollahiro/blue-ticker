@@ -168,7 +168,7 @@ private func packIssuer(_ row: IssuerHighWater) -> String {
     @Test func statementNoteClassifyRowsMatchUnscopedRowsIntersectedWithDocIDs() async throws {
         try await withMigratedApp { app in
             let note = statementNoteTypePerShareInformation
-            let other = statementNoteTypePropertyPlantEquipmentSchedule
+            let other = statementNoteTypeIssuedSharesAndCapital
             for (docID, code) in [("S1", "7203"), ("S2", "6758"), ("S3", "9984")] {
                 let row = CompanyStatementNote(docID: docID, noteType: note)
                 row.code = code
@@ -250,9 +250,9 @@ private func packIssuer(_ row: IssuerHighWater) -> String {
                 "S3", type: eps, source: statementNoteSourceLLM,
                 version: "notes-eps-v0", needsReview: true)
             try await seedNote(
-                "S4", type: statementNoteTypePropertyPlantEquipmentSchedule,
+                "S4", type: statementNoteTypeIssuedSharesAndCapital,
                 source: statementNoteSourceNotApplicable,
-                version: propertyPlantEquipmentScheduleNoteCacheVersion, needsReview: false)
+                version: issuedSharesAndCapitalNoteCacheVersion, needsReview: false)
 
             let rows = try await CompanyStatementNoteSourceVersionOnly.query(on: app.db)
                 .filter(\.$noteType != "")

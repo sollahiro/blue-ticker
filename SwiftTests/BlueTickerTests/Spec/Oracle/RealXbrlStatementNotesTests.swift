@@ -986,66 +986,6 @@ import Testing
         #expect(total.currentBalance == 1_530_000_000)
     }
 
-    // MARK: - property_plant_equipment_schedule / goodwill_and_intangibles（京セラ S100TSIJ、IFRS連結）
-    //
-    // 実データ検証（2026-08-01）: role=NotesPropertyPlantAndEquipmentConsolidatedFinancialStatementsIFRS /
-    // NotesGoodwillAndIntangibleAssetsConsolidatedFinancialStatementsIFRS 配下は「{資産区分}IFRS」
-    // （正味帳簿価額）・「{資産区分}AcquisitionCostIFRS」（取得原価）・
-    // 「{資産区分}AccumulatedDepreciationAndImpairmentLossesIFRS」等（累計償却/減損）の3点セットで
-    // 開示される。正味帳簿価額タグだけを抽出できているかを実データで確認する
-    // （取得原価・累計償却タグが誤って混入していないこと）。非IFRSは BS 区分タグ当期値で
-    // `available_via_statement`（lease と同型。内訳は `PropertyPlantEquipmentScheduleOracleFormatTests`）。
-
-    @Test(.enabled(if: cacheAvailable("S100TSIJ"), "XBRL cache S100TSIJ not available"))
-    func kyoceraPPEScheduleExtractsNetCarryingAmountsOnly() throws {
-        let result = StatementNotesResolver.resolvePropertyPlantEquipmentSchedule(
-            xbrlDir: Self.xbrlDir("S100TSIJ"))
-        guard case .resolved(let payload, _, _) = result else {
-            Issue.record("expected .resolved, got \(result)")
-            return
-        }
-        let items = try #require(payload.items)
-        let byTag = Dictionary(uniqueKeysWithValues: items.map { ($0.tag, $0.value) })
-
-        // 実データ検証済みの値（2026-08-01）。
-        #expect(byTag["LandIFRS"] != nil)
-        #expect(byTag["PropertyPlantAndEquipmentIFRS"] != nil)
-        // 取得原価・累計償却/減損タグは正味帳簿価額と別ものなので混入しないこと。
-        #expect(!items.contains { $0.tag.hasSuffix("AcquisitionCostIFRS") })
-        #expect(!items.contains { $0.tag.hasSuffix("AccumulatedDepreciationAndImpairmentLossesIFRS") })
-        #expect(!items.contains { $0.tag.hasSuffix("AccumulatedImpairmentLossesIFRS") })
-    }
-
-    @Test(.enabled(if: cacheAvailable("S100TSIJ"), "XBRL cache S100TSIJ not available"))
-    func kyoceraGoodwillScheduleExtractsNetCarryingAmountsOnly() throws {
-        let result = StatementNotesResolver.resolveGoodwillAndIntangibles(xbrlDir: Self.xbrlDir("S100TSIJ"))
-        guard case .resolved(let payload, _, _) = result else {
-            Issue.record("expected .resolved, got \(result)")
-            return
-        }
-        let items = try #require(payload.items)
-        let tags = Set(items.map(\.tag))
-
-        #expect(tags.contains("GoodwillIFRS"))
-        #expect(tags.contains("SoftwareIFRS"))
-        #expect(tags.contains("CustomerRelationshipsIFRS"))
-        #expect(!items.contains { $0.tag.hasSuffix("AcquisitionCostIFRS") })
-        #expect(!items.contains { $0.tag.hasSuffix("AccumulatedAmortizationAndImpairmentLossesIFRS") })
-    }
-
-    // MARK: - goodwill_and_intangibles（トヨタ自動車 S100VWVY、この注記自体を持たない）
-
-    @Test(.enabled(if: cacheAvailable("S100VWVY"), "XBRL cache S100VWVY not available"))
-    func toyotaHasNoGoodwillNoteIsNotApplicableNotAFailure() {
-        let result = StatementNotesResolver.resolveGoodwillAndIntangibles(xbrlDir: Self.xbrlDir("S100VWVY"))
-        guard case .notApplicable(let reason) = result else {
-            Issue.record("expected .notApplicable, got \(result)")
-            return
-        }
-        #expect(reason == statementNoteNotApplicableNotFound)
-    }
-
-
     // MARK: - per_share_information golden（ユーザー実データ確認済み 2026-08-02、US-GAAP BPS 2026-08-11）
     //
     // EPS・潜在株式調整後EPS・BPSはいずれも「業績等の概要（SummaryOfBusinessResults）」の離散数値

@@ -458,6 +458,24 @@ public func runFactsIngestCommand(
                     await context.resolveInterestBearingDebtBreakdown(
                         docID: docID, correctionDocIDs: correctionIDsByOriginal[docID] ?? [])
                 },
+                BreakdownStage(
+                    axis: breakdownAxisPropertyPlantEquipment,
+                    target: "breakdowns-\(breakdownAxisPropertyPlantEquipment)",
+                    listedCodes: deterministicMetricsListed, limit: unpublishedLimit,
+                    candidateSets: unpublishedSets
+                ) { docID in
+                    await context.resolvePropertyPlantEquipmentBreakdown(
+                        docID: docID, correctionDocIDs: correctionIDsByOriginal[docID] ?? [])
+                },
+                BreakdownStage(
+                    axis: breakdownAxisGoodwillAndIntangibles,
+                    target: "breakdowns-\(breakdownAxisGoodwillAndIntangibles)",
+                    listedCodes: deterministicMetricsListed, limit: unpublishedLimit,
+                    candidateSets: unpublishedSets
+                ) { docID in
+                    await context.resolveGoodwillAndIntangiblesBreakdown(
+                        docID: docID, correctionDocIDs: correctionIDsByOriginal[docID] ?? [])
+                },
             ]
             var summaries: [(stage: BreakdownStage, summary: BreakdownIngestSummary)] = []
             for stage in stages {
@@ -468,6 +486,7 @@ public func runFactsIngestCommand(
                     forceDocIDs: forceDocIDs,
                     logger: app.logger,
                     resolve: stage.axis == breakdownAxisInterestBearingDebt
+                        || breakdownAssetCategoryAxes.contains(stage.axis)
                         ? stage.resolve
                         : { docID in
                             // セグメント member を分類する軸だけ、会社拡張の調整列の Jev 判定を載せる。
@@ -526,8 +545,10 @@ public func runFactsIngestCommand(
         if targets.contains(.notes) {
             // 財務諸表注記取り込み: 対象母集団は上場全体（`listed`。日経225=`priority`は処理順の
             // 先頭寄せのみ。2026-09: 日経225限定を廃止し statements と同じ上場全体へ拡大）。
-            // EPS/発行済株式・資本金/PPE・のれんは注記からXBRL直接抽出（決定論）。
+            // EPS/発行済株式・資本金は注記からXBRL直接抽出（決定論）。
             // `borrowings_schedule` / `lease_liabilities` は公開面から廃止（パーサは IBD 軸が使う）。
+            // `property_plant_equipment_schedule` / `goodwill_and_intangibles` は Breakdown の
+            // `property_plant_equipment` / `goodwill_and_intangibles` 軸へ移した（BLT-137）。
             // `sga_expense_breakdown` は未公開のためここにも job-03 にも載せない。
             let statementNotesListed = codes ?? listed
             if statementNotesListed.isEmpty {
@@ -548,20 +569,6 @@ public func runFactsIngestCommand(
                         statementNoteTypeIssuedSharesAndCapital,
                         { docID, _ in
                             await context.resolveIssuedSharesAndCapitalNote(
-                                docID: docID, correctionDocIDs: correctionIDsByOriginal[docID] ?? [])
-                        }
-                    ),
-                    (
-                        statementNoteTypePropertyPlantEquipmentSchedule,
-                        { docID, _ in
-                            await context.resolvePropertyPlantEquipmentScheduleNote(
-                                docID: docID, correctionDocIDs: correctionIDsByOriginal[docID] ?? [])
-                        }
-                    ),
-                    (
-                        statementNoteTypeGoodwillAndIntangibles,
-                        { docID, _ in
-                            await context.resolveGoodwillAndIntangiblesNote(
                                 docID: docID, correctionDocIDs: correctionIDsByOriginal[docID] ?? [])
                         }
                     ),

@@ -34,6 +34,17 @@ public let breakdownAxisCapex = "capex"
 /// 有利子負債（社債・借入金＋リース負債を1表にした内訳）。報告セグメント指標ではないため
 /// `breakdownSegmentMetricAxes` には入れない。`needs_review` の行は公開しない（fail closed）。
 public let breakdownAxisInterestBearingDebt = "interest_bearing_debt"
+/// 有形固定資産の種類別（土地・建物等の正味帳簿価額）。IFRS 連結の注記だけ。報告セグメント指標ではない。
+/// 旧 notes `property_plant_equipment_schedule` の置き換え（BLT-137）。
+public let breakdownAxisPropertyPlantEquipment = "property_plant_equipment"
+/// のれん及び無形資産の種類別（正味帳簿価額）。IFRS 連結の注記だけ。報告セグメント別の `goodwill` とは別物。
+/// 旧 notes `goodwill_and_intangibles` の置き換え（BLT-137）。
+public let breakdownAxisGoodwillAndIntangibles = "goodwill_and_intangibles"
+/// 資産の種類別の2軸（有形固定資産、のれん及び無形資産）。
+public let breakdownAssetCategoryAxes = [
+    breakdownAxisPropertyPlantEquipment,
+    breakdownAxisGoodwillAndIntangibles,
+]
 
 /// interest_bearing_debt 行の名前付きセルキー。期首残高（円）。
 public let ibdCellOpening = "opening"
@@ -133,6 +144,7 @@ public let breakdownSegmentMetricAxes = [
 public func isSupportedBreakdownAxis(_ axis: String) -> Bool {
     axis == breakdownAxisProductService || axis == breakdownAxisGeography
         || axis == breakdownAxisInterestBearingDebt
+        || breakdownAssetCategoryAxes.contains(axis)
         || breakdownSegmentMetricAxes.contains(axis)
 }
 
@@ -176,6 +188,9 @@ public let noncurrentAssetAdditionsBreakdownCacheVersion = "breakdown-noncurrent
 public let capexBreakdownCacheVersion = "breakdown-capex-v1"
 /// 有利子負債。新軸のため v1 から。
 public let interestBearingDebtBreakdownCacheVersion = "breakdown-interest-bearing-debt-v2"
+/// 資産の種類別。新軸のため v1 から。
+public let propertyPlantEquipmentBreakdownCacheVersion = "breakdown-property-plant-equipment-v1"
+public let goodwillAndIntangiblesBreakdownCacheVersion = "breakdown-goodwill-and-intangibles-v1"
 
 /// 軸に対応する現行 cache_version 文字列。未知の軸は product_service 扱い（安全側に決定的バンプ対象へ）。
 public func breakdownCacheVersion(forAxis axis: String) -> String {
@@ -188,6 +203,8 @@ public func breakdownCacheVersion(forAxis axis: String) -> String {
     case breakdownAxisGoodwillAmortization: return goodwillAmortizationBreakdownCacheVersion
     case breakdownAxisEquityMethodInvestments: return equityMethodInvestmentsBreakdownCacheVersion
     case breakdownAxisInterestBearingDebt: return interestBearingDebtBreakdownCacheVersion
+    case breakdownAxisPropertyPlantEquipment: return propertyPlantEquipmentBreakdownCacheVersion
+    case breakdownAxisGoodwillAndIntangibles: return goodwillAndIntangiblesBreakdownCacheVersion
     default: return productServiceBreakdownCacheVersion
     }
 }
@@ -255,6 +272,13 @@ public let breakdownWarningIBDLeaseSourcesDiffer = "interest_bearing_debt_lease_
 /// `needs_review` にはしない（帯判定は別）。
 public let breakdownWarningIBDLeaseDenominatorFromNotes =
     "interest_bearing_debt_lease_denominator_from_notes"
+
+/// property_plant_equipment / goodwill_and_intangibles: 合計の科目が区分行の和と合わず行に残った。
+/// `needs_review` とセット（公開しない）。
+public let breakdownWarningAssetCategoryTotalUnmatched = "asset_category_total_unmatched"
+/// property_plant_equipment / goodwill_and_intangibles: 小計の内訳にさらに小計がある。
+/// `category_group` 1段では親を示せないので `needs_review` とセット（公開しない）。
+public let breakdownWarningAssetCategoryNestedSubtotal = "asset_category_nested_subtotal"
 
 /// 公開 serving が needs_review の格納行を出さないときの 404 reason。
 /// interest_bearing_debt 軸だけ。行は version-servable だが公開保留。未算出（reason 無し 404）とは区別する。
@@ -345,6 +369,8 @@ public let capitalExpendituresOverviewBreakdownMinServableVersion = 1
 public let noncurrentAssetAdditionsBreakdownMinServableVersion = 1
 public let capexBreakdownMinServableVersion = 1
 public let interestBearingDebtBreakdownMinServableVersion = 1
+public let propertyPlantEquipmentBreakdownMinServableVersion = 1
+public let goodwillAndIntangiblesBreakdownMinServableVersion = 1
 
 /// 軸に対応する read 床。未知の軸は product_service 床。
 public func breakdownMinServableVersion(forAxis axis: String) -> Int {
@@ -357,6 +383,8 @@ public func breakdownMinServableVersion(forAxis axis: String) -> Int {
     case breakdownAxisGoodwillAmortization: return goodwillAmortizationBreakdownMinServableVersion
     case breakdownAxisEquityMethodInvestments: return equityMethodInvestmentsBreakdownMinServableVersion
     case breakdownAxisInterestBearingDebt: return interestBearingDebtBreakdownMinServableVersion
+    case breakdownAxisPropertyPlantEquipment: return propertyPlantEquipmentBreakdownMinServableVersion
+    case breakdownAxisGoodwillAndIntangibles: return goodwillAndIntangiblesBreakdownMinServableVersion
     default: return productServiceBreakdownMinServableVersion
     }
 }
@@ -375,6 +403,7 @@ public func breakdownCacheVersionNumber(_ version: String) -> Int? {
         "breakdown-capital-expenditures-overview-v", "breakdown-noncurrent-asset-additions-v",
         "breakdown-capex-v",
         "breakdown-interest-bearing-debt-v",
+        "breakdown-property-plant-equipment-v", "breakdown-goodwill-and-intangibles-v",
         "breakdown-v",
     ]
     for prefix in prefixes where version.hasPrefix(prefix) {
@@ -822,6 +851,10 @@ public extension BreakdownRowPayload {
         // description は Capex Overview 等で値があるときだけ載せる（他軸に null を増やすのを避ける）。
         if let description {
             object["description"] = description
+        }
+        // 値を読んだ XBRL 要素（資産の種類別の軸）。持たない軸には出さない。
+        if let sourceTag {
+            object[ibdSourceTagKey] = sourceTag
         }
         return object
     }

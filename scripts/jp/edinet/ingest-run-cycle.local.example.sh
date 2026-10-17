@@ -11,7 +11,7 @@
 # limit / write は ingest.local.env を編集（PR 不要）。
 # 実運用ラッパー（ingest-run-cycle.local.sh）は gitignore。雛形は
 # scripts/jp/edinet/ingest-run-cycle.local.sh を cp して使う（caffeinate・
-# job-03 / job-06 日次 skip・post 1 回化を含む）。
+# job-06 日次 skip・post 1 回化を含む。job-03 は廃止）。
 
 set -euo pipefail
 
