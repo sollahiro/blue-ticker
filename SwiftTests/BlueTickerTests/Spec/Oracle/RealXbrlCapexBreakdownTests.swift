@@ -102,6 +102,43 @@ import Foundation
         }
     }
 
+    /// トヨタ: 会社拡張の「消去又は全社」（設備投資 29,452 / 資産 14,532,118 百万円）。標準の調整
+    /// member が無いので Jev（ここではスタブ）が会社拡張 member から選び、reconciling になる。
+    /// Jev 無しは従来どおり segment。事業（自動車）を選んでも外部売上があるので採らない。
+    // source: code=7203 fy_end=2026-03-31 doc_id=S100Y8NY page=146 row=消去又は全社
+    @Test func toyotaCorporateExpensesAndEliminationIsReconciling() async throws {
+        guard await Self.ensureAvailable("S100Y8NY") else { return }
+        let dir = Self.xbrlDir("S100Y8NY")
+        let contextMap = BreakdownExtractor.loadDimensionContextMap(xbrlDir: dir)
+        let facts = BreakdownExtractor.extractFactsByDimension(
+            xbrlDir: dir, dimensionKeywords: Xbrl.businessSegmentDimensionKeywords,
+            contextMap: contextMap)
+        let candidates = SegmentMemberRoleJevPicker.candidates(
+            facts: facts, labelsByTag: XBRLUtils.breakdownMemberLabels(in: dir))
+        let members: [String] = candidates.map(\.member)
+        #expect(members.contains("CorporateExpensesAndEliminationMember"))
+
+        let elimination = await SegmentMemberRoleJevPicker.pick(
+            candidates: candidates,
+            decider: StubSegmentMemberRoleDecider(member: "CorporateExpensesAndEliminationMember"),
+            docID: "S100Y8NY")
+        #expect(elimination.members == ["CorporateExpensesAndEliminationMember"])
+        let automotive = await SegmentMemberRoleJevPicker.pick(
+            candidates: candidates,
+            decider: StubSegmentMemberRoleDecider(member: "AutomotiveReportableSegmentMember"),
+            docID: "S100Y8NY")
+        #expect(automotive.members.isEmpty)
+
+        let withRoles = try #require(
+            BreakdownMemberRoles.$extraReconciling.withValue(elimination.members) { Self.snapshot("S100Y8NY") })
+        let row = try #require(withRoles.rows.first { $0.labelRaw == "CorporateExpensesAndEliminationMember" })
+        #expect(row.rowKind == "reconciling")
+        #expect(row.flow == 29_452_000_000)
+        #expect(row.segmentAssets == 14_532_118_000_000)
+        let without = try #require(Self.snapshot("S100Y8NY"))
+        #expect(without.rows.first { $0.labelRaw == "CorporateExpensesAndEliminationMember" }?.rowKind == "segment")
+    }
+
     /// 三菱UFJ: 銀行は固定資産増加額。資本的支出が無ければ NAA。
     @Test func mufgUsesNoncurrentAdditionsWhenCapitalExpendituresAbsent() async throws {
         guard await Self.ensureAvailable("S100W4FB") else { return }
@@ -135,5 +172,18 @@ import Foundation
             #expect(entity.rowKind == breakdownRowKindEntityTotal)
             #expect(entity.capitalExpendituresOverview == 96_439_000_000)
         }
+    }
+}
+
+/// 指定 member の候補キーを返すスタブ（3 サンプルとも同じ答え）。
+struct StubSegmentMemberRoleDecider: SegmentMemberRoleDeciding {
+    var member: String
+    func chooseReconcilingMember(
+        candidates: [SegmentMemberRoleCandidate], docID: String
+    ) async -> JevChoiceAggregate.Sample {
+        let key = candidates.first { $0.member == member }?.key ?? JevDecision.noneOfThese
+        return JevChoiceAggregate.Sample(
+            selected: key, probability: 0.97,
+            options: candidates.map(\.key) + [JevDecision.noneOfThese], model: "stub")
     }
 }

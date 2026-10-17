@@ -157,6 +157,7 @@ extension XBRLUtils {
     /// 複数 role で親が割れたときは辞書順の小さい親を残す（走査順に依存させない）。
     static func operatingSegmentMemberParents(in dir: URL) -> [String: String] {
         let skipParents = Xbrl.segmentSubtotalMemberNames.union(Xbrl.segmentReconcilingMemberNames)
+            .union(BreakdownMemberRoles.extraReconciling)
         var result: [String: String] = [:]
         for roleParents in loadPresentationParents(in: dir).values {
             for (child, parents) in roleParents {

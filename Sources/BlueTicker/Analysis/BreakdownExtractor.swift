@@ -675,7 +675,7 @@ enum BreakdownExtractor {
             guard factsContainRecognizedAmountTag([fact]) else { continue }
             guard let member = XBRLUtils.primaryBreakdownMember(fact.dimensions) else { continue }
             guard !Xbrl.segmentSubtotalMemberNames.contains(member),
-                !Xbrl.segmentReconcilingMemberNames.contains(member),
+                !BreakdownMemberRoles.isReconciling(member),
                 !Xbrl.segmentOtherBusinessMemberNames.contains(member)
             else { continue }
             members.insert(member)
@@ -954,7 +954,7 @@ enum BreakdownExtractor {
             guard factsContainRecognizedAmountTag([fact]),
                   let member = XBRLUtils.primaryBreakdownMember(fact.dimensions),
                   !Xbrl.segmentSubtotalMemberNames.contains(member),
-                  !Xbrl.segmentReconcilingMemberNames.contains(member),
+                  !BreakdownMemberRoles.isReconciling(member),
                   !Xbrl.segmentOtherBusinessMemberNames.contains(member)
             else { return nil }
             return member

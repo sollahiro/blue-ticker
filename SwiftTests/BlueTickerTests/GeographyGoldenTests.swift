@@ -2033,6 +2033,48 @@ import Testing
         #expect(!snapshot.warnings.contains("llm_row_sum_mismatch"))
     }
 
+    /// source: code=6138 fy_end=2026-03-31 doc_id=S100YHNC page=69 field=geography 当連結会計年度 アジア=中国 1,895,894+その他 865,309 合計=9,292,071
+    /// 6138 型: 横並びのアジアが 中国 / その他 に分かれ、子見出しが縦結合の金額と同じ行にある。
+    /// その行は見出しとして既存の入れ子見出しに乗せ、アジアの2列とも加算に残す。
+    @Test func horizontalNestedChildHeadersBesideRowspanAmounts() async throws {
+        let html = """
+            <p>当連結会計年度</p>
+            <p>（１）売上高</p>
+            <table>
+              <tr><td></td><td></td><td></td><td></td><td></td><td></td><td>(単位：千円)</td></tr>
+              <tr><td>日本</td><td>北米</td><td>欧州</td><td colspan="2">アジア</td><td>その他</td><td>合計</td></tr>
+              <tr><td rowspan="2">3,981,422</td><td rowspan="2">1,117,139</td><td rowspan="2">1,401,079</td><td>中国</td><td>その他</td><td rowspan="2">31,226</td><td rowspan="2">9,292,071</td></tr>
+              <tr><td>1,895,894</td><td>865,309</td></tr>
+            </table>
+            <p>(注)　売上高は顧客の所在地を基礎とし、国又は地域に分類しております。</p>
+            """
+        let tables = BreakdownExtractor.allTablesFromHtml(html, defaultHeading: "地域ごとの情報")
+        let parsed = RevenueRecognitionCandidates.parse(tables: tables)
+        #expect(parsed[0].headerRowCount == 3)
+        let (snapshotOrNil, _) = await normalize(
+            html: html, sales: 9_292_071_000, docID: "S100YHNC")
+        let snapshot = try #require(snapshotOrNil)
+        let segments = snapshot.rows.filter { $0.rowKind == "segment" }
+        // 既存の入れ子規則どおり（アジア / タイ → アジアタイ）。
+        #expect(segmentLabels(snapshot) == ["日本", "北米", "欧州", "アジア中国", "アジアその他", "その他"])
+        #expect(segments.count == 6)
+        #expect(segments.reduce(0) { $0 + $1.amount } == 9_292_069_000)
+        #expect(segments.contains { $0.amount == 1_895_894_000 })
+        #expect(segments.contains { $0.amount == 865_309_000 })
+        #expect(snapshot.rows.first { $0.labelRaw == "その他" }?.amount == 31_226_000)
+        #expect(!snapshot.warnings.contains("llm_row_sum_mismatch"))
+        #expect(!snapshot.needsReview)
+        #expect(publiclyServable(snapshot))
+    }
+
+    /// source: code=6237 fy_end=2026-03-31 doc_id=S100YHPM page=79 field=revenue_recognition 契約資産（期首残高）167,189千円 / －
+    /// 「－」が次の行と同じでも縦結合の写しとは限らない。子見出し行として扱わない。
+    @Test func dashBesideAmountWithUnitIsNotNestedChildHeader() {
+        let row = ["契約資産（期首残高）", "167,189千円", "－"]
+        let next = ["契約資産（期末残高）", "－", "－"]
+        #expect(!RevenueRecognitionCandidates.isNestedChildHeaderBesideRowspanAmounts(row, next: next))
+    }
+
     /// source: code=4228 fy_end=2026-03-31 doc_id=S100YI2M page=96 field=geography 当連結会計年度 ドイツ=6,836 (sibling of その他欧州=7,716)
     /// 4228 型: ドイツはその他欧州の残余ではなく並列の地域。加算に残して IS の 95% を満たす。
     @Test func germanyIsNotOfWhichChildOfOtherEurope() async throws {
