@@ -466,7 +466,15 @@ public func runFactsIngestCommand(
                     limit: stage.limit, explicitCodes: codes, priorityCodes: priority,
                     cachedDocIDs: cachedDocIDs, axis: stage.axis, candidateSets: stage.candidateSets,
                     forceDocIDs: forceDocIDs,
-                    logger: app.logger, resolve: stage.resolve)
+                    logger: app.logger,
+                    resolve: stage.axis == breakdownAxisInterestBearingDebt
+                        ? stage.resolve
+                        : { docID in
+                            // セグメント member を分類する軸だけ、会社拡張の調整列の Jev 判定を載せる。
+                            await context.withSegmentMemberRoles(
+                                docID: docID, correctionDocIDs: correctionIDsByOriginal[docID] ?? []
+                            ) { await stage.resolve(docID) }
+                        })
                 summaries.append((stage, summary))
             }
             let coverage = try? await withDbRetry(

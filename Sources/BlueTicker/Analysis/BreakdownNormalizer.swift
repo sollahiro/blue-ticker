@@ -126,7 +126,7 @@ enum BreakdownNormalizer {
         // 1次判定: タクソノミ標準の小計・調整 member を名称で分類する。
         var kinds: [String: String] = [:]
         for member in perMember.keys {
-            if Xbrl.segmentReconcilingMemberNames.contains(member) {
+            if BreakdownMemberRoles.isReconciling(member) {
                 kinds[member] = "reconciling"
             } else if Xbrl.segmentSubtotalMemberNames.contains(member) {
                 kinds[member] = "subtotal"
@@ -244,7 +244,7 @@ enum BreakdownNormalizer {
 
         var kinds: [String: String] = [:]
         for member in perMember.keys {
-            if Xbrl.segmentReconcilingMemberNames.contains(member) {
+            if BreakdownMemberRoles.isReconciling(member) {
                 kinds[member] = "reconciling"
             } else if Xbrl.segmentSubtotalMemberNames.contains(member) {
                 kinds[member] = "subtotal"
@@ -865,7 +865,7 @@ enum BreakdownNormalizer {
     ) -> BreakdownSnapshot? {
         var kinds: [String: String] = [:]
         for member in perMember.keys {
-            if Xbrl.segmentReconcilingMemberNames.contains(member)
+            if BreakdownMemberRoles.isReconciling(member)
                 || countBasisAdditiveBucketMemberNames.contains(member)
             {
                 kinds[member] = "reconciling"
@@ -1234,7 +1234,7 @@ enum BreakdownNormalizer {
 
             var excluded = Set(perMember.keys.filter { member in
                 Xbrl.segmentSubtotalMemberNames.contains(member)
-                    || Xbrl.segmentReconcilingMemberNames.contains(member)
+                    || BreakdownMemberRoles.isReconciling(member)
             })
             // 数値による小計除外の安全網（本処理と同じ非対称ルール、学び7）: 企業独自の合計行名が
             // 上記の標準語彙に無くても、候補が複数あるときは金額が連結売上高に一致する member を

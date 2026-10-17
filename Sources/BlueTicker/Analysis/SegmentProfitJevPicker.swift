@@ -74,7 +74,7 @@ enum SegmentProfitJevPicker {
         guard let total = values["ReportableSegmentsMember"] else { return nil }
         let reportable = values.filter { member, _ in
             !Xbrl.segmentSubtotalMemberNames.contains(member)
-                && !Xbrl.segmentReconcilingMemberNames.contains(member)
+                && !BreakdownMemberRoles.isReconciling(member)
                 && !Xbrl.segmentOtherBusinessMemberNames.contains(member)
         }
         guard !reportable.isEmpty else { return nil }
