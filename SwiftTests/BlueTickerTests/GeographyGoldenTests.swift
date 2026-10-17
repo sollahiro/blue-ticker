@@ -2067,6 +2067,14 @@ import Testing
         #expect(publiclyServable(snapshot))
     }
 
+    /// source: code=6237 fy_end=2026-03-31 doc_id=S100YHPM field=revenue_recognition 契約資産（期首残高）167,189千円 / －
+    /// 「－」が次の行と同じでも縦結合の写しとは限らない。子見出し行として扱わない。
+    @Test func dashBesideAmountWithUnitIsNotNestedChildHeader() {
+        let row = ["契約資産（期首残高）", "167,189千円", "－"]
+        let next = ["契約資産（期末残高）", "－", "－"]
+        #expect(!RevenueRecognitionCandidates.isNestedChildHeaderBesideRowspanAmounts(row, next: next))
+    }
+
     /// source: code=4228 fy_end=2026-03-31 doc_id=S100YI2M page=96 field=geography 当連結会計年度 ドイツ=6,836 (sibling of その他欧州=7,716)
     /// 4228 型: ドイツはその他欧州の残余ではなく並列の地域。加算に残して IS の 95% を満たす。
     @Test func germanyIsNotOfWhichChildOfOtherEurope() async throws {

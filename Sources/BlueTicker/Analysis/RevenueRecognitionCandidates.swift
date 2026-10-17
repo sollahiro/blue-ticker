@@ -889,18 +889,21 @@ enum RevenueRecognitionCandidates {
     /// rowspan 展開後は次の行と同じ値になる。金額はすべて次の行の写しで、子見出しの下に
     /// 次の行の金額があるときだけ見出しとして扱い、既存の入れ子見出しに乗せる。
     static func isNestedChildHeaderBesideRowspanAmounts(_ row: [String], next: [String]) -> Bool {
+        var rowspanAmount = false
         var childHeaderAboveAmount = false
         for (column, raw) in row.enumerated() {
             let text = compactCell(raw)
             if text.isEmpty { continue }
             let below = column < next.count ? compactCell(next[column]) : ""
             if isAmountCell(text) {
-                if below != text { return false }
+                // 「－」は空欄の続きと縦結合の写しを区別できない（契約残高表の 期首／期末 の行）。
+                if dashCells.contains(text) || below != text { return false }
+                rowspanAmount = true
             } else if column > 0, isAmountCell(below) {
                 childHeaderAboveAmount = true
             }
         }
-        return childHeaderAboveAmount
+        return rowspanAmount && childHeaderAboveAmount
     }
 
     private static func parseTable(
