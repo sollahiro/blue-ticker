@@ -48,9 +48,11 @@ enum BusinessBreakdownResolver {
 
         // 0) 決定論（表の行名・差異調整・標準タグ）で利益タグが決まらず profit が全行 null のとき、
         //    セグメント値のある既存タグから会社のセグメント利益の行を Jev に選ばせる。
+        //    公開しない（needs_review）結果と、利益タグが専用の銀行・保険の経路では聞かない。
         if let snapshot = factsSnapshot, let segmentProfitDecider,
-           snapshot.axis == breakdownAxisProductService,
-           !snapshot.rows.contains(where: { $0.profit != nil })
+           snapshot.axis == breakdownAxisProductService, !snapshot.needsReview,
+           !snapshot.rows.contains(where: { $0.profit != nil }),
+           !BreakdownNormalizer.isFinancialBasisDenominatorTag(snapshot.denominatorTag)
         {
             let candidates = SegmentProfitJevPicker.candidates(
                 facts: segments.facts, rowLabelsByTag: segments.rowLabelsByTag,

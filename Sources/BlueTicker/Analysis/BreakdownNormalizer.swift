@@ -375,6 +375,12 @@ enum BreakdownNormalizer {
         return fallback
     }
 
+    /// 銀行（粗利益）・保険（保険収益）基準の分母タグ。利益タグはその業種の専用タグで、
+    /// `profitTagOverride` は効かない。
+    static func isFinancialBasisDenominatorTag(_ tag: String) -> Bool {
+        Xbrl.segmentBankGrossProfitTags.contains(tag) || Xbrl.segmentInsuranceRevenueTags.contains(tag)
+    }
+
     /// 当期のセグメント member 値（member → 値）。`SegmentProfitJevPicker` の候補作り用。
     static func currentSegmentMemberValues(facts: [BreakdownFact], tag: String) -> [String: Double] {
         resolvePerMember(facts: facts, tag: tag).mapValues(\.value)

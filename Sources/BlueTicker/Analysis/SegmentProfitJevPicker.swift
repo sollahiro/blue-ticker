@@ -3,7 +3,8 @@
 // 決まらないときだけ、セグメント表に当期のセグメント値が載っている既存タグの中から、
 // 会社がセグメント利益（業績評価の利益）としている行を1つ選ばせる。会社拡張タグを
 // 一覧に足していかない（9201 日本航空の財務・法人所得税前利益など）。
-// 値はタグの開示値そのもの。採否は報告セグメント計との整合（コード）で決め、Jev は覆せない。
+// 値はタグの開示値そのもの。3 回一致・0.9 に加え、報告セグメント計があれば和との整合（コード）を
+// 求める。Jev は整合しない行を採らせられない。
 // キーが無い・合意できない・整合しないときは profit を付けない（null のまま）。
 
 import Foundation
@@ -28,11 +29,11 @@ protocol SegmentProfitDeciding: Sendable {
 enum SegmentProfitJevPicker {
     static let question = "segment_profit_row"
     static let axis = "product_service_profit"
-    /// 報告セグメント計の裏取りが無いときだけ効く確信度（他の Jev 経路の公開閾値と同じ）。
-    static let unsupportedThreshold = SegmentNoteDecision.applyProbabilityThreshold
+    /// 3 回一致かつ中央値 0.9 以上（他の Jev 経路の公開閾値と同じ）。報告セグメント計との整合は
+    /// その上の追加の確認（資産・減価償却費なども計と整合するので、整合だけでは採らない）。
     static let jevPolicy = JevDecisionPolicy(
-        question: question, confidenceThreshold: nil,
-        auditThreshold: SegmentNoteDecision.applyProbabilityThreshold)
+        question: question,
+        confidenceThreshold: SegmentNoteDecision.applyProbabilityThreshold)
 
     struct PickResult: Equatable, Sendable {
         var tag: String?
@@ -107,19 +108,11 @@ enum SegmentProfitJevPicker {
                 docID: docID, model: result.aggregate.model, applied: false,
                 sentences: sentences, calls: result.calls))
         }
-        switch reportableTotalAgrees(facts: facts, tag: chosen.tag) {
-        case .some(false):
+        if reportableTotalAgrees(facts: facts, tag: chosen.tag) == false {
             sentences.append("segment_profit_jev=reportable_total_mismatch tag=\(chosen.tag)")
             return PickResult(tag: nil, audit: audit(
                 docID: docID, model: result.aggregate.model, applied: false,
                 sentences: sentences, calls: result.calls))
-        case .none where !JevDecision.meetsThreshold(unsupportedThreshold, result.aggregate.probability):
-            sentences.append("segment_profit_jev=below_threshold_without_reportable_total tag=\(chosen.tag)")
-            return PickResult(tag: nil, audit: audit(
-                docID: docID, model: result.aggregate.model, applied: false,
-                sentences: sentences, calls: result.calls))
-        default:
-            break
         }
         sentences.append("segment_profit_jev=accepted tag=\(chosen.tag)")
         return PickResult(tag: chosen.tag, audit: audit(
