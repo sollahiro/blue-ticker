@@ -51,6 +51,8 @@ public struct BltServerContext: Sendable {
     let interestBearingDebtDecider: (any InterestBearingDebtDeciding)?
     /// Summary `sga` の Jev 行選択。同じキーが無いときは nil（タグ経路が空のまま）。
     let sgaLineDecider: (any SgaLineDeciding)?
+    /// 会社拡張 member のうち調整・消去・全社の列の判定。同じキーが無いときは nil（標準一覧だけ）。
+    let segmentMemberRoleDecider: (any SegmentMemberRoleDeciding)?
     /// 収益分解表の金額なし行が見出しか説明かの判定。同じキーが無いときは nil（見出しのまま）。
     let revenueRecognitionRowRoleDecider: (any RevenueRecognitionRowRoleDeciding)?
     /// employees / rd / goodwill / 報告セグメント指標軸が同一 doc を軸ループで再パースしないためのメモ。
@@ -68,6 +70,7 @@ public struct BltServerContext: Sendable {
         capexProseDecider: (any CapexProseDeciding)? = nil,
         interestBearingDebtDecider: (any InterestBearingDebtDeciding)? = nil,
         sgaLineDecider: (any SgaLineDeciding)? = nil,
+        segmentMemberRoleDecider: (any SegmentMemberRoleDeciding)? = nil,
         revenueRecognitionRowRoleDecider: (any RevenueRecognitionRowRoleDeciding)? = nil
     ) {
         self.cacheDir = cacheDir
@@ -87,6 +90,7 @@ public struct BltServerContext: Sendable {
         self.capexProseDecider = capexProseDecider
         self.interestBearingDebtDecider = interestBearingDebtDecider
         self.sgaLineDecider = sgaLineDecider
+        self.segmentMemberRoleDecider = segmentMemberRoleDecider
         self.revenueRecognitionRowRoleDecider = revenueRecognitionRowRoleDecider
         self.businessSegmentDimensionCache = BusinessSegmentDimensionCache()
     }
@@ -102,6 +106,25 @@ actor BusinessSegmentDimensionCache {
     }
 
     private var entries: [String: Entry] = [:]
+    private var reconcilingMembers: [String: Set<String>] = [:]
+
+    /// 書類ごとに1回だけ Jev に聞く（`SegmentMemberRoleJevPicker`）。キーが無ければ空。
+    func reconcilingMembers(
+        docID: String, xbrlDir: URL, decider: (any SegmentMemberRoleDeciding)?
+    ) async -> Set<String> {
+        if let hit = reconcilingMembers[docID] { return hit }
+        guard let decider else { return [] }
+        let entry = load(docID: docID, xbrlDir: xbrlDir)
+        let candidates = SegmentMemberRoleJevPicker.candidates(
+            facts: entry.facts, labelsByTag: entry.labelsByTag)
+        let picked = await SegmentMemberRoleJevPicker.pick(
+            candidates: candidates, decider: decider, docID: docID)
+        if !picked.members.isEmpty || candidates.count >= 2 {
+            printError("segment member roles \(docID): \(picked.sentences.joined(separator: " "))\n")
+        }
+        reconcilingMembers[docID] = picked.members
+        return picked.members
+    }
 
     func load(docID: String, xbrlDir: URL) -> Entry {
         if let hit = entries[docID] { return hit }
@@ -186,6 +209,9 @@ public func makeBltServerContext() async -> BltServerContext? {
     let sgaLineDecider: (any SgaLineDeciding)? = decisionsClient.map {
         OpenRouterSgaLineDecider(client: $0)
     }
+    let segmentMemberRoleDecider: (any SegmentMemberRoleDeciding)? = decisionsClient.map {
+        OpenRouterSegmentMemberRoleDecider(client: $0)
+    }
     let revenueRecognitionRowRoleDecider: (any RevenueRecognitionRowRoleDeciding)? = decisionsClient.map {
         OpenRouterRevenueRecognitionRowRoleDecider(client: $0)
     }
@@ -200,6 +226,7 @@ public func makeBltServerContext() async -> BltServerContext? {
         capexProseDecider: capexProseDecider,
         interestBearingDebtDecider: interestBearingDebtDecider,
         sgaLineDecider: sgaLineDecider,
+        segmentMemberRoleDecider: segmentMemberRoleDecider,
         revenueRecognitionRowRoleDecider: revenueRecognitionRowRoleDecider)
 }
 
@@ -921,6 +948,19 @@ public extension BltServerContext {
 }
 
 public extension BltServerContext {
+    /// 内訳の1軸を、その書類の会社拡張 member の役割（Jev 判定、書類ごとに1回）を載せて解決する。
+    func withSegmentMemberRoles(
+        docID: String, correctionDocIDs: [String] = [],
+        _ body: @Sendable () async -> BreakdownResolveResult
+    ) async -> BreakdownResolveResult {
+        guard segmentMemberRoleDecider != nil,
+              let xbrlDir = await downloadAnnualFilingXbrl(docID: docID, correctionDocIDs: correctionDocIDs)
+        else { return await body() }
+        let roles = await businessSegmentDimensionCache.reconcilingMembers(
+            docID: docID, xbrlDir: xbrlDir, decider: segmentMemberRoleDecider)
+        return await BreakdownMemberRoles.$extraReconciling.withValue(roles) { await body() }
+    }
+
     /// 内訳取り込み: 書類1件分の employees 軸内訳を解決する（2026-08-01追加）。`NumberOfEmployees` /
     /// `NumberOfGroupEmployees` のセグメント dimension 付き fact のみを対象にした決定論経路
     /// （LLM フォールバックなし）。全社合計は同一 XBRL パスで `BreakdownFinancialsResolver` が

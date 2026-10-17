@@ -877,10 +877,36 @@ enum RevenueRecognitionCandidates {
             let amounts = row.dropFirst().contains { isAmountCell($0) }
             let labelOnly = !compactCell(row.first ?? "").isEmpty
                 && row.dropFirst().allSatisfy { compactCell($0).isEmpty }
-            if amounts || labelOnly { break }
+            if labelOnly { break }
+            if amounts {
+                guard firstData + 1 < rows.count,
+                      isNestedChildHeaderBesideRowspanAmounts(row, next: rows[firstData + 1])
+                else { break }
+            }
             firstData += 1
         }
         return firstData
+    }
+
+    /// 横並び表の子見出し行（6138 S100YHNC のアジア → 中国 / その他）。他の列は縦結合の金額で、
+    /// rowspan 展開後は次の行と同じ値になる。金額はすべて次の行の写しで、子見出しの下に
+    /// 次の行の金額があるときだけ見出しとして扱い、既存の入れ子見出しに乗せる。
+    static func isNestedChildHeaderBesideRowspanAmounts(_ row: [String], next: [String]) -> Bool {
+        var rowspanAmount = false
+        var childHeaderAboveAmount = false
+        for (column, raw) in row.enumerated() {
+            let text = compactCell(raw)
+            if text.isEmpty { continue }
+            let below = column < next.count ? compactCell(next[column]) : ""
+            if isAmountCell(text) {
+                // 「－」は空欄の続きと縦結合の写しを区別できない（契約残高表の 期首／期末 の行）。
+                if dashCells.contains(text) || below != text { return false }
+                rowspanAmount = true
+            } else if column > 0, isAmountCell(below) {
+                childHeaderAboveAmount = true
+            }
+        }
+        return rowspanAmount && childHeaderAboveAmount
     }
 
     private static func parseTable(
@@ -895,6 +921,12 @@ enum RevenueRecognitionCandidates {
             let parts = rows.prefix(firstData).compactMap { row -> String? in
                 guard column < row.count else { return nil }
                 let text = compactCell(row[column])
+                // 子見出し行に並ぶ縦結合の金額（6138）は見出しではない。
+                if isAmountCell(text), firstData < rows.count,
+                   column < rows[firstData].count, compactCell(rows[firstData][column]) == text
+                {
+                    return nil
+                }
                 return text.isEmpty ? nil : text
             }
             let joined = joinHeaderParts(parts)
