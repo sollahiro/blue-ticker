@@ -1181,9 +1181,11 @@ enum RevenueRecognitionCandidates {
         return String(label.dropFirst().dropLast())
     }
 
+    /// 「生ずる」は「生じる」の表記揺れ（6526 S100R9DF の顧客との契約から生ずる収益）。
     private static func totalToken(_ label: String) -> String {
         let collapsed = label.replacingOccurrences(of: " ", with: "")
             .replacingOccurrences(of: "\u{3000}", with: "")
+            .replacingOccurrences(of: "生ずる", with: "生じる")
         return unwrapParentheses(collapsed)
     }
 
@@ -1308,6 +1310,38 @@ enum RevenueRecognitionCandidates {
         }
         guard !totalAmounts.isEmpty else { return false }
         return !totalAmounts.contains { sumMatches(sum, subtotal: $0, itemCount: full.count) }
+    }
+
+    /// 顧客との契約の外の収益（その他の源泉 / その他の収益）の合計行。明細の合計にこの行を
+    /// 足すと表の総合計（外部顧客への売上高 / 合計）に一致するときだけ `reconciling` 行にする。
+    /// 一致しないとき（顧客契約の小計しか無い、または総合計が別の内訳）は何も足さない。
+    /// カテゴリ行に同じ語があるときは明細に入っているので呼び出し側で足さない。
+    static func otherSourceRevenueRows(
+        table: ParsedTable, column: Int, rows: [BuiltRow], grandTotal: Double
+    ) -> [BuiltRow] {
+        let full = rows.filter { !$0.isPartial && $0.rowKind == "segment" }
+        guard !full.isEmpty else { return [] }
+        let amounts = dataAmounts(table: table, column: column)
+        var others: [BuiltRow] = []
+        for total in table.totals {
+            let label = stripNoteMarker(total.label)
+            guard isOtherSourceRevenueLabel(label), let amount = amounts[total.row], amount != 0
+            else { continue }
+            others.append(BuiltRow(
+                categoryGroup: label.replacingOccurrences(of: " ", with: ""), category: nil,
+                amount: amount, isPartial: false, rowKind: "reconciling"))
+        }
+        guard !others.isEmpty else { return [] }
+        let sum = (full + others).reduce(0.0) { $0 + $1.amount }
+        guard sumMatches(sum, subtotal: grandTotal, itemCount: full.count + others.count) else {
+            return []
+        }
+        return others
+    }
+
+    static func isOtherSourceRevenueLabel(_ label: String) -> Bool {
+        let token = totalToken(stripNoteMarker(label))
+        return token.hasPrefix("その他の源泉") || token == "その他の収益" || token == "その他収益"
     }
 
     static func emittedSumExceedsCap(_ rows: [BuiltRow], cap: Double) -> Bool {

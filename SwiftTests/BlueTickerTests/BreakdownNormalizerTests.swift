@@ -798,7 +798,7 @@ import Foundation
     }
 
     @Test func bankDenominatorFarFromSegmentSumSetsNeedsReview() throws {
-        // Grok 4.5 レビュー指摘の回帰テスト: 小計候補が1件しかない場合、距離チェックが
+        // 回帰テスト: 小計候補が1件しかない場合、距離チェックが
         // スキップされて needsReview が立たない穴があった。名称一致する小計しか無く、
         // それが segment 行合計から大きく乖離している（ここでは全社合計タグが部分合計しか
         // 無いケースを模す）ときは、採用した値であっても要確認とする。
@@ -913,7 +913,7 @@ import Foundation
     }
 
     @Test func netRevenueLikeTagIsNotAdoptedEvenWhenRatioMatches() throws {
-        // Grok 4.5 レビュー指摘の回帰テスト: 銀行等金融機関の NetRevenueIFRS は、比率がたまたま
+        // 回帰テスト: 銀行等金融機関の NetRevenueIFRS は、比率がたまたま
         // 一致してもブラックリストで除外され、外部売上として誤採用されない。
         let facts = [
             BreakdownFact(
@@ -927,7 +927,7 @@ import Foundation
     }
 
     @Test func unnamedSubtotalRowExcludedByNumericSafetyNetDuringDiscovery() throws {
-        // Grok 4.5 レビュー指摘の回帰テスト: 企業独自の合計行名（標準語彙に無い）が discovery の
+        // 回帰テスト: 企業独自の合計行名（標準語彙に無い）が discovery の
         // 合計計算に混ざると比率が約2倍になり、正しい売上タグが誤って弾かれていた。
         // 本処理と同じ数値安全網（分母一致 member を小計とみなす）を discovery 側にも適用済み。
         let facts = [

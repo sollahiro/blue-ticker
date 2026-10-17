@@ -122,7 +122,7 @@ import Foundation
         #expect(snapshot?.warnings.contains(RevenueRecognitionColumnNormalizer.warningLowConfidence) == true)
     }
 
-    /// Grok 4.5 レビュー指摘の回帰テスト（issue調査 2026-07-21）: `method == "xbrl_facts"` でも
+    /// 回帰テスト（issue調査 2026-07-21）: `method == "xbrl_facts"` でも
     /// facts の正規化に失敗する（未知タグで売上高・銀行・保険いずれの経路にも一致しない）場合、
     /// tables が非空なら LLM の表フォールバックへ回る（facts 優先化で tables を破棄していた頃は
     /// ここで永久に notFound になっていた）。

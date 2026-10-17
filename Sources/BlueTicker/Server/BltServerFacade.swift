@@ -57,6 +57,8 @@ public struct BltServerContext: Sendable {
     let segmentProfitDecider: (any SegmentProfitDeciding)?
     /// 収益分解表の金額なし行が見出しか説明かの判定。同じキーが無いときは nil（見出しのまま）。
     let revenueRecognitionRowRoleDecider: (any RevenueRecognitionRowRoleDeciding)?
+    /// 合計だけタグの従業員表がセグメント別かの判定。同じキーが無いときは nil（not_found のまま）。
+    let employeesTableDecider: (any EmployeesTableDeciding)?
     /// employees / rd / goodwill / 報告セグメント指標軸が同一 doc を軸ループで再パースしないためのメモ。
     let businessSegmentDimensionCache: BusinessSegmentDimensionCache
 
@@ -74,7 +76,8 @@ public struct BltServerContext: Sendable {
         sgaLineDecider: (any SgaLineDeciding)? = nil,
         segmentMemberRoleDecider: (any SegmentMemberRoleDeciding)? = nil,
         segmentProfitDecider: (any SegmentProfitDeciding)? = nil,
-        revenueRecognitionRowRoleDecider: (any RevenueRecognitionRowRoleDeciding)? = nil
+        revenueRecognitionRowRoleDecider: (any RevenueRecognitionRowRoleDeciding)? = nil,
+        employeesTableDecider: (any EmployeesTableDeciding)? = nil
     ) {
         self.cacheDir = cacheDir
         let store = EdinetCacheStore(cacheDir: edinetCacheDir(cacheDir))
@@ -96,6 +99,7 @@ public struct BltServerContext: Sendable {
         self.segmentMemberRoleDecider = segmentMemberRoleDecider
         self.segmentProfitDecider = segmentProfitDecider
         self.revenueRecognitionRowRoleDecider = revenueRecognitionRowRoleDecider
+        self.employeesTableDecider = employeesTableDecider
         self.businessSegmentDimensionCache = BusinessSegmentDimensionCache()
     }
 }
@@ -222,6 +226,9 @@ public func makeBltServerContext() async -> BltServerContext? {
     let revenueRecognitionRowRoleDecider: (any RevenueRecognitionRowRoleDeciding)? = decisionsClient.map {
         OpenRouterRevenueRecognitionRowRoleDecider(client: $0)
     }
+    let employeesTableDecider: (any EmployeesTableDeciding)? = decisionsClient.map {
+        OpenRouterEmployeesTableDecider(client: $0)
+    }
     return BltServerContext(
         apiKey: key, cacheDir: cacheDir, overviewChatClient: overviewChatClient,
         overviewModel: overviewEndpoint?.model ?? companyOverviewDefaultModel,
@@ -235,7 +242,8 @@ public func makeBltServerContext() async -> BltServerContext? {
         sgaLineDecider: sgaLineDecider,
         segmentMemberRoleDecider: segmentMemberRoleDecider,
         segmentProfitDecider: segmentProfitDecider,
-        revenueRecognitionRowRoleDecider: revenueRecognitionRowRoleDecider)
+        revenueRecognitionRowRoleDecider: revenueRecognitionRowRoleDecider,
+        employeesTableDecider: employeesTableDecider)
 }
 
 // MARK: - REST Facade
@@ -983,11 +991,18 @@ public extension BltServerContext {
         let total = BreakdownFinancialsResolver.financialsCanonicalEmployees(xbrlDir: xbrlDir)
         let cached = await businessSegmentDimensionCache.load(docID: docID, xbrlDir: xbrlDir)
         let memberParents = XBRLUtils.operatingSegmentMemberParents(in: xbrlDir)
-        guard
-            let snapshot = BreakdownNormalizer.normalizeEmployees(
-                facts: cached.facts, total: total, axis: breakdownAxisEmployees,
-                labelsByTag: cached.labelsByTag, memberParents: memberParents)
-        else {
+        var normalized = BreakdownNormalizer.normalizeEmployees(
+            facts: cached.facts, total: total, axis: breakdownAxisEmployees,
+            labelsByTag: cached.labelsByTag, memberParents: memberParents)
+        if normalized == nil {
+            // セグメント member の fact が無く、表の合計だけにタグが付く会社（8354）。
+            let segmentLabels = Set(cached.facts.compactMap { XBRLUtils.primaryBreakdownMember($0.dimensions) })
+                .compactMap { cached.labelsByTag[$0] }.sorted()
+            normalized = await EmployeesUntaggedRowFill.fromTotalOnlyTable(
+                total: total, xbrlDir: xbrlDir, segmentLabels: segmentLabels,
+                decider: employeesTableDecider, docID: docID)
+        }
+        guard let snapshot = normalized else {
             return .notApplicable(reason: breakdownNotApplicableNotFound)
         }
         // 表の一部の行に fact が付かない会社（純粋持株会社等）は、差額と整数一致する未タグ行だけ補う。

@@ -922,6 +922,45 @@ import Foundation
         }
     }
 
+    // source: code=8354 fy_end=2026-03-31 doc_id=S100YFNB page=94 field=employees row=銀行業務 6,895 / その他事業 1,155 (従業員の状況 連結会社、合計8,050)
+    // セグメント member 付きの fact が無く、横並び表の合計 8,050 だけにタグが付く。
+    // セグメント別かは Jev（ここではスタブ）が判定。Jev 無し・「別の内訳」なら行を作らない。
+    @Test func fukuokaFGEmployeesFromTotalOnlyHorizontalTable() async throws {
+        guard await Self.ensureAvailable("S100YFNB") else { return }
+        let (facts, labels) = Self.factsAndLabels("S100YFNB")
+        let dir = Self.xbrlDir("S100YFNB")
+        let normalized = BreakdownNormalizer.normalizeEmployees(
+            facts: facts, total: 8_050, axis: "employees", labelsByTag: labels,
+            memberParents: XBRLUtils.operatingSegmentMemberParents(in: dir))
+        #expect(normalized == nil)
+        let snapshot = try #require(await EmployeesUntaggedRowFill.fromTotalOnlyTable(
+            total: 8_050, xbrlDir: dir, segmentLabels: [],
+            decider: StubEmployeesTableDecider(answer: EmployeesTableJev.segmentsKey), docID: "S100YFNB"))
+        #expect(snapshot.denominator == 8_050)
+        #expect(snapshot.needsReview == false)
+        let rows: [String: Double] = Dictionary(uniqueKeysWithValues: snapshot.rows.map { ($0.labelRaw, $0.amount) })
+        let expected: [String: Double] = ["銀行業務": 6_895, "その他事業": 1_155]
+        #expect(rows == expected)
+        #expect(snapshot.rows.allSatisfy { $0.rowKind == "segment" })
+        let other = await EmployeesUntaggedRowFill.fromTotalOnlyTable(
+            total: 8_050, xbrlDir: dir, segmentLabels: [],
+            decider: StubEmployeesTableDecider(answer: EmployeesTableJev.otherKey), docID: "S100YFNB")
+        #expect(other == nil)
+        let noKey = await EmployeesUntaggedRowFill.fromTotalOnlyTable(
+            total: 8_050, xbrlDir: dir, segmentLabels: [], decider: nil, docID: "S100YFNB")
+        #expect(noKey == nil)
+    }
+
+    // source: code=8331 fy_end=2026-03-31 doc_id=S100YDSE page=102 field=employees row=従業員数 4,377 (単一セグメント。従業員表は合計のみ)
+    // 合計しか無い表からは行を作らない（Jev に聞く前に候補が無い）。
+    @Test func chibaBankTotalOnlyEmployeesStaysNotFound() async throws {
+        guard await Self.ensureAvailable("S100YDSE") else { return }
+        let snapshot = await EmployeesUntaggedRowFill.fromTotalOnlyTable(
+            total: 4_377, xbrlDir: Self.xbrlDir("S100YDSE"), segmentLabels: [],
+            decider: StubEmployeesTableDecider(answer: EmployeesTableJev.segmentsKey), docID: "S100YDSE")
+        #expect(snapshot == nil)
+    }
+
     // source: code=3086 fy_end=2026-02-28 doc_id=S100Y6K0 page=18 row=全社（共通） 243 (従業員の状況 連結会社の状況、合計5,584)
     // 全社（共通）が member 付き fact で開示される会社は、補完で行も値も変わらない。
     @Test func jFrontEmployeesWithTaggedCorporateSharedUnchangedByUntaggedFill() async throws {
@@ -956,5 +995,17 @@ import Foundation
         #expect(after.rows.count == 4)
         #expect(after.rows.map(\.amount).reduce(0, +) == 8_670)
         #expect(after.rows.allSatisfy { $0.rowKind == "segment" })
+    }
+}
+
+/// 固定の答えを返すスタブ（3 サンプルとも同じ）。
+struct StubEmployeesTableDecider: EmployeesTableDeciding {
+    var answer: String
+    func classifyEmployeesTable(
+        table: EmployeesUntaggedRowFill.TotalOnlyTable, segmentLabels: [String], docID: String
+    ) async -> JevChoiceAggregate.Sample {
+        JevChoiceAggregate.Sample(
+            selected: answer, probability: 0.97,
+            options: [EmployeesTableJev.segmentsKey, EmployeesTableJev.otherKey], model: "stub")
     }
 }
