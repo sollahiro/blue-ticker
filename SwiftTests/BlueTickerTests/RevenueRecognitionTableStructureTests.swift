@@ -720,4 +720,29 @@ import Testing
             #expect(axis == .customer)
         }
     }
+
+    /// 角括弧の説明行は金額のある品目の直後だけ。小計の直後の [海外] は次ブロックの見出し。
+    @Test func bracketedRowAfterSubtotalStaysGroupHeading() {
+        let grid: [[String]] = [
+            ["", "金額"],
+            ["［国内］", ""],
+            ["製品Ａ", "100"],
+            ["[製品Ａの説明]", ""],
+            ["製品Ｂ", "50"],
+            ["国内計", "150"],
+            ["[海外]", ""],
+            ["製品Ｃ", "70"],
+            ["合計", "220"],
+        ]
+        let structure = RevenueRecognitionTableStructure.inspect(grid: grid)
+        let groupOf: (String) -> String? = { label in
+            structure.rows.first { $0.category == label }?.categoryGroup
+        }
+        let b: String? = groupOf("製品Ｂ")
+        let c: String? = groupOf("製品Ｃ")
+        #expect(b == "［国内］")
+        #expect(c == "[海外]")
+        let described: Bool = structure.rows.contains { ($0.categoryGroup ?? "") == "[製品Ａの説明]" }
+        #expect(described == false)
+    }
 }

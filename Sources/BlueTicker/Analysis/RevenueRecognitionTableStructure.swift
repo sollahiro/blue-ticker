@@ -137,8 +137,12 @@ enum RevenueRecognitionTableStructure {
             if !hasAmount {
                 // 金額のある品目の直下の括弧書きは、その品目の説明（7416 はるやまHD: 重衣料 /
                 // [スーツ・礼服・コート]）。見出しにすると説明が次の品目の group にずれる。
+                // 直前が小計（計の直後の [海外] は次ブロックの見出し）や、直後に金額行が続かないときは説明にしない。
                 if isBracketedDescription(token), let previous = classified.last,
-                   previous.index == index - 1, previous.hasAmount, previous.labelKind == .category
+                   previous.index == index - 1, previous.hasAmount, previous.labelKind == .category,
+                   !isSubtotalLabel(previous.category ?? previous.categoryGroup ?? ""),
+                   index + 1 < rows.count,
+                   rows[index + 1].dropFirst(area.columnCount).contains(where: RevenueRecognitionCandidates.isAmountCell)
                 {
                     continue
                 }
