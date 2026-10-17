@@ -636,7 +636,8 @@ private struct AllInterestBearingIBDDecider: InterestBearingDebtDeciding {
         let (payload, _) = try await resolve("S100YHOQ", decider: nil)
         #expect(payload.needsReview == false)
         expectLedger(payload, total: 270_751_000_000, [
-            ("その他有利子負債", ibdRowSourceBorrowingsSchedule, 1_149_000_000, nil, true, nil, nil, nil),
+            // 「その他有利子負債」見出しの下の内訳（値セルの `<p>` は1つ）。見出しで有利子負債に確定する。
+            ("関係会社預り金（１年以内に返済予定）", ibdRowSourceBorrowingsSchedule, 1_149_000_000, ibdMaturityCurrent, true, nil, nil, nil),
             ("短期借入金", ibdRowSourceBalanceSheet, 128_003_000_000, ibdMaturityCurrent, true, nil, nil, "短期借入金"),
             ("コマーシャル・ペーパー", ibdRowSourceBalanceSheet, 5_000_000_000, ibdMaturityCurrent, true, nil, nil, "コマーシャル・ペーパー"),
             ("長期借入金", ibdRowSourceBalanceSheet, 120_934_000_000, ibdMaturityNonCurrent, true, nil, nil, "長期借入金"),
@@ -700,7 +701,8 @@ private struct AllInterestBearingIBDDecider: InterestBearingDebtDeciding {
         ])
     }
 
-    /// 3861 王子（入れ子）: J-GAAP 明細表の「その他有利子負債」67,000 は BS の CP 67,000 と同じ負債（同額でどの科目にも入らない行だけ）。
+    /// 3861 王子（入れ子）: J-GAAP 明細表の「その他有利子負債」見出しの下の CP 67,000 は BS の CP 67,000 と同じ負債。
+    /// 値セルの `<p>` は1つで、見出しではなく CP の行に付く。
     @Test func ledger3861S100YJ8J() async throws {
         guard await Self.ensureAvailable("S100YJ8J") else { return }
         let (payload, _) = try await resolve("S100YJ8J", decider: nil)
@@ -715,9 +717,26 @@ private struct AllInterestBearingIBDDecider: InterestBearingDebtDeciding {
             ("リース債務(１年以内に返済予定のものを除く)", ibdRowSourceBorrowingsSchedule, 22_493_000_000, ibdMaturityNonCurrent, true, nil, nil, nil),
             ("短期借入金", ibdRowSourceBorrowingsSchedule, 243_665_000_000, ibdMaturityCurrent, false, ibdExcludedReasonDuplicateOfBalanceSheet, 0, "短期借入金"),
             ("１年以内に返済予定の長期借入金", ibdRowSourceBorrowingsSchedule, 37_792_000_000, ibdMaturityCurrent, false, ibdExcludedReasonDuplicateOfBalanceSheet, 0, "短期借入金"),
-            ("その他有利子負債", ibdRowSourceBorrowingsSchedule, 67_000_000_000, nil, false, ibdExcludedReasonDuplicateOfBalanceSheet, 1, "コマーシャル・ペーパー"),
+            ("コマーシャル・ペーパー（１年以内に返済予定）", ibdRowSourceBorrowingsSchedule, 67_000_000_000, ibdMaturityCurrent, false, ibdExcludedReasonDuplicateOfBalanceSheet, 1, "コマーシャル・ペーパー"),
             ("長期借入金(１年以内に返済予定のものを除く)", ibdRowSourceBorrowingsSchedule, 492_444_000_000, ibdMaturityNonCurrent, false, ibdExcludedReasonDuplicateOfBalanceSheet, 2, "長期借入金"),
         ])
+    }
+
+    /// 9531 東京ガス: 明細表のラベルセルに「その他有利子負債」「コマーシャル・ペーパー（１年以内返済予定）」の
+    /// 2つの `<p>`、値セルは `<p>` 1つ（前期 10,000 / 当期 50,000）。値は見出しではなく CP の行に付く。
+    /// BS に CP 科目は無い（その他の流動負債に含む）ので明細表の CP を数える。
+    @Test func tokyoGasCommercialPaperKeepsItsLabel() async throws {
+        guard await Self.ensureAvailable("S100YH8W") else { return }
+        let (payload, _) = try await resolve("S100YH8W", decider: nil)
+        #expect(payload.needsReview == false)
+        let cp = payload.rows.filter { $0.debtSource == ibdRowSourceBorrowingsSchedule && $0.inTotal == true }
+            .first { $0.labelRaw.contains("コマーシャル") }
+        #expect(cp?.labelRaw == "コマーシャル・ペーパー（１年以内返済予定）")
+        #expect(cp?.closing == 50_000_000_000)
+        #expect(cp?.opening == 10_000_000_000)
+        #expect(cp?.maturityClass == ibdMaturityCurrent)
+        #expect(!payload.rows.contains { $0.labelRaw == "その他有利子負債" })
+        #expect(payload.rows.last?.closing == 1_277_236_000_000)
     }
 
     /// 4665: BS に流動リース科目が無い（非流動 0 だけ）とき、明細表の1年内リース 2 を選択段階の帯判定でも数える（明細表を退けない）。
