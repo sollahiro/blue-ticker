@@ -19,6 +19,8 @@ public let statementNoteTypeIssuedSharesAndCapital = "issued_shares_and_capital"
 /// 借入金等明細。公開面からは廃止（`retiredStatementNoteTypes`）。
 /// パーサ `BorrowingsSchedule` は IBD 軸が使う。
 public let statementNoteTypeBorrowingsSchedule = "borrowings_schedule"
+/// 有形固定資産・のれん及び無形資産の種類別明細。公開面からは廃止（`retiredStatementNoteTypes`）。
+/// Breakdown の `property_plant_equipment` / `goodwill_and_intangibles` 軸へ移した。
 public let statementNoteTypePropertyPlantEquipmentSchedule = "property_plant_equipment_schedule"
 public let statementNoteTypeGoodwillAndIntangibles = "goodwill_and_intangibles"
 /// リース負債（連結）。IFRS リース注記 TextBlock（`IFRSLease`）から決定論で抽出する。
@@ -35,20 +37,22 @@ public let statementNoteTypeSgaExpenseBreakdown = "sga_expense_breakdown"
 
 /// ingest / `--note-types` バリデーション用の公開 note_type 一覧（`FactsIngest` の走査順）。
 /// `sga_expense_breakdown` は未公開のため含めない。
-/// `borrowings_schedule` / `lease_liabilities` は公開面から廃止（`retiredStatementNoteTypes`）。
+/// `borrowings_schedule` / `lease_liabilities` / `property_plant_equipment_schedule` /
+/// `goodwill_and_intangibles` は公開面から廃止（`retiredStatementNoteTypes`）。
 public let allStatementNoteTypes: [String] = [
     statementNoteTypePerShareInformation,
     statementNoteTypeIssuedSharesAndCapital,
-    statementNoteTypePropertyPlantEquipmentSchedule,
-    statementNoteTypeGoodwillAndIntangibles,
 ]
 
 /// 旧公開 note_type。REST / MCP / skills は 404（`.absent`、retired breakdown 軸と同型）。
 /// `--note-types` / ingest は未知。パーサ（`BorrowingsSchedule` / `IFRSLease`）と
 /// `StatementNotesResolver.resolveLeaseLiabilities` の IBD ゲートは残す。
+/// 有形固定資産・のれん及び無形資産は Breakdown の資産の種類別の軸（`AssetCategoryBreakdown`）が引き継ぐ。
 public let retiredStatementNoteTypes = [
     statementNoteTypeBorrowingsSchedule,
     statementNoteTypeLeaseLiabilities,
+    statementNoteTypePropertyPlantEquipmentSchedule,
+    statementNoteTypeGoodwillAndIntangibles,
 ]
 
 /// 既知の note_type かどうか（`allStatementNoteTypes` と一致）。
@@ -125,8 +129,8 @@ public let statementNoteSourceNotApplicable = "not_applicable"
 public let statementNoteNotApplicableNotFound = "not_found"
 
 /// `.notApplicable` の理由（本note_typeの対象外だが、同等の値は `statement`（Statement本体のBS）から
-/// 取得できる）。`property_plant_equipment_schedule` / `lease_liabilities` は BS 構造化タグに
-/// 当期値があるときこの reason を返す（各 resolver 参照）。
+/// 取得できる）。`lease_liabilities`（IBD の内部ゲート）は BS 構造化タグに当期値があるとき
+/// この reason を返す。公開中の note_type はこの reason を出さない。
 public let statementNoteNotApplicableAvailableViaStatement = "available_via_statement"
 
 /// `.notApplicable` の理由（本note_typeの対象外だが、同等の値は他の statement note から取得できる）。

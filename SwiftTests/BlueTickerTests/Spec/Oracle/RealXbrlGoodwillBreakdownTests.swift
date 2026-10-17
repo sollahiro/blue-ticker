@@ -155,7 +155,7 @@ import Foundation
 }
 
 /// smoke 床では拾えないエッジケースの golden（Step 2）。`normalizeGoodwill` 決定論検証。
-/// IFRS の `goodwill_and_intangibles` note_type は `GoodwillAndIntangiblesOracleFormatTests` が別途カバー。
+/// IFRS ののれん及び無形資産の種類別は軸 `goodwill_and_intangibles`（`RealXbrlAssetCategoryBreakdownTests`）。
 
 @Suite struct RealXbrlGoodwillBreakdownTests {
     private static let xbrlRoot: URL = {

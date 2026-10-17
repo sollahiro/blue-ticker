@@ -7,7 +7,7 @@ import Foundation
 // MARK: - 契約型
 
 /// REST skills 応答の `schema_version`。形を破壊的に変えたときのみ +1。
-public let apiSkillsSchemaVersion = 4
+public let apiSkillsSchemaVersion = 5
 
 /// パラメータの置き場所（REST パス変数 / クエリ）。
 public enum ApiSkillParameterLocation: String, Sendable {
@@ -378,10 +378,12 @@ public func apiSkillsCatalog() -> [ApiSkill] {
             description: """
                 有価証券報告書から製品・サービス別/地域別売上高、従業員数、研究開発費、のれん、
                 報告セグメント別ののれんの償却額・持分法会計処理される投資、
-                設備投資マトリクス（capex）、有利子負債（interest_bearing_debt）を取得します（格納済みデータのみ）。
+                設備投資マトリクス（capex）、有利子負債（interest_bearing_debt）、
+                有形固定資産・のれん及び無形資産の種類別（property_plant_equipment / goodwill_and_intangibles）を取得します（格納済みデータのみ）。
                 対象は取り込み済みの上場企業です。doc_id を省略すると最新の有価証券報告書を使用します。
                 axis は product_service（既定）/ geography / employees / research_and_development / goodwill /
-                goodwill_amortization / equity_method_investments / capex / interest_bearing_debt に対応。
+                goodwill_amortization / equity_method_investments / capex / interest_bearing_debt /
+                property_plant_equipment / goodwill_and_intangibles に対応。
                 数値タグとセグメント fact から解決します。合計のみの開示は分母だけの行になります。
                 axis=capex は名前付きセル（segment_assets / flow / capital_expenditures_overview）で、
                 行の amount は使いません。flow は書類単位で capital_expenditures があればそれ、
@@ -410,6 +412,12 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                 interest_bearing_debt_lease_denominator_from_notes が付きます（404 にはしません）。
                 要確認（needs_review）の行は出しません。行があるのに needs_review で出さないときは
                 404 reason unknown（メッセージは「公開していません」。未算出の reason 無し 404 とは別）です。
+                property_plant_equipment / goodwill_and_intangibles は報告セグメントではなく資産の種類別で、
+                IFRS 連結の注記の正味帳簿価額（amount、円）です。行の source_tag は値を読んだ XBRL 要素のローカル名です。
+                直前の連続した行の和になる行は row_kind=subtotal で、その内訳行は category_group に小計の名前を持ちます。
+                合計に入るのは category_group の無い行と subtotal 行です（内訳行は小計と二重になるので足さないでください）。
+                全体の合計は denominator です（合計科目が無いときは最上位の行の和で、denominator_tag は要素名を + でつなぎます）。
+                goodwill（報告セグメント別ののれん）とは別の軸です。日本基準・米国基準は not_found（区分は get-statement の BS）。
                 research_and_development は、数値タグが無いとき本文の当期の会社全体の総額だけを補うことがあります。
                 capex も Overview 本文から会社全体の総額、またはタグ付き行の不足分を補うことがあります。
                 その行の warnings に not_allocatable_to_segments があっても 404 にはしません。
@@ -451,19 +459,21 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                     name: "axis",
                     location: .query,
                     type: .string,
-                    description: "内訳の軸（product_service / geography / employees / research_and_development / goodwill / goodwill_amortization / equity_method_investments / capex / interest_bearing_debt。省略時 product_service）",
+                    description: "内訳の軸（product_service / geography / employees / research_and_development / goodwill / goodwill_amortization / equity_method_investments / capex / interest_bearing_debt / property_plant_equipment / goodwill_and_intangibles。省略時 product_service）",
                     required: false,
                     defaultValue: .string(breakdownAxisProductService)
                 ),
             ],
             instructions: """
-                Breakdown（製品・サービス別/地域別売上、従業員数、研究開発費、のれん、報告セグメント別指標、設備投資マトリクスの構造化）。
+                Breakdown（製品・サービス別/地域別売上、従業員数、研究開発費、のれん、報告セグメント別指標、設備投資マトリクス、
+                有利子負債、資産の種類別の構造化）。
                 自由テキストのセグメント記述は get-filing-content の segments。
                 格納済みデータのみ。未算出は 404、DB 非接続は 503。
                 例: GET /v1/companies/6758/breakdown?axis=product_service
                 例: GET /v1/companies/6758/breakdown?axis=geography
                 例: GET /v1/companies/6758/breakdown?axis=employees
                 例: GET /v1/companies/6758/breakdown?axis=capex
+                例: GET /v1/companies/6758/breakdown?axis=goodwill_and_intangibles
                 """,
             mcpOutputSchema:
                 """
@@ -537,15 +547,14 @@ public func apiSkillsCatalog() -> [ApiSkill] {
             name: "財務諸表注記",
             description: """
                 貸借対照表・損益計算書・キャッシュ・フロー計算書（get-statement）の外にある注記
-                （EPS・発行済株式数・有形固定資産等明細表・のれん及び無形資産明細）を
+                （EPS・発行済株式数）を
                 note_type 単位で取得します（格納済みデータのみ）。
                 対象は上場企業（日経225は ingest の処理順の優先のみ）。doc_id を省略すると最新の有価証券報告書を使用します。
                 注記が取得できない場合はエラー応答とともに reason が返ることがあります
                 （reason 無しは単に未取り込み。REST では 404、MCP では isError）。
                 not_found（当該 note_type の開示・XBRLタグが見つからない＝正当な欠測）、
                 available_via_statement（本 note_type の対象外だが同等の値は get-statement から取得可能。
-                例: property_plant_equipment_schedule で BS に区分の
-                構造化タグ当期値がある場合。goodwill_and_intangibles は IFRS 注記限定のため非対象時も同様）、
+                公開中の note_type はこの reason を出さない）、
                 available_via_notes（本 note_type の対象外だが同等の値は他の公開 note_type から取得可能。
                 公開中の note_type はこの reason を出さない）、
                 us_gaap_unsupported（US-GAAP 連結で本 note_type の構造化タグ判定ができない場合）。
@@ -567,8 +576,7 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                     location: .query,
                     type: .string,
                     description: """
-                        注記種別: per_share_information / issued_shares_and_capital / \
-                        property_plant_equipment_schedule / goodwill_and_intangibles
+                        注記種別: per_share_information / issued_shares_and_capital
                         """,
                     required: true
                 ),
@@ -585,9 +593,8 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                 対象は上場企業（日経225は ingest の処理順の優先のみ）。格納済みデータのみ。未算出は 404（reason 無し）、
                 対象外・非開示は 404 + reason（not_found / available_via_statement /
                 available_via_notes / us_gaap_unsupported）、DB 非接続は 503。
-                property_plant_equipment_schedule は IFRS 注記を優先し、それ以外は BS 構造化タグ当期値で
-                available_via_statement（US-GAAP は us_gaap_unsupported）。
-                goodwill_and_intangibles は IFRS 注記限定。
+                有形固定資産・のれん及び無形資産の種類別は get-breakdown の axis=property_plant_equipment /
+                goodwill_and_intangibles（note_type property_plant_equipment_schedule / goodwill_and_intangibles は廃止）。
                 例: GET /v1/companies/7203/statement/notes?note_type=per_share_information
                 """,
             mcpOutputSchema:

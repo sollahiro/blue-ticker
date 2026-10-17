@@ -546,6 +546,8 @@ func breakdownNotFoundMessage(axis: String) -> String {
     case breakdownAxisEquityMethodInvestments: return "持分法会計処理される投資の内訳は未算出です"
     case breakdownAxisCapex: return "設備投資の内訳は未算出です"
     case breakdownAxisInterestBearingDebt: return "有利子負債の内訳は未算出です"
+    case breakdownAxisPropertyPlantEquipment: return "有形固定資産の種類別内訳は未算出です"
+    case breakdownAxisGoodwillAndIntangibles: return "のれん及び無形資産の種類別内訳は未算出です"
     default: return "製品・サービス別内訳は未算出です"
     }
 }

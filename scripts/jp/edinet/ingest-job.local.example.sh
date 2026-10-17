@@ -5,7 +5,7 @@
 #      scripts/jp/edinet/local/ingest-job-02-notes-core.local.sh
 #   chmod +x scripts/jp/edinet/local/ingest-job-02-notes-core.local.sh
 #
-# 第1引数: 00 | 01 | 02 | 03 | 04 | 05 | 06（省略時 02）
+# 第1引数: 00 | 01 | 02 | 04 | 05 | 06（省略時 02。03 は廃止）
 
 set -euo pipefail
 
@@ -20,7 +20,7 @@ case "$JOB" in
   00) exec "$REPO/scripts/jp/edinet/ingest-job-00-sync-foundation.sh" ;;
   01) exec "$REPO/scripts/jp/edinet/ingest-job-01-statements.sh" ;;
   02) exec "$REPO/scripts/jp/edinet/ingest-job-02-notes-core.sh" ;;
-  03) exec "$REPO/scripts/jp/edinet/ingest-job-03-notes-heavy.sh" ;;
+  03) echo "job-03 は廃止（PPE / のれん・無形資産は job-04 の breakdowns）" >&2; exit 0 ;;
   04) exec "$REPO/scripts/jp/edinet/ingest-job-04-breakdowns.sh" ;;
   05) exec "$REPO/scripts/jp/edinet/ingest-job-05-financials.sh" ;;
   06) exec "$REPO/scripts/jp/edinet/ingest-job-06-overviews.sh" ;;

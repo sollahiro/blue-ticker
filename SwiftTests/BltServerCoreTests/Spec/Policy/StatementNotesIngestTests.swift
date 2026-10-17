@@ -171,29 +171,29 @@ private func fixedResolvedResolve(value: Double = 123.45) -> StatementNoteResolv
         try await withMigratedApp { app in
             try await seedDoc("S1", secCode: "83060", db: app.db)
             let stale = CompanyStatementNote(
-                docID: "S1", noteType: statementNoteTypePropertyPlantEquipmentSchedule)
+                docID: "S1", noteType: statementNoteTypePerShareInformation)
             stale.code = "8306"
             stale.submitDateTime = "2025-06-20 09:00"
             stale.payload = StatementNotePayload(needsReview: false, warnings: [])
             stale.needsReview = false
             stale.source = statementNoteSourceNotApplicable
             stale.contentHash = ""
-            stale.cacheVersion = "notes-ppe-schedule-v1"
+            stale.cacheVersion = "notes-eps-v1"
             stale.notApplicableReason = statementNoteNotApplicableNotFound
             try await stale.create(on: app.db)
 
             let summary = try await runStatementNotesIngest(
                 db: app.db, listedCodes: ["8306"], years: 3, limit: nil,
-                noteType: statementNoteTypePropertyPlantEquipmentSchedule
+                noteType: statementNoteTypePerShareInformation
             ) { _, _ in
                 .notApplicable(reason: statementNoteNotApplicableAvailableViaStatement)
             }
 
             #expect(summary.notApplicable == 1)
             let key = CompanyStatementNote.compositeID(
-                docID: "S1", noteType: statementNoteTypePropertyPlantEquipmentSchedule)
+                docID: "S1", noteType: statementNoteTypePerShareInformation)
             let row = try #require(try await CompanyStatementNote.find(key, on: app.db))
-            #expect(row.cacheVersion == propertyPlantEquipmentScheduleNoteCacheVersion)
+            #expect(row.cacheVersion == perShareInformationNoteCacheVersion)
             #expect(row.notApplicableReason == statementNoteNotApplicableAvailableViaStatement)
             #expect(isKnownStatementNoteNotApplicableReason(row.notApplicableReason ?? ""))
         }
@@ -455,7 +455,7 @@ private func fixedResolvedResolve(value: Double = 123.45) -> StatementNoteResolv
     @Test func loadReturnsNotApplicableReasonWhenRowIsNotApplicable() async throws {
         try await withMigratedApp { app in
             let row = CompanyStatementNote(
-                docID: "S1", noteType: statementNoteTypePropertyPlantEquipmentSchedule)
+                docID: "S1", noteType: statementNoteTypePerShareInformation)
             row.code = "7203"
             row.submitDateTime = "2025-06-20 09:00"
             row.payload = StatementNotePayload(needsReview: false, warnings: [])
@@ -463,13 +463,13 @@ private func fixedResolvedResolve(value: Double = 123.45) -> StatementNoteResolv
             row.source = statementNoteSourceNotApplicable
             row.contentHash = ""
             row.cacheVersion = statementNoteCacheVersion(
-                forType: statementNoteTypePropertyPlantEquipmentSchedule)
+                forType: statementNoteTypePerShareInformation)
             row.notApplicableReason = statementNoteNotApplicableNotFound
             try await row.create(on: app.db)
 
             let result = try await loadStoredStatementNote(
                 code: "7203", docId: nil,
-                noteType: statementNoteTypePropertyPlantEquipmentSchedule, db: app.db)
+                noteType: statementNoteTypePerShareInformation, db: app.db)
             guard case .notApplicable(let reason) = result else {
                 Issue.record("expected .notApplicable, got \(result)")
                 return

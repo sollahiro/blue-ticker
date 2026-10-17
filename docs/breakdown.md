@@ -46,6 +46,8 @@ geography は変えない。本邦90％の `not_found` は既存の Jev ゲー�
 | `equity_method_investments` | 報告セグメントごとの持分法会計処理される投資 |
 | `capex` | 設備投資マトリクス（行=セグメント / 調整額 / EntityTotal。セル= `segment_assets` / `flow` / `capital_expenditures_overview`）。`flow` は書類単位で資本的支出があればそれ、無ければ非流動性資産への追加額。旧 4 軸名は廃止 |
 | `interest_bearing_debt` | 有利子負債（社債・借入金＋リース負債）。行=負債の行、セル= `opening` / `closing`、行ごとに `source`・`maturity_class`・`in_total`・`excluded_reason`・`paired_row_index`。合計は `in_total=true` の行だけ |
+| `property_plant_equipment` | 有形固定資産の種類別（土地・建物等の正味帳簿価額）。行ごとに `source_tag` |
+| `goodwill_and_intangibles` | のれん及び無形資産の種類別（正味帳簿価額）。報告セグメント別の `goodwill` とは別。行ごとに `source_tag` |
 
 公開軸（意味。公開判断の現在地は Linear [JP 現在地](https://linear.app/sollahiro/document/jp-現在地-af2abd076034)）:
 
@@ -60,6 +62,8 @@ geography は変えない。本邦90％の `not_found` は既存の Jev ゲー�
 | `equity_method_investments` | 持分法投資 |
 | `capex` | 設備投資マトリクス |
 | `interest_bearing_debt` | 有利子負債内訳 |
+| `property_plant_equipment` | 有形固定資産の種類別 |
+| `goodwill_and_intangibles` | のれん及び無形資産の種類別 |
 
 旧 `segment_assets` / `capital_expenditures` / `noncurrent_asset_additions` / `capital_expenditures_overview` は REST / MCP / skills から削除した（breaking。`apiSkillsSchemaVersion` 2、`breakdown-capex-v1`）。
 
@@ -131,8 +135,20 @@ geography は変えない。本邦90％の `not_found` は既存の Jev ゲー�
 
 v2（`breakdown-interest-bearing-debt-v2`）: 行と合計が変わる変更（上記の preset・除外・リース込み集約・単位・`source_tag`）。`/financials` は組立指紋にこの `cache_version` が入るので再組立される。`fin-vN` は上げない（`blt-cache-version-policy`: 既存行の読み出しは壊れず、軸の版で再計算対象が決まるため）。
 
+## 資産の種類別（`property_plant_equipment` / `goodwill_and_intangibles`）
+
+旧 notes `property_plant_equipment_schedule` / `goodwill_and_intangibles` の置き換え（notes の2種類は廃止）。切り口は報告セグメントではなく資産の種類。
+
+- 対象は IFRS 連結の注記 role（`NotesPropertyPlantAndEquipmentConsolidatedFinancialStatementsIFRS` / `NotesGoodwillAndIntangibleAssetsConsolidatedFinancialStatementsIFRS`）の正味帳簿価額 `{区分}IFRS` だけ。取得原価・累計償却・累計減損は載せない。注記の無い会社（日本基準・米国基準・のれん注記の無い IFRS 会社）は `not_found`。日本基準の区分は statement の BS 科目にある。
+- 行は表示順。直前の連続した2行以上の和に一致する行は小計（`row_kind=subtotal`、`category_group` が自分の名前）にし、その内訳行は `category_group` に小計の名前を持つ（ソニー 6758 の「コンテンツ資産」「その他の無形資産」）。和の比較は行数 × 表示単位（百万円）まで丸めを許す（JT 2914 は区分の和が合計と 1 百万円ずれる）。
+- 全行を1つにまとめる行（`PropertyPlantAndEquipmentIFRS` / `GoodwillAndIntangibleAssetsIFRS` 等）は行に出さず `denominator` にする。無いとき（のれんと無形資産を別科目で載せる会社）は最上位の行の和を `denominator` にし、`denominator_tag` は最上位の要素名を `+` で並べる（例 `GoodwillIFRS+IntangibleAssetsIFRS`）。
+- 合計の科目が区分行の和と合わず行に残ったら `needs_review` と `asset_category_total_unmatched`（公開しない）。
+- 行の `source_tag` は値を読んだ XBRL 要素のローカル名。`amount` が正味帳簿価額（円）。
+- source は `xbrl_facts`（決定論。Jev は使わない）。`cache_version` は `breakdown-property-plant-equipment-v1` / `breakdown-goodwill-and-intangibles-v1`。
+
 ## 変更履歴
 
+- 2026-10: 軸 `property_plant_equipment` / `goodwill_and_intangibles` を追加し、notes の同名2種類を廃止（breaking。`apiSkillsSchemaVersion` 5）。
 - 2026-10: 軸 `interest_bearing_debt` を追加（`average_rate` は公開前に廃止し、`in_total` / `excluded_reason` / `paired_row_index` を追加。未公開の軸なので `cache_version` は v1 のまま）（互換追加。`schema_version` / `apiSkillsSchemaVersion` は据え置き）。/financials `interest_bearing_debt` の正本をこの軸へ（`fin-vN` は上げず組立指紋で再組立）。
 
 ## 非目標
