@@ -126,7 +126,7 @@ struct GeographyProdBreakdownRow: Codable {
             }
             let geography = BreakdownExtractor.extractGeographyInfo(xbrlDir: xbrlDir)
             let financials = StatementFinancialsResolver.resolve(xbrlDir: xbrlDir)
-            let sales = financials?.sales
+            let sales = financials?.geographyCoverageSales ?? financials?.sales
             let (snapshot, source, audit) = await GeographyBreakdownResolver.resolve(
                 geography: geography, consolidatedSales: sales,
                 columnDecider: columnDecider,

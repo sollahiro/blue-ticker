@@ -70,6 +70,9 @@ protocol GeographyExtractionReviewing: Sendable {
 
 enum GeographyBreakdownLLMNormalizer {
 
+    /// 当期の地域表が無く前期の表だけのときの監査メモ（正当な not_found）。
+    static let priorPeriodTablesOnlyNote = "prior_period_tables_only"
+
     /// 分母整合性チェックの許容範囲。xbrl_facts 経路と同じ 0.95...1.05。
     /// キヤノン地域別注記の計 vs 連結売上 ≈ 2.5% 差は帯の内側。
     private static let denominatorTolerance = 0.95...1.05
@@ -98,6 +101,7 @@ enum GeographyBreakdownLLMNormalizer {
               let consolidatedSales, consolidatedSales != 0 else { return (nil, nil) }
 
         let parsed = RevenueRecognitionCandidates.parse(tables: result.tables)
+            .map(collapsingSingleYearHeader)
         let columns = RevenueRecognitionCandidates.amountColumns(in: parsed)
         guard !columns.isEmpty else { return (nil, nil) }
 
@@ -118,7 +122,11 @@ enum GeographyBreakdownLLMNormalizer {
         if currentGeography.isEmpty, afterFilters.contains(where: { $0.period == "前期" }),
            priorWithCurrentRow.isEmpty
         {
-            return (nil, nil)
+            // 当期は本邦90％等で表が無く、前期の表だけ残る（6706 S100YH6S）。列を選ぶ前に
+            // 決まる正当な欠測なので audit を返し、呼び出し側で not_found にする（unknown で再試行しない）。
+            return (nil, LLMBreakdownAudit(
+                sourceTableIndex: nil, periodColumn: nil, unit: "", profitDisclosed: false,
+                notes: priorPeriodTablesOnlyNote))
         }
         let scopedTables =
             currentGeography.isEmpty
@@ -756,16 +764,13 @@ enum GeographyBreakdownLLMNormalizer {
         _ table: RevenueRecognitionCandidates.ParsedTable
     ) -> Int {
         let headerBlock = table.grid.prefix(table.headerRowCount)
-        let yearSlicedHeader = headerBlock.contains { row in
-            row.contains {
-                $0.range(of: #"[0-9０-９]{4}年度"#, options: .regularExpression) != nil
-            }
-        }
+        let yearSlicedHeader = headerFiscalYearLabels(table).count >= 2
         let headerValues = table.columnHeaders.values.filter {
             !RevenueRecognitionCandidates.isYearSlicedGeographyColumnHeader($0)
         }
-        // 2021年度 / 日本 の下段セル「日本」を地域列に数えると、年スライス表が
-        // offeredColumns を独占して単純な 当連結会計年度 表が落ちる（6762）。
+        // 2021年度 / 日本・2022年度 / 日本 と年をまたぐ表の下段セル「日本」を地域列に数えると、
+        // 年スライス表が offeredColumns を独占して単純な 当連結会計年度 表が落ちる。
+        // 年が1つだけの見出しは `collapsingSingleYearHeader` で期間見出しとして外してある。
         let gridValues: [String] = yearSlicedHeader
             ? []
             : headerBlock.flatMap { $0 }
@@ -774,6 +779,41 @@ enum GeographyBreakdownLLMNormalizer {
             RevenueRecognitionCandidates.isGeographyRegionColumnHeader($0)
                 && !RevenueRecognitionCandidates.isOfWhichColumnHeader($0)
         }.map { RevenueRecognitionCandidates.collapsedCell($0) }).count
+    }
+
+    /// 見出し行に出る YYYY年度 の種類。
+    static func headerFiscalYearLabels(
+        _ table: RevenueRecognitionCandidates.ParsedTable
+    ) -> Set<String> {
+        var years = Set<String>()
+        for row in table.grid.prefix(table.headerRowCount) {
+            for cell in row {
+                let compact = RevenueRecognitionCandidates.collapsedCell(cell)
+                guard let range = compact.range(
+                    of: #"[0-9０-９]{4}年度"#, options: .regularExpression)
+                else { continue }
+                years.insert(String(compact[range]))
+            }
+        }
+        return years
+    }
+
+    /// 見出しの年が1つだけの表（6762 S100LMH9: 全列に 2021年度、その下に 日本／米州／…／合計）は、
+    /// 年は表の期間見出しであって列を分ける軸ではない。列見出しから年を外し、地域列として読む。
+    /// 年が2つ以上並ぶ年スライス表は変えない（`offeredColumns` が YYYY年度 / 日本 を出さない）。
+    static func collapsingSingleYearHeader(
+        _ table: RevenueRecognitionCandidates.ParsedTable
+    ) -> RevenueRecognitionCandidates.ParsedTable {
+        let years = headerFiscalYearLabels(table)
+        guard years.count == 1, let year = years.first else { return table }
+        var copy = table
+        for (column, header) in table.columnHeaders {
+            let parts = header.components(separatedBy: " / ")
+            let kept = parts.filter { RevenueRecognitionCandidates.collapsedCell($0) != year }
+            guard kept.count < parts.count, !kept.isEmpty else { continue }
+            copy.columnHeaders[column] = RevenueRecognitionCandidates.joinHeaderParts(kept)
+        }
+        return copy
     }
 
     static func preferredWholeCompanyColumn(

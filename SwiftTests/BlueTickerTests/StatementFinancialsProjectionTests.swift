@@ -314,4 +314,65 @@ import Testing
             StatementFinancialsResolver.geographyCoverageSalesLabel(
                 summaryLabel: "営業収益", fieldSet: onlyOperating) == "営業収益")
     }
+
+    private func line(
+        _ tag: String, _ value: Double, label: String? = nil, components: [String] = []
+    ) -> StatementLineItem {
+        StatementLineItem(
+            tag: tag, label: label, value: value, unit: "JPY", order: nil,
+            isTotal: !components.isEmpty,
+            components: components.isEmpty
+                ? nil : components.map { StatementLineComponent(tag: $0, weight: 1) })
+    }
+
+    /// geography カバー判定の分母: PL トップライン。合計行があればそれ、無ければ収益行の和。
+    @Test func incomeStatementTopLineRevenue() {
+        // 3382: 営業収益（合計）＝売上高＋営業収入。Summary も営業収益なので立てない。
+        let sevenAndI = [
+            line("OperatingRevenue1", 10_430_269, components: ["NetSales", "OperatingRevenue2"]),
+            line("NetSales", 8_893_693),
+            line("CostOfSales", 7_300_235),
+            line("GrossProfit", 1_593_457, components: ["NetSales", "CostOfSales"]),
+            line("OperatingRevenue2", 1_536_575),
+            line("OperatingIncome", 542_901, label: "営業利益"),
+        ]
+        #expect(StatementFinancialsResolver.incomeStatementTopLineRevenue(
+            sevenAndI, sales: 10_430_269) == nil)
+        #expect(StatementFinancialsResolver.incomeStatementTopLineRevenue(
+            sevenAndI, sales: 8_893_693) == 10_430_269)
+
+        // 9950 S100YDJ0: 合計行が無く 売上高 と 営業収入 が並ぶ（地域表の計 8,644,513）。
+        let hachiban = [
+            line("NetSales", 7_730_061),
+            line("CostOfSales", 4_762_017),
+            line("GrossProfit", 2_968_044, components: ["NetSales", "CostOfSales"]),
+            line("OperatingRevenue2", 914_452),
+            line("OperatingGrossProfit", 3_882_496, components: ["GrossProfit", "OperatingRevenue2"]),
+            line("SalariesAndAllowancesSGA", 1_500_550),
+            line("OperatingIncome", 120_000, label: "営業利益"),
+            line("InterestIncomeNOI", 1_000),
+        ]
+        #expect(StatementFinancialsResolver.incomeStatementTopLineRevenue(
+            hachiban, sales: 7_730_061) == 8_644_513)
+
+        // 2433 S100YHXU: 連結 PL の 収益（会社拡張）。Summary は個別の営業収益 58,457 を拾っている。
+        let hakuhodo = [
+            line("RevenueRevOA", 861_003, label: "収益"),
+            line("CostOfSales", 454_965),
+            line("GrossProfit", 406_037, components: ["RevenueRevOA", "CostOfSales"]),
+            line("OperatingIncome", 44_675, label: "営業利益"),
+        ]
+        #expect(StatementFinancialsResolver.incomeStatementTopLineRevenue(
+            hakuhodo, sales: 58_457) == 861_003)
+
+        // 売上高だけの PL、営業外の収益行は見ない。
+        let plain = [
+            line("NetSales", 113_935),
+            line("CostOfSales", 87_343),
+            line("OperatingIncome", 2_552, label: "営業利益"),
+            line("InterestIncomeNOI", 32),
+            line("NonOperatingIncome", 1_058, components: ["InterestIncomeNOI"]),
+        ]
+        #expect(StatementFinancialsResolver.incomeStatementTopLineRevenue(plain, sales: 113_935) == nil)
+    }
 }

@@ -940,16 +940,19 @@ public extension BltServerContext {
                 audit: gate.outcome.audit.map(LLMBreakdownAuditPayload.segmentNoteJev))
         }
 
-        let hash = breakdownContentHash(extracted: resolvedGeography, consolidatedSales: consolidatedSales)
+        // カバー判定と share の分母は PL トップライン（売上高の上の合計行など）。無ければ Summary 売上。
+        let coverageSales = financials?.geographyCoverageSales ?? consolidatedSales
+        let hash = breakdownContentHash(extracted: resolvedGeography, consolidatedSales: coverageSales)
         let result = await GeographyBreakdownResolver.resolve(
-            geography: resolvedGeography, consolidatedSales: consolidatedSales,
+            geography: resolvedGeography, consolidatedSales: coverageSales,
             columnDecider: geographyColumnDecider, labelsByTag: labelsByTag,
             fiscalYearEnd: BreakdownExtractor.currentFiscalYearEnd(fromXbrlDir: xbrlDir),
             docID: docID,
             salesLabel: financials?.geographyCoverageSalesLabel ?? financials?.salesLabel)
         guard let snapshot = result.snapshot else {
             // Resolver の notFound は「地域注記なし」または列が無い／none_of_these。
-            // audit があれば Jev が明示的に非該当と答えた正当欠測。audit 無しで表だけある場合は
+            // audit があれば Jev が明示的に非該当と答えた、または当期の地域表が無く前期表だけ
+            // （本邦90％省略。6706）の正当欠測。audit 無しで表だけある場合は
             // 列選択失敗の可能性が高いので unknown（再試行）に落とす。
             let reason: String
             if result.source == .notFound {
