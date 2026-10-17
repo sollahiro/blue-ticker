@@ -198,6 +198,12 @@ enum RevenueRecognitionColumnNormalizer {
                 }
             }
         }
+        if transposedWholeCompany == nil, !built.isEmpty, !hasRecognizedOtherRevenue(table),
+           let tableTotal
+        {
+            built += RevenueRecognitionCandidates.otherSourceRevenueRows(
+                table: table, column: column.column, rows: built, grandTotal: tableTotal.amount)
+        }
         if built.isEmpty {
             audit.sourceTableIndex = table.tableIndex
             audit.periodColumn = column.key
@@ -244,7 +250,9 @@ enum RevenueRecognitionColumnNormalizer {
             }
         }
         if !rows.isEmpty, !hasRecognizedOtherRevenue(table) {
-            if abs(denominator) > 0, emitted / abs(denominator) < coverageFloor {
+            let covered = emitted + rows.filter { $0.rowKind == "reconciling" }
+                .reduce(0.0) { $0 + $1.amount }
+            if abs(denominator) > 0, covered / abs(denominator) < coverageFloor {
                 needsReview = true
                 if !warnings.contains(warningDenominatorUndercoverage) {
                     warnings.append(warningDenominatorUndercoverage)

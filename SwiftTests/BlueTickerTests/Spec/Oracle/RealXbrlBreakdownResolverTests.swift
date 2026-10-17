@@ -143,6 +143,73 @@ import Foundation
         #expect(denom.tag == "llm_table_subtotal")
     }
 
+    /// 7464 S100YJG0 / 7532 S100Z42G: 顧客との契約の外の収益（その他の源泉 /
+    /// その他の収益）は `reconciling` 行。segment ＋ reconciling が表の総合計（分母）に一致する。
+    /// 三菱商事のように顧客との契約の合計を分母にする表では足さない（上の分母テスト）。
+    // source: code=7464 fy_end=2026-03-31 doc_id=S100YJG0 page=56 field=product_service.その他の源泉から生じる収益
+    // source: code=7532 fy_end=2026-06-30 doc_id=S100Z42G page=137 field=product_service.その他の収益
+    @Test(arguments: [
+        ("S100YJG0", "保安警告サイン", "その他の源泉から生じる収益", 5_605_648_000.0, 10_111_048_000.0),
+        ("S100Z42G", "外販事業", "その他の収益", 79_554_000_000.0, 2_445_260_000_000.0),
+    ])
+    func otherSourceRevenueIsReconcilingRow(
+        docID: String, needle: String, otherLabel: String, otherAmount: Double, total: Double
+    ) async throws {
+        guard await Self.ensureAvailable(docID) else { return }
+        let dir = Self.xbrlDir(docID)
+        let segments = BreakdownExtractor.extractSegmentInfo(xbrlDir: dir)
+        let denom = BreakdownFinancialsResolver.breakdownBusinessSalesDenominatorItem(
+            xbrlDir: dir, tables: segments.tables)
+        let (snapshot, source, _) = await BusinessBreakdownResolver.resolve(
+            segments: segments, consolidatedSales: denom.value,
+            denominatorTag: denom.tag,
+            columnDecider: FakeRevenueRecognitionColumnDecider(containing: needle)
+        )
+        #expect(source == .revenueRecognitionLLM)
+        let snap = try #require(snapshot)
+        let reconciling = snap.rows.filter { $0.rowKind == "reconciling" }
+        let labels: [String?] = reconciling.map(\.label)
+        #expect(labels == [otherLabel])
+        let amounts: [Double] = reconciling.map(\.amount)
+        #expect(amounts == [otherAmount])
+        let denominator: Double = snap.denominator
+        #expect(denominator == total)
+        let covered: Double = snap.rows
+            .filter { $0.rowKind == "segment" || $0.rowKind == "reconciling" }
+            .reduce(0) { $0 + $1.amount }
+        // 表の 1 単位 × 行数まで（7532 は百万円丸めで 1 ずれる）。
+        #expect(abs(covered - total) <= 20 * Financial.millionYen)
+        let needsReview: Bool = snap.needsReview
+        #expect(needsReview == false)
+    }
+
+    /// 6526 S100R9DF: 「顧客との契約から生ずる収益」は「生じる」の表記揺れで合計行。
+    /// 明細（製品売上 / ＮＲＥ売上 / その他）に入れず、明細の合計が分母 192,767 百万円に一致する。
+    // source: code=6526 fy_end=2023-03-31 doc_id=S100R9DF page=107 field=product_service.顧客との契約から生ずる収益
+    @Test func r9df6526ContractRevenueVariantIsTotalRow() async throws {
+        guard await Self.ensureAvailable("S100R9DF") else { return }
+        let dir = Self.xbrlDir("S100R9DF")
+        let segments = BreakdownExtractor.extractSegmentInfo(xbrlDir: dir)
+        let denom = BreakdownFinancialsResolver.breakdownBusinessSalesDenominatorItem(
+            xbrlDir: dir, tables: segments.tables)
+        let (snapshot, _, _) = await BusinessBreakdownResolver.resolve(
+            segments: segments, consolidatedSales: denom.value,
+            denominatorTag: denom.tag,
+            columnDecider: FakeRevenueRecognitionColumnDecider(containing: "ＮＲＥ売上"),
+            segmentInfoDecider: FakeRevenueRecognitionColumnDecider(containing: "ＮＲＥ売上")
+        )
+        let snap = try #require(snapshot)
+        let segmentRows = snap.rows.filter { $0.rowKind == "segment" }
+        let labels: [String?] = segmentRows.map(\.label)
+        #expect(labels == ["製品売上", "ＮＲＥ売上", "その他"])
+        let amounts: [Double] = segmentRows.map(\.amount)
+        #expect(amounts == [156_751, 34_867, 1_149].map { Double($0) * Financial.millionYen })
+        let denominator: Double = snap.denominator
+        #expect(denominator == 192_767 * Financial.millionYen)
+        let needsReview: Bool = snap.needsReview
+        #expect(needsReview == false)
+    }
+
     @Test func mitsubishiResolvesViaRevenueRecognitionLLM() async throws {
         guard await Self.ensureAvailable("S100YB25") else { return }
         let dir = Self.xbrlDir("S100YB25")
