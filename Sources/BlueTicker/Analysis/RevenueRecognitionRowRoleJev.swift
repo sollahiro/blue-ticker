@@ -23,11 +23,12 @@ enum RevenueRecognitionRowRoleJev {
         confidenceThreshold: confidenceThreshold,
         auditThreshold: SegmentNoteDecision.applyProbabilityThreshold)
 
-    /// Jev が説明と判定した行。
+    /// Jev が説明と判定した行と、行ごとの判定の監査メモ（`r3:description:0.94` 等）。
     static func descriptionRows(
         grid: [[String]], decider: any RevenueRecognitionRowRoleDeciding, docID: String
-    ) async -> Set<Int> {
+    ) async -> (rows: Set<Int>, notes: [String]) {
         var out: Set<Int> = []
+        var notes: [String] = []
         for row in RevenueRecognitionTableStructure.ambiguousHeadingRows(grid: grid) {
             let result = await JevDecisionSampler.decide(
                 policy: jevPolicy, options: [headingKey, descriptionKey]
@@ -35,8 +36,10 @@ enum RevenueRecognitionRowRoleJev {
                 await decider.classifyRow(grid: grid, row: row, docID: docID)
             }
             if result.selectedKey == descriptionKey { out.insert(row) }
+            let median = result.aggregate.probability.map { String(format: "%.2f", $0) } ?? "nil"
+            notes.append("r\(row):\(result.selectedKey ?? "fail_closed"):\(median)")
         }
-        return out
+        return (out, notes)
     }
 }
 

@@ -115,8 +115,11 @@ enum RevenueRecognitionColumnNormalizer {
         else { return (nil, audit) }
         // 品目の直後の金額なし行で、見出しか直前品目の説明かが構造で決まらないものは Jev に聞く。
         if let rowRoleDecider {
-            let descriptions = await RevenueRecognitionRowRoleJev.descriptionRows(
+            let (descriptions, roleNotes) = await RevenueRecognitionRowRoleJev.descriptionRows(
                 grid: table.grid, decider: rowRoleDecider, docID: docID)
+            if !roleNotes.isEmpty {
+                audit.notes += " row_role=\(roleNotes.joined(separator: ","))"
+            }
             if !descriptions.isEmpty,
                let reparsed = RevenueRecognitionCandidates.parse(
                    tables: result.tables, descriptionRows: [table.tableIndex: descriptions]
