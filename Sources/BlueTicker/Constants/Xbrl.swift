@@ -1402,6 +1402,8 @@ enum Xbrl {
     static let segmentReconcilingMemberNames: Set<String> = [
         "ReconcilingItemsMember",
         "HeadOfficeAccountsEtcReportableSegmentMember",  // 三井住友（本社勘定等）
+        // トヨタ・SUBARU の会社拡張「消去又は全社」（実データ検証: 7203 S100Y8NY、2026-10-17）。
+        "CorporateExpensesAndEliminationMember",
     ]
 
     /// 報告セグメントに含まれない「その他」事業（実際に売上を持つ事業区分。小計・調整の合算ではない）。

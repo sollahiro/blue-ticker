@@ -102,6 +102,17 @@ import Foundation
         }
     }
 
+    /// トヨタ: 会社拡張の「消去又は全社」（設備投資 29,452 / 資産 14,532,118 百万円）は reconciling。
+    // source: code=7203 fy_end=2026-03-31 doc_id=S100Y8NY page=146 row=消去又は全社
+    @Test func toyotaCorporateExpensesAndEliminationIsReconciling() async throws {
+        guard await Self.ensureAvailable("S100Y8NY") else { return }
+        let snapshot = try #require(Self.snapshot("S100Y8NY"))
+        let row = try #require(snapshot.rows.first { $0.labelRaw == "CorporateExpensesAndEliminationMember" })
+        #expect(row.rowKind == "reconciling")
+        #expect(row.flow == 29_452_000_000)
+        #expect(row.segmentAssets == 14_532_118_000_000)
+    }
+
     /// 三菱UFJ: 銀行は固定資産増加額。資本的支出が無ければ NAA。
     @Test func mufgUsesNoncurrentAdditionsWhenCapitalExpendituresAbsent() async throws {
         guard await Self.ensureAvailable("S100W4FB") else { return }
