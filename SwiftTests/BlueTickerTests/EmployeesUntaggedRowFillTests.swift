@@ -101,7 +101,9 @@ import Testing
             <tr><td>従業員数(人)</td><td>6,895</td><td>1,155</td>\(totalCell("8,050"))</tr>
             <tr><td></td><td>[2,538]</td><td>[336]</td><td>[2,874]</td></tr></table>
             """
-        let rows = EmployeesUntaggedRowFill.totalOnlyRows(html: html, tag: "NumberOfEmployees", total: 8_050)
+        let tables = EmployeesUntaggedRowFill.totalOnlyTables(html: html, tag: "NumberOfEmployees", total: 8_050)
+        #expect(tables.first?.header == "セグメントの名称")
+        let rows = tables.first?.rows
         let expected: [EmployeesUntaggedRowFill.TableRow] = [
             .init(label: "銀行業務", amount: 6_895, tagged: false),
             .init(label: "その他事業", amount: 1_155, tagged: false),
@@ -115,17 +117,20 @@ import Testing
             <tr><td>Ａ事業</td><td>60</td></tr><tr><td>全社（共通）</td><td>7</td></tr>
             <tr><td>合計</td>\(totalCell("67"))</tr></table>
             """
-        let rows = EmployeesUntaggedRowFill.totalOnlyRows(html: html, tag: "NumberOfEmployees", total: 67)
-        #expect(rows?.map(\.label) == ["Ａ事業", "全社（共通）"])
+        let tables = EmployeesUntaggedRowFill.totalOnlyTables(html: html, tag: "NumberOfEmployees", total: 67)
+        #expect(tables.first?.rows.map(\.label) == ["Ａ事業", "全社（共通）"])
     }
 
-    @Test func totalOnlyDepartmentTableWithoutSegmentHeadingIsIgnored() {
+    /// 部門別の表も構造上は候補になる。セグメント別かは見出しの語ではなく Jev が判定する。
+    @Test func totalOnlyDepartmentTableIsACandidateForJev() {
         let html = """
             <table><tr><td>部門の名称</td><td>従業員数(人)</td></tr>
             <tr><td>営業部門</td><td>60</td></tr><tr><td>管理部門</td><td>7</td></tr>
             <tr><td>合計</td>\(totalCell("67"))</tr></table>
             """
-        #expect(EmployeesUntaggedRowFill.totalOnlyRows(html: html, tag: "NumberOfEmployees", total: 67) == nil)
+        let tables = EmployeesUntaggedRowFill.totalOnlyTables(html: html, tag: "NumberOfEmployees", total: 67)
+        #expect(tables.first?.header == "部門の名称")
+        #expect(tables.first?.rows.count == 2)
     }
 
     /// 5985 サンコール S100LIN3 型: 製品区分の列がセグメント列の前にある。行は製品区分なので読まない。
@@ -136,7 +141,7 @@ import Testing
             <tr><td>自動車関連製品</td><td>北米</td><td>7</td></tr>
             <tr><td>合計</td><td></td>\(totalCell("67"))</tr></table>
             """
-        #expect(EmployeesUntaggedRowFill.totalOnlyRows(html: html, tag: "NumberOfEmployees", total: 67) == nil)
+        #expect(EmployeesUntaggedRowFill.totalOnlyTables(html: html, tag: "NumberOfEmployees", total: 67).isEmpty)
     }
 
     @Test func totalOnlyHorizontalTableWithSpannedHeaderIsIgnored() {
@@ -144,7 +149,7 @@ import Testing
             <table><tr><td>セグメントの名称</td><td colspan="2">銀行業務</td><td>合計</td></tr>
             <tr><td>従業員数(人)</td><td>6,895</td><td>1,155</td>\(totalCell("8,050"))</tr></table>
             """
-        #expect(EmployeesUntaggedRowFill.totalOnlyRows(html: html, tag: "NumberOfEmployees", total: 8_050) == nil)
+        #expect(EmployeesUntaggedRowFill.totalOnlyTables(html: html, tag: "NumberOfEmployees", total: 8_050).isEmpty)
     }
 
     @Test func totalOnlyTableWhoseCellsDoNotSumToTotalIsIgnored() {
@@ -152,6 +157,6 @@ import Testing
             <table><tr><td>セグメントの名称</td><td>Ａ事業</td><td>Ｂ事業</td><td>合計</td></tr>
             <tr><td>従業員数(人)</td><td>60</td><td>5</td>\(totalCell("67"))</tr></table>
             """
-        #expect(EmployeesUntaggedRowFill.totalOnlyRows(html: html, tag: "NumberOfEmployees", total: 67) == nil)
+        #expect(EmployeesUntaggedRowFill.totalOnlyTables(html: html, tag: "NumberOfEmployees", total: 67).isEmpty)
     }
 }

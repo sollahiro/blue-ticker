@@ -44,18 +44,26 @@ enum EmployeesUntaggedRowFill {
 
     /// セグメント member 付きの fact が1つも無く、表の全社合計だけにタグが付く会社
     ///（8354 ふくおかFG: 銀行業務 6,895 / その他事業 1,155 / 合計 8,050 の横並び表）。
-    /// ラベル列の見出し（先頭セル）が「セグメント」の表で、当期連結の合計セル（`CurrentYearInstant`）と
-    /// 同じ行（横並び）または同じ列（縦並び）の未タグ値が 2 つ以上あり、和が合計とぴったり一致するときだけ
-    /// 行にする。値は開示のセルそのまま。部門別の表、製品区分の列がセグメント列の前にある表
-    ///（5985 サンコール S100LIN3）、見出し・データ行に colspan / rowspan がある表は読まない。
-    static func fromTotalOnlyTable(total: Double?, xbrlDir: URL) -> BreakdownSnapshot? {
-        guard let total, total > 0 else { return nil }
+    /// 当期連結の合計セル（`CurrentYearInstant`）と同じ行（横並び）または同じ列（縦並び）の未タグ値が
+    /// 2 つ以上あり、和が合計とぴったり一致する表を候補にする（値は開示のセルそのまま）。
+    /// 行がセグメント別か（部門別・製品区分別・会社別でないか）は Jev が判定する（3 回一致・0.9）。
+    /// 見出し・データ行の結合でずれる表、ラベル列と値の列の間に別のラベル列がある表
+    ///（5985 サンコール S100LIN3: 製品区分の名称 / セグメントの名称 / 従業員数）は候補にしない。
+    /// キーが無い・合意できないときは行を作らない（not_found のまま）。
+    static func fromTotalOnlyTable(
+        total: Double?, xbrlDir: URL, segmentLabels: [String],
+        decider: (any EmployeesTableDeciding)?, docID: String
+    ) async -> BreakdownSnapshot? {
+        guard let total, total > 0, let decider else { return nil }
         for tag in Xbrl.employeeTags {
             for html in htmlFiles(in: xbrlDir, containing: tag) {
-                if let rows = totalOnlyRows(html: html, tag: tag, total: total) {
+                for table in totalOnlyTables(html: html, tag: tag, total: total) {
+                    let decision = await EmployeesTableJev.decide(
+                        table: table, segmentLabels: segmentLabels, decider: decider, docID: docID)
+                    guard decision.selectedKey == EmployeesTableJev.segmentsKey else { continue }
                     return BreakdownSnapshot(
                         axis: breakdownAxisEmployees, denominator: total, denominatorTag: tag,
-                        rows: rows.map {
+                        rows: table.rows.map {
                             BreakdownRow(
                                 labelRaw: $0.label, label: $0.label, amount: $0.amount,
                                 share: $0.amount / total, profit: nil, rowKind: rowKind(forLabel: $0.label))
@@ -69,14 +77,21 @@ enum EmployeesUntaggedRowFill {
 
     static let totalOnlyContextRef = "CurrentYearInstant"
 
+    /// 合計だけタグの表から読んだ候補。`header` はラベル列の見出し（無ければ空）。
+    struct TotalOnlyTable: Equatable, Sendable {
+        var header: String
+        var rows: [TableRow]
+    }
+
     private struct GridRow {
         var cells: [String]
         var colspanned: Bool
         var rowspanned: Bool
     }
 
-    /// 純関数。`fromTotalOnlyTable` の表読み。条件を満たす表が無ければ nil。
-    static func totalOnlyRows(html: String, tag: String, total: Double) -> [TableRow]? {
+    /// 純関数。`fromTotalOnlyTable` の表読み（構造と和の一致だけ。セグメント別かは見ない）。
+    static func totalOnlyTables(html: String, tag: String, total: Double) -> [TotalOnlyTable] {
+        var out: [TotalOnlyTable] = []
         let whole = NSRange(html.startIndex..., in: html)
         for tableMatch in tablePattern.matches(in: html, range: whole) {
             guard let tableRange = Range(tableMatch.range, in: html) else { continue }
@@ -88,33 +103,32 @@ enum EmployeesUntaggedRowFill {
                 where factInfo(in: cell, tag: tag) == [totalOnlyContextRef]
                     && leadingNumber(plainText(cell)) == total
                 {
-                    let horizontal = horizontalRows(grid: grid, row: r, totalColumn: c, tag: tag)
-                    let vertical = verticalRows(grid: grid, row: r, totalColumn: c, tag: tag)
-                    for candidate in [horizontal, vertical] where candidate.count >= 2 {
-                        let sum = candidate.reduce(0.0) { $0 + $1.amount }
-                        if abs(sum - total) < equalityEpsilon { return candidate }
+                    let candidates = [
+                        horizontalRows(grid: grid, row: r, totalColumn: c, tag: tag),
+                        verticalRows(grid: grid, row: r, totalColumn: c, tag: tag),
+                    ].compactMap { $0 }
+                    for candidate in candidates where candidate.rows.count >= 2 {
+                        let sum = candidate.rows.reduce(0.0) { $0 + $1.amount }
+                        if abs(sum - total) < equalityEpsilon, !out.contains(candidate) {
+                            out.append(candidate)
+                        }
                     }
                 }
             }
         }
-        return nil
+        return out
     }
 
-    private static func isSegmentLabelHeader(_ cell: String) -> Bool {
-        plainText(cell).contains("セグメント")
-    }
-
-    /// 合計セルと同じ行の未タグ値。ラベルは同じ列数の直近の見出し行で、その先頭セルが「セグメント」。
-    private static func horizontalRows(grid: [GridRow], row r: Int, totalColumn c: Int, tag: String) -> [TableRow] {
+    /// 合計セルと同じ行の未タグ値。ラベルは同じ列数の直近の見出し行。
+    private static func horizontalRows(grid: [GridRow], row r: Int, totalColumn c: Int, tag: String) -> TotalOnlyTable? {
         let data = grid[r]
         // データ行自身の rowspan（下の［臨時］行へ伸びる先頭セル、8354）は自分の列をずらさない。
         // 見出し行の結合と、見出しとデータの間の行の rowspan はずれるので読まない。
         guard !data.colspanned,
               let h = grid[..<r].lastIndex(where: { $0.cells.count == data.cells.count }),
               !grid[h].colspanned, !grid[h].rowspanned,
-              !grid[(h + 1)..<r].contains(where: \.rowspanned),
-              let first = grid[h].cells.first, isSegmentLabelHeader(first)
-        else { return [] }
+              !grid[(h + 1)..<r].contains(where: \.rowspanned)
+        else { return nil }
         let header = grid[h]
         var out: [TableRow] = []
         for i in 1..<data.cells.count where i != c {
@@ -123,24 +137,19 @@ enum EmployeesUntaggedRowFill {
             else { continue }
             let label = plainText(header.cells[i])
             let key = compact(label)
-            guard containsJapanese(label), !isTotalOrMeasureLabel(key) else { return [] }
+            guard containsJapanese(label), !isTotalOrMeasureLabel(key) else { return nil }
             out.append(TableRow(label: label, amount: amount, tagged: false))
         }
-        return out
+        return TotalOnlyTable(header: plainText(header.cells[0]), rows: out)
     }
 
-    /// 合計セルと同じ列の未タグ値。ラベルは各行の先頭セル。合計より上の見出し行の先頭セルが
-    /// 「セグメント」で、ラベル列と値の列の間に別のラベル列（製品区分など）が無いこと。
-    private static func verticalRows(grid: [GridRow], row r: Int, totalColumn c: Int, tag: String) -> [TableRow] {
-        guard c >= 1,
-              let headerIndex = grid[..<r].firstIndex(where: { row in
-                  row.cells.first.map(isSegmentLabelHeader) == true && c < row.cells.count
-              }),
-              !grid[headerIndex].colspanned,
-              !grid[headerIndex].cells[1..<c].contains(where: { containsJapanese(plainText($0)) })
-        else { return [] }
+    /// 合計セルと同じ列の未タグ値。ラベルは各行の先頭セル。ラベル列と値の列の間に
+    /// 別のラベル列（製品区分など）があるときは読まない。
+    private static func verticalRows(grid: [GridRow], row r: Int, totalColumn c: Int, tag: String) -> TotalOnlyTable? {
+        guard c >= 1 else { return nil }
         var out: [TableRow] = []
-        for (i, row) in grid.enumerated() where i > headerIndex && i != r && c < row.cells.count {
+        var firstDataRow: Int?
+        for (i, row) in grid.enumerated() where i != r && c < row.cells.count {
             guard factInfo(in: row.cells[c], tag: tag).isEmpty,
                   let amount = leadingNumber(plainText(row.cells[c])), amount > 0
             else { continue }
@@ -148,10 +157,18 @@ enum EmployeesUntaggedRowFill {
             let key = compact(label)
             guard containsJapanese(label), !key.isEmpty, !isTotalOrMeasureLabel(key) else { continue }
             guard !row.colspanned, !row.cells[1..<c].contains(where: { containsJapanese(plainText($0)) })
-            else { return [] }
+            else { return nil }
+            if firstDataRow == nil { firstDataRow = i }
             out.append(TableRow(label: label, amount: amount, tagged: false))
         }
-        return out
+        guard let firstDataRow else { return nil }
+        let header = grid[..<firstDataRow].last(where: { c < $0.cells.count })
+        if let header, header.colspanned
+            || header.cells[1..<c].contains(where: { containsJapanese(plainText($0)) })
+        {
+            return nil
+        }
+        return TotalOnlyTable(header: header.map { plainText($0.cells[0]) } ?? "", rows: out)
     }
 
     /// 純関数。未タグ行の合計が差額と一致するときだけ reconciling 行を足す。
