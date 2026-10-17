@@ -720,4 +720,27 @@ import Testing
             #expect(axis == .customer)
         }
     }
+
+    /// Jev に聞くのは、金額のある品目（小計でない）の直後にあり後ろに金額行が続く金額なし行だけ。
+    /// 先頭の見出しと、小計の直後の見出しは聞かない（構造で見出しと決まる）。
+    @Test func ambiguousHeadingRowsAreOnlyThoseBetweenItems() {
+        let grid: [[String]] = [
+            ["", "金額"],
+            ["［国内］", ""],
+            ["製品Ａ", "100"],
+            ["[製品Ａの説明]", ""],
+            ["製品Ｂ", "50"],
+            ["国内計", "150"],
+            ["[海外]", ""],
+            ["製品Ｃ", "70"],
+            ["合計", "220"],
+        ]
+        let rows: [Int] = RevenueRecognitionTableStructure.ambiguousHeadingRows(grid: grid)
+        #expect(rows == [3])
+        let structure = RevenueRecognitionTableStructure.inspect(grid: grid, descriptionRows: [3])
+        let b: String? = structure.rows.first { $0.category == "製品Ｂ" }?.categoryGroup
+        let c: String? = structure.rows.first { $0.category == "製品Ｃ" }?.categoryGroup
+        #expect(b == "［国内］")
+        #expect(c == "[海外]")
+    }
 }
