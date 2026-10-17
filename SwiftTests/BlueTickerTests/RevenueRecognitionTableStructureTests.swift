@@ -721,8 +721,9 @@ import Testing
         }
     }
 
-    /// 角括弧の説明行は金額のある品目の直後だけ。小計の直後の [海外] は次ブロックの見出し。
-    @Test func bracketedRowAfterSubtotalStaysGroupHeading() {
+    /// Jev に聞くのは、金額のある品目（小計でない）の直後にあり後ろに金額行が続く金額なし行だけ。
+    /// 先頭の見出しと、小計の直後の見出しは聞かない（構造で見出しと決まる）。
+    @Test func ambiguousHeadingRowsAreOnlyThoseBetweenItems() {
         let grid: [[String]] = [
             ["", "金額"],
             ["［国内］", ""],
@@ -734,15 +735,12 @@ import Testing
             ["製品Ｃ", "70"],
             ["合計", "220"],
         ]
-        let structure = RevenueRecognitionTableStructure.inspect(grid: grid)
-        let groupOf: (String) -> String? = { label in
-            structure.rows.first { $0.category == label }?.categoryGroup
-        }
-        let b: String? = groupOf("製品Ｂ")
-        let c: String? = groupOf("製品Ｃ")
+        let rows: [Int] = RevenueRecognitionTableStructure.ambiguousHeadingRows(grid: grid)
+        #expect(rows == [3])
+        let structure = RevenueRecognitionTableStructure.inspect(grid: grid, descriptionRows: [3])
+        let b: String? = structure.rows.first { $0.category == "製品Ｂ" }?.categoryGroup
+        let c: String? = structure.rows.first { $0.category == "製品Ｃ" }?.categoryGroup
         #expect(b == "［国内］")
         #expect(c == "[海外]")
-        let described: Bool = structure.rows.contains { ($0.categoryGroup ?? "") == "[製品Ａの説明]" }
-        #expect(described == false)
     }
 }

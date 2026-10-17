@@ -35,6 +35,7 @@ enum BusinessBreakdownResolver {
         denominatorTag: String? = nil,
         columnDecider: (any RevenueRecognitionColumnDeciding)? = nil,
         segmentInfoDecider: (any SegmentInfoDeciding)? = nil,
+        rowRoleDecider: (any RevenueRecognitionRowRoleDeciding)? = nil,
         fiscalYearEnd: String? = nil,
         docID: String = ""
     ) async -> (snapshot: BreakdownSnapshot?, source: BusinessBreakdownSource, audit: LLMBreakdownAudit?) {
@@ -82,7 +83,8 @@ enum BusinessBreakdownResolver {
                 if let columnDecider {
                     let (snapshot, audit) = await RevenueRecognitionColumnNormalizer.normalize(
                         segments, consolidatedSales: consolidatedSales, decider: columnDecider,
-                        fiscalYearEnd: fiscalYearEnd, docID: docID, denominatorTag: denominatorTag)
+                        fiscalYearEnd: fiscalYearEnd, docID: docID, denominatorTag: denominatorTag,
+                        rowRoleDecider: rowRoleDecider)
                     lastAudit = audit
                     if let snapshot, hasUsableSegmentRows(snapshot) {
                         if let facts = ReportableSegmentRevenueRecognition.preferFactsIfSameBreakdown(

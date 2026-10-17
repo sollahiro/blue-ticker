@@ -597,7 +597,7 @@ import Testing
     }
 
     /// 7416 はるやまHD S100YLJD 0105010 当期表。品目の下の金額なし行 `[スーツ・礼服・コート]` 等は
-    /// 直前の品目の説明。次の品目の category_group にしない（1行下へのずれ）。
+    /// 直前の品目の説明。Jev（ここではスタブ）が説明と判定した行は次の品目の category_group にしない。
     // source: code=7416 fy_end=2026-03-31 doc_id=S100YLJD page=72 field=product_service rows
     @Test func yljd7416BracketDescriptionStaysWithPrecedingItem() async throws {
         let blank = "<td>&#160;</td>"
@@ -625,7 +625,7 @@ import Testing
             """
         let snapshot = try await run(
             html: priorThen(currentHTML: current), docID: "S100YLJD", fyEnd: "2026-03-31",
-            pick: "t1_c2")
+            pick: "t1_c2", rowRoleDecider: StubRowRoleDecider(descriptionPrefix: "["))
         try assertFlatRows(
             snapshot, groups: ["重衣料", "中衣料", "軽衣料", "補修加工賃収入"],
             amounts: [15_047_573, 3_453_633, 15_795_876, 915_569], unit: 1_000)
@@ -2364,7 +2364,8 @@ import Testing
     }
 
     private func run(
-        html: String, docID: String, fyEnd: String, pick: String
+        html: String, docID: String, fyEnd: String, pick: String,
+        rowRoleDecider: (any RevenueRecognitionRowRoleDeciding)? = nil
     ) async throws -> BreakdownSnapshot {
         let extracted = ExtractedBreakdown(
             method: "html_table",
@@ -2372,7 +2373,8 @@ import Testing
             facts: [])
         let decider = FakeRevenueRecognitionColumnDecider(selected: pick, confidence: 0.9)
         let (snapshot, _) = await RevenueRecognitionColumnNormalizer.normalize(
-            extracted, consolidatedSales: nil, decider: decider, fiscalYearEnd: fyEnd, docID: docID)
+            extracted, consolidatedSales: nil, decider: decider, fiscalYearEnd: fyEnd, docID: docID,
+            rowRoleDecider: rowRoleDecider)
         return try #require(snapshot)
     }
 
@@ -2478,5 +2480,19 @@ import Testing
               <tr><td>外部顧客への売上高</td><td></td><td></td><td></td><td>2,445,260</td></tr>
             </table>
             """
+    }
+}
+
+/// 対象行の文字列が指定の接頭辞で始まれば説明、そうでなければ見出しと答えるスタブ。
+struct StubRowRoleDecider: RevenueRecognitionRowRoleDeciding {
+    var descriptionPrefix: String
+    func classifyRow(grid: [[String]], row: Int, docID: String) async -> JevChoiceAggregate.Sample {
+        let text = grid[row].first { !$0.isEmpty } ?? ""
+        let answer = text.hasPrefix(descriptionPrefix)
+            ? RevenueRecognitionRowRoleJev.descriptionKey : RevenueRecognitionRowRoleJev.headingKey
+        return JevChoiceAggregate.Sample(
+            selected: answer, probability: 0.97,
+            options: [RevenueRecognitionRowRoleJev.headingKey, RevenueRecognitionRowRoleJev.descriptionKey],
+            model: "stub")
     }
 }
