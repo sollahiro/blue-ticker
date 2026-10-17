@@ -58,6 +58,8 @@ enum EmployeesUntaggedRowFill {
         for tag in Xbrl.employeeTags {
             for html in htmlFiles(in: xbrlDir, containing: tag) {
                 for table in totalOnlyTables(html: html, tag: tag, total: total) {
+                    // セグメント注記にセグメント名があるのに、表の行がどれとも重ならないときは聞かない。
+                    if !segmentLabels.isEmpty, !rowsOverlapSegmentLabels(table.rows, segmentLabels) { continue }
                     let decision = await EmployeesTableJev.decide(
                         table: table, segmentLabels: segmentLabels, decider: decider, docID: docID)
                     guard decision.selectedKey == EmployeesTableJev.segmentsKey else { continue }
@@ -76,6 +78,15 @@ enum EmployeesUntaggedRowFill {
     }
 
     static let totalOnlyContextRef = "CurrentYearInstant"
+
+    /// 行ラベルのどれかがセグメント名を含む、またはセグメント名に含まれるか（空白・中黒は無視）。
+    static func rowsOverlapSegmentLabels(_ rows: [TableRow], _ segmentLabels: [String]) -> Bool {
+        let segments = segmentLabels.map(compact).filter { !$0.isEmpty }
+        return rows.contains { row in
+            let key = compact(row.label)
+            return !key.isEmpty && segments.contains { $0.contains(key) || key.contains($0) }
+        }
+    }
 
     /// 合計だけタグの表から読んだ候補。`header` はラベル列の見出し（無ければ空）。
     struct TotalOnlyTable: Equatable, Sendable {

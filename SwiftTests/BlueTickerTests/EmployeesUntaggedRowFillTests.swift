@@ -159,4 +159,13 @@ import Testing
             """
         #expect(EmployeesUntaggedRowFill.totalOnlyTables(html: html, tag: "NumberOfEmployees", total: 67).isEmpty)
     }
+
+    @Test func rowsMustOverlapSegmentNamesWhenTheNoteHasThem() {
+        let rows: [EmployeesUntaggedRowFill.TableRow] = [
+            .init(label: "銀行業務", amount: 6_895, tagged: false),
+            .init(label: "その他事業", amount: 1_155, tagged: false),
+        ]
+        #expect(EmployeesUntaggedRowFill.rowsOverlapSegmentLabels(rows, ["銀行業務"]))
+        #expect(!EmployeesUntaggedRowFill.rowsOverlapSegmentLabels(rows, ["自動車", "金融"]))
+    }
 }
