@@ -128,6 +128,25 @@ import Testing
         #expect(EmployeesUntaggedRowFill.totalOnlyRows(html: html, tag: "NumberOfEmployees", total: 67) == nil)
     }
 
+    /// 5985 サンコール S100LIN3 型: 製品区分の列がセグメント列の前にある。行は製品区分なので読まない。
+    @Test func totalOnlyTableWithProductColumnBeforeSegmentColumnIsIgnored() {
+        let html = """
+            <table><tr><td>製品区分の名称</td><td>セグメントの名称</td><td>従業員数(人)</td></tr>
+            <tr><td>材料関連製品</td><td>日本</td><td>60</td></tr>
+            <tr><td>自動車関連製品</td><td>北米</td><td>7</td></tr>
+            <tr><td>合計</td><td></td>\(totalCell("67"))</tr></table>
+            """
+        #expect(EmployeesUntaggedRowFill.totalOnlyRows(html: html, tag: "NumberOfEmployees", total: 67) == nil)
+    }
+
+    @Test func totalOnlyHorizontalTableWithSpannedHeaderIsIgnored() {
+        let html = """
+            <table><tr><td>セグメントの名称</td><td colspan="2">銀行業務</td><td>合計</td></tr>
+            <tr><td>従業員数(人)</td><td>6,895</td><td>1,155</td>\(totalCell("8,050"))</tr></table>
+            """
+        #expect(EmployeesUntaggedRowFill.totalOnlyRows(html: html, tag: "NumberOfEmployees", total: 8_050) == nil)
+    }
+
     @Test func totalOnlyTableWhoseCellsDoNotSumToTotalIsIgnored() {
         let html = """
             <table><tr><td>セグメントの名称</td><td>Ａ事業</td><td>Ｂ事業</td><td>合計</td></tr>
