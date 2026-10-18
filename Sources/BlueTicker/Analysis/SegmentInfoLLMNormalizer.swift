@@ -436,13 +436,15 @@ enum SegmentInfoLLMNormalizer {
         return RevenueRecognitionCandidates.isAggregateColumnHeader(leaf)
     }
 
-    /// 転置表の「消去」「調整額」「調整・消去」の列。合計・連結・計の列は含めない。
-    /// 「その他」を含む列は残事業バケット（`isSkippedTotalColumn` の例外）なので対象外。
+    /// 転置表の「消去」「調整額」「調整・消去」「連結消去」「その他の調整額」の列。
+    /// 合計・計・連結財務諸表計上額の列は含めない。行の種別と同じく「その他（消去分を含む）」
+    /// 「その他及び全社」は残事業バケット（`resolvedRowKind`）なので対象外。
     static func isReconcilingColumnHeader(_ header: String) -> Bool {
         let leaf = RevenueRecognitionCandidates.collapsedCell(headerLeaf(header))
         guard leaf.contains("消去") || leaf.contains("調整") else { return false }
-        if leaf.contains("その他") { return false }
-        return !(leaf.contains("合計") || leaf.contains("連結") || leaf.hasSuffix("計"))
+        guard resolvedRowKind(label: leaf, rowKind: "reconciling") == "reconciling" else { return false }
+        return !(leaf.contains("合計") || leaf.contains("計上") || leaf.contains("財務諸表")
+            || leaf.hasSuffix("計"))
     }
 
     static func headerLeaf(_ header: String) -> String {
@@ -818,22 +820,16 @@ enum SegmentInfoLLMNormalizer {
             let name = RevenueRecognitionCandidates.compactCell(header)
             guard !name.isEmpty else { continue }
             if SegmentInfoPublishGuards.isNumericOrCodeLabel(name) { continue }
-            let kind: String
-            if name.contains("消去") && !name.contains("その他") {
-                kind = "reconciling"
-            } else if name.contains("調整") && !name.contains("その他") {
-                kind = "reconciling"
-            } else {
-                kind = "segment"
+            let kind = isReconcilingColumnHeader(header) ? "reconciling" : "segment"
+            let profit = profitCells.flatMap { cells in
+                column < cells.count ? RevenueRecognitionCandidates.parseAmount(cells[column]) : nil
             }
+            // 売上も利益も「-」の調整列は載せる差異が無いので空行にしない（2802 の調整額）。
+            if kind == "reconciling", amount == 0, (profit ?? 0) == 0 { continue }
             built.append(RevenueRecognitionCandidates.BuiltRow(
                 categoryGroup: name, category: nil, amount: amount,
                 isPartial: false, rowKind: kind))
-            if let profitCells, column < profitCells.count,
-               let profit = RevenueRecognitionCandidates.parseAmount(profitCells[column])
-            {
-                profits[name] = profit
-            }
+            if let profit { profits[name] = profit }
         }
         return (built, profits, wholeCompanyAmount)
     }

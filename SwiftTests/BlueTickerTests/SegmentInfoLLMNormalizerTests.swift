@@ -82,6 +82,66 @@ import Foundation
         #expect(!snapshot.needsReview)
     }
 
+    /// 報告セグメント・計・調整額・連結財務諸表計上額の転置表。調整額の利益を reconciling で残す。
+    /// source: code=3490 fy_end=2025-02-28 doc_id=S100VU4O field=product_service.調整額.profit
+    @Test func transposedAdjustmentColumnKeepsProfitReconciliation() async throws {
+        let markdown = """
+            |                    | 報告セグメント    | 報告セグメント | 報告セグメント | 報告セグメント    | 調整額(注)１   | 連結財務諸表計上額(注)２ |
+            |                    | 不動産販売事業    | 不動産賃貸事業 | 不動産管理事業 | 計          | 調整額(注)１   | 連結財務諸表計上額(注)２ |
+            | 売上高                |            |         |         |            |           |               |
+            | 外部顧客への売上高          | 11,494,243 | 712,449 | 223,608 | 12,430,301 | －         | 12,430,301    |
+            | セグメント間の内部売上高又は振替高  | －          | －       | －       | －          | －         | －             |
+            | 計                  | 11,494,243 | 712,449 | 223,608 | 12,430,301 | －         | 12,430,301    |
+            | セグメント利益            | 1,031,670  | 128,790 | 81,259  | 1,241,721  | △266,595  | 975,125       |
+            """
+        let table = BreakdownTable(
+            heading: "セグメント情報", markdown: markdown, period: "当期", unitCaption: "千円")
+        let (snapshotOrNil, _) = await Self.normalize(tables: [table], sales: 12_430_301_000)
+        let snapshot = try #require(snapshotOrNil)
+        let adjustment = try #require(snapshot.rows.first { $0.labelRaw.hasPrefix("調整額") })
+        #expect(adjustment.rowKind == "reconciling")
+        #expect(adjustment.amount == 0)
+        #expect(adjustment.profit == -266_595_000)
+        #expect(!snapshot.rows.contains { $0.labelRaw == "計" || $0.labelRaw.hasPrefix("連結財務諸表計上額") })
+        let profitSum = snapshot.rows.filter { $0.rowKind == "segment" || $0.rowKind == "reconciling" }
+            .compactMap(\.profit).reduce(0, +)
+        // 原本の計 1,241,721 は区分の和 1,241,719 と 2 千円ずれる（開示の端数）。区分 + 調整額 = 975,124 ≒ 連結 975,125。
+        #expect(profitSum == 975_124_000)
+        #expect(!snapshot.needsReview)
+    }
+
+    /// 調整額の売上も利益も「－」なら、金額 0・利益なしの空の reconciling 行を出さない（2802 S100VXJA 型）。
+    @Test func transposedAdjustmentColumnWithoutAmountsIsOmitted() async throws {
+        let markdown = """
+            |                    | 報告セグメント    | 報告セグメント | 報告セグメント    | 調整額(注)１   | 連結財務諸表計上額 |
+            |                    | 不動産販売事業    | 不動産賃貸事業 | 計          | 調整額(注)１   | 連結財務諸表計上額 |
+            | 外部顧客への売上高          | 11,494,243 | 712,449 | 12,206,692 | －         | 12,206,692    |
+            | セグメント利益            | 1,031,670  | 128,790 | 1,160,460  | －         | 1,160,460     |
+            """
+        let table = BreakdownTable(
+            heading: "セグメント情報", markdown: markdown, period: "当期", unitCaption: "千円")
+        let (snapshotOrNil, _) = await Self.normalize(tables: [table], sales: 12_206_692_000)
+        let snapshot = try #require(snapshotOrNil)
+        #expect(!snapshot.rows.contains { $0.labelRaw.hasPrefix("調整額") })
+        #expect(snapshot.rows.filter { $0.rowKind == "segment" }.count == 2)
+    }
+
+    /// 転置表で reconciling として残す列見出し。合計・計・計上額の列と残事業バケットは対象外。
+    @Test func reconcilingColumnHeaders() {
+        for header in [
+            "消去", "調整額", "調整額(注)１", "調整・消去", "消去又は全社", "連結消去",
+            "セグメント間取引消去及びその他の調整額", "その他の調整額", "報告セグメント / 調整額",
+        ] {
+            #expect(SegmentInfoLLMNormalizer.isReconcilingColumnHeader(header), "\(header)")
+        }
+        for header in [
+            "合計", "計", "連結", "連結財務諸表計上額", "連結財務諸表計上額(注)２", "調整額計",
+            "その他（消去分を含む）", "その他及び全社", "プリンティング", "その他(注１)",
+        ] {
+            #expect(!SegmentInfoLLMNormalizer.isReconcilingColumnHeader(header), "\(header)")
+        }
+    }
+
     @Test func geographyOnlyReportingSegmentsAreNotApplicable() async throws {
         let markdown = """
             | 区分 | 当期 |
