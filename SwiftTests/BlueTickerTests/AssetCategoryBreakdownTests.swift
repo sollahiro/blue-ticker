@@ -84,6 +84,66 @@ import Testing
         #expect(payload.warnings == [breakdownWarningAssetCategoryNestedSubtotal])
     }
 
+    /// 合計科目の無い注記で、区分の行が直前の行の和に丸め差つきで近いだけ（100＋50 と 151）。
+    /// 商標権が「合計」に見えるが集約科目ではなく確かめる相手が無いので、公開保留にする。
+    @Test func roundedSubtotalWithoutTotalNeedsReview() throws {
+        let payload = try #require(AssetCategoryBreakdown.build(items: [
+            item("GoodwillIFRS", "のれん", 100),
+            item("SoftwareIFRS", "ソフトウェア", 50),
+            item("TrademarksIFRS", "商標権", 151),
+        ], spec: AssetCategoryBreakdown.goodwillAndIntangibles))
+        #expect(payload.needsReview == true)
+        #expect(payload.warnings == [breakdownWarningAssetCategorySubtotalUnverified])
+    }
+
+    /// 合計科目が無くても、丸め差なしで一致する区分の小計（ソニーのコンテンツ資産型）は公開する。
+    @Test func exactSubtotalWithoutTotalIsPublished() throws {
+        let payload = try #require(AssetCategoryBreakdown.build(items: [
+            item("GoodwillIFRS", "のれん", 500),
+            item("FilmCostIFRS", "映画", 10),
+            item("GameContentIFRS", "ゲーム", 20),
+            item("ContentAssetsNCAIFRS", "コンテンツ資産", 30),
+        ], spec: AssetCategoryBreakdown.goodwillAndIntangibles))
+        #expect(payload.needsReview == false)
+        #expect(payload.denominator == 530_000_000)
+        #expect(payload.denominatorTag == "GoodwillIFRS+ContentAssetsNCAIFRS")
+    }
+
+    /// 合計科目があれば、丸め差つきの小計も合計で確かめられるので公開する。
+    @Test func roundedSubtotalUnderTotalIsPublished() throws {
+        let payload = try #require(AssetCategoryBreakdown.build(items: [
+            item("GoodwillIFRS", "のれん", 500),
+            item("FilmCostIFRS", "映画", 10),
+            item("GameContentIFRS", "ゲーム", 20),
+            item("ContentAssetsNCAIFRS", "コンテンツ資産", 31),
+            item("GoodwillAndIntangibleAssetsIFRS", "のれん及び無形資産", 531),
+        ], spec: AssetCategoryBreakdown.goodwillAndIntangibles))
+        #expect(payload.needsReview == false)
+        #expect(payload.denominatorTag == "GoodwillAndIntangibleAssetsIFRS")
+    }
+
+    /// 会社ごとの合計科目（4902 等の `PropertyPlantAndEquipmentIfDifferentFromBSBalanceIFRS`）の下の丸め差は公開する。
+    @Test func roundedTotalUnderCompanyTotalTagIsPublished() throws {
+        let payload = try #require(AssetCategoryBreakdown.build(items: [
+            item("LandIFRS", "土地", 100),
+            item("BuildingsAndStructuresIFRS", "建物及び構築物", 250),
+            item("PropertyPlantAndEquipmentIfDifferentFromBSBalanceIFRS", "有形固定資産", 351),
+        ], spec: AssetCategoryBreakdown.propertyPlantEquipment))
+        #expect(payload.needsReview == false)
+        #expect(payload.denominatorTag == "PropertyPlantAndEquipmentIfDifferentFromBSBalanceIFRS")
+    }
+
+    /// 区分科目（`OtherComponentsOf…`）が丸め差で「合計」に見えても合計科目とはみなさない。
+    @Test func componentsTagIsNotATotal() throws {
+        let payload = try #require(AssetCategoryBreakdown.build(items: [
+            item("LandIFRS", "土地", 100),
+            item("BuildingsAndStructuresIFRS", "建物及び構築物", 250),
+            item("OtherComponentsOfPropertyPlantAndEquipmentIFRS", "その他", 351),
+        ], spec: AssetCategoryBreakdown.propertyPlantEquipment))
+        #expect(payload.needsReview == true)
+        #expect(payload.warnings == [breakdownWarningAssetCategorySubtotalUnverified])
+    }
+
     @Test func emptyNoteIsNotFound() {
         #expect(AssetCategoryBreakdown.build(items: [], spec: AssetCategoryBreakdown.propertyPlantEquipment) == nil)
     }

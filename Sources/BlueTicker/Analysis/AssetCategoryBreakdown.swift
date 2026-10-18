@@ -6,6 +6,8 @@
 // 日本基準は BS の区分科目がそのまま statement にあるので軸にしない（not_found）。
 // 行の小計（ソニーの「コンテンツ資産」等）は、表示順で直前の連続した行の和に一致する行として決める。
 // 金額の丸め（百万円）で 1 単位ずれる開示があるので、和の比較は行数 × 表示単位まで許す（JT の 1 百万円差）。
+// 丸め差で認めた小計は、合計科目の行がそれを含めて合うときだけ公開する。そうでなく集約科目でもない行が
+// 丸め差で小計（または合計）になったら、区分行が偶然近い和になっただけかもしれないので要確認にする。
 
 import Foundation
 
@@ -18,13 +20,17 @@ enum AssetCategoryBreakdown {
         let aggregateTags: Set<String>
         /// 集約科目でも、ほかに区分行が無ければ単独の行として正しい科目（のれん以外の無形資産の合計）。
         let standaloneAggregateTags: Set<String>
+        /// 合計行に使われる会社ごとの科目名の目印（`PropertyPlantAndEquipmentIfDifferentFromBSBalanceIFRS`、
+        /// `TotalIFRS` 等）。`Components` を含む区分科目（その他の有形固定資産）は除く。
+        let totalTagMarkers: [String]
     }
 
     static let propertyPlantEquipment = Spec(
         axis: breakdownAxisPropertyPlantEquipment,
         roleName: "NotesPropertyPlantAndEquipmentConsolidatedFinancialStatementsIFRS",
         aggregateTags: ["PropertyPlantAndEquipmentIFRS"],
-        standaloneAggregateTags: [])
+        standaloneAggregateTags: [],
+        totalTagMarkers: ["PropertyPlantAndEquipment", "PropertyAndEquipment", "Total"])
 
     static let goodwillAndIntangibles = Spec(
         axis: breakdownAxisGoodwillAndIntangibles,
@@ -33,7 +39,8 @@ enum AssetCategoryBreakdown {
             "GoodwillAndIntangibleAssetsIFRS", "IntangibleAssetsAndGoodwillIFRS",
             "IntangibleAssetsIFRS", "OtherIntangibleAssetsIFRS",
         ],
-        standaloneAggregateTags: ["IntangibleAssetsIFRS", "OtherIntangibleAssetsIFRS"])
+        standaloneAggregateTags: ["IntangibleAssetsIFRS", "OtherIntangibleAssetsIFRS"],
+        totalTagMarkers: ["IntangibleAssets", "Total"])
 
     /// 正味帳簿価額でないタグ（取得原価・累計償却・累計減損）。
     private static let componentKeywords = [
@@ -45,6 +52,8 @@ enum AssetCategoryBreakdown {
 
     /// 注記 role の正味帳簿価額（連結・当期末）を表示順で返す。順序が取れないタグはタグ名順で後ろ。
     static func categoryItems(xbrlDir: URL, roleName: String) -> [StatementLineItem] {
+        // 注記 role が表示リンクに無い書類（日本基準・米国基準）は、全 fact を読まずに抜ける。
+        guard hasNoteRole(xbrlDir: xbrlDir, roleName: roleName) else { return [] }
         // 正味帳簿価額は nil を 0 にしない（`nilAsZero: false`）。ラベル走査も同じ索引を使う。
         let facts = XBRLUtils.collectAllNumericFacts(in: xbrlDir, nilAsZero: false)
         var labelsByTag: [String: String?] = [:]
@@ -85,6 +94,16 @@ enum AssetCategoryBreakdown {
         return items
     }
 
+    /// 表示リンク（`_pre`）に注記 role があるか。訂正の展開ディレクトリも見る。
+    static func hasNoteRole(xbrlDir: URL, roleName: String) -> Bool {
+        let dirs = [xbrlDir] + overlayDirectoryEntries(in: xbrlDir).map(\.url)
+        return dirs.contains { dir in
+            XBRLUtils.loadRolesByTag(in: dir).values.contains { roles in
+                roles.contains { XBRLUtils.sectionNameFromRole($0) == roleName }
+            }
+        }
+    }
+
     /// 書類1件分の軸を解決する。IFRS の注記が無ければ nil（呼び出し側は not_found）。
     static func resolve(xbrlDir: URL, spec: Spec) -> BreakdownSnapshotPayload? {
         build(items: categoryItems(xbrlDir: xbrlDir, roleName: spec.roleName), spec: spec)
@@ -100,23 +119,24 @@ enum AssetCategoryBreakdown {
         var nodes: [Node] = []
         var open: [Int] = []
         for item in items {
-            var matched: Int?
+            var matched: (length: Int, exact: Bool)?
             if open.count >= 2 {
                 var sum = 0.0
                 for length in 1...open.count {
                     sum += nodes[open[open.count - length]].item.value
-                    if length >= 2, abs(sum - item.value) <= Double(length) * unit {
-                        matched = length
+                    let difference = abs(sum - item.value)
+                    if length >= 2, difference <= Double(length) * unit {
+                        matched = (length, difference == 0)
                     }
                 }
             }
             let index = nodes.count
             if let matched {
-                let children = Array(open.suffix(matched))
-                nodes.append(Node(item: item, children: children))
-                open.removeLast(matched)
+                let children = Array(open.suffix(matched.length))
+                nodes.append(Node(item: item, children: children, exact: matched.exact))
+                open.removeLast(matched.length)
             } else {
-                nodes.append(Node(item: item, children: []))
+                nodes.append(Node(item: item, children: [], exact: true))
             }
             open.append(index)
         }
@@ -151,6 +171,20 @@ enum AssetCategoryBreakdown {
             warnings.append(breakdownWarningAssetCategoryNestedSubtotal)
         }
 
+        // 丸め差で認めた小計は、合計科目の行がそれを含めて合うときだけ確かめられる。合計行が無い、または
+        // 合計に見えた行自体が区分の科目のとき（のれん 100・ソフトウェア 50・商標権 151 で商標権が「合計」になる）は、
+        // 区分行がたまたま近い和になっただけと区別できないので公開保留。集約科目の小計は残す。
+        let verifiedByTotal = grandTotal.map { isTotalTag(nodes[$0].item.tag, spec: spec) } ?? false
+        if !verifiedByTotal {
+            let unverified = nodes.contains { node in
+                !node.children.isEmpty && !node.exact && !spec.aggregateTags.contains(node.item.tag)
+            }
+            if unverified {
+                needsReview = true
+                warnings.append(breakdownWarningAssetCategorySubtotalUnverified)
+            }
+        }
+
         var rows: [BreakdownRowPayload] = []
         func emit(_ index: Int, parent: String?) {
             let node = nodes[index]
@@ -182,10 +216,18 @@ enum AssetCategoryBreakdown {
             sourceKind: breakdownSourceXbrlFacts, needsReview: needsReview, warnings: warnings)
     }
 
+    /// 合計行の科目か（集約科目、または会社ごとの合計科目名）。
+    static func isTotalTag(_ tag: String, spec: Spec) -> Bool {
+        if spec.aggregateTags.contains(tag) { return true }
+        return !tag.contains("Components") && spec.totalTagMarkers.contains { tag.contains($0) }
+    }
+
     private struct Node {
         let item: StatementLineItem
         /// 小計なら、その和になる直前の行（nodes の添字）。区分行は空。
         let children: [Int]
+        /// 小計の和が丸め差なしで一致したか。区分行は true。
+        let exact: Bool
     }
 
     /// 全行の金額を割り切る表示単位（円・千円・百万円）。和の丸め誤差の許容幅に使う。

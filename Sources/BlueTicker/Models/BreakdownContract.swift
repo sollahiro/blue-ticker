@@ -81,7 +81,9 @@ public let ibdMaturityClassKey = "maturity_class"
 /// （例: `BorrowingsCLIFRS`）、明細表・注記の行は読んだ表の TextBlock 要素のローカル名
 /// （例: `AnnexedConsolidatedDetailedScheduleOfBorrowingsTextBlock`）。名前空間・URI は付けない。
 /// 会社拡張要素は提出どおりのローカル名（提出者固有で会社間比較不可）。合計行・コードで足した値は null。
-public let ibdSourceTagKey = "source_tag"
+public let ibdSourceTagKey = breakdownRowSourceTagKey
+/// 行の値を読んだ XBRL 要素のローカル名のキー（interest_bearing_debt と資産の種類別の軸）。
+public let breakdownRowSourceTagKey = "source_tag"
 
 /// interest_bearing_debt 行の出所: 貸借対照表の科目。
 public let ibdRowSourceBalanceSheet = "balance_sheet"
@@ -279,6 +281,9 @@ public let breakdownWarningAssetCategoryTotalUnmatched = "asset_category_total_u
 /// property_plant_equipment / goodwill_and_intangibles: 小計の内訳にさらに小計がある。
 /// `category_group` 1段では親を示せないので `needs_review` とセット（公開しない）。
 public let breakdownWarningAssetCategoryNestedSubtotal = "asset_category_nested_subtotal"
+/// property_plant_equipment / goodwill_and_intangibles: 集約科目でない行が直前の行の和に丸め差つきで一致して
+/// 小計（または合計）になり、集約科目の合計行で確かめられない（偶然の近似を否定できない）。`needs_review` とセット（公開しない）。
+public let breakdownWarningAssetCategorySubtotalUnverified = "asset_category_subtotal_unverified"
 
 /// 公開 serving が needs_review の格納行を出さないときの 404 reason。
 /// interest_bearing_debt 軸だけ。行は version-servable だが公開保留。未算出（reason 無し 404）とは区別する。
@@ -854,7 +859,7 @@ public extension BreakdownRowPayload {
         }
         // 値を読んだ XBRL 要素（資産の種類別の軸）。持たない軸には出さない。
         if let sourceTag {
-            object[ibdSourceTagKey] = sourceTag
+            object[breakdownRowSourceTagKey] = sourceTag
         }
         return object
     }

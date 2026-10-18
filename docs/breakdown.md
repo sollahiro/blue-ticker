@@ -142,7 +142,9 @@ v2（`breakdown-interest-bearing-debt-v2`）: 行と合計が変わる変更（�
 - 対象は IFRS 連結の注記 role（`NotesPropertyPlantAndEquipmentConsolidatedFinancialStatementsIFRS` / `NotesGoodwillAndIntangibleAssetsConsolidatedFinancialStatementsIFRS`）の正味帳簿価額 `{区分}IFRS` だけ。取得原価・累計償却・累計減損は載せない。注記の無い会社（日本基準・米国基準・のれん注記の無い IFRS 会社）は `not_found`。日本基準の区分は statement の BS 科目にある。
 - 行は表示順。直前の連続した2行以上の和に一致する行は小計（`row_kind=subtotal`、`category_group` が自分の名前）にし、その内訳行は `category_group` に小計の名前を持つ（ソニー 6758 の「コンテンツ資産」「その他の無形資産」）。和の比較は行数 × 表示単位（百万円）まで丸めを許す（JT 2914 は区分の和が合計と 1 百万円ずれる）。
 - 全行を1つにまとめる行（`PropertyPlantAndEquipmentIFRS` / `GoodwillAndIntangibleAssetsIFRS` 等）は行に出さず `denominator` にする。無いとき（のれんと無形資産を別科目で載せる会社）は最上位の行の和を `denominator` にし、`denominator_tag` は最上位の要素名を `+` で並べる（例 `GoodwillIFRS+IntangibleAssetsIFRS`）。
-- 合計の科目が区分行の和と合わず行に残ったら `needs_review` と `asset_category_total_unmatched`（公開しない）。
+- 合計の科目が区分行の和と合わず行に残ったら `needs_review` と `asset_category_total_unmatched`（公開しない）。小計の中に小計があるときは `asset_category_nested_subtotal`（公開しない）。
+- 集約科目（`IntangibleAssetsIFRS` 等）でない行が丸め差つきで直前の行の和になって小計（または合計）と判定され、集約科目の合計行でそれを確かめられないときは、`needs_review` と `asset_category_subtotal_unverified`（公開しない）。区分行がたまたま近い和になっただけ（のれん 100・ソフトウェア 50・商標権 151）と区別できないため。丸め差なしで一致する小計（ソニーの「コンテンツ資産」）と、合計科目の行の下の丸め小計は公開する。合計科目は集約科目か、会社ごとの合計科目名（`PropertyPlantAndEquipment` / `PropertyAndEquipment` / `IntangibleAssets` / `Total` を含み `Components` を含まない。`PropertyPlantAndEquipmentIfDifferentFromBSBalanceIFRS`・`TotalIFRS` 等）。本番の旧 notes 529 件に当てると、公開から保留に変わる書類は 0。
+- 注記 role が表示リンクに無い書類は、全 fact を読まずに `not_found` を返す（job-04 で日本基準の書類を安く飛ばす）。
 - 行の `source_tag` は値を読んだ XBRL 要素のローカル名。`amount` が正味帳簿価額（円）。
 - source は `xbrl_facts`（決定論。Jev は使わない）。`cache_version` は `breakdown-property-plant-equipment-v1` / `breakdown-goodwill-and-intangibles-v1`。
 
