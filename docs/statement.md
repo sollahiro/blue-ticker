@@ -31,7 +31,7 @@
 
 ## notes
 
-決定論の公開 note_type 群（詳細はコードと smoke/golden）。`research_and_development` は breakdown 軸へ集約（発生支出）。販管費の**費目**内訳 `sga_expense_breakdown` は実装済みだが **未公開・未配線**（ingest / REST / 開発用 MCP / job-03 に載せない）。ingest の現在地は Linear Team `blue-ticker`。
+決定論の公開 note_type 群（詳細はコードと smoke/golden）。`research_and_development` は breakdown 軸へ集約（発生支出）。販管費の**費目**内訳 `sga_expense_breakdown` は実装済みだが **未公開・未配線**（ingest / REST / 開発用 MCP に載せない）。ingest の現在地は Linear Team `blue-ticker`。
 
 注記が対象外・非開示のときは **404** ＋ボディ `reason`（未取り込みは reason 無し）。既知 `reason` は `allStatementNoteNotApplicableReasons`（`StatementNotesContract.swift`）が正本:
 
@@ -48,10 +48,11 @@
 |---|---|
 | `per_share_information` | 1 株当たり情報 |
 | `issued_shares_and_capital` | 発行済株式・資本金等 |
-| `property_plant_equipment_schedule` | 有形固定資産明細 |
-| `goodwill_and_intangibles` | のれん・無形資産 |
 
-廃止（REST / MCP / skills / ingest から外した。未知 note_type と同じ 404。パーサは残し、有利子負債は breakdown 軸 `interest_bearing_debt`）: `borrowings_schedule` / `lease_liabilities`。
+廃止（REST / MCP / skills / ingest から外した。未知 note_type と同じ 404）:
+
+- `borrowings_schedule` / `lease_liabilities`: パーサは残し、有利子負債は breakdown 軸 `interest_bearing_debt`。
+- `property_plant_equipment_schedule` / `goodwill_and_intangibles`: breakdown 軸 `property_plant_equipment` / `goodwill_and_intangibles`（資産の種類別。`docs/breakdown.md`）。
 
 未公開: `sga_expense_breakdown`（販管費の主要な費目内訳。発生支出の `research_and_development` 軸とは別。US-GAAP 非対応）。
 

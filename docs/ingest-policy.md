@@ -17,9 +17,9 @@
 | 0 | `scripts/jp/edinet/ingest-job-00-sync-foundation.sh` | `sync` → `filing-sections` | 上場 | 80 | 日次（軽） |
 | 1 | `scripts/jp/edinet/ingest-job-01-statements.sh` | `statements` | 上場（225は処理順） | 80 | 6h |
 | 2 | `scripts/jp/edinet/ingest-job-02-notes-core.sh` | `statement-notes`（per_share, issued_shares） | 上場（225は処理順） | 80 | 6h |
-| 3 | `scripts/jp/edinet/ingest-job-03-notes-heavy.sh` | `statement-notes`（PPE / goodwill。`borrowings_schedule` / `lease_liabilities` は公開廃止のため省略。`sga_expense_breakdown` は未公開のため省略） | 上場（225は処理順） | 80 | 日次 |
-| 4 | `scripts/jp/edinet/ingest-job-04-breakdowns.sh` | `breakdowns`（全13軸） | 上場（225は処理順） | 50 | 6h |
-| 5 | `scripts/jp/edinet/ingest-job-05-financials.sh` | `financials` | 上場 | 80 | 6h（2・3の後） |
+| 3 | （廃止） | 旧 `statement-notes` の PPE / goodwill は Breakdown の `property_plant_equipment` / `goodwill_and_intangibles` 軸へ移した（job-4） | — | — | — |
+| 4 | `scripts/jp/edinet/ingest-job-04-breakdowns.sh` | `breakdowns`（全11軸） | 上場（225は処理順） | 50 | 6h |
+| 5 | `scripts/jp/edinet/ingest-job-05-financials.sh` | `financials` | 上場 | 80 | 6h（2の後） |
 | 6 | `scripts/jp/edinet/ingest-job-06-overviews.sh` | `overviews` | 上場（225は処理順） | 80 | 日次 |
 
 1 周まとめて回す: `scripts/jp/edinet/ingest-run-cycle.sh`（各ジョブ間に短い sleep。個別 skip 可）。
@@ -83,8 +83,6 @@ statements               … 上場正本（225は処理順）
         ↓
 notes-core               … BPS/EPS 供給源を優先
         ↓
-notes-heavy              … 重い note_type（PPE / goodwill）
-        ↓
 breakdowns               … LLM 軸は時間がかかるため financials と分離
         ↓
 financials               … 組立スナップショット再計算
@@ -94,7 +92,7 @@ overviews                … 銘柄の短い会社説明（LLM。最新有報1�
 （任意）status ページ / Linear 投稿
 ```
 
-`notes-heavy` と `breakdowns` は依存が無ければ cron 上は別スロットでもよい。`financials` だけは **notes-core 以降**に置く。`overviews` は他 stage に依存しない（XBRL ダウンロードは自前）。
+`breakdowns` は依存が無ければ cron 上は別スロットでもよい。`financials` だけは **notes-core 以降**に置く。`overviews` は他 stage に依存しない（XBRL ダウンロードは自前）。
 
 サイクル段階・最新年度 100%・stale・公開ゲートの現在地は Linear Team `blue-ticker`（[JP 現在地](https://linear.app/sollahiro/document/jp-現在地-af2abd076034)。ingest 後は `post-ingest-linear.sh` が status update に件数を載せる）。Git に件数や段階番号を書かない。
 

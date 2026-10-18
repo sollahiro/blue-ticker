@@ -70,6 +70,7 @@ breaking 再編時は可能な範囲で:
 ## 変更メモ（段階 A）
 
 - Notes の `lease_liabilities` / `borrowings_schedule` を REST / MCP / skills / `--note-types` / ingest から外した（breaking。`apiSkillsSchemaVersion` 4）。未知 note_type と同じ 404（reason 無し、retired breakdown 軸と同型）。パーサは残し、有利子負債の正本は breakdown 軸 `interest_bearing_debt`。`fin-vN` / `breakdown-interest-bearing-debt-v2` / 組立指紋は据え置き。
+- Notes の `property_plant_equipment_schedule` / `goodwill_and_intangibles` を同じ形で外し、breakdown 軸 `property_plant_equipment` / `goodwill_and_intangibles` を追加した（breaking。`apiSkillsSchemaVersion` 5）。軸の行は種類別の正味帳簿価額（`amount`・`source_tag`）、小計は `row_kind=subtotal`。日本基準の `available_via_statement` に当たる reason は breakdown に無く、`not_found` になる。job-03（notes-heavy）は廃止。
 
 ## Codable 応答への段階移行
 

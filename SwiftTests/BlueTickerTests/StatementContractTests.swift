@@ -158,6 +158,11 @@ import Testing
         }
         #expect(retiredStatementNoteTypes.contains(statementNoteTypeBorrowingsSchedule))
         #expect(retiredStatementNoteTypes.contains(statementNoteTypeLeaseLiabilities))
+        #expect(retiredStatementNoteTypes.contains(statementNoteTypePropertyPlantEquipmentSchedule))
+        #expect(retiredStatementNoteTypes.contains(statementNoteTypeGoodwillAndIntangibles))
+        #expect(allStatementNoteTypes == [
+            statementNoteTypePerShareInformation, statementNoteTypeIssuedSharesAndCapital,
+        ])
     }
 
     @Test func notePayloadKeepsRetiredKeysAsNull() {
