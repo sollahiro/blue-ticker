@@ -2141,7 +2141,7 @@ import Testing
         #expect(publiclyServable(snapshot))
     }
 
-    /// 6758 型: 遡及修正で表の計が IS とずれても IS をアンカーにする（比較年度は NR）。
+    /// 遡及修正などで表の計が IS とずれても IS をアンカーにする（表の計では NR を外さない）。
     @Test func restatedTableTotalDoesNotReplaceIncomeStatementAnchor() async throws {
         let html = """
             <p>当連結会計年度</p>
@@ -2257,9 +2257,217 @@ import Testing
               <tr><td>合計</td><td>32,582</td></tr>
             </table>
             """
-        let (snapshot, _) = await normalize(
+        let (snapshot, audit) = await normalize(
             html: html, sales: yen(35_446), docID: "S100YH6S", assignCurrentPeriod: false)
         #expect(snapshot == nil)
+        // 列を選ぶ前に決まる正当な欠測。audit があるので ingest は unknown（再試行）ではなく not_found。
+        #expect(audit?.notes == GeographyBreakdownLLMNormalizer.priorPeriodTablesOnlyNote)
+        #expect(audit?.columnJev == nil)
+    }
+
+    /// 6706 S100YH6S 実書類の形: 地域 dedicated TextBlock は前期（Prior1YearDuration）だけ、当期は
+    /// 本邦90％超で省略。Resolver は notFound と audit を返す（ingest は not_found、needs_review なし）。
+    @Test func priorOnlyDedicatedGeographyResolvesNotFoundWithAudit() async throws {
+        let html =
+            "&lt;p&gt;（1）売上高&lt;/p&gt;&lt;p&gt;（単位：百万円）&lt;/p&gt;"
+            + "&lt;table&gt;&lt;tr&gt;&lt;td&gt;日本&lt;/td&gt;&lt;td&gt;アジア&lt;/td&gt;&lt;td&gt;北米&lt;/td&gt;"
+            + "&lt;td&gt;欧州&lt;/td&gt;&lt;td&gt;その他&lt;/td&gt;&lt;td&gt;合計&lt;/td&gt;&lt;/tr&gt;"
+            + "&lt;tr&gt;&lt;td&gt;27,938&lt;/td&gt;&lt;td&gt;2,502&lt;/td&gt;&lt;td&gt;1,210&lt;/td&gt;"
+            + "&lt;td&gt;43&lt;/td&gt;&lt;td&gt;887&lt;/td&gt;&lt;td&gt;32,582&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;"
+        let xml = XBRLTestSupport.makeXbrlDuration(
+            """
+            <jpcrp_cor:RevenuesFromExternalCustomersInformationForEachRegionTextBlock contextRef="Prior1YearDuration">\(html)</jpcrp_cor:RevenuesFromExternalCustomersInformationForEachRegionTextBlock>
+            """
+        )
+        try await XBRLTestSupport.withXbrlDir(xml) { dir in
+            let geography = BreakdownExtractor.extractGeographyInfo(xbrlDir: dir)
+            #expect(geography.tables.count == 1)
+            #expect(geography.tables.first?.period == "前期")
+            let (snapshot, source, audit) = await GeographyBreakdownResolver.resolve(
+                geography: geography, consolidatedSales: yen(35_446),
+                columnDecider: FakeRevenueRecognitionColumnDecider(),
+                fiscalYearEnd: "2026-03-31", docID: "S100YH6S")
+            #expect(snapshot == nil)
+            #expect(source == .notFound)
+            #expect(audit?.notes == GeographyBreakdownLLMNormalizer.priorPeriodTablesOnlyNote)
+        }
+    }
+
+    /// 1963 S100TVFX 実書類の形: 前期・当期の地域 dedicated TextBlock がどちらも
+    /// CurrentYearDuration で提出され、contextRef では期間が決まらない。ブロックをまたいで
+    /// 同一レイアウトの隣接表対として先を前期にし、当期 832,595（IS と一致）を公開する。
+    @Test func duplicateCurrentContextDedicatedBlocksPairPriorThenCurrent() async throws {
+        func block(_ amounts: [String]) -> String {
+            let headers = ["日本", "東南アジア", "中東（注２）", "アフリカ", "北米（注３）", "その他の地域", "合計"]
+            let head = headers.map { "&lt;td&gt;\($0)&lt;/td&gt;" }.joined()
+            let cells = amounts.map { "&lt;td&gt;\($0)&lt;/td&gt;" }.joined()
+            let html =
+                "&lt;p&gt;１．地域ごとの情報&lt;/p&gt;&lt;p&gt;（1）売上高&lt;/p&gt;"
+                + "&lt;table&gt;&lt;tr&gt;&lt;td colspan=\"7\"&gt;（単位：百万円）&lt;/td&gt;&lt;/tr&gt;"
+                + "&lt;tr&gt;\(head)&lt;/tr&gt;&lt;tr&gt;\(cells)&lt;/tr&gt;&lt;/table&gt;"
+            return """
+                <jpcrp_cor:RevenuesFromExternalCustomersInformationForEachRegionTextBlock contextRef="CurrentYearDuration">\(html)</jpcrp_cor:RevenuesFromExternalCustomersInformationForEachRegionTextBlock>
+                """
+        }
+        let xml = XBRLTestSupport.makeXbrlDuration(
+            block(["173,106", "53,791", "148,463", "32,009", "184,986", "14,532", "606,890"])
+                + block(["222,531", "110,834", "286,753", "22,479", "162,971", "27,025", "832,595"]))
+        try await XBRLTestSupport.withXbrlDir(xml) { dir in
+            let geography = BreakdownExtractor.extractGeographyInfo(xbrlDir: dir)
+            #expect(geography.tables.map(\.period) == ["前期", "当期"])
+            let (snapshotOrNil, _, _) = await GeographyBreakdownResolver.resolve(
+                geography: geography, consolidatedSales: yen(832_595),
+                columnDecider: FakeRevenueRecognitionColumnDecider(selected: "t1_c6"),
+                fiscalYearEnd: "2024-03-31", docID: "S100TVFX")
+            let snapshot = try #require(snapshotOrNil)
+            #expect(segmentLabels(snapshot) == ["日本", "東南アジア", "中東", "アフリカ", "北米", "その他の地域"])
+            #expect(snapshot.rows.first { $0.labelRaw == "日本" }?.amount == yen(222_531))
+            #expect(snapshot.denominatorTag == "income_statement.sales")
+            #expect(!snapshot.needsReview)
+            #expect(publiclyServable(snapshot))
+        }
+    }
+
+    /// contextRef が前期・当期に分かれた通常の dedicated 2ブロックは対ラベルで上書きしない。
+    @Test func distinctContextDedicatedBlocksKeepContextPeriods() throws {
+        func block(_ context: String, _ japan: String) -> String {
+            let html =
+                "&lt;table&gt;&lt;tr&gt;&lt;td&gt;日本&lt;/td&gt;&lt;td&gt;海外&lt;/td&gt;&lt;td&gt;合計&lt;/td&gt;&lt;/tr&gt;"
+                + "&lt;tr&gt;&lt;td&gt;\(japan)&lt;/td&gt;&lt;td&gt;30&lt;/td&gt;&lt;td&gt;140&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;"
+            return """
+                <jpcrp_cor:RevenuesFromExternalCustomersInformationForEachRegionTextBlock contextRef="\(context)">\(html)</jpcrp_cor:RevenuesFromExternalCustomersInformationForEachRegionTextBlock>
+                """
+        }
+        let xml = XBRLTestSupport.makeXbrlDuration(
+            block("CurrentYearDuration", "110") + block("Prior1YearDuration", "110"))
+        XBRLTestSupport.withXbrlDir(xml) { dir in
+            let geography = BreakdownExtractor.extractGeographyInfo(xbrlDir: dir)
+            #expect(Set(geography.tables.compactMap(\.period)) == Set(["当期", "前期"]))
+            #expect(geography.tables.allSatisfy { $0.periodBasis == .contextRef })
+        }
+    }
+
+    /// 6762 S100LMH9 実書類の形: 製品×地域マトリクスが年度ごとに2表（単位行・年度行・地域行の3段見出し）、
+    /// 単純な地域表は無い。見出しの年が1つだけなら年は期間見出しで、日本／米州／…が地域列。
+    /// 売上高 合計 の行を地域ごとに読む（製品行をアジア他の列で読まない）。
+    // source: code=6762 fy_end=2021-03-31 doc_id=S100LMH9 page=139 field=geography 売上高 合計 by region
+    @Test func singleYearHeaderProductRegionMatricesReadTotalRowByRegion() async throws {
+        func matrix(_ year: String, _ rows: [(String, [String])]) -> String {
+            let regions = ["日本", "米州", "欧州", "中国", "アジア他", "合計"]
+            let unit = "<tr><td></td><td></td>" + String(repeating: "<td></td>", count: 4)
+                + "<td>（単位　百万円）</td><td>（単位　百万円）</td></tr>"
+            let years = "<tr><td></td><td></td>"
+                + String(repeating: "<td>\(year)</td>", count: regions.count) + "</tr>"
+            let head = "<tr><td></td><td></td>" + regions.map { "<td>\($0)</td>" }.joined() + "</tr>"
+            let body = rows.map { label, cells in
+                "<tr><td></td><td>\(label)</td>" + cells.map { "<td>\($0)</td>" }.joined() + "</tr>"
+            }.joined()
+            return "<table>\(unit)\(years)\(head)\(body)</table>"
+        }
+        let html = matrix("2020年度", [
+            ("コンデンサ", ["18,480", "25,830", "37,556", "46,300", "25,716", "153,882"]),
+            ("磁気応用製品", ["18,888", "6,836", "7,404", "43,223", "143,317", "219,668"]),
+            ("その他", ["73,035", "63,469", "103,294", "624,488", "125,201", "989,487"]),
+            ("売上高 合計", ["110,403", "96,135", "148,254", "714,011", "294,234", "1,363,037"]),
+        ]) + matrix("2021年度", [
+            ("コンデンサ", ["18,495", "22,830", "36,328", "54,210", "26,319", "158,182"]),
+            ("磁気応用製品", ["18,855", "4,040", "9,490", "42,036", "124,832", "199,253"]),
+            ("その他", ["79,855", "69,796", "102,625", "743,883", "125,414", "1,121,573"]),
+            ("売上高 合計", ["117,205", "96,666", "148,443", "840,129", "276,565", "1,479,008"]),
+        ])
+        var tables = BreakdownExtractor.allTablesFromHtml(html, defaultHeading: "地域別")
+        for index in tables.indices { tables[index].period = "当期" }
+        let parsed = RevenueRecognitionCandidates.parse(tables: tables)
+            .map(GeographyBreakdownLLMNormalizer.collapsingSingleYearHeader)
+        let second = try #require(parsed.last)
+        #expect(GeographyBreakdownLLMNormalizer.regionColumnCount(second) >= 2)
+        #expect(second.columnHeaders.values.contains("日本"))
+        #expect(!second.columnHeaders.values.contains { $0.contains("2021年度") })
+        let (snapshotOrNil, _) = await GeographyBreakdownLLMNormalizer.normalize(
+            ExtractedBreakdown(method: "html_table", tables: tables, facts: []),
+            consolidatedSales: yen(1_479_008),
+            decider: FakeRevenueRecognitionColumnDecider(selected: "t1_c7"),
+            fiscalYearEnd: "2021-03-31", docID: "S100LMH9")
+        let snapshot = try #require(snapshotOrNil)
+        #expect(segmentLabels(snapshot) == ["日本", "米州", "欧州", "中国", "アジア他"])
+        #expect(snapshot.rows.first { $0.labelRaw == "中国" }?.amount == yen(840_129))
+        #expect(!segmentLabels(snapshot).contains("コンデンサ"))
+        #expect(!snapshot.needsReview)
+        #expect(publiclyServable(snapshot))
+        // 前年度の表（合計 1,363,037）を選べば IS と合わず既存の llm_row_sum_mismatch で止まる。
+        let (priorOrNil, _) = await GeographyBreakdownLLMNormalizer.normalize(
+            ExtractedBreakdown(method: "html_table", tables: tables, facts: []),
+            consolidatedSales: yen(1_479_008),
+            decider: FakeRevenueRecognitionColumnDecider(selected: "t0_c7"),
+            fiscalYearEnd: "2021-03-31", docID: "S100LMH9-prior")
+        let prior = try #require(priorOrNil)
+        #expect(prior.warnings.contains("llm_row_sum_mismatch"))
+        #expect(!publiclyServable(prior))
+    }
+
+    /// 6758 S100TS7P 型: PL は 売上高 11,260,037 の上に 売上高及び金融ビジネス収入合計 13,020,768 がある。
+    /// 地域表の計はトップラインと一致する。トップラインで照らせば公開、売上高だけで照らすと不当に NR。
+    @Test func incomeStatementTopLineIsTheCoverageAnchor() async throws {
+        let html = """
+            <p>当連結会計年度</p>
+            <p>（単位：百万円）</p>
+            <table>
+              <tr><td>項目</td><td>2022年度修正再表示</td><td>2023年度</td></tr>
+              <tr><td>売上高及び金融ビジネス収入：</td><td></td><td></td></tr>
+              <tr><td>日本</td><td>2,126,508</td><td>3,027,526</td></tr>
+              <tr><td>米国</td><td>3,401,402</td><td>3,751,239</td></tr>
+              <tr><td>欧州</td><td>2,190,311</td><td>2,632,963</td></tr>
+              <tr><td>中国</td><td>855,437</td><td>1,000,907</td></tr>
+              <tr><td>アジア・太平洋地域</td><td>1,563,414</td><td>1,659,776</td></tr>
+              <tr><td>その他地域</td><td>837,301</td><td>948,357</td></tr>
+              <tr><td>計</td><td>10,974,373</td><td>13,020,768</td></tr>
+            </table>
+            """
+        let lines = [
+            StatementLineItem(tag: "NetSalesIFRS", label: nil, value: yen(11_260_037), unit: "JPY", order: 6),
+            StatementLineItem(
+                tag: "InsuranceIncomeFinancialServicesRevenueIFRS", label: "保険収益",
+                value: yen(586_115), unit: "JPY", order: 8),
+            StatementLineItem(
+                tag: "OtherFinancialServicesRevenueFinancialServicesRevenueIFRS",
+                label: "その他の金融ビジネス収入", value: yen(1_174_616), unit: "JPY", order: 9),
+            StatementLineItem(
+                tag: "FinancialServicesRevenueSalesAndOperatingRevenueIFRS", label: "金融ビジネス収入合計",
+                value: yen(1_760_731), unit: "JPY", order: 10, isTotal: true,
+                components: [
+                    StatementLineComponent(tag: "InsuranceIncomeFinancialServicesRevenueIFRS", weight: 1),
+                    StatementLineComponent(
+                        tag: "OtherFinancialServicesRevenueFinancialServicesRevenueIFRS", weight: 1),
+                ]),
+            StatementLineItem(
+                tag: "SalesAndFinancialServicesRevenueIFRS", label: "売上高及び金融ビジネス収入合計",
+                value: yen(13_020_768), unit: "JPY", order: 11, isTotal: true,
+                components: [
+                    StatementLineComponent(tag: "NetSalesIFRS", weight: 1),
+                    StatementLineComponent(
+                        tag: "FinancialServicesRevenueSalesAndOperatingRevenueIFRS", weight: 1),
+                ]),
+            StatementLineItem(tag: "CostOfSalesIFRS", label: nil, value: yen(8_089_317), unit: "JPY", order: 13),
+            StatementLineItem(
+                tag: "OperatingIncomeIFRS", label: "営業利益", value: yen(1_208_831), unit: "JPY", order: 24),
+        ]
+        let topLine = try #require(
+            StatementFinancialsResolver.incomeStatementTopLineRevenue(lines, sales: yen(11_260_037)))
+        #expect(topLine == yen(13_020_768))
+
+        let (publishedOrNil, _) = await normalize(
+            html: html, sales: topLine, docID: "S100TS7P", salesLabel: "売上収益")
+        let published = try #require(publishedOrNil)
+        #expect(published.rows.first { $0.labelRaw == "日本" }?.amount == yen(3_027_526))
+        #expect(published.denominatorTag == "income_statement.sales")
+        #expect(!published.needsReview)
+        #expect(publiclyServable(published))
+
+        let (subLineOrNil, _) = await normalize(
+            html: html, sales: yen(11_260_037), docID: "S100TS7P-sub-line", salesLabel: "売上収益")
+        let subLine = try #require(subLineOrNil)
+        #expect(subLine.warnings.contains("llm_row_sum_mismatch"))
+        #expect(!publiclyServable(subLine))
     }
 
     /// 最終判定サンプルが食い違えば降格しない（提案維持）。
