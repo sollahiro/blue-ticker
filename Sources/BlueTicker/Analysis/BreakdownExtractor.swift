@@ -2706,6 +2706,8 @@ enum BreakdownExtractor {
             // 地域の前期・当期の2ブロックがどちらも CurrentYearDuration で提出されたとき（1963 S100TVFX）、
             // contextRef では期間が決まらない。ブロックをまたいで同一レイアウトの隣接表対
             // （先が前期）に委ねる。contextRef が分かれている通常の提出は変えない。
+            // 対は隣り合う2表だけ見る。1ブロックに売上と資産の表が入り [売上前期, 資産前期, 売上当期, 資産当期]
+            // と並ぶ提出は対にならず、従来どおり両方当期のまま（未対応）。
             if Set(contextPeriodRefs).count < contextPeriodRefs.count {
                 var paired = contextPeriodIndices.map { tables[$0] }
                 applyIdenticalPairPeriodLabels(&paired)

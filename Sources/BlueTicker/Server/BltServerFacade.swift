@@ -931,17 +931,18 @@ public extension BltServerContext {
             return .notApplicable(reason: breakdownNotApplicableNotFound)
         }
         let labelsByTag = XBRLUtils.loadLabelsByTag(in: xbrlDir)
+        // カバー判定と share の分母は PL トップライン（売上高の上の合計行など）。無ければ Summary 売上。
+        // 注記ゲートの決定論スナップショット（clean 判定）も同じ分母で照らす。
+        let coverageSales = financials?.geographyCoverageSales ?? consolidatedSales
         let gate = await segmentsAfterNoteDecision(
             axis: .geography, docID: docID, extracted: geography, xbrlDir: xbrlDir,
-            consolidatedSales: consolidatedSales, labelsByTag: labelsByTag)
+            consolidatedSales: coverageSales, labelsByTag: labelsByTag)
         guard let resolvedGeography = gate.extracted else {
             return .notApplicable(
                 reason: breakdownNotApplicableNotFound,
                 audit: gate.outcome.audit.map(LLMBreakdownAuditPayload.segmentNoteJev))
         }
 
-        // カバー判定と share の分母は PL トップライン（売上高の上の合計行など）。無ければ Summary 売上。
-        let coverageSales = financials?.geographyCoverageSales ?? consolidatedSales
         let hash = breakdownContentHash(extracted: resolvedGeography, consolidatedSales: coverageSales)
         let result = await GeographyBreakdownResolver.resolve(
             geography: resolvedGeography, consolidatedSales: coverageSales,
@@ -954,10 +955,16 @@ public extension BltServerContext {
             // audit があれば Jev が明示的に非該当と答えた、または当期の地域表が無く前期表だけ
             // （本邦90％省略。6706）の正当欠測。audit 無しで表だけある場合は
             // 列選択失敗の可能性が高いので unknown（再試行）に落とす。
+            // 前期の表だけで not_found にした書類は、その根拠（`prior_period_tables_only`）を llm_audit に残す。
+            // Jev の非該当 audit は従来どおり載せない（jev.needs_review で行の needs_review が変わるため）。
             let reason: String
+            var audit: LLMBreakdownAuditPayload?
             if result.source == .notFound {
                 if result.audit != nil || geography.tables.isEmpty {
                     reason = breakdownNotApplicableNotFound
+                    if result.audit?.notes == GeographyBreakdownLLMNormalizer.priorPeriodTablesOnlyNote {
+                        audit = result.audit.map(llmBreakdownAuditPayload(from:))
+                    }
                 } else {
                     reason = breakdownNotApplicableUnknown
                 }
@@ -965,7 +972,7 @@ public extension BltServerContext {
                 reason = breakdownNotApplicableUnknown
             }
             return applyingSegmentNoteDecision(
-                gate.outcome, to: .notApplicable(reason: reason, audit: nil))
+                gate.outcome, to: .notApplicable(reason: reason, audit: audit))
         }
         return applyingSegmentNoteDecision(
             gate.outcome,

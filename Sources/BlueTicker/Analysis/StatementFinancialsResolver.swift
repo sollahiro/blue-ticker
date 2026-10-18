@@ -785,6 +785,16 @@ enum StatementFinancialsResolver {
         {
             return nil
         }
+        // 計算リンクが無く、合計の 売上高 と内訳の 売上高（製品）等が別々の根に残ったときは足すと二重になる。
+        // どれかの根が残りの根の和と一致するなら合計と内訳の関係なので立てない（Summary sales のまま）。
+        if roots.count > 1 {
+            let total = roots.reduce(0.0) { $0 + $1.value }
+            let isTotalOfOthers = roots.contains { root in
+                let others = total - root.value
+                return others > 0 && abs(root.value - others) <= root.value * topLineRevenueMinimumExcess
+            }
+            if isTotalOfOthers { return nil }
+        }
         let topLine = roots.reduce(0.0) { $0 + $1.value }
         return topLine > sales * (1 + topLineRevenueMinimumExcess) ? topLine : nil
     }

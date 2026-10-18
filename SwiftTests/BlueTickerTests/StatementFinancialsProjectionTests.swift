@@ -419,5 +419,15 @@ import Testing
             line("NonOperatingIncome", 1_058, components: ["InterestIncomeNOI"]),
         ]
         #expect(StatementFinancialsResolver.incomeStatementTopLineRevenue(plain, sales: 113_935) == nil)
+
+        // 計算リンクが無く、売上高（合計）と製品・商品の売上高が別々の根に残る。足すと二重なので立てない。
+        let unlinked = [
+            line("NetSalesOfFinishedGoods", 60_000, label: "製品売上高"),
+            line("NetSalesOfMerchandise", 40_000, label: "商品売上高"),
+            line("NetSales", 100_000, label: "売上高"),
+            line("CostOfSales", 70_000),
+            line("OperatingIncome", 5_000, label: "営業利益"),
+        ]
+        #expect(StatementFinancialsResolver.incomeStatementTopLineRevenue(unlinked, sales: 100_000) == nil)
     }
 }
