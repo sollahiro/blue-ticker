@@ -70,6 +70,15 @@ import Foundation
         #expect(medical.profit == 32_775 * Financial.millionYen)
         #expect(snapshot.rows.contains { $0.labelRaw == "その他及び全社" })
         #expect(!snapshot.rows.contains { $0.labelRaw == "連結" })
+        // 消去の列は売上が「-」でも利益の差異調整として reconciling で残す（区分の和 454,479 + 911 = 455,390）。
+        // source: code=7751 fy_end=2025-12-31 doc_id=S100XTLJ page=185 field=product_service.消去.profit
+        let elimination = try #require(snapshot.rows.first { $0.labelRaw == "消去" })
+        #expect(elimination.rowKind == "reconciling")
+        #expect(elimination.amount == 0)
+        #expect(elimination.profit == 911 * Financial.millionYen)
+        let profitSum = snapshot.rows.filter { $0.rowKind == "segment" || $0.rowKind == "reconciling" }
+            .compactMap(\.profit).reduce(0, +)
+        #expect(profitSum == 455_390 * Financial.millionYen)
         #expect(!snapshot.needsReview)
     }
 

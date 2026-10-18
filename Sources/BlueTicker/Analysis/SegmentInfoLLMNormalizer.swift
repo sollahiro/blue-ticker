@@ -436,6 +436,15 @@ enum SegmentInfoLLMNormalizer {
         return RevenueRecognitionCandidates.isAggregateColumnHeader(leaf)
     }
 
+    /// 転置表の「消去」「調整額」「調整・消去」の列。合計・連結・計の列は含めない。
+    /// 「その他」を含む列は残事業バケット（`isSkippedTotalColumn` の例外）なので対象外。
+    static func isReconcilingColumnHeader(_ header: String) -> Bool {
+        let leaf = RevenueRecognitionCandidates.collapsedCell(headerLeaf(header))
+        guard leaf.contains("消去") || leaf.contains("調整") else { return false }
+        if leaf.contains("その他") { return false }
+        return !(leaf.contains("合計") || leaf.contains("連結") || leaf.hasSuffix("計"))
+    }
+
     static func headerLeaf(_ header: String) -> String {
         let compact = RevenueRecognitionCandidates.compactCell(header)
         let parts = compact.components(separatedBy: " / ")
@@ -800,7 +809,8 @@ enum SegmentInfoLLMNormalizer {
         }
         for (column, header) in table.columnHeaders.sorted(by: { $0.key < $1.key }) {
             if column == wholeCompanyColumn, isSkippedTotalColumn(header) { continue }
-            if isSkippedTotalColumn(header) { continue }
+            // 消去・調整の列は合計列ではないので reconciling として残す（利益の差異調整。7751 消去 911）。
+            if isSkippedTotalColumn(header), !isReconcilingColumnHeader(header) { continue }
             if isPeriodColumnHeader(header) { continue }
             if RevenueRecognitionCandidates.isPeriodHeadingLabel(header) { continue }
             guard column < row.count, let amount = RevenueRecognitionCandidates.parseAmount(row[column])
