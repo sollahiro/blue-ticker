@@ -33,6 +33,18 @@ WHERE doc_type_code = ANY($1::text[])
 ORDER BY submit_date_time DESC, doc_id DESC
 LIMIT $3`;
 
+// 会社アイコンの R2 オブジェクトキー。$1: 4 桁コード text[]。
+// company_icons は 1 社 1 行（主キー code）。公開 URL は REST の icon_url と同じく
+// `{公開ベース URL}/{r2_object_key}`（Swift R2PublicURLConfig.publicURL(forKey:)）。
+export const ICON_SQL = `SELECT code, r2_object_key
+FROM company_icons
+WHERE code = ANY($1::text[])`;
+
+// Swift buildR2PublicURL(baseURL:key:) と同じ連結。
+export function iconPublicUrl(baseUrl, key) {
+  return `${baseUrl}/${key}`;
+}
+
 // 上場の 4 桁コード。5 桁かつ末尾 0 のときだけ。`00000`（未割当）は上場にしない。
 // Swift の listedTickerCode(fromSecCode:) と同じ。
 export function listedTickerCode(secCode) {

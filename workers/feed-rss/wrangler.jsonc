@@ -18,7 +18,9 @@
   ],
   "vars": {
     "FEED_OBJECT_KEY": "blue-ticker/edinet-filings.xml",
-    "FEED_PUBLIC_URL": "https://feed.sollahiro.com/blue-ticker/edinet-filings.xml"
+    "FEED_PUBLIC_URL": "https://feed.sollahiro.com/blue-ticker/edinet-filings.xml",
+    // 会社アイコンの公開ベース URL（blt-server の BLT_R2_PUBLIC_BASE_URL と同じ値）。
+    "FEED_ICON_BASE_URL": "https://icons.sollahiro.com"
   }
   // secret FEED_DATABASE_URL: Neon の読み取り専用ロールの接続文字列。
   // 書き込み URL（BLT_NEON_WRITE_DATABASE_URL 系）は絶対に入れない。

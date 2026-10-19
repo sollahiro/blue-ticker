@@ -13,7 +13,7 @@
 `https://feed.sollahiro.com/blue-ticker/edinet-filings.xml` は認証なしの公開。2026-09-09 ロックに対する**狭い文書化済み例外**で、これ以外はすべて HAPIS + App Attest（段階 B）のまま。BLT origin は閉じたまま（`BLT_ALLOW_UNAUTHENTICATED` は使わない）。
 
 - Cron Worker `workers/feed-rss` が日次（19:15 JST）に Neon を読み取り専用ロールで読み、R2 へ静的オブジェクトとして書く。配信は R2 カスタムドメイン
-- ヘッドラインのみ（社名・書類種別・提出日時・決算期・コード・doc_id）。会社アイコンは載せない
+- ヘッドラインのみ（社名・書類種別・提出日時・決算期・コード・doc_id）と、会社アイコンの公開 URL（`media:thumbnail`。アイコンのある会社だけ）。アイコン URL を一覧で出すのはこの RSS だけで、アイコン専用のエンドポイントは公開しない（2026-10-19 Sorahiro）
 - クエリパラメータなし。どのパスも origin / Neon へは届かない
 - REST `/v1/feed/updates` が契約の正。RSS はその派生ビューで、RSS 2.0 の形以上の互換保証は持たない
 

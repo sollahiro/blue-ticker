@@ -73,11 +73,15 @@ export function edinetDocumentUrl(docId) {
   return EDINET_VIEWER_URL_BASE + encodeURIComponent(docId);
 }
 
-// RSS 2.0 本文。items は toFeedItem の戻り値。ヘッドラインのみ（アイコン・画像なし）。
+// RSS 2.0 本文。items は toFeedItem の戻り値（icon_url があれば会社アイコンを
+// Media RSS の media:thumbnail で付ける）。チャネル画像・enclosure は出さない。
 export function buildRss({ items, now = new Date(), feedUrl }) {
   const lines = [];
   lines.push('<?xml version="1.0" encoding="UTF-8"?>');
-  lines.push('<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">');
+  lines.push(
+    '<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" ' +
+      'xmlns:media="http://search.yahoo.com/mrss/">'
+  );
   lines.push("  <channel>");
   lines.push("    <title>Blue Ticker — EDINET 提出書類（上場）</title>");
   // チャネル link はアプリ紹介ページ。sollahiro.com/blue-ticker/ は
@@ -115,6 +119,9 @@ export function buildRss({ items, now = new Date(), feedUrl }) {
     lines.push(
       `      <description>${escapeXml(`決算期: ${item.fy_end} / 証券コード: ${item.code}`)}</description>`
     );
+    if (item.icon_url) {
+      lines.push(`      <media:thumbnail url="${escapeXml(item.icon_url)}"/>`);
+    }
     lines.push("    </item>");
   }
   lines.push("  </channel>");

@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
 import { CACHE_CONTROL, CONTENT_TYPE, refreshFeed } from "./feed.js";
-import { FEED_DOC_TYPES, FEED_ITEM_LIMIT, FEED_SQL } from "./query.js";
+import { FEED_DOC_TYPES, FEED_ITEM_LIMIT, FEED_SQL, ICON_SQL } from "./query.js";
 
 const NOW = new Date("2026-10-10T10:15:00Z");
 const KEY = "blue-ticker/edinet-filings.xml";
@@ -37,7 +37,21 @@ function makeEnv(bucket) {
     FEED_BUCKET: bucket,
     FEED_OBJECT_KEY: KEY,
     FEED_PUBLIC_URL: "https://feed.sollahiro.com/blue-ticker/edinet-filings.xml",
+    FEED_ICON_BASE_URL: "https://icons.sollahiro.com",
   };
+}
+
+// FEED_SQL には rows、ICON_SQL には iconRows（関数なら呼ぶ）を返すフェイク。
+function fakeQuery(rows, iconRows = []) {
+  const queries = [];
+  const runQuery = async (text, params) => {
+    queries.push({ text, params });
+    if (text === ICON_SQL) {
+      return typeof iconRows === "function" ? iconRows() : iconRows;
+    }
+    return rows;
+  };
+  return { queries, runQuery };
 }
 
 const LISTED_ROW = {
@@ -55,18 +69,16 @@ describe("refreshFeed", () => {
   test("成功: put を 1 回、正しいキー・メタデータ・SQL パラメータで呼ぶ", async () => {
     const bucket = fakeBucket();
     const log = silentLog();
-    const queries = [];
-    const runQuery = async (text, params) => {
-      queries.push({ text, params });
-      return [LISTED_ROW];
-    };
+    const { queries, runQuery } = fakeQuery([LISTED_ROW]);
 
     const result = await refreshFeed({ env: makeEnv(bucket), runQuery, now: NOW, log });
 
     assert.deepEqual(result, { written: true, count: 1 });
-    assert.equal(queries.length, 1);
+    assert.equal(queries.length, 2);
     assert.equal(queries[0].text, FEED_SQL);
     assert.deepEqual(queries[0].params, [FEED_DOC_TYPES, "2026-10-04", FEED_ITEM_LIMIT]);
+    assert.equal(queries[1].text, ICON_SQL);
+    assert.deepEqual(queries[1].params, [["7203"]]);
 
     assert.equal(bucket.calls.length, 1);
     const put = bucket.calls[0];
@@ -82,6 +94,61 @@ describe("refreshFeed", () => {
     );
     assert.ok(!put.body.includes("sollahiro.com/blue-ticker/companies"));
     assert.ok(log.lines.some((line) => line.includes('"feed_rss_written"')));
+  });
+
+  test("アイコン: 同じ会社は 1 回だけ引き、ある会社にだけ media:thumbnail を付ける", async () => {
+    const bucket = fakeBucket();
+    const log = silentLog();
+    const { queries, runQuery } = fakeQuery(
+      [
+        LISTED_ROW,
+        { ...LISTED_ROW, doc_id: "S100BBB", doc_type_code: "130" },
+        { ...LISTED_ROW, doc_id: "S100CCC", sec_code: "477A0", filer_name: "サンプル商事" },
+      ],
+      [{ code: "7203", r2_object_key: "company-icons/7203.ico" }]
+    );
+
+    const result = await refreshFeed({ env: makeEnv(bucket), runQuery, now: NOW, log });
+
+    assert.deepEqual(result, { written: true, count: 3 });
+    assert.deepEqual(queries[1].params, [["7203", "477A"]]);
+    const body = bucket.calls[0].body;
+    assert.equal(
+      (body.match(/<media:thumbnail url="https:\/\/icons\.sollahiro\.com\/company-icons\/7203\.ico"\/>/g) ?? [])
+        .length,
+      2
+    );
+    const third = body.slice(body.indexOf("S100CCC"));
+    assert.ok(!third.includes("<media:thumbnail"));
+    assert.ok(log.lines.some((line) => line.includes('"icons":2')));
+  });
+
+  test("アイコンのクエリ失敗: アイコンなしでフィードは書く", async () => {
+    const bucket = fakeBucket();
+    const log = silentLog();
+    const { runQuery } = fakeQuery([LISTED_ROW], () => {
+      throw new Error("permission denied for table company_icons");
+    });
+
+    const result = await refreshFeed({ env: makeEnv(bucket), runQuery, now: NOW, log });
+
+    assert.deepEqual(result, { written: true, count: 1 });
+    assert.equal(bucket.calls.length, 1);
+    assert.ok(!bucket.calls[0].body.includes("<media:thumbnail"));
+    assert.ok(log.lines.some((line) => line.includes('"feed_rss_icons_skip"')));
+  });
+
+  test("アイコンのベース URL 未設定: アイコンのクエリを呼ばずにフィードは書く", async () => {
+    const bucket = fakeBucket();
+    const log = silentLog();
+    const { queries, runQuery } = fakeQuery([LISTED_ROW]);
+    const env = { ...makeEnv(bucket), FEED_ICON_BASE_URL: undefined };
+
+    const result = await refreshFeed({ env, runQuery, now: NOW, log });
+
+    assert.deepEqual(result, { written: true, count: 1 });
+    assert.equal(queries.length, 1);
+    assert.ok(!bucket.calls[0].body.includes("<media:thumbnail"));
   });
 
   test("クエリ失敗: put せず query_error", async () => {
