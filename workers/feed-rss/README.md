@@ -27,8 +27,14 @@ RSS は窓内を時系列で全部出すフィードなので、同日の絞り�
 - `pubDate` = `submit_date_time`（JST 壁時計 → RFC 822 `+0900`）
 - `category` = 2 つ: `<category domain="edinet:doc_type">{doc_type}</category>` と `<category domain="jp:sec_code">{code}</category>`
 - `description` = `決算期: {fy_end} / 証券コード: {code}`（`fy_end` は期末日の先頭 7 文字）
+- `media:thumbnail`（Media RSS、`xmlns:media="http://search.yahoo.com/mrss/"`）= 会社アイコンの公開 URL。`company_icons` に行がある会社だけ付ける
 
-会社アイコンは意図的に載せない（アイコンは認証越しの配信のみ）。
+## 会社アイコン
+
+- `company_icons` を `code = ANY(...)` で引き、`{FEED_ICON_BASE_URL}/{r2_object_key}` を `media:thumbnail` に入れる。REST の `icon_url`（`R2PublicURLConfig.publicURL(forKey:)`）と同じ URL になる
+- アイコンは付加情報。`FEED_ICON_BASE_URL` 未設定・クエリ失敗（権限不足を含む）でもフィードはアイコンなしで書く（ログ `feed_rss_icons_skip`）
+- アイコン URL を一覧で出す公開面はこの RSS だけ。アイコン専用のエンドポイントは作らない
+- チャネル画像（`<image>`）と `enclosure` は出さない
 
 チャネル `<link>` は `https://sollahiro.com/blue-ticker/`（workers/legal が配信するアプリ紹介ページ）。
 
@@ -53,7 +59,7 @@ Swift 側のラベル・対象種別・listed 判定を変えたら fixture も�
 - クエリ失敗・0 件（全件非上場含む）では R2 を上書きしない（既存オブジェクトを残す）
 - `FEED_BUCKET` / `FEED_OBJECT_KEY` / `FEED_DATABASE_URL` 未設定は `misconfigured` で skip
 - R2 `put` の失敗だけは再スローして cron 実行を失敗として見せる
-- ログは構造化 JSON（`feed_rss_skip` / `feed_rss_written` / `feed_rss_put_error`）。接続文字列は出さない
+- ログは構造化 JSON（`feed_rss_skip` / `feed_rss_written` / `feed_rss_put_error` / `feed_rss_icons_skip`）。接続文字列は出さない
 
 ## R2 メタデータ
 
@@ -90,6 +96,7 @@ Swift 側のラベル・対象種別・listed 判定を変えたら fixture も�
    GRANT CONNECT ON DATABASE <dbname> TO blt_feed_reader;
    GRANT USAGE ON SCHEMA public TO blt_feed_reader;
    GRANT SELECT ON public.edinet_documents TO blt_feed_reader;
+   GRANT SELECT ON public.company_icons TO blt_feed_reader;
    ALTER ROLE blt_feed_reader SET default_transaction_read_only = on;
    ```
 
@@ -100,6 +107,17 @@ Swift 側のラベル・対象種別・listed 判定を変えたら fixture も�
    npx wrangler@4 secret put FEED_DATABASE_URL   # blt_feed_reader の接続文字列
    npx wrangler@4 deploy
    ```
+
+## アイコン対応の反映（既存環境、人間が実行）
+
+1. Neon の読み取り専用ロールに `company_icons` の参照権限を足す（足すまではアイコンなしで書き続ける）:
+
+   ```sql
+   GRANT SELECT ON public.company_icons TO blt_feed_reader;
+   ```
+
+2. `npx wrangler@4 deploy`（`FEED_ICON_BASE_URL` は wrangler.jsonc の vars で入る）
+3. 次の cron（19:15 JST）のログが `feed_rss_written` で `icons` が 0 より大きいこと、`feed_rss_icons_skip` が出ていないことを確認する
 
 ## 検証
 

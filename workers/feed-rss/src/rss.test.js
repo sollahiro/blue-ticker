@@ -197,6 +197,7 @@ describe("buildRss", () => {
       doc_type_label: "有価証券報告書",
       fy_end: "2026-03",
       submitted_at: "2026-10-09 15:30",
+      icon_url: "https://icons.sollahiro.com/company-icons/7203.png",
     },
     {
       code: "477A",
@@ -216,7 +217,11 @@ describe("buildRss", () => {
 
   test("XML 宣言とチャネル要素", () => {
     assert.ok(xml.startsWith('<?xml version="1.0" encoding="UTF-8"?>'));
-    assert.ok(xml.includes('<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">'));
+    assert.ok(
+      xml.includes(
+        '<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:media="http://search.yahoo.com/mrss/">'
+      )
+    );
     assert.ok(xml.includes("<title>Blue Ticker — EDINET 提出書類（上場）</title>"));
     assert.ok(xml.includes("<link>https://sollahiro.com/blue-ticker/</link>"));
     assert.ok(xml.includes("<language>ja</language>"));
@@ -265,7 +270,19 @@ describe("buildRss", () => {
     assert.ok(!second.includes("<pubDate>"));
   });
 
-  test("アイコン・画像は出さない", () => {
+  test("icon_url がある item だけ media:thumbnail を出す", () => {
+    const first = xml.slice(xml.indexOf("S100AAA"), xml.indexOf("S100BBB"));
+    const second = xml.slice(xml.indexOf("S100BBB"));
+    assert.ok(
+      first.includes(
+        '<media:thumbnail url="https://icons.sollahiro.com/company-icons/7203.png"/>'
+      )
+    );
+    assert.ok(!second.includes("<media:thumbnail"));
+    assert.equal((xml.match(/<media:thumbnail /g) ?? []).length, 1);
+  });
+
+  test("チャネル画像・enclosure は出さない", () => {
     assert.ok(!xml.includes("<enclosure"));
     assert.ok(!xml.includes("<image"));
   });
