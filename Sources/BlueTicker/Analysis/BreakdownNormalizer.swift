@@ -183,8 +183,13 @@ enum BreakdownNormalizer {
         var uncorroboratedDenominatorAlignment = false
         // セグメント和と小計がほぼ一致（0.5%以内）して、財務の売上が2%超ずれるときも揃える
         // （8699 S100YJQ6: 財務の売上高 55,263 は営業収益 57,879 の一部。5%未満のずれで
-        // 揃えず、構成比の合計が 104.7% になっていた）。
-        let tightlyCorroborated = segmentConsistentDenominator.map { aligned in
+        // 揃えず、構成比の合計が 104.7% になっていた）。調整額込みで売上に合う保険会社
+        // （8750 S100YC7A / 8725 S100YNCJ）は、報告セグメント小計と一致しても揃えない。
+        let reconcilingSum = perMember.keys.filter { kinds[$0] == "reconciling" }
+            .reduce(0.0) { $0 + perMember[$1]!.value }
+        let closesWithReconciling = consolidatedSales != 0
+            && abs(segmentSum + reconcilingSum - consolidatedSales) / abs(consolidatedSales) <= 0.005
+        let tightlyCorroborated = !closesWithReconciling && segmentConsistentDenominator.map { aligned in
             aligned != 0 && abs(segmentSum - aligned) / abs(aligned) <= 0.005
                 && subtotalCandidates.contains { member in
                     abs(perMember[member]!.value - aligned) / abs(aligned) <= 0.005

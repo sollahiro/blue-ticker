@@ -2078,4 +2078,23 @@ import Foundation
             snap.rows.first { $0.labelRaw == "ReuseBusinessReportableSegmentMember" })
         #expect(reuse.rowKind == "segment")
     }
+
+    /// 調整額込みで連結売上に合うときは、報告セグメント小計とセグメント和が一致しても分母を揃えない。
+    // source: code=8750 fy_end=2026-03-31 doc_id=S100YC7A page=281 field=product_service.国内保険事業
+    @Test func denominatorStaysWhenReconcilingClosesToSales() throws {
+        let facts = [
+            Self.externalRevenueFact("DomesticInsuranceBusinessReportableSegmentMember", 8_155_625),
+            Self.externalRevenueFact("OverseasInsuranceBusinessReportableSegmentMember", 3_523_786),
+            Self.externalRevenueFact(
+                "OperatingSegmentsNotIncludedInReportableSegmentsAndOtherRevenueGeneratingBusinessActivitiesMember",
+                79_050),
+            Self.externalRevenueFact("ReportableSegmentsMember", 11_758_462),
+            Self.externalRevenueFact("ReconcilingItemsMember", -450_187),
+        ]
+        let result = ExtractedBreakdown(method: "xbrl_facts", tables: [], facts: facts)
+        let snap = try #require(
+            BreakdownNormalizer.normalize(result, consolidatedSales: 11_308_275_000_000))
+        #expect(snap.denominator == 11_308_275_000_000)
+        #expect(!snap.warnings.contains("sales_denominator_aligned_to_segment_total"))
+    }
 }
