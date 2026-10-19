@@ -32,7 +32,6 @@ tracker-ref	SwiftTests/BlueTickerTests/Spec/Oracle/RealXbrlBreakdownExtractionTe
 tracker-ref	docs/architecture.md	322b4f41ecaf28a6
 tracker-ref	docs/blt-server-roadmap.md	e8cb7fb7b0d4d05a
 tracker-ref	docs/breakdown.md	007948b39835bba4
-tracker-ref	docs/ingest-policy.md	70efb1236f6a0c1d
 tracker-ref	docs/ios-client.md	0ca3fc0f9f57638b
 tracker-ref	docs/ios-client.md	1f754dd730be0487
 tracker-ref	docs/ios-client.md	20c60772ba75ff80
@@ -42,4 +41,3 @@ tracker-ref	docs/ios-client.md	603497eaca8b1238
 tracker-ref	docs/ios-client.md	830c9411a6ba8039
 tracker-ref	docs/ios-client.md	bb3865c93b08fe4e
 tracker-ref	docs/ios-client.md	df653cf19b7dbc4b
-tracker-ref	scripts/post-ingest-linear.sh	26c377df1170b22a

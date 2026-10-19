@@ -63,7 +63,7 @@ set -a; . ./.env; set +a
 | 変数 | 意味 |
 |---|---|
 | `BLT_INGEST_WRITE` | `1` で本番 WRITE に接続 |
-| `BLT_INGEST_SKIP_POST` | `1` で status ページ・Linear 投稿をスキップ |
+| `BLT_INGEST_SKIP_POST` | `1` で status ページ更新をスキップ |
 | `BLT_INGEST_SKIP_00` … `06` | `ingest-run-cycle` で該当 job を飛ばす |
 | `BLT_INGEST_CYCLE_PAUSE_SEC` | cycle 内 job 間 sleep（既定 5） |
 | `BLT_INGEST_FILING_LIMIT` | job-00 の `--limit`（既定 80） |
@@ -94,7 +94,7 @@ overviews                … 銘柄の短い会社説明（LLM。最新有報1�
 
 `breakdowns` は依存が無ければ cron 上は別スロットでもよい。`financials` だけは **notes-core 以降**に置く。`overviews` は他 stage に依存しない（XBRL ダウンロードは自前）。
 
-サイクル段階・最新年度 100%・stale・公開ゲートの現在地は Linear Team `blue-ticker`（[JP 現在地](https://linear.app/sollahiro/document/jp-現在地-af2abd076034)。ingest 後は `post-ingest-linear.sh` が status update に件数を載せる）。Git に件数や段階番号を書かない。
+サイクル段階・最新年度 100%・stale・公開ゲートの現在地は Linear Team `blue-ticker` の document「JP 現在地」に置く。Git に件数や段階番号を書かない。
 
 コード変更後は `swift build -c release --product blt-server` を先に実行（旧バイナリは新 stage を黙って飛ばす）。
 
@@ -105,7 +105,6 @@ overviews                … 銘柄の短い会社説明（LLM。最新有報1�
 ジョブ末尾（`ingest-common.sh`、skip 可）:
 
 1. `scripts/generate-status-page.sh` — `BLT_STATUS_HTML` が指すファイルがあればマーカー置換（無ければ skip。git は触らない）。失敗しても ingest 成否に影響させない
-2. `scripts/post-ingest-linear.sh` — `LINEAR_API_KEY` かつ `BLT_INGEST_WRITE=1` のとき、`status-report` を Linear Project「JP 機能サイクル」の status update へ投稿（Issue コメントはしない。未設定なら skip）
 
 鮮度監視: `scripts/check-ingest-freshness.sh`。
 
