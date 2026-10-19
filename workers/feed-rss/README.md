@@ -110,7 +110,7 @@ Swift 側のラベル・対象種別・listed 判定を変えたら fixture も�
 
 ## アイコン対応の反映（既存環境、人間が実行）
 
-1. Neon の読み取り専用ロールに `company_icons` の参照権限を足す（足すまではアイコンなしで書き続ける）:
+1. Neon の読み取り専用ロールに `company_icons` の参照権限を足す（足すまではアイコンなしで書き続ける。本番は 2026-10-19 に実行済み）:
 
    ```sql
    GRANT SELECT ON public.company_icons TO blt_feed_reader;
