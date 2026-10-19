@@ -2234,6 +2234,18 @@ enum BreakdownExtractor {
         return nil
     }
 
+    /// 文書順で次の表。table 自身 → 親 → 祖父母の兄弟の順に探す（表が div に包まれている提出）。
+    private static func nextTableInDocument(after table: Element) -> Element? {
+        var current: Element? = table
+        var depth = 0
+        while let element = current, depth < 3 {
+            if let found = findNextTable(after: element) { return found }
+            current = element.parent()
+            depth += 1
+        }
+        return nil
+    }
+
     /// table の直後に、短いラベル（例:「第125期」）だけを挟んで次の表が続いていないかを調べる。
     /// 「第n期及び第n+1期における...は以下のとおりであります」のように前期・当期を1つの見出しで
     /// まとめて紹介し、表ごとに個別の <div> でラップされているケースで必要（実データ: キヤノン
@@ -2616,6 +2628,23 @@ enum BreakdownExtractor {
                         if headerRowsMatch(chainedGrid.first, workingGrid.first)
                             || rowLabelSetsOverlapEnough(workingGrid, chainedGrid) {
                             candidate = chained
+                            continue
+                        }
+                    }
+                    // オムロン型（S100LLFL）: 前期表のあとに（注）段落と「第84期（自…）」の期見出しを
+                    // 挟んで、同じ行ラベルの当期表が続く。注記の長文で上の連鎖が切れる。
+                    // 当期にセグメントが増えると見出し行は一致しない（S100TOYL の DSB）。
+                    if workingPeriod == "前期",
+                       let following = nextTableInDocument(after: workingTable),
+                       !seen.contains(ObjectIdentifier(following))
+                    {
+                        let followingGrid = expandTable(following)
+                        if rowLabelSetsOverlapEnough(workingGrid, followingGrid),
+                           detectPeriod(
+                               table: following, grid: followingGrid, fiscalYearEnd: fiscalYearEnd
+                           )?.0 == "当期"
+                        {
+                            candidate = following
                             continue
                         }
                     }

@@ -67,6 +67,7 @@ enum SegmentInfoLLMNormalizer {
     static let salesRowPreferred = [
         "外部顧客向け", "外部顧客に対する売上高", "外部顧客への売上高", "外部顧客への収益",
         "外部顧客への売上収益", "外部顧客に対するもの",
+        "外部顧客からの売上収益", "外部顧客からの売上高", "外部顧客からの収益",
         "外部顧客に対する経常収益", "外部顧客への経常収益",
         "顧客との契約から生じる収益", "顧客との契約から認識した収益",
         "セグメント収益", "セグメント売上高",
@@ -86,7 +87,8 @@ enum SegmentInfoLLMNormalizer {
         salesDenominatorTag: String? = nil
     ) async -> (snapshot: BreakdownSnapshot?, audit: LLMBreakdownAudit?) {
         guard !result.tables.isEmpty else { return (nil, nil) }
-        let parsed = RevenueRecognitionCandidates.parse(tables: result.tables)
+        let parsed = RevenueRecognitionCandidates.parse(
+            tables: mergingSplitSegmentMatrices(result.tables.map(collapsingSegmentBlocks)))
         let columns = RevenueRecognitionCandidates.amountColumns(in: parsed)
         guard !columns.isEmpty else { return (nil, nil) }
 
@@ -490,7 +492,12 @@ enum SegmentInfoLLMNormalizer {
 
     /// `(1) 外部顧客に対する売上高` の番号を落として売上行マーカーと照合する。
     static func stripLeadingEnumeration(_ label: String) -> String {
-        let compact = RevenueRecognitionCandidates.compactCell(label)
+        var compact = RevenueRecognitionCandidates.compactCell(label)
+        // 丸数字（オムロン S100LLFL の「①外部顧客に対する売上高」）。
+        if let first = compact.unicodeScalars.first, (0x2460...0x2473).contains(first.value) {
+            compact = String(compact.unicodeScalars.dropFirst())
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+        }
         guard let first = compact.first, first == "(" || first == "（" else {
             return compact
         }
@@ -550,9 +557,11 @@ enum SegmentInfoLLMNormalizer {
     static func preferredTables(
         _ all: [RevenueRecognitionCandidates.ParsedTable]
     ) -> [RevenueRecognitionCandidates.ParsedTable] {
-        let salesTables = all.filter { !isNonSalesMetricTable($0) }
+        let salesTables = all.filter { !isNonSalesMetricTable($0) && !isWholeCompanyOnlyTable($0) }
         let tables = salesTables.isEmpty ? all : salesTables
-        let product = tables.filter(isDedicatedProductTable)
+        // 行が売上と利益の指標で、列がセグメントの表は製品表ではない（8591 S100LU21 の前期表は
+        // 「貸倒引当金繰入(戻入)額」などの行で製品表に数えられ、当期表より先に残っていた）。
+        let product = tables.filter { isDedicatedProductTable($0) && !isMetricRowMatrix($0) }
         if !product.isEmpty { return product }
         let matrices = tables.filter { isSegmentColumnMatrix($0) }
         if !matrices.isEmpty { return matrices }
@@ -563,11 +572,124 @@ enum SegmentInfoLLMNormalizer {
         return tables
     }
 
+    /// 左端の列にセグメント名、その下に「(1) 外部顧客に対する売上高」「事業利益」などの指標が
+    /// 縦に並ぶ表（6981 S100LPV9）を、セグメントを行・期間を列にした表へ畳む。
+    /// 各セグメントの外部顧客への売上高の行だけを残す。2 ブロック以上がどれも売上行を持つときだけ。
+    static func collapsingSegmentBlocks(_ table: BreakdownTable) -> BreakdownTable {
+        let grid = BreakdownExtractor.markdownToGrid(table.markdown)
+        let width = grid.map(\.count).max() ?? 0
+        guard width >= 3 else { return table }
+        let rows = grid.map { $0 + Array(repeating: "", count: width - $0.count) }
+        // 最初のブロック見出し（金額なし）は見出し行に数えられがちなので、最初に金額が出る行の
+        // 1 行上をブロックの始まりにする。
+        guard let firstAmountRow = rows.firstIndex(where: { row in
+            row.dropFirst(2).contains { RevenueRecognitionCandidates.isAmountCell($0) }
+        }), firstAmountRow >= 2 else { return table }
+        let headerCount = firstAmountRow - 1
+        var blocks: [(name: String, salesRow: [String]?)] = []
+        for row in rows.dropFirst(headerCount) {
+            let name = RevenueRecognitionCandidates.compactCell(row[0])
+            let label = RevenueRecognitionCandidates.compactCell(row[1])
+            let hasAmount = row.dropFirst(2).contains { RevenueRecognitionCandidates.isAmountCell($0) }
+            if !name.isEmpty {
+                // 見出し行は金額を持たない。左端に名前があって金額もある行は普通の表。
+                guard !hasAmount, name != label else { return table }
+                blocks.append((name, nil))
+                continue
+            }
+            guard !blocks.isEmpty else { return table }
+            if blocks[blocks.count - 1].salesRow == nil,
+               label.contains("外部顧客"), isGenericSalesLabel(label)
+            {
+                blocks[blocks.count - 1].salesRow = row
+            }
+        }
+        // 「連結」だけの続き表（改ページで分かれた全社ブロック）も同じ形に畳み、候補から外せるようにする。
+        let wholeCompanyOnly = blocks.count == 1
+            && RevenueRecognitionCandidates.isAggregateColumnHeader(blocks[0].name)
+        guard blocks.count >= 2 || wholeCompanyOnly,
+              blocks.allSatisfy({ $0.salesRow != nil })
+        else { return table }
+        let collapsed = Array(rows.prefix(headerCount)) + blocks.map { block in
+            [block.name, block.name] + Array(block.salesRow!.dropFirst(2))
+        }
+        var copy = table
+        copy.markdown = BreakdownExtractor.gridToMarkdown(collapsed)
+        return copy
+    }
+
+    /// 報告セグメントの列が2表に分かれ、後ろの表の最後に合計列がある（8591 オリックスの
+    /// 国内7セグメント表と海外3セグメント＋合計表）。行ラベルが行ごとに一致する隣り合う同じ期間の
+    /// 表を横につなぐ。後ろの表は空にして、表番号（単位の参照先）はずらさない。
+    static func mergingSplitSegmentMatrices(_ tables: [BreakdownTable]) -> [BreakdownTable] {
+        guard tables.count >= 2 else { return tables }
+        var merged = tables
+        var index = 0
+        while index + 1 < merged.count {
+            let left = BreakdownExtractor.markdownToGrid(merged[index].markdown)
+            let right = BreakdownExtractor.markdownToGrid(merged[index + 1].markdown)
+            if merged[index].period != nil, merged[index].period == merged[index + 1].period,
+               let joined = joinedSplitMatrix(left, right)
+            {
+                merged[index].markdown = BreakdownExtractor.gridToMarkdown(joined)
+                merged[index + 1].markdown = ""
+                index += 2
+                continue
+            }
+            index += 1
+        }
+        return merged
+    }
+
+    static func joinedSplitMatrix(_ left: [[String]], _ right: [[String]]) -> [[String]]? {
+        guard left.count >= 6, left.count == right.count else { return nil }
+        let leftWidth = left.map(\.count).max() ?? 0
+        let rightWidth = right.map(\.count).max() ?? 0
+        guard leftWidth >= 3, rightWidth >= 3 else { return nil }
+        let leftRows = left.map { $0 + Array(repeating: "", count: leftWidth - $0.count) }
+        let rightRows = right.map { $0 + Array(repeating: "", count: rightWidth - $0.count) }
+        for (l, r) in zip(leftRows, rightRows) {
+            guard RevenueRecognitionCandidates.compactCell(l[0])
+                == RevenueRecognitionCandidates.compactCell(r[0]) else { return nil }
+        }
+        let headerCount = RevenueRecognitionCandidates.dataStartRow(leftRows)
+        guard headerCount > 0, headerCount < leftRows.count else { return nil }
+        func lastHeader(_ rows: [[String]], _ column: Int) -> String {
+            rows.prefix(headerCount).map { RevenueRecognitionCandidates.compactCell($0[column]) }
+                .filter { !$0.isEmpty && !$0.hasPrefix("(") && !$0.hasPrefix("（") }
+                .last ?? ""
+        }
+        // 前の表は合計列を持たず、後ろの表の最後の列だけが合計。
+        let leftHasTotal = (1..<leftWidth).contains {
+            RevenueRecognitionCandidates.isAggregateColumnHeader(lastHeader(leftRows, $0))
+        }
+        guard !leftHasTotal,
+              RevenueRecognitionCandidates.isAggregateColumnHeader(
+                lastHeader(rightRows, rightWidth - 1))
+        else { return nil }
+        return zip(leftRows, rightRows).map { l, r in l + Array(r.dropFirst()) }
+    }
+
+    /// 行が「連結」「消去又は全社」など全社・調整だけの表（6981 S100R773 の連結ブロック）。
+    static func isWholeCompanyOnlyTable(_ table: RevenueRecognitionCandidates.ParsedTable) -> Bool {
+        !table.items.isEmpty && table.items.allSatisfy {
+            RevenueRecognitionCandidates.isAggregateColumnHeader($0.label)
+        }
+    }
+
+    static func isMetricRowMatrix(_ table: RevenueRecognitionCandidates.ParsedTable) -> Bool {
+        let labels = table.items.map { stripLeadingEnumeration($0.label) }
+        return labels.contains(where: isGenericSalesLabel) && labels.contains(where: isProfitMetricLabel)
+    }
+
     static let nonSalesMetricHeads = [
         "営業利益", "営業損益", "セグメント利益", "セグメント損益", "セグメント損失",
         "当期償却額", "当期末残高", "のれんの償却額", "減損損失", "税金等調整前当期純利益",
+        "セグメント資産",
     ]
-    static let salesMarkers = ["売上", "顧客との契約", "外部顧客", "営業収益", "経常収益", "収益合計"]
+    static let salesMarkers = [
+        "売上", "顧客との契約", "外部顧客", "営業収益", "経常収益", "収益合計", "セグメント収益",
+    ]
 
     /// 売上の行が無く、利益・のれん償却・残高の行だけの表（4901 S100LV2D のセグメント損益と
     /// 調整表、7062 S100YLVZ ののれん償却額及び未償却残高）。売上内訳の候補にしない。
@@ -680,7 +802,10 @@ enum SegmentInfoLLMNormalizer {
         }
 
         var seen: Set<Int> = [selectedTable.tableIndex]
-        let recovery = preferredTables(parsed) + parsed
+        // 前期の表は最後に回す（8591 S100YG5L で前期のセグメント表から組んでいた）。
+        let preferred = preferredTables(parsed)
+        let recovery = preferred.filter { $0.period != "前期" } + preferred.filter { $0.period == "前期" }
+            + parsed
         for candidate in recovery where !seen.contains(candidate.tableIndex) {
             seen.insert(candidate.tableIndex)
             guard let recoveryColumn = amountColumn(for: candidate, among: columns) else { continue }

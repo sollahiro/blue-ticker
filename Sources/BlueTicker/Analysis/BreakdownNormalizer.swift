@@ -137,11 +137,17 @@ enum BreakdownNormalizer {
         // 2次判定（数値の安全網）: 名称未収載の合計行を分母一致で補足する。
         // ただし segment 候補が1件しかない場合は適用しない
         // （単一セグメント企業では amount ≈ denominator が正しい姿であり、小計ではない）。
+        // 売上の99%超を占める主力セグメント（IIJ のネットワークサービス及びSI事業）は小計にしない。
+        // 本物の合計なら残りのセグメントの和も同じ規模になる。
         let segmentCandidates = perMember.keys.filter { kinds[$0] == "segment" }
         if segmentCandidates.count > 1 {
             for member in segmentCandidates {
                 let amount = perMember[member]!.value
-                if abs(amount - consolidatedSales) / abs(consolidatedSales) < 0.01 {
+                let others = segmentCandidates.filter { $0 != member }
+                    .reduce(0.0) { $0 + perMember[$1]!.value }
+                if abs(amount - consolidatedSales) / abs(consolidatedSales) < 0.01,
+                   abs(others) >= abs(amount) * 0.5
+                {
                     kinds[member] = "subtotal"
                 }
             }
@@ -175,8 +181,18 @@ enum BreakdownNormalizer {
         // 小計が無く segmentSum だけに落ちる揃えは抽出不全の疑いがあるため要レビュー
         // （Opus 監査 2026-07-25）。
         var uncorroboratedDenominatorAlignment = false
+        // セグメント和と小計がほぼ一致（0.5%以内）して、財務の売上が2%超ずれるときも揃える
+        // （8699 S100YJQ6: 財務の売上高 55,263 は営業収益 57,879 の一部。5%未満のずれで
+        // 揃えず、構成比の合計が 104.7% になっていた）。
+        let tightlyCorroborated = segmentConsistentDenominator.map { aligned in
+            aligned != 0 && abs(segmentSum - aligned) / abs(aligned) <= 0.005
+                && subtotalCandidates.contains { member in
+                    abs(perMember[member]!.value - aligned) / abs(aligned) <= 0.005
+                }
+        } ?? false
+        let alignmentThreshold = tightlyCorroborated ? 0.02 : 0.05
         if let aligned = segmentConsistentDenominator, aligned != 0,
-           abs(consolidatedSales - aligned) / abs(aligned) > 0.05
+           abs(consolidatedSales - aligned) / abs(aligned) > alignmentThreshold
         {
             denominator = aligned
             warnings.append("sales_denominator_aligned_to_segment_total")
