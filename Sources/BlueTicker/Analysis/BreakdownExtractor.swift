@@ -188,6 +188,13 @@ enum BreakdownExtractor {
     /// `SegmentInfoLLMNormalizer` に回す（収益認識見出しには揃えない）。
     static let productOrServiceHeading = "製品・サービス別情報"
 
+    /// 前期だけの製品・サービス別表（当期は「90％超で省略」）。単一セグメントの専用タグを止めない
+    /// （4167 S100OFB9）。
+    static func isPriorOnlyProductOrServiceTable(_ table: BreakdownTable) -> Bool {
+        table.heading == productOrServiceHeading && table.period == "前期"
+            && !htmlTableHasCurrentPeriodRow(table)
+    }
+
     /// 連結財務諸表注記から事業別（報告セグメント別）情報を抽出する。
     ///
     /// 報告セグメント（xbrl_facts 経路）のメンバーが全て地域名の場合（オークマ型:
@@ -270,14 +277,7 @@ enum BreakdownExtractor {
         if shouldPreferRevenueRecognition(over: result)
             || (detectSingleSegmentDisclosure(xbrlDir: xbrlDir) != nil && result.method != "xbrl_facts")
         {
-            // 単体の収益認識注記へ寄せるのは、製品・サービス別表が前期にしか無いときだけ
-            // （4167 S100OFB9）。当期の表があればそれを残し（銀行のサービス毎の経常収益。
-            // S100YF85）、製品・サービス別表が無ければ単一セグメントのままにする（S100Y03W / S100YRSR）。
-            let productTables = result.tables.filter { $0.heading == productOrServiceHeading }
-            let onlyPriorProductTables =
-                !productTables.isEmpty && productTables.allSatisfy { $0.period == "前期" }
-            let revenueRecognition = extractRevenueRecognitionInfo(
-                xbrlDir: xbrlDir, includeStandaloneNote: onlyPriorProductTables)
+            let revenueRecognition = extractRevenueRecognitionInfo(xbrlDir: xbrlDir)
             if revenueRecognition.method == "html_table",
                 !isRevenueTypeOnlyDecomposition(revenueRecognition.tables)
             {
@@ -914,28 +914,14 @@ enum BreakdownExtractor {
     /// 分解した情報」を抽出する。オークマ型（J-GAAP 収益認識関係）とブリヂストン・デンソー型
     /// （IFRS 売上収益注記）の両方を `revenueRecognitionTextBlockTags` で拾い、見出しは
     /// `revenueRecognitionHeading` に揃えて後段の LLM 振り分けを共通化する。
-    /// 連結を作らない会社は単体の収益認識関係注記から拾う（`includeStandaloneNote` が false なら拾わない）。
-    static func extractRevenueRecognitionInfo(
-        xbrlDir: URL, includeStandaloneNote: Bool = true
-    ) -> ExtractedBreakdown {
-        var tables = extractFromTextBlocks(
+    static func extractRevenueRecognitionInfo(xbrlDir: URL) -> ExtractedBreakdown {
+        let tables = extractFromTextBlocks(
             xbrlDir: xbrlDir,
             dedicatedTags: Xbrl.revenueRecognitionTextBlockTags,
             mixedTags: [],
             dedicatedHeading: revenueRecognitionHeading,
             mixedKeywords: []
         )
-        if tables.isEmpty, includeStandaloneNote,
-            !BorrowingsSchedule.filerHasConsolidatedStatements(xbrlDir: xbrlDir)
-        {
-            tables = extractFromTextBlocks(
-                xbrlDir: xbrlDir,
-                dedicatedTags: Xbrl.revenueRecognitionNonConsolidatedTextBlockTags,
-                mixedTags: [],
-                dedicatedHeading: revenueRecognitionHeading,
-                mixedKeywords: []
-            )
-        }
         return buildResult(xbrlDir: xbrlDir, tables: tables, dimensionKeywords: [])
     }
 
@@ -954,8 +940,6 @@ enum BreakdownExtractor {
             // 製品別表（ニューロロジー/オンコロジー）を失う（実データ検証: S100YB05、2026-07-25）。
             "医薬品販売による収益", "ライセンス供与による収益",
             "医薬品の販売", "プロフィットシェア収入", "プロフィットシェア",
-            // 創薬の収益種類（単体注記の「事業収益の種類」。4889 S100YGXR）
-            "マイルストーン収入", "ロイヤリティ収入", "受託研究収入",
         ]
         guard revenueTypeMarkers.contains(where: { joined.contains($0) }) else { return false }
         // 事業・製品の具体名が併記されていれば種類分解ではない（ブリヂストン: タイヤ、デンソー: サーマル…）

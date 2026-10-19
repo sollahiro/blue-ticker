@@ -582,6 +582,7 @@ public extension BltServerContext {
     /// business の専用タグに**当期**本文があるとき、収益認識の分解表も製品・サービス別表も無く、
     /// かつ当期の報告セグメント売上 member が 1 以下なら `single_segment_disclosed`。
     /// 製品・サービス別表があるときは専用タグで短絡せず表ステップへ進む（475A S100YJX2）。
+    /// 前期だけの製品・サービス別表は数えない（4167 S100OFB9）。
     /// 当期 member が 2 以上ならタグを信じず表ステップへ進む。分解表があるときは表ステップへ進む。
     /// 選んだ表が合計行だけでカテゴリが無いときは専用タグへ戻す（8771）。
     /// 顧客表・製品90％・本邦90％はその省略を取り消さない。
@@ -607,7 +608,8 @@ public extension BltServerContext {
             !extracted.tables.contains(where: {
                 $0.heading == BreakdownExtractor.revenueRecognitionHeading
             }),
-            !SegmentInfoLLMNormalizer.hasUsableProductOrBusinessTable(extracted.tables)
+            !SegmentInfoLLMNormalizer.hasUsableProductOrBusinessTable(
+                extracted.tables.filter { !BreakdownExtractor.isPriorOnlyProductOrServiceTable($0) })
         {
             let omitted = SegmentNoteDecision.dedicatedTagBusinessOutcome(docID: docID, tagText: tagText)
             return await applyingReviewedOmission(
