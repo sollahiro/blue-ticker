@@ -1920,6 +1920,60 @@ import Foundation
         }
     }
 
+    /// 連結を作らない会社は単体の収益認識関係注記から拾う。連結を作る会社では拾わない。
+    @Test func revenueRecognitionInfoFromNonConsolidatedTextBlockOnlyForStandaloneFilers() {
+        // source: code=4167 fy_end=2022-03-31 doc_id=S100OFB9 page=85 field=product_service rows
+        let escaped =
+            "&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;/td&gt;&lt;td&gt;売上高&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;Big Advance&lt;/td&gt;&lt;td&gt;1,518,972&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;FAI&lt;/td&gt;&lt;td&gt;24,586&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;ITサポート&lt;/td&gt;&lt;td&gt;99,040&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;計&lt;/td&gt;&lt;td&gt;1,642,600&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;"
+        let standalone = textBlockXml(
+            tag: "NotesRevenueRecognitionFinancialStatementsTextBlock", escapedHtml: escaped)
+        XBRLTestSupport.withXbrlDir(standalone) { dir in
+            let result = BreakdownExtractor.extractRevenueRecognitionInfo(xbrlDir: dir)
+            #expect(result.method == "html_table")
+            #expect(result.tables.first?.heading == BreakdownExtractor.revenueRecognitionHeading)
+            #expect(result.tables.first?.markdown.contains("Big Advance") == true)
+        }
+        let consolidated = XBRLTestSupport.makeXbrlDuration(
+            """
+            <jpcrp_cor:NotesRevenueRecognitionFinancialStatementsTextBlock contextRef="CurrentYearDuration">\(escaped)</jpcrp_cor:NotesRevenueRecognitionFinancialStatementsTextBlock>
+            <jpcrp_cor:ConsolidatedBalanceSheetTextBlock contextRef="CurrentYearDuration">&lt;table&gt;&lt;tr&gt;&lt;td&gt;資産合計&lt;/td&gt;&lt;td&gt;1&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;</jpcrp_cor:ConsolidatedBalanceSheetTextBlock>
+            """
+        )
+        XBRLTestSupport.withXbrlDir(consolidated) { dir in
+            let result = BreakdownExtractor.extractRevenueRecognitionInfo(xbrlDir: dir)
+            #expect(result.tables.isEmpty)
+        }
+    }
+
+    /// 当期の製品・サービス別表がある単体の会社は、単体の収益認識注記へ寄せない（S100YF85）。
+    @Test func standaloneRevenueRecognitionDoesNotReplaceCurrentProductTable() {
+        // source: code=8559 fy_end=2026-03-31 doc_id=S100YF85 page=101 field=product_service rows
+        let product =
+            "&lt;p&gt;当事業年度&lt;/p&gt;&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;/td&gt;&lt;td&gt;貸出業務&lt;/td&gt;&lt;td&gt;有価証券投資業務&lt;/td&gt;&lt;td&gt;合計&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;外部顧客に対する経常収益&lt;/td&gt;&lt;td&gt;8,852&lt;/td&gt;&lt;td&gt;1,572&lt;/td&gt;&lt;td&gt;10,424&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;"
+        let revenue =
+            "&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;/td&gt;&lt;td&gt;金額&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;預金・貸出業務&lt;/td&gt;&lt;td&gt;560&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;為替業務&lt;/td&gt;&lt;td&gt;368&lt;/td&gt;&lt;/tr&gt;" +
+            "&lt;tr&gt;&lt;td&gt;顧客との契約から生じる経常収益&lt;/td&gt;&lt;td&gt;928&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;"
+        let xml = XBRLTestSupport.makeXbrlDuration(
+            """
+            <jpcrp_cor:InformationForEachProductOrServiceTextBlock contextRef="CurrentYearDuration">\(product)</jpcrp_cor:InformationForEachProductOrServiceTextBlock>
+            <jpcrp_cor:NotesRevenueRecognitionFinancialStatementsTextBlock contextRef="CurrentYearDuration">\(revenue)</jpcrp_cor:NotesRevenueRecognitionFinancialStatementsTextBlock>
+            <jpcrp_cor:DescriptionOfFactThatCompanysBusinessComprisesSingleSegment contextRef="CurrentYearDuration">当行は銀行業の単一セグメントであるため、記載を省略しております。</jpcrp_cor:DescriptionOfFactThatCompanysBusinessComprisesSingleSegment>
+            """
+        )
+        XBRLTestSupport.withXbrlDir(xml) { dir in
+            let result = BreakdownExtractor.extractSegmentInfo(xbrlDir: dir)
+            #expect(result.tables.contains { $0.heading == BreakdownExtractor.productOrServiceHeading })
+            #expect(!result.tables.contains { $0.heading == BreakdownExtractor.revenueRecognitionHeading })
+        }
+    }
+
     /// 三菱商事型: NotesRevenue2 の事業グループ別「顧客との契約から認識した収益」。
     @Test func revenueRecognitionInfoFromIFRSRevenue2TextBlock() {
         let xml = textBlockXml(

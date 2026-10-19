@@ -1260,6 +1260,13 @@ enum Xbrl {
         "NotesRevenue2ConsolidatedFinancialStatementsIFRSTextBlock",
     ]
 
+    /// 単体の収益認識関係注記。連結財務諸表を作らない会社は分解表をここにだけ載せる
+    /// （ココペリ 4167 S100OFB9: 当期の製品別は「90％超で省略」、分解表は単体注記側だけ）。
+    /// 連結を作る会社では使わない（連結優先）。
+    static let revenueRecognitionNonConsolidatedTextBlockTags: Set<String> = [
+        "NotesRevenueRecognitionFinancialStatementsTextBlock",
+    ]
+
     // MARK: - 事業別・地域別内訳の正規化（内訳取り込み, docs/breakdown.md）
 
     /// セグメント別の外部顧客売上タグ（優先順）。会計基準が混在するため単一タグ決め打ちにしない
