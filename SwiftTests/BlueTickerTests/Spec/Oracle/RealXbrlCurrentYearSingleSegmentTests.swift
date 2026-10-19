@@ -134,6 +134,7 @@ import Testing
 
     /// 4167 S100OFB9: 製品・サービス別表は前期だけ。前期の表で単一セグメントの省略を止めない。
     @Test func code4167S100OFB9PriorOnlyProductTableStaysSingleSegment() async throws {
+        // source: code=4167 fy_end=2022-03-31 doc_id=S100OFB9 page=85 field=product_service single_segment_disclosed
         guard await Self.ensureAvailable("S100OFB9") else { return }
         let dir = Self.xbrlDir("S100OFB9")
         let extracted = BreakdownExtractor.extractSegmentInfo(xbrlDir: dir)
