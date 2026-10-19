@@ -2270,11 +2270,15 @@ enum BreakdownExtractor {
     /// 事業別経路では呼ばない（うち輸出高を消さない）。
     /// `defaultPeriod`: TextBlock の contextRef 由来の期間。HTML 側で判定できないときのフォールバック
     /// （dedicated 地域売上・製品サービスの Prior/Current 分離 TextBlock 用。mixed 見出し経路では渡さない）。
+    /// `defaultPeriodCoversAllTables`: 同じタグが Prior / Current の別ブロックに分かれて提出されたとき。
+    /// ブロック内の未ラベル表をすべて `defaultPeriod` にする（7162 S100W62Z: 事業ごとの地域表が
+    /// 1ブロックに3枚。隣接対の「先=前期」で当期の表が前期になっていた）。
     /// `fiscalYearEnd`: キャプションの（自…至…）/「YYYY年度」を当期期末と照合する。
     static func allTablesFromHtml(
         _ html: String, defaultHeading: String, includeFootnotes: Bool = false,
         skipGeographyAssetMetricTables: Bool = false,
         defaultPeriod: String? = nil,
+        defaultPeriodCoversAllTables: Bool = false,
         dropOfWhichRegionColumns: Bool = false,
         fiscalYearEnd: String? = nil
     ) -> [BreakdownTable] {
@@ -2363,16 +2367,22 @@ enum BreakdownExtractor {
         // Prior/Current に分かれた専用地域売上 TextBlock（表1枚ずつ）を救いつつ、
         // 単一 CurrentYearDuration 配下に前期・当期表が同居する会社（味の素・クボタ）では
         // 両方を当期で上書きせず identical-pair / fallback に委ねる。
+        // 同じタグが Prior / Current の別ブロックに分かれているときは、ブロック内の表を全部その期間にする。
         if let defaultPeriod {
             let nilIndices = tables.indices.filter {
                 tables[$0].period == nil && markdownHasNumericValue(tables[$0].markdown)
             }
-            if nilIndices.count == 1 {
-                tables[nilIndices[0]].period = defaultPeriod
-                tables[nilIndices[0]].periodBasis = .contextRef
+            if nilIndices.count == 1 || defaultPeriodCoversAllTables {
+                for index in nilIndices {
+                    tables[index].period = defaultPeriod
+                    tables[index].periodBasis = .contextRef
+                }
             }
         }
-        applyPeriodOrdering(&tables)
+        // 全表に contextRef を付けたブロックは、当期×当期の隣接対（1963 型）で先を前期に戻さない。
+        if defaultPeriod == nil || !defaultPeriodCoversAllTables {
+            applyPeriodOrdering(&tables)
+        }
         if includeFootnotes, let footnotes = footnoteMarkdown(from: soup) {
             tables.append(BreakdownTable(heading: defaultHeading, markdown: footnotes, period: nil))
         }
@@ -2658,6 +2668,12 @@ enum BreakdownExtractor {
         for tag in tagOrder {
             var contextPeriodIndices: [Int] = []
             var contextPeriodRefs: [String] = []
+            // 表を含むブロックが前期・当期の両方の contextRef で提出されているか（7162 S100W62Z）。
+            let blockPeriods = Set((blocksByTag[tag] ?? []).compactMap { block -> String? in
+                guard block.content.lowercased().contains("<table") else { return nil }
+                return periodLabel(fromContextRef: block.contextRef)
+            })
+            let splitByContext = blockPeriods.contains("前期") && blockPeriods.contains("当期")
             for block in blocksByTag[tag] ?? [] {
                 guard !block.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
                       block.content.lowercased().contains("<table") else { continue }
@@ -2676,6 +2692,7 @@ enum BreakdownExtractor {
                         includeFootnotes: includeFootnotes,
                         skipGeographyAssetMetricTables: skipGeographyAssetMetricTables,
                         defaultPeriod: contextPeriod,
+                        defaultPeriodCoversAllTables: splitByContext,
                         dropOfWhichRegionColumns: dropOfWhichRegionColumns,
                         fiscalYearEnd: fiscalYearEnd
                     )

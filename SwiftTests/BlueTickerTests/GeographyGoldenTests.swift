@@ -2347,6 +2347,40 @@ import Testing
         }
     }
 
+    /// 7162 S100W62Z 実書類の形: 前期・当期の dedicated ブロックそれぞれに、事業ごとの地域表
+    /// （ディーリング／アセット・マネジメント／電力取引）が3枚ずつ入る。隣接対の「先=前期」を使うと
+    /// 前期ブロックの2枚目が当期・当期ブロックの1枚目が前期になる。ブロックの contextRef を全表に付ける。
+    // source: code=7162 fy_end=2025-03-31 doc_id=S100W62Z page=99-100 field=geography 関連情報 地域ごとの情報 (1) 営業収益
+    @Test func splitContextBlocksWithSeveralTablesUseBlockPeriodForAll() throws {
+        func table(_ caption: String, _ japan: String, _ overseas: String, _ total: String) -> String {
+            "&lt;p&gt;\(caption)&lt;/p&gt;"
+                + "&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;/td&gt;&lt;td&gt;&lt;/td&gt;&lt;td&gt;(単位：千円)&lt;/td&gt;&lt;/tr&gt;"
+                + "&lt;tr&gt;&lt;td&gt;日本&lt;/td&gt;&lt;td&gt;海外&lt;/td&gt;&lt;td&gt;合計&lt;/td&gt;&lt;/tr&gt;"
+                + "&lt;tr&gt;&lt;td&gt;\(japan)&lt;/td&gt;&lt;td&gt;\(overseas)&lt;/td&gt;&lt;td&gt;\(total)&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;"
+        }
+        func block(_ context: String, _ tables: [String]) -> String {
+            """
+            <jpcrp_cor:RevenuesFromExternalCustomersInformationForEachRegionTextBlock contextRef="\(context)">&lt;p&gt;(1) 営業収益&lt;/p&gt;\(tables.joined())</jpcrp_cor:RevenuesFromExternalCustomersInformationForEachRegionTextBlock>
+            """
+        }
+        let xml = XBRLTestSupport.makeXbrlDuration(
+            block("Prior1YearDuration", [
+                table("① ディーリング事業における営業収益", "△223,687", "560,974", "337,287"),
+                table("② アセット・マネジメント事業における営業収益", "186,652", "－", "186,652"),
+                table("④ 電力取引関連事業における営業収益", "8,015,676", "△104,916", "7,910,760"),
+            ])
+            + block("CurrentYearDuration", [
+                table("① ディーリング事業における営業収益", "△108,640", "198,082", "89,441"),
+                table("② アセット・マネジメント事業における営業収益", "195,661", "－", "195,661"),
+                table("④ 電力取引関連事業における営業収益", "12,849,412", "6,260", "12,855,672"),
+            ]))
+        XBRLTestSupport.withXbrlDir(xml) { dir in
+            let geography = BreakdownExtractor.extractGeographyInfo(xbrlDir: dir)
+            #expect(geography.tables.map(\.period) == ["前期", "前期", "前期", "当期", "当期", "当期"])
+            #expect(geography.tables.allSatisfy { $0.periodBasis == .contextRef })
+        }
+    }
+
     /// 6762 S100LMH9 実書類の形: 製品×地域マトリクスが年度ごとに2表（単位行・年度行・地域行の3段見出し）、
     /// 単純な地域表は無い。見出しの年が1つだけなら年は期間見出しで、日本／米州／…が地域列。
     /// 売上高 合計 の行を地域ごとに読む（製品行をアジア他の列で読まない）。
