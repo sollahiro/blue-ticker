@@ -80,11 +80,4 @@ ingest_post_hooks() {
       echo "WARN: generate-status-page.sh failed (ingest 成否には影響させない)" >&2
     fi
   fi
-
-  if [[ -x "$REPO/scripts/post-ingest-linear.sh" ]]; then
-    echo "=== post: post-ingest-linear ==="
-    if ! "$REPO/scripts/post-ingest-linear.sh"; then
-      echo "WARN: post-ingest-linear.sh failed (ingest 成否には影響させない)" >&2
-    fi
-  fi
 }
