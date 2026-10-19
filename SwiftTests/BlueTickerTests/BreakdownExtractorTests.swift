@@ -1949,7 +1949,8 @@ import Foundation
         }
     }
 
-    /// 当期の製品・サービス別表がある単体の会社は、単体の収益認識注記へ寄せない（S100YF85）。
+    /// 単体の会社でも、当期の製品・サービス別表があるとき（S100YF85）や製品・サービス別表が無いときは
+    /// 単体の収益認識注記へ寄せない。
     @Test func standaloneRevenueRecognitionDoesNotReplaceCurrentProductTable() {
         // source: code=8559 fy_end=2026-03-31 doc_id=S100YF85 page=101 field=product_service rows
         let product =
@@ -1970,6 +1971,17 @@ import Foundation
         XBRLTestSupport.withXbrlDir(xml) { dir in
             let result = BreakdownExtractor.extractSegmentInfo(xbrlDir: dir)
             #expect(result.tables.contains { $0.heading == BreakdownExtractor.productOrServiceHeading })
+            #expect(!result.tables.contains { $0.heading == BreakdownExtractor.revenueRecognitionHeading })
+        }
+        // 製品・サービス別表が無い単一セグメントの会社も寄せない（S100YRSR）。
+        let withoutProduct = XBRLTestSupport.makeXbrlDuration(
+            """
+            <jpcrp_cor:NotesRevenueRecognitionFinancialStatementsTextBlock contextRef="CurrentYearDuration">\(revenue)</jpcrp_cor:NotesRevenueRecognitionFinancialStatementsTextBlock>
+            <jpcrp_cor:DescriptionOfFactThatCompanysBusinessComprisesSingleSegment contextRef="CurrentYearDuration">当社は単一セグメントであるため、記載を省略しております。</jpcrp_cor:DescriptionOfFactThatCompanysBusinessComprisesSingleSegment>
+            """
+        )
+        XBRLTestSupport.withXbrlDir(withoutProduct) { dir in
+            let result = BreakdownExtractor.extractSegmentInfo(xbrlDir: dir)
             #expect(!result.tables.contains { $0.heading == BreakdownExtractor.revenueRecognitionHeading })
         }
     }

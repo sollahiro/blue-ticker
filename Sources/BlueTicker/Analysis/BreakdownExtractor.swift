@@ -270,13 +270,14 @@ enum BreakdownExtractor {
         if shouldPreferRevenueRecognition(over: result)
             || (detectSingleSegmentDisclosure(xbrlDir: xbrlDir) != nil && result.method != "xbrl_facts")
         {
-            // 当期の製品・サービス別表があれば単体の収益認識注記へは寄せない（銀行のサービス毎の
-            // 経常収益を残す。S100YF85）。前期の表しか無いときは寄せる（4167 S100OFB9）。
-            let hasCurrentProductTable = result.tables.contains {
-                $0.heading == productOrServiceHeading && $0.period != "前期"
-            }
+            // 単体の収益認識注記へ寄せるのは、製品・サービス別表が前期にしか無いときだけ
+            // （4167 S100OFB9）。当期の表があればそれを残し（銀行のサービス毎の経常収益。
+            // S100YF85）、製品・サービス別表が無ければ単一セグメントのままにする（S100Y03W / S100YRSR）。
+            let productTables = result.tables.filter { $0.heading == productOrServiceHeading }
+            let onlyPriorProductTables =
+                !productTables.isEmpty && productTables.allSatisfy { $0.period == "前期" }
             let revenueRecognition = extractRevenueRecognitionInfo(
-                xbrlDir: xbrlDir, includeStandaloneNote: !hasCurrentProductTable)
+                xbrlDir: xbrlDir, includeStandaloneNote: onlyPriorProductTables)
             if revenueRecognition.method == "html_table",
                 !isRevenueTypeOnlyDecomposition(revenueRecognition.tables)
             {
