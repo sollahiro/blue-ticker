@@ -66,7 +66,7 @@ public func isKnownStatementNoteType(_ noteType: String) -> Bool {
 /// v2: EPS 抽出。v3（2026-08-19）: IFRS の `JPYPerShares` BPS を日本基準
 /// `NetAssetsPerShare` より優先（IFRS 移行年度の比較表残存、スズキ S100W4MT）。
 public let perShareInformationNoteCacheVersion = "notes-eps-v3"
-public let issuedSharesAndCapitalNoteCacheVersion = "notes-issued-shares-and-capital-v1"
+public let issuedSharesAndCapitalNoteCacheVersion = "notes-issued-shares-and-capital-v2"
 /// v2（2026-08-05）: 抽出ロジック・payload構造を大幅改修（IFRS/J-GAAP多数のフォールバック経路追加、
 /// J-GAAP附属明細表のスケール判定・インデント処理バグ修正、日経225全224銘柄の実データレビュー完了）。
 /// v3（2026-08-12）: US-GAAP 連結を巨大注記 HTML（注記9の社債・借入金／長期債務表）から抽出。
@@ -242,9 +242,8 @@ public enum StatementNoteResolveResult: Sendable {
 /// - スカラー値の note は `value`/`unit` を使う
 /// - 表形式の note（EPS/BPS等・PPE明細・のれん明細）は `items` を使う
 ///   （`StatementLineItem` を再利用し、Statement 本体と表現を揃える）
-/// - 設備投資概要は `capexSegments`、発行済株式・資本金等は
-///   `issuedSharesEvents`（textblock表のイベント列）と `issuedSharesAsOf`（期末の離散タグ
-///   スナップショット。summary 移行時はこちらを正とする）
+/// - 設備投資概要は `capexSegments`、発行済株式総数は `issuedSharesAsOf`（期末の離散タグ）。
+///   旧世代（v1）の行が持つ `issued_shares_events` キーは読まない
 /// - 借入金等明細表は `borrowingsComponents`（当期首/当期末残高・平均利率、2026-08-02再設計。
 ///   単一値の `items` では平均利率を表現できないため専用型に切り出した）
 ///
@@ -255,7 +254,6 @@ public struct StatementNotePayload: Codable, Sendable {
     public var unit: String?
     public var items: [StatementLineItem]?
     public var capexSegments: [CapexSegmentPayload]?
-    public var issuedSharesEvents: [IssuedSharesEventPayload]?
     /// 期末スナップショット（離散XBRLタグ）。`issued_shares_and_capital` note_type 専用。
     public var issuedSharesAsOf: IssuedSharesAsOfPayload?
     public var borrowingsComponents: [BorrowingsComponentPayload]?
@@ -265,7 +263,6 @@ public struct StatementNotePayload: Codable, Sendable {
     public init(
         value: Double? = nil, unit: String? = nil, items: [StatementLineItem]? = nil,
         capexSegments: [CapexSegmentPayload]? = nil,
-        issuedSharesEvents: [IssuedSharesEventPayload]? = nil,
         issuedSharesAsOf: IssuedSharesAsOfPayload? = nil,
         borrowingsComponents: [BorrowingsComponentPayload]? = nil,
         needsReview: Bool = false, warnings: [String] = []
@@ -274,7 +271,6 @@ public struct StatementNotePayload: Codable, Sendable {
         self.unit = unit
         self.items = items
         self.capexSegments = capexSegments
-        self.issuedSharesEvents = issuedSharesEvents
         self.issuedSharesAsOf = issuedSharesAsOf
         self.borrowingsComponents = borrowingsComponents
         self.needsReview = needsReview
@@ -292,7 +288,6 @@ public struct StatementNotePayload: Codable, Sendable {
             "dividend_events": NSNull(),
             "capex_segments": capexSegments.map { $0.map { $0.jsonObject() } } as Any? ?? NSNull(),
             "borrowings_components": borrowingsComponents.map { $0.map { $0.jsonObject() } } as Any? ?? NSNull(),
-            "issued_shares_events": issuedSharesEvents.map { $0.map { $0.jsonObject() } } as Any? ?? NSNull(),
             "as_of_period_end": issuedSharesAsOf?.jsonObject() as Any? ?? NSNull(),
             "needs_review": needsReview,
             "warnings": warnings,
@@ -365,67 +360,17 @@ public struct CapexSegmentPayload: Codable, Sendable {
     }
 }
 
-/// 発行済株式・資本金等の期末スナップショット（`issued_shares_and_capital` note_type 専用）。
-/// textblock 表（`issuedSharesEvents`）とは別経路の離散XBRLタグ。表が千株丸めの会社でも
-/// financials / 将来の summary←notes 移行で使う期末値はこちらを正とする。
-/// - `issuedShares`: `PerShareExtractor` と同じタグ解決（生株）
-/// - `capitalStock`: 資本金（円）
-/// - `capitalReserve`: 資本準備金（`LegalCapitalSurplus`。資本剰余金全体ではない）
+/// 期末の発行済株式総数（`issued_shares_and_capital` note_type 専用。`PerShareExtractor` と同じタグ解決の生株）。
+/// 旧世代（v1）の行は資本金・資本準備金のキーも持つが、読まない（Codable は未知キーを無視する）。
 public struct IssuedSharesAsOfPayload: Codable, Sendable {
     public var issuedShares: Double?
-    public var capitalStock: Double?
-    public var capitalReserve: Double?
 
-    public init(issuedShares: Double?, capitalStock: Double?, capitalReserve: Double?) {
+    public init(issuedShares: Double?) {
         self.issuedShares = issuedShares
-        self.capitalStock = capitalStock
-        self.capitalReserve = capitalReserve
     }
 
     public func jsonObject() -> [String: Any] {
-        [
-            "issued_shares": issuedShares as Any? ?? NSNull(),
-            "capital_stock": capitalStock as Any? ?? NSNull(),
-            "capital_reserve": capitalReserve as Any? ?? NSNull(),
-        ]
+        ["issued_shares": issuedShares as Any? ?? NSNull()]
     }
 }
 
-/// 発行済株式総数・資本金等の推移1行分（`issued_shares_and_capital` note_type 専用）。表の「年月日」欄は
-/// 単発日付（例:「2019年５月31日」）と期間表記（例:「自2018年４月１日 至2019年３月31日」）が
-/// 会社によって混在するため、`date` はセルのテキストをそのまま保持し加工しない。株数・金額は
-/// ヘッダーの単位表記（株/千株、千円/百万円）を判定して常に「株」「円」の生値へ正規化する。
-public struct IssuedSharesEventPayload: Codable, Sendable {
-    public var date: String
-    public var sharesDelta: Double?
-    public var sharesBalance: Double?
-    public var capitalDelta: Double?
-    public var capitalBalance: Double?
-    public var capitalReserveDelta: Double?
-    public var capitalReserveBalance: Double?
-
-    public init(
-        date: String, sharesDelta: Double?, sharesBalance: Double?, capitalDelta: Double?,
-        capitalBalance: Double?, capitalReserveDelta: Double?, capitalReserveBalance: Double?
-    ) {
-        self.date = date
-        self.sharesDelta = sharesDelta
-        self.sharesBalance = sharesBalance
-        self.capitalDelta = capitalDelta
-        self.capitalBalance = capitalBalance
-        self.capitalReserveDelta = capitalReserveDelta
-        self.capitalReserveBalance = capitalReserveBalance
-    }
-
-    public func jsonObject() -> [String: Any] {
-        [
-            "date": date,
-            "shares_delta": sharesDelta as Any? ?? NSNull(),
-            "shares_balance": sharesBalance as Any? ?? NSNull(),
-            "capital_delta": capitalDelta as Any? ?? NSNull(),
-            "capital_balance": capitalBalance as Any? ?? NSNull(),
-            "capital_reserve_delta": capitalReserveDelta as Any? ?? NSNull(),
-            "capital_reserve_balance": capitalReserveBalance as Any? ?? NSNull(),
-        ]
-    }
-}

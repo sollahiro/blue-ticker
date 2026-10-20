@@ -29,10 +29,7 @@ private func issuedFound(docID: String) -> StatementNoteLoadResult {
         "doc_id": docID,
         "note_type": statementNoteTypeIssuedSharesAndCapital,
         "note": [
-            "as_of_period_end": [
-                "issued_shares": 6_149_810_645.0, "capital_stock": 881_357_000_000.0, "capital_reserve": NSNull(),
-            ] as [String: Any],
-            "issued_shares_events": [] as [Any],
+            "as_of_period_end": ["issued_shares": 6_149_810_645.0] as [String: Any],
         ] as [String: Any],
     ])
 }
