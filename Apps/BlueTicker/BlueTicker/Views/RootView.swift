@@ -2,6 +2,7 @@ import SwiftData
 import SwiftUI
 
 struct RootView: View {
+    @Environment(\.scenePhase) private var scenePhase
     @State private var tab = 0
     @State private var searchPath = NavigationPath()
     @State private var searchQuery = ""
@@ -49,10 +50,15 @@ struct RootView: View {
         .task(id: watched.map(\.code).joined(separator: ",")) {
             let codes = Array(Set(watched.map(\.code)))
             await APIClient.shared.setPinnedCodes(Set(codes))
-            // Feed の interactive GET を先に出す。先読みは 429 で止めて間引く。
+            // 銘柄面など interactive GET を先に出す。先読みは 429 で止めて間引く。
             try? await Task.sleep(for: .milliseconds(800))
             guard !Task.isCancelled else { return }
             await APIClient.shared.prefetchAnalysis(codes: codes)
+        }
+        .onChange(of: scenePhase) { _, phase in
+            // フォアグラウンド復帰でも、前回の取得から 1 時間を過ぎていれば RSS を再検証する。
+            guard phase == .active else { return }
+            Task { await feedSession.refresh() }
         }
     }
 

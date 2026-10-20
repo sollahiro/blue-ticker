@@ -1,26 +1,42 @@
 import SwiftUI
 
+/// Top feed（公開 RSS）。端末に保存済みの分をすぐ出し、裏で条件付き GET で再検証する。
+/// ProgressView は保存が無い初回の取得中だけ。保存も取得結果も無ければセクションごと出さない。
+@MainActor
 @Observable
 final class FeedSession {
-    var updates: [FeedUpdateItem] = []
-    var ready = false
-    var error: String?
+    private(set) var items: [FeedRSS.Item] = []
+    /// 保存が無いまま取得している間だけ `true`。
+    private(set) var isFirstLoading = false
+    private var restored = false
+    private var hasSaved = false
+    private var refreshing = false
 
-    /// 成功したら以後は取り直さない。失敗は次に名称検索へ戻ったときに再試行する。
-    /// タブ移動で `.task` が cancel されただけなら状態を触らず、次回にそのまま読み直す。
-    func loadIfNeeded() async {
-        guard !ready || error != nil else { return }
-        ready = false
-        do {
-            updates = try await APIClient.shared.feedUpdates().items
-            error = nil
-        } catch is CancellationError {
-            return
-        } catch {
-            updates = []
-            self.error = "有報一覧を取得できませんでした"
+    var showsSection: Bool { !items.isEmpty || isFirstLoading }
+
+    /// 名称検索の表示時とフォアグラウンド復帰時に呼ぶ。再検証の間隔は `FeedRSSStore` が決める。
+    /// 同時に呼ばれたら後の呼び出しは何もしない。
+    func refresh() async {
+        guard !refreshing else { return }
+        refreshing = true
+        defer {
+            refreshing = false
+            isFirstLoading = false
         }
-        ready = true
+        let store = FeedRSSStore.shared
+        if !restored {
+            restored = true
+            if let cached = await store.cachedItems() {
+                items = cached
+                hasSaved = true
+            }
+        }
+        guard await store.needsRevalidation() else { return }
+        isFirstLoading = !hasSaved
+        if let fresh = await store.revalidate() {
+            items = fresh
+            hasSaved = true
+        }
     }
 }
 
@@ -55,31 +71,26 @@ struct TopView: View {
                 }
             }
 
-            Section {
-                if let error = feed.error {
-                    Text(error)
-                        .foregroundStyle(Theme.textMuted)
-                } else if feed.ready && feed.updates.isEmpty {
-                    Text("直近の有報はありません")
-                        .foregroundStyle(Theme.textMuted)
-                } else {
-                    ForEach(feed.updates.prefix(10)) { item in
-                        companyLink(CompanyRef(item), submittedAt: item.submittedAt)
+            if feed.showsSection {
+                Section {
+                    ForEach(feed.items) { item in
+                        companyLink(
+                            CompanyRef(item), submittedAt: item.submittedAt.isEmpty ? nil : item.submittedAt)
                     }
-                }
-            } header: {
-                HStack {
-                    Text("最近新しい有報がアップロードされました")
-                        .foregroundStyle(Theme.textMuted)
-                    Spacer(minLength: 8)
-                    if !feed.ready {
-                        ProgressView()
-                            .controlSize(.small)
-                            .tint(Theme.textMuted)
-                            .accessibilityLabel("有報を読み込み中")
+                } header: {
+                    HStack {
+                        Text("最近新しい有報がアップロードされました")
+                            .foregroundStyle(Theme.textMuted)
+                        Spacer(minLength: 8)
+                        if feed.isFirstLoading {
+                            ProgressView()
+                                .controlSize(.small)
+                                .tint(Theme.textMuted)
+                                .accessibilityLabel("有報を読み込み中")
+                        }
                     }
+                    .textCase(nil)
                 }
-                .textCase(nil)
             }
 
             if !history.isEmpty {
@@ -102,7 +113,7 @@ struct TopView: View {
         .onChange(of: query) { _, newValue in
             scheduleSearch(newValue, debounce: .milliseconds(280))
         }
-        .task { await feed.loadIfNeeded() }
+        .task { await feed.refresh() }
         .onAppear { history = CompanyHistory.load() }
     }
 
