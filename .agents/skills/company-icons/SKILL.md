@@ -123,6 +123,8 @@ icons weekly 専用。次の **5 条件がすべて揃ったときだけ**、Aut
 
 無理に引き伸ばさない。ユーザー添付の高解像ロゴやワンオフ白地パッドは **CDN マップ**（公式の低解像 URL を残すと次の ingest が戻る）。
 
+visual GO でワードマーク／社名ロックアップが却下されマークのみを求められたら、公式の高解像ソース（SVG・大きい PNG・ブランドページ・OGP）からマークだけをワンオフ 512 白地にして `review/` に再仮置きし、その code だけ再 webhook する。次の visual GO までマップしない。
+
 ### OGP 横長
 
 - 欠測で公式の正方形が無いとき、検証済み OGP（多く 1200×630）はピンしてよい（グリコ型）
@@ -263,6 +265,7 @@ DATABASE_URL="$BLT_NEON_WRITE_DATABASE_URL" ./.build/release/blt-server ingest -
 - **英数字コード。** 株探の `?code=` に無い。公式 origin は Web 検索
 - **動的ラッパ。** `topics_file?img=/img/...` は実パスへ正規化してからマップする
 - **SNS の X。** 先頭 favicon が旧 Twitter マークの置き換え画像なら棄てる（ラクサス型）
+- **却下後のマークのみ。** ワードマーク付き After が却下されたら公式高解像からマークだけを切り、`review/` に新しい After を置きその code だけ再 webhook。マップは次の GO まで入れない
 
 ## 完了条件
 

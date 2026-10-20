@@ -148,3 +148,6 @@
 | 9818 | low_vis_no_source | 2026-10-05 | 大丸エナウィン。OGP はビル写真 |
 | 9850 | low_vis_no_source | 2026-10-05 | グルメ杵屋。事業アイコンであり HD マークではない |
 | 9976 | low_vis_no_source | 2026-10-05 | セキチュー。横長 header GIF |
+| 3167 | awaiting_go | 2026-10-20 | ＴＯＫＡＩホールディングス。apple-touch はワードマーク付きで却下。公式 brand 画像から T マークのみ 512 白地を再仮置き、visual GO 待ち |
+| 4678 | awaiting_go | 2026-10-20 | 秀英予備校。apple-touch は社名付きで却下。公式 logo.svg から S マークのみ 512 白地を再仮置き、visual GO 待ち |
+| 8600 | awaiting_go | 2026-10-20 | トモニホールディングス。apple-touch はワードマーク付きで却下。公式 OGP から翼マークのみ 512 白地を再仮置き、visual GO 待ち |
