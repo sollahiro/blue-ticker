@@ -86,7 +86,7 @@ enum CompanyIconOriginOverride {
     /// 2026-10-05 weekly: 公告紙面／URL無し／Pronexus の欠行。公式 apple-touch / 正方形 /
     /// 中央マークのある OGP。単色矩形・SNS の X・横長ワードマーク OGP は載せない。
     /// 2026-10-20 weekly replacements: same-origin 16px→公式 apple-touch / 正方形。
-    /// Visual GO は PR #534（99 GO / 3 却下）。3167 / 4678 / 8600 はマークのみ再構築のため未マップ。
+    /// Visual GO は PR #534（99 公式 URL + 3 マークのみ 512 CDN）。
     static let manualSources: [String: CompanyIconManualSource] = [
         "7203": .homepageOrigin("https://toyota.jp"),
         "9267": .homepageOrigin("https://www.genky.co.jp"),
@@ -451,6 +451,9 @@ enum CompanyIconOriginOverride {
             "https://www.tanseisha.co.jp/wp-content/themes/www.tanseisha.co.jp/assets/img/apple-touch-icon.png"),
         "9867": .imageURL("https://www.solekia.com/apple-touch-icon.png"),
         "9983": .imageURL("https://www.fastretailing.com/favicon/apple-touch-icon.png"),
+        "3167": .imageURL("https://icons.sollahiro.com/company-icons/3167.png"), // R2 CDN TOKAI T-mark 512 // pragma: allowlist secret
+        "4678": .imageURL("https://icons.sollahiro.com/company-icons/4678.png"), // R2 CDN Shuei S-mark 512 // pragma: allowlist secret
+        "8600": .imageURL("https://icons.sollahiro.com/company-icons/8600.png"), // R2 CDN Tomony wing 512 // pragma: allowlist secret
     ]
 
     static func manualSource(for code: String) -> CompanyIconManualSource? {

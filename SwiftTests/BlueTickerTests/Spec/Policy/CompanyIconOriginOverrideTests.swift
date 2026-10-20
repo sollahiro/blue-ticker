@@ -429,7 +429,6 @@ import Testing
     }
 
     /// 2026-10-20 weekly replacements: 16px→公式 apple-touch。PR #534 visual GO 99 社。
-    /// 却下の 3167 / 4678 / 8600 はマークのみ再構築のためマップしない。
     @Test func pins20261020WeeklyReplacementGOManualImageURLs() {
         let expected: [(String, String)] = [
             ("1333", "https://www.umios.com/favicon/favicon_192.png"),
@@ -534,15 +533,33 @@ import Testing
         ]
         #expect(expected.count == 99)
         #expect(Set(expected.map(\.0)).count == 99)
-        #expect(CompanyIconOriginOverride.manualSources["3167"] == nil)
-        #expect(CompanyIconOriginOverride.manualSources["4678"] == nil)
-        #expect(CompanyIconOriginOverride.manualSources["8600"] == nil)
         #expect(
             Set(expected.map(\.0))
                 .isDisjoint(with: Set(CompanyIconOriginOverride.pronexusDisclosureHomepages.keys)))
         for (code, url) in expected {
             #expect(!url.contains("prtimes.jp"), "code=\(code)")
             #expect(!url.contains("i0.wp.com"), "code=\(code)")
+            #expect(
+                CompanyIconOriginOverride.manualSources[code] == .imageURL(url), "code=\(code)")
+        }
+    }
+
+    /// 2026-10-20 weekly: 3167 / 4678 / 8600 mark-only 512. PR #534 visual GO after wordmark reject.
+    @Test func pins20261020WeeklyMarkOnlyReplacementCDNImageURLs() {
+        let expected: [(String, String)] = [
+            ("3167", "https://icons.sollahiro.com/company-icons/3167.png"), // pragma: allowlist secret
+            ("4678", "https://icons.sollahiro.com/company-icons/4678.png"), // pragma: allowlist secret
+            ("8600", "https://icons.sollahiro.com/company-icons/8600.png"), // pragma: allowlist secret
+        ]
+        #expect(expected.count == 3)
+        #expect(Set(expected.map(\.0)).count == 3)
+        #expect(
+            Set(expected.map(\.0))
+                .isDisjoint(with: Set(CompanyIconOriginOverride.pronexusDisclosureHomepages.keys)))
+        for (code, url) in expected {
+            #expect(!url.contains("prtimes.jp"), "code=\(code)")
+            #expect(!url.contains("i0.wp.com"), "code=\(code)")
+            #expect(url.hasSuffix("/company-icons/\(code).png"), "code=\(code)")
             #expect(
                 CompanyIconOriginOverride.manualSources[code] == .imageURL(url), "code=\(code)")
         }
