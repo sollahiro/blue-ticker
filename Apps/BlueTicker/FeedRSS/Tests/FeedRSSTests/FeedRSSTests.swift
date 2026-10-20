@@ -77,6 +77,18 @@ private let sample = """
         #expect(FeedRSS.topFeed(items).map(\.docId) == ["S100AAAA"])
     }
 
+    @Test func topFeedStopsAtTenNewestAnnualReports() {
+        let items = (0..<15).map { index in
+            FeedRSS.Item(
+                docId: "S\(index)", code: "1000", name: "x", docType: index.isMultiple(of: 3) ? "160" : "120",
+                docTypeLabel: "", submittedAt: "", iconURL: nil)
+        }
+        let top = FeedRSS.topFeed(items)
+        #expect(top.count == FeedRSS.topFeedLimit)
+        #expect(top.allSatisfy { $0.docType == "120" })
+        #expect(top.first?.docId == "S1")
+    }
+
     @Test func emptyChannelIsEmptyList() throws {
         let xml = #"<?xml version="1.0"?><rss version="2.0"><channel><title>x</title></channel></rss>"#
         let items = try #require(FeedRSS.parse(Data(xml.utf8)))
