@@ -4,7 +4,14 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
 import { CACHE_CONTROL, CONTENT_TYPE, refreshFeed } from "./feed.js";
-import { FEED_DOC_TYPES, FEED_ITEM_LIMIT, FEED_SQL, ICON_SQL } from "./query.js";
+import {
+  ANNUAL_SQL,
+  FEED_ANNUAL_MIN,
+  FEED_DOC_TYPES,
+  FEED_ITEM_LIMIT,
+  FEED_SQL,
+  ICON_SQL,
+} from "./query.js";
 
 const NOW = new Date("2026-10-10T10:15:00Z");
 const KEY = "blue-ticker/edinet-filings.xml";
@@ -41,13 +48,16 @@ function makeEnv(bucket) {
   };
 }
 
-// FEED_SQL には rows、ICON_SQL には iconRows（関数なら呼ぶ）を返すフェイク。
-function fakeQuery(rows, iconRows = []) {
+// FEED_SQL には rows、ANNUAL_SQL には annualRows、ICON_SQL には iconRows（関数なら呼ぶ）を返すフェイク。
+function fakeQuery(rows, iconRows = [], annualRows = []) {
   const queries = [];
   const runQuery = async (text, params) => {
     queries.push({ text, params });
     if (text === ICON_SQL) {
       return typeof iconRows === "function" ? iconRows() : iconRows;
+    }
+    if (text === ANNUAL_SQL) {
+      return typeof annualRows === "function" ? annualRows() : annualRows;
     }
     return rows;
   };
@@ -74,11 +84,13 @@ describe("refreshFeed", () => {
     const result = await refreshFeed({ env: makeEnv(bucket), runQuery, now: NOW, log });
 
     assert.deepEqual(result, { written: true, count: 1 });
-    assert.equal(queries.length, 2);
+    assert.equal(queries.length, 3);
     assert.equal(queries[0].text, FEED_SQL);
     assert.deepEqual(queries[0].params, [FEED_DOC_TYPES, "2026-10-04", FEED_ITEM_LIMIT]);
-    assert.equal(queries[1].text, ICON_SQL);
-    assert.deepEqual(queries[1].params, [["7203"]]);
+    assert.equal(queries[1].text, ANNUAL_SQL);
+    assert.deepEqual(queries[1].params, ["120", FEED_ANNUAL_MIN]);
+    assert.equal(queries[2].text, ICON_SQL);
+    assert.deepEqual(queries[2].params, [["7203"]]);
 
     assert.equal(bucket.calls.length, 1);
     const put = bucket.calls[0];
@@ -102,8 +114,14 @@ describe("refreshFeed", () => {
     const { queries, runQuery } = fakeQuery(
       [
         LISTED_ROW,
-        { ...LISTED_ROW, doc_id: "S100BBB", doc_type_code: "130" },
-        { ...LISTED_ROW, doc_id: "S100CCC", sec_code: "477A0", filer_name: "サンプル商事" },
+        { ...LISTED_ROW, doc_id: "S100BBB", doc_type_code: "130", submit_date_time: "2026-10-09 15:20" },
+        {
+          ...LISTED_ROW,
+          doc_id: "S100CCC",
+          sec_code: "477A0",
+          filer_name: "サンプル商事",
+          submit_date_time: "2026-10-09 15:10",
+        },
       ],
       [{ code: "7203", r2_object_key: "company-icons/7203.ico" }]
     );
@@ -111,7 +129,7 @@ describe("refreshFeed", () => {
     const result = await refreshFeed({ env: makeEnv(bucket), runQuery, now: NOW, log });
 
     assert.deepEqual(result, { written: true, count: 3 });
-    assert.deepEqual(queries[1].params, [["7203", "477A"]]);
+        assert.deepEqual(queries[2].params, [["7203", "477A"]]);
     const body = bucket.calls[0].body;
     assert.equal(
       (body.match(/<media:thumbnail url="https:\/\/icons\.sollahiro\.com\/company-icons\/7203\.ico"\/>/g) ?? [])
@@ -147,8 +165,46 @@ describe("refreshFeed", () => {
     const result = await refreshFeed({ env, runQuery, now: NOW, log });
 
     assert.deepEqual(result, { written: true, count: 1 });
-    assert.equal(queries.length, 1);
+    assert.equal(queries.length, 2);
     assert.ok(!bucket.calls[0].body.includes("<media:thumbnail"));
+  });
+
+  test("有報の直近行: 窓の外でも載せ、窓の行と重複したら 1 回だけ", async () => {
+    const bucket = fakeBucket();
+    const log = silentLog();
+    const oldAnnual = {
+      ...LISTED_ROW,
+      doc_id: "S100OLD1",
+      sec_code: "99840",
+      filer_name: "古い有報株式会社",
+      submit_date_time: "2026-09-30 15:00",
+    };
+    const { runQuery } = fakeQuery(
+      [{ ...LISTED_ROW, doc_id: "S100HALF", doc_type_code: "160" }, LISTED_ROW],
+      [],
+      [LISTED_ROW, oldAnnual]
+    );
+
+    const result = await refreshFeed({ env: makeEnv(bucket), runQuery, now: NOW, log });
+
+    assert.deepEqual(result, { written: true, count: 3 });
+    const body = bucket.calls[0].body;
+    assert.equal((body.match(/<guid isPermaLink="false">S100AAA<\/guid>/g) ?? []).length, 1);
+    assert.ok(body.indexOf("S100AAA") < body.indexOf("S100OLD1"));
+    assert.ok(body.includes("<title>古い有報株式会社（9984） 有価証券報告書</title>"));
+  });
+
+  test("有報のクエリ失敗: put せず query_error", async () => {
+    const bucket = fakeBucket();
+    const log = silentLog();
+    const { runQuery } = fakeQuery([LISTED_ROW], [], () => {
+      throw new Error("statement timeout");
+    });
+
+    const result = await refreshFeed({ env: makeEnv(bucket), runQuery, now: NOW, log });
+
+    assert.deepEqual(result, { written: false, reason: "query_error" });
+    assert.equal(bucket.calls.length, 0);
   });
 
   test("クエリ失敗: put せず query_error", async () => {

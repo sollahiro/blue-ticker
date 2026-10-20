@@ -91,7 +91,7 @@ export function buildRss({ items, now = new Date(), feedUrl }) {
   lines.push(
     "    <description>EDINET に提出された上場会社の開示書類のヘッドラインのみを配信します。" +
       "毎日 19:15（JST）に更新。対象は有価証券報告書（120）・訂正有価証券報告書（130）・" +
-      "四半期報告書（140）・半期報告書（160）の直近7日分です。</description>"
+      "四半期報告書（140）・半期報告書（160）の直近7日分で、有価証券報告書は期間に関係なく直近10件も含みます。</description>"
   );
   lines.push("    <language>ja</language>");
   lines.push(`    <lastBuildDate>${utcToRfc822Jst(now)}</lastBuildDate>`);

@@ -117,10 +117,6 @@ actor APIClient {
         return String(value)
     }
 
-    func feedUpdates() async throws -> FeedUpdatesResponse {
-        try await get(path("v1/feed/updates"))
-    }
-
     /// 未設定・Worker 未到達の 503 は空ランキングとして扱う。
     func feedTrend() async throws -> FeedTrendResponse {
         do {

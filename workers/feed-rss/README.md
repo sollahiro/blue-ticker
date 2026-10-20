@@ -12,7 +12,8 @@ Cron が 1 日 1 回 Neon を読み、RSS XML を R2 の静的オブジェクト
 
 - 書類種別: `120` / `130` / `140` / `160`（`Api.feedAllowedDocTypes` と同じ）
 - 期間: 直近 7 暦日（UTC、今日を含む。`feedInclusiveCutoffDateString(days: 7)` と同じ下限）
-- 上限: 200 件
+- 有報（`120`）は期間に関係なく、新しい順に直近 10 件を必ず足す（`ANNUAL_SQL`・`mergeFeedRows`）。7 日窓に有報が少ない時期でも iOS の Top feed（有報だけを出す）が REST 既定の 10 件を保てるように。期間を延ばすと 6 月の決算期に有報だけで上限を超えるので件数で区切る
+- 上限: 200 件（超えたら有報の直近 10 件以外を古い方から落とす）
 - 上場のみ: 府令 `010`（会社開示）・5 桁 `sec_code` 末尾 `0`・`00000` 以外
 - 並び順: `submit_date_time` 降順、`doc_id` 降順
 
@@ -56,7 +57,7 @@ Swift 側のラベル・対象種別・listed 判定を変えたら fixture も�
 
 ## fail closed
 
-- クエリ失敗・0 件（全件非上場含む）では R2 を上書きしない（既存オブジェクトを残す）
+- クエリ失敗（有報の直近行のクエリを含む）・0 件（全件非上場含む）では R2 を上書きしない（既存オブジェクトを残す）
 - `FEED_BUCKET` / `FEED_OBJECT_KEY` / `FEED_DATABASE_URL` 未設定は `misconfigured` で skip
 - R2 `put` の失敗だけは再スローして cron 実行を失敗として見せる
 - ログは構造化 JSON（`feed_rss_skip` / `feed_rss_written` / `feed_rss_put_error` / `feed_rss_icons_skip`）。接続文字列は出さない

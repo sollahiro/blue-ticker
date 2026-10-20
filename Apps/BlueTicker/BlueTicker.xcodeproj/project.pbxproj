@@ -35,6 +35,8 @@
 		AA0000000000000000000031 /* HAPISOriginGate.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000031 /* HAPISOriginGate.swift */; };
 		AA0000000000000000000032 /* ZeroAxisFill.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000032 /* ZeroAxisFill.swift */; };
 		AA0000000000000000000033 /* FundMath.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000033 /* FundMath.swift */; };
+		AA0000000000000000000040 /* FeedRSS.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000040 /* FeedRSS.swift */; };
+		AA0000000000000000000041 /* FeedRSSStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000041 /* FeedRSSStore.swift */; };
 		AA0000000000000000000034 /* FundView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000034 /* FundView.swift */; };
 		AA0000000000000000000035 /* FundPositionEditView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000035 /* FundPositionEditView.swift */; };
 		AA0000000000000000000037 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000037 /* PrivacyInfo.xcprivacy */; };
@@ -73,6 +75,8 @@
 		BB0000000000000000000031 /* HAPISOriginGate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HAPISOriginGate.swift; sourceTree = "<group>"; };
 		BB0000000000000000000032 /* ZeroAxisFill.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZeroAxisFill.swift; sourceTree = "<group>"; };
 		BB0000000000000000000033 /* FundMath.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FundMath.swift; sourceTree = "<group>"; };
+		BB0000000000000000000040 /* FeedRSS.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeedRSS.swift; sourceTree = "<group>"; };
+		BB0000000000000000000041 /* FeedRSSStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeedRSSStore.swift; sourceTree = "<group>"; };
 		BB0000000000000000000034 /* FundView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FundView.swift; sourceTree = "<group>"; };
 		BB0000000000000000000035 /* FundPositionEditView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FundPositionEditView.swift; sourceTree = "<group>"; };
 		BB0000000000000000000037 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
@@ -97,6 +101,7 @@
 				DD0000000000000000000009 /* HAPISConsumer */,
 				DD0000000000000000000010 /* ZeroAxisFill */,
 				DD0000000000000000000011 /* FundMath */,
+				DD0000000000000000000012 /* FeedRSS */,
 				DD0000000000000000000003 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -135,6 +140,7 @@
 				BB0000000000000000000005 /* DTOs.swift */,
 				BB0000000000000000000006 /* APIClient.swift */,
 				BB0000000000000000000024 /* ResponseCache.swift */,
+				BB0000000000000000000041 /* FeedRSSStore.swift */,
 			);
 			path = API;
 			sourceTree = "<group>";
@@ -213,6 +219,15 @@
 			);
 			name = FundMath;
 			path = FundMath/Sources/FundMath;
+			sourceTree = "<group>";
+		};
+		DD0000000000000000000012 /* FeedRSS */ = {
+			isa = PBXGroup;
+			children = (
+				BB0000000000000000000040 /* FeedRSS.swift */,
+			);
+			name = FeedRSS;
+			path = FeedRSS/Sources/FeedRSS;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -313,6 +328,8 @@
 				AA0000000000000000000018 /* BreakdownView.swift in Sources */,
 				AA0000000000000000000032 /* ZeroAxisFill.swift in Sources */,
 				AA0000000000000000000033 /* FundMath.swift in Sources */,
+				AA0000000000000000000040 /* FeedRSS.swift in Sources */,
+				AA0000000000000000000041 /* FeedRSSStore.swift in Sources */,
 				AA0000000000000000000034 /* FundView.swift in Sources */,
 				AA0000000000000000000035 /* FundPositionEditView.swift in Sources */,
 			);

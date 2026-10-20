@@ -29,10 +29,11 @@ struct CompanyRef: Hashable, Identifiable, Codable {
         iconURL = item.iconURL
     }
 
-    init(_ item: FeedUpdateItem) {
+    /// RSS に業種は無い。銘柄面が `financials` の `sector` で補う。
+    init(_ item: FeedRSS.Item) {
         code = item.code
         name = item.name
-        sector = item.sector ?? ""
+        sector = ""
         iconURL = item.iconURL
     }
 

@@ -8,7 +8,7 @@
 
 ## 置き場
 
-`Apps/BlueTicker`。`Package.swift` の platforms は macOS のまま。Xcode プロジェクトは `Apps/` に閉じる。シミュレータ不要の計算は `HAPISConsumer` / `ZeroAxisFill` / `FundMath` を `swift test` する。Cloud Agent の Linux VM では `xcodebuild` が無い。
+`Apps/BlueTicker`。`Package.swift` の platforms は macOS のまま。Xcode プロジェクトは `Apps/` に閉じる。シミュレータ不要の計算は `HAPISConsumer` / `ZeroAxisFill` / `FundMath` / `FeedRSS` を `swift test` する。Cloud Agent の Linux VM では `xcodebuild` が無い。
 
 マージ品質と配布は分け、同じ検証を二箇所で走らせない。
 
@@ -79,7 +79,7 @@ Release Archive は HAPIS 本番 + App Attest production。Internal TestFlight �
 | 新着 | ウォッチリストだけ。名称検索の Feed 行には付けない。バッジの定義は未決のため v1 では出さない。Feed 行には提出日（`submitted_at`。矢印の左に「提出日」と日付）を出す |
 | 近くの本社 | v1 から外す（位置情報も HQ API も無い） |
 | ウォッチリスト | クライアントの SwiftData。同じ Apple ID の端末へ iCloud（CloudKit、コンテナ `iCloud.com.sollahiro.BlueTicker`）で同期する。保有の株数・取得単価・証券会社・口座の区分も同じ行なので一緒に同期する。Blue Ticker のサーバーへは送らない。1 本のリスト。見出しは「あなたの追加した企業」。行は株数と取得単価（円/株）が両方入れば保有、欠けていればウォッチ（第三 enum は無い）。同じ銘柄は口座違いで複数行可。並べ替え UI と編集モードは置かない（削除は行のスワイプのみ）。保有行のキャプションは口座ではなく保有数量。保有・口座の入力は銘柄画面ツールバーの保有情報。起動時に概要・分解・Overview を先読みし、解析キャッシュを 7 日持つ |
-| 解析キャッシュ | 概要・分解・Overview の REST 応答を端末 Caches に保存（標準 6 時間。ウォッチリスト銘柄は 7 日）。期限切れでも通信失敗時は最後の成功応答を出す。サーバーが 404 を返したら捨てる。検索・Feed はキャッシュしない。iOS は Core をリンクしないので `CacheManager` は使わない |
+| 解析キャッシュ | 概要・分解・Overview の REST 応答を端末 Caches に保存（標準 6 時間。ウォッチリスト銘柄は 7 日）。期限切れでも通信失敗時は最後の成功応答を出す。サーバーが 404 を返したら捨てる。検索はキャッシュしない。Feed は下の「Top feed」の端末保存を使う。会社アイコンは取れた画像を端末 Caches に 7 日持つ（配信に `Cache-Control` が無いため）。iOS は Core をリンクしないので `CacheManager` は使わない |
 | ファンド | タブ右端。公開 UI は「保有株数に応じた業績」（純利益 / 純資産 / 投資元本 / ファンドROE。ルックスルーは出さない）と「あなたの保有している企業」（ウォッチは出さない。リスト行と同じ会社アイコン。行は社名+コード、純利益・純資産・投資元本の 3 行。行タップで銘柄面）。保有・口座の入力は銘柄の `保有情報`。公開合計は銘柄単位で合算。バージョンはスクロール末尾に B マークと「バージョン x.y.z (ビルド n)」。免責・プライバシー・利用規約はアプリ内に出さず、App Store 用の公開ページ（Cloudflare Worker `workers/legal/`）。サーバー切替・発行者 URL は出さない。Debug だけ開発ラボ（ローカル / HAPIS 本番）。開発ラボの銘柄面（キヤノン、トヨタ自動車、守谷輸送機工業、ファーストリテイリング、ジャパンエレベーターサービスHD）は通信なしで銘柄ツールバーの保有情報まで行ける（リストには入れない。保有を保存したときだけウォッチ行になる）。設定タブは復活させない |
 | 会社行 | 社名・業種に加え銘柄コードを載せる。社名は最大3行 |
 | 業種タグ | `search_companies` の `sector`（例: 富士フイルムは `化学`）。Feed からの遷移は `CompanyRef.sector` が空なので、銘柄面は `GET /v1/companies/{code}/financials` の `sector` で補う |
@@ -103,7 +103,7 @@ Release Archive は HAPIS 本番 + App Attest production。Internal TestFlight �
 
 | 画面 | Feature | 備考 |
 |---|---|---|
-| 名称検索 | Feed Update / Search | 「最近新しい有報がアップロードされました」＋キーワード検索＋履歴。Feed 読み込み中は見出し右端に `ProgressView`。取れたらタブ往復では取り直さない（失敗・cancel は次の表示で再試行）。Feed は REST 省略時どおり直近90日を最大10件。同日過多のサンプルはサーバー。Feed Trend（「最近よく調べられています」）は呼び出しを保留中。再開時の 503 は空リスト。フィード下に「最近あなたが調べた企業」（履歴） |
+| 名称検索 | Feed Update / Search | 「最近新しい有報がアップロードされました」＋キーワード検索＋履歴。Feed は公開 RSS（下の「Top feed」）から取り、直近の有報（120）10 件だけを出す（RSS は直近7日の窓＋有報の直近10件）。保存の無い初回の取得中だけ見出し右端に `ProgressView`。保存も取得結果も無い・0件ならセクションごと出さない。Feed Trend（「最近よく調べられています」）は呼び出しを保留中。再開時の 503 は空リスト。フィード下に「最近あなたが調べた企業」（履歴） |
 | 条件検索 | Screen（BLT-49） | 業種チップ + 6 プリセット。タップで `GET /v1/screen` の結果へ。全社 `financials` をクライアントで絞らない |
 | リスト | （クライアント） | ウォッチリスト 1 本。見出しは「あなたの追加した企業」。行はウォッチ／保有。削除は行のスワイプのみ（並べ替え UI は無い）。保有入力は銘柄の `保有情報` |
 | ファンド | （クライアント） | 「保有株数に応じた業績」と「あなたの保有している企業」（ウォッチは出さない）。保有入力は銘柄の `保有情報`。指標は最新 FY Summary の `eps` / `bps`（円/株）。portfolio REST は足さない |
@@ -219,9 +219,21 @@ Debug 実機で Attest を試す: 開発ラボの「HAPIS 本番」（既定で 
 
 段階 B のトークン: TTL 約 1 時間。期限の約 5 分前にサイレント refresh。残り 60 秒超なら手元のトークンで即リクエストを出し、refresh は裏で 1 本だけ走らせる（リクエスト経路で制御面の往復を待たない）。残り 60 秒以下は refresh を待つ。
 
+### Top feed（公開 RSS）
+
+- 取得元は `https://feed.sollahiro.com/blue-ticker/edinet-filings.xml`（`workers/feed-rss`。毎日 19:15 JST 生成）。HAPIS・トークン・オリジン・Neon を通らない。`/v1/feed/updates` へはフォールバックしない。鮮度は 1 日 1 回
+- 表示：名称検索を開いたら端末に保存済みの RSS を解析してすぐ出す。裏で `If-None-Match` / `If-Modified-Since` 付きの条件付き GET を送り、304 は取得時刻だけ進め、200 は保存を差し替えて画面を更新する
+- 間隔：前回の取得から 1 時間（RSS の `max-age`）以内は再検証しない。フォアグラウンド復帰時も同じ条件で再検証する
+- 失敗時：保存済みの分を出し続ける。途中で切れた本文（`</rss>` が無い）は失敗扱いで、保存を差し替えない
+- 保存：生の XML と `ETag` / `Last-Modified` / 取得時刻を Caches の `blt-feed/v1/edinet-filings.json` に 1 ファイル（`FeedRSSStore`）
+- 行：銘柄コードは `<category domain="jp:sec_code">`、社名はタイトルのコード括弧より前、提出日は `pubDate`（JST）。アイコンは `<media:thumbnail url>` を `CompanyRef.iconURL` に渡し、無い会社は `CompanyIconLoader` の拡張子プローブ。業種は銘柄面が `financials` の `sector` で補う
+- 対象は直近の有報（120）10 件だけ（REST 既定と同じ件数）。訂正（130）・四半期（140）・半期（160）は RSS に入っていても出さない。RSS 側が有報を期間に関係なく直近 10 件載せるので、閑散期も 10 件出る
+- アイコンは画面に入った行の `.task` から取る
+- 解析と再検証の判定は `Apps/BlueTicker/FeedRSS`（Linux / macOS の `swift test`）。アプリはそのソースを直接コンパイルする
+
 ### ゲートウェイの同時実行（`HAPISOriginGate`）
 
-HAPIS の制限は 60/分のレートで同時数ではない。interactive（Feed / 検索 / 銘柄面）は 3 本まで並列に出し、銘柄面の financials / overview / waterfall を直列にしない。先読み（ウォッチリスト）は 1 本ずつ 4 秒間隔で、interactive が流れている・待っている間と、最後の interactive から 2 秒間は出さない。スロットが空いたら待ちを全員起こして条件を再確認させる（先頭だけ起こすと、その 1 本が間隔待ちで眠っている間に空きが使われない）。mint / refresh はスロットを取る前に済ませる。
+HAPIS の制限は 60/分のレートで同時数ではない。interactive（検索 / 銘柄面）は 3 本まで並列に出し、銘柄面の financials / overview / waterfall を直列にしない。先読み（ウォッチリスト）は 1 本ずつ 4 秒間隔で、interactive が流れている・待っている間と、最後の interactive から 2 秒間は出さない。スロットが空いたら待ちを全員起こして条件を再確認させる（先頭だけ起こすと、その 1 本が間隔待ちで眠っている間に空きが使われない）。mint / refresh はスロットを取る前に済ませる。
 
 ### Mac / Simulator 手動スモーク（この PR では必須にしない）
 
