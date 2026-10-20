@@ -37,7 +37,7 @@ private func issuedFound(docID: String) -> StatementNoteLoadResult {
     ])
 }
 
-private func body(_ result: StatementNoteLoadResult) -> [String: Any]? {
+private func foundBody(_ result: StatementNoteLoadResult) -> [String: Any]? {
     if case .found(let body) = result { return body }
     return nil
 }
@@ -50,7 +50,7 @@ private func keys(_ body: [String: Any]) -> [String] {
     @Test func bothNotesComposeOneDocument() throws {
         let result = composeShares(
             perShare: perShareFound(docID: "S100YE2C"), issuedShares: issuedFound(docID: "S100YE2C"))
-        let body = try #require(body(result))
+        let body = try #require(foundBody(result))
         #expect(body["code"] as? String == "6758")
         #expect(body["doc_id"] as? String == "S100YE2C")
         #expect(keys(body) == ["eps", "diluted_eps", "bps", "issued_shares"])
@@ -65,7 +65,7 @@ private func keys(_ body: [String: Any]) -> [String] {
     @Test func issuedSharesFromAnotherDocumentIsNotMixed() throws {
         let result = composeShares(
             perShare: perShareFound(docID: "S100YE2C"), issuedShares: issuedFound(docID: "S100OLD1"))
-        let body = try #require(body(result))
+        let body = try #require(foundBody(result))
         #expect(body["doc_id"] as? String == "S100YE2C")
         #expect(keys(body) == ["eps", "diluted_eps", "bps"])
     }
@@ -74,7 +74,7 @@ private func keys(_ body: [String: Any]) -> [String] {
         let result = composeShares(
             perShare: .notApplicable(reason: statementNoteNotApplicableNotFound),
             issuedShares: issuedFound(docID: "S100YE2C"))
-        let body = try #require(body(result))
+        let body = try #require(foundBody(result))
         #expect(keys(body) == ["issued_shares"])
     }
 
