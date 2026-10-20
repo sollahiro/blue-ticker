@@ -91,4 +91,14 @@ private func keys(_ body: [String: Any]) -> [String] {
             return
         }
     }
+
+    /// 旧版の推移の表の円単位だけが原因の要確認行は、発行済株式数（タグ）を止めない。
+    @Test func legacyTableUnitWarningDoesNotWithholdShareCount() {
+        let unit = legacyIssuedSharesUnitUnresolvedWarning
+        #expect(isServableIssuedSharesForShares(needsReview: false, warnings: []))
+        #expect(isServableIssuedSharesForShares(needsReview: true, warnings: [unit]))
+        #expect(!isServableIssuedSharesForShares(needsReview: true, warnings: []))
+        #expect(!isServableIssuedSharesForShares(needsReview: true, warnings: [unit, "other"]))
+        #expect(!isPubliclyServableStatementNote(needsReview: true, warnings: [unit]))
+    }
 }

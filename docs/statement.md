@@ -34,16 +34,15 @@
 EPS・希薄化後 EPS・BPS・発行済株式総数を、有報の記載そのままで返す（`SharesResponse` = {code, doc_id, items}。`StatementNotesContract.swift`）。items の `key` は `eps` / `diluted_eps` / `bps` / `issued_shares`、`label` は有報の表示名、`unit` は `yen_per_share` / `shares`。開示の無い key は行ごと省く。
 
 - 値の源泉は財務諸表注記取り込み（`company_statement_notes`）の2注記。`per_share_information`（EPS・希薄化後 EPS・BPS）と `issued_shares_and_capital` の期末発行済株式数（`as_of_period_end.issued_shares`、【株式の総数等】→主要な経営指標等の推移のタグ）。書類は 1株当たり情報の行に揃え、別書類の発行済株式は混ぜない。
-- 資本金・資本準備金と「発行済株式総数、資本金等の推移」の表は返さず、取り込みもしない（提出会社単体の値で、連結の分析にほとんど使わないため）。`issued_shares_and_capital` の行は期末の発行済株式総数だけ（`notes-issued-shares-and-capital-v2`。v1 の行が持つ資本金・推移のキーは読まない）。
+- 資本金・資本準備金と「発行済株式総数、資本金等の推移」の表は返さず、取り込みもしない（提出会社単体の値で、連結の分析にほとんど使わないため）。`issued_shares_and_capital` の行は期末の発行済株式総数だけ。`cache_version` は据え置き（期末値の意味は変わらない。旧行が持つ資本金・推移のキーは読まない）。旧表パーサの円単位警告（`issued_shares_unit_unresolved`）だけで要確認の旧行も、発行済株式数は shares が返す。
 - IFRS の継続事業・非継続事業別の EPS は statement の損益計算書（`ContinuingOperations*EarningsLossPerShareIFRS` 等）にある。shares には足さない。
 - financials の `eps` / `bps` / `issued_shares` の正本は同じ2注記（`docs/financials-summary-separation.md`）。
 
-非開示は **404** ＋ボディ `reason`（未取り込みは reason 無し）。shares が返す `reason` は `allSharesNotApplicableReasons`（`not_found` / `us_gaap_unsupported`）。
+非開示は **404** ＋ボディ `reason`（未取り込みは reason 無し）。shares が返す `reason` は `allSharesNotApplicableReasons`（`not_found` のみ）。
 
 | reason | 意味 |
 |---|---|
 | `not_found` | 当該書類に開示・タグが無い（正当欠測） |
-| `us_gaap_unsupported` | US-GAAP 連結で構造化タグ判定ができない |
 
 旧 `GET /v1/companies/{code}/statement/notes`（note_type 指定）は廃止し、常に 404（後継は shares）。
 

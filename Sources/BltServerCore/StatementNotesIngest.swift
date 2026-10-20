@@ -270,7 +270,10 @@ enum StatementNoteLoadResult {
 /// read 可否は `isServableStatementNote`（xbrl_facts/not_applicable はバージョン床、LLM 経由は常に可）。
 /// 無い・read 不可・府令対象外なら `.absent`（呼び出し側は 404。ライブ解決へはフォールバックしない）。
 func loadStoredStatementNote(
-    code: String, docId: String?, noteType: String, db: Database
+    code: String, docId: String?, noteType: String, db: Database,
+    isPubliclyServable: (_ needsReview: Bool, _ warnings: [String]) -> Bool = {
+        isPubliclyServableStatementNote(needsReview: $0, warnings: $1)
+    }
 ) async throws -> StatementNoteLoadResult {
     let code4 = String(code.prefix(4))
     guard !code4.isEmpty, code4.allSatisfy({ $0.isLetter || $0.isNumber }) else { return .absent }
@@ -294,16 +297,14 @@ func loadStoredStatementNote(
             among: candidates.map(\.docID), db: db)
         row = candidates.first {
             isServableStatementNote(source: $0.source, cacheVersion: $0.cacheVersion, noteType: noteType)
-                && isPubliclyServableStatementNote(
-                    needsReview: $0.needsReview, warnings: $0.payload.warnings)
+                && isPubliclyServable($0.needsReview, $0.payload.warnings)
                 && companyDocIDs.contains($0.docID)
         }
     }
 
     guard let row,
         isServableStatementNote(source: row.source, cacheVersion: row.cacheVersion, noteType: noteType),
-        isPubliclyServableStatementNote(
-            needsReview: row.needsReview, warnings: row.payload.warnings),
+        isPubliclyServable(row.needsReview, row.payload.warnings),
         let docID = row.id?.components(separatedBy: "#").first
     else { return .absent }
 
@@ -337,8 +338,19 @@ func loadStoredShares(code: String, docId: String?, db: Database) async throws -
         anchorDocID = found
     }
     let issued = try await loadStoredStatementNote(
-        code: code, docId: anchorDocID, noteType: statementNoteTypeIssuedSharesAndCapital, db: db)
+        code: code, docId: anchorDocID, noteType: statementNoteTypeIssuedSharesAndCapital, db: db,
+        isPubliclyServable: isServableIssuedSharesForShares)
     return composeShares(perShare: perShare, issuedShares: issued)
+}
+
+/// `shares` が発行済株式の注記行を使ってよいか。旧版の推移の表パーサが付けた円単位の警告
+/// （`legacyIssuedSharesUnitUnresolvedWarning`）だけの要確認は、表の列の問題で期末発行済株式数
+/// （タグ）には影響しないので使う。決定論の要確認行は ingest が再計算しないため、読み側で救う。
+/// それ以外の要確認・回帰は従来どおり出さない。
+func isServableIssuedSharesForShares(needsReview: Bool, warnings: [String]) -> Bool {
+    if isPubliclyServableStatementNote(needsReview: needsReview, warnings: warnings) { return true }
+    return needsReview && !warnings.isEmpty
+        && warnings.allSatisfy { $0 == legacyIssuedSharesUnitUnresolvedWarning }
 }
 
 /// 2注記の読み取り結果を `shares` の公開契約（`SharesResponse`）へ写す純関数。

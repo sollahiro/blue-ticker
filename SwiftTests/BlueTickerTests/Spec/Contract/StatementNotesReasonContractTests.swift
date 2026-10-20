@@ -20,7 +20,7 @@ import Testing
         #expect(!isKnownStatementNoteNotApplicableReason(""))
 
         // 公開面（get-shares）が出す reason は既知コードの部分集合で、すべて説明に載っている。
-        #expect(allSharesNotApplicableReasons == ["not_found", "us_gaap_unsupported"])
+        #expect(allSharesNotApplicableReasons == ["not_found"])
         let skill = try #require(apiSkill(id: "get-shares"))
         for reason in allSharesNotApplicableReasons {
             #expect(isKnownStatementNoteNotApplicableReason(reason))

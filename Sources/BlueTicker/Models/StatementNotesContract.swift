@@ -66,7 +66,7 @@ public func isKnownStatementNoteType(_ noteType: String) -> Bool {
 /// v2: EPS 抽出。v3（2026-08-19）: IFRS の `JPYPerShares` BPS を日本基準
 /// `NetAssetsPerShare` より優先（IFRS 移行年度の比較表残存、スズキ S100W4MT）。
 public let perShareInformationNoteCacheVersion = "notes-eps-v3"
-public let issuedSharesAndCapitalNoteCacheVersion = "notes-issued-shares-and-capital-v2"
+public let issuedSharesAndCapitalNoteCacheVersion = "notes-issued-shares-and-capital-v1"
 /// v2（2026-08-05）: 抽出ロジック・payload構造を大幅改修（IFRS/J-GAAP多数のフォールバック経路追加、
 /// J-GAAP附属明細表のスケール判定・インデント処理バグ修正、日経225全224銘柄の実データレビュー完了）。
 /// v3（2026-08-12）: US-GAAP 連結を巨大注記 HTML（注記9の社債・借入金／長期債務表）から抽出。
@@ -152,8 +152,12 @@ public let allStatementNoteNotApplicableReasons: [String] = [
 /// 追加・改名したら ApiSkills の get-shares と本配列を同時更新する。
 public let allSharesNotApplicableReasons: [String] = [
     statementNoteNotApplicableNotFound,
-    statementNotApplicableUSGAAP,
 ]
+
+/// 旧版の推移の表パーサが付けた警告（表の円単位が決まらず要確認）。表パーサは廃止したが、
+/// この警告だけで要確認になっている格納行は残る。期末発行済株式数（タグ）には関係しないので、
+/// `shares` はこの警告だけの行を使う（`isServableIssuedSharesForShares`）。
+public let legacyIssuedSharesUnitUnresolvedWarning = "issued_shares_unit_unresolved"
 
 /// `shares` の公開契約の1行。`key` は `eps` / `diluted_eps` / `bps` / `issued_shares`。
 /// `label` は有報の表示名、`unit` は `yen_per_share` / `shares`。
@@ -243,7 +247,7 @@ public enum StatementNoteResolveResult: Sendable {
 /// - 表形式の note（EPS/BPS等・PPE明細・のれん明細）は `items` を使う
 ///   （`StatementLineItem` を再利用し、Statement 本体と表現を揃える）
 /// - 設備投資概要は `capexSegments`、発行済株式総数は `issuedSharesAsOf`（期末の離散タグ）。
-///   旧世代（v1）の行が持つ `issued_shares_events` キーは読まない
+///   表パーサ廃止前の行が持つ `issued_shares_events` キーは読まない
 /// - 借入金等明細表は `borrowingsComponents`（当期首/当期末残高・平均利率、2026-08-02再設計。
 ///   単一値の `items` では平均利率を表現できないため専用型に切り出した）
 ///
@@ -361,7 +365,7 @@ public struct CapexSegmentPayload: Codable, Sendable {
 }
 
 /// 期末の発行済株式総数（`issued_shares_and_capital` note_type 専用。`PerShareExtractor` と同じタグ解決の生株）。
-/// 旧世代（v1）の行は資本金・資本準備金のキーも持つが、読まない（Codable は未知キーを無視する）。
+/// 表パーサ廃止前の行は資本金・資本準備金のキーも持つが、読まない（Codable は未知キーを無視する）。
 public struct IssuedSharesAsOfPayload: Codable, Sendable {
     public var issuedShares: Double?
 

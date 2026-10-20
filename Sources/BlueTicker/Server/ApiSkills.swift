@@ -554,8 +554,7 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                 diluted_eps など）。IFRS の継続事業・非継続事業別の EPS は get-statement の損益計算書にあります。
                 取得できない場合はエラー応答とともに reason が返ることがあります
                 （reason 無しは単に未取り込み。REST では 404、MCP では isError）。
-                not_found（当該書類に開示・XBRLタグが見つからない＝正当な欠測）、
-                us_gaap_unsupported（US-GAAP 連結で構造化タグ判定ができない場合）。
+                not_found（当該書類に開示・XBRLタグが見つからない＝正当な欠測）。
                 """,
             method: "GET",
             path: "/v1/companies/{code}/shares",
@@ -579,7 +578,7 @@ public func apiSkillsCatalog() -> [ApiSkill] {
             ],
             instructions: """
                 Shares（EPS・希薄化後 EPS・BPS・発行済株式総数、有報の記載そのまま）。格納済みデータのみ。
-                未算出は 404（reason 無し）、非開示は 404 + reason（not_found / us_gaap_unsupported）、
+                未算出は 404（reason 無し）、非開示は 404 + reason（not_found）、
                 DB 非接続は 503。旧 statement/notes（note_type 指定）は廃止し常に 404。
                 例: GET /v1/companies/7203/shares
                 """,
