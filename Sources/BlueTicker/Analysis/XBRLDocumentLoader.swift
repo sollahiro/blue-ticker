@@ -75,6 +75,7 @@ nonisolated(unsafe) private var _standardTaxonomyLabelsCache: (
 nonisolated(unsafe) private var _didWarnMissingStandardTaxonomyLabels = false
 private let _standardTaxonomyLock = NSLock()
 let xbrlStandardLabelRole = "http://www.xbrl.org/2003/role/label"
+let xbrlVerboseLabelRole = "http://www.xbrl.org/2003/role/verboseLabel"
 
 private func isDeprecatedXbrlLabelRole(_ role: String) -> Bool {
     role.contains("deprecated")

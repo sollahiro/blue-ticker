@@ -340,8 +340,30 @@ func loadStoredShares(code: String, docId: String?, db: Database) async throws -
     let issued = try await loadStoredStatementNote(
         code: code, docId: anchorDocID, noteType: statementNoteTypeIssuedSharesAndCapital, db: db,
         isPubliclyServable: isServableIssuedSharesForShares)
-    return composeShares(perShare: perShare, issuedShares: issued)
+    if anchorDocID == nil, case .found(let body) = issued, let found = body["doc_id"] as? String {
+        anchorDocID = found
+    }
+    var incomeStatement: [StatementLineItem] = []
+    if let anchorDocID, let row = try await CompanyStatement.find(anchorDocID, on: db),
+        row.code == String(code.prefix(4)), isServableStatementCacheVersion(row.cacheVersion)
+    {
+        incomeStatement = row.payload.incomeStatement
+    }
+    return composeShares(perShare: perShare, issuedShares: issued, incomeStatement: incomeStatement)
 }
+
+/// 損益計算書の継続・非継続事業の1株当たり利益（IFRS のみタグがある）。`shares` の key と表示名。
+/// 値は同じ書類の格納済み statement から取り、有報から取り直さない。
+let sharesOperationsPerShareItems: [(tag: String, key: String, label: String, after: String)] = [
+    ("ContinuingOperationsBasicEarningsLossPerShareIFRS", "continuing_eps",
+     "継続事業の基本的１株当たり当期利益", "eps"),
+    ("DiscontinuedOperationsBasicEarningsLossPerShareIFRS", "discontinued_eps",
+     "非継続事業の基本的１株当たり当期利益", "eps"),
+    ("ContinuingOperationsDilutedEarningsLossPerShareIFRS", "continuing_diluted_eps",
+     "継続事業の希薄化後１株当たり当期利益", "diluted_eps"),
+    ("DiscontinuedOperationsDilutedEarningsLossPerShareIFRS", "discontinued_diluted_eps",
+     "非継続事業の希薄化後１株当たり当期利益", "diluted_eps"),
+]
 
 /// `shares` が発行済株式の注記行を使ってよいか。旧版の推移の表パーサが付けた円単位の警告
 /// （`legacyIssuedSharesUnitUnresolvedWarning`）だけの要確認は、表の列の問題で期末発行済株式数
@@ -356,7 +378,8 @@ func isServableIssuedSharesForShares(needsReview: Bool, warnings: [String]) -> B
 /// 2注記の読み取り結果を `shares` の公開契約（`SharesResponse`）へ写す純関数。
 /// 片方だけでも値があれば返す。どちらも値が無いときは 1株当たり情報の reason を優先する。
 func composeShares(
-    perShare: StatementNoteLoadResult, issuedShares: StatementNoteLoadResult
+    perShare: StatementNoteLoadResult, issuedShares: StatementNoteLoadResult,
+    incomeStatement: [StatementLineItem] = []
 ) -> StatementNoteLoadResult {
     var code: String?
     var docID: String?
@@ -385,6 +408,14 @@ func composeShares(
                         unit: sharesIssuedSharesUnit))
             }
         }
+    }
+    // 継続・非継続は基本的／希薄化後それぞれの直後に置く。親の行が無ければ（有報に載らない等）
+    // 継続・非継続も出さない（内訳だけが浮くのを避ける）。円以外の単位は混ぜない。
+    for (tag, key, label, after) in sharesOperationsPerShareItems.reversed() {
+        guard let index = items.firstIndex(where: { $0.key == after }),
+            let line = incomeStatement.first(where: { $0.tag == tag && $0.unit == "JPYPerShares" })
+        else { continue }
+        items.insert(SharesItem(key: key, label: label, value: line.value, unit: "yen_per_share"), at: index + 1)
     }
     if let code, let docID, !items.isEmpty {
         return .found(SharesResponse(code: code, docId: docID, items: items).jsonObject())
