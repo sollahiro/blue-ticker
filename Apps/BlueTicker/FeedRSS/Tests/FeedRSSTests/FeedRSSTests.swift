@@ -72,6 +72,11 @@ private let sample = """
         #expect(dates.jstMinute("not a date") == nil)
     }
 
+    @Test func topFeedKeepsOnlyAnnualReportsInFeedOrder() throws {
+        let items = try #require(FeedRSS.parse(Data(sample.utf8)))
+        #expect(FeedRSS.topFeed(items).map(\.docId) == ["S100AAAA"])
+    }
+
     @Test func emptyChannelIsEmptyList() throws {
         let xml = #"<?xml version="1.0"?><rss version="2.0"><channel><title>x</title></channel></rss>"#
         let items = try #require(FeedRSS.parse(Data(xml.utf8)))

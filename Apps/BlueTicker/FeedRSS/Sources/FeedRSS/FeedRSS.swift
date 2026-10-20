@@ -5,13 +5,21 @@ import Foundation
 #endif
 
 /// Top feed の取得元。公開 RSS（`workers/feed-rss`。日次 19:15 JST に R2 へ生成）を読む。
-/// HAPIS・トークン・オリジン・Neon を通らない。件数と期間は RSS のまま（7 日・最大 200 件・間引きなし）。
+/// HAPIS・トークン・オリジン・Neon を通らない。出すのは有報（120）だけで、RSS 内の有報は間引かない
+/// （RSS は 7 日窓の 4 種別＋期間に関係ない有報の直近 10 件）。
 /// 銘柄コードは `<category domain="jp:sec_code">` から取る（タイトルから読まない）。
 /// 社名はタイトルの「社名（コード） 書類種別」から、コードの括弧より前を取る。
 enum FeedRSS {
     static let url = URL(string: "https://feed.sollahiro.com/blue-ticker/edinet-filings.xml")!
     /// RSS の `Cache-Control: max-age=3600` に合わせる。前回の取得からこの間は再検証しない。
     static let revalidateInterval: TimeInterval = 60 * 60
+    /// Top feed に出す書類種別。有報（120）だけ。訂正・四半期・半期は RSS にあっても出さない。
+    static let topFeedDocTypes: Set<String> = ["120"]
+
+    /// 解析した RSS から Top feed に出す行だけを残す（並びは RSS のまま）。
+    static func topFeed(_ items: [Item]) -> [Item] {
+        items.filter { topFeedDocTypes.contains($0.docType) }
+    }
 
     struct Item: Hashable, Identifiable, Sendable {
         var docId: String

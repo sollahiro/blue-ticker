@@ -33,6 +33,55 @@ WHERE doc_type_code = ANY($1::text[])
 ORDER BY submit_date_time DESC, doc_id DESC
 LIMIT $3`;
 
+// 有報（120）は期間に関係なく、新しい順にこの件数を必ず載せる。
+// 7 暦日の窓は閑散期に有報が数件しか無く、iOS の Top feed（有報だけを出す）が
+// REST の既定（有報 10 件）より少なくなるため。期間ではなく件数で区切るのは、
+// 6 月の決算期に期間を延ばすと有報だけで FEED_ITEM_LIMIT を超えるから。
+export const FEED_ANNUAL_DOC_TYPE = "120";
+export const FEED_ANNUAL_MIN = 10;
+
+// 有報の直近行。$1: 書類種別 text、$2: 件数 int。listed 条件は FEED_SQL と同じで、期間の下限だけ無い。
+export const ANNUAL_SQL = `SELECT doc_id, sec_code, filer_name, doc_type_code, ordinance_code, period_end, submit_date_time, doc_description
+FROM edinet_documents
+WHERE doc_type_code = $1
+  AND ordinance_code = '010'
+  AND sec_code LIKE '____0'
+  AND sec_code <> '00000'
+ORDER BY submit_date_time DESC, doc_id DESC
+LIMIT $2`;
+
+// 窓の行と有報の直近行を doc_id で重複除去し、submit_date_time 降順・doc_id 降順に並べる。
+// limit を超えたら有報の直近行以外を古い方から落とす（有報の直近行は必ず残る）。
+export function mergeFeedRows(windowRows, annualRows, limit) {
+  const byId = new Map();
+  for (const row of [...annualRows, ...windowRows]) {
+    if (row && typeof row.doc_id === "string" && !byId.has(row.doc_id)) {
+      byId.set(row.doc_id, row);
+    }
+  }
+  const pinned = new Set(annualRows.map((row) => row?.doc_id));
+  const sorted = [...byId.values()].sort(compareRowsDesc);
+  let excess = sorted.length - limit;
+  if (excess <= 0) return sorted;
+  const kept = [];
+  for (let index = sorted.length - 1; index >= 0; index -= 1) {
+    const row = sorted[index];
+    if (excess > 0 && !pinned.has(row.doc_id)) {
+      excess -= 1;
+      continue;
+    }
+    kept.push(row);
+  }
+  return kept.reverse();
+}
+
+function compareRowsDesc(a, b) {
+  const at = String(a.submit_date_time ?? "");
+  const bt = String(b.submit_date_time ?? "");
+  if (at !== bt) return at < bt ? 1 : -1;
+  return a.doc_id < b.doc_id ? 1 : a.doc_id > b.doc_id ? -1 : 0;
+}
+
 // 会社アイコンの R2 オブジェクトキー。$1: 4 桁コード text[]。
 // company_icons は 1 社 1 行（主キー code）。公開 URL は REST の icon_url と同じく
 // `{公開ベース URL}/{r2_object_key}`（Swift R2PublicURLConfig.publicURL(forKey:)）。

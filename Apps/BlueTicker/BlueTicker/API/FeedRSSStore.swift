@@ -41,7 +41,7 @@ actor FeedRSSStore {
         fileEncoder = encoder
     }
 
-    /// 保存済みの RSS を解析して返す。保存が無い・読めなければ `nil`。
+    /// 保存済みの RSS を解析し、Top feed に出す行（有報だけ）を返す。保存が無い・読めなければ `nil`。
     /// 読めない保存は検証子ごと忘れ、次の再検証を全件取得にする。
     func cachedItems() -> [FeedRSS.Item]? {
         guard let record = restoredRecord() else { return nil }
@@ -50,14 +50,14 @@ actor FeedRSSStore {
             try? FileManager.default.removeItem(at: fileURL)
             return nil
         }
-        return items
+        return FeedRSS.topFeed(items)
     }
 
     func needsRevalidation(now: Date = Date()) -> Bool {
         FeedRSS.needsRevalidation(restoredRecord(), now: now)
     }
 
-    /// 条件付き GET を送る。200 で解析できたときだけ新しい一覧を返す（304・失敗・cancel は `nil`）。
+    /// 条件付き GET を送る。200 で解析できたときだけ新しい一覧（有報だけ）を返す（304・失敗・cancel は `nil`）。
     func revalidate(now: Date = Date()) async -> [FeedRSS.Item]? {
         let previous = restoredRecord()
         var request = URLRequest(url: FeedRSS.url)
@@ -88,7 +88,7 @@ actor FeedRSSStore {
             return nil
         case .replaced(let updated, let items):
             save(updated)
-            return items
+            return FeedRSS.topFeed(items)
         case .failed:
             return nil
         }
