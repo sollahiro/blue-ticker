@@ -319,6 +319,69 @@ func loadStoredStatementNote(
     ])
 }
 
+// MARK: - read 経路（REST/MCP shares）
+
+/// `shares` の発行済株式数の行（`SharesItem`）の固定値。
+let sharesIssuedSharesKey = "issued_shares"
+let sharesIssuedSharesLabel = "発行済株式総数"
+let sharesIssuedSharesUnit = "shares"
+
+/// 格納済みの2注記（`per_share_information` / `issued_shares_and_capital`）から公開契約
+/// {code, doc_id, items} を組み立てる。書類は 1株当たり情報の行に揃える（doc_id 省略時はその最新）。
+/// 1株当たり情報が無い書類だけ、発行済株式の行の書類を使う。資本金・資本準備金・推移の表は返さない。
+func loadStoredShares(code: String, docId: String?, db: Database) async throws -> StatementNoteLoadResult {
+    let perShare = try await loadStoredStatementNote(
+        code: code, docId: docId, noteType: statementNoteTypePerShareInformation, db: db)
+    var anchorDocID = docId
+    if case .found(let body) = perShare, let found = body["doc_id"] as? String {
+        anchorDocID = found
+    }
+    let issued = try await loadStoredStatementNote(
+        code: code, docId: anchorDocID, noteType: statementNoteTypeIssuedSharesAndCapital, db: db)
+    return composeShares(perShare: perShare, issuedShares: issued)
+}
+
+/// 2注記の読み取り結果を `shares` の公開契約（`SharesResponse`）へ写す純関数。
+/// 片方だけでも値があれば返す。どちらも値が無いときは 1株当たり情報の reason を優先する。
+func composeShares(
+    perShare: StatementNoteLoadResult, issuedShares: StatementNoteLoadResult
+) -> StatementNoteLoadResult {
+    var code: String?
+    var docID: String?
+    var items: [SharesItem] = []
+    if case .found(let body) = perShare {
+        code = body["code"] as? String
+        docID = body["doc_id"] as? String
+        let note = body["note"] as? [String: Any]
+        for item in note?["items"] as? [[String: Any]] ?? [] {
+            guard let key = item["tag"] as? String, let value = item["value"] as? Double else { continue }
+            items.append(
+                SharesItem(key: key, label: item["label"] as? String, value: value, unit: item["unit"] as? String))
+        }
+    }
+    if case .found(let body) = issuedShares {
+        let issuedDocID = body["doc_id"] as? String
+        // 1株当たり情報と別書類の発行済株式は混ぜない。
+        if docID == nil || docID == issuedDocID {
+            let asOf = (body["note"] as? [String: Any])?["as_of_period_end"] as? [String: Any]
+            if let value = asOf?["issued_shares"] as? Double {
+                code = code ?? body["code"] as? String
+                docID = docID ?? issuedDocID
+                items.append(
+                    SharesItem(
+                        key: sharesIssuedSharesKey, label: sharesIssuedSharesLabel, value: value,
+                        unit: sharesIssuedSharesUnit))
+            }
+        }
+    }
+    if let code, let docID, !items.isEmpty {
+        return .found(SharesResponse(code: code, docId: docID, items: items).jsonObject())
+    }
+    if case .notApplicable(let reason) = perShare { return .notApplicable(reason: reason) }
+    if case .notApplicable(let reason) = issuedShares { return .notApplicable(reason: reason) }
+    return .absent
+}
+
 // MARK: - servable/unservable 集計
 
 /// `source`/`cache_version`/`note_type` を対象にした軽量射影（`payload` の JSONB を転送しない）。

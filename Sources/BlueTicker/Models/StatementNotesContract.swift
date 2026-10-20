@@ -148,6 +148,62 @@ public let allStatementNoteNotApplicableReasons: [String] = [
     statementNotApplicableUSGAAP,
 ]
 
+/// `shares`（REST/MCP）の 404 で返しうる `reason`（公開契約）。公開中の2注記が出す理由だけ。
+/// 追加・改名したら ApiSkills の get-shares と本配列を同時更新する。
+public let allSharesNotApplicableReasons: [String] = [
+    statementNoteNotApplicableNotFound,
+    statementNotApplicableUSGAAP,
+]
+
+/// `shares` の公開契約の1行。`key` は `eps` / `diluted_eps` / `bps` / `issued_shares`。
+/// `label` は有報の表示名、`unit` は `yen_per_share` / `shares`。
+public struct SharesItem: Codable, Sendable, Equatable {
+    public var key: String
+    public var label: String?
+    public var value: Double
+    public var unit: String?
+
+    public init(key: String, label: String?, value: Double, unit: String?) {
+        self.key = key
+        self.label = label
+        self.value = value
+        self.unit = unit
+    }
+
+    public func jsonObject() -> [String: Any] {
+        [
+            "key": key,
+            "label": label as Any? ?? NSNull(),
+            "value": value,
+            "unit": unit as Any? ?? NSNull(),
+        ]
+    }
+}
+
+/// `shares` API の公開レスポンス（{code, doc_id, items}）。値は財務諸表注記取り込みの2注記
+/// （`per_share_information` / `issued_shares_and_capital` の期末発行済株式数）を1書類に揃えたもの。
+public struct SharesResponse: Codable, Sendable, Equatable {
+    public var code: String
+    public var docId: String
+    public var items: [SharesItem]
+
+    private enum CodingKeys: String, CodingKey {
+        case code
+        case docId = "doc_id"
+        case items
+    }
+
+    public init(code: String, docId: String, items: [SharesItem]) {
+        self.code = code
+        self.docId = docId
+        self.items = items
+    }
+
+    public func jsonObject() -> [String: Any] {
+        ["code": code, "doc_id": docId, "items": items.map { $0.jsonObject() }]
+    }
+}
+
 /// 404 `reason` が公開契約の既知コードか（クライアント／カタログ突合用）。
 public func isKnownStatementNoteNotApplicableReason(_ reason: String) -> Bool {
     allStatementNoteNotApplicableReasons.contains(reason)

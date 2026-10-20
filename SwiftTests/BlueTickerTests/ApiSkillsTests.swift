@@ -26,7 +26,7 @@ import Testing
                 "search_companies", "get_filings",
                 "get_financial_summary",
                 "get_waterfall", "get_filing_content",
-                "get_breakdown", "get_statement", "get_statement_notes",
+                "get_breakdown", "get_statement", "get_shares",
                 "get_feed_updates", "get_feed_trend",
             ])
     }
@@ -69,38 +69,35 @@ import Testing
 
     /// MCP tools/list と REST /v1/skills が共有する description に、未取り込みと非開示の
     /// 区別（reason 有無とコード意味）が載っていること（チャットボットが読み方を知る契約）。
-    @Test func statementNotesDescriptionDocumentsReasonSemantics() throws {
-        let skill = try #require(apiSkill(id: "get-statement-notes"))
+    @Test func sharesDescriptionDocumentsReasonSemantics() throws {
+        let skill = try #require(apiSkill(id: "get-shares"))
         #expect(skill.description.contains("reason"))
         #expect(skill.description.contains("未取り込み"))
         #expect(skill.description.contains("isError"))
-        for reason in allStatementNoteNotApplicableReasons {
+        for reason in allSharesNotApplicableReasons {
             #expect(
                 skill.description.contains(reason) || skill.instructions.contains(reason),
                 "missing reason \(reason)")
         }
     }
 
-    /// 未公開 note_type を公開カタログ（description / note_type 引数説明）に載せない。
-    @Test func statementNotesCatalogOmitsUnpublishedSgaExpenseBreakdown() throws {
-        let skill = try #require(apiSkill(id: "get-statement-notes"))
-        let noteType = try #require(skill.parameters.first { $0.name == "note_type" })
-        let surfaces = [skill.description, skill.instructions, noteType.description]
+    /// get-shares は株式の4値だけ。旧 notes の note_type・資本金・推移の表をカタログに載せない。
+    @Test func sharesCatalogListsKeysAndOmitsRetiredNotes() throws {
+        let skill = try #require(apiSkill(id: "get-shares"))
+        #expect(skill.path == "/v1/companies/{code}/shares")
+        #expect(!skill.parameters.contains { $0.name == "note_type" })
+        for key in ["eps", "diluted_eps", "bps", "issued_shares"] {
+            #expect(skill.description.contains(key), "missing key \(key)")
+        }
+        let surfaces = [skill.description, skill.instructions]
         for text in surfaces {
             #expect(!text.contains("sga_expense_breakdown"))
-            #expect(!text.contains("販売費及び一般管理費の費目内訳"))
-            #expect(!text.contains("dividends"))
-            #expect(!text.contains("policy_holding_securities"))
+            #expect(!text.contains("issued_shares_and_capital"))
+            #expect(!text.contains("per_share_information"))
+            #expect(!text.contains("資本準備金"))
             #expect(!text.contains("borrowings_schedule"))
-            #expect(!text.contains("lease_liabilities"))
-            #expect(!text.contains("借入金等明細"))
-            #expect(!text.contains("リース負債"))
         }
-        for published in allStatementNoteTypes {
-            #expect(
-                noteType.description.contains(published),
-                "note_type param must list published type \(published)")
-        }
+        #expect(apiSkill(id: "get-statement-notes") == nil)
     }
 
     @Test func breakdownCatalogListsCapexAndOmitsRetiredAxes() throws {
@@ -117,7 +114,7 @@ import Testing
         #expect(!skill.description.contains("axis=business"))
         #expect(skill.description.contains("needs_review"))
         #expect(skill.description.contains("interest_bearing_debt_lease_denominator_from_notes"))
-        #expect(apiSkillsSchemaVersion == 5)
+        #expect(apiSkillsSchemaVersion == 6)
     }
 
     @Test func breakdownCatalogListsAssetCategoryAxes() throws {
@@ -129,10 +126,5 @@ import Testing
         }
         #expect(skill.description.contains("subtotal"))
         #expect(skill.description.contains("source_tag"))
-        // notes の引数説明からは外す
-        let notes = try #require(apiSkill(id: "get-statement-notes"))
-        let noteType = try #require(notes.parameters.first { $0.name == "note_type" })
-        #expect(!noteType.description.contains("property_plant_equipment_schedule"))
-        #expect(!noteType.description.contains("goodwill_and_intangibles"))
     }
 }

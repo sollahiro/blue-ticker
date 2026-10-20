@@ -12,7 +12,7 @@ public let feedTrendRecordedTools: Set<String> = [
     "get_filing_content",
     "get_breakdown",
     "get_statement",
-    "get_statement_notes",
+    "get_shares",
 ]
 
 /// `surface` の許可値。ホスト名ではなく origin が明示する（MCP はすべて `POST /`）。
