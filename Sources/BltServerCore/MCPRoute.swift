@@ -323,15 +323,12 @@ private func dispatchMcpTool(
             await serveStoredStatement(code: code, docId: docId, years: years, db: db, logger: logger),
             notFoundMessage: "財務諸表は未抽出です")
 
-    case "get_statement_notes":
+    case "get_shares":
         let code = args["code"]?.stringValue ?? ""
         let docId = args["doc_id"]?.stringValue
-        guard let noteType = args["note_type"]?.stringValue, !noteType.isEmpty else {
-            return errorToolResult("note_type は必須です")
-        }
         return mapReasonedResult(
-            await serveStoredStatementNote(code: code, docId: docId, noteType: noteType, db: db, logger: logger),
-            notFoundMessage: "指定された note_type の注記は未算出です")
+            await serveStoredShares(code: code, docId: docId, db: db, logger: logger),
+            notFoundMessage: sharesNotFoundMessage)
 
     case "get_feed_updates":
         let limit = parseFeedLimit(args["limit"]?.intValue)
@@ -393,7 +390,7 @@ private func mapFeedTrendResult(_ result: FeedTrendServeResult) -> CallTool.Resu
     }
 }
 
-/// `ReasonedServeResult` → `CallTool.Result`（breakdown / statement-notes 共通）。
+/// `ReasonedServeResult` → `CallTool.Result`（breakdown / shares 共通）。
 /// REST の `makeReasonedResponse` と同型（notApplicable / withheld のときエラー本文に `reason` を添える。issue #132）。
 /// withheld は isError で、軸固有メッセージと reason を載せる（未算出文言にしない）。
 private func mapReasonedResult(

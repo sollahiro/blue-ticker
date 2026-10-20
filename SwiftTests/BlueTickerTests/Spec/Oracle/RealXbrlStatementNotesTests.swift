@@ -1387,141 +1387,36 @@ import Testing
         #expect(segments[0].investmentAmount == 3_705_000_000)
     }
 
-    // MARK: - issued_shares_and_capital golden（ユーザー実データ確認済み 2026-08-02、as_of 2026-08-11）
+    // MARK: - issued_shares_and_capital golden（期末の発行済株式総数だけ。公開面は shares の issued_shares）
     //
-    // 2経路: (1) `as_of_period_end` = 離散タグの期末スナップショット（発行済は PerShareExtractor と
-    // 同値、資本金/資本準備金は CapitalStock*/LegalCapitalSurplus）。(2) `issued_shares_events` =
-    // textblock 表のイベント列。株数=株/千株、金額=千円/百万円と単位が会社ごとに揺れるため常に
-    // 「株」「円」の生値へ正規化する。行の採否は「株数増減／資本金増減／資本準備金増減のいずれか1つでも
-    // 実数」で判定する。日立の「自◯至◯」期間ラベル行（3増減欄すべて「－」）だけを除外する。
+    // 発行済は PerShareExtractor と同値（【株式の総数等】の普通株式→主要な経営指標等の推移）。
+    // 資本金・資本準備金と推移の表は読まない。
 
-    @Test(.enabled(if: cacheAvailable("S100JRT9"), "XBRL cache S100JRT9 not available"))
-    func goldenIssuedSharesAndCapitalLaserTecStockSplitsOnly() throws {
-        let result = StatementNotesResolver.resolveIssuedSharesAndCapital(xbrlDir: Self.xbrlDir("S100JRT9"))
-        guard case .resolved(let payload, let source, _) = result else {
-            Issue.record("expected .resolved, got \(result)")
-            return
-        }
-        #expect(source == statementNoteSourceXbrlFacts)
-        let events = try #require(payload.issuedSharesEvents)
-        #expect(events.count == 2)
-        #expect(events[0].sharesDelta == 23_571_600)
-        #expect(events[0].sharesBalance == 47_143_200)
-        #expect(events[0].capitalDelta == nil)
-        #expect(events[1].sharesDelta == 47_143_200)
-        #expect(events[1].sharesBalance == 94_286_400)
-    }
-
-    /// smoke 富士フイルム: as_of 発行済が smoke_expected と一致、分割イベント1件、資本金/準備金タグ。
+    /// smoke 富士フイルム: as_of 発行済が smoke_expected と一致。
     @Test(.enabled(if: cacheAvailable("S100W3XJ"), "XBRL cache S100W3XJ not available"))
-    func goldenIssuedSharesAndCapitalFujifilmAsOfAndSplitEvent() throws {
+    func goldenIssuedSharesAndCapitalFujifilmAsOf() throws {
         let result = StatementNotesResolver.resolveIssuedSharesAndCapital(xbrlDir: Self.xbrlDir("S100W3XJ"))
         guard case .resolved(let payload, let source, _) = result else {
             Issue.record("expected .resolved, got \(result)")
             return
         }
         #expect(source == statementNoteSourceXbrlFacts)
-        let asOf = try #require(payload.issuedSharesAsOf)
-        #expect(asOf.issuedShares == 1_243_877_184)
-        #expect(asOf.capitalStock == 40_363_000_000)
-        #expect(asOf.capitalReserve == 63_636_000_000)
-        let events = try #require(payload.issuedSharesEvents)
-        #expect(events.count == 1)
-        #expect(events[0].sharesDelta == 829_251_456)
-        #expect(events[0].sharesBalance == 1_243_877_184)
-        #expect(events[0].capitalDelta == nil)
+        #expect(payload.issuedSharesAsOf?.issuedShares == 1_243_877_184)
+        #expect(!payload.needsReview)
+        #expect(payload.issuedSharesAsOf?.jsonObject().keys.sorted() == ["issued_shares"])
     }
 
-    /// smoke 味の素: 表の期末残高は千株丸め、as_of はタグ生株（smoke_expected と一致）。
+    /// 味の素: 【株式の総数等】の発行済株式数（株単位）。推移の表は千株丸め（502,818千株）だが読まない。
+    /// code=2802 fy_end=2025-03-31 doc_id=S100VXJA page=66 field=発行済株式総数（普通株式 502,818,808株）
     @Test(.enabled(if: cacheAvailable("S100VXJA"), "XBRL cache S100VXJA not available"))
-    func goldenIssuedSharesAndCapitalAjinomotoAsOfNotRoundedTableBalance() throws {
+    func goldenIssuedSharesAndCapitalAjinomotoAsOfIsExactShareCount() throws {
         let result = StatementNotesResolver.resolveIssuedSharesAndCapital(xbrlDir: Self.xbrlDir("S100VXJA"))
         guard case .resolved(let payload, _, _) = result else {
             Issue.record("expected .resolved, got \(result)")
             return
         }
-        let asOf = try #require(payload.issuedSharesAsOf)
-        #expect(asOf.issuedShares == 502_818_808)
-        #expect(asOf.capitalStock == 79_863_000_000)
-        #expect(asOf.capitalReserve == 4_274_000_000)
-        let events = try #require(payload.issuedSharesEvents)
-        #expect(events.last?.sharesBalance == 502_818_000)
-        #expect(events.last?.sharesBalance != asOf.issuedShares)
-    }
-
-    @Test(.enabled(if: cacheAvailable("S100QZT0"), "XBRL cache S100QZT0 not available"))
-    func goldenIssuedSharesAndCapitalHitachiExcludesFiscalYearPlaceholderRows() throws {
-        // 「自2018年４月１日 至2019年３月31日」等の期間ラベル行（変動なし確認用、増減欄が
-        // すべて「－」）を挟むが、実イベント行（単発日付、5件）だけが残ることを確認する。
-        // 2022/12/14は自己株式消却（△表記）で資本金・資本準備金の増減欄は「－」のまま。
-        let result = StatementNotesResolver.resolveIssuedSharesAndCapital(xbrlDir: Self.xbrlDir("S100QZT0"))
-        guard case .resolved(let payload, _, _) = result else {
-            Issue.record("expected .resolved, got \(result)")
-            return
-        }
-        let events = try #require(payload.issuedSharesEvents)
-        #expect(events.count == 5)
-        #expect(events.allSatisfy { !$0.date.contains("自") })
-        let retirement = try #require(events.last)
-        #expect(retirement.sharesDelta == -30_488_800)
-        #expect(retirement.sharesBalance == 938_083_077)
-        #expect(retirement.capitalDelta == nil)
-        let firstIssuance = events[0]
-        #expect(firstIssuance.sharesDelta == 587_800)
-        #expect(firstIssuance.capitalDelta == 1_072_000_000)
-        #expect(firstIssuance.capitalReserveDelta == 1_072_000_000)
-    }
-
-    @Test(.enabled(if: cacheAvailable("S100QZOM"), "XBRL cache S100QZOM not available"))
-    func goldenIssuedSharesAndCapitalSoftBankGroupThousandShareUnit() throws {
-        // ヘッダーが「（千株）」表記のため、生値の1000倍が正しい株数（消却・分割イベント5件）。
-        let result = StatementNotesResolver.resolveIssuedSharesAndCapital(xbrlDir: Self.xbrlDir("S100QZOM"))
-        guard case .resolved(let payload, _, _) = result else {
-            Issue.record("expected .resolved, got \(result)")
-            return
-        }
-        let events = try #require(payload.issuedSharesEvents)
-        #expect(events.count == 5)
-        #expect(events[0].sharesDelta == -55_753_000)
-        #expect(events[0].sharesBalance == 1_044_907_000)
-        #expect(events[1].sharesDelta == 1_044_907_000)
-        #expect(events[1].sharesBalance == 2_089_814_000)
-        #expect(events.last?.sharesBalance == 1_469_995_000)
-    }
-
-    @Test(.enabled(if: cacheAvailable("S100QYHM"), "XBRL cache S100QYHM not available"))
-    func goldenIssuedSharesAndCapitalKobeSteelStockExchangeIssuance() throws {
-        // 株式交換による新株発行1件のみ。資本金増減欄は「－」だが資本準備金は実額で増加
-        // （株式交換型の新株発行が資本準備金側に計上された珍しいケース）。
-        let result = StatementNotesResolver.resolveIssuedSharesAndCapital(xbrlDir: Self.xbrlDir("S100QYHM"))
-        guard case .resolved(let payload, _, _) = result else {
-            Issue.record("expected .resolved, got \(result)")
-            return
-        }
-        let events = try #require(payload.issuedSharesEvents)
-        #expect(events.count == 1)
-        #expect(events[0].sharesDelta == 31_981_753)
-        #expect(events[0].sharesBalance == 396_345_963)
-        #expect(events[0].capitalDelta == nil)
-        #expect(events[0].capitalReserveDelta == 21_907_000_000)
-    }
-
-    @Test(.enabled(if: cacheAvailable("S100VH9B"), "XBRL cache S100VH9B not available"))
-    func goldenIssuedSharesAndCapitalJTShareCountUnchangedOnlyCapitalReserveMoved() throws {
-        // 会社法448条に基づく資本準備金→その他資本剰余金への振替。株数・資本金は不変
-        // （増減欄が「－」）で資本準備金だけ実額で減少する行。株数増減欄だけで採否判定すると
-        // この行自体が消えてしまうバグを実データで発見・修正した回帰。
-        let result = StatementNotesResolver.resolveIssuedSharesAndCapital(xbrlDir: Self.xbrlDir("S100VH9B"))
-        guard case .resolved(let payload, _, _) = result else {
-            Issue.record("expected .resolved, got \(result)")
-            return
-        }
-        let events = try #require(payload.issuedSharesEvents)
-        #expect(events.count == 1)
-        #expect(events[0].sharesDelta == nil)
-        #expect(events[0].sharesBalance == 2_000_000_000)
-        #expect(events[0].capitalDelta == nil)
-        #expect(events[0].capitalReserveDelta == -100_000_000_000)
-        #expect(events[0].capitalReserveBalance == 636_400_000_000)
+        #expect(payload.issuedSharesAsOf?.issuedShares == 502_818_808)
+        #expect(!payload.needsReview)
+        #expect(payload.warnings.isEmpty)
     }
 }

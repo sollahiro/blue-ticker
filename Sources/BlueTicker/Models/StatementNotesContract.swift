@@ -148,6 +148,66 @@ public let allStatementNoteNotApplicableReasons: [String] = [
     statementNotApplicableUSGAAP,
 ]
 
+/// `shares`（REST/MCP）の 404 で返しうる `reason`（公開契約）。公開中の2注記が出す理由だけ。
+/// 追加・改名したら ApiSkills の get-shares と本配列を同時更新する。
+public let allSharesNotApplicableReasons: [String] = [
+    statementNoteNotApplicableNotFound,
+]
+
+/// 旧版の推移の表パーサが付けた警告（表の円単位が決まらず要確認）。表パーサは廃止したが、
+/// この警告だけで要確認になっている格納行は残る。期末発行済株式数（タグ）には関係しないので、
+/// `shares` はこの警告だけの行を使う（`isServableIssuedSharesForShares`）。
+public let legacyIssuedSharesUnitUnresolvedWarning = "issued_shares_unit_unresolved"
+
+/// `shares` の公開契約の1行。`key` は `eps` / `diluted_eps` / `bps` / `issued_shares`。
+/// `label` は有報の表示名、`unit` は `yen_per_share` / `shares`。
+public struct SharesItem: Codable, Sendable, Equatable {
+    public var key: String
+    public var label: String?
+    public var value: Double
+    public var unit: String?
+
+    public init(key: String, label: String?, value: Double, unit: String?) {
+        self.key = key
+        self.label = label
+        self.value = value
+        self.unit = unit
+    }
+
+    public func jsonObject() -> [String: Any] {
+        [
+            "key": key,
+            "label": label as Any? ?? NSNull(),
+            "value": value,
+            "unit": unit as Any? ?? NSNull(),
+        ]
+    }
+}
+
+/// `shares` API の公開レスポンス（{code, doc_id, items}）。値は財務諸表注記取り込みの2注記
+/// （`per_share_information` / `issued_shares_and_capital` の期末発行済株式数）を1書類に揃えたもの。
+public struct SharesResponse: Codable, Sendable, Equatable {
+    public var code: String
+    public var docId: String
+    public var items: [SharesItem]
+
+    private enum CodingKeys: String, CodingKey {
+        case code
+        case docId = "doc_id"
+        case items
+    }
+
+    public init(code: String, docId: String, items: [SharesItem]) {
+        self.code = code
+        self.docId = docId
+        self.items = items
+    }
+
+    public func jsonObject() -> [String: Any] {
+        ["code": code, "doc_id": docId, "items": items.map { $0.jsonObject() }]
+    }
+}
+
 /// 404 `reason` が公開契約の既知コードか（クライアント／カタログ突合用）。
 public func isKnownStatementNoteNotApplicableReason(_ reason: String) -> Bool {
     allStatementNoteNotApplicableReasons.contains(reason)
@@ -186,9 +246,8 @@ public enum StatementNoteResolveResult: Sendable {
 /// - スカラー値の note は `value`/`unit` を使う
 /// - 表形式の note（EPS/BPS等・PPE明細・のれん明細）は `items` を使う
 ///   （`StatementLineItem` を再利用し、Statement 本体と表現を揃える）
-/// - 設備投資概要は `capexSegments`、発行済株式・資本金等は
-///   `issuedSharesEvents`（textblock表のイベント列）と `issuedSharesAsOf`（期末の離散タグ
-///   スナップショット。summary 移行時はこちらを正とする）
+/// - 設備投資概要は `capexSegments`、発行済株式総数は `issuedSharesAsOf`（期末の離散タグ）。
+///   表パーサ廃止前の行が持つ `issued_shares_events` キーは読まない
 /// - 借入金等明細表は `borrowingsComponents`（当期首/当期末残高・平均利率、2026-08-02再設計。
 ///   単一値の `items` では平均利率を表現できないため専用型に切り出した）
 ///
@@ -199,7 +258,6 @@ public struct StatementNotePayload: Codable, Sendable {
     public var unit: String?
     public var items: [StatementLineItem]?
     public var capexSegments: [CapexSegmentPayload]?
-    public var issuedSharesEvents: [IssuedSharesEventPayload]?
     /// 期末スナップショット（離散XBRLタグ）。`issued_shares_and_capital` note_type 専用。
     public var issuedSharesAsOf: IssuedSharesAsOfPayload?
     public var borrowingsComponents: [BorrowingsComponentPayload]?
@@ -209,7 +267,6 @@ public struct StatementNotePayload: Codable, Sendable {
     public init(
         value: Double? = nil, unit: String? = nil, items: [StatementLineItem]? = nil,
         capexSegments: [CapexSegmentPayload]? = nil,
-        issuedSharesEvents: [IssuedSharesEventPayload]? = nil,
         issuedSharesAsOf: IssuedSharesAsOfPayload? = nil,
         borrowingsComponents: [BorrowingsComponentPayload]? = nil,
         needsReview: Bool = false, warnings: [String] = []
@@ -218,7 +275,6 @@ public struct StatementNotePayload: Codable, Sendable {
         self.unit = unit
         self.items = items
         self.capexSegments = capexSegments
-        self.issuedSharesEvents = issuedSharesEvents
         self.issuedSharesAsOf = issuedSharesAsOf
         self.borrowingsComponents = borrowingsComponents
         self.needsReview = needsReview
@@ -236,7 +292,6 @@ public struct StatementNotePayload: Codable, Sendable {
             "dividend_events": NSNull(),
             "capex_segments": capexSegments.map { $0.map { $0.jsonObject() } } as Any? ?? NSNull(),
             "borrowings_components": borrowingsComponents.map { $0.map { $0.jsonObject() } } as Any? ?? NSNull(),
-            "issued_shares_events": issuedSharesEvents.map { $0.map { $0.jsonObject() } } as Any? ?? NSNull(),
             "as_of_period_end": issuedSharesAsOf?.jsonObject() as Any? ?? NSNull(),
             "needs_review": needsReview,
             "warnings": warnings,
@@ -309,67 +364,17 @@ public struct CapexSegmentPayload: Codable, Sendable {
     }
 }
 
-/// 発行済株式・資本金等の期末スナップショット（`issued_shares_and_capital` note_type 専用）。
-/// textblock 表（`issuedSharesEvents`）とは別経路の離散XBRLタグ。表が千株丸めの会社でも
-/// financials / 将来の summary←notes 移行で使う期末値はこちらを正とする。
-/// - `issuedShares`: `PerShareExtractor` と同じタグ解決（生株）
-/// - `capitalStock`: 資本金（円）
-/// - `capitalReserve`: 資本準備金（`LegalCapitalSurplus`。資本剰余金全体ではない）
+/// 期末の発行済株式総数（`issued_shares_and_capital` note_type 専用。`PerShareExtractor` と同じタグ解決の生株）。
+/// 表パーサ廃止前の行は資本金・資本準備金のキーも持つが、読まない（Codable は未知キーを無視する）。
 public struct IssuedSharesAsOfPayload: Codable, Sendable {
     public var issuedShares: Double?
-    public var capitalStock: Double?
-    public var capitalReserve: Double?
 
-    public init(issuedShares: Double?, capitalStock: Double?, capitalReserve: Double?) {
+    public init(issuedShares: Double?) {
         self.issuedShares = issuedShares
-        self.capitalStock = capitalStock
-        self.capitalReserve = capitalReserve
     }
 
     public func jsonObject() -> [String: Any] {
-        [
-            "issued_shares": issuedShares as Any? ?? NSNull(),
-            "capital_stock": capitalStock as Any? ?? NSNull(),
-            "capital_reserve": capitalReserve as Any? ?? NSNull(),
-        ]
+        ["issued_shares": issuedShares as Any? ?? NSNull()]
     }
 }
 
-/// 発行済株式総数・資本金等の推移1行分（`issued_shares_and_capital` note_type 専用）。表の「年月日」欄は
-/// 単発日付（例:「2019年５月31日」）と期間表記（例:「自2018年４月１日 至2019年３月31日」）が
-/// 会社によって混在するため、`date` はセルのテキストをそのまま保持し加工しない。株数・金額は
-/// ヘッダーの単位表記（株/千株、千円/百万円）を判定して常に「株」「円」の生値へ正規化する。
-public struct IssuedSharesEventPayload: Codable, Sendable {
-    public var date: String
-    public var sharesDelta: Double?
-    public var sharesBalance: Double?
-    public var capitalDelta: Double?
-    public var capitalBalance: Double?
-    public var capitalReserveDelta: Double?
-    public var capitalReserveBalance: Double?
-
-    public init(
-        date: String, sharesDelta: Double?, sharesBalance: Double?, capitalDelta: Double?,
-        capitalBalance: Double?, capitalReserveDelta: Double?, capitalReserveBalance: Double?
-    ) {
-        self.date = date
-        self.sharesDelta = sharesDelta
-        self.sharesBalance = sharesBalance
-        self.capitalDelta = capitalDelta
-        self.capitalBalance = capitalBalance
-        self.capitalReserveDelta = capitalReserveDelta
-        self.capitalReserveBalance = capitalReserveBalance
-    }
-
-    public func jsonObject() -> [String: Any] {
-        [
-            "date": date,
-            "shares_delta": sharesDelta as Any? ?? NSNull(),
-            "shares_balance": sharesBalance as Any? ?? NSNull(),
-            "capital_delta": capitalDelta as Any? ?? NSNull(),
-            "capital_balance": capitalBalance as Any? ?? NSNull(),
-            "capital_reserve_delta": capitalReserveDelta as Any? ?? NSNull(),
-            "capital_reserve_balance": capitalReserveBalance as Any? ?? NSNull(),
-        ]
-    }
-}

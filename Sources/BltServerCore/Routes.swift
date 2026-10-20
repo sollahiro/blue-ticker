@@ -219,23 +219,22 @@ func registerRoutes(
             notFoundMessage: "財務諸表は未抽出です")
     }
 
-    // GET /v1/companies/{code}/statement/notes?note_type=per_share_information&doc_id=...
-    // DB（財務諸表注記取り込み company_statement_notes）の格納済み注記のみを返す。note_type 省略時は 400。
-    // `statement` 本体とは別エンドポイント（バージョニング独立。docs/statement.md）。
-    // 財務諸表注記取り込み の対象母集団は上場全体（日経225は処理順のみ。2026-09 に限定を廃止して拡大。ingest 側）。
-    v1.get("companies", ":code", "statement", "notes") { req async -> Response in
+    // GET /v1/companies/{code}/shares?doc_id=...
+    // EPS・希薄化後 EPS・BPS・発行済株式数（docs/statement.md）。DB（財務諸表注記取り込み company_statement_notes）の
+    // 格納済み2注記を1書類に揃えて返す。ライブ抽出へはフォールバックしない。
+    v1.get("companies", ":code", "shares") { req async -> Response in
         let code = req.parameters.get("code") ?? ""
-        recordFeedTrend(req.application, surface: "rest", tool: "get_statement_notes", code: code)
+        recordFeedTrend(req.application, surface: "rest", tool: "get_shares", code: code)
         let docId = req.query[String.self, at: "doc_id"]
-        guard let noteType = req.query[String.self, at: "note_type"], !noteType.isEmpty else {
-            return errorResponse(.badRequest, message: "note_type は必須です")
-        }
         return makeReasonedResponse(
-            await serveStoredStatementNote(
-                code: code, docId: docId, noteType: noteType, db: dbAvailable ? req.db : nil,
-                logger: req.logger
-            ),
-            notFoundMessage: "指定された note_type の注記は未算出です")
+            await serveStoredShares(
+                code: code, docId: docId, db: dbAvailable ? req.db : nil, logger: req.logger),
+            notFoundMessage: sharesNotFoundMessage)
+    }
+
+    // 旧 GET /v1/companies/{code}/statement/notes は廃止（常に 404。後継は shares）。
+    v1.get("companies", ":code", "statement", "notes") { _ async -> Response in
+        errorResponse(.notFound, message: statementNotesRetiredMessage)
     }
 
     // GET /v1/screen?sector=電気機器&roic_min=15&sales_cagr_3y_min=10&sort=roic&order=desc&limit=50
@@ -462,7 +461,7 @@ func serveStoredStatement(
 }
 
 /// notApplicable の reason を持つ read 結果の共通形。
-/// `breakdown` / `statement-notes` の応答変換（REST/MCP）を共通化するための型。
+/// `breakdown` / `shares` の応答変換（REST/MCP）を共通化するための型。
 /// E/F/unknown の reason を 404 応答へ載せるため、他エンドポイントが共有する
 /// `StoredDataServeResult` とは別に持つ（影響範囲を reason 付き応答に限定。issue #132）。
 enum ReasonedServeResult {
@@ -514,7 +513,7 @@ func mapWithheldBreakdownLoad(_ reason: String) -> ReasonedServeResult {
     return .notFound
 }
 
-/// reason 付き `stored` 系（breakdown / statement-notes）の DB 読み取り共通枠。
+/// reason 付き `stored` 系（breakdown / shares）の DB 読み取り共通枠。
 /// `serveStored` と同じ db ガード・リトライ・エラーマッピングを、3値の load 結果に適用する。
 private func serveStoredReasoned(
     db: Database?, logger: Logger,
@@ -562,13 +561,18 @@ func serveStoredBreakdown(
     }
 }
 
-/// `statement/notes` の DB 読み取り共通ロジック。`db` の扱いは `serveStoredFinancials` 参照。
+/// `shares` 404 応答のメッセージ（REST/MCP 共用）。
+let sharesNotFoundMessage = "株式の情報は未算出です"
+/// 廃止した `statement/notes` の 404 メッセージ（REST/MCP 共用）。
+let statementNotesRetiredMessage = "statement/notes は廃止しました。GET /v1/companies/{code}/shares を使ってください"
+
+/// `shares` の DB 読み取り共通ロジック。`db` の扱いは `serveStoredFinancials` 参照。
 /// ライブ解決へのフォールバックは行わない（有報セクション取り込み・内訳取り込み・Statement取り込み と同型）。
-func serveStoredStatementNote(
-    code: String, docId: String?, noteType: String, db: Database?, logger: Logger
+func serveStoredShares(
+    code: String, docId: String?, db: Database?, logger: Logger
 ) async -> ReasonedServeResult {
     await serveStoredReasoned(db: db, logger: logger) { db in
-        try await loadStoredStatementNote(code: code, docId: docId, noteType: noteType, db: db)
+        try await loadStoredShares(code: code, docId: docId, db: db)
     }
 }
 
@@ -683,7 +687,7 @@ private func makeStoredDataResponse(
     }
 }
 
-/// `ReasonedServeResult` を HTTP レスポンスへ変換する（breakdown / statement-notes 共通）。
+/// `ReasonedServeResult` を HTTP レスポンスへ変換する（breakdown / shares 共通）。
 /// ステータスは 404 のまま維持し（エッジ課金がステータス単位でメーターするため、issue #132 のコメント参照）、
 /// notApplicable と withheld のときのみ 404 ボディへ `reason` を追加する。
 /// withheld は軸固有のメッセージ（未算出文言にしない）。

@@ -270,7 +270,10 @@ enum StatementNoteLoadResult {
 /// read 可否は `isServableStatementNote`（xbrl_facts/not_applicable はバージョン床、LLM 経由は常に可）。
 /// 無い・read 不可・府令対象外なら `.absent`（呼び出し側は 404。ライブ解決へはフォールバックしない）。
 func loadStoredStatementNote(
-    code: String, docId: String?, noteType: String, db: Database
+    code: String, docId: String?, noteType: String, db: Database,
+    isPubliclyServable: (_ needsReview: Bool, _ warnings: [String]) -> Bool = {
+        isPubliclyServableStatementNote(needsReview: $0, warnings: $1)
+    }
 ) async throws -> StatementNoteLoadResult {
     let code4 = String(code.prefix(4))
     guard !code4.isEmpty, code4.allSatisfy({ $0.isLetter || $0.isNumber }) else { return .absent }
@@ -294,16 +297,14 @@ func loadStoredStatementNote(
             among: candidates.map(\.docID), db: db)
         row = candidates.first {
             isServableStatementNote(source: $0.source, cacheVersion: $0.cacheVersion, noteType: noteType)
-                && isPubliclyServableStatementNote(
-                    needsReview: $0.needsReview, warnings: $0.payload.warnings)
+                && isPubliclyServable($0.needsReview, $0.payload.warnings)
                 && companyDocIDs.contains($0.docID)
         }
     }
 
     guard let row,
         isServableStatementNote(source: row.source, cacheVersion: row.cacheVersion, noteType: noteType),
-        isPubliclyServableStatementNote(
-            needsReview: row.needsReview, warnings: row.payload.warnings),
+        isPubliclyServable(row.needsReview, row.payload.warnings),
         let docID = row.id?.components(separatedBy: "#").first
     else { return .absent }
 
@@ -317,6 +318,80 @@ func loadStoredStatementNote(
         "note_type": row.noteType,
         "note": row.payload.jsonObject(),
     ])
+}
+
+// MARK: - read 経路（REST/MCP shares）
+
+/// `shares` の発行済株式数の行（`SharesItem`）の固定値。
+let sharesIssuedSharesKey = "issued_shares"
+let sharesIssuedSharesLabel = "発行済株式総数"
+let sharesIssuedSharesUnit = "shares"
+
+/// 格納済みの2注記（`per_share_information` / `issued_shares_and_capital`）から公開契約
+/// {code, doc_id, items} を組み立てる。書類は 1株当たり情報の行に揃える（doc_id 省略時はその最新）。
+/// 1株当たり情報が無い書類だけ、発行済株式の行の書類を使う。資本金・資本準備金・推移の表は返さない。
+func loadStoredShares(code: String, docId: String?, db: Database) async throws -> StatementNoteLoadResult {
+    let perShare = try await loadStoredStatementNote(
+        code: code, docId: docId, noteType: statementNoteTypePerShareInformation, db: db)
+    var anchorDocID = docId
+    if case .found(let body) = perShare, let found = body["doc_id"] as? String {
+        anchorDocID = found
+    }
+    let issued = try await loadStoredStatementNote(
+        code: code, docId: anchorDocID, noteType: statementNoteTypeIssuedSharesAndCapital, db: db,
+        isPubliclyServable: isServableIssuedSharesForShares)
+    return composeShares(perShare: perShare, issuedShares: issued)
+}
+
+/// `shares` が発行済株式の注記行を使ってよいか。旧版の推移の表パーサが付けた円単位の警告
+/// （`legacyIssuedSharesUnitUnresolvedWarning`）だけの要確認は、表の列の問題で期末発行済株式数
+/// （タグ）には影響しないので使う。決定論の要確認行は ingest が再計算しないため、読み側で救う。
+/// それ以外の要確認・回帰は従来どおり出さない。
+func isServableIssuedSharesForShares(needsReview: Bool, warnings: [String]) -> Bool {
+    if isPubliclyServableStatementNote(needsReview: needsReview, warnings: warnings) { return true }
+    return needsReview && !warnings.isEmpty
+        && warnings.allSatisfy { $0 == legacyIssuedSharesUnitUnresolvedWarning }
+}
+
+/// 2注記の読み取り結果を `shares` の公開契約（`SharesResponse`）へ写す純関数。
+/// 片方だけでも値があれば返す。どちらも値が無いときは 1株当たり情報の reason を優先する。
+func composeShares(
+    perShare: StatementNoteLoadResult, issuedShares: StatementNoteLoadResult
+) -> StatementNoteLoadResult {
+    var code: String?
+    var docID: String?
+    var items: [SharesItem] = []
+    if case .found(let body) = perShare {
+        code = body["code"] as? String
+        docID = body["doc_id"] as? String
+        let note = body["note"] as? [String: Any]
+        for item in note?["items"] as? [[String: Any]] ?? [] {
+            guard let key = item["tag"] as? String, let value = item["value"] as? Double else { continue }
+            items.append(
+                SharesItem(key: key, label: item["label"] as? String, value: value, unit: item["unit"] as? String))
+        }
+    }
+    if case .found(let body) = issuedShares {
+        let issuedDocID = body["doc_id"] as? String
+        // 1株当たり情報と別書類の発行済株式は混ぜない。
+        if docID == nil || docID == issuedDocID {
+            let asOf = (body["note"] as? [String: Any])?["as_of_period_end"] as? [String: Any]
+            if let value = asOf?["issued_shares"] as? Double {
+                code = code ?? body["code"] as? String
+                docID = docID ?? issuedDocID
+                items.append(
+                    SharesItem(
+                        key: sharesIssuedSharesKey, label: sharesIssuedSharesLabel, value: value,
+                        unit: sharesIssuedSharesUnit))
+            }
+        }
+    }
+    if let code, let docID, !items.isEmpty {
+        return .found(SharesResponse(code: code, docId: docID, items: items).jsonObject())
+    }
+    if case .notApplicable(let reason) = perShare { return .notApplicable(reason: reason) }
+    if case .notApplicable(let reason) = issuedShares { return .notApplicable(reason: reason) }
+    return .absent
 }
 
 // MARK: - servable/unservable 集計

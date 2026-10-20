@@ -1,4 +1,4 @@
-# Statement / Notes（ドメイン契約）
+# Statement / Shares（ドメイン契約）
 
 有報 XBRL の BS/PL/CF/SS を絞り込みなしで構造化する。Summary は主要指標、Breakdown は比較用割合。正本→組立は `docs/financials-summary-separation.md`。抽出の再発防止は `.agents/skills/xbrl-development/SKILL.md`。
 
@@ -19,9 +19,9 @@
 | 機能 | REST | 開発用 MCP |
 |---|---|---|
 | Statement | `GET /v1/companies/{code}/statement` | `get_statement` |
-| Notes | `GET /v1/companies/{code}/statement/notes` | `get_statement_notes` |
+| Shares | `GET /v1/companies/{code}/shares` | `get_shares` |
 
-対象母集団は上場全体（Statement / Notes とも。日経225は処理順の優先のみ）。1書類=1行（ingest が候補 docID を反復）。通期のみ。
+対象母集団は上場全体（Statement / Shares とも。日経225は処理順の優先のみ）。1書類=1行（ingest が候補 docID を反復）。通期のみ。
 
 ## 契約（骨組み）
 
@@ -29,32 +29,33 @@
 
 行の `label` は presentation の `preferredLabel` が指すロールの文言。`preferredLabel` が無い arc は提出ラベル（標準ロール優先で1つに収束）を使う。ただし収束したラベルが別の表の arc が `preferredLabel` で指すロール（セグメント表用の positiveLabel / alt 等）の文言なら、本表には標準ロールの文言（提出側、無ければ標準タクソノミ）を出す（8766 S100YLS8 / 8725 S100YNCJ の `ProfitLossAttributableToOwnersOfParentIFRS` は「親会社の所有者」。どの arc も指さない alt だけの BS 科目 2413 S100YJ25「短期借入金」は従来どおり）。
 
-## notes
+## shares
 
-決定論の公開 note_type 群（詳細はコードと smoke/golden）。`research_and_development` は breakdown 軸へ集約（発生支出）。販管費の**費目**内訳 `sga_expense_breakdown` は実装済みだが **未公開・未配線**（ingest / REST / 開発用 MCP に載せない）。ingest の現在地は Linear Team `blue-ticker`。
+EPS・希薄化後 EPS・BPS・発行済株式総数を、有報の記載そのままで返す（`SharesResponse` = {code, doc_id, items}。`StatementNotesContract.swift`）。items の `key` は `eps` / `diluted_eps` / `bps` / `issued_shares`、`label` は有報の表示名、`unit` は `yen_per_share` / `shares`。開示の無い key は行ごと省く。
 
-注記が対象外・非開示のときは **404** ＋ボディ `reason`（未取り込みは reason 無し）。既知 `reason` は `allStatementNoteNotApplicableReasons`（`StatementNotesContract.swift`）が正本:
+- 値の源泉は財務諸表注記取り込み（`company_statement_notes`）の2注記。`per_share_information`（EPS・希薄化後 EPS・BPS）と `issued_shares_and_capital` の期末発行済株式数（`as_of_period_end.issued_shares`、【株式の総数等】→主要な経営指標等の推移のタグ）。書類は 1株当たり情報の行に揃え、別書類の発行済株式は混ぜない。
+- 資本金・資本準備金と「発行済株式総数、資本金等の推移」の表は返さず、取り込みもしない（提出会社単体の値で、連結の分析にほとんど使わないため）。`issued_shares_and_capital` の行は期末の発行済株式総数だけ。`cache_version` は据え置き（期末値の意味は変わらない。旧行が持つ資本金・推移のキーは読まない）。旧表パーサの円単位警告（`issued_shares_unit_unresolved`）だけで要確認の旧行も、発行済株式数は shares が返す。
+- IFRS の継続事業・非継続事業別の EPS は statement の損益計算書（`ContinuingOperations*EarningsLossPerShareIFRS` 等）にある。shares には足さない。
+- financials の `eps` / `bps` / `issued_shares` の正本は同じ2注記（`docs/financials-summary-separation.md`）。
+
+非開示は **404** ＋ボディ `reason`（未取り込みは reason 無し）。shares が返す `reason` は `allSharesNotApplicableReasons`（`not_found` のみ）。
 
 | reason | 意味 |
 |---|---|
-| `not_found` | 当該 note_type の開示・タグが無い（正当欠測） |
-| `available_via_statement` | 本 note_type 対象外だが同等値は statement から取得可 |
-| `available_via_notes` | 本 note_type 対象外だが同等値は他の公開 note_type から取得可（公開中の note はこの reason を出さない） |
-| `us_gaap_unsupported` | US-GAAP 連結で本 note_type の構造化タグ判定ができない |
+| `not_found` | 当該書類に開示・タグが無い（正当欠測） |
 
-公開 note_type:
+旧 `GET /v1/companies/{code}/statement/notes`（note_type 指定）は廃止し、常に 404（後継は shares）。
 
-| note_type | 内容 |
-|---|---|
-| `per_share_information` | 1 株当たり情報 |
-| `issued_shares_and_capital` | 発行済株式・資本金等 |
+### 注記取り込み（内部）
 
-廃止（REST / MCP / skills / ingest から外した。未知 note_type と同じ 404）:
+`company_statement_notes` と ingest ステージ `statement-notes` は shares の源泉として残す。決定論の note_type（`allStatementNoteTypes` = `per_share_information` / `issued_shares_and_capital`）。`allStatementNoteNotApplicableReasons` は内部の reason 一覧（`available_via_*` は廃止した note_type 用）。
+
+廃止した note_type（公開面から外した）:
 
 - `borrowings_schedule` / `lease_liabilities`: パーサは残し、有利子負債は breakdown 軸 `interest_bearing_debt`。
 - `property_plant_equipment_schedule` / `goodwill_and_intangibles`: breakdown 軸 `property_plant_equipment` / `goodwill_and_intangibles`（資産の種類別。`docs/breakdown.md`）。
 
-未公開: `sga_expense_breakdown`（販管費の主要な費目内訳。発生支出の `research_and_development` 軸とは別。US-GAAP 非対応）。
+未公開: `sga_expense_breakdown`（販管費の主要な費目内訳。発生支出の `research_and_development` 軸とは別。US-GAAP 非対応）。ingest の現在地は Linear Team `blue-ticker`。
 
 ## 非ゴール（当面）
 

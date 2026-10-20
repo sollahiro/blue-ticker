@@ -733,75 +733,25 @@ enum StatementNotesResolver {
         ].contains { joined.contains($0) }
     }
 
-    /// 発行済株式総数・資本金等（`issued_shares_and_capital` note_type）。
-    ///
-    /// 2経路を併記する（2026-08-11）:
-    /// 1. **`as_of_period_end`（離散XBRLタグ）**: 期末の発行済株式・資本金・資本準備金。
-    ///    発行済は `PerShareExtractor` と同じ解決（financials / smoke の `per_share.issued_shares`
-    ///    と一致）。資本金は `ShareCapitalIFRS`→Summary→`CapitalStock`、資本準備金は
-    ///    `LegalCapitalSurplus`（その他資本剰余金を含む `CapitalSurplus*` は使わない）。
-    ///    将来 summary を notes から読む場合も期末値の正はこちら。
-    /// 2. **`issued_shares_events`（textblock HTML表）**: 分割・消却・増資などのイベント列。
-    ///    表が千株丸めの会社では最終行残高がタグ期末と数百株ずれることがある（味の素・クボタ等）。
-    ///    履歴用途であり期末の正には使わない。
-    ///
-    /// 表パースの揺れ（2026-08-02 実データ検証）:
-    /// - 単位が会社ごとに揺れる（株数=株/千株、金額=千円/百万円）。表内ヘッダーに加え、
-    ///   表直前の「（単位：千円）」キャプション（`BreakdownExtractor.resolvedUnitCaption`）も見る。
-    ///   どちらも無いときは XBRL 資本金と突合して倍率を決め、それもできなければ
-    ///   ×1 を黙って使わず `needs_review` にする。常に「株」「円」の生値へ正規化する（列固定にしない）
-    /// - 「自◯年◯月◯日 至◯年◯月◯日」という期間表記の行が挟まる会社がある。日立は変動なし
-    ///   確認用（3つの増減欄＝株数・資本金・資本準備金がすべて「－」）だが、メルカリは新株予約権
-    ///   行使の集約開示（増減欄が実数）に使っており、「単発日付か期間表記か」では判定できない。
-    ///   Notes は基本 XBRL からそのまま構造化する方針のため、なるべく行を省かない: 3つの増減欄の
-    ///   いずれか1つでも実数なら採用する（残高欄は前行から常に繰り越されるため判定に使わない）。
-    ///   JT・横河電機は株数は動かず資本準備金だけ動いた行（会社法448条に基づく振替）を持ち、
-    ///   株数増減欄だけで判定すると取りこぼす（実データで発見）
-    /// - メルカリは各セルが「普通株式」というラベル行＋数値行の2つの`<p>`を1つの`<td>`にまとめて
-    ///   持つ（例:「普通株式 2,840,500」）。列固定・完全一致パースだと数値を取りこぼすため、
-    ///   セルの末尾トークンを数値として解釈する方式にする
-    /// - 自己株式消却による減少は「△」表記（例: 日立・ソフトバンクG）
-    /// - 表に現れない期末後の増減（例: 日立の注記6「2023年５月31日付で新株発行」）は脚注の
-    ///   自由記述にしかなく構造化抽出の対象外（決議日/表記載基準のみ、他note_typeと同様の割り切り）
-    ///
-    /// 表が無くてもタグ期末が取れれば resolved（summary 床用）。両方無ければ notApplicable。
+    /// 期末の発行済株式総数（`issued_shares_and_capital` note_type。公開面は `shares` の `issued_shares`）。
+    /// `PerShareExtractor` と同じタグ解決（【株式の総数等】の普通株式→主要な経営指標等の推移。
+    /// financials / smoke の `per_share.issued_shares` と一致）。
+    /// 資本金・資本準備金（提出会社単体）と「発行済株式総数、資本金等の推移」の表は読まない
+    /// （連結の分析にほとんど使わず、公開もしないため）。タグが無ければ notApplicable。
     static func resolveIssuedSharesAndCapital(xbrlDir: URL) -> StatementNoteResolveResult {
         let allTagElements = XBRLUtils.collectAllNumericElements(in: xbrlDir, nilAsZero: false)
         let durationFS = fieldSetFromDuration(allTagElements)
-        let issuedShares = PerShareExtractor.extract(
-            durationFS: durationFS, tagElements: allTagElements).issuedShares
-        let capitalStock = resolveCurrentInstantFact(allTagElements, tags: Xbrl.capitalStockTags)
-        let capitalReserve = resolveCurrentInstantFact(allTagElements, tags: Xbrl.capitalReserveTags)
-        let asOf: IssuedSharesAsOfPayload?
-        if issuedShares != nil || capitalStock != nil || capitalReserve != nil {
-            asOf = IssuedSharesAsOfPayload(
-                issuedShares: issuedShares, capitalStock: capitalStock, capitalReserve: capitalReserve)
-        } else {
-            asOf = nil
-        }
-        let parsed = parseIssuedSharesTable(
-            xbrlDir: xbrlDir, xbrlCapital: capitalStock, xbrlReserve: capitalReserve)
-        let events = parsed?.events
-
-        guard asOf != nil || !(events ?? []).isEmpty else {
+        guard
+            let issuedShares = PerShareExtractor.extract(
+                durationFS: durationFS, tagElements: allTagElements
+            ).issuedShares
+        else {
             return .notApplicable(reason: statementNoteNotApplicableNotFound)
         }
-        let eventHash = (events ?? []).map {
-            "\($0.date):\($0.sharesDelta ?? -1):\($0.sharesBalance ?? -1)"
-        }.joined(separator: ";")
-        let asOfHash = [
-            "s=\(issuedShares.map { String($0) } ?? "-")",
-            "c=\(capitalStock.map { String($0) } ?? "-")",
-            "r=\(capitalReserve.map { String($0) } ?? "-")",
-        ].joined(separator: ",")
         return .resolved(
-            payload: StatementNotePayload(
-                issuedSharesEvents: events.flatMap { $0.isEmpty ? nil : $0 },
-                issuedSharesAsOf: asOf,
-                needsReview: parsed?.needsReview ?? false,
-                warnings: parsed?.warnings ?? []),
+            payload: StatementNotePayload(issuedSharesAsOf: IssuedSharesAsOfPayload(issuedShares: issuedShares)),
             source: statementNoteSourceXbrlFacts,
-            contentHash: "asOf{\(asOfHash)}|events{\(eventHash)}")
+            contentHash: "asOf{s=\(issuedShares)}")
     }
 
     // MARK: - financials 組立向けパススルー（タスク #1–2、`docs/financials-summary-separation.md`）
@@ -844,185 +794,6 @@ enum StatementNotesResolver {
         return InterestExpenseExtractor.extract(
             fieldSet: durationFS, accountingStandard: std, xbrlDir: xbrlDir
         ).current
-    }
-
-    /// 期末 Instant の離散 fact。連結 `CurrentYearInstant` を優先し、無ければ
-    /// `CurrentYearInstant_NonConsolidatedMember`（資本金・資本準備金は親会社科目が多い）、
-    /// さらに `CurrentYearInstant*` を辞書順で拾う。
-    private static func resolveCurrentInstantFact(
-        _ tagElements: XbrlTagElements, tags: [String]
-    ) -> Double? {
-        let preferred = [
-            Xbrl.currentYearInstantContext,
-            "\(Xbrl.currentYearInstantContext)_NonConsolidatedMember",
-            Xbrl.filingDateInstantContext,
-        ]
-        for tag in tags {
-            guard let ctxs = tagElements[tag] else { continue }
-            for key in preferred {
-                if let v = ctxs[key] { return v }
-            }
-            for key in ctxs.keys.sorted() where key.contains(Xbrl.currentYearInstantContext) {
-                return ctxs[key]
-            }
-        }
-        return nil
-    }
-
-    /// セルのテキストが金額欄（数値または「－」）として解釈できるか。ラベル文字列（日付・
-    /// 「（注）」等）は対象外。
-    private static func isIssuedSharesAmountToken(_ text: String) -> Bool {
-        let trimmed = text.trimmingCharacters(in: .whitespaces)
-        if ["－", "-", "—", "―"].contains(trimmed) { return true }
-        return issuedSharesAmountValue(text) != nil
-    }
-
-    /// 金額欄の値。「－」は nil（実変動なし）。メルカリのように「普通株式 2,840,500」のような
-    /// ラベル＋数値の複合セルは、空白区切りの末尾トークンを数値として解釈する。
-    private static func issuedSharesAmountValue(_ text: String) -> Double? {
-        let trimmed = text.trimmingCharacters(in: .whitespaces)
-        if let v = XBRLUtils.parseTextblockCellValue(trimmed) { return v }
-        if ["－", "-", "—", "―"].contains(trimmed) { return nil }
-        guard let lastToken = trimmed.split(separator: " ").last else { return nil }
-        return XBRLUtils.parseTextblockCellValue(String(lastToken))
-    }
-
-    static let issuedSharesUnitUnresolvedWarning = "issued_shares_unit_unresolved"
-
-    struct IssuedSharesTableParse {
-        var events: [IssuedSharesEventPayload]
-        var needsReview: Bool
-        var warnings: [String]
-    }
-
-    private static func parseIssuedSharesTable(
-        xbrlDir: URL, xbrlCapital: Double?, xbrlReserve: Double?
-    ) -> IssuedSharesTableParse? {
-        guard let html = XBRLUtils.extractTextblockHtml(
-            in: xbrlDir, textblockTag: "ChangesInNumberOfIssuedSharesStatedCapitalEtcTextBlock")
-        else { return nil }
-        return parseIssuedSharesEvents(
-            html: html, xbrlCapital: xbrlCapital, xbrlReserve: xbrlReserve)
-    }
-
-    /// HTML 表から発行済株式イベントを読む。テストは caption / XBRL 突合をここに載せる。
-    static func parseIssuedSharesEvents(
-        html: String, xbrlCapital: Double? = nil, xbrlReserve: Double? = nil
-    ) -> IssuedSharesTableParse? {
-        guard let soup = try? SwiftSoup.parse(html),
-            let tables = (try? soup.select("table"))?.array()
-        else { return nil }
-
-        for table in tables {
-            let rows = gridRows(from: table)
-            var sharesScale = 1.0
-            var yenScale: Double?
-            let (caption, _) = BreakdownExtractor.resolvedUnitCaption(
-                grid: rows, pending: nil, table: table)
-            if let caption, let scale = BreakdownLLMAmountScale.yenScale(forHeaderToken: caption) {
-                yenScale = scale
-            }
-
-            struct RawEvent {
-                var date: String
-                var sharesDelta: Double?
-                var sharesBalance: Double?
-                var capitalDelta: Double?
-                var capitalBalance: Double?
-                var reserveDelta: Double?
-                var reserveBalance: Double?
-            }
-            var rawEvents: [RawEvent] = []
-            for cols in rows {
-                guard !cols.isEmpty else { continue }
-                let joined = cols.joined(separator: " ")
-                if joined.contains("千株") { sharesScale = 1000 }
-                if yenScale == nil {
-                    if joined.contains("百万円") {
-                        yenScale = Financial.millionYen
-                    } else if joined.contains("千円") {
-                        yenScale = 1_000
-                    }
-                }
-
-                let amountTokens = cols.filter { isIssuedSharesAmountToken($0) }
-                guard amountTokens.count >= 2 else { continue }
-                let sharesDelta = issuedSharesAmountValue(amountTokens[0])
-                let sharesBalance = issuedSharesAmountValue(amountTokens[1])
-                let capitalDelta = amountTokens.count > 2 ? issuedSharesAmountValue(amountTokens[2]) : nil
-                let capitalBalance = amountTokens.count > 3 ? issuedSharesAmountValue(amountTokens[3]) : nil
-                let reserveDelta = amountTokens.count > 4 ? issuedSharesAmountValue(amountTokens[4]) : nil
-                let reserveBalance = amountTokens.count > 5 ? issuedSharesAmountValue(amountTokens[5]) : nil
-                // 3つの増減欄がすべて「－」＝実変動なしの参考行（日立の期間ラベル行等）は除外。
-                // いずれか1つでも実数があれば採用する（JT・横河電機のように株数は動かず資本準備金
-                // だけ動く行を取りこぼさないため）。
-                guard sharesDelta != nil || capitalDelta != nil || reserveDelta != nil else { continue }
-
-                let date = cols[0].trimmingCharacters(in: .whitespaces)
-                rawEvents.append(
-                    RawEvent(
-                        date: date, sharesDelta: sharesDelta, sharesBalance: sharesBalance,
-                        capitalDelta: capitalDelta, capitalBalance: capitalBalance,
-                        reserveDelta: reserveDelta, reserveBalance: reserveBalance))
-            }
-            guard !rawEvents.isEmpty else { continue }
-
-            let hasCapital = rawEvents.contains {
-                $0.capitalDelta != nil || $0.capitalBalance != nil
-                    || $0.reserveDelta != nil || $0.reserveBalance != nil
-            }
-            var needsReview = false
-            var warnings: [String] = []
-            if yenScale == nil, hasCapital {
-                yenScale = inferIssuedSharesYenScale(
-                    capitalBalances: rawEvents.compactMap(\.capitalBalance),
-                    reserveBalances: rawEvents.compactMap(\.reserveBalance),
-                    xbrlCapital: xbrlCapital, xbrlReserve: xbrlReserve)
-                if yenScale == nil {
-                    needsReview = true
-                    warnings.append(issuedSharesUnitUnresolvedWarning)
-                    yenScale = 1
-                }
-            }
-            let appliedYen = yenScale ?? 1
-            let events = rawEvents.map { raw in
-                IssuedSharesEventPayload(
-                    date: raw.date,
-                    sharesDelta: raw.sharesDelta.map { $0 * sharesScale },
-                    sharesBalance: raw.sharesBalance.map { $0 * sharesScale },
-                    capitalDelta: raw.capitalDelta.map { $0 * appliedYen },
-                    capitalBalance: raw.capitalBalance.map { $0 * appliedYen },
-                    capitalReserveDelta: raw.reserveDelta.map { $0 * appliedYen },
-                    capitalReserveBalance: raw.reserveBalance.map { $0 * appliedYen })
-            }
-            return IssuedSharesTableParse(
-                events: events, needsReview: needsReview, warnings: warnings)
-        }
-        return nil
-    }
-
-    /// 表に単位が無いとき、期末残高と XBRL 資本金／資本準備金の比から円倍率を決める。
-    /// 候補は 円 / 千円 / 百万円。どれも 5% 以内に入らなければ nil（黙って ×1 にしない）。
-    static func inferIssuedSharesYenScale(
-        capitalBalances: [Double],
-        reserveBalances: [Double],
-        xbrlCapital: Double?,
-        xbrlReserve: Double?
-    ) -> Double? {
-        matchIssuedSharesYenScale(samples: capitalBalances, xbrl: xbrlCapital)
-            ?? matchIssuedSharesYenScale(samples: reserveBalances, xbrl: xbrlReserve)
-    }
-
-    private static func matchIssuedSharesYenScale(samples: [Double], xbrl: Double?) -> Double? {
-        guard let xbrl, xbrl != 0 else { return nil }
-        guard let sample = samples.last(where: { $0 != 0 }) else { return nil }
-        let candidates: [Double] = [1, 1_000, Financial.millionYen]
-        let hits = candidates.filter { scale in
-            abs(abs(sample) * scale - abs(xbrl)) / abs(xbrl) <= 0.05
-        }
-        return hits.min(by: {
-            abs(abs(sample) * $0 - abs(xbrl)) < abs(abs(sample) * $1 - abs(xbrl))
-        })
     }
 
     /// `<table>` の各 `<tr>` を `rowspan`/`colspan` を展開した仮想グリッド（列固定・欠損セルなし）
