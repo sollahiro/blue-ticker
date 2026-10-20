@@ -1,6 +1,7 @@
 // 実 EDINET XBRL：当期の報告セグメント売上 member が 2 以上なら専用タグを信じない。
 // 7063 S100P97P / 1711 S100RADQ / 2321 S100YNI3 は 2 セグメント。
 // 5125 S100UGFD は当期タグ＋当期 member 0 で単一。9853 S100LST1 は Prior タグ＋当期 member 0 で単一。
+// 4167 S100OFB9 は製品・サービス別表が前期だけ（当期は 90％超で省略）なので単一。
 
 import Foundation
 import Testing
@@ -126,6 +127,21 @@ import Testing
         let extracted = BreakdownExtractor.extractSegmentInfo(xbrlDir: dir)
         let gate = await noteContext().segmentsAfterNoteDecision(
             axis: .business, docID: "S100LST1", extracted: extracted, xbrlDir: dir,
+            consolidatedSales: nil, labelsByTag: [:])
+        #expect(gate.extracted == nil)
+        #expect(gate.outcome.omissionReason == breakdownNotApplicableSingleSegmentDisclosed)
+    }
+
+    /// 4167 S100OFB9: 製品・サービス別表は前期だけ。前期の表で単一セグメントの省略を止めない。
+    @Test func code4167S100OFB9PriorOnlyProductTableStaysSingleSegment() async throws {
+        // source: code=4167 fy_end=2022-03-31 doc_id=S100OFB9 page=85 field=product_service single_segment_disclosed
+        guard await Self.ensureAvailable("S100OFB9") else { return }
+        let dir = Self.xbrlDir("S100OFB9")
+        let extracted = BreakdownExtractor.extractSegmentInfo(xbrlDir: dir)
+        #expect(extracted.tables.contains { BreakdownExtractor.isPriorOnlyProductOrServiceTable($0) })
+        #expect(BreakdownExtractor.dedicatedSingleSegmentTagTrustedForOmission(xbrlDir: dir) != nil)
+        let gate = await noteContext().segmentsAfterNoteDecision(
+            axis: .business, docID: "S100OFB9", extracted: extracted, xbrlDir: dir,
             consolidatedSales: nil, labelsByTag: [:])
         #expect(gate.extracted == nil)
         #expect(gate.outcome.omissionReason == breakdownNotApplicableSingleSegmentDisclosed)

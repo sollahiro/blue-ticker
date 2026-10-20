@@ -2986,4 +2986,37 @@ import Foundation
             #expect(reason == .unknown)
         }
     }
+
+    /// 前期表のあとに（注）段落と第84期の期見出しを挟んで当期表が続く。当期にセグメントが増えて
+    /// 見出し行は一致しないが、行ラベルが同じなので同じ開示の続きとして当期表も拾う。
+    /// 原本の第83期・第84期の表から資産等の行を除き、当期に1列足した形。
+    // source: code=6645 fy_end=2021-03-31 doc_id=S100LLFL page=132 field=product_service.IAB
+    @Test func currentTableAfterFootnotesFollowsPriorTable() {
+        let html = """
+            <p>セグメント情報</p>
+            <p>第83期（自　2019年４月１日　至　2020年３月31日）　(単位：百万円)</p>
+            <table>
+              <tr><td></td><td>IAB</td><td>EMC</td><td>計</td><td>連結</td></tr>
+              <tr><td>①　外部顧客に対する売上高</td><td>352,762</td><td>88,357</td><td>441,119</td><td>441,119</td></tr>
+              <tr><td>②　セグメント間の内部売上高</td><td>5,120</td><td>44,061</td><td>49,181</td><td>－</td></tr>
+              <tr><td>セグメント利益</td><td>53,595</td><td>918</td><td>54,513</td><td>54,513</td></tr>
+            </table>
+            <p>（注）１　セグメント間の内部取引における価額は、外部顧客との取引価額に準じています。</p>
+            <p>２　「消去調整他」には、配賦不能費用、セグメント間の内部取引消去などが含まれています。</p>
+            <p>３　環境事業のSSBへの移管およびバックライト事業の収束により、第84期より、「その他」の事業セグメントを「SSB」の事業セグメントおよび「消去調整他」に含め、IAB、EMC、SSB、HCBの４セグメントで開示しています。これに伴い、第83期を新管理区分に組み替えて表示しています。</p>
+            <p>第84期（自　2020年４月１日　至　2021年３月31日）　(単位：百万円)</p>
+            <table>
+              <tr><td></td><td>IAB</td><td>EMC</td><td>SSB</td><td>計</td><td>連結</td></tr>
+              <tr><td>①　外部顧客に対する売上高</td><td>346,446</td><td>86,028</td><td>95,663</td><td>528,137</td><td>528,137</td></tr>
+              <tr><td>②　セグメント間の内部売上高</td><td>5,029</td><td>43,327</td><td>8,994</td><td>57,350</td><td>－</td></tr>
+              <tr><td>セグメント利益</td><td>58,793</td><td>2,962</td><td>5,693</td><td>67,448</td><td>67,448</td></tr>
+            </table>
+            """
+        let tables = BreakdownExtractor.keywordTablesFromHtml(
+            html, keywords: ["セグメント情報"], headingLikeOnly: true, fiscalYearEnd: "2021-03-31")
+        #expect(tables.count == 2)
+        let periods: [String?] = tables.map(\.period)
+        #expect(periods.contains("当期"))
+        #expect(tables.contains { $0.markdown.contains("346,446") || $0.markdown.contains("346446") })
+    }
 }

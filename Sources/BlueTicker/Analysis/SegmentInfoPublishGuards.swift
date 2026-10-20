@@ -301,7 +301,10 @@ enum SegmentInfoPublishGuards {
             }
         }
         guard let fyYear = fiscalYearEnd.flatMap({ Int($0.prefix(4)) }) else { return false }
-        let foundYears = years(in: blob)
+        // 当期と判定済みの表は、直前キャプションの年（8591 S100LU21 の「（注）2020年４月１日より、
+        // 報告セグメントの区分を変更」）で前期扱いにしない。列見出しの年だけ見る。
+        let yearSource = selectedTable.period == "当期" ? selectedColumn.header : blob
+        let foundYears = years(in: yearSource)
         return !foundYears.isEmpty && foundYears.allSatisfy { $0 < fyYear }
     }
 

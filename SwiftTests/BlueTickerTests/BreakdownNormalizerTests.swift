@@ -2029,4 +2029,72 @@ import Foundation
         let entity = try #require(snapshot.rows.first { $0.labelRaw == Xbrl.entityTotalMemberName })
         #expect(entity.amount == 96_439_000_000)
     }
+
+    private static func externalRevenueFact(_ member: String, _ millions: Double) -> BreakdownFact {
+        BreakdownFact(
+            tag: "RevenuesFromExternalCustomers",
+            contextRef: "CurrentYearDuration_\(member)",
+            dimensions: ["OperatingSegmentsAxis": member],
+            value: millions * 1_000_000, label: nil, unitRef: "JPY", decimals: "-6"
+        )
+    }
+
+    /// 売上の99%超を占める主力セグメントは、連結売上と1%以内でも小計にしない。
+    /// 残りのセグメントの和が同じ規模でないので合計ではない。
+    // source: code=3774 fy_end=2025-03-31 doc_id=S100W7DL page=105 field=product_service.ネットワークサービス及びSI事業
+    @Test func dominantSegmentNearConsolidatedSalesStaysSegment() throws {
+        let facts = [
+            Self.externalRevenueFact("NetworkServicesAndSIBusinessReportableSegmentMember", 313_883),
+            Self.externalRevenueFact("ATMOperationBusinessReportableSegmentMember", 2_948),
+        ]
+        let result = ExtractedBreakdown(method: "xbrl_facts", tables: [], facts: facts)
+        let snap = try #require(
+            BreakdownNormalizer.normalize(result, consolidatedSales: 316_831_000_000))
+        let network = try #require(
+            snap.rows.first { $0.labelRaw == "NetworkServicesAndSIBusinessReportableSegmentMember" })
+        #expect(network.rowKind == "segment")
+        #expect(snap.denominator == 316_831_000_000)
+        #expect(!snap.warnings.contains("sales_denominator_aligned_to_segment_total"))
+        #expect(snap.needsReview == false)
+    }
+
+    /// 財務の売上高が営業収益の一部（55,263 / 57,879）で、セグメント和と報告セグメント小計が
+    /// 一致するときは、5%未満のずれでも分母を小計に揃える（構成比の和を100%にする）。
+    // source: code=8699 fy_end=2026-03-31 doc_id=S100YJQ6 page=91 field=product_service.リユース事業
+    @Test func denominatorAlignsToTightSubtotalWhenSalesIsPartOfOperatingRevenue() throws {
+        let facts = [
+            Self.externalRevenueFact("BankingBusinessReportableSegmentMember", 2_615),
+            Self.externalRevenueFact("ReuseBusinessReportableSegmentMember", 55_249),
+            Self.externalRevenueFact("OtherBusinessReportableSegmentMember", 14),
+            Self.externalRevenueFact("ReportableSegmentsMember", 57_879),
+        ]
+        let result = ExtractedBreakdown(method: "xbrl_facts", tables: [], facts: facts)
+        let snap = try #require(
+            BreakdownNormalizer.normalize(result, consolidatedSales: 55_263_000_000))
+        #expect(snap.denominator == 57_879_000_000)
+        #expect(snap.warnings.contains("sales_denominator_aligned_to_segment_total"))
+        #expect(snap.needsReview == false)
+        let reuse = try #require(
+            snap.rows.first { $0.labelRaw == "ReuseBusinessReportableSegmentMember" })
+        #expect(reuse.rowKind == "segment")
+    }
+
+    /// 調整額込みで連結売上に合うときは、報告セグメント小計とセグメント和が一致しても分母を揃えない。
+    // source: code=8750 fy_end=2026-03-31 doc_id=S100YC7A page=281 field=product_service.国内保険事業
+    @Test func denominatorStaysWhenReconcilingClosesToSales() throws {
+        let facts = [
+            Self.externalRevenueFact("DomesticInsuranceBusinessReportableSegmentMember", 8_155_625),
+            Self.externalRevenueFact("OverseasInsuranceBusinessReportableSegmentMember", 3_523_786),
+            Self.externalRevenueFact(
+                "OperatingSegmentsNotIncludedInReportableSegmentsAndOtherRevenueGeneratingBusinessActivitiesMember",
+                79_050),
+            Self.externalRevenueFact("ReportableSegmentsMember", 11_758_462),
+            Self.externalRevenueFact("ReconcilingItemsMember", -450_187),
+        ]
+        let result = ExtractedBreakdown(method: "xbrl_facts", tables: [], facts: facts)
+        let snap = try #require(
+            BreakdownNormalizer.normalize(result, consolidatedSales: 11_308_275_000_000))
+        #expect(snap.denominator == 11_308_275_000_000)
+        #expect(!snap.warnings.contains("sales_denominator_aligned_to_segment_total"))
+    }
 }

@@ -620,8 +620,12 @@ enum RevenueRecognitionTableStructure {
         for row in rows.dropFirst(firstData) {
             let hasAmount = row.contains { RevenueRecognitionCandidates.isAmountCell($0) }
             guard hasAmount else { continue }
-            let width = RevenueRecognitionCandidates.leadingLabelCells(row).count
+            let leading = RevenueRecognitionCandidates.leadingLabelCells(row)
+            let width = leading.count
             guard width > 0 else { continue }
+            // 左端が空で、連結列だけに金額がある調整行（キリン S100NR8P の「その他の営業収益」
+            // 〜「税引前利益」）はラベルがセグメント列側にあり、ラベル域の幅に数えない。
+            if width > 2, leading.first?.isEmpty == true { continue }
             counts[width, default: 0] += 1
         }
         return counts.max(by: { $0.value != $1.value ? $0.value < $1.value : $0.key < $1.key })?.key
