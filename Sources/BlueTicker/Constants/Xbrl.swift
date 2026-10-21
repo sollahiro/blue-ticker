@@ -284,6 +284,19 @@ enum Xbrl {
         "BasicEarningsLossPerShareSummaryOfBusinessResults",       // JGAAP・汎用 Summary
     ]
 
+    /// IFRS 損益計算書の1株当たり利益の行。提出ラベルは見出し（「一株当たり情報」＞「基本的」＞
+    /// 「継続事業」）の下に置く前提の断片で、行だけでは意味が通らない（ソニー S100YE2C は「基本的」、
+    /// 継続・非継続は提出ラベル無し）。Statement では標準タクソノミの冗長ラベルを使う。
+    static let ifrsPerShareStatementTags: Set<String> = [
+        "BasicEarningsLossPerShareIFRS",
+        "DilutedEarningsLossPerShareIFRS",
+        "BasicAndDilutedEarningsLossPerShareIFRS",
+        "ContinuingOperationsBasicEarningsLossPerShareIFRS",
+        "DiscontinuedOperationsBasicEarningsLossPerShareIFRS",
+        "ContinuingOperationsDilutedEarningsLossPerShareIFRS",
+        "DiscontinuedOperationsDilutedEarningsLossPerShareIFRS",
+    ]
+
     /// 潜在株式調整後1株当たり当期利益（連結）。JGAAP のみ "Loss" を含まないタグ名になる
     /// （EDINETタクソノミの命名不統一、実データ確認済み: レーザーテック S100JRT9）。
     static let dilutedEpsTags: [String] = [

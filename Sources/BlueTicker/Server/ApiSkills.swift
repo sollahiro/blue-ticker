@@ -549,9 +549,11 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                 有価証券報告書に記載された EPS（1株当たり当期純利益）・希薄化後 EPS・BPS（1株当たり純資産）・
                 発行済株式総数を取得します（格納済みデータのみ）。値は有報の記載をそのまま返します。
                 対象は上場企業。doc_id を省略すると最新の有価証券報告書を使用します。
-                items は key（eps / diluted_eps / bps / issued_shares）・label（有報の表示名）・value・unit
+                items は key（eps / continuing_eps / discontinued_eps / diluted_eps / continuing_diluted_eps /
+                discontinued_diluted_eps / bps / issued_shares）・label（表示名）・value・unit
                 （yen_per_share / shares）の行で、開示の無い key は行ごと省きます（潜在株式が無い会社の
-                diluted_eps など）。IFRS の継続事業・非継続事業別の EPS は get-statement の損益計算書にあります。
+                diluted_eps など）。continuing_* / discontinued_* は IFRS で継続事業・非継続事業別の EPS を
+                損益計算書に開示している会社だけにあります。
                 取得できない場合はエラー応答とともに reason が返ることがあります
                 （reason 無しは単に未取り込み。REST では 404、MCP では isError）。
                 not_found（当該書類に開示・XBRLタグが見つからない＝正当な欠測）。
