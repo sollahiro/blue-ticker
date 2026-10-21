@@ -83,15 +83,12 @@ export function buildRss({ items, now = new Date(), feedUrl }) {
       'xmlns:media="http://search.yahoo.com/mrss/">'
   );
   lines.push("  <channel>");
-  lines.push("    <title>Blue Ticker — EDINET 提出書類（上場）</title>");
-  // チャネル link はアプリ紹介ページ。sollahiro.com/blue-ticker/ は
-  // workers/legal（src/index.js の assetPathFor が /blue-ticker を privacy へ回す）
-  // が実際に配信しているので、この URL を使う（存在しない場合は feedUrl にする想定だった）。
-  lines.push("    <link>https://sollahiro.com/blue-ticker/</link>");
+  lines.push("    <title>有報LAB — 直近提出書類</title>");
+  // チャネル link は有報LAB のページ（workers/legal が yuholab.com で配信）。
+  lines.push("    <link>https://yuholab.com</link>");
   lines.push(
-    "    <description>EDINET に提出された上場会社の開示書類のヘッドラインのみを配信します。" +
-      "毎日 19:15（JST）に更新。対象は有価証券報告書（120）・訂正有価証券報告書（130）・" +
-      "四半期報告書（140）・半期報告書（160）の直近7日分で、有価証券報告書は期間に関係なく直近10件も含みます。</description>"
+    "    <description>EDINET に提出された上場会社の有価証券報告書（120）のヘッドラインのみを配信します。" +
+      "毎日 19:15（JST）に更新。対象は直近7日分と、期間に関係なく最新10件です。</description>"
   );
   lines.push("    <language>ja</language>");
   lines.push(`    <lastBuildDate>${utcToRfc822Jst(now)}</lastBuildDate>`);

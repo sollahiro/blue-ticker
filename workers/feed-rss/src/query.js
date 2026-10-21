@@ -1,13 +1,25 @@
 // Feed RSS の抽出条件。`/v1/feed/updates`（Sources/BltServerCore/FeedServe.swift と
-// Sources/BlueTicker/Server/FeedAssembly.swift）の listed 選択と揃える。
-// 違いは同日過多の安定サンプリングをしないことだけ（RSS は窓内を時系列で全部出す）。
+// Sources/BlueTicker/Server/FeedAssembly.swift）の listed 判定と揃える。
+// 違いは 2 つ。RSS に載せる書類種別は有報（120）だけ（RSS_DOC_TYPES）で、
+// 同日過多の安定サンプリングもしない（RSS は窓内を時系列で全部出す）。
 
-// Api.feedAllowedDocTypes（= 同期対象の全書類種別）。
+// Api.feedAllowedDocTypes（= 同期対象の全書類種別）。parity.test.js が fixture / Swift と照合する。
+// RSS の抽出には使わない（同期・REST / MCP のフィードの種別はこちら）。
 export const FEED_DOC_TYPES = ["120", "130", "140", "160"];
+
+// 公開 RSS に載せる書類種別。有価証券報告書（120）だけ。訂正（130）・四半期（140）・半期（160）は出さない。
+// FEED_DOC_TYPES の部分集合であること（parity.test.js）。
+export const RSS_DOC_TYPES = ["120"];
 
 // 直近 7 暦日（今日を含む）。`feedInclusiveCutoffDateString(days: 7)` に対応。
 export const FEED_DAYS = 7;
 export const FEED_ITEM_LIMIT = 200;
+
+// 有報は期間に関係なく、新しい順にこの件数を必ず載せる。
+// 7 暦日の窓は閑散期に有報が数件しか無く、iOS の Top feed（有報だけを出す）が
+// REST の既定（有報 10 件）より少なくなるため。期間ではなく件数で区切るのは、
+// 6 月の決算期に期間を延ばすと有報だけで FEED_ITEM_LIMIT を超えるから。
+export const FEED_LATEST_MIN = 10;
 
 // 会社開示府令（Api.ordinanceCompanyDisclosure）。
 export const ORDINANCE_COMPANY_DISCLOSURE = "010";
@@ -21,7 +33,7 @@ export function feedCutoffDateString(days, now = new Date()) {
   return new Date(ms).toISOString().slice(0, 10);
 }
 
-// listed 行の抽出。$1: 書類種別 text[]、$2: 下限日（含む）text、$3: 件数上限 int。
+// listed 行の抽出。$1: 書類種別 text[]、$2: 件数上限 int。期間の下限は selectFeedRows で切る。
 // 府令 010・5 桁 sec_code 末尾 0・00000 以外は Swift の feedListedQuery と同じ。
 export const FEED_SQL = `SELECT doc_id, sec_code, filer_name, doc_type_code, ordinance_code, period_end, submit_date_time, doc_description
 FROM edinet_documents
@@ -29,57 +41,17 @@ WHERE doc_type_code = ANY($1::text[])
   AND ordinance_code = '010'
   AND sec_code LIKE '____0'
   AND sec_code <> '00000'
-  AND submit_date_time >= $2
-ORDER BY submit_date_time DESC, doc_id DESC
-LIMIT $3`;
-
-// 有報（120）は期間に関係なく、新しい順にこの件数を必ず載せる。
-// 7 暦日の窓は閑散期に有報が数件しか無く、iOS の Top feed（有報だけを出す）が
-// REST の既定（有報 10 件）より少なくなるため。期間ではなく件数で区切るのは、
-// 6 月の決算期に期間を延ばすと有報だけで FEED_ITEM_LIMIT を超えるから。
-export const FEED_ANNUAL_DOC_TYPE = "120";
-export const FEED_ANNUAL_MIN = 10;
-
-// 有報の直近行。$1: 書類種別 text、$2: 件数 int。listed 条件は FEED_SQL と同じで、期間の下限だけ無い。
-export const ANNUAL_SQL = `SELECT doc_id, sec_code, filer_name, doc_type_code, ordinance_code, period_end, submit_date_time, doc_description
-FROM edinet_documents
-WHERE doc_type_code = $1
-  AND ordinance_code = '010'
-  AND sec_code LIKE '____0'
-  AND sec_code <> '00000'
 ORDER BY submit_date_time DESC, doc_id DESC
 LIMIT $2`;
 
-// 窓の行と有報の直近行を doc_id で重複除去し、submit_date_time 降順・doc_id 降順に並べる。
-// limit を超えたら有報の直近行以外を古い方から落とす（有報の直近行は必ず残る）。
-export function mergeFeedRows(windowRows, annualRows, limit) {
-  const byId = new Map();
-  for (const row of [...annualRows, ...windowRows]) {
-    if (row && typeof row.doc_id === "string" && !byId.has(row.doc_id)) {
-      byId.set(row.doc_id, row);
-    }
-  }
-  const pinned = new Set(annualRows.map((row) => row?.doc_id));
-  const sorted = [...byId.values()].sort(compareRowsDesc);
-  let excess = sorted.length - limit;
-  if (excess <= 0) return sorted;
-  const kept = [];
-  for (let index = sorted.length - 1; index >= 0; index -= 1) {
-    const row = sorted[index];
-    if (excess > 0 && !pinned.has(row.doc_id)) {
-      excess -= 1;
-      continue;
-    }
-    kept.push(row);
-  }
-  return kept.reverse();
-}
-
-function compareRowsDesc(a, b) {
-  const at = String(a.submit_date_time ?? "");
-  const bt = String(b.submit_date_time ?? "");
-  if (at !== bt) return at < bt ? 1 : -1;
-  return a.doc_id < b.doc_id ? 1 : a.doc_id > b.doc_id ? -1 : 0;
+// FEED_SQL の行（submit_date_time 降順・doc_id 降順、最大 FEED_ITEM_LIMIT 件）から、
+// 先頭 minCount 件か、下限日（含む）以降の行を残す。行は新しい順なので結果は先頭からの連続区間。
+// 「窓（下限日以降を最大 limit 件）＋有報の直近 minCount 件を doc_id で重複除去し、
+// 上限超過時は直近 minCount 件以外を古い方から落とす」と同じ結果になる（query.test.js）。
+export function selectFeedRows(rows, cutoff, minCount) {
+  return rows.filter(
+    (row, index) => index < minCount || String(row?.submit_date_time ?? "") >= cutoff
+  );
 }
 
 // 会社アイコンの R2 オブジェクトキー。$1: 4 桁コード text[]。
