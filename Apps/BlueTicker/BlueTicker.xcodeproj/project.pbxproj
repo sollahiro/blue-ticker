@@ -27,7 +27,7 @@
 		AA0000000000000000000018 /* BreakdownView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000018 /* BreakdownView.swift */; };
 		AA0000000000000000000019 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000019 /* Assets.xcassets */; };
 		AA0000000000000000000050 /* AppIcon.icon in Resources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000050 /* AppIcon.icon */; };
-		AA0000000000000000000021 /* BrandMark.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000021 /* BrandMark.swift */; };
+		AA0000000000000000000021 /* VersionMarkFooter.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000021 /* VersionMarkFooter.swift */; };
 		AA0000000000000000000024 /* ResponseCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000024 /* ResponseCache.swift */; };
 		AA0000000000000000000025 /* HAPISConsumerModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000025 /* HAPISConsumerModels.swift */; };
 		AA0000000000000000000026 /* HAPISAttestation.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000026 /* HAPISAttestation.swift */; };
@@ -41,6 +41,7 @@
 		AA0000000000000000000034 /* FundView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000034 /* FundView.swift */; };
 		AA0000000000000000000035 /* FundPositionEditView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000035 /* FundPositionEditView.swift */; };
 		AA0000000000000000000037 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000037 /* PrivacyInfo.xcprivacy */; };
+		AA0000000000000000000042 /* InfoPlist.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000042 /* InfoPlist.xcstrings */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -66,7 +67,7 @@
 		BB0000000000000000000019 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		BB0000000000000000000050 /* AppIcon.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = AppIcon.icon; sourceTree = "<group>"; };
 		BB0000000000000000000020 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
-		BB0000000000000000000021 /* BrandMark.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrandMark.swift; sourceTree = "<group>"; };
+		BB0000000000000000000021 /* VersionMarkFooter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VersionMarkFooter.swift; sourceTree = "<group>"; };
 		BB0000000000000000000024 /* ResponseCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResponseCache.swift; sourceTree = "<group>"; };
 		BB0000000000000000000025 /* HAPISConsumerModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HAPISConsumerModels.swift; sourceTree = "<group>"; };
 		BB0000000000000000000026 /* HAPISAttestation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HAPISAttestation.swift; sourceTree = "<group>"; };
@@ -83,6 +84,7 @@
 		BB0000000000000000000035 /* FundPositionEditView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FundPositionEditView.swift; sourceTree = "<group>"; };
 		BB0000000000000000000037 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		BB0000000000000000000038 /* Info-Release.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "Info-Release.plist"; sourceTree = "<group>"; };
+		BB0000000000000000000042 /* InfoPlist.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = InfoPlist.xcstrings; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -121,6 +123,7 @@
 				BB0000000000000000000050 /* AppIcon.icon */,
 				BB0000000000000000000020 /* Info.plist */,
 				BB0000000000000000000038 /* Info-Release.plist */,
+				BB0000000000000000000042 /* InfoPlist.xcstrings */,
 				BB0000000000000000000037 /* PrivacyInfo.xcprivacy */,
 				BB0000000000000000000029 /* BlueTicker-Debug.entitlements */,
 				BB0000000000000000000030 /* BlueTicker-Release.entitlements */,
@@ -161,7 +164,7 @@
 			isa = PBXGroup;
 			children = (
 				BB0000000000000000000009 /* RootView.swift */,
-				BB0000000000000000000021 /* BrandMark.swift */,
+				BB0000000000000000000021 /* VersionMarkFooter.swift */,
 				BB0000000000000000000034 /* FundView.swift */,
 				BB0000000000000000000035 /* FundPositionEditView.swift */,
 				BB0000000000000000000010 /* SettingsView.swift */,
@@ -295,6 +298,7 @@
 				AA0000000000000000000019 /* Assets.xcassets in Resources */,
 				AA0000000000000000000050 /* AppIcon.icon in Resources */,
 				AA0000000000000000000037 /* PrivacyInfo.xcprivacy in Resources */,
+				AA0000000000000000000042 /* InfoPlist.xcstrings in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -321,7 +325,7 @@
 				AA0000000000000000000008 /* CompanyRef.swift in Sources */,
 				4CCED69B305EDAFE003CAB8E /* HistoryView.swift in Sources */,
 				AA0000000000000000000009 /* RootView.swift in Sources */,
-				AA0000000000000000000021 /* BrandMark.swift in Sources */,
+				AA0000000000000000000021 /* VersionMarkFooter.swift in Sources */,
 				AA0000000000000000000010 /* SettingsView.swift in Sources */,
 				AA0000000000000000000012 /* CompanyRowView.swift in Sources */,
 				AA0000000000000000000013 /* TopView.swift in Sources */,
@@ -449,7 +453,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = BlueTicker/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = "Blue Ticker";
+				INFOPLIST_KEY_CFBundleDisplayName = "有報LAB";
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.finance";
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "同じ Wi-Fi 上の開発サーバーに接続します。";
@@ -485,7 +489,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "BlueTicker/Info-Release.plist";
-				INFOPLIST_KEY_CFBundleDisplayName = "Blue Ticker";
+				INFOPLIST_KEY_CFBundleDisplayName = "有報LAB";
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.finance";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
