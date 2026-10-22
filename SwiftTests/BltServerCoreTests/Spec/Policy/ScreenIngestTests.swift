@@ -630,15 +630,33 @@ private func codes(_ json: [String: Any]?) -> [String] {
             #expect(notModified.headers.first(name: .eTag) == etag)
             #expect((notModified.body.string ?? "").isEmpty)
 
+            // 作り置きは作り直しまで変わらない（リクエストは DB を読まない）。
             try await upsertScreenIndex(
                 code: "0003", response: try makeResponse(code: "0003", latest: ["roic": 5.0]),
                 db: app.db)
-            let changed = Request(
-                application: app, method: .GET, url: URI(string: "/v1/screen/snapshot"),
-                headers: ["If-None-Match": etag], on: app.eventLoopGroup.next())
-            let refreshed = try await app.responder.respond(to: changed).get()
+            func revalidateWithFirstTag() async throws -> Response {
+                let request = Request(
+                    application: app, method: .GET, url: URI(string: "/v1/screen/snapshot"),
+                    headers: ["If-None-Match": etag], on: app.eventLoopGroup.next())
+                return try await app.responder.respond(to: request).get()
+            }
+            #expect(try await revalidateWithFirstTag().status == .notModified)
+
+            let cache = try #require(app.storage[ScreenSnapshotCacheKey.self])
+            #expect(await refreshScreenSnapshot(cache: cache, db: app.db, logger: app.logger))
+            let refreshed = try await revalidateWithFirstTag()
             #expect(refreshed.status == .ok)
             #expect(refreshed.headers.first(name: .eTag) != etag)
+            let refreshedData = try #require(refreshed.body.string?.data(using: .utf8))
+            let refreshedJson = try #require(
+                try JSONSerialization.jsonObject(with: refreshedData) as? [String: Any])
+            #expect(refreshedJson["count"] as? Int == 3)
+
+            // 索引が空になったら作り置きを捨てて 404 に戻す。
+            try await ScreenIndex.query(on: app.db).delete()
+            #expect(!(await refreshScreenSnapshot(cache: cache, db: app.db, logger: app.logger)))
+            let (goneStatus, _) = try await send(app, "/v1/screen/snapshot")
+            #expect(goneStatus == .notFound)
         }
         let app = try await Application.make(.testing)
         try await registerRoutes(app, context: makeContext())

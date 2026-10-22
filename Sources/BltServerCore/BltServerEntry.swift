@@ -51,6 +51,9 @@ public func runBltServer(host: String = "127.0.0.1", port: Int = 3000) async thr
             startMasterDataPolling(app: app)
         }
         try await registerRoutes(app, context: context)
+        if let urlString = Environment.get("DATABASE_URL"), !urlString.isEmpty {
+            startScreenSnapshotRefresh(app: app)
+        }
 
         try await app.execute()
     } catch {

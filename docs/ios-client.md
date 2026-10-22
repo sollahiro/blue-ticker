@@ -187,7 +187,8 @@ Screen REST は `GET /v1/screen`（`screen_index` 読み取り。`sector` 完全
 - 中身：`screen_index` 全行（約 3,700 社）を列形式で返す。`schema_version`（形の版、`screenSnapshotSchemaVersion` = 1）/ `screen_version`（`screenIndexVersion`）/ `count` / `code` / `name` / `market` / `sector` / `period_end` / `metrics`（許可リスト 12 指標すべて。指標名 → 行と同じ長さの配列、null は null）/ `payout_ratio_3y`（行ごとに長さ 3、古→新）。code 昇順。数値は小数 4 桁に丸める（閾値との比較で境界がずれるのは 0.00005 未満の行だけ）。索引未生成は 404、DB 非接続は 503。skills カタログ・MCP には載せない
 - 検証子：本文の SHA-256 を強い `ETag`。`If-None-Match` 一致は 304（本文なし）。`Cache-Control: private, no-cache`
 - 端末内検索（`Apps/BlueTicker/ScreenSnapshot`）は `GET /v1/screen` と同じ規則：業種は完全一致の OR（空は全業種）、範囲は両端含む AND、フィルタ・ソート対象が null の行は落とす、同値はコード昇順、結果は 50 件
-- 表示：保存済みがあれば通信せずに件数を出す（業種変更も debounce なし）。表示のたびに条件付き GET（前回の取得から 1 時間以内は送らない）。304 は取得時刻だけ進め、200 は保存を差し替えて数え直す。結果画面も同じ保存から引く。件数と結果画面の同時取得は 1 本にまとめる
+- サーバー：本文と ETag は起動時と 3 日ごと（`Api.screenSnapshotRebuildIntervalSeconds`）に裏で作り置きし、リクエストはそれを返すだけ（作り置きが無いときだけそのリクエストで作る）。手元から ingest した直後に反映したいときはサーバーを再起動する
+- 表示：アプリ起動時に先読みする。保存済みがあれば通信せずに件数を出す（業種変更も debounce なし）。表示のたびに条件付き GET（前回の取得から 3 日以内は送らない）。304 は取得時刻だけ進め、200 は保存を差し替えて数え直す。結果画面も同じ保存から引く。件数と結果画面の同時取得は 1 本にまとめる
 - 失敗時：保存済みの分を使い続ける。版違い・列の長さ不一致・途中で切れた本文は失敗扱いで保存を差し替えない。保存も取得もできなければ `GET /v1/screen` に戻す
 - 保存：本文と `ETag` / 取得時刻を Caches の `blt-screen/v1/screen-snapshot.json` に 1 ファイル（`ScreenSnapshotStore`）
 - 解析・検索・再検証の判定は `Apps/BlueTicker/ScreenSnapshot`（Linux / macOS の `swift test`）。アプリはそのソースを直接コンパイルする

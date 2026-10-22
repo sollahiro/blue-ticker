@@ -55,6 +55,12 @@ struct RootView: View {
             guard !Task.isCancelled else { return }
             await APIClient.shared.prefetchAnalysis(codes: codes)
         }
+        .task {
+            // 条件検索のスナップショットを起動時に先読みする（タブを開いた時点で件数を出せるように）。
+            // 保存が新しければ通信しない。
+            guard await ScreenSnapshotStore.shared.needsRevalidation() else { return }
+            _ = await ScreenSnapshotStore.shared.revalidate()
+        }
         .onChange(of: scenePhase) { _, phase in
             // フォアグラウンド復帰でも、前回の取得から 1 時間を過ぎていれば RSS を再検証する。
             guard phase == .active else { return }
