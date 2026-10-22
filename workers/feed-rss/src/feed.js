@@ -4,17 +4,15 @@
 
 import { buildRss } from "./rss.js";
 import {
-  ANNUAL_SQL,
-  FEED_ANNUAL_DOC_TYPE,
-  FEED_ANNUAL_MIN,
   FEED_DAYS,
-  FEED_DOC_TYPES,
   FEED_ITEM_LIMIT,
+  FEED_LATEST_MIN,
   FEED_SQL,
   ICON_SQL,
+  RSS_DOC_TYPES,
   feedCutoffDateString,
   iconPublicUrl,
-  mergeFeedRows,
+  selectFeedRows,
   toFeedItem,
 } from "./query.js";
 
@@ -32,14 +30,9 @@ export async function refreshFeed({ env, runQuery, now = new Date(), log = conso
   const cutoff = feedCutoffDateString(FEED_DAYS, now);
   let rows;
   try {
-    const windowRows = await runQuery(FEED_SQL, [FEED_DOC_TYPES, cutoff, FEED_ITEM_LIMIT]);
-    // 有報は窓に関係なく直近 FEED_ANNUAL_MIN 件を足す。失敗したら窓だけでは書かない（fail closed）。
-    const annualRows = await runQuery(ANNUAL_SQL, [FEED_ANNUAL_DOC_TYPE, FEED_ANNUAL_MIN]);
-    rows = mergeFeedRows(
-      Array.isArray(windowRows) ? windowRows : [],
-      Array.isArray(annualRows) ? annualRows : [],
-      FEED_ITEM_LIMIT
-    );
+    // 有報の新しい順に最大 FEED_ITEM_LIMIT 件を引き、窓（直近 FEED_DAYS 暦日）か直近 FEED_LATEST_MIN 件を残す。
+    const latestRows = await runQuery(FEED_SQL, [RSS_DOC_TYPES, FEED_ITEM_LIMIT]);
+    rows = selectFeedRows(Array.isArray(latestRows) ? latestRows : [], cutoff, FEED_LATEST_MIN);
   } catch (error) {
     log.error(
       JSON.stringify({

@@ -13,6 +13,7 @@ import {
   FEED_DOC_TYPES,
   FEED_SQL,
   ORDINANCE_COMPANY_DISCLOSURE,
+  RSS_DOC_TYPES,
   listedTickerCode,
   toFeedItem,
 } from "./query.js";
@@ -80,6 +81,13 @@ describe("書類種別・府令パリティ", () => {
       .sort();
     assert.deepEqual(codes, [...fixture.feedDocTypes].sort());
     assert.deepEqual([...FEED_DOC_TYPES].sort(), [...fixture.feedDocTypes].sort());
+  });
+
+  test("RSS_DOC_TYPES は fixture.feedDocTypes（同期対象）の部分集合", () => {
+    assert.ok(RSS_DOC_TYPES.length > 0);
+    for (const code of RSS_DOC_TYPES) {
+      assert.ok(fixture.feedDocTypes.includes(code), `${code} が同期対象に無い`);
+    }
   });
 
   test("会社開示府令 010 は fixture / Swift / JS で一致する", () => {

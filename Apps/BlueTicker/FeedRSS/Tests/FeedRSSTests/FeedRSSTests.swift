@@ -8,8 +8,8 @@ private let sample = """
     <?xml version="1.0" encoding="UTF-8"?>
     <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:media="http://search.yahoo.com/mrss/">
       <channel>
-        <title>Blue Ticker — EDINET 提出書類（上場）</title>
-        <link>https://sollahiro.com/blue-ticker/</link>
+        <title>有報LAB — 直近提出書類</title>
+        <link>https://yuholab.com</link>
         <lastBuildDate>Tue, 20 Oct 2026 19:15:40 +0900</lastBuildDate>
         <item>
           <title>中部水産株式会社（8145） 訂正有価証券報告書</title>
