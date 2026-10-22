@@ -182,6 +182,55 @@ public func apiSkillsCatalog() -> [ApiSkill] {
             mcpOutputSchema: nil
         ),
         ApiSkill(
+            id: "get-relations",
+            name: "取引先・関係会社",
+            description: "有報に記載された主要な顧客・関係会社・出資先・大株主と、他社の有報からの逆引き（仕入先・親会社・大株主になっている会社）を返します（格納済みのみ）。",
+            method: "GET",
+            path: "/v1/companies/{code}/relations",
+            mcpTool: nil,
+            feature: "relations",
+            parameters: [
+                ApiSkillParameter(
+                    name: "code",
+                    location: .path,
+                    type: .string,
+                    description: "銘柄コード（例: 9409）",
+                    required: true
+                ),
+                ApiSkillParameter(
+                    name: "type",
+                    location: .query,
+                    type: .string,
+                    description:
+                        "カンマ区切り: customer,supplier,group,parent,subsidiary,affiliate,investee,major_shareholder,major_shareholder_of（省略時は全種類）",
+                    required: false
+                ),
+                ApiSkillParameter(
+                    name: "limit",
+                    location: .query,
+                    type: .integer,
+                    description: "1 ページの件数（既定 200・上限 1000）",
+                    required: false
+                ),
+                ApiSkillParameter(
+                    name: "cursor",
+                    location: .query,
+                    type: .string,
+                    description: "前の応答の next_cursor",
+                    required: false
+                ),
+            ],
+            instructions: """
+                有報の記載だけを返す（basis は常に disclosed。推定・競合は出さない）。
+                company は上場企業に名寄せできたときだけ付く（それ以外は null で name_raw のみ）。
+                supplier / major_shareholder_of は相手側の有報からの逆引きで、上場企業どうしだけ。
+                omitted は提出会社が記載を省略した type。未知の type・不正なコードは 400、未格納は 404、DB 非接続は 503。
+                MCP には出さない。
+                例: GET /v1/companies/9409/relations?type=customer,group
+                """,
+            mcpOutputSchema: nil
+        ),
+        ApiSkill(
             id: "get-filings",
             name: "提出書類一覧",
             description: "銘柄コードに紐づく EDINET 書類一覧を取得します。",

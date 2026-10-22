@@ -168,6 +168,24 @@ func registerRoutes(
             notFoundMessage: "会社説明は未算出です")
     }
 
+    // GET /v1/companies/{code}/relations?type=customer,group&limit=200&cursor=...
+    // DB（関係取り込み company_relations）の格納行のみを返す。ライブ抽出へはフォールバックしない。
+    // 不正なコード・未知の type は 400、未格納（公開できる行が無い）は 404、DB 非接続は 503。MCP には出さない。
+    v1.get("companies", ":code", "relations") { req async -> Response in
+        let code = req.parameters.get("code") ?? ""
+        let result = await serveStoredRelations(
+            code: code, types: req.query[String.self, at: "type"],
+            limit: req.query[Int.self, at: "limit"], cursor: req.query[String.self, at: "cursor"],
+            db: dbAvailable ? req.db : nil, logger: req.logger)
+        switch result {
+        case .ok(let value): return jsonResponse(value, status: .ok)
+        case .badRequest(let message): return errorResponse(.badRequest, message: message)
+        case .notFound: return errorResponse(.notFound, message: "取引先・関係会社は未抽出です")
+        case .dbUnavailable:
+            return errorResponse(.serviceUnavailable, message: "財務データベースに接続できません")
+        }
+    }
+
     // GET /v1/companies/{code}/filing-content?doc_id=...&sections=a,b
     // DB（有報セクション取り込み company_filing_sections）の格納済みセクション本文のみを返す。
     // 有報のライブ抽出（9MB DL＋SwiftSoup）は大企業で 1GB OOM を実測したため撤去し、重い抽出は
@@ -416,7 +434,7 @@ enum StoredDataServeResult {
 /// `withDbRetry`（読み取りリトライ）→ nil→notFound / throw→dbUnavailable。
 /// `db` は DB 未接続時 `nil` を渡す（`Database` の取得自体が未接続時に fatalError するため、
 /// 呼び出し側で dbAvailable ガード済みの値のみ渡すこと）。
-private func serveStored(
+func serveStored(
     db: Database?, logger: Logger,
     load: @escaping @Sendable (Database) async throws -> [String: Any]?
 ) async -> StoredDataServeResult {
