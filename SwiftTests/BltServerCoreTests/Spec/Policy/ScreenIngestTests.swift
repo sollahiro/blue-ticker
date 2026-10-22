@@ -647,6 +647,19 @@ private func codes(_ json: [String: Any]?) -> [String] {
         try await app.asyncShutdown()
     }
 
+    @Test func screenSnapshotPagesThroughAllRows() async throws {
+        try await withApp { app in
+            for code in ["0003", "0001", "0005", "0002", "0004"] {
+                try await upsertScreenIndex(
+                    code: code, response: try makeResponse(code: code, latest: ["roic": 5.0]),
+                    db: app.db)
+            }
+            let body = try #require(try await loadScreenSnapshot(db: app.db, pageSize: 2))
+            #expect(body["code"] as? [String] == ["0001", "0002", "0003", "0004", "0005"])
+            #expect(body["count"] as? Int == 5)
+        }
+    }
+
     @Test func entityTagMatchingAcceptsListsWildcardAndWeakTags() {
         #expect(entityTagMatches("\"abc\"", etag: "\"abc\""))
         #expect(entityTagMatches("\"x\", W/\"abc\"", etag: "\"abc\""))

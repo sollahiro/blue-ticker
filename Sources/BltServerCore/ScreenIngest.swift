@@ -269,10 +269,20 @@ func backfillScreenIndexForServableFinancials(
 }
 
 /// screen_index 全行をスナップショット形で読む。索引が未生成（0 行）なら nil（呼び出し側は 404）。
-func loadScreenSnapshot(db: Database) async throws -> [String: Any]? {
-    let rows = try await ScreenIndex.query(on: db).sort(\.$id).all()
+/// code 昇順の keyset ページで読む（1 クエリで全件 `.all()` しない）。
+func loadScreenSnapshot(db: Database, pageSize: Int = 1000) async throws -> [String: Any]? {
+    var rows: [ScreenRow] = []
+    var afterCode: String? = nil
+    while true {
+        var query = ScreenIndex.query(on: db).sort(\.$id)
+        if let afterCode { query = query.filter(\.$id > afterCode) }
+        let page = try await query.limit(pageSize).all()
+        rows.append(contentsOf: page.map { $0.toRow() })
+        afterCode = page.last?.id
+        if page.count < pageSize { break }
+    }
     guard !rows.isEmpty else { return nil }
-    return screenSnapshotJSON(rows: rows.map { $0.toRow() })
+    return screenSnapshotJSON(rows: rows)
 }
 
 /// `screen/snapshot` の DB 読み取り。`db` の扱いは `serveStoredFinancials` 参照。
