@@ -254,6 +254,31 @@ func registerRoutes(
             notFoundMessage: "Screen 索引は未生成です")
     }
 
+    // GET /v1/screen/snapshot
+    // screen_index 全行の列形式スナップショット（iOS 条件検索が端末内で件数・絞り込み・並べ替えをする）。
+    // 本文の SHA-256 を強い ETag にし、`If-None-Match` 一致は 304（本文なし）。本文は起動時と 3 日ごとに
+    // 裏で作り置きし（`ScreenSnapshotCache.swift`）、リクエストはそれを返すだけ。作り置きが無いときだけ
+    // そのリクエストで作る。REST のみ（skills カタログ・MCP には載せない）。
+    let snapshotCache = ScreenSnapshotCache()
+    app.storage[ScreenSnapshotCacheKey.self] = snapshotCache
+    v1.get("screen", "snapshot") { req async -> Response in
+        let prepared: PreparedScreenSnapshot
+        if let cached = await snapshotCache.current() {
+            prepared = cached
+        } else {
+            switch await buildScreenSnapshot(db: dbAvailable ? req.db : nil, logger: req.logger) {
+            case .ready(let built):
+                await snapshotCache.store(built)
+                prepared = built
+            case .notFound:
+                return errorResponse(.notFound, message: "Screen 索引は未生成です")
+            case .unavailable:
+                return errorResponse(.serviceUnavailable, message: "財務データベースに接続できません")
+            }
+        }
+        return screenSnapshotResponse(prepared, ifNoneMatch: req.headers.first(name: .ifNoneMatch))
+    }
+
     // GET /v1/feed/updates?limit=10&doc_type=120
     // 銘柄横断の直近提出書類。sync 済み edinet_documents のみ（ライブ EDINET なし）。
     v1.get("feed", "updates") { req async -> Response in
@@ -726,6 +751,35 @@ private func jsonResponse(_ value: Any, status: HTTPResponseStatus) -> Response 
     response.headers.contentType = .json
     response.body = .init(data: data)
     return response
+}
+
+/// スナップショットの 200 / 304。`If-None-Match` は一覧・`*`・弱い比較（`W/`）も受ける。
+/// `Cache-Control: no-cache` で途中のキャッシュには毎回再検証させる（端末側が取得間隔を持つ）。
+private func screenSnapshotResponse(_ prepared: PreparedScreenSnapshot, ifNoneMatch: String?) -> Response {
+    let response: Response
+    if let ifNoneMatch, entityTagMatches(ifNoneMatch, etag: prepared.etag) {
+        response = Response(status: .notModified)
+    } else {
+        response = Response(status: .ok)
+        response.headers.contentType = .json
+        response.body = .init(data: prepared.body)
+    }
+    response.headers.replaceOrAdd(name: .eTag, value: prepared.etag)
+    response.headers.replaceOrAdd(name: .cacheControl, value: "private, no-cache")
+    return response
+}
+
+/// `If-None-Match`（カンマ区切りの一覧）が `etag` に一致するか。弱い比較（`W/` を外して比べる）。
+func entityTagMatches(_ header: String, etag: String) -> Bool {
+    func strip(_ tag: String) -> String {
+        let trimmed = tag.trimmingCharacters(in: .whitespaces)
+        return trimmed.hasPrefix("W/") ? String(trimmed.dropFirst(2)) : trimmed
+    }
+    let target = strip(etag)
+    return header.split(separator: ",").contains { candidate in
+        let tag = strip(String(candidate))
+        return tag == "*" || tag == target
+    }
 }
 
 /// `{"error": "...", "status": N}` 形式のエラーレスポンス。`reason` を渡すと同じボディに

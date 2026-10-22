@@ -157,6 +157,11 @@ struct ScreenView: View {
                 session.countsLoading = false
                 return
             }
+            // 保存済みのスナップショットがあれば通信せずに数える（debounce も要らない）。
+            if let rows = await ScreenSnapshotStore.shared.cachedRows() {
+                applyLocalCounts(rows, sectors: sectors)
+                return
+            }
             session.countsLoading = true
             try? await Task.sleep(for: .milliseconds(400))
             guard !Task.isCancelled else { return }
@@ -164,6 +169,23 @@ struct ScreenView: View {
             guard !Task.isCancelled, complete else { return }
             session.loadedSectors = sectors
         }
+        .task {
+            // 表示のたびに検証子で取り直す（間隔内は送らない）。新しい本文が来たら数え直す。
+            guard await ScreenSnapshotStore.shared.needsRevalidation(),
+                let fresh = await ScreenSnapshotStore.shared.revalidate()
+            else { return }
+            applyLocalCounts(fresh, sectors: screenSectors)
+        }
+    }
+
+    private func applyLocalCounts(_ rows: [ScreenSnapshot.Row], sectors: [String]) {
+        var next: [ScreenPreset: Int] = [:]
+        for preset in ScreenPreset.allCases {
+            next[preset] = preset.search(rows, sectors: sectors, limit: 0).matched
+        }
+        session.presetMatched = next
+        session.countsLoading = false
+        session.loadedSectors = sectors
     }
 
     /// 未選択と全選択は同じ（業種フィルタなし）。複数業種はサーバーの IN 検索が OR する。
@@ -209,12 +231,18 @@ struct ScreenView: View {
         .padding(.vertical, 6)
     }
 
-    /// 件数は既存 `GET /v1/screen` の `matched`（`limit=1`）。業種数に関わらず 6 プリセットで
-    /// 6 リクエスト（業種の複数選択はサーバーの IN 検索が 1 本で受ける）。
+    /// 件数はまずスナップショット（`GET /v1/screen/snapshot` を 1 回）を取って端末内で数える。
+    /// 取れないときだけ既存 `GET /v1/screen` の `matched`（`limit=1`）に戻す。こちらは業種数に関わらず
+    /// 6 プリセットで 6 リクエスト（業種の複数選択はサーバーの IN 検索が 1 本で受ける）。
     /// プリセットは直列（HAPIS 同時接続を増やさない。業種変更の debounce と合わせる）。
     /// 戻り値は全プリセットの件数が揃ったか。欠けたときは呼び出し側が確定させず、次のタブ表示で取り直す。
     private func loadPresetCounts() async -> Bool {
         let sectors = screenSectors
+        if let rows = await ScreenSnapshotStore.shared.rowsFetchingIfNeeded() {
+            guard !Task.isCancelled else { return false }
+            applyLocalCounts(rows, sectors: sectors)
+            return true
+        }
         var next: [ScreenPreset: Int] = [:]
         for preset in ScreenPreset.allCases {
             guard !Task.isCancelled else { return false }
@@ -341,7 +369,16 @@ private struct ScreenResultsView: View {
         }
     }
 
+    /// スナップショットがあれば端末内で引く（REST と同じ 50 件）。無ければ `GET /v1/screen`。
     private func run() async {
+        if let rows = await ScreenSnapshotStore.shared.rowsFetchingIfNeeded() {
+            let result = preset.search(rows, sectors: sectors, limit: 50)
+            items = result.rows.map(ScreenItem.init)
+            matched = result.matched
+            errorMessage = nil
+            loaded = true
+            return
+        }
         do {
             let response = try await APIClient.shared.screen(
                 sectors: sectors, filters: preset.filters, sort: preset.sortMetric)

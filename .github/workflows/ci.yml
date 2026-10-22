@@ -46,6 +46,10 @@ jobs:
         working-directory: Apps/BlueTicker/FeedRSS
         run: swift test -Xswiftc -disable-upcoming-feature -Xswiftc MemberImportVisibility
 
+      - name: Test iOS screen snapshot search
+        working-directory: Apps/BlueTicker/ScreenSnapshot
+        run: swift test -Xswiftc -disable-upcoming-feature -Xswiftc MemberImportVisibility
+
   ios-paths:
     # macos-26 を毎回起こさない。iOS アプリ本体と、このワークフロー（ios ジョブ定義）の
     # 変更だけを見る。docs やサーバー側 DTO はコンパイルに影響しないので対象外。
@@ -121,7 +125,7 @@ jobs:
     # テストターゲットはまだ無いのでシミュレータは起動せず、SDK 向けコンパイルだけ確認する。
     # シミュレータ不要の iOS Foundation 単体は swift-macos / swift-linux の
     # `Apps/BlueTicker/HAPISConsumer` と `Apps/BlueTicker/ZeroAxisFill` と
-    # `Apps/BlueTicker/FundMath` と `Apps/BlueTicker/FeedRSS` が回す。
+    # `Apps/BlueTicker/FundMath` と `Apps/BlueTicker/FeedRSS` と `Apps/BlueTicker/ScreenSnapshot` が回す。
     # 署名はしない（CODE_SIGNING_ALLOWED=NO。プロジェクトの DEVELOPMENT_TEAM は実機用）。
     needs: ios-paths
     if: needs.ios-paths.outputs.run == 'true'
@@ -220,6 +224,10 @@ jobs:
 
       - name: Test iOS top feed RSS parsing
         working-directory: Apps/BlueTicker/FeedRSS
+        run: swift test -Xswiftc -disable-upcoming-feature -Xswiftc MemberImportVisibility
+
+      - name: Test iOS screen snapshot search
+        working-directory: Apps/BlueTicker/ScreenSnapshot
         run: swift test -Xswiftc -disable-upcoming-feature -Xswiftc MemberImportVisibility
 
   # ---- 必須チェック（scripts/ci/*.sh。ローカルでも同じコマンドで実行できる。docs/ci-checks.md）
