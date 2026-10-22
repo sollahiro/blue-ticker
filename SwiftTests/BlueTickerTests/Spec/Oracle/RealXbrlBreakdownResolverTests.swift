@@ -418,6 +418,8 @@ import Foundation
 
     /// Sony 6758 S100W19Q: 報告セグメントは G&NS 等。製品カテゴリ表は product_service。
     // source: code=6758 fy_end=2025-03-31 doc_id=S100W19Q page=152 field=segment.G&NS
+    // source: code=6758 fy_end=2025-03-31 doc_id=S100W19Q page=126 field=segment.denominator
+    // source: code=6758 fy_end=2025-03-31 doc_id=S100W19Q page=155 field=product_service.デジタルソフトウェア
     @Test func sonyS100W19QSegmentAndProductServiceAxes() async throws {
         guard await Self.ensureAvailable("S100W19Q") else { return }
         let dir = Self.xbrlDir("S100W19Q")
@@ -471,6 +473,8 @@ import Foundation
 
     /// Takeda 4502 S100YB5L: 単一セグメント 医薬品事業。製品は収益の分解。
     // source: code=4502 fy_end=2026-03-31 doc_id=S100YB5L page=169 field=segment.医薬品事業
+    // source: code=4502 fy_end=2026-03-31 doc_id=S100YB5L page=170 field=product_service.ENTYVIO
+    // source: code=4502 fy_end=2026-03-31 doc_id=S100YB5L page=146 field=employees.医薬品事業
     @Test func takedaS100YB5LSingleSegmentAndProductDecomposition() async throws {
         guard await Self.ensureAvailable("S100YB5L") else { return }
         let dir = Self.xbrlDir("S100YB5L")
@@ -520,6 +524,7 @@ import Foundation
     }
 
     /// Sony 6758 最新 S100YE2C: 旧 product_service の xbrl_facts セグメント行は segment へ移す。
+    // source: code=6758 fy_end=2026-03-31 doc_id=S100YE2C page=152 field=product_service.not_reportable_segment_facts
     @Test func sonyS100YE2CProductServiceIsNotReportableSegmentFacts() async throws {
         guard await Self.ensureAvailable("S100YE2C") else { return }
         let dir = Self.xbrlDir("S100YE2C")

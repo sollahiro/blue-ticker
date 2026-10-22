@@ -45,6 +45,8 @@ import Testing
     }
 
     /// 7063 S100P97P: Prior 専用タグの定型文が残るが、当期は MX / EX の 2 報告セグメント。
+    // source: code=7063 fy_end=2022-06-30 doc_id=S100P97P page=0 field=segment.MX
+    // reroute to segment axis, values unchanged, approved by BLT_Tester
     @Test func birdman7063S100P97PBuildsMXAndEXNotSingleSegmentDisclosed() async throws {
         guard await Self.ensureAvailable("S100P97P") else { return }
         let dir = Self.xbrlDir("S100P97P")
