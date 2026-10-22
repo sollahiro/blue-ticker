@@ -869,7 +869,7 @@ enum BreakdownExtractor {
     /// 資産表を候補から外し、注記「売上高」の収益の分解（地域×事業マトリクス）へフォールバックする。
     ///
     /// 関連情報「地域ごとの情報」と GeographicArea facts だけ。報告セグメント（OperatingSegments）
-    /// の地域名行はコピーしない（BLT-187。省略は same_as: segment）。
+    /// の地域名行はコピーしない（省略は same_as: segment）。
     static func extractGeographyInfo(xbrlDir: URL) -> ExtractedBreakdown {
         let dedicated = Xbrl.geographyTextBlockTags.subtracting(Xbrl.geographyMixedTextBlockTags)
         // US-GAAP 注記23 型（野村）: 小見出し「［地域別情報］」があればその下の表だけを使う。

@@ -1,4 +1,4 @@
-// product_service 軸。報告セグメント facts / 報告セグメント表は使わない（BLT-187）。
+// product_service 軸。報告セグメント facts / 報告セグメント表は使わない。
 // 製品・サービス別表と収益分解表だけを `ProductServiceBreakdownResolver` へ渡す。
 
 import Foundation
@@ -16,7 +16,7 @@ enum BusinessBreakdownSource: String {
 enum BusinessBreakdownResolver {
 
     /// product_service 軸。報告セグメント facts / 積み上げ PnL / 報告セグメント表は使わない。
-    /// 製品・サービス別表または収益分解表だけを正規化する（BLT-187）。
+    /// 製品・サービス別表または収益分解表だけを正規化する。
     static func resolve(
         segments: ExtractedBreakdown, consolidatedSales: Double?,
         labelsByTag: [String: String] = [:],

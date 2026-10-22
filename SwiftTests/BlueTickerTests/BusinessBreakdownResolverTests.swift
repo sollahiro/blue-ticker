@@ -41,7 +41,7 @@ import Foundation
         try extracted(docID: docID, key: "segments")
     }
 
-    /// 報告セグメント facts は product_service に載せない（BLT-187。軸は segment）。
+    /// 報告セグメント facts は product_service に載せない（軸は segment）。
     @Test func xbrlFactsAreNotAdoptedOnProductServiceAxis() async throws {
         let segments = try Self.segmentsResult(docID: "S100VXJA")
         let sales = try #require(try Self.loadSales(code: "2802"))

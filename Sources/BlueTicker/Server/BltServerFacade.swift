@@ -775,7 +775,7 @@ public extension BltServerContext {
     }
 
     /// 内訳取り込み: 書類1件分の product_service 軸内訳を解決する。
-    /// 関連情報の製品表または収益分解だけ。報告セグメント facts は使わない（BLT-187）。
+    /// 関連情報の製品表または収益分解だけ。報告セグメント facts は使わない。
     /// 売上分母は同一 XBRL パスで `BreakdownFinancialsResolver` が直接解決する（#9 / #10b）。
     /// 収益認識表は顧客契約の連結金額、無ければ本表外タグへフォールバックする
     /// （三菱商事）。由来タグは実タグ / `llm_table_subtotal` で、偽の `income_statement.sales` は出さない。

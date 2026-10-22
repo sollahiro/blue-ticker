@@ -184,14 +184,14 @@ public func isSupportedBreakdownAxis(_ axis: String) -> Bool {
 /// v1: 公開軸キー `business` → `product_service` のハードカットオーバー。応答・主キー・
 /// payload.axis の契約が変わる。金額の再計算はしない（マージ後にキー書き換え）。
 /// v2: 報告セグメント facts / 報告セグメント表をこの軸から外し、関連情報・収益分解の
-/// 製品表だけにする（BLT-187。旧 xbrl_facts 行は segment 軸へ移す）。
+/// 製品表だけにする（旧 xbrl_facts 行は segment 軸へ移す）。
 public let productServiceBreakdownCacheVersion = "breakdown-product_service-v2"
 /// 報告セグメント軸。新軸のため v1 から。
 public let segmentBreakdownCacheVersion = "breakdown-segment-v1"
 /// v11: 単位のみ表を捨てて dedicated contextRef の period を通し、うち列を抽出時に落とす。
 /// v12: うち列ドロップの決定論を精緻化（1段うち豪州、地域コンテキスト、軸ゲート）。
 /// v13: ingest 時に jpcrp 標準 member の日本語ラベルを補完（生 `*Member` 表示の誤表示）。
-/// v14: 報告セグメント facts の geography コピーをやめ、省略は same_as: segment（BLT-187）。
+/// v14: 報告セグメント facts の geography コピーをやめ、省略は same_as: segment。
 /// v11 のままでは決定論変更後も clean 行が skip される。
 public let geographyBreakdownCacheVersion = "breakdown-geography-v14"
 /// うち / タグ付き合計列の subtotal 化は targeted `--codes`（対象行削除）で定着。v2 は日経225全件再計算になるため上げない。
