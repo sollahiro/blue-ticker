@@ -1,15 +1,17 @@
 import Foundation
 
 /// 条件検索の取得元。`GET /v1/screen/snapshot`（`screen_index` 全行の列形式）を 1 回取り、
-/// 件数・絞り込み・並べ替えを端末内で行う。`screen_index` は ingest 後に日次で変わるだけなので、
+/// 件数・絞り込み・並べ替えを端末内で行う。`screen_index` は財務 ingest でしか変わらず、サーバーも
+/// 3 日ごとにしか作り直さないので、
 /// 保存した本文を `ETag` の条件付き GET で取り直す（`revalidateInterval` 以内は再検証しない）。
 /// 検索の意味は REST `GET /v1/screen` と同じ（業種は完全一致の OR、範囲は両端含む AND、
 /// フィルタ・ソート対象が null の行は落とす、同値はコード昇順）。
 enum ScreenSnapshot {
     /// 応答の形の版（サーバー `screenSnapshotSchemaVersion`）。違う版は解析しない。
     static let schemaVersion = 1
-    /// 前回の取得からこの間は再検証しない。索引は日次でしか変わらない。
-    static let revalidateInterval: TimeInterval = 60 * 60
+    /// 前回の取得からこの間は再検証しない（3 日。サーバーの作り直し間隔
+    /// `Api.screenSnapshotRebuildIntervalSeconds` と同じ）。
+    static let revalidateInterval: TimeInterval = 3 * 24 * 60 * 60
 
     /// 1 社の最新 FY。`metrics` のキーは REST の指標名（`roic` など）。null は持たない。
     struct Row: Hashable, Sendable {

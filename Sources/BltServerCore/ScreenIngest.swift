@@ -9,6 +9,7 @@
 // - read は screen_index の型付き列に対する AND フィルタ + 1 キーソート + LIMIT のみ。
 //   行が 1 件も無い（未生成）は 404。フィルタ 0 件は 200 で空配列。
 // - `GET /v1/screen/snapshot` は screen_index 全行を列形式で返す（iOS が端末内で絞る）。未生成は 404。
+//   本文の作り置きは `ScreenSnapshotCache.swift`。
 
 import BlueTickerCore
 import Fluent
