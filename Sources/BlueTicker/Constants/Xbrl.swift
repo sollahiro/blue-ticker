@@ -284,6 +284,19 @@ enum Xbrl {
         "BasicEarningsLossPerShareSummaryOfBusinessResults",       // JGAAP・汎用 Summary
     ]
 
+    /// IFRS 損益計算書の1株当たり利益の行。提出ラベルは見出し（「一株当たり情報」＞「基本的」＞
+    /// 「継続事業」）の下に置く前提の断片で、行だけでは意味が通らない（ソニー S100YE2C は「基本的」、
+    /// 継続・非継続は提出ラベル無し）。Statement では標準タクソノミの冗長ラベルを使う。
+    static let ifrsPerShareStatementTags: Set<String> = [
+        "BasicEarningsLossPerShareIFRS",
+        "DilutedEarningsLossPerShareIFRS",
+        "BasicAndDilutedEarningsLossPerShareIFRS",
+        "ContinuingOperationsBasicEarningsLossPerShareIFRS",
+        "DiscontinuedOperationsBasicEarningsLossPerShareIFRS",
+        "ContinuingOperationsDilutedEarningsLossPerShareIFRS",
+        "DiscontinuedOperationsDilutedEarningsLossPerShareIFRS",
+    ]
+
     /// 潜在株式調整後1株当たり当期利益（連結）。JGAAP のみ "Loss" を含まないタグ名になる
     /// （EDINETタクソノミの命名不統一、実データ確認済み: レーザーテック S100JRT9）。
     static let dilutedEpsTags: [String] = [
@@ -321,21 +334,6 @@ enum Xbrl {
     static let ordinaryShareMemberSuffix = "_OrdinaryShareMember"
     static let currentYearInstantContext = "CurrentYearInstant"
     static let filingDateInstantContext = "FilingDateInstant"
-
-    /// 資本金（期末・円）。`issued_shares_and_capital` note の `as_of_period_end.capital_stock` 用。
-    /// IFRS連結は `ShareCapitalIFRS`（CurrentYearInstant）、JGAAP/US-GAAP 親会社は
-    /// Summary / `CapitalStock`（多くが NonConsolidatedMember）。優先順は連結→Summary→単体。
-    static let capitalStockTags: [String] = [
-        "ShareCapitalIFRS",
-        "CapitalStockSummaryOfBusinessResults",
-        "CapitalStock",
-    ]
-
-    /// 資本準備金（期末・円）。表の「資本準備金」列に対応する `LegalCapitalSurplus` のみ
-    /// （`CapitalSurplus` / `CapitalSurplusIFRS` はその他資本剰余金を含み得るため使わない）。
-    static let capitalReserveTags: [String] = [
-        "LegalCapitalSurplus",
-    ]
 
     // MARK: - 営業利益タグ
 

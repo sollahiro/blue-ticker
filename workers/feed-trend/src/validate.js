@@ -10,7 +10,9 @@ export const ALLOWED_TOOLS = new Set([
   "get_filing_content",
   "get_breakdown",
   "get_statement",
+  // 旧名（statement/notes 廃止前のイベント）。origin はもう送らない。
   "get_statement_notes",
+  "get_shares",
 ]);
 
 export const QUERY_MAX_LENGTH = 128;

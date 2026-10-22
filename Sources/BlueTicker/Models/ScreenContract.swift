@@ -384,3 +384,48 @@ public func screenResponseJSON(
         "sort": ["key": query.sort.rawValue, "order": query.order.rawValue],
     ]
 }
+
+// MARK: - スナップショット（端末内検索用）
+
+/// `GET /v1/screen/snapshot` の形の版。列の増減・丸め・並びが変わったときだけ上げる。
+/// 中身の版は `screen_version`（`screenIndexVersion`）で別に返す。
+public let screenSnapshotSchemaVersion = 1
+
+/// スナップショットの数値の小数桁。全行を配るため桁を落としてサイズを抑える。
+/// 閾値（整数・ネット D/E は 1 桁）との比較で境界がずれるのは 0.00005 未満の行だけ。
+public let screenSnapshotFractionDigits = 4
+
+/// `GET /v1/screen/snapshot` 応答。`screen_index` 全行を列形式で返す（code 昇順）。
+/// iOS 条件検索が 1 回取得して端末内で件数・絞り込み・並べ替えをする。
+/// 行の i 番目は各配列の i 番目。指標は許可リスト全 12 個を常に載せ、null は null。
+/// `payout_ratio_3y` は行ごとに長さ 3（古→新）。
+public func screenSnapshotJSON(rows: [ScreenRow]) -> [String: Any] {
+    let sorted = rows.sorted { $0.code < $1.code }
+    func number(_ value: Double?) -> Any {
+        guard let value, value.isFinite else { return NSNull() }
+        return roundedSnapshotNumber(value)
+    }
+    var metrics: [String: Any] = [:]
+    for metric in ScreenMetric.allCases {
+        metrics[metric.rawValue] = sorted.map { number($0[metric]) }
+    }
+    return [
+        "schema_version": screenSnapshotSchemaVersion,
+        "screen_version": screenIndexVersion,
+        "count": sorted.count,
+        "code": sorted.map(\.code),
+        "name": sorted.map(\.name),
+        "market": sorted.map(\.market),
+        "sector": sorted.map(\.sector),
+        "period_end": sorted.map(\.periodEnd),
+        "metrics": metrics,
+        "payout_ratio_3y": sorted.map { row in row.payoutRatio3y.map { number($0) } },
+    ]
+}
+
+/// 小数 `screenSnapshotFractionDigits` 桁へ丸める。丸めで非有限になる値は元のまま返す。
+func roundedSnapshotNumber(_ value: Double) -> Double {
+    let scale = pow(10, Double(screenSnapshotFractionDigits))
+    let rounded = (value * scale).rounded() / scale
+    return rounded.isFinite ? rounded : value
+}

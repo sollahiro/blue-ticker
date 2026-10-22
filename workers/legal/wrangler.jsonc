@@ -3,13 +3,18 @@
   "main": "src/index.js",
   "compatibility_date": "2026-09-19",
   "workers_dev": true,
-  // App Store 用の免責・プライバシー・利用規約静的ページ。api.* / mcp.* の前段に置かない。
+  // 有報LAB（iOS アプリ）の免責・プライバシー・利用規約静的ページ。api.* / mcp.* の前段に置かない。
   "assets": {
     "directory": "./public",
     "binding": "ASSETS",
     "run_worker_first": true
   },
+  // yuholab.com が配信先。sollahiro.com は旧 URL 6 パスの 301 用に残す（src/index.js）。
   "routes": [
+    {
+      "pattern": "yuholab.com",
+      "custom_domain": true
+    },
     {
       "pattern": "sollahiro.com",
       "custom_domain": true

@@ -105,14 +105,14 @@ fly secrets set BLT_FEED_TREND_URL='https://blt-feed-trend.<account>.workers.dev
 
 ### Legal page Worker
 
-App Store 用の免責・プライバシーは静的 HTML（`workers/legal/`）。トークンは無い。**この Worker を Tunnel の `api.*` / `mcp.*` に差し込まない。**
+有報LAB（iOS アプリ）の免責・プライバシー・利用規約は静的 HTML（`workers/legal/`）。トークンは無い。**この Worker を Tunnel の `api.*` / `mcp.*` に差し込まない。**
 
 ```bash
 cd workers/legal
 npx wrangler@4 deploy
 ```
 
-`main` への push は `.github/workflows/legal-worker.yml`。GitHub secrets は Feed Trend と同じ `CLOUDFLARE_API_TOKEN` · `CLOUDFLARE_ACCOUNT_ID`。公開 URL は `https://sollahiro.com/blue-ticker/privacy` と `https://sollahiro.com/blue-ticker/terms`。workers.dev も残す。
+`main` への push は `.github/workflows/legal-worker.yml`。GitHub secrets は Feed Trend と同じ `CLOUDFLARE_API_TOKEN` · `CLOUDFLARE_ACCOUNT_ID`。公開 URL は Custom Domain `yuholab.com` の `https://yuholab.com`・`/privacy`・`/terms`。`sollahiro.com` の旧 URL 6 パス（`/blue-ticker`・`/yuholab` とそれぞれの `/privacy`・`/terms`）は 301 で直接 `yuholab.com` へ飛ばす（`workers/legal/README.md`）。workers.dev も残す。
 
 ### REST Service Token
 

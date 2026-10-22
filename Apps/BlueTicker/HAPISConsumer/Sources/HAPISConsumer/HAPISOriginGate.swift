@@ -7,7 +7,7 @@ import Foundation
 /// 数本の並列は問題にならない。
 public actor HAPISOriginGate {
     public enum RequestClass: Sendable, Equatable {
-        /// Feed / 検索 / 銘柄を開いたとき。429 クールダウンだけ待つ。
+        /// 検索 / 銘柄を開いたとき。429 クールダウンだけ待つ。
         case interactive
         /// ウォッチリスト先読み。リクエスト間を空け、interactive に道を譲る。
         case prefetch

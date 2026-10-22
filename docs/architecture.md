@@ -124,10 +124,11 @@ flowchart LR
 | `GET /v1/companies/{code}/waterfall` | Waterfall |
 | `GET /v1/companies/{code}/filing-content` | セクション本文 |
 | `GET /v1/companies/{code}/breakdown?axis=` | breakdowns（上場・格納済み。LLM の `needs_review` / `llm_unit_unresolved` は出さない。`docs/breakdown.md`） |
-| `GET /v1/companies/{code}/statement` · `/statement/notes` | Statement / Notes（上場。日経225は処理順の優先のみ） |
+| `GET /v1/companies/{code}/statement` · `/shares` | Statement / Shares（上場。日経225は処理順の優先のみ） |
 | `GET /v1/feed/updates` | Feed Update（直近 N 日の提出書類。既定 90 日・10 件。同日過多は安定サンプル。`total.day` / `total.week`） |
 | `GET /v1/feed/trend` | Feed Trend（匿名の検索・ツールヒット件数。書類件数ではない。カウンター未設定は 503） |
 | `GET /v1/screen` | Screen（`screen_index` 横断検索。skills / MCP 未掲載。索引未生成は 404。`sales_cagr_3y` と screen-v3 指標、screen-v4 の配当性向 3 年平均は ingest 時の派生列） |
+| `GET /v1/screen/snapshot` | Screen スナップショット（`screen_index` 全行の列形式。iOS 条件検索が端末内で絞る。本文 SHA-256 の `ETag` / 304。本文は起動時と 3 日ごとに作り置き。skills / MCP 未掲載。索引未生成は 404。`docs/ios-client.md`） |
 
 エラー封筒: `{"error":...,"status":N}`。
 

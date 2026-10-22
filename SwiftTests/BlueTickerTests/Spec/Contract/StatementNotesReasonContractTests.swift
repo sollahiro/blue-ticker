@@ -1,4 +1,4 @@
-// statement-notes 404 `reason` の公開契約（既知コード一覧）。
+// statement-notes / shares 404 `reason` の公開契約（既知コード一覧）。
 
 import Foundation
 import Testing
@@ -19,11 +19,14 @@ import Testing
         #expect(!isKnownStatementNoteNotApplicableReason("geography_only"))
         #expect(!isKnownStatementNoteNotApplicableReason(""))
 
-        let skill = try #require(apiSkill(id: "get-statement-notes"))
-        for reason in allStatementNoteNotApplicableReasons {
+        // 公開面（get-shares）が出す reason は既知コードの部分集合で、すべて説明に載っている。
+        #expect(allSharesNotApplicableReasons == ["not_found"])
+        let skill = try #require(apiSkill(id: "get-shares"))
+        for reason in allSharesNotApplicableReasons {
+            #expect(isKnownStatementNoteNotApplicableReason(reason))
             #expect(
                 skill.description.contains(reason) || skill.instructions.contains(reason),
-                "get-statement-notes must document reason \(reason)")
+                "get-shares must document reason \(reason)")
         }
     }
 

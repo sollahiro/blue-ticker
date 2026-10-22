@@ -7,7 +7,7 @@ import Foundation
 // MARK: - 契約型
 
 /// REST skills 応答の `schema_version`。形を破壊的に変えたときのみ +1。
-public let apiSkillsSchemaVersion = 5
+public let apiSkillsSchemaVersion = 6
 
 /// パラメータの置き場所（REST パス変数 / クエリ）。
 public enum ApiSkillParameterLocation: String, Sendable {
@@ -491,7 +491,7 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                 （格納済みデータのみ）。Summary/Waterfall の絞り込んだ ~20指標とは異なり、開示された
                 全項目（企業拡張タグ含む）を返します。持分変動計算書は合計列のみ（資本構成員別の
                 行列展開はしない）。対象は上場企業（日経225は ingest の処理順の優先のみ）。doc_id を省略すると最新の
-                有価証券報告書を使用します。注記（statement-notes）は別ツール get-statement-notes の対象。
+                有価証券報告書を使用します。EPS・BPS・発行済株式数は別ツール get-shares の対象。
                 """,
             method: "GET",
             path: "/v1/companies/{code}/statement",
@@ -543,41 +543,31 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                 """
         ),
         ApiSkill(
-            id: "get-statement-notes",
-            name: "財務諸表注記",
+            id: "get-shares",
+            name: "株式",
             description: """
-                貸借対照表・損益計算書・キャッシュ・フロー計算書（get-statement）の外にある注記
-                （EPS・発行済株式数）を
-                note_type 単位で取得します（格納済みデータのみ）。
-                対象は上場企業（日経225は ingest の処理順の優先のみ）。doc_id を省略すると最新の有価証券報告書を使用します。
-                注記が取得できない場合はエラー応答とともに reason が返ることがあります
+                有価証券報告書に記載された EPS（1株当たり当期純利益）・希薄化後 EPS・BPS（1株当たり純資産）・
+                発行済株式総数を取得します（格納済みデータのみ）。値は有報の記載をそのまま返します。
+                対象は上場企業。doc_id を省略すると最新の有価証券報告書を使用します。
+                items は key（eps / continuing_eps / discontinued_eps / diluted_eps / continuing_diluted_eps /
+                discontinued_diluted_eps / bps / issued_shares）・label（表示名）・value・unit
+                （yen_per_share / shares）の行で、開示の無い key は行ごと省きます（潜在株式が無い会社の
+                diluted_eps など）。continuing_* / discontinued_* は IFRS で継続事業・非継続事業別の EPS を
+                損益計算書に開示している会社だけにあります。
+                取得できない場合はエラー応答とともに reason が返ることがあります
                 （reason 無しは単に未取り込み。REST では 404、MCP では isError）。
-                not_found（当該 note_type の開示・XBRLタグが見つからない＝正当な欠測）、
-                available_via_statement（本 note_type の対象外だが同等の値は get-statement から取得可能。
-                公開中の note_type はこの reason を出さない）、
-                available_via_notes（本 note_type の対象外だが同等の値は他の公開 note_type から取得可能。
-                公開中の note_type はこの reason を出さない）、
-                us_gaap_unsupported（US-GAAP 連結で本 note_type の構造化タグ判定ができない場合）。
+                not_found（当該書類に開示・XBRLタグが見つからない＝正当な欠測）。
                 """,
             method: "GET",
-            path: "/v1/companies/{code}/statement/notes",
-            mcpTool: "get_statement_notes",
-            feature: "statement_notes",
+            path: "/v1/companies/{code}/shares",
+            mcpTool: "get_shares",
+            feature: "shares",
             parameters: [
                 ApiSkillParameter(
                     name: "code",
                     location: .path,
                     type: .string,
                     description: "銘柄コード（例: 7203）",
-                    required: true
-                ),
-                ApiSkillParameter(
-                    name: "note_type",
-                    location: .query,
-                    type: .string,
-                    description: """
-                        注記種別: per_share_information / issued_shares_and_capital
-                        """,
                     required: true
                 ),
                 ApiSkillParameter(
@@ -589,19 +579,18 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                 ),
             ],
             instructions: """
-                Statement Notes（get-statement 本体の外にある財務諸表注記、note_type 単位）。
-                対象は上場企業（日経225は ingest の処理順の優先のみ）。格納済みデータのみ。未算出は 404（reason 無し）、
-                対象外・非開示は 404 + reason（not_found / available_via_statement /
-                available_via_notes / us_gaap_unsupported）、DB 非接続は 503。
-                有形固定資産・のれん及び無形資産の種類別は get-breakdown の axis=property_plant_equipment /
-                goodwill_and_intangibles（note_type property_plant_equipment_schedule / goodwill_and_intangibles は廃止）。
-                例: GET /v1/companies/7203/statement/notes?note_type=per_share_information
+                Shares（EPS・希薄化後 EPS・BPS・発行済株式総数、有報の記載そのまま）。格納済みデータのみ。
+                未算出は 404（reason 無し）、非開示は 404 + reason（not_found）、
+                DB 非接続は 503。旧 statement/notes（note_type 指定）は廃止し常に 404。
+                例: GET /v1/companies/7203/shares
                 """,
             mcpOutputSchema:
                 """
-                {"type":"object","required":["code","doc_id","note_type","note"],"properties":{"code":\
-                {"type":"string"},"doc_id":{"type":"string"},"note_type":{"type":"string"},\
-                "note":{"type":"object"}}}
+                {"type":"object","required":["code","doc_id","items"],"properties":{"code":\
+                {"type":"string"},"doc_id":{"type":"string"},"items":{"type":"array","items":\
+                {"type":"object","required":["key","value"],"properties":{"key":{"type":"string"},\
+                "label":{"type":["string","null"]},"value":{"type":"number"},\
+                "unit":{"type":["string","null"]}}}}}}
                 """
         ),
         ApiSkill(
@@ -647,7 +636,7 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                 items はクエリ days 窓を新しい暦日から limit 件埋める（既定 90 日・10 件）。同日が残り枠を超えるとその日から安定サンプリングする。
                 `date` は集計した UTC 暦日。`total.day` はその日、`total.week` は直近7日の上場提出件数（limit で切る前。days とは独立）。
                 空でも 200（items=[]）。DB 非接続は 503。ライブ EDINET へはフォールバックしない。
-                RSS は静的フィード（https://feed.sollahiro.com/blue-ticker/edinet-filings.xml。日次 19:15 JST・ヘッドラインと会社アイコン URL のみ・直近7日 120/130/140/160）。REST が契約の正。MCP は追従。
+                RSS は静的フィード（https://feed.sollahiro.com/blue-ticker/edinet-filings.xml。日次 19:15 JST・ヘッドラインと会社アイコン URL のみ・有報 120 だけ。直近7日分と最新10件）。REST が契約の正。MCP は追従。
                 例: GET /v1/feed/updates?days=90&limit=10
                 例: GET /v1/feed/updates?doc_type=120,160
                 """,

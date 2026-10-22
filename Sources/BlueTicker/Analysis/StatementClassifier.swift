@@ -169,6 +169,9 @@ enum StatementClassifier {
         preferredLabelRolesElsewhere: Set<String> = []
     ) -> String? {
         let variants = labelRoleVariantsByTag[tag] ?? [:]
+        if Xbrl.ifrsPerShareStatementTags.contains(tag), let verbose = variants[xbrlVerboseLabelRole] {
+            return selfContainedPerShareLabel(verbose)
+        }
         if sectionType == .cashFlow || sectionType == .changesInEquity {
             if ContextHelpers.isConsolidatedPriorInstant(ctx)
                 || ContextHelpers.isNonConsolidatedPriorInstant(ctx),
@@ -201,6 +204,12 @@ enum StatementClassifier {
             return plainLabel
         }
         return variant
+    }
+
+    /// 標準の冗長ラベル（「継続事業、基本的１株当たり当期利益（△損失）（IFRS）」）から
+    /// 会計基準の注記「（IFRS）」を外す。
+    static func selfContainedPerShareLabel(_ verbose: String) -> String {
+        verbose.hasSuffix("（IFRS）") ? String(verbose.dropLast("（IFRS）".count)) : verbose
     }
 
     /// `suffix`（"periodStartLabel"/"periodEndLabel"）を含むロールの中から決定的に1つ選ぶ

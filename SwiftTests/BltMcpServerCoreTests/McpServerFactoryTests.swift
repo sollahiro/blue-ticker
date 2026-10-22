@@ -13,7 +13,7 @@ private let expectedToolNames: Set<String> = [
     "search_companies", "get_filings",
     "get_financial_summary",
     "get_waterfall", "get_filing_content",
-    "get_breakdown", "get_statement", "get_statement_notes",
+    "get_breakdown", "get_statement", "get_shares",
     "get_feed_updates", "get_feed_trend",
 ]
 
@@ -227,8 +227,8 @@ private func valueJSONObject(_ value: Value) -> [String: Any]? {
             outputSchemaRequiredKeys(try #require(byName["get_statement"]))
                 == ["schema_version", "code", "name", "sector", "market", "years"])
         #expect(
-            outputSchemaRequiredKeys(try #require(byName["get_statement_notes"]))
-                == ["code", "doc_id", "note_type", "note"])
+            outputSchemaRequiredKeys(try #require(byName["get_shares"]))
+                == ["code", "doc_id", "items"])
         #expect(
             outputSchemaRequiredKeys(try #require(byName["get_feed_updates"]))
                 == ["schema_version", "date", "days", "total", "items"])

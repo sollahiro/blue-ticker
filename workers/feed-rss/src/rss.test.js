@@ -222,8 +222,10 @@ describe("buildRss", () => {
         '<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:media="http://search.yahoo.com/mrss/">'
       )
     );
-    assert.ok(xml.includes("<title>Blue Ticker — EDINET 提出書類（上場）</title>"));
-    assert.ok(xml.includes("<link>https://sollahiro.com/blue-ticker/</link>"));
+    assert.ok(xml.includes("<title>有報LAB — 直近提出書類</title>"));
+    assert.ok(xml.includes("<link>https://yuholab.com</link>"));
+    assert.ok(xml.includes("有価証券報告書（120）のヘッドラインのみ"));
+    assert.ok(!/（130）|（140）|（160）/.test(xml));
     assert.ok(xml.includes("<language>ja</language>"));
     assert.ok(xml.includes("<lastBuildDate>Sat, 10 Oct 2026 19:15:00 +0900</lastBuildDate>"));
     assert.ok(xml.includes("<ttl>1440</ttl>"));

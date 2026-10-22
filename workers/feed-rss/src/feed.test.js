@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
 import { CACHE_CONTROL, CONTENT_TYPE, refreshFeed } from "./feed.js";
-import { FEED_DOC_TYPES, FEED_ITEM_LIMIT, FEED_SQL, ICON_SQL } from "./query.js";
+import { FEED_ITEM_LIMIT, FEED_SQL, ICON_SQL } from "./query.js";
 
 const NOW = new Date("2026-10-10T10:15:00Z");
 const KEY = "blue-ticker/edinet-filings.xml";
@@ -76,7 +76,7 @@ describe("refreshFeed", () => {
     assert.deepEqual(result, { written: true, count: 1 });
     assert.equal(queries.length, 2);
     assert.equal(queries[0].text, FEED_SQL);
-    assert.deepEqual(queries[0].params, [FEED_DOC_TYPES, "2026-10-04", FEED_ITEM_LIMIT]);
+    assert.deepEqual(queries[0].params, [["120"], FEED_ITEM_LIMIT]);
     assert.equal(queries[1].text, ICON_SQL);
     assert.deepEqual(queries[1].params, [["7203"]]);
 
@@ -102,8 +102,14 @@ describe("refreshFeed", () => {
     const { queries, runQuery } = fakeQuery(
       [
         LISTED_ROW,
-        { ...LISTED_ROW, doc_id: "S100BBB", doc_type_code: "130" },
-        { ...LISTED_ROW, doc_id: "S100CCC", sec_code: "477A0", filer_name: "サンプル商事" },
+        { ...LISTED_ROW, doc_id: "S100BBB", submit_date_time: "2026-10-09 15:20" },
+        {
+          ...LISTED_ROW,
+          doc_id: "S100CCC",
+          sec_code: "477A0",
+          filer_name: "サンプル商事",
+          submit_date_time: "2026-10-09 15:10",
+        },
       ],
       [{ code: "7203", r2_object_key: "company-icons/7203.ico" }]
     );
@@ -149,6 +155,44 @@ describe("refreshFeed", () => {
     assert.deepEqual(result, { written: true, count: 1 });
     assert.equal(queries.length, 1);
     assert.ok(!bucket.calls[0].body.includes("<media:thumbnail"));
+  });
+
+  test("窓の外の有報: 直近 10 件までは載せ、それより古いものは落とす", async () => {
+    const bucket = fakeBucket();
+    const log = silentLog();
+    // 窓（2026-10-04 以降）の中は 1 件だけ。新しい順に並んだ行を返す。
+    const older = Array.from({ length: 11 }, (_, index) => ({
+      ...LISTED_ROW,
+      doc_id: `S100O${String(index).padStart(2, "0")}`,
+      sec_code: "99840",
+      filer_name: "古い有報株式会社",
+      submit_date_time: `2026-09-${String(30 - index).padStart(2, "0")} 15:00`,
+    }));
+    const { runQuery } = fakeQuery([LISTED_ROW, ...older]);
+
+    const result = await refreshFeed({ env: makeEnv(bucket), runQuery, now: NOW, log });
+
+    assert.deepEqual(result, { written: true, count: 10 });
+    const body = bucket.calls[0].body;
+    assert.ok(body.indexOf("S100AAA") < body.indexOf("S100O00"));
+    assert.ok(body.includes("<title>古い有報株式会社（9984） 有価証券報告書</title>"));
+    assert.ok(body.includes("S100O08"));
+    assert.ok(!body.includes("S100O09"));
+  });
+
+  test("有報以外は載らない（RSS は 120 だけを問い合わせる）", async () => {
+    const bucket = fakeBucket();
+    const log = silentLog();
+    const { queries, runQuery } = fakeQuery([LISTED_ROW]);
+
+    await refreshFeed({ env: makeEnv(bucket), runQuery, now: NOW, log });
+
+    assert.deepEqual(queries[0].params[0], ["120"]);
+    const body = bucket.calls[0].body;
+    assert.deepEqual(
+      [...body.matchAll(/<category domain="edinet:doc_type">(\d+)<\/category>/g)].map((m) => m[1]),
+      ["120"]
+    );
   });
 
   test("クエリ失敗: put せず query_error", async () => {

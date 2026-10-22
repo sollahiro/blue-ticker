@@ -1,6 +1,7 @@
 # Feed RSS Worker
 
-EDINET に提出された上場会社の開示書類（ヘッドラインのみ）を RSS 2.0 で公開する。
+EDINET に提出された上場会社の有価証券報告書（ヘッドラインのみ）を RSS 2.0 で公開する。
+チャネル名は「有報LAB — 直近提出書類」、チャネル `<link>` は `https://yuholab.com`（workers/legal が配信する有報LAB のページ）。
 Cron が 1 日 1 回 Neon を読み、RSS XML を R2 の静的オブジェクトとして書き出す。
 配信は R2 カスタムドメイン `feed.sollahiro.com` が担い、この Worker 自体は公開ルートを持たない。
 
@@ -8,11 +9,13 @@ Cron が 1 日 1 回 Neon を読み、RSS XML を R2 の静的オブジェクト
 
 - cron `15 10 * * *`（UTC）= 毎日 19:15 JST。18:00 JST の blt-sync 完了後に回す。
 
-## 抽出条件（`/v1/feed/updates` と同じ listed 選択）
+## 抽出条件（listed 判定は `/v1/feed/updates` と同じ）
 
-- 書類種別: `120` / `130` / `140` / `160`（`Api.feedAllowedDocTypes` と同じ）
+- 書類種別: 有価証券報告書 `120` だけ（`RSS_DOC_TYPES`）。訂正（`130`）・四半期（`140`）・半期（`160`）は出さない。同期対象・REST / MCP のフィードの種別（`FEED_DOC_TYPES` = `Api.feedAllowedDocTypes`）とは別の定数で、こちらは変えない
 - 期間: 直近 7 暦日（UTC、今日を含む。`feedInclusiveCutoffDateString(days: 7)` と同じ下限）
+- 期間に関係なく、新しい順に直近 10 件は必ず載せる（`FEED_LATEST_MIN`）。7 日窓に有報が少ない時期でも iOS の Top feed が REST 既定の 10 件を保てるように。期間を延ばすと 6 月の決算期に有報だけで上限を超えるので件数で区切る
 - 上限: 200 件
+- クエリは 1 本（`FEED_SQL`）: 有報を新しい順に 200 件引き、`selectFeedRows` で「先頭 10 件」か「下限日以降」の行を残す。旧実装（窓のクエリ＋有報の直近 10 件のクエリ＋重複除去）と同じ結果になることを `src/query.test.js` で確かめている
 - 上場のみ: 府令 `010`（会社開示）・5 桁 `sec_code` 末尾 `0`・`00000` 以外
 - 並び順: `submit_date_time` 降順、`doc_id` 降順
 
@@ -36,8 +39,6 @@ RSS は窓内を時系列で全部出すフィードなので、同日の絞り�
 - アイコン URL を一覧で出す公開面はこの RSS だけ。アイコン専用のエンドポイントは作らない
 - チャネル画像（`<image>`）と `enclosure` は出さない
 
-チャネル `<link>` は `https://sollahiro.com/blue-ticker/`（workers/legal が配信するアプリ紹介ページ）。
-
 ## Swift とのパリティ
 
 抽出条件・item マッピングは REST `/v1/feed/updates` の Swift 実装と揃える。対応関係:
@@ -47,7 +48,7 @@ RSS は窓内を時系列で全部出すフィードなので、同日の絞り�
 - ラベル・辞書形: `filingDict`、`docTypeLabel`（Sources/BlueTicker/Server/BltServerFacade.swift）
 - 対象書類種別・府令: `Api.documentSyncDocTypes` / `feedAllowedDocTypes`、`Api.ordinanceCompanyDisclosure`（Sources/BlueTicker/Constants/Api.swift）
 
-共有 fixture `test-fixtures/feed-parity.json` を正本に、両側のテストでドリフトを検知する:
+共有 fixture `test-fixtures/feed-parity.json` を正本に、両側のテストでドリフトを検知する。fixture の `feedDocTypes` は同期対象の種別で、RSS の種別（`RSS_DOC_TYPES`）はその部分集合であることだけを確かめる:
 
 - JS: `src/parity.test.js`（`node --test src/*.test.js` に含まれる。Swift ソースも直接パースして定数・ラベル・生 SQL を照合する）
 - Swift: `SwiftTests/BlueTickerTests/FeedRssParityFixtureTests.swift`

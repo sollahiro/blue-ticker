@@ -71,6 +71,8 @@ breaking 再編時は可能な範囲で:
 
 - Notes の `lease_liabilities` / `borrowings_schedule` を REST / MCP / skills / `--note-types` / ingest から外した（breaking。`apiSkillsSchemaVersion` 4）。未知 note_type と同じ 404（reason 無し、retired breakdown 軸と同型）。パーサは残し、有利子負債の正本は breakdown 軸 `interest_bearing_debt`。`fin-vN` / `breakdown-interest-bearing-debt-v2` / 組立指紋は据え置き。
 - Notes の `property_plant_equipment_schedule` / `goodwill_and_intangibles` を同じ形で外し、breakdown 軸 `property_plant_equipment` / `goodwill_and_intangibles` を追加した（breaking。`apiSkillsSchemaVersion` 5）。軸の行は種類別の正味帳簿価額（`amount`・`source_tag`）、小計は `row_kind=subtotal`。日本基準の `available_via_statement` に当たる reason は breakdown に無く、`not_found` になる。job-03（notes-heavy）は廃止。
+- `GET /v1/companies/{code}/statement/notes`（MCP `get_statement_notes`）を廃止し、`GET /v1/companies/{code}/shares`（MCP `get_shares`）を追加した（breaking。`apiSkillsSchemaVersion` 6）。shares は {code, doc_id, items}（key = `eps` / `diluted_eps` / `bps` / `issued_shares`）。旧パスは常に 404。資本金・資本準備金・推移の表は公開も取り込みもしない（新規行は期末の発行済株式総数だけ）。`notes-issued-shares-and-capital-v1`・組立指紋・`fin-vN`・`company_statement_notes` のテーブルは据え置き（期末値は不変のため再 ingest・再組立を起こさない）。Feed Trend の tool 名は `get_shares`（Worker は旧名も受ける）。
+- shares に IFRS の継続事業・非継続事業別 EPS（key `continuing_eps` / `discontinued_eps` / `continuing_diluted_eps` / `discontinued_diluted_eps`）を足した（互換追加。同じ書類の格納済み statement から取る）。statement の IFRS 1株当たり利益の行の `label` を標準タクソノミの冗長ラベルにした（値・行数は不変。`statement-v3` は据え置き、旧行は該当 code の再取り込みで直す）。
 
 ## Codable 応答への段階移行
 

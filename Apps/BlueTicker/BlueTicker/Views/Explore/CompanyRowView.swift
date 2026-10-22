@@ -118,6 +118,9 @@ struct CompanyIconView: View {
 /// 格納の大半は ICO なので `UIImage(data:)` ではなく ImageIO で解码する。
 /// 「無い」結果は `UserDefaults` に 1 日持ち、起動ごとに最大 5 回のプローブをやり直さない
 /// （Feed / 検索結果の数十リクエストが本文の REST と帯域を争わないようにする）。
+/// 取れた画像は生のバイト列を端末 Caches にも 7 日持つ。アイコン配信には `Cache-Control` が無く
+/// Cloudflare でもキャッシュされないので、メモリだけだと起動ごとに取り直す。
+/// 取得は行の `.task` から呼ぶので、List が画面に入れた行の分だけになる。
 actor CompanyIconLoader {
     static let shared = CompanyIconLoader()
 
@@ -125,21 +128,38 @@ actor CompanyIconLoader {
     private static let missingStorageKey = "blt.icon.missing"
     private static let missingTTL: TimeInterval = 24 * 60 * 60
     private static let missingLimit = 2_000
+    private static let diskTTL: TimeInterval = 7 * 24 * 60 * 60
 
     private var memory: [String: UIImage] = [:]
     private var missing: [String: Date]
     private var inflight: [String: Task<IconLoadOutcome, Never>] = [:]
     private let defaults: UserDefaults
+    private let directory: URL
 
-    init(defaults: UserDefaults = .standard, now: Date = Date()) {
+    init(defaults: UserDefaults = .standard, directory: URL? = nil, now: Date = Date()) {
         self.defaults = defaults
+        if let directory {
+            self.directory = directory
+        } else {
+            let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first
+                ?? FileManager.default.temporaryDirectory
+            self.directory = caches
+                .appendingPathComponent("blt-icons", isDirectory: true)
+                .appendingPathComponent("v1", isDirectory: true)
+        }
         let stored = defaults.dictionary(forKey: Self.missingStorageKey) as? [String: Date] ?? [:]
         missing = stored.filter { now.timeIntervalSince($0.value) < Self.missingTTL }
+        // 期限切れのファイルは二度とヒットしないので起動時に捨てる（完了は待たない）。
+        Task { await self.purgeExpiredDisk() }
     }
 
     func image(code: String, preferredURL: String?) async -> UIImage? {
         let key = cacheKey(code: code, preferredURL: preferredURL)
         if let cached = memory[key] { return cached }
+        if let stored = diskImage(key: key) {
+            memory[key] = stored
+            return stored
+        }
         if let checkedAt = missing[key], Date().timeIntervalSince(checkedAt) < Self.missingTTL {
             return nil
         }
@@ -152,6 +172,9 @@ actor CompanyIconLoader {
         inflight[key] = nil
         if let loaded = outcome.image {
             memory[key] = loaded
+            if let data = outcome.data {
+                storeDisk(key: key, data: data)
+            }
             if missing.removeValue(forKey: key) != nil {
                 persistMissing()
             }
@@ -176,8 +199,8 @@ actor CompanyIconLoader {
         var sawUnavailable = false
         if let preferredURL, let url = URL(string: preferredURL) {
             switch await fetchImage(url) {
-            case .image(let image):
-                return IconLoadOutcome(image: image, cacheAsMissing: false)
+            case .image(let image, let data):
+                return IconLoadOutcome(image: image, data: data, cacheAsMissing: false)
             case .unavailable:
                 sawUnavailable = true
             case .notFound:
@@ -192,8 +215,8 @@ actor CompanyIconLoader {
             let url = APIConfiguration.defaultIconBaseURL
                 .appending(path: "company-icons/\(trimmed).\(ext)")
             switch await fetchImage(url) {
-            case .image(let image):
-                return IconLoadOutcome(image: image, cacheAsMissing: false)
+            case .image(let image, let data):
+                return IconLoadOutcome(image: image, data: data, cacheAsMissing: false)
             case .unavailable:
                 sawUnavailable = true
             case .notFound:
@@ -220,7 +243,7 @@ actor CompanyIconLoader {
             guard let image = CompanyIconDecoder.image(from: data) else {
                 return .unavailable
             }
-            return .image(image)
+            return .image(image, data)
         } catch is CancellationError {
             return .unavailable
         } catch let error as URLError where error.code == .cancelled {
@@ -233,15 +256,63 @@ actor CompanyIconLoader {
     private func cacheKey(code: String, preferredURL: String?) -> String {
         "\(code)|\(preferredURL ?? "")"
     }
+
+    private func diskImage(key: String) -> UIImage? {
+        let url = diskURL(for: key)
+        guard let modified = Self.modificationDate(url),
+            Date().timeIntervalSince(modified) < Self.diskTTL,
+            let data = try? Data(contentsOf: url)
+        else {
+            return nil
+        }
+        return CompanyIconDecoder.image(from: data)
+    }
+
+    private func storeDisk(key: String, data: Data) {
+        do {
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            try data.write(to: diskURL(for: key), options: .atomic)
+        } catch {
+            return
+        }
+    }
+
+    private func purgeExpiredDisk() {
+        let now = Date()
+        let names = (try? FileManager.default.contentsOfDirectory(atPath: directory.path)) ?? []
+        for name in names {
+            let url = directory.appendingPathComponent(name)
+            if let modified = Self.modificationDate(url), now.timeIntervalSince(modified) < Self.diskTTL {
+                continue
+            }
+            try? FileManager.default.removeItem(at: url)
+        }
+    }
+
+    private func diskURL(for key: String) -> URL {
+        let name = String(
+            key.map { character in
+                character.isLetter || character.isNumber || character == "-" || character == "_"
+                    || character == "." ? character : "_"
+            }
+        )
+        return directory.appendingPathComponent("\(name).img")
+    }
+
+    private static func modificationDate(_ url: URL) -> Date? {
+        (try? FileManager.default.attributesOfItem(atPath: url.path))?[.modificationDate] as? Date
+    }
 }
 
 private struct IconLoadOutcome {
     var image: UIImage?
+    /// ディスクに保存する生のバイト列（取れたときだけ）。
+    var data: Data? = nil
     var cacheAsMissing: Bool
 }
 
 private enum IconFetchResult {
-    case image(UIImage)
+    case image(UIImage, Data)
     case notFound
     case unavailable
 }

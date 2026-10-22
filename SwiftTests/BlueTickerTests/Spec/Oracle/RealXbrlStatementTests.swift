@@ -1947,4 +1947,27 @@ import Foundation
             byTag["FinancialRevenue"]?.components?.map(\.tag)
                 .contains("InterestAndDividendIncomeRevOA") == true)
     }
+
+    // 6758 ソニー: IFRS PL の1株当たり利益は「一株当たり情報」の見出し階層の下にあり、提出ラベルは
+    // 「基本的」の断片、継続・非継続は提出ラベル無し。標準タクソノミの冗長ラベルで行だけで読めるようにする。
+    // source: code=6758 fy_end=2026-03-31 doc_id=S100YE2C page=130 field=income_statement.ContinuingOperationsBasicEarningsLossPerShareIFRS
+    // source: code=6758 fy_end=2026-03-31 doc_id=S100YE2C page=130 field=income_statement.DiscontinuedOperationsDilutedEarningsLossPerShareIFRS
+    @Test func sonyPerShareRowsUseSelfContainedLabels() async throws {
+        guard Self.taxonomyAvailable, await Self.ensureAvailable("S100YE2C") else { return }
+        let year = try Self.requireResolved(
+            await Self.analyzer().extract(docID: "S100YE2C", statementTypes: [.incomeStatement]))
+        let byTag = Dictionary(uniqueKeysWithValues: year.incomeStatement.map { ($0.tag, $0) })
+        let expected: [(String, String, Double)] = [
+            ("BasicEarningsLossPerShareIFRS", "基本的１株当たり当期利益（△損失）", -54.7),
+            ("ContinuingOperationsBasicEarningsLossPerShareIFRS", "継続事業、基本的１株当たり当期利益（△損失）", 172.51),
+            ("DiscontinuedOperationsBasicEarningsLossPerShareIFRS", "非継続事業、基本的１株当たり当期利益（△損失）", -227.21),
+            ("DilutedEarningsLossPerShareIFRS", "希薄化後１株当たり当期利益（△損失）", -54.36),
+            ("ContinuingOperationsDilutedEarningsLossPerShareIFRS", "継続事業、希薄化後１株当たり当期利益（△損失）", 171.44),
+            ("DiscontinuedOperationsDilutedEarningsLossPerShareIFRS", "非継続事業、希薄化後１株当たり当期利益（△損失）", -225.8),
+        ]
+        for (tag, label, value) in expected {
+            #expect(byTag[tag]?.label == label, "\(tag)")
+            #expect(byTag[tag]?.value == value, "\(tag)")
+        }
+    }
 }
