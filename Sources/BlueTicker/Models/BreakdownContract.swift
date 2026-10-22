@@ -389,7 +389,9 @@ public func isDeterministicBreakdownNotApplicableReason(_ reason: String) -> Boo
 /// breakdown read（REST/MCP）が適用する最低スキーマバージョン番号（軸別 `…-vN` の N）。
 /// **明示指定**。決定論・LLM とも `isServableBreakdown` でこの床を見る（パース不能な
 /// cache_version は非 servable）。不変条件: 各軸の床 ≤ その軸の現行 `…-vN` の N。
-public let productServiceBreakdownMinServableVersion = 2
+/// product_service は v2 でも床を 1 のまま据え置く。旧 v1 行は再 ingest で v2 に置き換わるまで配信を続ける
+/// （床を上げると既定軸の breakdown が全銘柄で 404 になるため）。
+public let productServiceBreakdownMinServableVersion = 1
 public let segmentBreakdownMinServableVersion = 1
 public let geographyBreakdownMinServableVersion = 1
 public let employeesBreakdownMinServableVersion = 1
