@@ -35,13 +35,44 @@ enum SegmentBreakdownResolver {
         if let snapshot = factsSnapshot {
             factsSnapshot = BreakdownNormalizer.publishingAsSegment(snapshot)
         }
+        var profitAudit: LLMBreakdownAudit?
+
+        // 決定論で利益タグが決まらず profit が全行 null のとき、セグメント値のある既存タグから
+        // 会社のセグメント利益の行を Jev に選ばせる（9201 日本航空の財務・法人所得税前利益）。
+        if let snapshot = factsSnapshot, let segmentProfitDecider,
+           !snapshot.needsReview,
+           !snapshot.rows.contains(where: { $0.profit != nil }),
+           !BreakdownNormalizer.isFinancialBasisDenominatorTag(snapshot.denominatorTag)
+        {
+            let candidates = SegmentProfitJevPicker.candidates(
+                facts: reportable.facts, rowLabelsByTag: reportable.rowLabelsByTag,
+                memberLabels: labelsByTag, amountTag: snapshot.denominatorTag)
+            let picked = await SegmentProfitJevPicker.pick(
+                candidates: candidates, facts: reportable.facts,
+                salesLabel: reportable.rowLabelsByTag[snapshot.denominatorTag]?.sorted().first
+                    ?? snapshot.denominatorTag,
+                decider: segmentProfitDecider, docID: docID)
+            if !candidates.isEmpty {
+                profitAudit = LLMBreakdownAudit(
+                    sourceTableIndex: nil, periodColumn: nil, unit: "",
+                    profitDisclosed: picked.tag != nil, notes: "segment_profit_jev",
+                    jev: picked.audit)
+            }
+            if let tag = picked.tag,
+               let withProfit = BreakdownNormalizer.normalize(
+                   factsInput, consolidatedSales: consolidatedSales, labelsByTag: labelsByTag,
+                   profitTagOverride: tag)
+            {
+                factsSnapshot = BreakdownNormalizer.publishingAsSegment(withProfit)
+            }
+        }
 
         if let snapshot = factsSnapshot, !snapshot.needsReview,
            snapshot.rows.contains(where: { $0.rowKind == "segment" })
         {
             return (
                 applyingPatternAndJoin(snapshot, pattern: pattern, employeeLabels: employeeLabels),
-                .xbrlFacts, nil)
+                .xbrlFacts, profitAudit)
         }
 
         if let stacked = StackedSegmentPnLNormalizer.normalize(
