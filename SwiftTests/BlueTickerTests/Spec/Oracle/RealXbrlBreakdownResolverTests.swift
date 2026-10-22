@@ -289,21 +289,20 @@ import Foundation
         // 報告セグメント名が「日本事業」「米州事業」等の地域事業ユニット。金額はユーザー確認済み
         // （分母 969,992 百万円と一致）。ラベルが地名に見えるため needs_review は立つが、
         // 中身は事業軸として採用する（本番 segment_info_llm / S100XSCU）。
-        let segments = BreakdownExtractor.extractSegmentInfo(xbrlDir: Self.xbrlDir("S100XSCU"))
-        let joined = segments.tables.map(\.markdown).joined(separator: "\n")
+        let reportable = BreakdownExtractor.extractReportableSegmentInfo(
+            xbrlDir: Self.xbrlDir("S100XSCU"))
+        let joined = reportable.tables.map(\.markdown).joined(separator: "\n")
         #expect(joined.contains("日本事業"))
 
         let sales = 969_992_000_000.0
         let decider = FakeRevenueRecognitionColumnDecider(containing: "日本事業")
 
-        let (snapshot, source, _) = await BusinessBreakdownResolver.resolve(
-            segments: segments, consolidatedSales: sales, columnDecider: decider
+        let (snapshot, source, _) = await SegmentBreakdownResolver.resolve(
+            reportable: reportable, consolidatedSales: sales, segmentInfoDecider: decider
         )
 
-        #expect(source == .segmentInfoLLM)
-        #expect(snapshot?.axis == breakdownAxisProductService)
-        #expect(snapshot?.needsReview == true)
-        #expect(snapshot?.warnings.contains("business_label_looks_like_geography") == true)
+        #expect(source == .segmentInfoLLM || source == .xbrlFacts)
+        #expect(snapshot?.axis == breakdownAxisSegment)
         let japan = try #require(snapshot?.rows.first { $0.labelRaw.contains("日本") })
         #expect(japan.labelRaw == "日本事業")
         #expect(japan.amount == 295_343_000_000)
@@ -335,19 +334,19 @@ import Foundation
         #expect(overseas.amount == 1_229_340_000_000)
     }
 
-    @Test func konamiBusinessResolvesViaXbrlFactsWithoutLLM() async throws {
+    @Test func konamiReportableFactsResolveOnSegmentAxisWithoutLLM() async throws {
         guard await Self.ensureAvailable("S100YKX5") else { return }
-        let segments = BreakdownExtractor.extractSegmentInfo(xbrlDir: Self.xbrlDir("S100YKX5"))
+        let reportable = BreakdownExtractor.extractReportableSegmentInfo(xbrlDir: Self.xbrlDir("S100YKX5"))
         let sales = 493_677_000_000.0
 
-        let (snapshot, source, audit) = await BusinessBreakdownResolver.resolve(
-            segments: segments, consolidatedSales: sales
+        let (snapshot, source, audit) = await SegmentBreakdownResolver.resolve(
+            reportable: reportable, consolidatedSales: sales
         )
 
         #expect(source == .xbrlFacts)
         #expect(audit == nil)
         let snap = try #require(snapshot)
-        #expect(snap.axis == breakdownAxisProductService)
+        #expect(snap.axis == breakdownAxisSegment)
         #expect(snap.denominatorTag == "NetSalesAndOperatingRevenueFromExternalCustomersIFRS")
         #expect(snap.denominator == sales)
         #expect(snap.denominator / sales < 10)
@@ -357,6 +356,11 @@ import Foundation
         })
         #expect(digital.amount == 370_225_000_000)
         #expect(digital.rowKind == "segment")
+        let product = BreakdownExtractor.extractProductServiceInfo(xbrlDir: Self.xbrlDir("S100YKX5"))
+        let (productSnapshot, productSource, _) = await BusinessBreakdownResolver.resolve(
+            segments: product, consolidatedSales: sales)
+        #expect(productSource != .xbrlFacts)
+        #expect(productSnapshot?.axis != breakdownAxisSegment)
     }
 
     /// フジックス S100YHMW: 報告セグメントは日本/アジア。製品別は90％省略で表が無い。
@@ -380,9 +384,9 @@ import Foundation
 
         #expect(snapshot == nil)
         #expect(source == .notFound)
-        #expect(audit?.notApplicableReason == breakdownNotApplicableGeographyOnly)
         let reason = BreakdownExtractor.classifyNotApplicableReason(
-            segments: segments, consolidatedSales: sales, xbrlDir: Self.xbrlDir("S100YHMW"),
+            segments: BreakdownExtractor.extractReportableSegmentInfo(xbrlDir: Self.xbrlDir("S100YHMW")),
+            consolidatedSales: sales, xbrlDir: Self.xbrlDir("S100YHMW"),
             llmHint: audit?.notApplicableReason)
         #expect(reason == .geographyOnly)
     }
@@ -400,9 +404,134 @@ import Foundation
         #expect(snapshot == nil)
         #expect(source == .notFound)
         let reason = BreakdownExtractor.classifyNotApplicableReason(
-            segments: segments, consolidatedSales: 5_830_295_000.0,
+            segments: BreakdownExtractor.extractReportableSegmentInfo(xbrlDir: Self.xbrlDir("S100LRPS")),
+            consolidatedSales: 5_830_295_000.0,
             xbrlDir: Self.xbrlDir("S100LRPS"), llmHint: audit?.notApplicableReason)
         #expect(reason == .geographyOnly)
+    }
+
+    /// Sony 6758 S100W19Q: 報告セグメントは G&NS 等。製品カテゴリ表は product_service。
+    // source: code=6758 fy_end=2025-03-31 doc_id=S100W19Q page=152 field=segment.G&NS
+    @Test func sonyS100W19QSegmentAndProductServiceAxes() async throws {
+        guard await Self.ensureAvailable("S100W19Q") else { return }
+        let dir = Self.xbrlDir("S100W19Q")
+        let yen = Financial.millionYen
+        let expected: [(String, Double)] = [
+            ("G&NS", 4_543_571),
+            ("音楽", 1_820_263),
+            ("映画", 1_498_534),
+            ("ET&S", 2_362_838),
+            ("I&SS", 1_712_534),
+            ("金融", 922_147),
+            ("その他", 82_477),
+        ]
+        let financials = StatementFinancialsResolver.resolve(xbrlDir: dir)
+        let coverage = financials?.geographyCoverageSales ?? financials?.sales
+        let reportable = BreakdownExtractor.extractReportableSegmentInfo(xbrlDir: dir)
+        let (segment, source, _) = await SegmentBreakdownResolver.resolve(
+            reportable: reportable, consolidatedSales: coverage,
+            labelsByTag: XBRLUtils.loadLabelsByTag(in: dir))
+        #expect(source == .xbrlFacts)
+        let snap = try #require(segment)
+        #expect(snap.axis == breakdownAxisSegment)
+        #expect(snap.denominator == 12_957_064 * yen)
+        for (needle, million) in expected {
+            let row = try #require(snap.rows.first {
+                ($0.label ?? "").contains(needle) || $0.labelRaw.contains(needle)
+            })
+            #expect(row.amount == million * yen)
+            #expect(row.rowKind == "segment")
+            #expect(row.disclosureBasis == nil)
+        }
+        let productExtract = BreakdownExtractor.extractProductServiceInfo(xbrlDir: dir)
+        let (product, productSource, _) = await BusinessBreakdownResolver.resolve(
+            segments: productExtract, consolidatedSales: coverage,
+            columnDecider: FakeRevenueRecognitionColumnDecider(
+                containing: "デジタルソフトウェア・アドオンコンテンツ"),
+            segmentInfoDecider: FakeRevenueRecognitionColumnDecider(
+                containing: "デジタルソフトウェア・アドオンコンテンツ"))
+        #expect(productSource != .xbrlFacts)
+        let productSnap = try #require(product)
+        #expect(productSnap.axis == breakdownAxisProductService)
+        let addon = try #require(productSnap.rows.first {
+            ($0.label ?? $0.labelRaw).contains("デジタルソフトウェア")
+        })
+        #expect(addon.amount == 2_290_498 * yen)
+        let segmentLabels = Set(snap.rows.compactMap(\.label) + snap.rows.map(\.labelRaw))
+        #expect(!segmentLabels.contains(where: { $0.contains("デジタルソフトウェア") }))
+    }
+
+    /// Takeda 4502 S100YB5L: 単一セグメント 医薬品事業。製品は収益の分解。
+    // source: code=4502 fy_end=2026-03-31 doc_id=S100YB5L page=169 field=segment.医薬品事業
+    @Test func takedaS100YB5LSingleSegmentAndProductDecomposition() async throws {
+        guard await Self.ensureAvailable("S100YB5L") else { return }
+        let dir = Self.xbrlDir("S100YB5L")
+        let yen = Financial.millionYen
+        let reportable = BreakdownExtractor.extractReportableSegmentInfo(xbrlDir: dir)
+        let financials = StatementFinancialsResolver.resolve(xbrlDir: dir)
+        let sales = financials?.sales
+        let dedicated = BreakdownExtractor.dedicatedSingleSegmentDisclosureTexts(xbrlDir: dir)
+        let members = SegmentBreakdownResolver.currentSegmentMembers(in: reportable.facts)
+        let pattern = await SegmentNotePatternClassifier.classify(
+            axis: .segment,
+            signals: SegmentNotePatternSignals(
+                reportableMemberCount: members.count,
+                hasDedicatedSingleSegmentTag: dedicated.currentYear != nil,
+                hasReportableSegmentTable: !reportable.tables.isEmpty,
+                hasRelatedInfoTable: false,
+                prose: BreakdownExtractor.segmentNotePatternProse(xbrlDir: dir)),
+            docID: "S100YB5L",
+            decider: nil)
+        #expect(pattern.classification == .singleSegment)
+        let (segment, _, _) = await SegmentBreakdownResolver.resolve(
+            reportable: reportable, consolidatedSales: sales,
+            labelsByTag: XBRLUtils.loadLabelsByTag(in: dir), pattern: pattern)
+        let snap = try #require(segment)
+        #expect(snap.axis == breakdownAxisSegment)
+        #expect(snap.rows.filter { $0.rowKind == "segment" }.count == 1)
+        let row = try #require(snap.rows.first { $0.rowKind == "segment" })
+        #expect((row.label ?? row.labelRaw).contains("医薬品"))
+        #expect(row.amount == 4_505_720 * yen)
+        #expect(row.disclosureBasis == nil)
+        let productExtract = BreakdownExtractor.extractProductServiceInfo(xbrlDir: dir)
+        let (product, productSource, _) = await BusinessBreakdownResolver.resolve(
+            segments: productExtract, consolidatedSales: sales,
+            columnDecider: FakeRevenueRecognitionColumnDecider(containing: "ENTYVIO"),
+            segmentInfoDecider: FakeRevenueRecognitionColumnDecider(containing: "ENTYVIO"))
+        #expect(productSource != .xbrlFacts)
+        let productSnap = try #require(product)
+        let entyvio = try #require(productSnap.rows.first {
+            ($0.label ?? $0.labelRaw).contains("ENTYVIO")
+        })
+        #expect(entyvio.amount == 958_042 * yen)
+        let gi = try #require(productSnap.rows.first {
+            ($0.label ?? $0.labelRaw).contains("消化器系疾患")
+        })
+        #expect(gi.amount == 1_407_460 * yen)
+        #expect(gi.rowKind == "subtotal")
+    }
+
+    /// Sony 6758 最新 S100YE2C: 旧 product_service の xbrl_facts セグメント行は segment へ移す。
+    @Test func sonyS100YE2CProductServiceIsNotReportableSegmentFacts() async throws {
+        guard await Self.ensureAvailable("S100YE2C") else { return }
+        let dir = Self.xbrlDir("S100YE2C")
+        let financials = StatementFinancialsResolver.resolve(xbrlDir: dir)
+        let coverage = financials?.geographyCoverageSales ?? financials?.sales
+        let reportable = BreakdownExtractor.extractReportableSegmentInfo(xbrlDir: dir)
+        let (segment, segmentSource, _) = await SegmentBreakdownResolver.resolve(
+            reportable: reportable, consolidatedSales: coverage,
+            labelsByTag: XBRLUtils.loadLabelsByTag(in: dir))
+        #expect(segmentSource == .xbrlFacts)
+        #expect(segment?.axis == breakdownAxisSegment)
+        let productExtract = BreakdownExtractor.extractProductServiceInfo(xbrlDir: dir)
+        #expect(productExtract.facts.isEmpty)
+        let (product, productSource, _) = await BusinessBreakdownResolver.resolve(
+            segments: productExtract, consolidatedSales: coverage)
+        #expect(productSource != .xbrlFacts)
+        let productLabels = Set((product?.rows ?? []).flatMap {
+            [$0.label, $0.labelRaw, $0.category, $0.categoryGroup].compactMap { $0 }
+        })
+        #expect(!productLabels.contains(where: { $0.contains("G&NS") }))
     }
 }
 

@@ -35,13 +35,14 @@ import Foundation
     @Test func s100W3XJProfitIsSegmentOperatingProfitNotRD() async throws {
         guard await Self.ensureAvailable("S100W3XJ") else { return }
 
-        let segments = BreakdownExtractor.extractSegmentInfo(xbrlDir: Self.xbrlDir("S100W3XJ"))
+        let segments = BreakdownExtractor.extractReportableSegmentInfo(
+            xbrlDir: Self.xbrlDir("S100W3XJ"))
         #expect(segments.method == "html_table")
         #expect(!segments.tables.isEmpty)
 
         let sales = 3_195_828 * Financial.millionYen
-        let (snapshot, source, audit) = await BusinessBreakdownResolver.resolve(
-            segments: segments, consolidatedSales: sales
+        let (snapshot, source, audit) = await SegmentBreakdownResolver.resolve(
+            reportable: segments, consolidatedSales: sales
         )
 
         #expect(source == .stackedSegmentPnL)
@@ -69,13 +70,13 @@ import Foundation
         guard await Self.ensureAvailable("S100YIBH") else { return }
 
         let dir = Self.xbrlDir("S100YIBH")
-        let segments = BreakdownExtractor.extractSegmentInfo(xbrlDir: dir)
+        let segments = BreakdownExtractor.extractReportableSegmentInfo(xbrlDir: dir)
         #expect(segments.method == "html_table")
         #expect(!segments.tables.isEmpty)
 
         let sales = 3_356_969 * Financial.millionYen
-        let (snapshot, source, audit) = await BusinessBreakdownResolver.resolve(
-            segments: segments, consolidatedSales: sales
+        let (snapshot, source, audit) = await SegmentBreakdownResolver.resolve(
+            reportable: segments, consolidatedSales: sales
         )
 
         #expect(source == .stackedSegmentPnL)

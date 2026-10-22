@@ -23,19 +23,26 @@ struct BreakdownRow: Equatable {
     var categoryGroup: String? = nil
     /// 収益分解・うち内数の明細。フラット表・加算行は nil。
     var category: String? = nil
+    /// `segment` 軸の行: business / geographic。
+    var segmentBasis: String? = nil
+    /// 90%省略の1行など。
+    var disclosureBasis: String? = nil
 }
 
 struct BreakdownSnapshot: Equatable {
-    var axis: String  // "product_service" | "geography"
+    var axis: String  // "segment" | "product_service" | "geography"
     var denominator: Double
     // 採用した分母の出所（監査・再現用）。xbrl_facts 経路は実際に使った XBRL タグ名
     // （例: "SalesToExternalCustomersIFRS"）、html_table 経路は XBRL タグが存在しないため
     // sentinel 文字列 "income_statement.sales" を使う（意図的な語彙の使い分け）。
     var denominatorTag: String
     var rows: [BreakdownRow]
-    var sourceKind: String  // "xbrl_facts"（本ファイル） | "html_table"（GeographyBreakdownLLMNormalizer） | "revenue_recognition"（RevenueRecognitionColumnNormalizer） | "segment_info"（SegmentInfoLLMNormalizer）
+    var sourceKind: String  // "xbrl_facts"（本ファイル） | "html_table"（GeographyBreakdownLLMNormalizer） | "revenue_recognition"（RevenueRecognitionColumnNormalizer） | "segment_info"（SegmentInfoLLMNormalizer） | "same_as"
     var needsReview: Bool
     var warnings: [String]
+    var sameAs: String? = nil
+    var disclosureBasis: String? = nil
+    var employeesJoin: String? = nil
 }
 
 enum BreakdownNormalizer {
@@ -1432,5 +1439,35 @@ enum BreakdownNormalizer {
         // 地域事業ユニットの汎用ラッパ。これだけ残っても固有の事業語幹とはみなさない。
         stripped = stripped.replacingOccurrences(of: "Business", with: "")
         return !stripped.isEmpty
+    }
+
+    /// 報告セグメント facts を `segment` 軸として公開する。地理 member でも geography 軸にはしない。
+    static func publishingAsSegment(_ snapshot: BreakdownSnapshot) -> BreakdownSnapshot {
+        var copy = snapshot
+        copy.axis = breakdownAxisSegment
+        let members = copy.rows.filter { $0.rowKind == "segment" }.map(\.labelRaw)
+        let tableBasis = segmentBasis(forMembers: members)
+        copy.rows = copy.rows.map { row in
+            var row = row
+            if row.rowKind == "segment" || row.rowKind == "reconciling" {
+                row.segmentBasis = rowSegmentBasis(member: row.labelRaw, tableBasis: tableBasis)
+            }
+            return row
+        }
+        return copy
+    }
+
+    static func segmentBasis(forMembers members: [String]) -> String {
+        allMembersAreGeography(members)
+            ? breakdownSegmentBasisGeographic : breakdownSegmentBasisBusiness
+    }
+
+    static func rowSegmentBasis(member: String, tableBasis: String) -> String {
+        if Xbrl.segmentSpecificGeographyMemberKeywords.contains(where: member.contains),
+           !hasSubstantiveNonGeographyContent(member)
+        {
+            return breakdownSegmentBasisGeographic
+        }
+        return tableBasis
     }
 }

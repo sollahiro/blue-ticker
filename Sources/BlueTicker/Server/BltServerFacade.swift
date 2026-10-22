@@ -732,19 +732,65 @@ public extension BltServerContext {
         return (copy, outcome)
     }
 
-    /// 内訳取り込み: 書類1件分の product_service 軸内訳を解決する。xbrl_facts（決定的）/ 収益認識注記 LLM /
-    /// segment_info LLM のいずれかへ `BusinessBreakdownResolver` が振り分ける。LLM 呼び出しは
-    /// html_table 経路でのみ発生する（xbrl_facts で解決できれば呼ばない。LLM 費用最小化）。
+    /// 報告セグメント軸。出典はセグメント情報の報告セグメント表と XBRL ReportableSegment facts。
+    /// 製品表・地域別関連情報からは作らない。単一セグメント / 90%省略は連結売上の1行。
+    func resolveSegmentBreakdown(docID: String, correctionDocIDs: [String] = []) async -> BreakdownResolveResult {
+        guard let xbrlDir = await downloadAnnualFilingXbrl(
+            docID: docID, correctionDocIDs: correctionDocIDs
+        ) else { return .failed }
+        let reportable = BreakdownExtractor.extractReportableSegmentInfo(xbrlDir: xbrlDir)
+        let financials = StatementFinancialsResolver.resolve(xbrlDir: xbrlDir)
+        let consolidatedSales = financials?.geographyCoverageSales ?? financials?.sales
+        let labelsByTag = XBRLUtils.loadLabelsByTag(in: xbrlDir)
+        let pattern = await classifySegmentNotePattern(
+            axis: .segment, docID: docID, xbrlDir: xbrlDir, reportable: reportable)
+        let employeeLabels = await employeeJoinLabels(
+            docID: docID, xbrlDir: xbrlDir, labelsByTag: labelsByTag)
+        let hash = breakdownContentHash(extracted: reportable, consolidatedSales: consolidatedSales)
+        let result = await SegmentBreakdownResolver.resolve(
+            reportable: reportable, consolidatedSales: consolidatedSales,
+            labelsByTag: labelsByTag, denominatorTag: nil,
+            segmentInfoDecider: segmentInfoDecider,
+            columnDecider: revenueRecognitionColumnDecider,
+            segmentProfitDecider: segmentProfitDecider,
+            fiscalYearEnd: BreakdownExtractor.currentFiscalYearEnd(fromXbrlDir: xbrlDir),
+            docID: docID, pattern: pattern, employeeLabels: employeeLabels)
+        if let snapshot = result.snapshot {
+            return attachingPattern(
+                pattern,
+                to: breakdownByRecordingOverlayRegressions(
+                    .resolved(
+                        payload: breakdownSnapshotPayload(from: snapshot),
+                        source: result.source.rawValue, contentHash: hash,
+                        audit: result.audit.map(llmBreakdownAuditPayload(from:))),
+                    xbrlDir: xbrlDir))
+        }
+        if pattern.classification == .notDisclosed || reportable.method == "not_found" {
+            return attachingPattern(
+                pattern, to: .notApplicable(reason: breakdownNotApplicableNotFound))
+        }
+        return attachingPattern(
+            pattern, to: .notApplicable(reason: breakdownNotApplicableUnknown,
+                                        audit: result.audit.map(llmBreakdownAuditPayload(from:))))
+    }
+
+    /// 内訳取り込み: 書類1件分の product_service 軸内訳を解決する。
+    /// 関連情報の製品表または収益分解だけ。報告セグメント facts は使わない（BLT-187）。
     /// 売上分母は同一 XBRL パスで `BreakdownFinancialsResolver` が直接解決する（#9 / #10b）。
-    /// 収益認識表へ寄せた会社は顧客契約の連結金額、無ければ本表外タグへフォールバックする
+    /// 収益認識表は顧客契約の連結金額、無ければ本表外タグへフォールバックする
     /// （三菱商事）。由来タグは実タグ / `llm_table_subtotal` で、偽の `income_statement.sales` は出さない。
-    /// 保険等で売上欠測でも xbrl_facts 決定論（第一生命型）が使える場合は解決を試す。
     func resolveBusinessBreakdown(docID: String, correctionDocIDs: [String] = []) async -> BreakdownResolveResult {
         guard let xbrlDir = await downloadAnnualFilingXbrl(
             docID: docID, correctionDocIDs: correctionDocIDs
         ) else { return .failed }
-        guard let segments = BreakdownExtractor.extractSpecialSection("segments", xbrlDir: xbrlDir)
-        else { return .notApplicable(reason: breakdownNotApplicableUnknown) }
+        let segments = BreakdownExtractor.extractProductServiceInfo(xbrlDir: xbrlDir)
+        if segments.method == "not_found" || segments.tables.isEmpty {
+            if let sameAs = await relatedInfoSameAsResult(
+                axis: .productService, docID: docID, xbrlDir: xbrlDir)
+            {
+                return sameAs
+            }
+        }
 
         let denomItem = BreakdownFinancialsResolver.breakdownBusinessSalesDenominatorItem(
             xbrlDir: xbrlDir, tables: segments.tables)
@@ -824,8 +870,9 @@ public extension BltServerContext {
                 reason: breakdownNotApplicableSingleSegmentDisclosed, audit: audit)
         }
         guard var snapshot = result.snapshot else {
+            let reportable = BreakdownExtractor.extractReportableSegmentInfo(xbrlDir: xbrlDir)
             let reason = BreakdownExtractor.classifyNotApplicableReason(
-                segments: segments, consolidatedSales: consolidatedSales, xbrlDir: xbrlDir,
+                segments: reportable, consolidatedSales: consolidatedSales, xbrlDir: xbrlDir,
                 llmHint: result.audit?.notApplicableReason)
             return applyingSegmentNoteDecision(
                 gate.outcome,
@@ -904,6 +951,11 @@ public extension BltServerContext {
         }
         let geography = BreakdownExtractor.extractGeographyInfo(xbrlDir: xbrlDir)
         if geography.method == "not_found" {
+            if let sameAs = await relatedInfoSameAsResult(
+                axis: .geography, docID: docID, xbrlDir: xbrlDir)
+            {
+                return sameAs
+            }
             return .notApplicable(reason: breakdownNotApplicableNotFound)
         }
         let labelsByTag = XBRLUtils.loadLabelsByTag(in: xbrlDir)
@@ -1419,9 +1471,11 @@ private func breakdownSnapshotPayload(from s: BreakdownSnapshot) -> BreakdownSna
             BreakdownRowPayload(
                 labelRaw: $0.labelRaw, label: $0.label ?? $0.labelRaw, amount: $0.amount,
                 profit: $0.profit, rowKind: $0.rowKind, description: $0.description,
-                categoryGroup: $0.categoryGroup, category: $0.category)
+                categoryGroup: $0.categoryGroup, category: $0.category,
+                segmentBasis: $0.segmentBasis, disclosureBasis: $0.disclosureBasis)
         },
-        sourceKind: s.sourceKind, needsReview: s.needsReview, warnings: s.warnings)
+        sourceKind: s.sourceKind, needsReview: s.needsReview, warnings: s.warnings,
+        sameAs: s.sameAs, disclosureBasis: s.disclosureBasis, employeesJoin: s.employeesJoin)
 }
 
 /// LLM が空行・取り違え表で NR にしたときだけ第二パス対象。xbrl_facts（8316 の距離など）は見ない。
@@ -1438,6 +1492,91 @@ private func shouldReviewLLMNeedsReview(
         SegmentInfoPublishGuards.warningNumericOrCodeLabels,
     ]
     return snapshot.warnings.contains(where: { wrongTable.contains($0) })
+}
+
+extension BltServerContext {
+    fileprivate func classifySegmentNotePattern(
+        axis: SegmentNotePatternAxis, docID: String, xbrlDir: URL, reportable: ExtractedBreakdown
+    ) async -> SegmentNotePatternOutcome {
+        let members = SegmentBreakdownResolver.currentSegmentMembers(in: reportable.facts)
+        let dedicated = BreakdownExtractor.dedicatedSingleSegmentDisclosureTexts(xbrlDir: xbrlDir)
+        let hasDedicated = dedicated.currentYear != nil
+            || (members.count <= 1 && dedicated.any != nil)
+        return await SegmentNotePatternClassifier.classify(
+            axis: axis,
+            signals: SegmentNotePatternSignals(
+                reportableMemberCount: members.count,
+                hasDedicatedSingleSegmentTag: hasDedicated,
+                hasReportableSegmentTable: !reportable.tables.isEmpty
+                    && reportable.tables.contains { !BreakdownExtractor.isProductServiceTable($0) },
+                hasRelatedInfoTable: false,
+                prose: BreakdownExtractor.segmentNotePatternProse(xbrlDir: xbrlDir)
+            ),
+            docID: docID,
+            decider: segmentNoteDecider as? any SegmentNotePatternDeciding
+        )
+    }
+
+    fileprivate func employeeJoinLabels(
+        docID: String, xbrlDir: URL, labelsByTag: [String: String]
+    ) async -> Set<String> {
+        let total = BreakdownFinancialsResolver.financialsCanonicalEmployees(xbrlDir: xbrlDir)
+        let cached = await businessSegmentDimensionCache.load(docID: docID, xbrlDir: xbrlDir)
+        let memberParents = XBRLUtils.operatingSegmentMemberParents(in: xbrlDir)
+        let snapshot = BreakdownNormalizer.normalizeEmployees(
+            facts: cached.facts, total: total, axis: breakdownAxisEmployees,
+            labelsByTag: labelsByTag.isEmpty ? cached.labelsByTag : labelsByTag,
+            memberParents: memberParents)
+        return Set(
+            (snapshot?.rows ?? []).filter { $0.rowKind == "segment" }
+                .compactMap { $0.label ?? $0.labelRaw }
+        )
+    }
+
+    fileprivate func relatedInfoSameAsResult(
+        axis: SegmentNotePatternAxis, docID: String, xbrlDir: URL
+    ) async -> BreakdownResolveResult? {
+        let reportable = BreakdownExtractor.extractReportableSegmentInfo(xbrlDir: xbrlDir)
+        let pattern = await classifySegmentNotePattern(
+            axis: axis, docID: docID, xbrlDir: xbrlDir, reportable: reportable)
+        guard pattern.classification == .omittedSameAsSegment else { return nil }
+        let snapshot = SegmentBreakdownResolver.sameAsSnapshot(axis: axis.wire)
+        let hash = breakdownContentHash(extracted: reportable, consolidatedSales: nil)
+        return attachingPattern(
+            pattern,
+            to: .resolved(
+                payload: breakdownSnapshotPayload(from: snapshot),
+                source: breakdownSourceSameAs, contentHash: hash, audit: nil))
+    }
+}
+
+private func attachingPattern(
+    _ pattern: SegmentNotePatternOutcome, to result: BreakdownResolveResult
+) -> BreakdownResolveResult {
+    guard let jev = pattern.audit else {
+        if pattern.needsReview {
+            switch result {
+            case .resolved(var payload, let source, let contentHash, let audit):
+                payload.needsReview = true
+                return .resolved(
+                    payload: payload, source: source, contentHash: contentHash, audit: audit)
+            default:
+                return result
+            }
+        }
+        return result
+    }
+    switch result {
+    case .resolved(var payload, let source, let contentHash, let audit):
+        if pattern.needsReview { payload.needsReview = true }
+        let merged = (audit ?? .segmentNoteJev(jev)).replacingJev(jev)
+        return .resolved(payload: payload, source: source, contentHash: contentHash, audit: merged)
+    case .notApplicable(let reason, let audit):
+        let merged = (audit ?? .segmentNoteJev(jev)).replacingJev(jev)
+        return .notApplicable(reason: reason, audit: merged)
+    case .failed:
+        return result
+    }
 }
 
 /// 相談した Jev 判断を結果へ載せる。適用しなかったときは needs_review を立て、決定論の中身は変えない。

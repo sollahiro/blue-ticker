@@ -103,6 +103,7 @@ import Testing
     @Test func breakdownCatalogListsCapexAndOmitsRetiredAxes() throws {
         let skill = try #require(apiSkill(id: "get-breakdown"))
         let axis = try #require(skill.parameters.first { $0.name == "axis" })
+        #expect(axis.description.contains("segment"))
         #expect(axis.description.contains("product_service"))
         #expect(axis.description.contains("capex"))
         #expect(!axis.description.contains("business"))
@@ -114,7 +115,9 @@ import Testing
         #expect(!skill.description.contains("axis=business"))
         #expect(skill.description.contains("needs_review"))
         #expect(skill.description.contains("interest_bearing_debt_lease_denominator_from_notes"))
-        #expect(apiSkillsSchemaVersion == 6)
+        #expect(apiSkillsSchemaVersion == 7)
+        #expect(skill.description.contains("segment_basis"))
+        #expect(skill.description.contains("dominant_90pct"))
     }
 
     @Test func breakdownCatalogListsAssetCategoryAxes() throws {

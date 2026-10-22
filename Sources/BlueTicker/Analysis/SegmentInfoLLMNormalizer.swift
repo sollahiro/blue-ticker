@@ -84,7 +84,8 @@ enum SegmentInfoLLMNormalizer {
         decider: any SegmentInfoDeciding,
         fiscalYearEnd: String?,
         docID: String,
-        salesDenominatorTag: String? = nil
+        salesDenominatorTag: String? = nil,
+        publishedAxis: String = breakdownAxisProductService
     ) async -> (snapshot: BreakdownSnapshot?, audit: LLMBreakdownAudit?) {
         guard !result.tables.isEmpty else { return (nil, nil) }
         let parsed = RevenueRecognitionCandidates.parse(
@@ -93,7 +94,7 @@ enum SegmentInfoLLMNormalizer {
         guard !columns.isEmpty else { return (nil, nil) }
 
         let scopedTables = dropPriorEraTables(
-            preferredTables(parsed), among: parsed, fiscalYearEnd: fiscalYearEnd)
+            preferredTables(parsed, axis: publishedAxis), among: parsed, fiscalYearEnd: fiscalYearEnd)
         let scopedColumns = columns.filter { column in
             scopedTables.contains { $0.tableIndex == column.tableIndex }
         }
@@ -103,7 +104,8 @@ enum SegmentInfoLLMNormalizer {
         // 報告セグメントが地域のみで、使える製品・事業表が無い（製品90％省略の文は製品表ではない）。
         // 製品表は preferredTables が先に残す。日本事業などの事業ユニットは対象外。
         // business に日本/アジアを載せない。地域は geography 軸。
-        if constraint == .geographyOnly {
+        // `segment` 軸では報告セグメント表そのものを残す（地理軸でも product_service に載せない）。
+        if constraint == .geographyOnly, publishedAxis != breakdownAxisSegment {
             var audit = LLMBreakdownAudit(
                 sourceTableIndex: nil, periodColumn: nil, unit: "",
                 profitDisclosed: false, notes: "axis_constraint=geography_only")
@@ -266,7 +268,7 @@ enum SegmentInfoLLMNormalizer {
             needsReview: needsReview)
 
         let snapshot = BreakdownSnapshot(
-            axis: breakdownAxisProductService,
+            axis: publishedAxis,
             denominator: denom,
             denominatorTag: denomTag,
             rows: rows,
@@ -554,11 +556,18 @@ enum SegmentInfoLLMNormalizer {
     /// 製品・サービス別表、報告セグメントの列マトリクス、地域のみ、の順で Jev に出す。
     /// セグメント注記は製品表・報告セグメント・所在地表が混在するので、全体の axisConstraint
     /// をそのまま使うと製品表が geography_only で落ちる。
+    /// `segment` 軸では報告セグメント行列だけを残し、製品表は出さない。
     static func preferredTables(
-        _ all: [RevenueRecognitionCandidates.ParsedTable]
+        _ all: [RevenueRecognitionCandidates.ParsedTable],
+        axis: String = breakdownAxisProductService
     ) -> [RevenueRecognitionCandidates.ParsedTable] {
         let salesTables = all.filter { !isNonSalesMetricTable($0) && !isWholeCompanyOnlyTable($0) }
         let tables = salesTables.isEmpty ? all : salesTables
+        if axis == breakdownAxisSegment {
+            let matrices = tables.filter { isSegmentColumnMatrix($0) && !isDedicatedProductTable($0) }
+            if !matrices.isEmpty { return matrices }
+            return tables.filter { !isDedicatedProductTable($0) }
+        }
         // 行が売上と利益の指標で、列がセグメントの表は製品表ではない（8591 S100LU21 の前期表は
         // 「貸倒引当金繰入(戻入)額」などの行で製品表に数えられ、当期表より先に残っていた）。
         let product = tables.filter { isDedicatedProductTable($0) && !isMetricRowMatrix($0) }

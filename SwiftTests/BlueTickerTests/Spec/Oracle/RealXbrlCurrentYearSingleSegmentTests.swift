@@ -67,10 +67,11 @@ import Testing
         let kept = try #require(gate.extracted)
         #expect(gate.outcome.omissionReason != breakdownNotApplicableSingleSegmentDisclosed)
 
-        let (snapshot, source, _) = await BusinessBreakdownResolver.resolve(
-            segments: kept, consolidatedSales: sales)
+        let (snapshot, source, _) = await SegmentBreakdownResolver.resolve(
+            reportable: kept, consolidatedSales: sales)
         let snap = try #require(snapshot)
         #expect(source == .xbrlFacts)
+        #expect(snap.axis == breakdownAxisSegment)
         let labels = Self.segmentLabels(snap)
         let labelBlob = labels.joined(separator: " ").uppercased()
         #expect(labelBlob.contains("MX"))

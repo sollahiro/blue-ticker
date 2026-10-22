@@ -1,16 +1,5 @@
-// `segments` キーの事業別内訳（business breakdown）を解決する。
-// docs/breakdown.md 参照。`BreakdownExtractor.extractSegmentInfo` は
-// 既にオークマ型（axis が geography 判定される場合）を収益認識関係注記へ axis-aware に
-// swap 済みで返す（`isGeographyAxis` 判定＋`extractRevenueRecognitionInfo` フォールバック）。
-// 本リゾルバはその後段として、method に応じてどの正規化器（xbrl_facts の決定的経路 /
-// 収益認識の Jev 列選択 / セグメント情報の Jev 列・行選択）に振り分けるかだけを判断する。
-//
-// swap 済みの html_table は見出しが `BreakdownExtractor.revenueRecognitionHeading`
-// （`extractRevenueRecognitionInfo` の dedicatedHeading）で判別できる。オークマ型は
-// facts を捨てる。収益認識の行が報告セグメントと名前・金額とも一致し利益があるときだけ
-// facts を残し、`ReportableSegmentRevenueRecognition` が product_service に載せる。
-// それ以外の html_table（例: キヤノンの US-GAAP 注23）は `SegmentInfoLLMNormalizer` に回す。
-// 見出し文字列は `BreakdownExtractor` 側の単一の真実源を参照する。
+// product_service 軸。報告セグメント facts / 報告セグメント表は使わない（BLT-187）。
+// 製品・サービス別表と収益分解表だけを `ProductServiceBreakdownResolver` へ渡す。
 
 import Foundation
 
@@ -26,9 +15,8 @@ enum BusinessBreakdownSource: String {
 
 enum BusinessBreakdownResolver {
 
-    /// segments（事業別セグメント情報。swap 済みの可能性あり）の ExtractedBreakdown から
-    /// product_service 軸の BreakdownSnapshot を解決する。LLM 呼び出しは html_table 経路でのみ発生し、
-    /// xbrl_facts で business 判定できた場合は呼び出さない（決定的経路を優先し LLM 費用を最小化）。
+    /// product_service 軸。報告セグメント facts / 積み上げ PnL / 報告セグメント表は使わない。
+    /// 製品・サービス別表または収益分解表だけを正規化する（BLT-187）。
     static func resolve(
         segments: ExtractedBreakdown, consolidatedSales: Double?,
         labelsByTag: [String: String] = [:],
@@ -40,133 +28,16 @@ enum BusinessBreakdownResolver {
         fiscalYearEnd: String? = nil,
         docID: String = ""
     ) async -> (snapshot: BreakdownSnapshot?, source: BusinessBreakdownSource, audit: LLMBreakdownAudit?) {
-        let factsInput = ExtractedBreakdown(
-            method: "xbrl_facts", tables: segments.tables, facts: segments.facts,
-            rowLabelsByTag: segments.rowLabelsByTag)
-        var factsSnapshot = BreakdownNormalizer.normalize(
-            factsInput, consolidatedSales: consolidatedSales, labelsByTag: labelsByTag)
-        var profitAudit: LLMBreakdownAudit?
-
-        // 0) 決定論（表の行名・差異調整・標準タグ）で利益タグが決まらず profit が全行 null のとき、
-        //    セグメント値のある既存タグから会社のセグメント利益の行を Jev に選ばせる。
-        //    公開しない（needs_review）結果と、利益タグが専用の銀行・保険の経路では聞かない。
-        if let snapshot = factsSnapshot, let segmentProfitDecider,
-           snapshot.axis == breakdownAxisProductService, !snapshot.needsReview,
-           !snapshot.rows.contains(where: { $0.profit != nil }),
-           !BreakdownNormalizer.isFinancialBasisDenominatorTag(snapshot.denominatorTag)
-        {
-            let candidates = SegmentProfitJevPicker.candidates(
-                facts: segments.facts, rowLabelsByTag: segments.rowLabelsByTag,
-                memberLabels: labelsByTag, amountTag: snapshot.denominatorTag)
-            let picked = await SegmentProfitJevPicker.pick(
-                candidates: candidates, facts: segments.facts,
-                salesLabel: segments.rowLabelsByTag[snapshot.denominatorTag]?.sorted().first
-                    ?? snapshot.denominatorTag,
-                decider: segmentProfitDecider, docID: docID)
-            if !candidates.isEmpty {
-                profitAudit = LLMBreakdownAudit(
-                    sourceTableIndex: nil, periodColumn: nil, unit: "",
-                    profitDisclosed: picked.tag != nil, notes: "segment_profit_jev",
-                    jev: picked.audit)
-            }
-            if let tag = picked.tag,
-               let withProfit = BreakdownNormalizer.normalize(
-                   factsInput, consolidatedSales: consolidatedSales, labelsByTag: labelsByTag,
-                   profitTagOverride: tag)
-            {
-                factsSnapshot = withProfit
-            }
-        }
-
-        // 1) xbrl_facts 経路（決定的、LLM不要）。axis が product_service かつ needs_review が
-        //    立っていなければ確信度が高いのでそのまま採用する。
-        //    geography のままなのは swap 対象の収益認識/IFRS売上収益注記が見つからなかった
-        //    （または収益種類だけの分解で意図的に swap しなかった）ケース。product_service としては
-        //    採用せず、下の tables 経路へフォールバックする（住友ファーマ: 製品別表が
-        //    セグメント注記 tables 側に残っている。実データ検証 2026-07-24）。
-        if let factsSnapshot, factsSnapshot.axis == breakdownAxisProductService, !factsSnapshot.needsReview {
-            return (factsSnapshot, .xbrlFacts, profitAudit)
-        }
-
-        // 2) 積み上げセグメント損益表の決定論寄せ（LLM より先）。
-        // 同一事業ラベルが指標ブロックごとに繰り返され、末尾「XXX計」だけが指標名を持つ表
-        // （実測: 富士フイルム S100YIBH / S100W3XJ）では、LLM が研究開発費を profit に
-        // 誤寄せする。比較必須の揃えは構造側で行う。
-        if let stacked = StackedSegmentPnLNormalizer.normalize(
-            segments, consolidatedSales: consolidatedSales, salesDenominatorTag: denominatorTag)
-        {
-            return (stacked, .stackedSegmentPnL, nil)
-        }
-
-        // 3) html_table 経路。見出しで「収益認識関係由来（swap 済み）」か
-        //    「segments 自体が html_table（例: キヤノン注23）」かを振り分ける。
-        // `method == "xbrl_facts"` でも tables が非空なら試す（facts 優先で method が
-        // xbrl_facts になった会社が、facts の正規化失敗時に表スクレイピングへ
-        // フォールバックできるようにするため）。
-        // axis=product_service だが needs_review（表取り違えの疑い）の場合も同じ tables 経路を試す
-        // （エーザイ旧filings型: 地域別 facts が誤って product_service と確定していたが、
-        // classifyAxis 修正で needs_review=true になった後も、実際には製品別の html_table が
-        // 別途存在する。Opus監査 finding #2 フォローアップ、2026-07-25）。
-        // LLM が resolve せず終わった場合でも、audit（`notApplicableReason` 等）は呼び出し元へ
-        // 持ち帰る（issue #135: html_table経由でLLMが「地域別のみ」等と判定した理由を
-        // `BreakdownExtractor.classifyNotApplicableReason` の分類に使うため）。
-        var lastAudit: LLMBreakdownAudit?
-        if !segments.tables.isEmpty {
-            if segments.tables.first?.heading == BreakdownExtractor.revenueRecognitionHeading {
-                if let columnDecider {
-                    let (snapshot, audit) = await RevenueRecognitionColumnNormalizer.normalize(
-                        segments, consolidatedSales: consolidatedSales, decider: columnDecider,
-                        fiscalYearEnd: fiscalYearEnd, docID: docID, denominatorTag: denominatorTag,
-                        rowRoleDecider: rowRoleDecider)
-                    lastAudit = audit
-                    if let snapshot, hasUsableSegmentRows(snapshot) {
-                        if let facts = ReportableSegmentRevenueRecognition.preferFactsIfSameBreakdown(
-                            facts: factsSnapshot, rr: snapshot)
-                        {
-                            return (facts, .xbrlFacts, nil)
-                        }
-                        return (snapshot, .revenueRecognitionLLM, audit)
-                    }
-                }
-            } else if let infoDecider = segmentInfoDecider
-                ?? columnDecider.map({ SegmentInfoDeciderFromColumnDecider(columnDecider: $0) })
-            {
-                let (snapshot, audit) = await SegmentInfoLLMNormalizer.normalize(
-                    segments, consolidatedSales: consolidatedSales, decider: infoDecider,
-                    fiscalYearEnd: fiscalYearEnd, docID: docID,
-                    salesDenominatorTag: denominatorTag
-                )
-                lastAudit = audit
-                if audit?.notApplicableReason
-                    == BusinessBreakdownNotApplicableReason.geographyOnly.rawValue
-                {
-                    return (nil, .notFound, audit)
-                }
-                if let snapshot, hasUsableSegmentRows(snapshot) {
-                    return (snapshot, .segmentInfoLLM, audit)
-                }
-            }
-        }
-
-        // 4) LLM 経路が無い・失敗した場合、xbrl_facts の axis=product_service スナップショットが
-        //    あれば（needs_review=true でも）何もないよりはマシなのでフォールバックする
-        //    （INPEX旧filings型: tables が無く LLM 経路自体を試せない会社の挙動を変えない）。
-        if let factsSnapshot, factsSnapshot.axis == breakdownAxisProductService {
-            return (factsSnapshot, .xbrlFacts, nil)
-        }
-
-        // 収益認識へ寄せたが LLM が無い／失敗し、表の行が報告セグメントと同じ内訳のとき。
-        // 地理軸 facts を product_service に載せる（利益・計 / 調整 / 連結は開示セル）。
-        if let factsSnapshot,
-           segments.tables.first?.heading == BreakdownExtractor.revenueRecognitionHeading,
-           ReportableSegmentRevenueRecognition.tablesMatchFacts(segments.tables, facts: factsSnapshot)
-        {
-            var published = factsSnapshot
-            published.axis = breakdownAxisProductService
-            return (published, .xbrlFacts, lastAudit)
-        }
-
-        return (nil, .notFound, lastAudit)
+        _ = segmentProfitDecider
+        let tables = segments.tables.filter(BreakdownExtractor.isProductServiceTable)
+        let product = ExtractedBreakdown(
+            method: tables.isEmpty ? "not_found" : "html_table",
+            tables: tables, facts: [])
+        return await ProductServiceBreakdownResolver.resolve(
+            product: product, consolidatedSales: consolidatedSales, labelsByTag: labelsByTag,
+            denominatorTag: denominatorTag, columnDecider: columnDecider,
+            segmentInfoDecider: segmentInfoDecider, rowRoleDecider: rowRoleDecider,
+            fiscalYearEnd: fiscalYearEnd, docID: docID)
     }
 
     /// 空行の LLM スナップショットは `xbrl_facts` を隠すので採用しない（7273 S100YLTN）。

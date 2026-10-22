@@ -385,6 +385,14 @@ public func runFactsIngestCommand(
             }
             let stages: [BreakdownStage] = [
                 BreakdownStage(
+                    axis: breakdownAxisSegment, target: "breakdowns-segment",
+                    listedCodes: publicBreakdownListed, limit: stageLimit,
+                    candidateSets: publicBreakdownSets
+                ) { docID in
+                    await context.resolveSegmentBreakdown(
+                        docID: docID, correctionDocIDs: correctionIDsByOriginal[docID] ?? [])
+                },
+                BreakdownStage(
                     axis: breakdownAxisProductService, target: "breakdowns",
                     listedCodes: publicBreakdownListed, limit: stageLimit,
                     candidateSets: publicBreakdownSets

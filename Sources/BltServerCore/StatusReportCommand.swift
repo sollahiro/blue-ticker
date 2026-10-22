@@ -366,8 +366,25 @@ public func buildIngestStatusReport(
         },
         targetCodes: listedCodes, docsTarget: docsTarget, latestDocs: latestDocs, now: now)
 
-    // breakdown_product_service / breakdown_geography（対象母集団: listedCodes＝上場全体。
+    // breakdown_segment / breakdown_product_service / breakdown_geography（対象母集団: listedCodes＝上場全体。
     // 候補集合は filing_sections と同じ keep 窓）。
+    let segmentRows = try await CompanyBreakdownStatusProjection.query(on: db)
+        .filter(\.$axis == breakdownAxisSegment)
+        .all()
+    let breakdownSegment = buildDocumentLevelStage(
+        key: "breakdown_segment", label: "報告セグメント別の売上内訳",
+        rows: segmentRows.map { row in
+            let isCurrent =
+                !isVersionGatedBreakdownSource(row.source)
+                || row.cacheVersion == breakdownCacheVersion(forAxis: breakdownAxisSegment)
+            let isServable = isServableBreakdown(
+                source: row.source, cacheVersion: row.cacheVersion, axis: breakdownAxisSegment)
+            return StatusRow(
+                code: row.code, docID: row.docID, isCurrentVersion: isCurrent, isServable: isServable,
+                updatedAt: row.updatedAt, highWater: nil)
+        },
+        targetCodes: listedCodes, docsTarget: docsTarget, latestDocs: latestDocs, now: now)
+
     let businessRows = try await CompanyBreakdownStatusProjection.query(on: db)
         .filter(\.$axis == breakdownAxisProductService)
         .all()
@@ -405,7 +422,7 @@ public func buildIngestStatusReport(
 
     return IngestStatusReport(
         generatedAt: isoString(from: now),
-        stages: [financials, statements, filingSections, breakdownBusiness, breakdownGeography])
+        stages: [financials, statements, filingSections, breakdownSegment, breakdownBusiness, breakdownGeography])
 }
 
 // MARK: - CLI エントリ

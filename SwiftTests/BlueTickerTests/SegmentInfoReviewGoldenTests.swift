@@ -3,7 +3,7 @@
 // 2 真の単一セグメント（顧客表だけ）→ single_segment_disclosed のまま
 // 3 空行 LLM は保存せず xbrl_facts へフォールバック（7273）
 // 4 keepTable が組立不能な表でも製品/地域表を残す（3600 / 4324）
-// ネットワークなし。cache_version は新軸系列 breakdown-product_service-v1。
+// ネットワークなし。cache_version は新軸系列 breakdown-product_service-v2 / breakdown-segment-v1。
 
 import Foundation
 import Testing
@@ -103,8 +103,13 @@ import Testing
             segments: extracted,
             consolidatedSales: 100 * Financial.millionYen,
             segmentInfoDecider: FakeRevenueRecognitionColumnDecider())
-        let snap = try #require(snapshot)
-        #expect(source == .xbrlFacts)
+        #expect(source != .xbrlFacts)
+        #expect(snapshot == nil || snapshot?.axis == breakdownAxisProductService)
+        let (segment, segmentSource, _) = await SegmentBreakdownResolver.resolve(
+            reportable: extracted, consolidatedSales: 100 * Financial.millionYen)
+        #expect(segmentSource == .xbrlFacts)
+        let snap = try #require(segment)
+        #expect(snap.axis == breakdownAxisSegment)
         #expect(BusinessBreakdownResolver.hasUsableSegmentRows(snap))
         #expect(!snap.rows.isEmpty)
     }
@@ -242,7 +247,7 @@ import Testing
     }
 
     @Test func cacheVersionStartsProductServiceV1() {
-        #expect(productServiceBreakdownCacheVersion == "breakdown-product_service-v1")
+        #expect(productServiceBreakdownCacheVersion == "breakdown-product_service-v2")
     }
 
     private func productServiceTable() -> BreakdownTable {

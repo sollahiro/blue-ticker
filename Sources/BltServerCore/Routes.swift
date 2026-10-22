@@ -42,6 +42,8 @@ func registerRoutes(
                 "filing_sections_min_servable": filingSectionsMinServableVersion,
                 "breakdown_product_service": productServiceBreakdownCacheVersion,
                 "breakdown_product_service_min_servable": productServiceBreakdownMinServableVersion,
+                "breakdown_segment": segmentBreakdownCacheVersion,
+                "breakdown_segment_min_servable": segmentBreakdownMinServableVersion,
                 "breakdown_geography": geographyBreakdownCacheVersion,
                 "breakdown_geography_min_servable": geographyBreakdownMinServableVersion,
                 "statement": statementCacheVersion,
@@ -562,6 +564,7 @@ private func serveStoredReasoned(
 /// `breakdown` 404 応答の軸別メッセージ（REST/MCP 共用）。
 func breakdownNotFoundMessage(axis: String) -> String {
     switch axis {
+    case breakdownAxisSegment: return "報告セグメント別内訳は未算出です"
     case breakdownAxisGeography: return "地域別内訳は未算出です"
     case breakdownAxisEmployees: return "従業員数の内訳は未算出です"
     case breakdownAxisResearchAndDevelopment: return "研究開発費の内訳は未算出です"
