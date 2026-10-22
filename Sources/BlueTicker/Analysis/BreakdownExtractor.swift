@@ -363,6 +363,17 @@ enum BreakdownExtractor {
             }
         }
         tables = tables.filter { !isProductServiceTable($0) }
+        let relatedMarkdown = Set(
+            relatedInfoTablesEmbeddedInSegmentNote(xbrlDir: xbrlDir).map(\.markdown))
+        if !relatedMarkdown.isEmpty {
+            tables = tables.filter { table in
+                // 積み上げセグメント損益（富士フイルム）は関連情報キーワードに巻き込まれても残す。
+                if table.markdown.contains("営業利益") || table.markdown.contains("セグメント利益") {
+                    return true
+                }
+                return !relatedMarkdown.contains(table.markdown)
+            }
+        }
         var result = buildResult(
             xbrlDir: xbrlDir, tables: tables,
             dimensionKeywords: Xbrl.businessSegmentDimensionKeywords)
@@ -410,11 +421,38 @@ enum BreakdownExtractor {
         "製品及びサービスごとの情報",
         "製品・サービス別情報",
         "製品及びサービス別",
+        "収益の分解",
+    ]
+
+    /// セグメント注記に同居する関連情報・収益分解・地域表。報告セグメント表からは除く。
+    static let relatedInfoHeadingKeywordsEmbeddedInSegmentNote: [String] = [
+        "収益の分解",
+        "製品及びサービスごとの情報",
+        "製品・サービス別情報",
+        "製品及びサービス別",
+        "地域ごとの情報",
+        "地域別の情報",
+        "地域ごとの収益",
     ]
 
     static func isProductServiceTable(_ table: BreakdownTable) -> Bool {
-        table.heading == productOrServiceHeading
+        if table.heading == productOrServiceHeading
             || table.heading == revenueRecognitionHeading
+        {
+            return true
+        }
+        return productOrServiceRelatedInfoHeadingKeywords.contains { table.heading.contains($0) }
+    }
+
+    static func relatedInfoTablesEmbeddedInSegmentNote(xbrlDir: URL) -> [BreakdownTable] {
+        extractFromTextBlocks(
+            xbrlDir: xbrlDir,
+            dedicatedTags: [],
+            mixedTags: Xbrl.businessSegmentTextBlockTags.union(Xbrl.businessSegmentMixedTextBlockTags),
+            dedicatedHeading: "セグメント情報",
+            mixedKeywords: relatedInfoHeadingKeywordsEmbeddedInSegmentNote,
+            mixedHeadingLikeOnly: true
+        )
     }
 
     /// パターン分類に渡す本文。専用タグと「記載を省略」文。数値は含めない。
@@ -2699,6 +2737,22 @@ enum BreakdownExtractor {
                     if !gridHasNumericValue(published) {
                         candidate = findNextTable(after: workingTable)
                         continue
+                    }
+                    // 収益の分解は種類別の直後に製品表が続き、改ページで複数表に割れる
+                    // （Takeda 4502 S100YB5L の ENTYVIO / 消化器系疾患合計）。
+                    // 地域表に入ったら打ち切る。
+                    if keyword.contains("収益の分解"),
+                       let following = nextTableInDocument(after: workingTable)
+                    {
+                        let followingGrid = expandTable(following)
+                        let followingMd = gridToMarkdown(followingGrid)
+                        let geographyHits = ["日本", "米国", "海外", "アジア"].filter {
+                            followingMd.contains($0)
+                        }.count
+                        if geographyHits < 2 {
+                            candidate = following
+                            continue
+                        }
                     }
 
                     // 同じ開示が前期・当期の表を1つの見出しでまとめて紹介しているケース

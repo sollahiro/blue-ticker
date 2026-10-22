@@ -23,6 +23,7 @@ enum SegmentBreakdownResolver {
         segmentProfitDecider: (any SegmentProfitDeciding)? = nil,
         fiscalYearEnd: String? = nil,
         docID: String = "",
+        xbrlDir: URL? = nil,
         pattern: SegmentNotePatternOutcome? = nil,
         employeeLabels: Set<String> = []
     ) async -> (snapshot: BreakdownSnapshot?, source: SegmentBreakdownSource, audit: LLMBreakdownAudit?) {
@@ -81,7 +82,7 @@ enum SegmentBreakdownResolver {
 
         if let oneRow = oneRowSnapshot(
             reportable: reportable, consolidatedSales: consolidatedSales,
-            labelsByTag: labelsByTag, pattern: pattern)
+            labelsByTag: labelsByTag, pattern: pattern, xbrlDir: xbrlDir)
         {
             return (
                 applyingPatternAndJoin(oneRow, pattern: pattern, employeeLabels: employeeLabels),
@@ -109,7 +110,8 @@ enum SegmentBreakdownResolver {
         reportable: ExtractedBreakdown,
         consolidatedSales: Double?,
         labelsByTag: [String: String],
-        pattern: SegmentNotePatternOutcome?
+        pattern: SegmentNotePatternOutcome?,
+        xbrlDir: URL? = nil
     ) -> BreakdownSnapshot? {
         let classification = pattern?.classification
         let allowOneRow = classification == .singleSegment
@@ -131,15 +133,19 @@ enum SegmentBreakdownResolver {
             member = nil
             label = named
         } else if classification == .singleSegment,
+                  let dir = xbrlDir,
+                  let tagged = XBRLUtils.soleReportableSegmentChild(
+                      in: dir, labelsByTag: labelsByTag)
+        {
+            member = tagged.member
+            label = tagged.label
+        } else if classification == .singleSegment,
                   let named = pattern?.evidenceSentence.flatMap({
                       SegmentNotePatternClassifier.lastBusinessName(in: $0)
                   })
         {
             member = nil
             label = named
-        } else if members.count == 1 {
-            member = members.first
-            label = labelsByTag[members.first!] ?? members.first!
         } else {
             return nil
         }
@@ -238,6 +244,7 @@ enum ProductServiceBreakdownResolver {
         }
         if product.tables.contains(where: {
             $0.heading == BreakdownExtractor.revenueRecognitionHeading
+                || $0.heading.contains("収益の分解")
         }) {
             if let columnDecider {
                 let (snapshot, audit) = await RevenueRecognitionColumnNormalizer.normalize(

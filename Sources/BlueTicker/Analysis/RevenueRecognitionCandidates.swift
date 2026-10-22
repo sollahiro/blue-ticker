@@ -62,6 +62,7 @@ enum RevenueRecognitionCandidates {
     struct GroupHeader: Equatable {
         var group: String
         var row: Int
+        var subtotalLabel: String? = nil
     }
 
     struct AmountColumn: Equatable {
@@ -210,6 +211,17 @@ enum RevenueRecognitionCandidates {
                             built.append(BuiltRow(
                                 categoryGroup: group, category: item.label,
                                 amount: amounts[item.row] ?? 0, isPartial: false, rowKind: "segment"))
+                        }
+                        // 開示にある領域合計（消化器系疾患合計 等）。2行の地域小計は出さない。
+                        if let groupAmount,
+                           fullItems.count >= 3,
+                           let subtotalLabel = table.groups.first(where: { $0.group == group })?
+                            .subtotalLabel,
+                           subtotalLabel.contains("合計")
+                        {
+                            built.append(BuiltRow(
+                                categoryGroup: group, category: subtotalLabel,
+                                amount: groupAmount, isPartial: false, rowKind: "subtotal"))
                         }
                     }
                     for item in partialItems {
@@ -955,7 +967,8 @@ enum RevenueRecognitionCandidates {
                 } else if isGroupSubtotalLabel(label) {
                     attachGroupSubtotal(
                         stem: groupNameFromSubtotal(label), subtotalRow: i,
-                        items: &items, groups: &groups, lastClosedRow: lastClosedRow)
+                        items: &items, groups: &groups, lastClosedRow: lastClosedRow,
+                        label: label)
                     group = ""
                     lastClosedRow = i
                 }
@@ -1193,7 +1206,8 @@ enum RevenueRecognitionCandidates {
     /// 小計行の金額を groupAmount に使う。小計自体は row に出さない。
     private static func attachGroupSubtotal(
         stem: String, subtotalRow: Int,
-        items: inout [Item], groups: inout [GroupHeader], lastClosedRow: Int
+        items: inout [Item], groups: inout [GroupHeader], lastClosedRow: Int,
+        label: String
     ) {
         guard !stem.isEmpty else { return }
         let headerRow = groups.last(where: { $0.group == stem })?.row
@@ -1203,8 +1217,9 @@ enum RevenueRecognitionCandidates {
         }
         if let existing = groups.firstIndex(where: { $0.group == stem }) {
             groups[existing].row = subtotalRow
+            groups[existing].subtotalLabel = label
         } else {
-            groups.append(GroupHeader(group: stem, row: subtotalRow))
+            groups.append(GroupHeader(group: stem, row: subtotalRow, subtotalLabel: label))
         }
     }
 

@@ -99,15 +99,17 @@ enum SegmentNotePatternClassifier {
             if signals.reportableMemberCount >= 2 {
                 return .deterministic(.multipleSegments)
             }
-            if signals.hasReportableSegmentTable, signals.reportableMemberCount != 1 {
-                return .deterministic(.multipleSegments)
-            }
+            // 専用タグは「同じ注記に収益の分解表がある」より強い。Takeda 4502 は
+            // 報告セグメント表が無く、製品表がセグメント注記に同居する。
             if signals.hasDedicatedSingleSegmentTag, signals.reportableMemberCount <= 1 {
                 return .deterministic(
                     .singleSegment, evidence: signals.prose.first)
             }
             if signals.reportableMemberCount == 1, signals.prose.isEmpty {
                 return .deterministic(.singleSegment)
+            }
+            if signals.hasReportableSegmentTable, signals.reportableMemberCount != 1 {
+                return .deterministic(.multipleSegments)
             }
             return nil
         }
@@ -196,15 +198,20 @@ enum SegmentNotePatternClassifier {
     static func lastBusinessName(in text: String) -> String? {
         let stripped = text.replacingOccurrences(
             of: #"【[^】]*】"#, with: "", options: .regularExpression)
-        guard let regex = try? NSRegularExpression(pattern: #"([^。、\s]{1,40}事業)"#) else {
+        // 助詞・句読点で切る。貪欲に文頭から最後の「事業」まで取ると
+        // 「当社グループは医薬品事業の単一の事業」になる。
+        guard let regex = try? NSRegularExpression(
+            pattern: #"([^\s。、のはがをにとで]{1,20}事業)"#)
+        else {
             return nil
         }
         let ns = stripped as NSString
         let matches = regex.matches(in: stripped, range: NSRange(location: 0, length: ns.length))
-        guard let last = matches.last else { return nil }
-        let name = ns.substring(with: last.range)
-        if name.contains("全セグメント") || name.contains("報告セグメント") { return nil }
-        return name
+        let names = matches.map { ns.substring(with: $0.range) }.filter { name in
+            !name.contains("全セグメント") && !name.contains("報告セグメント")
+                && !name.contains("単一")
+        }
+        return names.last
     }
 
     /// 従業員行のラベルが segment 行と接合できないとき true。

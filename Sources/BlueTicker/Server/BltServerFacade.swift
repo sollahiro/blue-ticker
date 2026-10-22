@@ -754,7 +754,7 @@ public extension BltServerContext {
             columnDecider: revenueRecognitionColumnDecider,
             segmentProfitDecider: segmentProfitDecider,
             fiscalYearEnd: BreakdownExtractor.currentFiscalYearEnd(fromXbrlDir: xbrlDir),
-            docID: docID, pattern: pattern, employeeLabels: employeeLabels)
+            docID: docID, xbrlDir: xbrlDir, pattern: pattern, employeeLabels: employeeLabels)
         if let snapshot = result.snapshot {
             return attachingPattern(
                 pattern,

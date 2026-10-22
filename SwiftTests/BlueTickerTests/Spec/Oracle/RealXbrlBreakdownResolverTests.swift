@@ -298,15 +298,21 @@ import Foundation
         let decider = FakeRevenueRecognitionColumnDecider(containing: "日本事業")
 
         let (snapshot, source, _) = await SegmentBreakdownResolver.resolve(
-            reportable: reportable, consolidatedSales: sales, segmentInfoDecider: decider
+            reportable: reportable, consolidatedSales: sales,
+            labelsByTag: XBRLUtils.loadLabelsByTag(in: Self.xbrlDir("S100XSCU")),
+            segmentInfoDecider: decider
         )
 
         #expect(source == .segmentInfoLLM || source == .xbrlFacts)
         #expect(snapshot?.axis == breakdownAxisSegment)
-        let japan = try #require(snapshot?.rows.first { $0.labelRaw.contains("日本") })
-        #expect(japan.labelRaw == "日本事業")
+        let japan = try #require(snapshot?.rows.first {
+            ($0.label ?? $0.labelRaw).contains("日本")
+        })
+        #expect((japan.label ?? japan.labelRaw).contains("日本"))
         #expect(japan.amount == 295_343_000_000)
-        let china = try #require(snapshot?.rows.first { $0.labelRaw.contains("トラベルリテール") })
+        let china = try #require(snapshot?.rows.first {
+            ($0.label ?? $0.labelRaw).contains("トラベルリテール")
+        })
         #expect(china.amount == 342_244_000_000)
     }
 
@@ -416,14 +422,15 @@ import Foundation
         guard await Self.ensureAvailable("S100W19Q") else { return }
         let dir = Self.xbrlDir("S100W19Q")
         let yen = Financial.millionYen
-        let expected: [(String, Double)] = [
-            ("G&NS", 4_543_571),
-            ("音楽", 1_820_263),
-            ("映画", 1_498_534),
-            ("ET&S", 2_362_838),
-            ("I&SS", 1_712_534),
-            ("金融", 922_147),
-            ("その他", 82_477),
+        // 有報表の略称（G&NS 等）と XBRL ラベル（ゲーム＆ネットワークサービス）のどちらでもよい。
+        let expected: [(needles: [String], million: Double)] = [
+            (["G&NS", "ゲーム"], 4_543_571),
+            (["音楽"], 1_820_263),
+            (["映画"], 1_498_534),
+            (["ET&S", "エンタテインメント"], 2_362_838),
+            (["I&SS", "イメージング"], 1_712_534),
+            (["金融"], 922_147),
+            (["その他"], 82_477),
         ]
         let financials = StatementFinancialsResolver.resolve(xbrlDir: dir)
         let coverage = financials?.geographyCoverageSales ?? financials?.sales
@@ -435,9 +442,10 @@ import Foundation
         let snap = try #require(segment)
         #expect(snap.axis == breakdownAxisSegment)
         #expect(snap.denominator == 12_957_064 * yen)
-        for (needle, million) in expected {
-            let row = try #require(snap.rows.first {
-                ($0.label ?? "").contains(needle) || $0.labelRaw.contains(needle)
+        for (needles, million) in expected {
+            let row = try #require(snap.rows.first { row in
+                let blob = (row.label ?? "") + row.labelRaw
+                return needles.contains(where: { blob.contains($0) })
             })
             #expect(row.amount == million * yen)
             #expect(row.rowKind == "segment")
@@ -485,7 +493,7 @@ import Foundation
         #expect(pattern.classification == .singleSegment)
         let (segment, _, _) = await SegmentBreakdownResolver.resolve(
             reportable: reportable, consolidatedSales: sales,
-            labelsByTag: XBRLUtils.loadLabelsByTag(in: dir), pattern: pattern)
+            labelsByTag: XBRLUtils.loadLabelsByTag(in: dir), xbrlDir: dir, pattern: pattern)
         let snap = try #require(segment)
         #expect(snap.axis == breakdownAxisSegment)
         #expect(snap.rows.filter { $0.rowKind == "segment" }.count == 1)

@@ -2609,12 +2609,10 @@ import Foundation
             #expect(!result.tables.contains { $0.heading == BreakdownExtractor.revenueRecognitionHeading })
             #expect(!result.tables.contains { $0.markdown.contains("契約負債") })
 
-            // geography 側は報告セグメント facts へフォールバックできる
+            // 報告セグメント facts は geography にコピーしない（BLT-187）。関連情報の地域表が無ければ空。
             let geo = BreakdownExtractor.extractGeographyInfo(xbrlDir: dir)
-            #expect(geo.method == "xbrl_facts")
-            let geoMembers = Set(geo.facts.compactMap { $0.dimensions["OperatingSegmentsAxis"] })
-            #expect(geoMembers.contains("JapanReportableSegmentMember"))
-            #expect(geoMembers.contains("APACReportableSegmentMember"))
+            #expect(geo.method == "not_found")
+            #expect(geo.facts.isEmpty)
         }
     }
 

@@ -109,6 +109,27 @@ import Testing
         #expect(outcome.evidenceSentence == sameAsSegment)
     }
 
+    @Test func dedicatedTagWinsOverStrayRelatedInfoTables() async {
+        let outcome = await SegmentNotePatternClassifier.classify(
+            axis: .segment,
+            signals: SegmentNotePatternSignals(
+                reportableMemberCount: 0, hasDedicatedSingleSegmentTag: true,
+                hasReportableSegmentTable: true, hasRelatedInfoTable: true,
+                prose: [takedaWording]),
+            decider: FakeSegmentNotePatternDecider(selected: "multiple_segments"))
+        #expect(outcome.classification == .singleSegment)
+        #expect(outcome.source == SegmentNotePatternClassifier.deterministicSource)
+    }
+
+    @Test func lastBusinessNameDoesNotSwallowTheWholeSentence() {
+        #expect(
+            SegmentNotePatternClassifier.lastBusinessName(
+                in: "当社グループは医薬品事業の単一の事業セグメントから構成されております。")
+                == "医薬品事業")
+        #expect(
+            SegmentNotePatternClassifier.lastBusinessName(in: takedaWording) == nil)
+    }
+
     @Test func employeesJoinUnavailableWhenDepartmentsDoNotMatchSingleSegment() {
         #expect(
             SegmentNotePatternClassifier.employeesJoinUnavailable(
