@@ -110,6 +110,20 @@ actor APIClient {
         return try await get(url)
     }
 
+    /// `GET /v1/screen/snapshot` の条件付き GET（`ScreenSnapshotStore` 専用）。
+    /// 304 は `status` 304 と空の本文で返す。`ResponseCache` には載せない（検証子ごと Store が持つ）。
+    func screenSnapshot(headers: [String: String]) async throws
+        -> (status: Int, etag: String?, body: Data)
+    {
+        let (data, response) = try await fetchWithGate(
+            path("v1/screen/snapshot"), hapisClass: .interactive, headers: headers)
+        return (
+            response?.statusCode ?? 0,
+            response?.value(forHTTPHeaderField: "ETag"),
+            data
+        )
+    }
+
     private static func queryNumber(_ value: Double) -> String {
         if value.rounded() == value, value >= Double(Int.min), value <= Double(Int.max) {
             return String(Int(value))
@@ -304,8 +318,16 @@ actor APIClient {
         _ url: URL,
         hapisClass: HAPISOriginGate.RequestClass
     ) async throws -> Data {
+        try await fetchWithGate(url, hapisClass: hapisClass, headers: [:]).data
+    }
+
+    private func fetchWithGate(
+        _ url: URL,
+        hapisClass: HAPISOriginGate.RequestClass,
+        headers: [String: String]
+    ) async throws -> (data: Data, response: HTTPURLResponse?) {
         guard APIConfiguration.usesHAPISConsumer(url) else {
-            return try await fetchData(url, hapisClass: hapisClass)
+            return try await fetchResponse(url, headers: headers, hapisClass: hapisClass)
         }
         try Task.checkCancellation()
         do {
@@ -317,24 +339,29 @@ actor APIClient {
         }
         do {
             return try await originGate.withTurn(hapisClass) {
-                try await self.fetchData(url, hapisClass: hapisClass)
+                try await self.fetchResponse(url, headers: headers, hapisClass: hapisClass)
             }
         } catch APIClientError.http(let status, _) where status == 429 && hapisClass == .interactive {
             try await originGate.waitTurn(.interactive)
             return try await originGate.withTurn(hapisClass) {
-                try await self.fetchData(url, hapisClass: hapisClass)
+                try await self.fetchResponse(url, headers: headers, hapisClass: hapisClass)
             }
         }
     }
 
-    private func fetchData(
+    /// `headers` は条件付き GET の検証子など。304 は成功として本文（空）と応答を返す。
+    private func fetchResponse(
         _ url: URL,
+        headers: [String: String] = [:],
         hapisRemintAttempted: Bool = false,
         hapisClass: HAPISOriginGate.RequestClass = .interactive
-    ) async throws -> Data {
+    ) async throws -> (data: Data, response: HTTPURLResponse?) {
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
         request.setValue("application/json", forHTTPHeaderField: "Accept")
+        for (field, value) in headers {
+            request.setValue(value, forHTTPHeaderField: field)
+        }
         // HAPIS ゲートウェイだけ、制御面で mint した consumer JWT を Bearer に付ける。
         // Release と Debug の HAPIS 本番は App Attest。loopback / LAN `http` は付けない。
         if APIConfiguration.usesHAPISConsumer(url) {
@@ -369,8 +396,8 @@ actor APIClient {
                 } catch {
                     throw APIClientError.hapisUnavailable
                 }
-                return try await fetchData(
-                    url, hapisRemintAttempted: true, hapisClass: hapisClass)
+                return try await fetchResponse(
+                    url, headers: headers, hapisRemintAttempted: true, hapisClass: hapisClass)
             }
         }
         if status == 429 {
@@ -391,11 +418,11 @@ actor APIClient {
             let message = httpErrorMessage(data, fallback: "サービスを利用できません")
             throw APIClientError.http(status: 503, message: message)
         }
-        guard (200..<300).contains(status) else {
+        guard (200..<300).contains(status) || status == 304 else {
             let message = httpErrorMessage(data, fallback: "HTTP \(status)")
             throw APIClientError.http(status: status, message: message)
         }
-        return data
+        return (data, http)
     }
 
     private func httpErrorMessage(_ data: Data, fallback: String) -> String {

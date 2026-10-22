@@ -128,6 +128,7 @@ flowchart LR
 | `GET /v1/feed/updates` | Feed Update（直近 N 日の提出書類。既定 90 日・10 件。同日過多は安定サンプル。`total.day` / `total.week`） |
 | `GET /v1/feed/trend` | Feed Trend（匿名の検索・ツールヒット件数。書類件数ではない。カウンター未設定は 503） |
 | `GET /v1/screen` | Screen（`screen_index` 横断検索。skills / MCP 未掲載。索引未生成は 404。`sales_cagr_3y` と screen-v3 指標、screen-v4 の配当性向 3 年平均は ingest 時の派生列） |
+| `GET /v1/screen/snapshot` | Screen スナップショット（`screen_index` 全行の列形式。iOS 条件検索が端末内で絞る。本文 SHA-256 の `ETag` / 304。skills / MCP 未掲載。索引未生成は 404。`docs/ios-client.md`） |
 
 エラー封筒: `{"error":...,"status":N}`。
 
