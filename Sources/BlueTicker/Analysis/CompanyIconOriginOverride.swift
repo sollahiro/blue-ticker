@@ -85,6 +85,8 @@ enum CompanyIconOriginOverride {
     /// 2195 / 2894 / 6203 / 7265: ユーザー指定のワンオフ 512 白地クロップを R2 CDN へ。
     /// 2026-10-05 weekly: 公告紙面／URL無し／Pronexus の欠行。公式 apple-touch / 正方形 /
     /// 中央マークのある OGP。単色矩形・SNS の X・横長ワードマーク OGP は載せない。
+    /// 2026-10-20 weekly: 公告 URL が origin パース不能／注記委譲の欠行。公式 apple-touch /
+    /// 中央マークのある OGP。apple-touch の単色矩形は使わず OGP へ（2286）。
     /// 2026-10-20 weekly replacements: same-origin 16px→公式 apple-touch / 正方形。
     /// Visual GO は PR #534（99 公式 URL + 3 マークのみ 512 CDN）。
     static let manualSources: [String: CompanyIconManualSource] = [
@@ -332,6 +334,10 @@ enum CompanyIconOriginOverride {
         "9679": .imageURL("https://www.horai-kk.co.jp/assets/img/common/apple-touch-icon-precomposed.png"),
         "9778": .imageURL("https://www.subaru-net.com/wp-content/themes/subaru-net/images/apple-touch-icon.png"),
         "9820": .imageURL("https://www.mt-genex.co.jp/assets/images/common/apple-touch-icon.png"),
+        "1788": .imageURL(
+            "https://www.santo.co.jp/app/wp-content/uploads/2025/06/cropped-favicon-192x192.png"),
+        "2286": .imageURL("https://www.hayashikane.co.jp/_assets/img/common/ogp.png"),
+        "3901": .imageURL("https://www.marklines.com/apple-touch-icon.png"),
         "1333": .imageURL("https://www.umios.com/favicon/favicon_192.png"),
         "1444": .imageURL("https://reform-nisso.co.jp/favicons/apple-touch-icon-144x144.png"),
         "1518": .imageURL(

@@ -138,6 +138,8 @@ origin: (1) ユーザー指定のコンシューマサイト (2) 有報「公告
 
 有報本文から公式 origin を拾うときは IR 配信ホスト・大学・省庁ホストを捨てる。Jetpack CDN は first-party の同一パスが取れるならそちら。同一上場会社の自社製品／コンシューマサイト（7203 / 581A 型）はコーポレート origin が取れないときに採用してよい。別法人ホストは禁止のまま。
 
+欠測の「自動 ingest が使える」判定は公告セルの URL がこの CA から origin としてパースできるときに限る。`.html` がホストに連結している、全角ハイフン、空白入りホストはパース不能 → 手動ピン対象。
+
 画像は FaviconFetcher（rel=icon 優先）と**逆順**:
 
 1. 正方形 apple-touch（144–192px）
@@ -163,6 +165,7 @@ Wayback は **バイト取得の代用** であってマップ値ではない。
 ## R2
 
 - キー: `company-icons/{code}.*`。秘密は既存 `BLT_R2_*`
+- 差し替えの Before/After 仮置きは `company-icons/review/{date}/{code}-before|after.*`。本番キーは GO 前に上書きしない
 - 無い／入らない場合は止めて報告。新しい CLI フラグや恒常スクリプトを足さない
 - バイトを先に持っている（添付・Wayback・ワンオフ PNG）ときは既存 R2 経路で PUT してよい。その後 **マップを CDN にして** `blt-server ingest --stages icons --codes` で DB 行を書く
 - SQL で `company_icons` を upsert しない（ingest の skip / source_url 照合から外れる）
@@ -265,6 +268,9 @@ DATABASE_URL="$BLT_NEON_WRITE_DATABASE_URL" ./.build/release/blt-server ingest -
 - **英数字コード。** 株探の `?code=` に無い。公式 origin は Web 検索
 - **動的ラッパ。** `topics_file?img=/img/...` は実パスへ正規化してからマップする
 - **SNS の X。** 先頭 favicon が旧 Twitter マークの置き換え画像なら棄てる（ラクサス型）
+- **公告セルだけ見る。** 欠測分類は「公告掲載方法」行のセルだけから URL を取る。HTML 全体を連結すると紙面・注記委譲を誤って auto-capable にする
+- **壊れた公告ホスト。** セル内 URL が `.html` 連結・全角ハイフン・空白入りだと origin パース不能。自動 ingest 不能として公式 origin を別途探す
+- **差し替え仮置き。** Before/After は `company-icons/review/{date}/{code}-before|after.*`。本番 `company-icons/{code}.*` は visual GO 後の ingest まで上書きしない
 - **却下後のマークのみ。** ワードマーク付き After が却下されたら公式高解像からマークだけを切り、`review/` に新しい After を置きその code だけ再 webhook。マップは次の GO まで入れない
 
 ## 完了条件

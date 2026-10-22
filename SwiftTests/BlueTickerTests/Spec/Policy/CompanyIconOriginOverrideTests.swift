@@ -565,6 +565,29 @@ import Testing
         }
     }
 
+    /// 2026-10-20 weekly: listed × company_icons 欠行。公告 URL が origin パース不能／注記委譲。
+    /// 公式 apple-touch / 中央マークのある OGP。単色矩形 apple-touch は載せない。
+    @Test func pins20261020WeeklyMissingListedManualImageURLs() {
+        let expected: [(String, String)] = [
+            ("1788", "https://www.santo.co.jp/app/wp-content/uploads/2025/06/cropped-favicon-192x192.png"),
+            ("2286", "https://www.hayashikane.co.jp/_assets/img/common/ogp.png"),
+            ("3901", "https://www.marklines.com/apple-touch-icon.png"),
+        ]
+        #expect(expected.count == 3)
+        #expect(Set(expected.map(\.0)).count == 3)
+        #expect(CompanyIconOriginOverride.manualSources["2976"] == nil)
+        #expect(CompanyIconOriginOverride.manualSources["7509"] == nil)
+        #expect(
+            Set(expected.map(\.0))
+                .isDisjoint(with: Set(CompanyIconOriginOverride.pronexusDisclosureHomepages.keys)))
+        for (code, url) in expected {
+            #expect(!url.contains("prtimes.jp"), "code=\(code)")
+            #expect(!url.contains("i0.wp.com"), "code=\(code)")
+            #expect(
+                CompanyIconOriginOverride.manualSources[code] == .imageURL(url), "code=\(code)")
+        }
+    }
+
     @Test func detectsPronexusDisclosureHosts() {
         #expect(CompanyIconOriginOverride.isPronexusDisclosureHost("https://www.pronexus.co.jp"))
         #expect(CompanyIconOriginOverride.isPronexusDisclosureHost("http://pronexus.co.jp"))

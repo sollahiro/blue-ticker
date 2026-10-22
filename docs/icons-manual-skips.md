@@ -148,3 +148,5 @@
 | 9818 | low_vis_no_source | 2026-10-05 | 大丸エナウィン。OGP はビル写真 |
 | 9850 | low_vis_no_source | 2026-10-05 | グルメ杵屋。事業アイコンであり HD マークではない |
 | 9976 | low_vis_no_source | 2026-10-05 | セキチュー。横長 header GIF |
+| 2976 | low_vis_no_source | 2026-10-20 | 日本グランデ。公告 URL 全角ハイフンで origin 不能。公式 favicon 37px のみ |
+| 7509 | low_vis_no_source | 2026-10-20 | アイエー。公告 URL 全角ハイフンで origin 不能。正方形/apple-touch なし |
