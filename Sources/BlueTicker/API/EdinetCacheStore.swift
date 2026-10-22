@@ -295,7 +295,10 @@ final class EdinetCacheStore: Sendable {
 
     /// 展開前にエントリ数・非圧縮サイズ合計が上限内か検査する。超過時は `XbrlZipError.tooLarge`。
     private func validateZipSafety(at zipURL: URL) throws {
-        guard let archive = Archive(url: zipURL, accessMode: .read) else {
+        let archive: Archive
+        do {
+            archive = try Archive(url: zipURL, accessMode: .read)
+        } catch {
             throw XbrlZipError.invalidArchive
         }
         var totalBytes: Int64 = 0

@@ -148,7 +148,7 @@ enum RevenueRecognitionColumnNormalizer {
         }
         let tableTotal = RevenueRecognitionCandidates.tableTotal(
             table: table, column: column.column)
-        var tableSumReview = transposedWholeCompany == nil
+        let tableSumReview = transposedWholeCompany == nil
             && RevenueRecognitionCandidates.tableSumMismatch(
                 rows: built, table: table, column: column.column, cap: tableTotal?.amount)
 
