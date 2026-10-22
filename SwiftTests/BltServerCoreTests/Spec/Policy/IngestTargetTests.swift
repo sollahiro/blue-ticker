@@ -20,6 +20,7 @@ struct IngestTargetTests {
         #expect(parseIngestTargets("statement-notes") == [.notes])
         #expect(parseIngestTargets("icons") == [.icons])
         #expect(parseIngestTargets("overviews") == [.overviews])
+        #expect(parseIngestTargets("relations") == [.relations])
     }
 
     @Test("複数対象をカンマ区切りで選択")
@@ -27,7 +28,7 @@ struct IngestTargetTests {
         #expect(parseIngestTargets("financials,filing-sections") == [.financials, .filingSections])
         #expect(
             parseIngestTargets(
-                "financials,filing-sections,breakdowns,statements,statement-notes,icons,overviews")
+                "financials,filing-sections,breakdowns,statements,statement-notes,icons,overviews,relations")
                 == Set(IngestTarget.allCases))
     }
 

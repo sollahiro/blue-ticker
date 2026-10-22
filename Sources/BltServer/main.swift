@@ -3,7 +3,8 @@
 //   blt-server [--host HOST] [--port PORT]                   REST サーバーを起動
 //   blt-server sync [--from YYYY-MM-DD] [--to YYYY-MM-DD]    EDINET 書類一覧を DB へ同期
 //   blt-server ingest [--limit N] [--with-facts] [--stages financials,
-//                     filing-sections,breakdowns,statements,statement-notes,icons,overviews]
+//                     filing-sections,breakdowns,statements,statement-notes,icons,overviews,
+//                     relations]
 //                     [--codes 7203,6758] [--doc-ids S100W0S7]
 //                     [--note-types per_share_information,property_plant_equipment_schedule,...]
 //                                                            対象を DB へ取り込み（--stages で選択、既定は全て）。
@@ -94,7 +95,7 @@ do {
         )
     } else if argv.count > 1, argv[1] == "ingest" {
         guard let targets = parseIngestTargets(optionValue("--stages", in: argv)) else {
-            printError("blt-server error: --stages は financials,filing-sections,breakdowns,statements,statement-notes,icons,overviews のカンマ区切りで指定してください\n")
+            printError("blt-server error: --stages は financials,filing-sections,breakdowns,statements,statement-notes,icons,overviews,relations のカンマ区切りで指定してください\n")
             exit(1)
         }
         // `optionValue` はフラグが argv 末尾（値なし）のとき nil を返し、フラグ未指定と区別できない。

@@ -86,6 +86,8 @@ func configureDatabase(_ app: Application) async throws {
     app.migrations.add(AddScreenPayoutRatio3yToScreenIndex())
     app.migrations.add(CreateManualXbrlOverrides())
     app.migrations.add(RestrictManualXbrlOverridesToCapex())
+    // 関係取り込み: 顧客・関係会社・出資先・大株主（company_relations、書類×相手単位）。stage は `relations`。
+    app.migrations.add(CreateCompanyRelations())
     try await withDbRetry(
         operationTimeoutSeconds: Api.dbBootstrapOperationTimeoutSeconds,
         logger: app.logger,

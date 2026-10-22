@@ -24,6 +24,10 @@ public enum IngestTarget: String, CaseIterable, Sendable {
     /// 銘柄 Overview（company_overviews、会社1社=1行の短い会社説明）。
     /// `OPENROUTER_OVERVIEW_API_KEY` 未設定時は対象に含めてもスキップされる。
     case overviews
+    /// 関係（company_relations。主要な顧客・関係会社・親会社等・政策保有株式・大株主。会社ごとに最新有報1件）。
+    /// 区分の目印が無い関係会社表だけ Jev（`OPENROUTER_DECISION_API_KEY` 未設定時は区分保留のまま格納）。
+    /// 名前解決（銘柄コード）は決定論。
+    case relations
 }
 
 /// `--note-types` の CSV 値を note_type の集合へ変換する（`statement-notes` ステージ専用）。

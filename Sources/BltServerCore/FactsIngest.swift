@@ -260,7 +260,7 @@ public func runFactsIngestCommand(
         if inFlightOriginalIDs.isEmpty {
             let companyWide =
                 targets.contains(.financials) || targets.contains(.icons)
-                || targets.contains(.overviews)
+                || targets.contains(.overviews) || targets.contains(.relations)
             inFlightListedCodes = codes ?? (companyWide ? listed : [])
         } else {
             inFlightListedCodes = []
@@ -651,6 +651,25 @@ public func runFactsIngestCommand(
                     app.logger, target: "overviews", attempted: s10.attempted, stored: s10.stored,
                     failed: s10.failed, skipped: s10.skipped, notApplicable: s10.notApplicable)
             }
+        }
+        if targets.contains(.relations) {
+            // 関係取り込み: 上場企業の最新有報1件（overviews と同じ選び方）。名前解決は決定論。
+            let s11 = try await runRelationsIngest(
+                db: app.db, listedCodes: listed, limit: stageLimit, explicitCodes: codes,
+                priorityCodes: priority, cachedDocIDs: cachedDocIDs, forceDocIDs: forceDocIDs,
+                directory: await context.relationNameDirectory(), logger: app.logger
+            ) { docID, _ in
+                await context.extractCompanyRelations(
+                    docID: docID, correctionDocIDs: correctionIDsByOriginal[docID] ?? [])
+            }
+            logIngestSummary(
+                app.logger, target: "relations", attempted: s11.attempted, stored: s11.stored,
+                failed: s11.failed, skipped: s11.skipped)
+            app.logger.notice(
+                "関係取り込み 解き直し",
+                metadata: [
+                    "event": "relations_reresolved", "changed": .stringConvertible(s11.reresolved),
+                ])
         }
     } catch {
         try? await app.asyncShutdown()
