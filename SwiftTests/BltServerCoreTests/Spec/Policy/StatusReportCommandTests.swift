@@ -147,10 +147,10 @@ private func seedBreakdown(
             let report = try await buildIngestStatusReport(
                 db: app.db, listedCodes: ["7203", "6758"], priorityCodes: ["7203"])
 
-            #expect(report.stages.count == 5)
+            #expect(report.stages.count == 6)
             #expect(report.stages.map(\.key) == [
                 "financials", "statements", "filing_sections",
-                "breakdown_product_service", "breakdown_geography",
+                "breakdown_segment", "breakdown_product_service", "breakdown_geography",
             ])
             for stage in report.stages {
                 #expect(stage.companiesCovered == 0)

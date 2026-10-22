@@ -85,16 +85,16 @@ import Foundation
         let docID = "S100YSGA"
         guard await Self.ensureAvailable(docID) else { return }
         let dir = Self.xbrlRoot.appendingPathComponent("\(docID)_xbrl")
-        let segments = BreakdownExtractor.extractSegmentInfo(xbrlDir: dir)
+        let reportable = BreakdownExtractor.extractReportableSegmentInfo(xbrlDir: dir)
         let denom = BreakdownFinancialsResolver.breakdownBusinessSalesDenominatorItem(
-            xbrlDir: dir, tables: segments.tables)
-        let result = await BusinessBreakdownResolver.resolve(
-            segments: segments, consolidatedSales: denom.value,
+            xbrlDir: dir, tables: reportable.tables)
+        let result = await SegmentBreakdownResolver.resolve(
+            reportable: reportable, consolidatedSales: denom.value,
             labelsByTag: XBRLUtils.loadLabelsByTag(in: dir), denominatorTag: denom.tag,
             fiscalYearEnd: BreakdownExtractor.currentFiscalYearEnd(fromXbrlDir: dir),
             docID: docID)
-        let snapshot = try #require(result.snapshot, "\(docID): product_service snapshot")
-        #expect(snapshot.axis == breakdownAxisProductService)
+        let snapshot = try #require(result.snapshot, "\(docID): segment snapshot")
+        #expect(snapshot.axis == breakdownAxisSegment)
         func million(_ row: BreakdownRow) -> Double? {
             row.profit.map { $0 / Financial.millionYen }
         }

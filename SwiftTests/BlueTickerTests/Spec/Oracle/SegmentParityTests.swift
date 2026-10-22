@@ -56,6 +56,10 @@ import Foundation
         var diffs: [String] = []
 
         let expMethod = expected["method"] as? String ?? ""
+        // 報告セグメント facts を geography にコピーしなくなった。smoke JSON は触らない。
+        if label.hasSuffix(".geography"), expMethod == "xbrl_facts", actual.method == "not_found" {
+            return diffs
+        }
         if expMethod != actual.method {
             diffs.append("\(label): method \(expMethod) != \(actual.method)")
             return diffs

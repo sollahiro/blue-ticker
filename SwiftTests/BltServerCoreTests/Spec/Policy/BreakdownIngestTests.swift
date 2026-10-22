@@ -753,10 +753,10 @@ extension BreakdownLoadResult {
         try await withMigratedApp { app in
             try await seedRow(
                 "S1", code: "7203", submit: "2025-06-20 09:00", db: app.db,
-                source: breakdownSourceXbrlFacts, cacheVersion: "breakdown-v0")
+                source: breakdownSourceXbrlFacts, cacheVersion: "breakdown-v1")
             try await seedRow(
                 "S2", code: "6758", submit: "2025-06-20 09:00", db: app.db,
-                source: breakdownSourceXbrlFacts, cacheVersion: "breakdown-v1")
+                source: breakdownSourceXbrlFacts, cacheVersion: "breakdown-v2")
 
             let coverage = try await countServableBreakdowns(db: app.db)
             #expect(coverage.servable == 1)
@@ -1133,11 +1133,11 @@ extension BreakdownLoadResult {
         try await withMigratedApp { app in
             try await seedRow(
                 "S1", code: "7203", submit: "2025-06-20 09:00", db: app.db,
-                source: breakdownSourceNotApplicable, cacheVersion: "breakdown-v0",
+                source: breakdownSourceNotApplicable, cacheVersion: "breakdown-v1",
                 notApplicableReason: breakdownNotApplicableUnknown)
             try await seedRow(
                 "S2", code: "6758", submit: "2025-06-20 09:00", db: app.db,
-                source: breakdownSourceNotApplicable, cacheVersion: "breakdown-v1",
+                source: breakdownSourceNotApplicable, cacheVersion: "breakdown-v2",
                 notApplicableReason: breakdownNotApplicableGeographyOnly)
 
             let coverage = try await countServableBreakdowns(db: app.db)

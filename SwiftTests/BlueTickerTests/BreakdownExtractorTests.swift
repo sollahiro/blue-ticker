@@ -1741,10 +1741,9 @@ import Foundation
         }
     }
 
-    @Test func geographyFallsBackToReportableSegmentFactsWhenMembersAreGeography() throws {
-        // 電通型（S100XS0O / issue #163）: GeographicArea dimension も地域売上表も無く、
-        // 報告セグメント（Japan/Americas/EMEA/APAC）の OperatingSegments 収益が地域別内訳そのもの。
-        // 軸は実データ同様 jpcrp_cor:OperatingSegmentsAxis。
+    @Test func geographyDoesNotCopyReportableSegmentFactsWhenMembersAreGeographic() throws {
+        // 電通型（S100XS0O）: 報告セグメント member が地域名でも geography へコピーしない。
+        // 地域別は関連情報「地域ごとの情報」/ GeographicArea facts だけ。
         func segmentContext(id: String, member: String) -> String {
             """
             <xbrli:context id="\(id)">
@@ -1791,20 +1790,11 @@ import Foundation
         """
         try XBRLTestSupport.withXbrlDir(xml) { dir in
             let geo = BreakdownExtractor.extractGeographyInfo(xbrlDir: dir)
-            #expect(geo.method == "xbrl_facts")
+            #expect(geo.method == "not_found")
             #expect(geo.tables.isEmpty)
-            let geoMembers = Set(geo.facts.compactMap { $0.dimensions["OperatingSegmentsAxis"] })
-            #expect(geoMembers == Set(members))
-            #expect(geo.facts.filter { $0.tag == "Revenue2IFRS" }.count == 4)
-
-            // 正規化まで通し、axis=geography で確定することを確認（resolver 契約）
-            let snapshot = try #require(
-                BreakdownNormalizer.normalize(geo, consolidatedSales: 1_435_245_000_000))
-            #expect(snapshot.axis == "geography")
-            #expect(snapshot.needsReview == false)
-            #expect(snapshot.denominatorTag == "Revenue2IFRS")
-            let labels = Set(snapshot.rows.filter { $0.rowKind == "segment" }.map(\.labelRaw))
-            #expect(labels == Set(members))
+            #expect(geo.facts.isEmpty)
+            #expect(
+                BreakdownNormalizer.normalize(geo, consolidatedSales: 1_435_245_000_000) == nil)
         }
     }
 
