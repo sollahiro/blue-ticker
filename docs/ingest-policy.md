@@ -21,7 +21,7 @@
 | 4 | `scripts/jp/edinet/ingest-job-04-breakdowns.sh` | `breakdowns`（全11軸） | 上場（225は処理順） | 50 | 6h |
 | 5 | `scripts/jp/edinet/ingest-job-05-financials.sh` | `financials` | 上場 | 80 | 6h（2の後） |
 | 6 | `scripts/jp/edinet/ingest-job-06-overviews.sh` | `overviews` | 上場（225は処理順） | 80 | 日次 |
-| 7 | `scripts/jp/edinet/ingest-job-07-relations.sh` | `relations`（主要な顧客・関係会社・親会社等・政策保有株式・大株主） | 上場（225は処理順） | 80 | 日次。`ingest-run-cycle` には未組み込み（上場全社の初回は Jev を伴うため Sorahiro の OK 後に組み込む） |
+| 7 | `scripts/jp/edinet/ingest-job-07-relations.sh` | `relations`（主要な顧客・関係会社・親会社等・政策保有株式・大株主） | 上場（225は処理順） | 100 | 日次 |
 
 1 周まとめて回す: `scripts/jp/edinet/ingest-run-cycle.sh`（各ジョブ間に短い sleep。個別 skip 可）。
 
@@ -65,7 +65,7 @@ set -a; . ./.env; set +a
 |---|---|
 | `BLT_INGEST_WRITE` | `1` で本番 WRITE に接続 |
 | `BLT_INGEST_SKIP_POST` | `1` で status ページ更新をスキップ |
-| `BLT_INGEST_SKIP_00` … `06` | `ingest-run-cycle` で該当 job を飛ばす |
+| `BLT_INGEST_SKIP_00` … `07` | `ingest-run-cycle` で該当 job を飛ばす |
 | `BLT_INGEST_CYCLE_PAUSE_SEC` | cycle 内 job 間 sleep（既定 5） |
 | `BLT_INGEST_FILING_LIMIT` | job-00 の `--limit`（既定 80） |
 | `BLT_INGEST_STATEMENTS_LIMIT` | job-01（既定 80） |
@@ -73,7 +73,7 @@ set -a; . ./.env; set +a
 | `BLT_INGEST_BREAKDOWN_LIMIT` | job-04 business/geography 用（既定 50。employees/rd/goodwill はコード側 30/回） |
 | `BLT_INGEST_FINANCIALS_LIMIT` | job-05（既定 80） |
 | `BLT_INGEST_OVERVIEW_LIMIT` | job-06（既定 80） |
-| `BLT_INGEST_RELATIONS_LIMIT` | job-07（既定 80） |
+| `BLT_INGEST_RELATIONS_LIMIT` | job-07（既定 100） |
 | `BLT_R2_XBRL_BUCKET` | 設定時 ingest が R2 L2 に PUT（未設定でも ingest は可） |
 
 ## 実行順（1サイクル内）
@@ -90,6 +90,8 @@ breakdowns               … LLM 軸は時間がかかるため financials と�
 financials               … 組立スナップショット再計算
         ↓
 overviews                … 銘柄の短い会社説明（LLM。最新有報1件。financials 非依存。LLM 成功行は cache_version バンプでは再生成せず、最新 doc_id 変更と needs_review。`not_applicable` は版ずれで再実行）
+        ↓
+relations                … 取引先・関係会社（最新有報1件。区分の決まらない関係会社表だけ Jev。名前解決は決定論）
         ↓
 （任意）status ページ / Linear 投稿
 ```
