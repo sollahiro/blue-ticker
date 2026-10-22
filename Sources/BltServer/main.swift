@@ -7,7 +7,7 @@
 //                     relations]
 //                     [--codes 7203,6758] [--doc-ids S100W0S7]
 //                     [--note-types per_share_information,property_plant_equipment_schedule,...]
-//                                                            対象を DB へ取り込み（--stages で選択、既定は全て）。
+//                                                            対象を DB へ取り込み（--stages で選択、既定は relations 以外の全て）。
 //                                                            breakdowns: product_service/geography は上場全体（--limit 適用）、
 //                                                            employees/rd/goodwill 等の決定論指標軸も上場全体
 //                                                            （1ジョブ 30。日経225は処理順の優先のみ）。

@@ -553,6 +553,9 @@ public extension BltServerContext {
             await RelationKindJev.apply(result, decider: relationKindDecider, docID: docID))
     }
 
+    /// 関係会社表の Jev が使えるか（キー未設定なら Jev 保留の書類を再試行しない）。
+    var canDecideRelationKinds: Bool { relationKindDecider != nil }
+
     /// 名前解決の EDINET 提出者索引（`assets/EdinetcodeDlInfo.csv` の全行）。
     func relationNameDirectory() async -> RelationNameDirectory {
         RelationNameDirectory(filers: await edinetFilerNames())

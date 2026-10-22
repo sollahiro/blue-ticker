@@ -1,5 +1,6 @@
 // 関係の相手の名前を上場企業の銘柄コードに結ぶ（すべて決定論。LLM は使わない）。
-// 正規化は一般規則だけ（NFKC・大文字・法人格語・注記マーカー・末尾の括弧書き・「及びそのグループ会社」・空白と記号）。
+// 正規化は一般規則だけ（NFKC・大文字・法人格語・注記マーカー・「及びそのグループ会社」・空白と記号。
+// 末尾の括弧書きは大株主の名義表記だけ外す）。
 // 社名を直書きした辞書・別名表・例外は作らない。
 // 解決の順（最初に一意に決まったところで止める）:
 //   1. EDINET 提出者名の完全一致（上場 → name_exact）
@@ -10,22 +11,26 @@
 //   5. どれにも当たらない → unresolved
 // 自分自身（related_code == code）には結ばない。
 
+import Crypto
 import Foundation
 
 public enum RelationNameNormalizer {
     /// 照合用の名前（`name_norm`）。空なら照合しない。
-    public static func normalize(_ name: String) -> String {
+    /// 末尾の括弧書きを外すのは `stripsTrailingParenthesis` のときだけ（大株主の名義表記「（信託口）」
+    /// 「（常任代理人 …）」）。それ以外では国名・地域名の括弧（「TOYOTA MOTOR (CHINA)」）を残し、
+    /// 別の上場会社に結ばない。
+    public static func normalize(_ name: String, stripsTrailingParenthesis: Bool = false) -> String {
         var s = name.precomposedStringWithCompatibilityMapping.uppercased()
         s = replacing(s, noteMarkerPatterns, with: " ")
-        // 末尾の括弧書き（「（信託口）」「（常任代理人 …）」）と法人格語は、どちらが外側でも外れるまで繰り返す。
+        // 法人格語（と大株主の名義の括弧書き）は、どちらが外側でも外れるまで繰り返す。
         var previous = ""
         while previous != s {
             previous = s
             s = replacing(s, japaneseCorporateFormPatterns, with: "")
             s = trimmed(s)
-            s = replacing(
-                s, [trailingParenthesisPattern, trailingGroupPhrasePattern, englishCorporateSuffixPattern],
-                with: "")
+            if stripsTrailingParenthesis { s = replacing(s, [trailingParenthesisPattern], with: "") }
+            s = replacing(s, [formerNamePattern], with: "")
+            s = replacing(s, [trailingGroupPhrasePattern, englishCorporateSuffixPattern], with: "")
             s = trimmed(s)
         }
         s = replacing(s, [separatorPattern], with: "")
@@ -65,6 +70,10 @@ public enum RelationNameNormalizer {
     private static let trailingParenthesisPattern = try! NSRegularExpression(
         pattern: #"\s*\([^()]*\)\s*$"#)
 
+    /// 末尾の旧社名の括弧書き（「（旧 東日本電信電話㈱）」）。どの kind でも外す。
+    private static let formerNamePattern = try! NSRegularExpression(
+        pattern: #"\s*\(\s*旧[^()]*(?:\([^()]*\)[^()]*)*\)\s*$"#)
+
     /// 末尾の「及びそのグループ会社」等（相手先をグループ単位で書いた顧客欄）。
     private static let trailingGroupPhrasePattern = try! NSRegularExpression(
         pattern: #"\s*(?:及び|および|並びに|ならびに|と)?\s*その(?:グループ会社|グループ各社|子会社|関係会社|連結子会社)(?:等)?\s*$"#)
@@ -78,6 +87,9 @@ public enum RelationNameNormalizer {
         pattern: #"[\s・･,，、。.．\-‐‑–—―−'’&＆]"#)
 }
 
+/// 正規化・解決規則の版。規則を変えたら上げる（全行の `resolver_key` がずれ、name_norm を作り直して解き直される）。
+public let relationNameResolverVersion = "resolver-v3"
+
 /// EDINET 提出者名の照合索引（正規化した名前 → 提出者）。
 public struct RelationNameDirectory: Sendable {
     public struct Entry: Sendable, Equatable {
@@ -87,8 +99,17 @@ public struct RelationNameDirectory: Sendable {
 
     private(set) var byName: [String: [Entry]] = [:]
     private(set) var byEnglishName: [String: [Entry]] = [:]
+    /// 名簿の中身（提出者コード・名前・英字名・上場コード）と正規化の版のハッシュ。
+    /// 格納行の `resolver_key` と違えば、その行を解き直す（コードリストの更新・新規上場・上場廃止・社名変更）。
+    public let fingerprint: String
 
     public init(filers: [EdinetFilerName]) {
+        let canonical = filers
+            .map { "\($0.edinetCode)\t\($0.name)\t\($0.nameEn)\t\($0.listedCode ?? "")" }
+            .sorted()
+            .joined(separator: "\n")
+        fingerprint = SHA256.hash(data: Data((relationNameResolverVersion + "\n" + canonical).utf8))
+            .prefix(16).map { String(format: "%02x", $0) }.joined()
         for filer in filers {
             let entry = Entry(edinetCode: filer.edinetCode, listedCode: filer.listedCode)
             let ja = RelationNameNormalizer.normalize(filer.name)
@@ -107,12 +128,13 @@ public struct RelationNameResolution: Sendable, Equatable {
 }
 
 public enum RelationNameResolver {
-    /// 子会社索引（3.）を見る kind。取引の相手（顧客・関連会社・親会社等）だけ。
-    /// 連結子会社の行そのものは親経由に結ばない（上場子会社は 1. で結ぶ）。出資先・大株主も結ばない
+    /// 子会社索引（3.）を見る kind。取引の相手（顧客・関連会社）だけ。
+    /// 連結子会社の行そのものは親経由に結ばない（上場子会社は 1. で結ぶ）。親会社等の行も結ばない
+    /// （結ぶと祖父母会社が親会社になり、逆引きで孫会社が子会社に見える）。出資先・大株主も結ばない
     /// （子会社の株を持つ・子会社が株主であることは、親会社が出資先・大株主であることにならない。
     /// 例: 信託口の名義人である信託銀行を、その親会社の「大株主になっている会社」にしない）。
     public static func usesSubsidiaryIndex(kind: String) -> Bool {
-        kind != relationKindSubsidiary && kind != relationKindInvestee && kind != relationKindMajorShareholder
+        kind == relationKindCustomer || kind == relationKindAffiliate
     }
 
     /// - Parameters:

@@ -78,11 +78,6 @@ public let relationResolutionAmbiguous = "ambiguous"
 /// どれにも当たらない。
 public let relationResolutionUnresolved = "unresolved"
 
-/// 次の ingest で解き直す resolution（解決済みは触らない）。
-public let relationRetryableResolutions: Set<String> = [
-    relationResolutionAmbiguous, relationResolutionUnresolved,
-]
-
 // MARK: - 抽出結果（Core → ingest）
 
 /// 関係 1 行（書類 1 件の相手 1 件）。`kind == none` の行は節の状態だけを持つ。
@@ -174,16 +169,19 @@ public enum CompanyRelationsResolveResult: Sendable {
 // MARK: - 公開可否（serve 時の純関数）
 
 /// 公開 REST が格納行を出してよいか。格納行・`cache_version` は触らない（breakdown と同じ形）。
-/// - Jev 由来（`decided_by = jev`）の `needs_review` は出さない（fail closed）。
+/// - Jev 由来（`decided_by = jev`）の `needs_review` は出さない（fail closed）。ただし `needs_review` が
+///   名前解決の `ambiguous` だけによるとき（Jev が区分を採用した行）は出す。
 /// - 決定論の `needs_review`（名前解決の `ambiguous`）は出す（呼び出し側が `company: null`）。
 /// - 訂正 overlay 回帰の warning が付いた書類の行は出さない。
 /// - 区分の決まらない行（`unclassified`）は出さない。
 public func isPubliclyServableRelation(
-    kind: String, decidedBy: String, needsReview: Bool, warning: String?
+    kind: String, decidedBy: String, needsReview: Bool, resolution: String?, warning: String?
 ) -> Bool {
     if let warning, hasOverlayRegressionWarning([warning]) { return false }
     if kind == relationKindUnclassified { return false }
-    if decidedBy == relationDecidedByJev, needsReview { return false }
+    if decidedBy == relationDecidedByJev, needsReview, resolution != relationResolutionAmbiguous {
+        return false
+    }
     return true
 }
 

@@ -46,12 +46,15 @@ public func parseStatementNoteTypes(_ csv: String?) -> Set<String>? {
     return result.isEmpty ? nil : result
 }
 
+/// `--stages` 省略時の対象。`relations` は関係会社表の Jev を伴うため `--stages relations` の明示指定だけ。
+public let defaultIngestTargets = Set(IngestTarget.allCases).subtracting([.relations])
+
 /// `--stages` の CSV 値を取り込み対象の集合へ変換する。
-/// - `nil`（フラグ未指定）: 全対象。
+/// - `nil`（フラグ未指定）: `relations` を除く全対象（`relations` は Jev を伴うため明示指定だけ）。
 /// - 有効なトークンのみ（例 `"financials"`, `"financials,statements"`, 空白許容）: その集合。
 /// - 未知トークンを含む・有効なトークンが 0 個（`""` や `","`）: `nil`（呼び出し側で usage エラー）。
 public func parseIngestTargets(_ csv: String?) -> Set<IngestTarget>? {
-    guard let csv else { return Set(IngestTarget.allCases) }
+    guard let csv else { return defaultIngestTargets }
     var result = Set<IngestTarget>()
     for token in csv.split(separator: ",") {
         let value = token.trimmingCharacters(in: .whitespaces)

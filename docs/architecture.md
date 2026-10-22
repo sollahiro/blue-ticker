@@ -167,7 +167,7 @@ Neon 接続・R2 秘密・LLM キーの正本は `.env.example`。プロセス�
 | financials | `company_financials` |
 | filing-sections / breakdowns / statements / notes | 各テーブル（書類単位） |
 | overview | `company_overviews`（会社1社=1行。由来 doc_id は列。ingest stage は `overviews`。公開 REST は `GET /v1/companies/{code}/overview`。read 床は `overview-v1`。Filing `texts` には載せない） |
-| relations | `company_relations`（書類 1 件の相手 1 件 = 1 行。会社ごとに最新有報 1 件の行だけを持ち、逆引き用の行は作らない。ingest stage は `relations`。区分は決定論（表内の見出し行 → 名前の接頭辞 → 表外の見出し）で、決まらない表だけ Jev（閾値 0.9。未満は `needs_review`）。名前解決は決定論（EDINET コードリストの提出者名・英字名 → 上場会社の子会社索引）。記載の省略は `kind = none` の状態行で未抽出と区別する。大株主の住所は保存のみ） |
+| relations | `company_relations`（書類 1 件の相手 1 件 = 1 行。会社ごとに最新有報 1 件の行だけを持ち、逆引き用の行は作らない。ingest stage は `relations`。区分は決定論（表内の見出し行 → 名前の接頭辞 → 表外の見出し）で、決まらない表だけ Jev（閾値 0.9。未満は `needs_review`）。名前解決は決定論（EDINET コードリストの提出者名・英字名 → 上場会社の子会社索引。索引は顧客・関連会社の行だけに使う）。記載の省略は `kind = none` の状態行で未抽出と区別する。大株主の住所は保存のみ） |
 
 ## キャッシュとデプロイ
 

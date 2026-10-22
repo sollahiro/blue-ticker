@@ -153,7 +153,7 @@ private func rows(_ result: CompanyRelationsExtractor.Result, section: String) -
         #expect(low.rows.first?.decidedBy == relationDecidedByJev)
         #expect(!isPubliclyServableRelation(
             kind: low.rows[0].kind, decidedBy: low.rows[0].decidedBy,
-            needsReview: low.rows[0].needsReview, warning: nil))
+            needsReview: low.rows[0].needsReview, resolution: nil, warning: nil))
 
         let high = await RelationKindJev.apply(
             result, decider: FakeRelationKindDecider(selected: relationKindSubsidiary, probability: 0.97),
@@ -212,6 +212,34 @@ private func rows(_ result: CompanyRelationsExtractor.Result, section: String) -
         let group = rows(result, section: relationSectionAffiliatedEntities)
         #expect(group.first { $0.nameRaw == "トヨタ モータークレジット㈱" }?.kind == relationKindSubsidiary)
         #expect(!group.contains { $0.kind == relationKindUnclassified })
+    }
+}
+
+@Suite struct RelationCustomerRowspanTests {
+    @Test func rowspanCustomerWithPerRowSegmentsIsOneRow() {
+        let html = """
+            <p>（単位：百万円）</p>
+            <table>
+            <tr><td>顧客の名称又は氏名</td><td>売上高</td><td>関連するセグメント名</td></tr>
+            <tr><td rowspan="2">ＮＴＴ東日本㈱</td><td rowspan="2">91,494</td><td>Ａ</td></tr>
+            <tr><td>Ｂ</td></tr>
+            <tr><td>㈱ＮＴＴドコモ</td><td>36,147</td><td>Ａ</td></tr>
+            </table>
+            """
+        let rows = CompanyRelationsExtractor.parseMainCustomers(html: html)
+        #expect(rows.map(\.nameRaw) == ["ＮＴＴ東日本㈱", "㈱ＮＴＴドコモ"])
+        #expect(rows.first?.segmentLabel == "Ａ、Ｂ")
+        #expect(rows.first?.amountYen == 91_494_000_000)
+        #expect(rows.map(\.position) == [0, 1])
+    }
+}
+
+@Suite struct RelationOutsideHeadingTests {
+    @Test func notesBetweenTablesAreNotHeadings() {
+        #expect(CompanyRelationsExtractor.outsideHeadingKind(["(2) 持分法適用関連会社"]) == relationKindAffiliate)
+        #expect(CompanyRelationsExtractor.outsideHeadingKind(["※特定子会社です"]) == nil)
+        #expect(CompanyRelationsExtractor.outsideHeadingKind(["(注) 子会社に該当します"]) == nil)
+        #expect(CompanyRelationsExtractor.outsideHeadingKind(["連結子会社", "＊１：特定子会社に該当します。"]) == relationKindSubsidiary)
     }
 }
 

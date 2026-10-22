@@ -108,6 +108,7 @@ private func relations(_ json: [String: Any]?) -> [[String: Any]] {
             let item = try #require(items.first)
             #expect(item["type"] as? String == "customer")
             #expect(item["basis"] as? String == "disclosed")
+            #expect(item["reasons"] as? [String] == [relationResolutionViaListedParent])
             #expect(item["name_raw"] as? String == "㈱電通")
             #expect(item["amount_yen"] as? Double == 95_235_000_000)
             let company = item["company"] as? [String: Any]
@@ -134,7 +135,9 @@ private func relations(_ json: [String: Any]?) -> [[String: Any]] {
             let item = try #require(relations(json).first)
             #expect(item["type"] as? String == "supplier")
             #expect((item["company"] as? [String: Any])?["code"] as? String == "9409")
-            #expect(item["reasons"] as? [String] == [relationReasonDisclosedByCounterparty])
+            #expect(
+                item["reasons"] as? [String]
+                    == [relationReasonDisclosedByCounterparty, relationResolutionViaListedParent])
             #expect((item["evidence"] as? [String: Any])?["from_code"] as? String == "9409")
         }
     }
@@ -160,7 +163,9 @@ private func relations(_ json: [String: Any]?) -> [[String: Any]] {
             #expect(items.count == 2)
             // 上場（company あり）を先に、自社の行と逆引きは同じ相手でまとめる。
             #expect((items[0]["company"] as? [String: Any])?["code"] as? String == "4812")
-            #expect(items[0]["reasons"] as? [String] == [relationReasonDisclosedByCounterparty])
+            #expect(
+                items[0]["reasons"] as? [String]
+                    == [relationResolutionNameExact, relationReasonDisclosedByCounterparty])
             #expect(items[0]["voting_ratio"] as? Double == 61.8)
             #expect(items[1]["company"] is NSNull)
             #expect(items.allSatisfy { $0["type"] as? String == "group" })
@@ -188,7 +193,9 @@ private func relations(_ json: [String: Any]?) -> [[String: Any]] {
             let (_, json) = try await send(app, "/v1/companies/1111/relations?type=group")
             let items = relations(json)
             #expect(items.map { $0["name_raw"] as? String } == ["株式会社ジェブ決定"])
-            #expect(items.first?["reasons"] as? [String] == [relationReasonJevClassified])
+            #expect(
+                items.first?["reasons"] as? [String]
+                    == [relationReasonJevClassified, relationResolutionUnresolved])
         }
     }
 
@@ -202,6 +209,45 @@ private func relations(_ json: [String: Any]?) -> [[String: Any]] {
             let item = try #require(relations(json).first)
             #expect(item["company"] is NSNull)
             #expect(item["needs_review"] == nil)
+            #expect(item["reasons"] as? [String] == [relationResolutionAmbiguous])
+        }
+    }
+
+    @Test func jevClassifiedRowWithAmbiguousNameIsServed() async throws {
+        try await withRelationsApp { app in
+            try await seed(
+                app, code: "1111", section: relationSectionAffiliatedEntities, kind: relationKindAffiliate,
+                name: "株式会社あいまい", resolution: relationResolutionAmbiguous,
+                decidedBy: relationDecidedByJev, needsReview: true)
+            let (status, json) = try await send(app, "/v1/companies/1111/relations?type=group")
+            #expect(status == .ok)
+            let item = try #require(relations(json).first)
+            #expect(item["company"] is NSNull)
+            #expect(item["reasons"] as? [String] == [relationReasonJevClassified, relationResolutionAmbiguous])
+        }
+    }
+
+    @Test func reverseLookupIsOneItemPerCounterparty() async throws {
+        try await withRelationsApp { app in
+            // 9409 が顧客欄に 4324 本体と 4324 の子会社を両方載せている。
+            try await seed(
+                app, code: "9409", section: relationSectionMainCustomers, kind: relationKindCustomer,
+                position: 0, name: "㈱電通", relatedCode: "4324", resolution: relationResolutionViaListedParent,
+                amount: 95_000_000_000)
+            try await seed(
+                app, code: "9409", section: relationSectionMainCustomers, kind: relationKindCustomer,
+                position: 1, name: "株式会社電通グループ", relatedCode: "4324", amount: 10_000_000_000)
+            try await seed(
+                app, code: "4324", section: relationSectionMajorShareholders, kind: relationKindMajorShareholder,
+                position: 0, name: "テスト", rank: 1, ratio: 0.1)
+            let (_, json) = try await send(app, "/v1/companies/4324/relations?type=supplier")
+            let items = relations(json)
+            #expect(items.count == 1)
+            #expect(items.first?["amount_yen"] as? Double == 95_000_000_000)
+            #expect(
+                items.first?["reasons"] as? [String]
+                    == [relationReasonDisclosedByCounterparty, relationResolutionViaListedParent,
+                        relationResolutionNameExact])
         }
     }
 
@@ -296,13 +342,18 @@ private func relations(_ json: [String: Any]?) -> [[String: Any]] {
             #expect(second?["next_cursor"] is NSNull)
             let (bad, _) = try await send(app, "/v1/companies/1111/relations?cursor=x")
             #expect(bad == .badRequest)
+            // 別の type の要求には使えない。
+            let (otherType, _) = try await send(app, "/v1/companies/1111/relations?type=customer&cursor=\(cursor)")
+            #expect(otherType == .badRequest)
         }
     }
 
     @Test func servabilityIsPureFunction() {
-        #expect(isPubliclyServableRelation(kind: relationKindCustomer, decidedBy: relationDecidedByRule, needsReview: true, warning: nil))
-        #expect(!isPubliclyServableRelation(kind: relationKindAffiliate, decidedBy: relationDecidedByJev, needsReview: true, warning: nil))
-        #expect(!isPubliclyServableRelation(kind: relationKindUnclassified, decidedBy: relationDecidedByRule, needsReview: false, warning: nil))
-        #expect(!isPubliclyServableRelation(kind: relationKindCustomer, decidedBy: relationDecidedByRule, needsReview: false, warning: "overlay_regression"))
+        #expect(isPubliclyServableRelation(kind: relationKindCustomer, decidedBy: relationDecidedByRule, needsReview: true, resolution: relationResolutionAmbiguous, warning: nil))
+        #expect(!isPubliclyServableRelation(kind: relationKindAffiliate, decidedBy: relationDecidedByJev, needsReview: true, resolution: relationResolutionUnresolved, warning: nil))
+        #expect(isPubliclyServableRelation(kind: relationKindAffiliate, decidedBy: relationDecidedByJev, needsReview: true, resolution: relationResolutionAmbiguous, warning: nil))
+        #expect(!isPubliclyServableRelation(kind: relationKindUnclassified, decidedBy: relationDecidedByJev, needsReview: true, resolution: relationResolutionAmbiguous, warning: nil))
+        #expect(!isPubliclyServableRelation(kind: relationKindUnclassified, decidedBy: relationDecidedByRule, needsReview: false, resolution: nil, warning: nil))
+        #expect(!isPubliclyServableRelation(kind: relationKindCustomer, decidedBy: relationDecidedByRule, needsReview: false, resolution: nil, warning: "overlay_regression"))
     }
 }

@@ -657,6 +657,7 @@ public func runFactsIngestCommand(
             let s11 = try await runRelationsIngest(
                 db: app.db, listedCodes: listed, limit: stageLimit, explicitCodes: codes,
                 priorityCodes: priority, cachedDocIDs: cachedDocIDs, forceDocIDs: forceDocIDs,
+                retryJevPending: context.canDecideRelationKinds,
                 directory: await context.relationNameDirectory(), logger: app.logger
             ) { docID, _ in
                 await context.extractCompanyRelations(

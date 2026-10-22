@@ -99,6 +99,14 @@ enum CompanyRelationsExtractor {
                 let segment = table.segmentColumn.map { compactLabel(row[$0]) }.flatMap {
                     $0.isEmpty || isDash($0) ? nil : $0
                 }
+                // 相手先・金額を rowspan で縦に結合し、セグメントだけを行ごとに書いた表は 1 行にまとめる。
+                if let last = result.last, last.nameRaw == name, last.amountYen == amount {
+                    if let segment, !(last.segmentLabel ?? "").split(separator: "、").contains(Substring(segment)) {
+                        result[result.count - 1].segmentLabel =
+                            last.segmentLabel.map { $0 + "、" + segment } ?? segment
+                    }
+                    continue
+                }
                 result.append(
                     CompanyRelationDraft(
                         section: relationSectionMainCustomers, kind: relationKindCustomer,
@@ -348,13 +356,21 @@ enum CompanyRelationsExtractor {
     }
 
     /// 表の外の直前の見出し（短い段落のうち最後に区分語を含むもの）。注記の長文は見ない。
-    private static func outsideHeadingKind(_ paragraphs: [String]) -> String? {
+    /// 「※特定子会社です」「（注）…」のような表と表の間の注記は見出しにしない（続きの表の区分を上書きしない）。
+    static func outsideHeadingKind(_ paragraphs: [String]) -> String? {
         for paragraph in paragraphs.reversed() {
             let compact = compactCell(paragraph)
-            guard !compact.isEmpty, compact.count <= 40 else { continue }
+            guard !compact.isEmpty, compact.count <= 40, !isNoteParagraph(compact) else { continue }
             if let kind = groupKind(from: compact) { return kind }
         }
         return nil
+    }
+
+    private static let notePrefixes = ["※", "*", "＊", "(注", "（注", "注"]
+    private static let sentenceMarkers = ["です", "ます", "である", "。", "当該", "該当"]
+
+    static func isNoteParagraph(_ text: String) -> Bool {
+        notePrefixes.contains { text.hasPrefix($0) } || sentenceMarkers.contains { text.contains($0) }
     }
 
     // MARK: - 提出会社の親会社等の情報

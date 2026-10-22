@@ -14,7 +14,9 @@ private func resolve(
     directory: RelationNameDirectory, subsidiaries: [String: Set<String>] = [:]
 ) -> RelationNameResolution {
     RelationNameResolver.resolve(
-        nameNorm: RelationNameNormalizer.normalize(name), kind: kind, ownCode: ownCode,
+        nameNorm: RelationNameNormalizer.normalize(
+            name, stripsTrailingParenthesis: kind == relationKindMajorShareholder),
+        kind: kind, ownCode: ownCode,
         directory: directory, subsidiaryParents: { subsidiaries[$0] ?? [] })
 }
 
@@ -27,6 +29,7 @@ private func resolve(
         #expect(RelationNameNormalizer.normalize("ＴＯＰＰＡＮホールディングス株式会社") == "TOPPANホールディングス")
         #expect(RelationNameNormalizer.normalize("DAISHINKU CORP.") == "DAISHINKU")
         #expect(RelationNameNormalizer.normalize("株式会社電通グループ 及びそのグループ会社") == "電通グループ")
+        #expect(RelationNameNormalizer.normalize("ＮＴＴ東日本㈱ （旧 東日本電信電話㈱）") == "NTT東日本")
         #expect(RelationNameNormalizer.normalize("Largan Precision Co.,Ltd.") == "LARGANPRECISION")
     }
 
@@ -91,6 +94,45 @@ private func resolve(
             #expect(result.relatedCode == nil)
             #expect(result.resolution != relationResolutionViaListedParent)
         }
+    }
+
+    @Test func countryParenthesisIsKeptSoForeignSubsidiaryIsNotLinkedToAnotherListedCompany() async {
+        let dir = await directory()
+        #expect(RelationNameNormalizer.normalize("TOYOTA MOTOR (CHINA) CO., LTD.") == "TOYOTAMOTOR(CHINA)")
+        let customer = resolve("TOYOTA MOTOR (CHINA) CO., LTD.", ownCode: "6201", directory: dir)
+        #expect(customer.relatedCode == nil)
+        let subsidiary = resolve(
+            "Toyota Tsusho (Thailand) Co., Ltd.", kind: relationKindSubsidiary, ownCode: "7203", directory: dir)
+        #expect(subsidiary.relatedCode == nil)
+    }
+
+    @Test func majorShareholderNomineeParenthesisIsStripped() async {
+        let dir = await directory()
+        #expect(
+            RelationNameNormalizer.normalize("株式会社大真空（退職給付信託口）", stripsTrailingParenthesis: true)
+                == "大真空")
+        let result = resolve("株式会社大真空（退職給付信託口）", kind: relationKindMajorShareholder, ownCode: "6384", directory: dir)
+        #expect(result.relatedCode == "6962")
+    }
+
+    @Test func parentRowIsNotLinkedViaSubsidiaryIndex() async {
+        let dir = await directory()
+        let result = resolve(
+            "㈱電通", kind: relationKindParent, ownCode: "1234", directory: dir, subsidiaries: ["電通": ["4324"]])
+        #expect(result.relatedCode == nil)
+    }
+
+    @Test func fingerprintChangesWithDirectoryContent() {
+        let a = RelationNameDirectory(filers: [
+            EdinetFilerName(edinetCode: "E1", name: "株式会社A", nameEn: "", listedCode: nil)
+        ])
+        let b = RelationNameDirectory(filers: [
+            EdinetFilerName(edinetCode: "E1", name: "株式会社A", nameEn: "", listedCode: "1111")
+        ])
+        #expect(a.fingerprint != b.fingerprint)
+        #expect(a.fingerprint == RelationNameDirectory(filers: [
+            EdinetFilerName(edinetCode: "E1", name: "株式会社A", nameEn: "", listedCode: nil)
+        ]).fingerprint)
     }
 
     @Test func multipleParentsAreAmbiguous() async {

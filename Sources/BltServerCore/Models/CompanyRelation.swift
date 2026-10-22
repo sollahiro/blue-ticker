@@ -64,6 +64,10 @@ final class CompanyRelation: Model, @unchecked Sendable {
     @OptionalField(key: "resolution")
     var resolution: String?
 
+    /// 解決したときの名簿の指紋（`RelationNameDirectory.fingerprint`）。今の名簿とずれた行は解き直す。
+    @OptionalField(key: "resolver_key")
+    var resolverKey: String?
+
     @Field(key: "needs_review")
     var needsReview: Bool
 
@@ -127,12 +131,13 @@ final class CompanyRelation: Model, @unchecked Sendable {
         self.kind = draft.kind
         self.position = draft.position
         self.nameRaw = draft.nameRaw
-        self.nameNorm = RelationNameNormalizer.normalize(draft.nameRaw)
+        self.nameNorm = relationNameNorm(nameRaw: draft.nameRaw, kind: draft.kind)
         self.amountYen = draft.amountYen
         self.segmentLabel = draft.segmentLabel
         self.votingRatio = draft.votingRatio
         self.relatedCode = nil
         self.resolution = nil
+        self.resolverKey = nil
         self.needsReview = draft.needsReview
         self.decidedBy = draft.decidedBy
         self.shares = draft.shares
@@ -147,4 +152,9 @@ final class CompanyRelation: Model, @unchecked Sendable {
         self.warning = warning
         self.cacheVersion = cacheVersion
     }
+}
+
+/// 格納行の `name_norm`。大株主だけ末尾の名義表記の括弧を外す。
+func relationNameNorm(nameRaw: String, kind: String) -> String {
+    RelationNameNormalizer.normalize(nameRaw, stripsTrailingParenthesis: kind == relationKindMajorShareholder)
 }

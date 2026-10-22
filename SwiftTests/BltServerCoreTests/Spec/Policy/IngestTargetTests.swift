@@ -8,7 +8,8 @@ import Testing
 struct IngestTargetTests {
     @Test("未指定は全対象")
     func nilSelectsAll() {
-        #expect(parseIngestTargets(nil) == Set(IngestTarget.allCases))
+        #expect(parseIngestTargets(nil) == Set(IngestTarget.allCases).subtracting([.relations]))
+        #expect(parseIngestTargets(nil)?.contains(.relations) == false)
     }
 
     @Test("単一対象を選択")
