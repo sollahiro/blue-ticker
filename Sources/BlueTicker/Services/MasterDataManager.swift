@@ -41,6 +41,8 @@ func resolveEdinetCSVWriteURL(
 actor MasterDataManager {
     private var stocks: [MasterStock] = []
     private var codeIndex: [String: MasterStock] = [:]
+    /// 証券コードの無い行も含む全 EDINET 提出者（関係の名前解決用）。
+    private var filers: [EdinetFilerName] = []
     private var isLoaded = false
 
     func loadIfNeeded() async {
@@ -127,6 +129,12 @@ actor MasterDataManager {
         return edinet.isEmpty ? nil : edinet
     }
 
+    /// 関係の名前解決に使う全 EDINET 提出者（上場・非上場、証券コードの無い行を含む）。
+    func filerNames() async -> [EdinetFilerName] {
+        await loadIfNeeded()
+        return filers
+    }
+
     // MARK: - Private
 
     private func loadCSV(from url: URL) async {
@@ -169,13 +177,21 @@ actor MasterDataManager {
         let locationIdx = normalizedCols.firstIndex(of: normalizeHeaderName("所在地"))
         let filerTypeIdx = normalizedCols.firstIndex(of: normalizeHeaderName("提出者種別"))
         let edinetIdx = normalizedCols.firstIndex(of: normalizeHeaderName("ＥＤＩＮＥＴコード"))
+        let nameEnIdx = normalizedCols.firstIndex(of: normalizeHeaderName("提出者名（英字）"))
 
         var loaded: [MasterStock] = []
         var index: [String: MasterStock] = [:]
+        var allFilers: [EdinetFilerName] = []
 
         for line in lines {
             let fields = parseCSVRow(line)
             guard fields.count > max(codeIdx, nameIdx) else { continue }
+            if let filer = edinetFilerName(
+                fields: fields, nameIdx: nameIdx, nameEnIdx: nameEnIdx, codeIdx: codeIdx,
+                listingIdx: listingIdx, edinetIdx: edinetIdx)
+            {
+                allFilers.append(filer)
+            }
             // EDINET証券コードは5桁（4桁TSEコード + "0"）。ユーザー向けは末尾を除いた4桁。
             // 00000 は未割当なので listedTickerCode が落とす。
             let secCode = normalizeSecurityCode(fields[codeIdx])
@@ -232,7 +248,26 @@ actor MasterDataManager {
         }
         self.stocks = loaded
         self.codeIndex = index
+        self.filers = allFilers
         self.isLoaded = true
+    }
+
+    private func edinetFilerName(
+        fields: [String], nameIdx: Int, nameEnIdx: Int?, codeIdx: Int, listingIdx: Int?,
+        edinetIdx: Int?
+    ) -> EdinetFilerName? {
+        func field(_ idx: Int?) -> String {
+            guard let idx, idx < fields.count else { return "" }
+            return fields[idx].trimmingCharacters(in: .whitespacesAndNewlines)
+                .trimmingCharacters(in: CharacterSet(charactersIn: "\""))
+        }
+        let name = field(nameIdx)
+        guard !name.isEmpty else { return nil }
+        let listed = field(listingIdx) == "上場"
+        let code = listedTickerCode(fromSecCode: normalizeSecurityCode(field(codeIdx)))
+        return EdinetFilerName(
+            edinetCode: field(edinetIdx).uppercased(), name: name, nameEn: field(nameEnIdx),
+            listedCode: listed ? code : nil)
     }
 
     private func normalizeForSearch(_ name: String) -> String {
@@ -271,6 +306,16 @@ let masterDataManager = MasterDataManager()
 /// 上場・国内法人の EDINETコード → 5 桁証券コード。BltServerCore の候補選定から使う。
 public func listedSecCodeByEdinetCode() async -> [String: String] {
     await masterDataManager.listedSecCodeByEdinetCode()
+}
+
+/// 関係の名前解決用の全 EDINET 提出者。
+public func edinetFilerNames() async -> [EdinetFilerName] {
+    await masterDataManager.filerNames()
+}
+
+/// 上場企業の 4 桁コード → EDINET 提出者名（応答の `company.name`）。未収録は nil。
+public func listedCompanyName(forCode code: String) async -> String? {
+    await masterDataManager.getByCode(code)?.coName
 }
 
 /// 4 桁上場コードの EDINET 提出者コード。未収録は nil。
