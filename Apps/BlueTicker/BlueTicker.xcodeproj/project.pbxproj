@@ -26,6 +26,7 @@
 		AA0000000000000000000017 /* SummaryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000017 /* SummaryView.swift */; };
 		AA0000000000000000000018 /* BreakdownView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000018 /* BreakdownView.swift */; };
 		AA0000000000000000000019 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000019 /* Assets.xcassets */; };
+		AA0000000000000000000050 /* AppIcon.icon in Resources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000050 /* AppIcon.icon */; };
 		AA0000000000000000000021 /* VersionMarkFooter.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000021 /* VersionMarkFooter.swift */; };
 		AA0000000000000000000024 /* ResponseCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000024 /* ResponseCache.swift */; };
 		AA0000000000000000000025 /* HAPISConsumerModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000025 /* HAPISConsumerModels.swift */; };
@@ -64,6 +65,7 @@
 		BB0000000000000000000017 /* SummaryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SummaryView.swift; sourceTree = "<group>"; };
 		BB0000000000000000000018 /* BreakdownView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BreakdownView.swift; sourceTree = "<group>"; };
 		BB0000000000000000000019 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		BB0000000000000000000050 /* AppIcon.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = AppIcon.icon; sourceTree = "<group>"; };
 		BB0000000000000000000020 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		BB0000000000000000000021 /* VersionMarkFooter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VersionMarkFooter.swift; sourceTree = "<group>"; };
 		BB0000000000000000000024 /* ResponseCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResponseCache.swift; sourceTree = "<group>"; };
@@ -118,6 +120,7 @@
 				DD0000000000000000000005 /* Models */,
 				DD0000000000000000000006 /* Views */,
 				BB0000000000000000000019 /* Assets.xcassets */,
+				BB0000000000000000000050 /* AppIcon.icon */,
 				BB0000000000000000000020 /* Info.plist */,
 				BB0000000000000000000038 /* Info-Release.plist */,
 				BB0000000000000000000042 /* InfoPlist.xcstrings */,
@@ -293,6 +296,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				AA0000000000000000000019 /* Assets.xcassets in Resources */,
+				AA0000000000000000000050 /* AppIcon.icon in Resources */,
 				AA0000000000000000000037 /* PrivacyInfo.xcprivacy in Resources */,
 				AA0000000000000000000042 /* InfoPlist.xcstrings in Resources */,
 			);
