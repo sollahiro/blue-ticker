@@ -8,7 +8,7 @@
   - `segment`: セグメント情報の報告セグメント表 / XBRL ReportableSegment。行に `segment_basis`（`business` / `geographic`）。全社・調整は reconciling。下流の従業員・設備投資・セグメント利益の結合キー。
   - `product_service`: 関連情報「製品及びサービスごとの情報」、または収益の分解の製品表。報告セグメント facts からは作らない。表が無ければ空。
   - `geography`: 関連情報「地域ごとの情報」。報告セグメントが地域軸でもコピーしない。
-- 関連情報が「セグメント情報に同様の情報を開示しているため省略」なら `same_as: segment`（値は複製しない）。両方開示されていれば（同一でも別でも）独立に残す。
+- 関連情報が「セグメント情報に同様の情報を開示しているため省略」なら `same_as: segment`（値は複製しない）。報告セグメントが地域軸で、関連情報に売上の地域表が無いときも同じ（IFRS「地域に関する情報」が米国の重要性開示と非流動資産表だけの電通型）。両方開示されていれば（同一でも別でも）独立に残す。
 - 開示パターン（XBRL 信号が先。曖昧なときだけ注記散文を Jev。数値は返させない）: `multiple_segments` / `single_segment` / `omitted_dominant_90pct` / `omitted_same_as_segment`（関連情報軸） / `not_disclosed`。根拠文は監査に残す。
 - 単一セグメントは「記載を省略」に依存しない。専用タグまたは「単一の事業セグメントから構成」で足りる。表が無く `single_segment` なら報告セグメント1行（member / 本文の事業名）に連結売上。
 - `omitted_dominant_90pct` は単一セグメントではない。「○○事業の売上高、セグメント利益及びセグメント資産の金額がいずれも全セグメントの90%を超えるため、記載を省略」。`segment` は支配的事業の1行に連結売上、`disclosure_basis=dominant_90pct`。従業員表の区分が合わなければ `employees_join=unavailable`（無理に結合しない）。

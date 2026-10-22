@@ -52,6 +52,8 @@ struct SegmentNotePatternSignals: Equatable, Sendable {
     var hasDedicatedSingleSegmentTag: Bool
     var hasReportableSegmentTable: Bool
     var hasRelatedInfoTable: Bool
+    /// 報告セグメント売上 member がすべて地域名（電通型 Japan/Americas/EMEA/APAC）。
+    var reportableMembersAreGeographic: Bool = false
     var prose: [String]
 }
 
@@ -92,8 +94,16 @@ enum SegmentNotePatternClassifier {
         axis: SegmentNotePatternAxis, signals: SegmentNotePatternSignals
     ) -> SegmentNotePatternOutcome? {
         switch axis {
-        case .productService, .geography:
+        case .productService:
             if signals.hasRelatedInfoTable { return nil }
+            return nil
+        case .geography:
+            if signals.hasRelatedInfoTable { return nil }
+            // 関連情報に売上の地域表が無く、報告セグメント自体が地域軸なら
+            // 公開 geography は値のコピーではなく same_as: segment（電通 4324）。
+            if signals.reportableMembersAreGeographic, signals.reportableMemberCount >= 2 {
+                return .deterministic(.omittedSameAsSegment)
+            }
             return nil
         case .segment:
             if signals.reportableMemberCount >= 2 {

@@ -109,6 +109,43 @@ import Testing
         #expect(outcome.evidenceSentence == sameAsSegment)
     }
 
+    @Test func geographicReportableMembersWithoutGeographyTableAreSameAsSegment() async {
+        let decider = FakeSegmentNotePatternDecider(selected: "not_disclosed")
+        let outcome = await SegmentNotePatternClassifier.classify(
+            axis: .geography,
+            signals: SegmentNotePatternSignals(
+                reportableMemberCount: 4, hasDedicatedSingleSegmentTag: false,
+                hasReportableSegmentTable: true, hasRelatedInfoTable: false,
+                reportableMembersAreGeographic: true, prose: []),
+            docID: "synthetic-geographic-segments",
+            decider: decider)
+        #expect(outcome.classification == .omittedSameAsSegment)
+        #expect(outcome.source == SegmentNotePatternClassifier.deterministicSource)
+        #expect(decider.callCount() == 0)
+    }
+
+    @Test func businessMembersWithoutGeographyTableAreNotDeterministicSameAs() async {
+        let outcome = await SegmentNotePatternClassifier.classify(
+            axis: .geography,
+            signals: SegmentNotePatternSignals(
+                reportableMemberCount: 3, hasDedicatedSingleSegmentTag: false,
+                hasReportableSegmentTable: true, hasRelatedInfoTable: false,
+                reportableMembersAreGeographic: false, prose: []),
+            decider: nil)
+        #expect(outcome.classification != .omittedSameAsSegment)
+    }
+
+    @Test func geographyTablePresenceBlocksDeterministicSameAs() async {
+        let outcome = await SegmentNotePatternClassifier.classify(
+            axis: .geography,
+            signals: SegmentNotePatternSignals(
+                reportableMemberCount: 4, hasDedicatedSingleSegmentTag: false,
+                hasReportableSegmentTable: true, hasRelatedInfoTable: true,
+                reportableMembersAreGeographic: true, prose: []),
+            decider: nil)
+        #expect(outcome.classification != .omittedSameAsSegment)
+    }
+
     @Test func dedicatedTagWinsOverStrayRelatedInfoTables() async {
         let outcome = await SegmentNotePatternClassifier.classify(
             axis: .segment,

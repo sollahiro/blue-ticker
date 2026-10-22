@@ -546,5 +546,85 @@ import Foundation
         })
         #expect(!productLabels.contains(where: { $0.contains("G&NS") }))
     }
+
+    /// 電通 4324 S100XS0O: 報告セグメントは日本 / Americas / EMEA / APAC。
+    /// IFRS `InformationAboutGeographicalAreasIFRSTextBlock`「(4) 地域に関する情報」は
+    /// ①外部顧客からの売上収益が米国の重要性開示のみ、②非流動資産表。売上の地域表は無い。
+    /// 抽出は not_found。公開 geography は same_as: segment。
+    // source: code=4324 fy_end=2025-12-31 doc_id=S100XS0O page=0 field=geography
+    @Test func dentsuS100XS0OGeographyIsSameAsGeographicSegments() async throws {
+        guard await Self.ensureAvailable("S100XS0O") else { return }
+        let dir = Self.xbrlDir("S100XS0O")
+        let geography = BreakdownExtractor.extractGeographyInfo(xbrlDir: dir)
+        #expect(geography.method == "not_found")
+        #expect(geography.tables.isEmpty)
+        #expect(geography.facts.isEmpty)
+
+        let reportable = BreakdownExtractor.extractReportableSegmentInfo(xbrlDir: dir)
+        let members = SegmentBreakdownResolver.currentSegmentMembers(in: reportable.facts)
+        #expect(BreakdownNormalizer.allMembersAreGeography(members))
+        let pattern = await SegmentNotePatternClassifier.classify(
+            axis: .geography,
+            signals: SegmentNotePatternSignals(
+                reportableMemberCount: members.count,
+                hasDedicatedSingleSegmentTag: false,
+                hasReportableSegmentTable: !reportable.tables.isEmpty,
+                hasRelatedInfoTable: false,
+                reportableMembersAreGeographic: true,
+                prose: BreakdownExtractor.segmentNotePatternProse(xbrlDir: dir)),
+            docID: "S100XS0O",
+            decider: nil)
+        #expect(pattern.classification == .omittedSameAsSegment)
+        #expect(pattern.source == SegmentNotePatternClassifier.deterministicSource)
+        let sameAs = SegmentBreakdownResolver.sameAsSnapshot(axis: breakdownAxisGeography)
+        #expect(sameAs.sameAs == breakdownAxisSegment)
+        #expect(sameAs.rows.isEmpty)
+        #expect(sameAs.sourceKind == breakdownSourceSameAs)
+
+        let sales = 1_435_245_000_000.0
+        let (segment, source, _) = await SegmentBreakdownResolver.resolve(
+            reportable: reportable, consolidatedSales: sales,
+            labelsByTag: XBRLUtils.loadLabelsByTag(in: dir))
+        #expect(source == .xbrlFacts)
+        let snap = try #require(segment)
+        #expect(snap.axis == breakdownAxisSegment)
+        #expect(snap.denominator == sales)
+        #expect(snap.denominatorTag == "Revenue2IFRS")
+        let expected: [(needle: String, amount: Double)] = [
+            ("Japan", 608_310_000_000),
+            ("Americas", 369_666_000_000),
+            ("EMEA", 338_401_000_000),
+            ("APAC", 112_199_000_000),
+        ]
+        let segmentRows = snap.rows.filter { $0.rowKind == "segment" }
+        #expect(segmentRows.count == 4)
+        for (needle, amount) in expected {
+            let row = try #require(segmentRows.first { row in
+                row.labelRaw.contains(needle) || (row.label ?? "").contains(needle)
+                    || (needle == "Japan" && (row.label ?? "").contains("日本"))
+            })
+            #expect(row.amount == amount)
+            #expect(row.segmentBasis == breakdownSegmentBasisGeographic)
+        }
+
+        let analysisCache = Self.xbrlRoot
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let ctx = BltServerContext(
+            apiKey: ProcessInfo.processInfo.environment["BLT_EDINET_API_KEY"] ?? "test",
+            cacheDir: analysisCache)
+        switch await ctx.resolveGeographyBreakdown(docID: "S100XS0O") {
+        case .resolved(let payload, let geoSource, _, _):
+            #expect(geoSource == breakdownSourceSameAs)
+            #expect(payload.axis == breakdownAxisGeography)
+            #expect(payload.sameAs == breakdownAxisSegment)
+            #expect(payload.rows.isEmpty)
+        case .notApplicable(let reason, _):
+            Issue.record("geography same_as expected, got not_applicable \(reason)")
+        case .failed:
+            Issue.record("geography same_as expected, got failed")
+        }
+    }
 }
 

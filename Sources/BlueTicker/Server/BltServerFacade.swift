@@ -1510,6 +1510,7 @@ extension BltServerContext {
                 hasReportableSegmentTable: !reportable.tables.isEmpty
                     && reportable.tables.contains { !BreakdownExtractor.isProductServiceTable($0) },
                 hasRelatedInfoTable: false,
+                reportableMembersAreGeographic: BreakdownNormalizer.allMembersAreGeography(members),
                 prose: BreakdownExtractor.segmentNotePatternProse(xbrlDir: xbrlDir)
             ),
             docID: docID,

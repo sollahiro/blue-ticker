@@ -1743,7 +1743,8 @@ import Foundation
 
     @Test func geographyDoesNotCopyReportableSegmentFactsWhenMembersAreGeographic() throws {
         // 電通型（S100XS0O）: 報告セグメント member が地域名でも geography へコピーしない。
-        // 地域別は関連情報「地域ごとの情報」/ GeographicArea facts だけ。
+        // 抽出は not_found。公開 geography の same_as: segment は resolver / 分類側
+        // （RealXbrlBreakdownResolverTests.dentsuS100XS0OGeographyIsSameAsGeographicSegments）。
         func segmentContext(id: String, member: String) -> String {
             """
             <xbrli:context id="\(id)">
