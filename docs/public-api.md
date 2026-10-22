@@ -19,6 +19,26 @@
 
 詳細は `workers/feed-rss/README.md`。
 
+## 取引先・関係会社（`GET /v1/companies/{code}/relations`）
+
+有報の記載だけを返す（`basis` は常に `disclosed`）。推定・競合（`competitor`）は持たない。MCP には出さない。
+
+- `type`（カンマ区切り。省略時は全種類）: `customer`（主要な顧客）· `supplier`（他社の主要な顧客欄に自社が載っている＝逆引き）· `group`（関係会社。`parent` / `subsidiary` / `affiliate` で絞れる。`other_related` は `group` のみ）· `investee`（政策保有株式。逆引きはしない）· `major_shareholder`（大株主）· `major_shareholder_of`（他社の大株主欄に自社が載っている＝逆引き）
+- 逆引きは上場企業どうしだけ。相手側の有報の行で、`reasons` に `disclosed_by_counterparty`、`evidence.from_code` は相手のコード
+- 応答: `{code, relations[], omitted[], next_cursor}`。要素は `type, kind, basis, company{code,name}|null, name_raw, reasons[], amount_yen, segment_label, voting_ratio, investee{shares,book_value_yen,purpose,is_deemed,holder}|null, major_shareholder{rank,shares,ratio}|null, evidence{doc_id,section,fy_end,from_code}`。nullable のキーも必ず出す
+- `company` は上場企業に名寄せできたときだけ（決定論。候補が複数なら null で `name_raw` のみ）。Jev が区分を決めた行は `reasons` に `jev_classified`
+- `reasons` には名前解決の結果も入る: `name_exact`（EDINET 提出者名の一致）· `name_en_exact`（英字名の一致）· `via_listed_parent`（相手は非上場で、ある上場会社の連結子会社として載っている名前。`company` はその親会社。例: 9409 の顧客「㈱電通」→ 4324）· `edinet_unlisted`（非上場の EDINET 提出者）· `ambiguous`（候補が複数。`company: null`）· `unresolved`。`via_listed_parent` は顧客・関連会社の行だけ（出資先・大株主・親会社には使わない）
+- 何が載るか（有報の記載の範囲そのもの）:
+  - `customer`: 売上高の 10% 以上を占める相手先だけ（それ未満の取引先は載らない）
+  - `investee`: 政策保有株式（純投資目的以外）だけ。純投資の保有は載らない
+  - `major_shareholder`: 名義株主の上位（信託口・外国名義・証券金融会社などを含む）。実質株主ではない。個人名も記載どおり返す
+- 各行は各社の最新有報 1 件の記載で、時点（`evidence.fy_end`）は会社ごとに揃わない。逆引きは相手側の有報の時点
+- 単位: `amount_yen` は円。`voting_ratio` は %（記載どおり。66.16 = 66.16%）。`major_shareholder.ratio` は割合（XBRL の値。0.128 = 12.8%）
+- `omitted`: 提出会社が記載を省略した type（例: 売上高の 10% 以上の相手先がない → `customer`）。「省略」と「未抽出」を区別する
+- 出さないもの: Jev の `needs_review` 行、訂正 overlay 回帰の書類の行、大株主の住所、`needs_review` キー
+- `limit`（既定 200・上限 1000）と `cursor`（前の応答の `next_cursor`。不透明な文字列で、同じ `type` の要求にだけ使える）
+- 未知の `type`・不正なコード・不正な `cursor` は 400、公開できる行が無い（未取り込み含む）は 404、DB 非接続は 503
+
 ## 定義
 
 素性不明の第三者が自分のアプリに組み込める API へ移ること。3軸:

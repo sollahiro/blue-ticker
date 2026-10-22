@@ -8,7 +8,8 @@ import Testing
 struct IngestTargetTests {
     @Test("未指定は全対象")
     func nilSelectsAll() {
-        #expect(parseIngestTargets(nil) == Set(IngestTarget.allCases))
+        #expect(parseIngestTargets(nil) == Set(IngestTarget.allCases).subtracting([.relations]))
+        #expect(parseIngestTargets(nil)?.contains(.relations) == false)
     }
 
     @Test("単一対象を選択")
@@ -20,6 +21,7 @@ struct IngestTargetTests {
         #expect(parseIngestTargets("statement-notes") == [.notes])
         #expect(parseIngestTargets("icons") == [.icons])
         #expect(parseIngestTargets("overviews") == [.overviews])
+        #expect(parseIngestTargets("relations") == [.relations])
     }
 
     @Test("複数対象をカンマ区切りで選択")
@@ -27,7 +29,7 @@ struct IngestTargetTests {
         #expect(parseIngestTargets("financials,filing-sections") == [.financials, .filingSections])
         #expect(
             parseIngestTargets(
-                "financials,filing-sections,breakdowns,statements,statement-notes,icons,overviews")
+                "financials,filing-sections,breakdowns,statements,statement-notes,icons,overviews,relations")
                 == Set(IngestTarget.allCases))
     }
 

@@ -17,6 +17,11 @@ import Testing
         #expect(ids.contains("get-feed-trend"))
         let overview = apiSkillsCatalog().first { $0.id == "get-overview" }
         #expect(overview?.mcpTool == nil)
+        // 取引先・関係会社は REST だけ（MCP には出さない）。
+        let relations = apiSkillsCatalog().first { $0.id == "get-relations" }
+        #expect(relations?.path == "/v1/companies/{code}/relations")
+        #expect(relations?.mcpTool == nil)
+        #expect(!apiSkillsCatalog().compactMap(\.mcpTool).contains { $0.contains("relation") })
     }
 
     @Test func mcpToolNamesMatchExpectedSet() {

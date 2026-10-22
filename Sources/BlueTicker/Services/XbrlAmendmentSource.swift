@@ -182,8 +182,10 @@ func xbrlSearchRoots(in dir: URL) -> [URL] {
 }
 
 /// `contextRef` が行メンバー表（`Row{N}Member`）か。政策保有株式・配当決議など。
+/// 大株主の状況（`No{N}MajorShareholdersMember`）も同じ扱い（訂正にその表があれば行ごと置換）。
 public func isRowMemberContext(_ contextRef: String) -> Bool {
-    contextRef.range(of: #"Row[0-9]+Member"#, options: .regularExpression) != nil
+    contextRef.range(of: #"Row[0-9]+Member|No[0-9]+MajorShareholdersMember"#, options: .regularExpression)
+        != nil
 }
 
 /// 訂正 fact を原本へ重ねる。キーは tag + contextRef。

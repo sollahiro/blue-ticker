@@ -120,6 +120,7 @@ flowchart LR
 | `GET /v1/companies?q=` | 企業検索（JP / EDINET） |
 | `GET /v1/companies/{code}/filings` | 提出書類一覧 |
 | `GET /v1/companies/{code}/overview` | 短い会社説明（格納済み。MCP には出さない） |
+| `GET /v1/companies/{code}/relations?type=` | 取引先・関係会社（有報の記載のみ。顧客・関係会社・出資先・大株主と、他社の有報からの逆引き＝仕入先・親会社・大株主になっている会社。格納済み。MCP には出さない。`docs/public-api.md`） |
 | `GET /v1/companies/{code}/financials` | Summary（床未満・未格納 404）。`?fields=` で `years[]` の公開キーを射影（不明キー 400） |
 | `GET /v1/companies/{code}/waterfall` | Waterfall |
 | `GET /v1/companies/{code}/filing-content` | セクション本文 |
@@ -166,10 +167,11 @@ Neon 接続・R2 秘密・LLM キーの正本は `.env.example`。プロセス�
 | financials | `company_financials` |
 | filing-sections / breakdowns / statements / notes | 各テーブル（書類単位） |
 | overview | `company_overviews`（会社1社=1行。由来 doc_id は列。ingest stage は `overviews`。公開 REST は `GET /v1/companies/{code}/overview`。read 床は `overview-v1`。Filing `texts` には載せない） |
+| relations | `company_relations`（書類 1 件の相手 1 件 = 1 行。会社ごとに最新有報 1 件の行だけを持ち、逆引き用の行は作らない。ingest stage は `relations`。区分は決定論（表内の見出し行 → 名前の接頭辞 → 表外の見出し）で、決まらない表だけ Jev（閾値 0.9。未満は `needs_review`）。名前解決は決定論（EDINET コードリストの提出者名・英字名 → 上場会社の子会社索引。索引は顧客・関連会社の行だけに使う）。記載の省略は `kind = none` の状態行で未抽出と区別する。大株主の住所は保存のみ） |
 
 ## キャッシュとデプロイ
 
-ローカルキャッシュは `external/` と `derived/`（`.agents/rules/caching.md`）。本番: Fly compute + Neon DB。生 XBRL の中央コピーは R2（ingest 時 L2。配信は読まない）。書類単位 ingest（filing-sections / breakdowns / statements / notes）は各社の最新有報を先に回し、同一年次内では日経225のあと、ローカルに展開済みの XBRL を先に回す（未キャッシュは R2、それも無ければ EDINET ダウンロード）。同一展開 dir の数値 fact 再収集はプロセス内 FIFO（ラベルキャッシュと同容量）。icons / overviews は最新1件、financials は会社単位のためこの年次並びの対象外。
+ローカルキャッシュは `external/` と `derived/`（`.agents/rules/caching.md`）。本番: Fly compute + Neon DB。生 XBRL の中央コピーは R2（ingest 時 L2。配信は読まない）。書類単位 ingest（filing-sections / breakdowns / statements / notes）は各社の最新有報を先に回し、同一年次内では日経225のあと、ローカルに展開済みの XBRL を先に回す（未キャッシュは R2、それも無ければ EDINET ダウンロード）。同一展開 dir の数値 fact 再収集はプロセス内 FIFO（ラベルキャッシュと同容量）。icons / overviews / relations は最新1件、financials は会社単位のためこの年次並びの対象外。
 
 ## コンテナ責務
 
