@@ -9,9 +9,28 @@
 import Foundation
 
 /// company_breakdowns.axis の公開定数（BltServerCore / REST / MCP / ingest で共用）。
-/// 製品・サービス別（報告セグメントの製品的内訳を含む）。旧公開キー `business` は廃止。
+/// 報告セグメント（セグメント情報の報告セグメント表 / XBRL ReportableSegment）。
+/// 製品表・地域別関連情報からは作らない。従業員・設備投資・セグメント利益の結合キー。
+public let breakdownAxisSegment = "segment"
+/// 関連情報「製品及びサービスごとの情報」、または収益の分解の製品表。
+/// 報告セグメント facts からは作らない。旧公開キー `business` は廃止。
 public let breakdownAxisProductService = "product_service"
+/// 関連情報「地域ごとの情報」。報告セグメントが地域軸でもコピーしない。
 public let breakdownAxisGeography = "geography"
+/// 報告セグメント行の区分（事業 / 所在地）。`segment` 軸の segment 行に付ける。
+public let breakdownSegmentBasisBusiness = "business"
+public let breakdownSegmentBasisGeographic = "geographic"
+public let breakdownRowSegmentBasisKey = "segment_basis"
+/// 90%省略で立てた1行。正確なセグメント合計ではない。
+public let breakdownDisclosureBasisDominant90pct = "dominant_90pct"
+public let breakdownDisclosureBasisKey = "disclosure_basis"
+/// 関連情報が「セグメント情報に同様の情報を開示しているため省略」のときの参照。
+/// 値は複製しない。公開 JSON のキー。
+public let breakdownSameAsKey = "same_as"
+/// 従業員表の区分が segment 行と一致せず結合できない。
+public let breakdownEmployeesJoinUnavailable = "unavailable"
+public let breakdownEmployeesJoinKey = "employees_join"
+public let breakdownWarningEmployeesJoinUnavailable = "employees_join_unavailable"
 /// 従業員数のセグメント別内訳軸（2026-08-01追加）。決定論のみ（LLMフォールバックなし）。
 public let breakdownAxisEmployees = "employees"
 /// 研究開発費（全社合計）のセグメント別内訳軸（2026-08-01追加）。
@@ -144,7 +163,8 @@ public let breakdownSegmentMetricAxes = [
 
 /// `company_breakdowns.axis` として実装済みの軸か。
 public func isSupportedBreakdownAxis(_ axis: String) -> Bool {
-    axis == breakdownAxisProductService || axis == breakdownAxisGeography
+    axis == breakdownAxisSegment
+        || axis == breakdownAxisProductService || axis == breakdownAxisGeography
         || axis == breakdownAxisInterestBearingDebt
         || breakdownAssetCategoryAxes.contains(axis)
         || breakdownSegmentMetricAxes.contains(axis)
@@ -163,12 +183,17 @@ public func isSupportedBreakdownAxis(_ axis: String) -> Bool {
 /// Jev 列選択）は `breakdown-business-vN` 側の履歴であり、本スタンプの N ではない。
 /// v1: 公開軸キー `business` → `product_service` のハードカットオーバー。応答・主キー・
 /// payload.axis の契約が変わる。金額の再計算はしない（マージ後にキー書き換え）。
-public let productServiceBreakdownCacheVersion = "breakdown-product_service-v1"
+/// v2: 報告セグメント facts / 報告セグメント表をこの軸から外し、関連情報・収益分解の
+/// 製品表だけにする（旧 xbrl_facts 行は segment 軸へ移す）。
+public let productServiceBreakdownCacheVersion = "breakdown-product_service-v2"
+/// 報告セグメント軸。新軸のため v1 から。
+public let segmentBreakdownCacheVersion = "breakdown-segment-v1"
 /// v11: 単位のみ表を捨てて dedicated contextRef の period を通し、うち列を抽出時に落とす。
 /// v12: うち列ドロップの決定論を精緻化（1段うち豪州、地域コンテキスト、軸ゲート）。
 /// v13: ingest 時に jpcrp 標準 member の日本語ラベルを補完（生 `*Member` 表示の誤表示）。
+/// v14: 報告セグメント facts の geography コピーをやめ、省略は same_as: segment。
 /// v11 のままでは決定論変更後も clean 行が skip される。
-public let geographyBreakdownCacheVersion = "breakdown-geography-v13"
+public let geographyBreakdownCacheVersion = "breakdown-geography-v14"
 /// うち / タグ付き合計列の subtotal 化は targeted `--codes`（対象行削除）で定着。v2 は日経225全件再計算になるため上げない。
 /// v2: ingest 時に jpcrp 標準 member の日本語ラベルを補完（生 `*Member` 表示の誤表示）。
 public let employeesBreakdownCacheVersion = "breakdown-employees-v2"
@@ -197,6 +222,7 @@ public let goodwillAndIntangiblesBreakdownCacheVersion = "breakdown-goodwill-and
 /// 軸に対応する現行 cache_version 文字列。未知の軸は product_service 扱い（安全側に決定的バンプ対象へ）。
 public func breakdownCacheVersion(forAxis axis: String) -> String {
     switch axis {
+    case breakdownAxisSegment: return segmentBreakdownCacheVersion
     case breakdownAxisGeography: return geographyBreakdownCacheVersion
     case breakdownAxisEmployees: return employeesBreakdownCacheVersion
     case breakdownAxisResearchAndDevelopment: return researchAndDevelopmentBreakdownCacheVersion
@@ -218,6 +244,8 @@ public func breakdownCacheVersion(forAxis axis: String) -> String {
 /// `.notFound` は行を作らない方針のため、この文字列が DB に書かれることはない
 /// （欠ける軸は出さない）。
 public let breakdownSourceXbrlFacts = "xbrl_facts"
+/// 関連情報がセグメント情報と同一のため省略。値は持たず `same_as` だけを残す。
+public let breakdownSourceSameAs = "same_as"
 /// 積み上げセグメント損益表の決定論寄せ（`StackedSegmentPnLNormalizer`）。
 public let breakdownSourceStackedSegmentPnL = "stacked_segment_pnl"
 public let breakdownSourceRevenueRecognitionLLM = "revenue_recognition_llm"
@@ -361,7 +389,10 @@ public func isDeterministicBreakdownNotApplicableReason(_ reason: String) -> Boo
 /// breakdown read（REST/MCP）が適用する最低スキーマバージョン番号（軸別 `…-vN` の N）。
 /// **明示指定**。決定論・LLM とも `isServableBreakdown` でこの床を見る（パース不能な
 /// cache_version は非 servable）。不変条件: 各軸の床 ≤ その軸の現行 `…-vN` の N。
+/// product_service は v2 でも床を 1 のまま据え置く。旧 v1 行は再 ingest で v2 に置き換わるまで配信を続ける
+/// （床を上げると既定軸の breakdown が全銘柄で 404 になるため）。
 public let productServiceBreakdownMinServableVersion = 1
+public let segmentBreakdownMinServableVersion = 1
 public let geographyBreakdownMinServableVersion = 1
 public let employeesBreakdownMinServableVersion = 1
 public let researchAndDevelopmentBreakdownMinServableVersion = 1
@@ -380,6 +411,7 @@ public let goodwillAndIntangiblesBreakdownMinServableVersion = 1
 /// 軸に対応する read 床。未知の軸は product_service 床。
 public func breakdownMinServableVersion(forAxis axis: String) -> Int {
     switch axis {
+    case breakdownAxisSegment: return segmentBreakdownMinServableVersion
     case breakdownAxisGeography: return geographyBreakdownMinServableVersion
     case breakdownAxisEmployees: return employeesBreakdownMinServableVersion
     case breakdownAxisResearchAndDevelopment: return researchAndDevelopmentBreakdownMinServableVersion
@@ -399,7 +431,8 @@ public func breakdownMinServableVersion(forAxis axis: String) -> Int {
 /// パース不能なら nil（非 servable 扱い）。
 public func breakdownCacheVersionNumber(_ version: String) -> Int? {
     let prefixes = [
-        "breakdown-product_service-v", "breakdown-business-v", "breakdown-geography-v",
+        "breakdown-product_service-v", "breakdown-business-v", "breakdown-segment-v",
+        "breakdown-geography-v",
         "breakdown-employees-v",
         "breakdown-research-and-development-v", "breakdown-goodwill-v",
         "breakdown-segment-assets-v",
@@ -430,6 +463,7 @@ public func breakdownCacheVersionNumber(_ version: String) -> Int? {
 public func isVersionGatedBreakdownSource(_ source: String) -> Bool {
     source == breakdownSourceXbrlFacts
         || source == breakdownSourceStackedSegmentPnL
+        || source == breakdownSourceSameAs
         || source == breakdownSourceNotApplicable
         || source == breakdownSourceResearchAndDevelopmentProse
         || source == breakdownSourceCapexProse
@@ -478,6 +512,7 @@ public func isPubliclyServableBreakdown(
     if axis == breakdownAxisInterestBearingDebt, needsReview { return false }
     if source == breakdownSourceXbrlFacts
         || source == breakdownSourceStackedSegmentPnL
+        || source == breakdownSourceSameAs
         || source == breakdownSourceNotApplicable
         || source == breakdownSourceResearchAndDevelopmentProse
         || source == breakdownSourceCapexProse
@@ -563,6 +598,10 @@ public struct BreakdownRowPayload: Codable, Sendable, Equatable {
     /// interest_bearing_debt 行の値の出所 XBRL 要素のローカル名（`ibdSourceTagKey`）。
     /// 合計行・コードで足した値・他軸は nil。
     public var sourceTag: String?
+    /// `segment` 軸の行: `business` / `geographic`。他軸は nil。
+    public var segmentBasis: String?
+    /// 90%省略の1行など、正確なセグメント合計ではないときの印。他は nil。
+    public var disclosureBasis: String?
 
     private enum CodingKeys: String, CodingKey {
         case labelRaw, label, amount, profit, rowKind, description
@@ -576,6 +615,8 @@ public struct BreakdownRowPayload: Codable, Sendable, Equatable {
         case debtSource = "debt_source"
         case maturityClass = "maturity_class"
         case sourceTag = "source_tag"
+        case segmentBasis = "segment_basis"
+        case disclosureBasis = "disclosure_basis"
     }
 
     public init(
@@ -586,7 +627,7 @@ public struct BreakdownRowPayload: Codable, Sendable, Equatable {
         opening: Double? = nil, closing: Double? = nil,
         debtSource: String? = nil, maturityClass: String? = nil,
         inTotal: Bool? = nil, excludedReason: String? = nil, pairedRowIndex: Int? = nil,
-        sourceTag: String? = nil
+        sourceTag: String? = nil, segmentBasis: String? = nil, disclosureBasis: String? = nil
     ) {
         self.labelRaw = labelRaw
         self.label = label
@@ -607,6 +648,8 @@ public struct BreakdownRowPayload: Codable, Sendable, Equatable {
         self.debtSource = debtSource
         self.maturityClass = maturityClass
         self.sourceTag = sourceTag
+        self.segmentBasis = segmentBasis
+        self.disclosureBasis = disclosureBasis
         if let categoryGroup {
             self.label = Self.displayLabel(categoryGroup: categoryGroup, category: category)
         }
@@ -639,6 +682,8 @@ public struct BreakdownRowPayload: Codable, Sendable, Equatable {
         debtSource = try container.decodeIfPresent(String.self, forKey: .debtSource)
         maturityClass = try container.decodeIfPresent(String.self, forKey: .maturityClass)
         sourceTag = try container.decodeIfPresent(String.self, forKey: .sourceTag)
+        segmentBasis = try container.decodeIfPresent(String.self, forKey: .segmentBasis)
+        disclosureBasis = try container.decodeIfPresent(String.self, forKey: .disclosureBasis)
         if let categoryGroup {
             label = try container.decodeIfPresent(String.self, forKey: .label)
                 ?? Self.displayLabel(categoryGroup: categoryGroup, category: category)
@@ -671,6 +716,8 @@ public struct BreakdownRowPayload: Codable, Sendable, Equatable {
         try container.encodeIfPresent(debtSource, forKey: .debtSource)
         try container.encodeIfPresent(maturityClass, forKey: .maturityClass)
         try container.encodeIfPresent(sourceTag, forKey: .sourceTag)
+        try container.encodeIfPresent(segmentBasis, forKey: .segmentBasis)
+        try container.encodeIfPresent(disclosureBasis, forKey: .disclosureBasis)
     }
 
     public static func displayLabel(categoryGroup: String, category: String?) -> String {
@@ -688,6 +735,12 @@ public struct BreakdownSnapshotPayload: Codable, Sendable, Equatable {
     public var sourceKind: String
     public var needsReview: Bool
     public var warnings: [String]
+    /// 関連情報がセグメント情報と同一のため省略。値は `segment`。無いときは nil。
+    public var sameAs: String?
+    /// 90%省略の1行など。無いときは nil（通常の報告セグメント表）。
+    public var disclosureBasis: String?
+    /// 従業員結合ができないとき `unavailable`。通常は nil。
+    public var employeesJoin: String?
     /// capex 軸だけ。書類単位のフロー指標。無いときは nil。
     public var flowMetric: String?
     public var segmentAssets: CapexMetricTotalsPayload?
@@ -697,6 +750,7 @@ public struct BreakdownSnapshotPayload: Codable, Sendable, Equatable {
     public init(
         axis: String, denominator: Double, denominatorTag: String, rows: [BreakdownRowPayload],
         sourceKind: String, needsReview: Bool, warnings: [String],
+        sameAs: String? = nil, disclosureBasis: String? = nil, employeesJoin: String? = nil,
         flowMetric: String? = nil, segmentAssets: CapexMetricTotalsPayload? = nil,
         flow: CapexMetricTotalsPayload? = nil,
         capitalExpendituresOverview: CapexMetricTotalsPayload? = nil
@@ -708,6 +762,9 @@ public struct BreakdownSnapshotPayload: Codable, Sendable, Equatable {
         self.sourceKind = sourceKind
         self.needsReview = needsReview
         self.warnings = warnings
+        self.sameAs = sameAs
+        self.disclosureBasis = disclosureBasis
+        self.employeesJoin = employeesJoin
         self.flowMetric = flowMetric
         self.segmentAssets = segmentAssets
         self.flow = flow
@@ -861,6 +918,12 @@ public extension BreakdownRowPayload {
         if let sourceTag {
             object[breakdownRowSourceTagKey] = sourceTag
         }
+        if let segmentBasis {
+            object[breakdownRowSegmentBasisKey] = segmentBasis
+        }
+        if let disclosureBasis {
+            object[breakdownDisclosureBasisKey] = disclosureBasis
+        }
         return object
     }
 
@@ -923,7 +986,7 @@ public extension BreakdownSnapshotPayload {
                 "warnings": warnings,
             ]
         }
-        return [
+        var object: [String: Any] = [
             "axis": axis,
             "denominator": denominator,
             "denominator_tag": denominatorTag,
@@ -932,6 +995,16 @@ public extension BreakdownSnapshotPayload {
             "needs_review": needsReview,
             "warnings": warnings,
         ]
+        if let sameAs {
+            object[breakdownSameAsKey] = sameAs
+        }
+        if let disclosureBasis {
+            object[breakdownDisclosureBasisKey] = disclosureBasis
+        }
+        if let employeesJoin {
+            object[breakdownEmployeesJoinKey] = employeesJoin
+        }
+        return object
     }
 
     /// capex 軸の公開形。単一 `amount` / 単一 `denominator` は出さない。

@@ -32,16 +32,19 @@ import Foundation
     }
 
     /// FY2025-03。格納済み profit は営業利益ブロック（HC 77,635 等）と一致する。
+    // source: code=4901 fy_end=2025-03-31 doc_id=S100W3XJ page=0 field=segment.ヘルスケア.profit
+    // reroute to segment axis, values unchanged, approved by BLT_Tester
     @Test func s100W3XJProfitIsSegmentOperatingProfitNotRD() async throws {
         guard await Self.ensureAvailable("S100W3XJ") else { return }
 
-        let segments = BreakdownExtractor.extractSegmentInfo(xbrlDir: Self.xbrlDir("S100W3XJ"))
+        let segments = BreakdownExtractor.extractReportableSegmentInfo(
+            xbrlDir: Self.xbrlDir("S100W3XJ"))
         #expect(segments.method == "html_table")
         #expect(!segments.tables.isEmpty)
 
         let sales = 3_195_828 * Financial.millionYen
-        let (snapshot, source, audit) = await BusinessBreakdownResolver.resolve(
-            segments: segments, consolidatedSales: sales
+        let (snapshot, source, audit) = await SegmentBreakdownResolver.resolve(
+            reportable: segments, consolidatedSales: sales
         )
 
         #expect(source == .stackedSegmentPnL)
@@ -65,17 +68,19 @@ import Foundation
     }
 
     /// FY2026-03。誤寄せ時は研究開発費（HC 53,346 等）を segment profit に載せる。
+    // source: code=4901 fy_end=2026-03-31 doc_id=S100YIBH page=0 field=segment.ヘルスケア.profit
+    // reroute to segment axis, values unchanged, approved by BLT_Tester
     @Test func s100YIBHProfitIsSegmentOperatingProfitNotRD() async throws {
         guard await Self.ensureAvailable("S100YIBH") else { return }
 
         let dir = Self.xbrlDir("S100YIBH")
-        let segments = BreakdownExtractor.extractSegmentInfo(xbrlDir: dir)
+        let segments = BreakdownExtractor.extractReportableSegmentInfo(xbrlDir: dir)
         #expect(segments.method == "html_table")
         #expect(!segments.tables.isEmpty)
 
         let sales = 3_356_969 * Financial.millionYen
-        let (snapshot, source, audit) = await BusinessBreakdownResolver.resolve(
-            segments: segments, consolidatedSales: sales
+        let (snapshot, source, audit) = await SegmentBreakdownResolver.resolve(
+            reportable: segments, consolidatedSales: sales
         )
 
         #expect(source == .stackedSegmentPnL)

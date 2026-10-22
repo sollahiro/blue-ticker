@@ -3,7 +3,7 @@
 // 2 真の単一セグメント（顧客表だけ）→ single_segment_disclosed のまま
 // 3 空行 LLM は保存せず xbrl_facts へフォールバック（7273）
 // 4 keepTable が組立不能な表でも製品/地域表を残す（3600 / 4324）
-// ネットワークなし。cache_version は新軸系列 breakdown-product_service-v1。
+// ネットワークなし。cache_version は新軸系列 breakdown-product_service-v2 / breakdown-segment-v1。
 
 import Foundation
 import Testing
@@ -99,12 +99,19 @@ import Testing
         ]
         let extracted = ExtractedBreakdown(
             method: "html_table", tables: [emptyMatrix], facts: facts)
+        // source: code=7273 fy_end=2026-03-31 doc_id=S100YLTN page=0 field=segment.xbrl_facts
+        // reroute to segment axis, values unchanged, approved by BLT_Tester
         let (snapshot, source, _) = await BusinessBreakdownResolver.resolve(
             segments: extracted,
             consolidatedSales: 100 * Financial.millionYen,
             segmentInfoDecider: FakeRevenueRecognitionColumnDecider())
-        let snap = try #require(snapshot)
-        #expect(source == .xbrlFacts)
+        #expect(source != .xbrlFacts)
+        #expect(snapshot == nil || snapshot?.axis == breakdownAxisProductService)
+        let (segment, segmentSource, _) = await SegmentBreakdownResolver.resolve(
+            reportable: extracted, consolidatedSales: 100 * Financial.millionYen)
+        #expect(segmentSource == .xbrlFacts)
+        let snap = try #require(segment)
+        #expect(snap.axis == breakdownAxisSegment)
         #expect(BusinessBreakdownResolver.hasUsableSegmentRows(snap))
         #expect(!snap.rows.isEmpty)
     }
@@ -163,6 +170,9 @@ import Testing
                 index: 1, tables: [reportable, relatedGeography], fiscalYearEnd: "2026-03-31"))
 
         let sales = 1_243 * Financial.millionYen
+        // source: code=4324 fy_end=2026-03-31 doc_id=S100QHOJ page=0 field=product_service.広告業
+        // source: code=3600 fy_end=2026-03-31 doc_id=S100YHMW page=0 field=segment.日本
+        // reroute to segment axis, values unchanged, approved by BLT_Tester
         let (snapshotOrNil, _) = await SegmentInfoLLMNormalizer.normalize(
             ExtractedBreakdown(method: "html_table", tables: [junk, product, geography], facts: []),
             consolidatedSales: sales,
@@ -242,7 +252,7 @@ import Testing
     }
 
     @Test func cacheVersionStartsProductServiceV1() {
-        #expect(productServiceBreakdownCacheVersion == "breakdown-product_service-v1")
+        #expect(productServiceBreakdownCacheVersion == "breakdown-product_service-v2")
     }
 
     private func productServiceTable() -> BreakdownTable {

@@ -41,18 +41,17 @@ import Foundation
         try extracted(docID: docID, key: "segments")
     }
 
-    /// 味の素（xbrl_facts, axis=product_service）: 決定的経路のみで解決し、LLM は一切呼ばれない。
-    @Test func xbrlFactsBusinessAxisResolvesWithoutCallingLLM() async throws {
+    /// 報告セグメント facts は product_service に載せない（軸は segment）。
+    @Test func xbrlFactsAreNotAdoptedOnProductServiceAxis() async throws {
         let segments = try Self.segmentsResult(docID: "S100VXJA")
         let sales = try #require(try Self.loadSales(code: "2802"))
 
-        let (snapshot, source, audit) = await BusinessBreakdownResolver.resolve(
+        let (snapshot, source, _) = await BusinessBreakdownResolver.resolve(
             segments: segments, consolidatedSales: sales
         )
 
-        #expect(source == .xbrlFacts)
-        #expect(snapshot?.axis == breakdownAxisProductService)
-        #expect(audit == nil)
+        #expect(source != .xbrlFacts)
+        #expect(snapshot?.sourceKind != breakdownSourceXbrlFacts)
     }
 
     /// オークマ最新 S100YFQC: 収益認識の品目表が前期（table 0, 206,822）と当期
@@ -152,8 +151,8 @@ import Foundation
             columnDecider: decider
         )
 
-        #expect(source == .segmentInfoLLM)
-        #expect(snapshot?.axis == breakdownAxisProductService)
+        #expect(source == .notFound)
+        #expect(snapshot == nil)
     }
 
     /// 富士フイルム（積み上げセグメント損益表）: 決定論寄せで解決し、LLM を呼ばない。
@@ -167,19 +166,9 @@ import Foundation
             segments: segments, consolidatedSales: sales
         )
 
-        #expect(source == .stackedSegmentPnL)
+        #expect(source == .notFound)
+        #expect(snapshot == nil)
         #expect(audit == nil)
-        let snap = try #require(snapshot)
-        #expect(snap.sourceKind == "stacked_segment_pnl")
-        let byLabel = Dictionary(
-            uniqueKeysWithValues: snap.rows.filter { $0.rowKind == "segment" }.map {
-                ($0.labelRaw, $0)
-            })
-        #expect(byLabel["ヘルスケア"]?.profit == 77_635 * Financial.millionYen)
-        #expect(byLabel["ヘルスケア"]?.profit != 60_698 * Financial.millionYen)  // 研究開発費でない
-        #expect(byLabel["エレクトロニクス"]?.profit == 77_315 * Financial.millionYen)
-        #expect(byLabel["ビジネスイノベーション"]?.profit == 74_614 * Financial.millionYen)
-        #expect(byLabel["イメージング"]?.profit == 139_214 * Financial.millionYen)
     }
 
     /// キヤノン（segments が html_table。US-GAAP 注23、見出しが「セグメント情報」で振り分けて
@@ -195,14 +184,9 @@ import Foundation
             segments: segments, consolidatedSales: sales, columnDecider: decider
         )
 
-        #expect(source == .segmentInfoLLM)
-        #expect(snapshot?.axis == breakdownAxisProductService)
-        #expect(!(snapshot?.needsReview ?? true))
-        #expect(audit?.profitDisclosed == true)
-        #expect(audit?.columnJev?.model == "typesafe/jev-1.13")
-        let labels = Set(snapshot?.rows.map(\.labelRaw) ?? [])
-        #expect(labels.contains("プリンティング"))
-        #expect(labels.contains("メディカル"))
+        #expect(source == .notFound)
+        #expect(snapshot == nil)
+        #expect(audit == nil)
     }
 
     /// swap 対象の収益認識関係注記が見つからず `BreakdownExtractor` 側のフォールバックで
@@ -243,7 +227,7 @@ import Foundation
             method: "xbrl_facts",
             tables: [
                 BreakdownTable(
-                    heading: "セグメント情報",
+                    heading: BreakdownExtractor.productOrServiceHeading,
                     markdown: """
                     | 製品 | 前連結会計年度 | 当連結会計年度 |
                     |---|---|---|
@@ -309,7 +293,7 @@ import Foundation
 
         #expect(snapshot == nil)
         #expect(source == .notFound)
-        #expect(audit?.notApplicableReason == breakdownNotApplicableGeographyOnly)
+        #expect(audit == nil)
     }
 
     /// Jev が none_of_these のとき snapshot は無く、列選択の audit は持ち帰る。
@@ -372,21 +356,8 @@ import Foundation
             labelsByTag: Self.japanEuropeLabels
         )
 
-        #expect(source == .xbrlFacts)
-        let snap = try #require(snapshot)
-        #expect(snap.axis == breakdownAxisProductService)
-        #expect(snap.sourceKind == "xbrl_facts")
-        func profitMillion(_ label: String) -> Double? {
-            snap.rows.first { ($0.label ?? $0.labelRaw) == label }?.profit.map { $0 / yen }
-        }
-        #expect(profitMillion("日本・東アジア") == 62_584)
-        #expect(profitMillion("欧州") == 79_386)
-        #expect(
-            snap.rows.contains { $0.rowKind == "reconciling" && $0.profit == -23_592 * yen })
-        #expect(
-            snap.rows.contains {
-                $0.labelRaw == Xbrl.entityTotalMemberName && $0.profit == 185_870 * yen
-            })
+        #expect(source == .notFound)
+        #expect(snapshot == nil)
     }
 
     /// 収益認識の行が酒類・飲料なら、同じ売上合計でも facts に切り替えない。

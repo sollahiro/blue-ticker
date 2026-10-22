@@ -4,6 +4,14 @@
 
 ## 方針（確定）
 
+- 内訳の軸は出典の有報表で決める（中身の地名／製品名では決めない）。
+  - `segment`: セグメント情報の報告セグメント表 / XBRL ReportableSegment。行に `segment_basis`（`business` / `geographic`）。全社・調整は reconciling。下流の従業員・設備投資・セグメント利益の結合キー。
+  - `product_service`: 関連情報「製品及びサービスごとの情報」、または収益の分解の製品表。報告セグメント facts からは作らない。表が無ければ空。
+  - `geography`: 関連情報「地域ごとの情報」。報告セグメントが地域軸でもコピーしない。
+- 関連情報が「セグメント情報に同様の情報を開示しているため省略」なら `same_as: segment`（値は複製しない）。報告セグメントが地域軸で、関連情報に売上の地域表が無いときも同じ（IFRS「地域に関する情報」が米国の重要性開示と非流動資産表だけの電通型）。両方開示されていれば（同一でも別でも）独立に残す。
+- 開示パターン（XBRL 信号が先。曖昧なときだけ注記散文を Jev。数値は返させない）: `multiple_segments` / `single_segment` / `omitted_dominant_90pct` / `omitted_same_as_segment`（関連情報軸） / `not_disclosed`。根拠文は監査に残す。
+- 単一セグメントは「記載を省略」に依存しない。専用タグまたは「単一の事業セグメントから構成」で足りる。表が無く `single_segment` なら報告セグメント1行（member / 本文の事業名）に連結売上。
+- `omitted_dominant_90pct` は単一セグメントではない。「○○事業の売上高、セグメント利益及びセグメント資産の金額がいずれも全セグメントの90%を超えるため、記載を省略」。`segment` は支配的事業の1行に連結売上、`disclosure_basis=dominant_90pct`。従業員表の区分が合わなければ `employees_join=unavailable`（無理に結合しない）。
 - 事業再編・名称変更の過去遡及補正はしない。各期はその期の開示どおり。
 - 会社間の行ラベル対応は必須にしない。比較は構造（軸・分母・割合）まで。
 - `segments` / `geography` は開示ブロックの取り分け。事業×地域の両方が常にあることは保証しない。
@@ -38,7 +46,8 @@ geography は変えない。本邦90％の `not_found` は既存の Jev ゲー�
 
 | API キー | 意味 |
 |---|---|
-| `segments` | 報告セグメント（事業とも地域とも限らない） |
+| `segments` | 報告セグメント（事業とも地域とも限らない）。filing-content の本文キー |
+| `segment` | 報告セグメント別売上（breakdown 軸） |
 | `geography` | 地域別注記 |
 | `employees` | 従業員数のセグメント別内訳 |
 | `research_and_development` | 研究開発費のセグメント別内訳 |
@@ -54,8 +63,9 @@ geography は変えない。本邦90％の `not_found` は既存の Jev ゲー�
 
 | axis | 内容 |
 |---|---|
-| `product_service` | 製品・サービス別売上 |
-| `geography` | 地域別売上 |
+| `segment` | 報告セグメント別売上（`segment_basis` / `disclosure_basis`） |
+| `product_service` | 製品・サービス別売上（関連情報・収益分解。報告セグメント facts は載せない） |
+| `geography` | 地域別売上（関連情報。報告セグメントのコピーはしない。省略は `same_as`） |
 | `employees` | 従業員内訳 |
 | `research_and_development` | 研究開発費内訳（発生支出） |
 | `goodwill` | のれん |

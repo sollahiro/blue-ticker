@@ -751,6 +751,7 @@ extension BreakdownLoadResult {
 
     @Test func countServableSplitsXbrlFactsRowsByVersionFloor() async throws {
         try await withMigratedApp { app in
+            // product_service 床は 1。v0 は床未満、v1 は配信する。
             try await seedRow(
                 "S1", code: "7203", submit: "2025-06-20 09:00", db: app.db,
                 source: breakdownSourceXbrlFacts, cacheVersion: "breakdown-v0")
@@ -1131,6 +1132,7 @@ extension BreakdownLoadResult {
     /// not_applicable source も xbrl_facts と同じくバージョン床で servable/unservable が分かれる。
     @Test func countServableSplitsNotApplicableRowsByVersionFloorLikeXbrlFacts() async throws {
         try await withMigratedApp { app in
+            // product_service 床は 1。v0 は床未満、v1 は配信する。
             try await seedRow(
                 "S1", code: "7203", submit: "2025-06-20 09:00", db: app.db,
                 source: breakdownSourceNotApplicable, cacheVersion: "breakdown-v0",

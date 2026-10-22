@@ -1741,10 +1741,10 @@ import Foundation
         }
     }
 
-    @Test func geographyFallsBackToReportableSegmentFactsWhenMembersAreGeography() throws {
-        // 電通型（S100XS0O / issue #163）: GeographicArea dimension も地域売上表も無く、
-        // 報告セグメント（Japan/Americas/EMEA/APAC）の OperatingSegments 収益が地域別内訳そのもの。
-        // 軸は実データ同様 jpcrp_cor:OperatingSegmentsAxis。
+    @Test func geographyDoesNotCopyReportableSegmentFactsWhenMembersAreGeographic() throws {
+        // 電通型（S100XS0O）: 報告セグメント member が地域名でも geography へコピーしない。
+        // 抽出は not_found。公開 geography の same_as: segment は resolver / 分類側
+        // （RealXbrlBreakdownResolverTests.dentsuS100XS0OGeographyIsSameAsGeographicSegments）。
         func segmentContext(id: String, member: String) -> String {
             """
             <xbrli:context id="\(id)">
@@ -1791,20 +1791,11 @@ import Foundation
         """
         try XBRLTestSupport.withXbrlDir(xml) { dir in
             let geo = BreakdownExtractor.extractGeographyInfo(xbrlDir: dir)
-            #expect(geo.method == "xbrl_facts")
+            #expect(geo.method == "not_found")
             #expect(geo.tables.isEmpty)
-            let geoMembers = Set(geo.facts.compactMap { $0.dimensions["OperatingSegmentsAxis"] })
-            #expect(geoMembers == Set(members))
-            #expect(geo.facts.filter { $0.tag == "Revenue2IFRS" }.count == 4)
-
-            // 正規化まで通し、axis=geography で確定することを確認（resolver 契約）
-            let snapshot = try #require(
-                BreakdownNormalizer.normalize(geo, consolidatedSales: 1_435_245_000_000))
-            #expect(snapshot.axis == "geography")
-            #expect(snapshot.needsReview == false)
-            #expect(snapshot.denominatorTag == "Revenue2IFRS")
-            let labels = Set(snapshot.rows.filter { $0.rowKind == "segment" }.map(\.labelRaw))
-            #expect(labels == Set(members))
+            #expect(geo.facts.isEmpty)
+            #expect(
+                BreakdownNormalizer.normalize(geo, consolidatedSales: 1_435_245_000_000) == nil)
         }
     }
 
@@ -2609,12 +2600,10 @@ import Foundation
             #expect(!result.tables.contains { $0.heading == BreakdownExtractor.revenueRecognitionHeading })
             #expect(!result.tables.contains { $0.markdown.contains("契約負債") })
 
-            // geography 側は報告セグメント facts へフォールバックできる
+            // 報告セグメント facts は geography にコピーしない。関連情報の地域表が無ければ空。
             let geo = BreakdownExtractor.extractGeographyInfo(xbrlDir: dir)
-            #expect(geo.method == "xbrl_facts")
-            let geoMembers = Set(geo.facts.compactMap { $0.dimensions["OperatingSegmentsAxis"] })
-            #expect(geoMembers.contains("JapanReportableSegmentMember"))
-            #expect(geoMembers.contains("APACReportableSegmentMember"))
+            #expect(geo.method == "not_found")
+            #expect(geo.facts.isEmpty)
         }
     }
 

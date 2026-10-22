@@ -235,7 +235,7 @@ import Testing
     }
 
     @Test func cacheVersionStartsProductServiceV1() {
-        #expect(productServiceBreakdownCacheVersion == "breakdown-product_service-v1")
+        #expect(productServiceBreakdownCacheVersion == "breakdown-product_service-v2")
         #expect(
             breakdownWarningSingleSegmentTagDisagreesWithCurrentYearReportableSegments
                 == "single_segment_tag_disagrees_with_current_year_reportable_segments")

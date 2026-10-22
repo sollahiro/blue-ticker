@@ -7,10 +7,13 @@ import Testing
     @Test func htmlExtractorSharedPathBumpsProductServiceWithGeography() throws {
         let productServiceN = try #require(breakdownCacheVersionNumber(productServiceBreakdownCacheVersion))
         let geographyN = try #require(breakdownCacheVersionNumber(geographyBreakdownCacheVersion))
-        #expect(productServiceN == 1)
-        #expect(geographyN == 13)
+        #expect(productServiceN == 2)
+        #expect(geographyN == 14)
         #expect(try #require(breakdownCacheVersionNumber("breakdown-geography-v12")) < geographyN)
-        #expect(productServiceBreakdownCacheVersion == "breakdown-product_service-v1")
+        #expect(productServiceBreakdownCacheVersion == "breakdown-product_service-v2")
+        #expect(segmentBreakdownCacheVersion == "breakdown-segment-v1")
+        #expect(isSupportedBreakdownAxis(breakdownAxisSegment))
+        #expect(breakdownCacheVersion(forAxis: breakdownAxisSegment) == segmentBreakdownCacheVersion)
         #expect(breakdownCacheVersionNumber("breakdown-business-v15") == 15)
         // fact-only axes do not share allTablesFromHtml / keywordTablesFromHtml.
         #expect(employeesBreakdownCacheVersion == "breakdown-employees-v2")
@@ -68,6 +71,9 @@ import Testing
     }
 
     @Test func publicServingLeavesXbrlAndNoneRowsUntouched() {
+        #expect(
+            isPubliclyServableBreakdown(
+                source: breakdownSourceSameAs, needsReview: false, warnings: []) == true)
         #expect(
             isPubliclyServableBreakdown(
                 source: breakdownSourceXbrlFacts, needsReview: true, warnings: []) == true)

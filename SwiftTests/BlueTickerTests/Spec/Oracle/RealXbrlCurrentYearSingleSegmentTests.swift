@@ -45,6 +45,8 @@ import Testing
     }
 
     /// 7063 S100P97P: Prior 専用タグの定型文が残るが、当期は MX / EX の 2 報告セグメント。
+    // source: code=7063 fy_end=2022-06-30 doc_id=S100P97P page=0 field=segment.MX
+    // reroute to segment axis, values unchanged, approved by BLT_Tester
     @Test func birdman7063S100P97PBuildsMXAndEXNotSingleSegmentDisclosed() async throws {
         guard await Self.ensureAvailable("S100P97P") else { return }
         let dir = Self.xbrlDir("S100P97P")
@@ -67,10 +69,11 @@ import Testing
         let kept = try #require(gate.extracted)
         #expect(gate.outcome.omissionReason != breakdownNotApplicableSingleSegmentDisclosed)
 
-        let (snapshot, source, _) = await BusinessBreakdownResolver.resolve(
-            segments: kept, consolidatedSales: sales)
+        let (snapshot, source, _) = await SegmentBreakdownResolver.resolve(
+            reportable: kept, consolidatedSales: sales)
         let snap = try #require(snapshot)
         #expect(source == .xbrlFacts)
+        #expect(snap.axis == breakdownAxisSegment)
         let labels = Self.segmentLabels(snap)
         let labelBlob = labels.joined(separator: " ").uppercased()
         #expect(labelBlob.contains("MX"))

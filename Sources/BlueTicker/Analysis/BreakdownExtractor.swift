@@ -322,6 +322,157 @@ enum BreakdownExtractor {
         return result
     }
 
+    /// 報告セグメント軸用。製品表 prepend と収益認識 swap をしない。
+    /// 出典はセグメント情報の報告セグメント表と ReportableSegment / OperatingSegments facts。
+    static func extractReportableSegmentInfo(xbrlDir: URL) -> ExtractedBreakdown {
+        var tables = extractFromTextBlocks(
+            xbrlDir: xbrlDir,
+            dedicatedTags: Xbrl.businessSegmentTextBlockTags,
+            mixedTags: Xbrl.businessSegmentMixedTextBlockTags,
+            dedicatedHeading: "セグメント情報",
+            mixedKeywords: Xbrl.businessSegmentHeadingKeywords,
+            mixedHeadingExclusionKeywords: Xbrl.businessSegmentHeadingExclusionKeywords,
+            mixedHeadingLikeOnly: true
+        )
+        if tables.isEmpty {
+            for keyword in Xbrl.usgaapNote23BusinessSegmentHeadingKeywords {
+                let fallback = extractFromTextBlocks(
+                    xbrlDir: xbrlDir,
+                    dedicatedTags: [],
+                    mixedTags: Xbrl.businessSegmentMixedTextBlockTags,
+                    dedicatedHeading: "セグメント情報",
+                    mixedKeywords: [keyword],
+                    mixedHeadingLikeOnly: true
+                )
+                if !fallback.isEmpty {
+                    tables = fallback
+                    break
+                }
+            }
+        }
+        if !tablesContainSalesEquivalent(tables) {
+            let etcTables = extractFromTextBlocks(
+                xbrlDir: xbrlDir,
+                dedicatedTags: Xbrl.businessSegmentEtcTextBlockTags,
+                mixedTags: [],
+                dedicatedHeading: "セグメント情報",
+                mixedKeywords: []
+            )
+            if !etcTables.isEmpty {
+                tables = tables + etcTables
+            }
+        }
+        tables = tables.filter { !isProductServiceTable($0) }
+        let relatedMarkdown = Set(
+            relatedInfoTablesEmbeddedInSegmentNote(xbrlDir: xbrlDir).map(\.markdown))
+        if !relatedMarkdown.isEmpty {
+            tables = tables.filter { table in
+                // 積み上げセグメント損益（富士フイルム）は関連情報キーワードに巻き込まれても残す。
+                if table.markdown.contains("営業利益") || table.markdown.contains("セグメント利益") {
+                    return true
+                }
+                return !relatedMarkdown.contains(table.markdown)
+            }
+        }
+        var result = buildResult(
+            xbrlDir: xbrlDir, tables: tables,
+            dimensionKeywords: Xbrl.businessSegmentDimensionKeywords)
+        if result.method == "xbrl_facts" {
+            result.rowLabelsByTag = StatementNotesResolver.segmentNoteRowLabels(xbrlDir: xbrlDir)
+        }
+        return result
+    }
+
+    /// 製品・サービス軸用。報告セグメント facts は載せない。表が無ければ空。
+    static func extractProductServiceInfo(xbrlDir: URL) -> ExtractedBreakdown {
+        let dedicatedProduct = extractFromTextBlocks(
+            xbrlDir: xbrlDir,
+            dedicatedTags: Xbrl.productOrServiceTextBlockTags,
+            mixedTags: [],
+            dedicatedHeading: productOrServiceHeading,
+            mixedKeywords: []
+        ).filter { !isPriorOnlyProductOrServiceTable($0) }
+        if !dedicatedProduct.isEmpty {
+            return ExtractedBreakdown(method: "html_table", tables: dedicatedProduct, facts: [])
+        }
+        let relatedInfoProduct = extractFromTextBlocks(
+            xbrlDir: xbrlDir,
+            dedicatedTags: [],
+            mixedTags: Xbrl.businessSegmentTextBlockTags.union(Xbrl.businessSegmentMixedTextBlockTags),
+            dedicatedHeading: productOrServiceHeading,
+            mixedKeywords: productOrServiceRelatedInfoHeadingKeywords,
+            mixedHeadingLikeOnly: true
+        ).filter { !isPriorOnlyProductOrServiceTable($0) }
+        if !relatedInfoProduct.isEmpty {
+            return ExtractedBreakdown(method: "html_table", tables: relatedInfoProduct, facts: [])
+        }
+        let revenueRecognition = extractRevenueRecognitionInfo(xbrlDir: xbrlDir)
+        if revenueRecognition.method == "html_table",
+            !isRevenueTypeOnlyDecomposition(revenueRecognition.tables),
+            !tablesLookLikeContractBalanceStub(revenueRecognition.tables)
+        {
+            return ExtractedBreakdown(
+                method: "html_table", tables: revenueRecognition.tables, facts: [])
+        }
+        return ExtractedBreakdown(method: "not_found", tables: [], facts: [])
+    }
+
+    static let productOrServiceRelatedInfoHeadingKeywords: [String] = [
+        "製品及びサービスごとの情報",
+        "製品・サービス別情報",
+        "製品及びサービス別",
+        "収益の分解",
+    ]
+
+    /// セグメント注記に同居する関連情報・収益分解・地域表。報告セグメント表からは除く。
+    static let relatedInfoHeadingKeywordsEmbeddedInSegmentNote: [String] = [
+        "収益の分解",
+        "製品及びサービスごとの情報",
+        "製品・サービス別情報",
+        "製品及びサービス別",
+        "地域ごとの情報",
+        "地域別の情報",
+        "地域ごとの収益",
+    ]
+
+    static func isProductServiceTable(_ table: BreakdownTable) -> Bool {
+        if table.heading == productOrServiceHeading
+            || table.heading == revenueRecognitionHeading
+        {
+            return true
+        }
+        return productOrServiceRelatedInfoHeadingKeywords.contains { table.heading.contains($0) }
+    }
+
+    static func relatedInfoTablesEmbeddedInSegmentNote(xbrlDir: URL) -> [BreakdownTable] {
+        extractFromTextBlocks(
+            xbrlDir: xbrlDir,
+            dedicatedTags: [],
+            mixedTags: Xbrl.businessSegmentTextBlockTags.union(Xbrl.businessSegmentMixedTextBlockTags),
+            dedicatedHeading: "セグメント情報",
+            mixedKeywords: relatedInfoHeadingKeywordsEmbeddedInSegmentNote,
+            mixedHeadingLikeOnly: true
+        )
+    }
+
+    /// パターン分類に渡す本文。専用タグと「記載を省略」文。数値は含めない。
+    static func segmentNotePatternProse(xbrlDir: URL) -> [String] {
+        var seen = Set<String>()
+        var prose: [String] = []
+        let dedicated = dedicatedSingleSegmentDisclosureTexts(xbrlDir: xbrlDir)
+        for text in [dedicated.currentYear, dedicated.any].compactMap({ $0 }) {
+            let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !trimmed.isEmpty, seen.insert(trimmed).inserted {
+                prose.append(trimmed)
+            }
+        }
+        for sentence in segmentNoteOmissionSentences(xbrlDir: xbrlDir)
+        where seen.insert(sentence).inserted {
+            prose.append(sentence)
+        }
+        return prose
+    }
+
     /// RR 表が契約債権・契約資産・契約負債の残高推移だけで、売上分解を含まないか
     /// （電通 NotesRevenue2 / メルカリ IFRS 売上収益スタブ）。
     static func tablesLookLikeContractBalanceStub(_ tables: [BreakdownTable]) -> Bool {
@@ -717,10 +868,8 @@ enum BreakdownExtractor {
     /// IFRS「地域別の情報」で外部顧客売上を省略し非流動資産だけを載せる会社（日本精工型）では、
     /// 資産表を候補から外し、注記「売上高」の収益の分解（地域×事業マトリクス）へフォールバックする。
     ///
-    /// 電通型（issue #163）: 地域専用注記は重要国の文章開示＋非流動資産表のみで売上表が残らず、
-    /// GeographicArea dimension も無い。報告セグメント自体が日本/Americas/EMEA/APAC の地域軸なら
-    /// OperatingSegments の売上 facts を geography として採用する（product_service 軸は既に
-    /// `shouldPreferRevenueRecognition` で製品・サービス表へ swap する相補関係）。
+    /// 関連情報「地域ごとの情報」と GeographicArea facts だけ。報告セグメント（OperatingSegments）
+    /// の地域名行はコピーしない（省略は same_as: segment）。
     static func extractGeographyInfo(xbrlDir: URL) -> ExtractedBreakdown {
         let dedicated = Xbrl.geographyTextBlockTags.subtracting(Xbrl.geographyMixedTextBlockTags)
         // US-GAAP 注記23 型（野村）: 小見出し「［地域別情報］」があればその下の表だけを使う。
@@ -772,20 +921,9 @@ enum BreakdownExtractor {
         }
         // 前期 TextBlock だけが残るとき（2146 S100YKK1 / 1968 S100TU63）は当期の地域表が無い。
         // Prior コンテキストの比較表に当期行がある場合（1887 / 4568）は html を残す。
-        // html_table の前期だけを公開せず、報告セグメントが地域軸なら facts へ落とす。
-        if !tables.isEmpty, tables.allSatisfy({ $0.period == "前期" }),
-           !tables.contains(where: htmlTableHasCurrentPeriodRow),
-           let segmentGeography = extractGeographyFromReportableSegments(xbrlDir: xbrlDir)
-        {
-            return segmentGeography
-        }
+        // 報告セグメント facts へのフォールバックはしない（軸を混ぜない）。
         let result = buildResult(
             xbrlDir: xbrlDir, tables: tables, dimensionKeywords: Xbrl.geographyDimensionKeywords)
-        if result.method == "not_found",
-            let segmentGeography = extractGeographyFromReportableSegments(xbrlDir: xbrlDir)
-        {
-            return segmentGeography
-        }
         // IFRS で地域別の専用 TextBlock が無く、セグメント注記の小見出し
         // 「(2）営業収益の地域別内訳」の下に地域表だけがある型（8698 S100YM8I）。
         // 地域注記・報告セグメントのどちらからも取れないときだけ、IFRS セグメント注記を
@@ -810,22 +948,6 @@ enum BreakdownExtractor {
             }
         }
         return result
-    }
-
-    /// 報告セグメント（OperatingSegments 系）の売上 facts が全て地域軸相当なら geography として返す。
-    /// 事業名セグメントや国内海外×事業クロス（キッコーマン型）は `isGeographyAxis` が false。
-    private static func extractGeographyFromReportableSegments(xbrlDir: URL) -> ExtractedBreakdown? {
-        let contextMap = loadDimensionContextMap(xbrlDir: xbrlDir)
-        let facts = extractFactsByDimension(
-            xbrlDir: xbrlDir,
-            dimensionKeywords: Xbrl.businessSegmentDimensionKeywords,
-            contextMap: contextMap
-        )
-        guard !facts.isEmpty,
-            factsContainRecognizedAmountTag(facts),
-            isGeographyAxis(facts)
-        else { return nil }
-        return ExtractedBreakdown(method: "xbrl_facts", tables: [], facts: facts)
     }
 
     /// markdown 表のデータ行先頭セル（行ラベル）に地域名キーワードが十分あるか。
@@ -2615,6 +2737,22 @@ enum BreakdownExtractor {
                     if !gridHasNumericValue(published) {
                         candidate = findNextTable(after: workingTable)
                         continue
+                    }
+                    // 収益の分解は種類別の直後に製品表が続き、改ページで複数表に割れる
+                    // （Takeda 4502 S100YB5L の ENTYVIO / 消化器系疾患合計）。
+                    // 地域表に入ったら打ち切る。
+                    if keyword.contains("収益の分解"),
+                       let following = nextTableInDocument(after: workingTable)
+                    {
+                        let followingGrid = expandTable(following)
+                        let followingMd = gridToMarkdown(followingGrid)
+                        let geographyHits = ["日本", "米国", "海外", "アジア"].filter {
+                            followingMd.contains($0)
+                        }.count
+                        if geographyHits < 2 {
+                            candidate = following
+                            continue
+                        }
                     }
 
                     // 同じ開示が前期・当期の表を1つの見出しでまとめて紹介しているケース

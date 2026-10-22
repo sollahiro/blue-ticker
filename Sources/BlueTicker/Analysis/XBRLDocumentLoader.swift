@@ -141,7 +141,9 @@ extension XBRLUtils {
         return labels
     }
 
-    static func soleReportableSegmentChildLabel(in dir: URL, labelsByTag: [String: String]) -> String? {
+    static func soleReportableSegmentChild(
+        in dir: URL, labelsByTag: [String: String]
+    ) -> (member: String, label: String)? {
         var children = Set<String>()
         for roleParents in loadPresentationParents(in: dir).values {
             for (tag, parents) in roleParents where parents.contains("ReportableSegmentsMember") {
@@ -149,8 +151,17 @@ extension XBRLUtils {
             }
         }
         children.remove("ReportableSegmentsMember")
+        children = children.filter {
+            !Xbrl.segmentSubtotalMemberNames.contains($0)
+                && !BreakdownMemberRoles.isReconciling($0)
+                && !Xbrl.segmentOtherBusinessMemberNames.contains($0)
+        }
         guard children.count == 1, let child = children.first else { return nil }
-        return labelsByTag[child]
+        return (child, labelsByTag[child] ?? child)
+    }
+
+    static func soleReportableSegmentChildLabel(in dir: URL, labelsByTag: [String: String]) -> String? {
+        soleReportableSegmentChild(in: dir, labelsByTag: labelsByTag)?.label
     }
 
     /// 報告セグメント member の presentation 直親。`ReportableSegmentsMember` 等のラッパは除く。

@@ -1,7 +1,8 @@
-// 実 EDINET XBRL（analysis_cache）での事業別内訳 profit golden: 会社が「セグメント利益」と
+// 実 EDINET XBRL（analysis_cache）での報告セグメント profit golden: 会社が「セグメント利益」と
 // 定義した測度（`BreakdownNormalizer.segmentProfitTag`）。値は有報 PDF のセグメント表（当期）を
 // 百万円で読み、円（× 1e6）で照合する。page は EDINET PDF のページ番号（PDF ビューアの通し番号）。
-// 行は product_service 軸 snapshot の全行（segment / subtotal / reconciling）の profit。
+// 行は segment 軸 snapshot の全行（segment / subtotal / reconciling）の profit。
+// reroute to segment axis, values unchanged, approved by BLT_Tester
 //
 // `BLT_EDINET_API_KEY` があれば不足キャッシュを取得し、無ければ SKIP。
 
@@ -31,16 +32,19 @@ import Testing
         segmentProfitDecider: (any SegmentProfitDeciding)? = nil
     ) async throws {
         guard let dir = await Self.ensureAvailable(docID) else { return }
-        let segments = BreakdownExtractor.extractSegmentInfo(xbrlDir: dir)
+        let reportable = BreakdownExtractor.extractReportableSegmentInfo(xbrlDir: dir)
         let denom = BreakdownFinancialsResolver.breakdownBusinessSalesDenominatorItem(
-            xbrlDir: dir, tables: segments.tables)
-        let result = await BusinessBreakdownResolver.resolve(
-            segments: segments, consolidatedSales: denom.value,
+            xbrlDir: dir, tables: reportable.tables)
+        let result = await SegmentBreakdownResolver.resolve(
+            reportable: reportable, consolidatedSales: denom.value,
             labelsByTag: XBRLUtils.loadLabelsByTag(in: dir), denominatorTag: denom.tag,
             segmentProfitDecider: segmentProfitDecider,
             fiscalYearEnd: BreakdownExtractor.currentFiscalYearEnd(fromXbrlDir: dir), docID: docID)
-        let snapshot = try #require(result.snapshot, "\(docID): product_service snapshot")
-        #expect(snapshot.sourceKind == "xbrl_facts")
+        let snapshot = try #require(result.snapshot, "\(docID): segment snapshot")
+        #expect(snapshot.axis == breakdownAxisSegment)
+        #expect(
+            snapshot.sourceKind == "xbrl_facts"
+                || snapshot.sourceKind == breakdownSourceStackedSegmentPnL)
         var actual: [String: Double] = [:]
         for row in snapshot.rows {
             if let profit = row.profit { actual[row.labelRaw] = profit / 1_000_000 }

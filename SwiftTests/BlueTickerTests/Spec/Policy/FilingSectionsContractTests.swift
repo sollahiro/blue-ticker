@@ -36,7 +36,8 @@ import Testing
         #expect(filingSectionsCacheVersion == "sections-v8")
         // breakdown of-which refinements already at geography v13; product_service is a
         // new axis series at v1 after the public axis-key hard cutover.
-        #expect(geographyBreakdownCacheVersion == "breakdown-geography-v13")
-        #expect(productServiceBreakdownCacheVersion == "breakdown-product_service-v1")
+        #expect(geographyBreakdownCacheVersion == "breakdown-geography-v14")
+        #expect(productServiceBreakdownCacheVersion == "breakdown-product_service-v2")
+        #expect(segmentBreakdownCacheVersion == "breakdown-segment-v1")
     }
 }

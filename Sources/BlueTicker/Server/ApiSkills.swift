@@ -7,7 +7,7 @@ import Foundation
 // MARK: - 契約型
 
 /// REST skills 応答の `schema_version`。形を破壊的に変えたときのみ +1。
-public let apiSkillsSchemaVersion = 6
+public let apiSkillsSchemaVersion = 7
 
 /// パラメータの置き場所（REST パス変数 / クエリ）。
 public enum ApiSkillParameterLocation: String, Sendable {
@@ -423,16 +423,20 @@ public func apiSkillsCatalog() -> [ApiSkill] {
         ),
         ApiSkill(
             id: "get-breakdown",
-            name: "製品・サービス別・地域別売上内訳",
+            name: "報告セグメント・製品・サービス別・地域別売上内訳",
             description: """
-                有価証券報告書から製品・サービス別/地域別売上高、従業員数、研究開発費、のれん、
+                有価証券報告書から報告セグメント別（segment）、製品・サービス別/地域別売上高、従業員数、研究開発費、のれん、
                 報告セグメント別ののれんの償却額・持分法会計処理される投資、
                 設備投資マトリクス（capex）、有利子負債（interest_bearing_debt）、
                 有形固定資産・のれん及び無形資産の種類別（property_plant_equipment / goodwill_and_intangibles）を取得します（格納済みデータのみ）。
                 対象は取り込み済みの上場企業です。doc_id を省略すると最新の有価証券報告書を使用します。
-                axis は product_service（既定）/ geography / employees / research_and_development / goodwill /
+                axis は segment / product_service（既定）/ geography / employees / research_and_development / goodwill /
                 goodwill_amortization / equity_method_investments / capex / interest_bearing_debt /
                 property_plant_equipment / goodwill_and_intangibles に対応。
+                segment はセグメント情報の報告セグメント表。行に segment_basis（business / geographic）が付きます。
+                90%省略の1行は disclosure_basis=dominant_90pct。関連情報の省略は same_as=segment（値は複製しません）。
+                従業員表の区分が合わないときは employees_join=unavailable です。
+                product_service は関連情報の製品表または収益分解だけで、報告セグメント facts は含めません。
                 数値タグとセグメント fact から解決します。合計のみの開示は分母だけの行になります。
                 axis=capex は名前付きセル（segment_assets / flow / capital_expenditures_overview）で、
                 行の amount は使いません。flow は書類単位で capital_expenditures があればそれ、
@@ -508,16 +512,17 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                     name: "axis",
                     location: .query,
                     type: .string,
-                    description: "内訳の軸（product_service / geography / employees / research_and_development / goodwill / goodwill_amortization / equity_method_investments / capex / interest_bearing_debt / property_plant_equipment / goodwill_and_intangibles。省略時 product_service）",
+                    description: "内訳の軸（segment / product_service / geography / employees / research_and_development / goodwill / goodwill_amortization / equity_method_investments / capex / interest_bearing_debt / property_plant_equipment / goodwill_and_intangibles。省略時 product_service）",
                     required: false,
                     defaultValue: .string(breakdownAxisProductService)
                 ),
             ],
             instructions: """
-                Breakdown（製品・サービス別/地域別売上、従業員数、研究開発費、のれん、報告セグメント別指標、設備投資マトリクス、
+                Breakdown（報告セグメント/製品・サービス別/地域別売上、従業員数、研究開発費、のれん、報告セグメント別指標、設備投資マトリクス、
                 有利子負債、資産の種類別の構造化）。
                 自由テキストのセグメント記述は get-filing-content の segments。
                 格納済みデータのみ。未算出は 404、DB 非接続は 503。
+                例: GET /v1/companies/6758/breakdown?axis=segment
                 例: GET /v1/companies/6758/breakdown?axis=product_service
                 例: GET /v1/companies/6758/breakdown?axis=geography
                 例: GET /v1/companies/6758/breakdown?axis=employees
