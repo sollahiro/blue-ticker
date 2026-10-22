@@ -142,12 +142,16 @@ final class FakeSegmentNotePatternDecider: SegmentNotePatternDeciding, @unchecke
         return calls
     }
 
-    func classifyDisclosure(
-        prose: String, axis: SegmentNotePatternAxis
-    ) async -> SegmentNoteConsultedChoice {
+    private func bump() {
         lock.lock()
         calls += 1
         lock.unlock()
+    }
+
+    func classifyDisclosure(
+        prose: String, axis: SegmentNotePatternAxis
+    ) async -> SegmentNoteConsultedChoice {
+        bump()
         return SegmentNoteConsultedChoice(
             question: SegmentNotePatternClassifier.question,
             selected: selected, probability: probability,
