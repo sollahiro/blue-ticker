@@ -585,6 +585,76 @@ private func codes(_ json: [String: Any]?) -> [String] {
         }
     }
 
+    @Test func screenSnapshotReturnsAllRowsInColumnsAndRevalidates() async throws {
+        try await withApp { app in
+            let (emptyStatus, _) = try await send(app, "/v1/screen/snapshot")
+            #expect(emptyStatus == .notFound)
+
+            try await upsertScreenIndex(
+                code: "0002",
+                response: try makeResponse(
+                    code: "0002", sector: "輸送用機器", latest: ["roic": 12.345678, "net_de": 0.25]),
+                db: app.db)
+            try await upsertScreenIndex(
+                code: "0001",
+                response: try makeResponse(code: "0001", latest: ["sales": 50000.0, "roic": 20.0]),
+                db: app.db)
+
+            let request = Request(
+                application: app, method: .GET, url: URI(string: "/v1/screen/snapshot"),
+                on: app.eventLoopGroup.next())
+            let response = try await app.responder.respond(to: request).get()
+            #expect(response.status == .ok)
+            #expect(response.headers.first(name: .cacheControl) == "private, no-cache")
+            let etag = try #require(response.headers.first(name: .eTag))
+            #expect(etag.hasPrefix("\"") && etag.hasSuffix("\""))
+            let data = try #require(response.body.string?.data(using: .utf8))
+            let json = try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+            #expect(json["schema_version"] as? Int == screenSnapshotSchemaVersion)
+            #expect(json["screen_version"] as? String == screenIndexVersion)
+            #expect(json["count"] as? Int == 2)
+            #expect(json["code"] as? [String] == ["0001", "0002"])
+            #expect(json["sector"] as? [String] == ["電気機器", "輸送用機器"])
+            let metrics = try #require(json["metrics"] as? [String: [Any]])
+            #expect(Set(metrics.keys) == Set(ScreenMetric.allCases.map(\.rawValue)))
+            #expect(metrics["roic"]?[0] as? Double == 20)
+            #expect(metrics["roic"]?[1] as? Double == 12.3457)
+            #expect(metrics["sales"]?[1] is NSNull)
+            #expect((json["payout_ratio_3y"] as? [[Any]])?.map(\.count) == [3, 3])
+
+            let conditional = Request(
+                application: app, method: .GET, url: URI(string: "/v1/screen/snapshot"),
+                headers: ["If-None-Match": "\"stale\", W/\(etag)"], on: app.eventLoopGroup.next())
+            let notModified = try await app.responder.respond(to: conditional).get()
+            #expect(notModified.status == .notModified)
+            #expect(notModified.headers.first(name: .eTag) == etag)
+            #expect((notModified.body.string ?? "").isEmpty)
+
+            try await upsertScreenIndex(
+                code: "0003", response: try makeResponse(code: "0003", latest: ["roic": 5.0]),
+                db: app.db)
+            let changed = Request(
+                application: app, method: .GET, url: URI(string: "/v1/screen/snapshot"),
+                headers: ["If-None-Match": etag], on: app.eventLoopGroup.next())
+            let refreshed = try await app.responder.respond(to: changed).get()
+            #expect(refreshed.status == .ok)
+            #expect(refreshed.headers.first(name: .eTag) != etag)
+        }
+        let app = try await Application.make(.testing)
+        try await registerRoutes(app, context: makeContext())
+        let (status, _) = try await send(app, "/v1/screen/snapshot")
+        #expect(status == .serviceUnavailable)
+        try await app.asyncShutdown()
+    }
+
+    @Test func entityTagMatchingAcceptsListsWildcardAndWeakTags() {
+        #expect(entityTagMatches("\"abc\"", etag: "\"abc\""))
+        #expect(entityTagMatches("\"x\", W/\"abc\"", etag: "\"abc\""))
+        #expect(entityTagMatches("*", etag: "\"abc\""))
+        #expect(!entityTagMatches("\"abd\"", etag: "\"abc\""))
+        #expect(!entityTagMatches("", etag: "\"abc\""))
+    }
+
     @Test func screenEndpointRejectsUnknownKeysAndServes503WithoutDb() async throws {
         try await withApp { app in
             let (emptyStatus, emptyJson) = try await send(app, "/v1/screen")

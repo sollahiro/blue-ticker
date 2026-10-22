@@ -29,7 +29,7 @@
 
 ## 置き場
 
-`Apps/BlueTicker`。`Package.swift` の platforms は macOS のまま。Xcode プロジェクトは `Apps/` に閉じる。シミュレータ不要の計算は `HAPISConsumer` / `ZeroAxisFill` / `FundMath` / `FeedRSS` を `swift test` する。Cloud Agent の Linux VM では `xcodebuild` が無い。
+`Apps/BlueTicker`。`Package.swift` の platforms は macOS のまま。Xcode プロジェクトは `Apps/` に閉じる。シミュレータ不要の計算は `HAPISConsumer` / `ZeroAxisFill` / `FundMath` / `FeedRSS` / `ScreenSnapshot` を `swift test` する。Cloud Agent の Linux VM では `xcodebuild` が無い。
 
 マージ品質と配布は分け、同じ検証を二箇所で走らせない。
 
@@ -125,7 +125,7 @@ Release Archive は HAPIS 本番 + App Attest production。Internal TestFlight �
 | 画面 | Feature | 備考 |
 |---|---|---|
 | 名称検索 | Feed Update / Search | 「最近新しい有報がアップロードされました」＋キーワード検索＋履歴。Feed は公開 RSS（下の「Top feed」）から取り、直近の有報（120）10 件だけを出す（RSS は直近7日の窓＋有報の直近10件）。保存の無い初回の取得中だけ見出し右端に `ProgressView`。保存も取得結果も無い・0件ならセクションごと出さない。Feed Trend（「最近よく調べられています」）は呼び出しを保留中。再開時の 503 は空リスト。フィード下に「最近あなたが調べた企業」（履歴） |
-| 条件検索 | Screen | 業種チップ + 6 プリセット。タップで `GET /v1/screen` の結果へ。全社 `financials` をクライアントで絞らない |
+| 条件検索 | Screen | 業種チップ + 6 プリセット。件数・結果は `GET /v1/screen/snapshot`（`screen_index` 全行）を端末内で絞る。取れないときだけ `GET /v1/screen`。全社 `financials` はクライアントで絞らない |
 | リスト | （クライアント） | ウォッチリスト 1 本。見出しは「あなたの追加した企業」。行はウォッチ／保有。削除は行のスワイプのみ（並べ替え UI は無い）。保有入力は銘柄の `保有情報` |
 | ファンド | （クライアント） | 「保有株数に応じた業績」と「あなたの保有している企業」（ウォッチは出さない）。保有入力は銘柄の `保有情報`。指標は最新 FY Summary の `eps` / `bps`（円/株）。portfolio REST は足さない |
 | 概要 | Summary | 年次の水準値。未集計は 404 |
@@ -156,7 +156,7 @@ Release Archive は HAPIS 本番 + App Attest production。Internal TestFlight �
 
 - 業種は横スクロール 3 段のチップで複数選択。セクション見出しは「業種を選ぶ」。各段は自然幅で敷き詰める。楕円。選択時は緑枠・薄緑地・緑文字、非選択は一律グレー地の白抜き。見切れマスクの半径はセクション枠の半径から内側オフセットを引く（outer r = inner r + padding）。リスト行の業種タグも選択時と同じ緑枠スタイル。市場チップは出さない。未選択と全選択は `sector` を送らない。1 業種は `sector=` 完全一致。2 業種以上は AND にせず、カンマ区切りの `sector=` 1 リクエストでサーバーの IN 検索（OR）に任せる（ソート・件数もサーバー側）
 - DualRangeSlider・指標の詳細トグル・`ScreenMetricFilter` 組み立て UI は出さない。フローは業種（任意）→ プリセットタップ → 結果 → 銘柄
-- プリセットは 6 つ。セクション見出しは「こんな企業を探す」（件数の読み込み中は見出し右端に `ProgressView`）。行はラベル（優良=青 / 成長=橙 / 安定=緑 / 高CF=ティール / 改善=ゴールド / 高還元=パープル。業種タグと同形の枠）+ 1 行の説明文（「高収益で財務が健全な企業」など 15 字前後、1 行に収める）。右端に該当件数（`GET /v1/screen` の `matched`。`limit=1`。業種変更から 400ms debounce。6 件揃ったらタブ往復では取り直さない（欠けたら次の表示で再試行）。未選択・全選択は 6 リクエスト。9 業種以上の部分選択は件数を出さない）。クライアントが `GET /v1/screen` の min/max + `sort` desc に写す（閾値は整数、ネット D/E は 1 桁。ソートはプリセットごとにフィルタで必ず非 null になる指標を選ぶ — 高還元は `payout_ratio`、それ以外（改善を含む）は `roic`。ソート指標が null の行はサーバーが落とすため。改善を `roic_cagr_3y` で並べると上位 10 件中 9 件が 3 期前 ROIC < 0 の赤字回復銘柄になる（2026-09 本番相当データ。`roic` 順では上位 50 件中 9 件）ため、変化幅は条件だけに使う）:
+- プリセットは 6 つ。セクション見出しは「こんな企業を探す」（件数の読み込み中は見出し右端に `ProgressView`）。行はラベル（優良=青 / 成長=橙 / 安定=緑 / 高CF=ティール / 改善=ゴールド / 高還元=パープル。業種タグと同形の枠）+ 1 行の説明文（「高収益で財務が健全な企業」など 15 字前後、1 行に収める）。右端に該当件数（スナップショットを端末内で数える。下の「スナップショット」。取れないときだけ `GET /v1/screen` の `matched`（`limit=1`。業種変更から 400ms debounce。6 件揃ったらタブ往復では取り直さない（欠けたら次の表示で再試行）。未選択・全選択は 6 リクエスト。9 業種以上の部分選択は件数を出さない））。クライアントが `GET /v1/screen` の min/max + `sort` desc に写す（閾値は整数、ネット D/E は 1 桁。ソートはプリセットごとにフィルタで必ず非 null になる指標を選ぶ — 高還元は `payout_ratio`、それ以外（改善を含む）は `roic`。ソート指標が null の行はサーバーが落とすため。改善を `roic_cagr_3y` で並べると上位 10 件中 9 件が 3 期前 ROIC < 0 の赤字回復銘柄になる（2026-09 本番相当データ。`roic` 順では上位 50 件中 9 件）ため、変化幅は条件だけに使う）:
   - **優良**: `roic_min=10`、`operating_margin_min=8`、`net_de_max=0.5`。成長フィルタなし
   - **成長**: `sales_cagr_3y_min=10`、`operating_margin_min=5`、`roic_min=8`。CAGR 上限なし
   - **安定**（旧 健全成長）: `sales_cagr_3y_min=5`、`roic_min=12`、`net_de_max=0.3`
@@ -180,7 +180,17 @@ Release Archive は HAPIS 本番 + App Attest production。Internal TestFlight �
 - 対象は最新 FY の Summary 水準値だけ。YoY / Waterfall / Breakdown / Notes は混ぜない
 - 業種チップの候補はクライアント側の表示用カタログ。`GET /v1/companies?sector=` は足さない
 
-Screen REST は `GET /v1/screen`（`screen_index` 読み取り。`sector` 完全一致 + `<metric>_min` / `<metric>_max` の AND + `sort` / `order` / `limit`（既定 `roic` / `desc` / 50、上限 200））。許可リストは上の 12 指標。応答は `items[]`（メタ + core4 + フィルタ / ソートに使った指標。`payout_ratio` 投影時は `payout_ratio_3y` も）と `returned` / `matched` / `sort`。索引未生成（0 行）は 404、フィルタ 0 件は 200 で空配列。iOS 条件検索はこれを呼ぶ。`screen_index` は財務 ingest 直後に 1 社ずつ派生更新し、公開床（servable）の `company_financials` は現行 fin-vN 一致を問わず次回 ingest で投影する（列定義変更後の手動一発は `blt-server screen-rebuild`。`screenIndexVersion` = `screen-v4`。`fin-vN` は上げない）。skills カタログには載せない。
+Screen REST は `GET /v1/screen`（`screen_index` 読み取り。`sector` 完全一致 + `<metric>_min` / `<metric>_max` の AND + `sort` / `order` / `limit`（既定 `roic` / `desc` / 50、上限 200））。許可リストは上の 12 指標。応答は `items[]`（メタ + core4 + フィルタ / ソートに使った指標。`payout_ratio` 投影時は `payout_ratio_3y` も）と `returned` / `matched` / `sort`。索引未生成（0 行）は 404、フィルタ 0 件は 200 で空配列。iOS 条件検索はスナップショットが取れないときだけこれを呼ぶ。`screen_index` は財務 ingest 直後に 1 社ずつ派生更新し、公開床（servable）の `company_financials` は現行 fin-vN 一致を問わず次回 ingest で投影する（列定義変更後の手動一発は `blt-server screen-rebuild`。`screenIndexVersion` = `screen-v4`。`fin-vN` は上げない）。skills カタログには載せない。
+
+### スナップショット（`GET /v1/screen/snapshot`）
+
+- 中身：`screen_index` 全行（約 3,700 社）を列形式で返す。`schema_version`（形の版、`screenSnapshotSchemaVersion` = 1）/ `screen_version`（`screenIndexVersion`）/ `count` / `code` / `name` / `market` / `sector` / `period_end` / `metrics`（許可リスト 12 指標すべて。指標名 → 行と同じ長さの配列、null は null）/ `payout_ratio_3y`（行ごとに長さ 3、古→新）。code 昇順。数値は小数 4 桁に丸める（閾値との比較で境界がずれるのは 0.00005 未満の行だけ）。索引未生成は 404、DB 非接続は 503。skills カタログ・MCP には載せない
+- 検証子：本文の SHA-256 を強い `ETag`。`If-None-Match` 一致は 304（本文なし）。`Cache-Control: private, no-cache`
+- 端末内検索（`Apps/BlueTicker/ScreenSnapshot`）は `GET /v1/screen` と同じ規則：業種は完全一致の OR（空は全業種）、範囲は両端含む AND、フィルタ・ソート対象が null の行は落とす、同値はコード昇順、結果は 50 件
+- 表示：保存済みがあれば通信せずに件数を出す（業種変更も debounce なし）。表示のたびに条件付き GET（前回の取得から 1 時間以内は送らない）。304 は取得時刻だけ進め、200 は保存を差し替えて数え直す。結果画面も同じ保存から引く。件数と結果画面の同時取得は 1 本にまとめる
+- 失敗時：保存済みの分を使い続ける。版違い・列の長さ不一致・途中で切れた本文は失敗扱いで保存を差し替えない。保存も取得もできなければ `GET /v1/screen` に戻す
+- 保存：本文と `ETag` / 取得時刻を Caches の `blt-screen/v1/screen-snapshot.json` に 1 ファイル（`ScreenSnapshotStore`）
+- 解析・検索・再検証の判定は `Apps/BlueTicker/ScreenSnapshot`（Linux / macOS の `swift test`）。アプリはそのソースを直接コンパイルする
 
 ## 認証
 
