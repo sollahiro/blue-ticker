@@ -61,6 +61,8 @@ public struct BltServerContext: Sendable {
     let employeesTableDecider: (any EmployeesTableDeciding)?
     /// 設備投資等の概要で未タグ行の種別（reconciling / segment）の判定。同じキーが無いときは nil（行を足さない）。
     let capexOverviewRowDecider: (any CapexOverviewRowDeciding)?
+    /// 関係会社表の区分（目印の無い表だけ）。同じキーが無いときは nil（区分は unclassified のまま）。
+    let relationKindDecider: (any RelationKindDeciding)?
     /// employees / rd / goodwill / 報告セグメント指標軸が同一 doc を軸ループで再パースしないためのメモ。
     let businessSegmentDimensionCache: BusinessSegmentDimensionCache
 
@@ -80,7 +82,8 @@ public struct BltServerContext: Sendable {
         segmentProfitDecider: (any SegmentProfitDeciding)? = nil,
         revenueRecognitionRowRoleDecider: (any RevenueRecognitionRowRoleDeciding)? = nil,
         employeesTableDecider: (any EmployeesTableDeciding)? = nil,
-        capexOverviewRowDecider: (any CapexOverviewRowDeciding)? = nil
+        capexOverviewRowDecider: (any CapexOverviewRowDeciding)? = nil,
+        relationKindDecider: (any RelationKindDeciding)? = nil
     ) {
         self.cacheDir = cacheDir
         let store = EdinetCacheStore(cacheDir: edinetCacheDir(cacheDir))
@@ -104,6 +107,7 @@ public struct BltServerContext: Sendable {
         self.revenueRecognitionRowRoleDecider = revenueRecognitionRowRoleDecider
         self.employeesTableDecider = employeesTableDecider
         self.capexOverviewRowDecider = capexOverviewRowDecider
+        self.relationKindDecider = relationKindDecider
         self.businessSegmentDimensionCache = BusinessSegmentDimensionCache()
     }
 }
@@ -236,6 +240,9 @@ public func makeBltServerContext() async -> BltServerContext? {
     let capexOverviewRowDecider: (any CapexOverviewRowDeciding)? = decisionsClient.map {
         OpenRouterCapexOverviewRowDecider(client: $0)
     }
+    let relationKindDecider: (any RelationKindDeciding)? = decisionsClient.map {
+        OpenRouterRelationKindDecider(client: $0)
+    }
     return BltServerContext(
         apiKey: key, cacheDir: cacheDir, overviewChatClient: overviewChatClient,
         overviewModel: overviewEndpoint?.model ?? companyOverviewDefaultModel,
@@ -251,7 +258,8 @@ public func makeBltServerContext() async -> BltServerContext? {
         segmentProfitDecider: segmentProfitDecider,
         revenueRecognitionRowRoleDecider: revenueRecognitionRowRoleDecider,
         employeesTableDecider: employeesTableDecider,
-        capexOverviewRowDecider: capexOverviewRowDecider)
+        capexOverviewRowDecider: capexOverviewRowDecider,
+        relationKindDecider: relationKindDecider)
 }
 
 // MARK: - REST Facade
@@ -528,6 +536,26 @@ public enum BreakdownResolveResult: Sendable {
     /// 監査の無い not_applicable。既存の呼び出しはこちら。
     public static func notApplicable(reason: String) -> BreakdownResolveResult {
         .notApplicable(reason: reason, audit: nil)
+    }
+}
+
+public extension BltServerContext {
+    /// 関係（顧客・グループ会社・出資先・大株主）の抽出（ingest 用。stage は `relations`）。
+    /// 区分の目印が無い関係会社表だけ Jev（`RelationKindJev`）。キーが無ければ `unclassified` のまま。
+    func extractCompanyRelations(
+        docID: String, correctionDocIDs: [String] = []
+    ) async -> CompanyRelationsResolveResult {
+        guard let xbrlDir = await downloadAnnualFilingXbrl(
+            docID: docID, correctionDocIDs: correctionDocIDs
+        ) else { return .failed }
+        let result = CompanyRelationsExtractor.extract(xbrlDir: xbrlDir)
+        return .extracted(
+            await RelationKindJev.apply(result, decider: relationKindDecider, docID: docID))
+    }
+
+    /// 名前解決の EDINET 提出者索引（`assets/EdinetcodeDlInfo.csv` の全行）。
+    func relationNameDirectory() async -> RelationNameDirectory {
+        RelationNameDirectory(filers: await edinetFilerNames())
     }
 }
 

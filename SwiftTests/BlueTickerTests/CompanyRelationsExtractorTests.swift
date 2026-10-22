@@ -1,0 +1,230 @@
+// 関係（顧客・関係会社・出資先・大株主）抽出の検証。
+// HTML 断片の単体テストと、実書類（キャッシュが無ければ SKIP）での形の確認。
+// 期待値は実害が出た行・課題の Spec に挙がった行だけ（網羅的な golden にしない）。
+
+import Foundation
+import Testing
+
+@testable import BlueTickerCore
+
+private func realXbrlDir(_ docID: String) async -> URL? {
+    await SmokeCacheSupport.ensureCached([docID])
+    let dir = SmokeCacheSupport.cacheDir.appendingPathComponent("\(docID)_xbrl")
+    guard FileManager.default.fileExists(atPath: dir.path) else {
+        print("SKIP   \(docID): XBRL キャッシュなし")
+        return nil
+    }
+    return dir
+}
+
+private func rows(_ result: CompanyRelationsExtractor.Result, section: String) -> [CompanyRelationDraft] {
+    result.extraction.rows.filter { $0.section == section }
+}
+
+@Suite struct CompanyRelationsExtractorTests {
+    // MARK: - 顧客表
+
+    @Test func customerTableReadsNameAmountSegmentAndUnit() {
+        let html = """
+            <p>３．主要な顧客ごとの情報</p>
+            <table>
+            <tr><td></td><td></td><td>(単位：千円)</td></tr>
+            <tr><td>顧客の名称又は氏名</td><td>売上高</td><td>関連するセグメント名</td></tr>
+            <tr><td>株式会社エー</td><td>1,534,174</td><td>装置事業</td></tr>
+            <tr><td>ＴＯＰＰＡＮ株式会社 (注)</td><td>667,154</td><td>装置事業</td></tr>
+            <tr><td>合計</td><td>2,201,328</td><td></td></tr>
+            </table>
+            """
+        let rows = CompanyRelationsExtractor.parseMainCustomers(html: html)
+        #expect(rows.map(\.nameRaw) == ["株式会社エー", "ＴＯＰＰＡＮ株式会社"])
+        #expect(rows.map(\.amountYen) == [1_534_174_000, 667_154_000])
+        #expect(rows.allSatisfy { $0.segmentLabel == "装置事業" && $0.kind == relationKindCustomer })
+    }
+
+    @Test func customerTableKeepsOnlyCurrentPeriodWhenBothPeriodsInOneBlock() {
+        let html = """
+            <p>前連結会計年度（自 2024年4月1日 至 2025年3月31日）</p>
+            <table><tr><td>相手先</td><td>売上高(百万円)</td></tr><tr><td>前期社</td><td>10</td></tr></table>
+            <p>当連結会計年度（自 2025年4月1日 至 2026年3月31日）</p>
+            <table><tr><td>相手先</td><td>売上高(百万円)</td></tr><tr><td>当期社</td><td>20</td></tr></table>
+            """
+        let rows = CompanyRelationsExtractor.parseMainCustomers(html: html)
+        #expect(rows.map(\.nameRaw) == ["当期社"])
+        #expect(rows.first?.amountYen == 20_000_000)
+    }
+
+    @Test func omissionSentenceIsOmittedNotUnextracted() {
+        let html = "<p>外部顧客への売上高のうち、連結損益計算書の売上高の10％以上を占める相手先がないため、記載を省略しております。</p>"
+        #expect(CompanyRelationsExtractor.parseMainCustomers(html: html).isEmpty)
+        #expect(CompanyRelationsExtractor.omissionStatus(html) == relationSectionStatusOmitted)
+    }
+
+    // MARK: - 関係会社表
+
+    @Test func groupTableHeadingRowsSetKindAndRatioColumns() {
+        let html = """
+            <table>
+            <tr><td rowspan="2">名称</td><td rowspan="2">住所</td><td rowspan="2">主要な事業の内容</td>
+                <td colspan="2">議決権の所有(被所有)割合</td><td rowspan="2">関係内容</td></tr>
+            <tr><td>所有割合(％)</td><td>被所有割合(％)</td></tr>
+            <tr><td>(親会社)</td><td></td><td></td><td></td><td></td><td></td></tr>
+            <tr><td>株式会社オヤ</td><td>東京都</td><td>持株会社</td><td>―</td><td>51.2</td><td>―</td></tr>
+            <tr><td>(連結子会社)</td><td></td><td></td><td></td><td></td><td></td></tr>
+            <tr><td>㈱コー (注)４，６</td><td>東京都</td><td>日本</td><td>100.0 (25.0)</td><td>―</td><td>―</td></tr>
+            <tr><td>(持分法適用関連会社)</td><td></td><td></td><td></td><td></td><td></td></tr>
+            <tr><td>カンレン㈱ ※１</td><td>大阪市</td><td>日本</td><td>33.4</td><td>―</td><td>―</td></tr>
+            <tr><td>その他54社</td><td></td><td></td><td></td><td></td><td></td></tr>
+            </table>
+            """
+        let parsed = CompanyRelationsExtractor.parseAffiliatedEntities(
+            html: html, section: relationSectionAffiliatedEntities, defaultKind: nil)
+        #expect(parsed.pending.isEmpty)
+        #expect(parsed.rows.map(\.nameRaw) == ["株式会社オヤ", "㈱コー", "カンレン㈱"])
+        #expect(parsed.rows.map(\.kind) == [relationKindParent, relationKindSubsidiary, relationKindAffiliate])
+        #expect(parsed.rows.map(\.votingRatio) == [51.2, 100.0, 33.4])
+        #expect(parsed.rows.allSatisfy { $0.decidedBy == relationDecidedByRule && !$0.needsReview })
+    }
+
+    @Test func groupKindFromNamePrefixAndOutsideHeading() {
+        let prefixed = """
+            <table>
+            <tr><td>名称</td><td>住所</td><td>資本金</td><td>主要な事業の内容</td><td>議決権の所有割合（％）</td><td>関係内容</td></tr>
+            <tr><td>（連結子会社） Example U.S.A., Inc. （注）2</td><td>米国</td><td>400千米ドル</td><td>販売</td><td>100</td><td>販売</td></tr>
+            <tr><td>（持分法適用関連会社） 株式会社オークション</td><td>横浜市</td><td>212</td><td>事業</td><td>33.5</td><td>取引</td></tr>
+            </table>
+            """
+        let p = CompanyRelationsExtractor.parseAffiliatedEntities(
+            html: prefixed, section: relationSectionAffiliatedEntities, defaultKind: nil)
+        #expect(p.rows.map(\.nameRaw) == ["Example U.S.A., Inc.", "株式会社オークション"])
+        #expect(p.rows.map(\.kind) == [relationKindSubsidiary, relationKindAffiliate])
+
+        let outside = """
+            <p>４【関係会社の状況】</p><p>(1）連結子会社</p>
+            <table>
+            <tr><td>名称</td><td>住所</td><td>資本金</td><td>主要な事業の内容</td><td>所有持分割合（％）</td><td>関係内容</td></tr>
+            <tr><td>コー㈱ （注）３</td><td>東京都</td><td>50</td><td>日本</td><td>100.00</td><td>有</td></tr>
+            </table>
+            <p>（注）１ 「主要な事業の内容」欄には、セグメントの名称を記載しております。</p>
+            <p>(2）持分法適用会社</p>
+            <table>
+            <tr><td>名称</td><td>住所</td><td>資本金</td><td>主要な事業の内容</td><td>議決権の所有割合（％）</td><td>関係内容</td></tr>
+            <tr><td>カンレン㈱</td><td>東京都</td><td>50</td><td>日本</td><td>49.00 (49.00)</td><td>有</td></tr>
+            </table>
+            """
+        let o = CompanyRelationsExtractor.parseAffiliatedEntities(
+            html: outside, section: relationSectionAffiliatedEntities, defaultKind: nil)
+        #expect(o.rows.map(\.kind) == [relationKindSubsidiary, relationKindAffiliate])
+        #expect(o.rows.map(\.votingRatio) == [100.0, 49.0])
+    }
+
+    @Test func unmarkedGroupTableIsPendingForJev() {
+        let html = """
+            <table>
+            <tr><td>名称</td><td>住所</td><td>資本金</td><td>主要な事業の内容</td><td>議決権の所有割合（％）</td><td>関係内容</td></tr>
+            <tr><td>コー㈱</td><td>東京都</td><td>50</td><td>日本</td><td>100.00</td><td>有</td></tr>
+            </table>
+            """
+        let parsed = CompanyRelationsExtractor.parseAffiliatedEntities(
+            html: html, section: relationSectionAffiliatedEntities, defaultKind: nil)
+        #expect(parsed.rows.map(\.kind) == [relationKindUnclassified])
+        #expect(parsed.rows.first?.decidedBy == relationDecidedByJev)
+        #expect(parsed.rows.first?.needsReview == true)
+        #expect(parsed.pending.map(\.rowIndices) == [[0]])
+    }
+
+    @Test func jevBelowThresholdKeepsNeedsReviewAndAcceptedSetsDecidedBy() async {
+        let html = """
+            <table>
+            <tr><td>名称</td><td>住所</td><td>議決権の所有割合（％）</td></tr>
+            <tr><td>コー㈱</td><td>東京都</td><td>100.00</td></tr>
+            </table>
+            """
+        let parsed = CompanyRelationsExtractor.parseAffiliatedEntities(
+            html: html, section: relationSectionAffiliatedEntities, defaultKind: nil)
+        let result = CompanyRelationsExtractor.Result(
+            extraction: CompanyRelationsExtraction(rows: parsed.rows, fyEnd: nil),
+            pendingGroupTables: parsed.pending)
+
+        let low = await RelationKindJev.apply(
+            result, decider: FakeRelationKindDecider(selected: relationKindSubsidiary, probability: 0.8),
+            docID: "S100TEST")
+        #expect(low.rows.first?.kind == relationKindUnclassified)
+        #expect(low.rows.first?.needsReview == true)
+        #expect(low.rows.first?.decidedBy == relationDecidedByJev)
+        #expect(!isPubliclyServableRelation(
+            kind: low.rows[0].kind, decidedBy: low.rows[0].decidedBy,
+            needsReview: low.rows[0].needsReview, warning: nil))
+
+        let high = await RelationKindJev.apply(
+            result, decider: FakeRelationKindDecider(selected: relationKindSubsidiary, probability: 0.97),
+            docID: "S100TEST")
+        #expect(high.rows.first?.kind == relationKindSubsidiary)
+        #expect(high.rows.first?.needsReview == false)
+        #expect(high.rows.first?.decidedBy == relationDecidedByJev)
+    }
+
+    // MARK: - 実書類
+
+    @Test func showaShinkuMainCustomersCurrentPeriod() async {
+        guard let dir = await realXbrlDir("S100YKGJ") else { return }
+        let result = CompanyRelationsExtractor.extract(xbrlDir: dir)
+        let customers = rows(result, section: relationSectionMainCustomers)
+        #expect(customers.map(\.nameRaw) == ["Largan Precision Co.Ltd", "株式会社大真空", "三生電子株式会社"])
+        #expect(customers.map(\.amountYen) == [2_060_814_000, 1_534_174_000, 1_373_043_000])
+        #expect(customers.allSatisfy { $0.segmentLabel == "真空技術応用装置事業" })
+        let group = rows(result, section: relationSectionAffiliatedEntities)
+        #expect(group.contains { $0.kind == relationKindOtherRelated && $0.nameRaw == "株式会社アルバック" })
+        #expect(group.contains { $0.kind == relationKindSubsidiary && $0.nameRaw == "株式会社エフ・イー・シー" })
+    }
+
+    @Test func tvAsahiMainCustomerDentsu() async {
+        guard let dir = await realXbrlDir("S100YCD2") else { return }
+        let customers = rows(CompanyRelationsExtractor.extract(xbrlDir: dir), section: relationSectionMainCustomers)
+        #expect(customers.first?.nameRaw == "㈱電通")
+        #expect(customers.first?.amountYen == 95_235_000_000)
+    }
+
+    @Test func dentsuGroupSubsidiaryNoteMarkerIsDropped() async {
+        guard let dir = await realXbrlDir("S100XS0O") else { return }
+        let group = rows(CompanyRelationsExtractor.extract(xbrlDir: dir), section: relationSectionAffiliatedEntities)
+        let dentsu = group.first { $0.nameRaw == "㈱電通" }
+        #expect(dentsu?.kind == relationKindSubsidiary)
+        #expect(dentsu?.votingRatio == 100.0)
+        #expect(!group.contains { $0.nameRaw.contains("注") })
+    }
+
+    @Test func toyotaPolicyHoldingsAndMajorShareholders() async {
+        guard let dir = await realXbrlDir("S100Y8NY") else { return }
+        let result = CompanyRelationsExtractor.extract(xbrlDir: dir)
+        let investees = rows(result, section: relationSectionPolicyHoldings)
+        #expect(investees.count > 10)
+        #expect(investees.first?.shares == 363_365_900)
+        #expect(investees.first?.bookValueYen == 989_627_000_000)
+        #expect(investees.allSatisfy { $0.kind == relationKindInvestee && $0.holder != nil })
+        #expect(investees.contains { $0.isDeemed == true })
+        let majors = rows(result, section: relationSectionMajorShareholders)
+        #expect(majors.map(\.rank) == Array(1...10).map { Optional($0) })
+        #expect(majors.first?.nameRaw == "日本マスタートラスト信託銀行㈱")
+        #expect(majors.first?.shares == 1_667_971_000)
+        #expect(majors.first?.ratio == 0.128)
+        #expect(majors.allSatisfy { $0.address != nil })
+        // 見出し行だけを繰り返した続きの表（海外の連結子会社）は前の表の区分を引き継ぐ。
+        let group = rows(result, section: relationSectionAffiliatedEntities)
+        #expect(group.first { $0.nameRaw == "トヨタ モータークレジット㈱" }?.kind == relationKindSubsidiary)
+        #expect(!group.contains { $0.kind == relationKindUnclassified })
+    }
+}
+
+struct FakeRelationKindDecider: RelationKindDeciding {
+    var selected: String?
+    var probability: Double?
+
+    func classifyGroupTable(
+        table: CompanyRelationsExtractor.PendingGroupTable, docID: String
+    ) async -> JevChoiceAggregate.Sample {
+        JevChoiceAggregate.Sample(
+            selected: selected, probability: probability,
+            probabilities: selected.map { [$0: probability ?? 0] } ?? [:],
+            options: relationGroupKinds, model: "fake")
+    }
+}
