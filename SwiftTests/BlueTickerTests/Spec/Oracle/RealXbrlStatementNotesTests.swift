@@ -629,7 +629,7 @@ import Testing
 
         // 縦積み内訳自体（カテゴリ見出し「その他有利子負債」は値なしのため除外され、
         // 内訳「コマーシャル・ペーパー」のみが値を持つ）も正しく抽出されること。
-        let other = try #require(components.first { $0.label == "その他有利子負債" })
+        let other = try #require(components.first { $0.label == "コマーシャル・ペーパー(１年以内に償還)" })
         #expect(other.priorBalance == 25_000_000_000)
         #expect(other.currentBalance == 62_000_000_000)
 
