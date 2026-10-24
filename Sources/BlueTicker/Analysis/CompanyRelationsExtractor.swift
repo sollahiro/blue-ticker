@@ -240,8 +240,14 @@ enum CompanyRelationsExtractor {
                     headingKind = kind
                     continue
                 }
-                // 全列にまたがる見出し（「●探鉱・開発・生産等」）は相手ではない。
+                // 横に結合した見出し（「●探鉱・開発・生産等」）は相手ではない。
                 if isSpanningLabelRow(row) { continue }
+                // 括弧で囲んだだけの名称（「（繊維）」「＜親会社＞」）は見出し。区分語があれば区分を切り替える。
+                // 「＜親会社＞」の行のように他の列に値が入っていても相手ではない。
+                if isWrappedLabel(rawName) {
+                    if let kind = groupKind(from: rawName) { headingKind = kind }
+                    continue
+                }
                 var (prefixKind, name) = stripKindPrefix(rawName)
                 // 「（持分法適用会社）澤藤電機㈱」のように区分の先頭行の名称に付いた区分語は、次の区分までの行にも効く。
                 if let prefixKind { headingKind = prefixKind }
@@ -348,16 +354,35 @@ enum CompanyRelationsExtractor {
         grid.prefix(3).contains { row in
             row.contains { cell in
                 let c = compactCell(cell)
-                return c.contains("損益情報") || c.hasPrefix("売上高") || c.hasPrefix("(1)売上高")
-                    || c.hasPrefix("①売上高") || c.hasPrefix("売上収益")
+                if c.contains("損益情報") { return true }
+                let ns = c as NSString
+                let label = enumeratorPrefixPattern.stringByReplacingMatches(
+                    in: c, range: NSRange(location: 0, length: ns.length), withTemplate: "")
+                return financialInfoLabels.contains { label.hasPrefix($0) }
             }
         }
     }
 
-    /// 全列が同じ文字列の行（区分語のない、表の幅いっぱいの見出し）。
+    /// 損益情報の表の項目名（「①売上収益」「(1)売上高」の番号は外して比べる）。
+    private static let financialInfoLabels = ["売上高", "売上収益", "営業収益"]
+    private static let enumeratorPrefixPattern = try! NSRegularExpression(
+        pattern: #"^[(（]?[0-9０-９①-⑳]+[)）.．]?"#)
+
+    /// 名称の全体が 1 組の括弧に入っている（「（繊維）」「〔食肉の販売〕」「＜親会社＞」「《連結子会社》」）。
+    static func isWrappedLabel(_ text: String) -> Bool {
+        let c = compactCell(text)
+        let ns = c as NSString
+        return wrappedLabelPattern.firstMatch(in: c, range: NSRange(location: 0, length: ns.length)) != nil
+    }
+
+    private static let wrappedLabelPattern = try! NSRegularExpression(
+        pattern: #"^(?:\([^()]*\)|〔[^〔〕]*〕|\[[^\[\]]*\]|<[^<>]*>|《[^《》]*》|【[^【】]*】)$"#)
+
+    /// 横に結合した見出しだけの行（区分語のない「●探鉱・開発・生産等」「国内」）。
+    /// 2 列以上にまたがる同じ文字列のほかは空の行。
     private static func isSpanningLabelRow(_ row: [String]) -> Bool {
-        let cells = row.map(compactCell)
-        guard row.count >= 3, let first = cells.first, !first.isEmpty else { return false }
+        let cells = row.map(compactCell).filter { !$0.isEmpty }
+        guard row.count >= 3, cells.count >= 2, let first = cells.first else { return false }
         return cells.allSatisfy { $0 == first }
     }
 
@@ -720,20 +745,65 @@ enum CompanyRelationsExtractor {
         var precedingText: String { precedingParagraphs.joined(separator: " ") }
     }
 
-    private static let tablePattern = try! NSRegularExpression(
-        pattern: #"<table\b.*?</table>"#, options: [.caseInsensitive, .dotMatchesLineSeparators])
+    private static let tableTagPattern = try! NSRegularExpression(
+        pattern: #"<(/?)table\b[^>]*>"#, options: [.caseInsensitive])
+
+    /// 入れ子を数えた最上位の表の範囲（「関係内容」欄の中の表で外側の表を切らない）。閉じていない表は末尾まで。
+    private static func topLevelTableRanges(_ html: String) -> [NSRange] {
+        let ns = html as NSString
+        var ranges: [NSRange] = []
+        var depth = 0
+        var start = 0
+        for m in tableTagPattern.matches(in: html, range: NSRange(location: 0, length: ns.length)) {
+            if m.range(at: 1).length == 0 {
+                if depth == 0 { start = m.range.location }
+                depth += 1
+            } else if depth > 0 {
+                depth -= 1
+                if depth == 0 { ranges.append(NSRange(location: start, length: m.range.upperBound - start)) }
+            }
+        }
+        if depth > 0 { ranges.append(NSRange(location: start, length: ns.length - start)) }
+        return ranges
+    }
+
+    /// 表の中の表を、その文字列（セルの値として 1 つの段落）に置き換える。
+    private static func flattenNestedTables(_ tableHTML: String) -> String {
+        let ns = tableHTML as NSString
+        var nested: [NSRange] = []
+        var depth = 0
+        var start = 0
+        for m in tableTagPattern.matches(in: tableHTML, range: NSRange(location: 0, length: ns.length)) {
+            if m.range(at: 1).length == 0 {
+                depth += 1
+                if depth == 2 { start = m.range.location }
+            } else if depth > 0 {
+                if depth == 2 { nested.append(NSRange(location: start, length: m.range.upperBound - start)) }
+                depth -= 1
+            }
+        }
+        guard !nested.isEmpty else { return tableHTML }
+        var out = tableHTML
+        for range in nested.reversed() {
+            let inner = (out as NSString).substring(with: range)
+            let text = ((try? SwiftSoup.parseBodyFragment(inner).text()) ?? "")
+                .replacingOccurrences(of: "&", with: "&amp;").replacingOccurrences(of: "<", with: "&lt;")
+            out = (out as NSString).replacingCharacters(in: range, with: "<span>\(text)</span>")
+        }
+        return out
+    }
 
     /// TextBlock を「直前の段落＋表」の並びに分ける。最後の要素は表の後ろの段落だけ（`table == nil`）。
     static func splitTables(_ html: String) -> [HTMLSegment] {
         let ns = html as NSString
         var segments: [HTMLSegment] = []
         var cursor = 0
-        for match in tablePattern.matches(in: html, range: NSRange(location: 0, length: ns.length)) {
-            let before = ns.substring(with: NSRange(location: cursor, length: match.range.location - cursor))
-            let tableHTML = ns.substring(with: match.range)
+        for range in topLevelTableRanges(html) {
+            let before = ns.substring(with: NSRange(location: cursor, length: range.location - cursor))
+            let tableHTML = flattenNestedTables(ns.substring(with: range))
             segments.append(
                 HTMLSegment(precedingParagraphs: paragraphs(before), table: parseTable(tableHTML)))
-            cursor = match.range.upperBound
+            cursor = range.upperBound
         }
         segments.append(HTMLSegment(precedingParagraphs: paragraphs(ns.substring(from: cursor)), table: nil))
         return segments
@@ -828,6 +898,11 @@ enum CompanyRelationsExtractor {
     private static let aggregateRowPattern = try! NSRegularExpression(
         pattern: #"^(その他|他)(の)?[0-9０-９]+社|^[0-9０-９]+社$|^\(.*\)[0-9０-９]+社$|^その他.*[0-9０-９]+社$"#)
 
+    private static let countRowPattern = try! NSRegularExpression(pattern: #"[0-9]+社\)?$"#)
+    /// 会社の法人格の表記（社名を含む行かを見るだけ。特定の社名は持たない）。
+    private static let legalFormPattern = try! NSRegularExpression(
+        pattern: #"㈱|㈲|\(株\)|\(有\)|株式会社|有限会社|合同会社|合資会社|合名会社|(?i:inc|ltd|llc|llp|gmbh|corp|limited|plc|pte|sdn|bhd|b\.v|n\.v|s\.a|s\.r\.o|co\.)|(?<![A-Za-z])(?:AS|AG|SE|KG|SA|LP)(?![A-Za-z])"#)
+
     /// 相手の名前として採るか（合計・計・その他・単位行・注記行・数字だけを落とす）。
     static func isCounterpartyName(_ name: String) -> Bool {
         let c = compactCell(name)
@@ -843,6 +918,15 @@ enum CompanyRelationsExtractor {
         if aggregateRowPattern.firstMatch(in: c, range: NSRange(location: 0, length: ns.length)) != nil {
             return false
         }
+        // 社数で終わる集計の行（「合計127社」「持分法適用関連会社2社」「その他(27社)」）。
+        // 「㈱不二家その他6社」「X GmbH及びグループ会社1社」のように社名を含む行は残す。
+        if countRowPattern.firstMatch(in: c, range: NSRange(location: 0, length: ns.length)) != nil,
+            !c.contains("及び"),
+            legalFormPattern.firstMatch(in: c, range: NSRange(location: 0, length: ns.length)) == nil
+        {
+            return false
+        }
+        if c.first.map({ ("①"..."⑳").contains($0) }) == true { return false }
         return true
     }
 
