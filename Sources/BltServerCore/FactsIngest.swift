@@ -170,7 +170,7 @@ public func runFactsIngestCommand(
     try bootstrapBltLogging(from: &env)
     let app = try await Application.make(env)
     do {
-        try await configureDatabase(app)
+        try await configureDatabase(app, schema: .migrate)
         // 上場・国内法人の対象ユニバース。financials/filing-sections 共通で候補を絞り込み、
         // 上場廃止・外国法人など二度と成功しない企業への無駄なリトライを避ける。
         let listed = await context.listedCompanyCodes()

@@ -6,6 +6,7 @@ name: Deploy
 # workflow_run はパスフィルタ非対応のため、「前回成功した Deploy run の head_sha からの
 # 差分にデプロイ関連パスが含まれるか」をジョブ内で判定する（スキップで終わった成功 run も
 # 基準にしてよい: その run 自身が「基準〜その時点に関連差分なし」を検証済みのため）。
+# 差分にマイグレーションが含まれる run は失敗で止める（Mac で migrate してから手動デプロイ）。
 # `v*` タグ push では起動しない（旧 release.yml 相当の Homebrew 成果物は作らない）。
 on:
   workflow_run:
@@ -65,11 +66,33 @@ jobs:
             echo "HEAD は既にデプロイ済みの $base に含まれるためスキップします"
             exit 0
           fi
-          # Dockerfile が COPY する scripts/・assets/ もデプロイ関連パスに含める。
           # --no-renames: rename 検出時に旧パス（Sources/ からの移動元等）が出力から
           # 消えて取りこぼすのを防ぎ、両側を列挙させる
-          if git diff --no-renames --name-only "$base" HEAD | \
-             grep -qE '^(Sources/|scripts/|assets/|Dockerfile$|fly\.toml$|Package\.swift$|Package\.resolved$)'; then
+          changed_files=$(git diff --no-renames --name-only "$base" HEAD)
+          # マイグレーションを含む変更は自動デプロイしない。blt-server は起動時に migrate しない
+          # （読み取りロールで動く）ため、Mac で `blt-server migrate` を流す前に新しいサーバーが出ると
+          # 未作成の列・表を読みに行く。失敗で止めるのは、この run を次回の基準（成功 run）にしないため
+          # （成功扱いにすると、次の push でマイグレーションの差分が判定から消えて素通りする）。
+          # 手順: Mac で migrate → Actions から Deploy を workflow_dispatch（docs/ingest-policy.md「出荷順」）。
+          migrations=$(printf '%s\n' "$changed_files" | grep -E '^Sources/[^/]+/Migrations/' || true)
+          if [ -n "$migrations" ]; then
+            echo "::error::マイグレーションを含むため自動デプロイしません。Mac で blt-server migrate を実行してから、Deploy を workflow_dispatch で起動してください。"
+            printf '%s\n' "$migrations"
+            {
+              echo "### 自動デプロイを止めました（マイグレーションあり）"
+              echo
+              echo "1. Mac で \`DATABASE_URL=\"\$BLT_NEON_WRITE_DATABASE_URL\" ./.build/release/blt-server migrate\`"
+              echo "2. Actions の Deploy を workflow_dispatch で実行"
+              echo
+              printf '%s\n' "$migrations" | sed 's/^/- /'
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          # blt-server イメージに入るものだけを見る（Dockerfile は blt-server だけをビルドし、
+          # 実行ステージへ入れるのは scripts/entrypoint.sh と assets/EdinetcodeDlInfo.csv だけ）。
+          # 取り込みスクリプト（scripts/jp/ など）や taxonomy だけの変更ではデプロイしない。
+          if printf '%s\n' "$changed_files" | \
+             grep -qE '^(Sources/(BltServer|BltServerCore|BltMcpServerCore|BlueTicker)/|scripts/entrypoint\.sh$|assets/EdinetcodeDlInfo\.csv$|Dockerfile$|\.dockerignore$|fly\.toml$|Package\.swift$|Package\.resolved$)'; then
             echo "changed=true" >> "$GITHUB_OUTPUT"
           else
             echo "changed=false" >> "$GITHUB_OUTPUT"

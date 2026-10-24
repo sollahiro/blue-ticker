@@ -142,7 +142,7 @@ public func runScreenRebuildCommand(limit: Int? = nil) async throws {
     try bootstrapBltLogging(from: &env)
     let app = try await Application.make(env)
     do {
-        try await configureDatabase(app)
+        try await configureDatabase(app, schema: .migrate)
         let summary = try await rebuildScreenIndex(db: app.db, limit: limit, logger: app.logger)
         app.logger.notice(
             "screen_index rebuild completed",

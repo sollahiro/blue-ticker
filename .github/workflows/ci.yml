@@ -4,6 +4,14 @@ name: CI
 # 検証対象は blt-server（唯一の product）とテストスイート、iOS クライアントの
 # シミュレータ向けコンパイル、および fly.toml の serviceless 不変条件。
 # デプロイは deploy.yml（CI 成功後）。
+#
+# 1 ジョブ 1 責務（docs/ci-checks.md）:
+#   build-linux / build-macos  コンパイルだけ（テストは実行しない）
+#   unit-tests                 golden 以外の Swift テスト（実 Postgres・読み取り専用ロールを含む）
+#   golden-suite               golden と実 XBRL のスイート
+#   ios-paths / ios / ios-packages  iOS アプリ本体と iOS 補助パッケージ（Apps/BlueTicker の変更時だけ）
+#   static-checks              scripts/ci の検査とリポジトリ不変条件（数秒で終わるものを 1 runner に集める）
+#   structure                  構造変更の通知（PR への書き込み権限を持つため分けておく）
 
 on:
   push:
@@ -12,10 +20,30 @@ on:
     branches: [main]
 
 jobs:
-  swift-macos:
-    # 本番 ingest は Mac で走るので、macOS でパッケージがビルドできることだけ確認する。
-    # テストは実行しない（iOS 補助パッケージのテストも含めて Linux の swift-linux と
-    # 必須チェック golden-suite で回す）。必須チェックではない。
+  build-linux:
+    # Linux（Fly のイメージと同じ swift:6.1）で全ターゲットとテストターゲットがコンパイルできること。
+    # テストは unit-tests / golden-suite が実行する。
+    runs-on: ubuntu-latest
+    container: swift:6.1
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache SwiftPM dependencies
+        uses: actions/cache@v4
+        with:
+          path: .build
+          key: swiftpm-linux-${{ hashFiles('Package.resolved') }}
+
+      - name: Build
+        # swift-nio 2.101.x の _NIOFileSystem が Linux で `import CSystem` を欠くため、
+        # swift-nio が有効化する upcoming feature MemberImportVisibility (Swift 6.1+) 下で
+        # st_ctim 等がエラー化する一時措置。詳細: .agents/rules/architecture.md / .agents/skills/deploy/SKILL.md
+        run: swift build --build-tests -Xswiftc -disable-upcoming-feature -Xswiftc MemberImportVisibility
+
+  build-macos:
+    # 本番 ingest は Mac で走るので、macOS でパッケージがビルドできることを確認する。
+    # テストは実行しない（unit-tests / golden-suite / ios-packages が Linux で回す）。
     # SwiftPM の .build キャッシュは使わない。キーが Package.resolved ハッシュだけだと
     # エントリが凍り、復元成功後に `_NumericsShims` 欠落で落ちることがある
     # （同一キー swiftpm-macos-<hash>-miv1 の成功/失敗が混在）。
@@ -104,9 +132,7 @@ jobs:
     # サーバーの swift test とはジョブを分けて並列に回し、サーバー CI を遅らせない。
     # iOS 26 SDK は macos-26 イメージの既定 Xcode 26.6 に入っている。
     # テストターゲットはまだ無いのでシミュレータは起動せず、SDK 向けコンパイルだけ確認する。
-    # シミュレータ不要の iOS Foundation 単体は swift-macos / swift-linux の
-    # `Apps/BlueTicker/HAPISConsumer` と `Apps/BlueTicker/ZeroAxisFill` と
-    # `Apps/BlueTicker/FundMath` と `Apps/BlueTicker/FeedRSS` と `Apps/BlueTicker/ScreenSnapshot` が回す。
+    # シミュレータ不要の iOS Foundation 単体（Apps/BlueTicker 配下の SwiftPM パッケージ）は ios-packages が回す。
     # 署名はしない（CODE_SIGNING_ALLOWED=NO。プロジェクトの DEVELOPMENT_TEAM は実機用）。
     needs: ios-paths
     if: needs.ios-paths.outputs.run == 'true'
@@ -134,11 +160,12 @@ jobs:
             COMPILER_INDEX_STORE_ENABLE=NO \
             | xcbeautify --quieter
 
-  swift-linux:
+  unit-tests:
     # SQLite では検証できない Postgres 固有挙動（JSONB・索引・String PK）も同一ジョブの
     # サービスコンテナ Postgres 16 で回帰させる（.agents/skills/deploy/SKILL.md「Neon E2E」）。
-    # PostgresIntegrationTests は BLT_TEST_POSTGRES_URL 設定時のみ実行される仕組みのため、
-    # 別ジョブに分けると同じ Linux フルビルドが2回走るだけになる。統合して1回にする。
+    # PostgresIntegrationTests / ReadOnlyRolePostgresTests は BLT_TEST_POSTGRES_URL 設定時のみ実行される
+    # 仕組みのため、別ジョブに分けると同じ Linux フルビルドが2回走るだけになる。統合して1回にする。
+    # ReadOnlyRolePostgresTests は配信経路が SELECT だけのロールで動くこと（DDL・書き込みをしない）を見る。
     runs-on: ubuntu-latest
     container: swift:6.1
     timeout-minutes: 30
@@ -170,7 +197,7 @@ jobs:
         # swift-nio 2.101.x の _NIOFileSystem が Linux で `import CSystem` を欠くため、
         # swift-nio が有効化する upcoming feature MemberImportVisibility (Swift 6.1+) 下で
         # st_ctim 等がエラー化する。macOS も同フラグが無いと EventSource が
-        # `_NumericsShims` を見失う（swift-macos のビルドと同じ一時措置）。
+        # `_NumericsShims` を見失う（build-linux / build-macos と同じ一時措置）。
         # 詳細: .agents/rules/architecture.md / .agents/skills/deploy/SKILL.md
         #
         # 数分かかる XBRL スイートとハング緩和テストは同一プロセス並列だと
@@ -188,6 +215,17 @@ jobs:
           GOLDEN_FILTER="$(scripts/ci/golden-suite.sh --print-filter)"
           swift test -Xswiftc -disable-upcoming-feature -Xswiftc MemberImportVisibility --skip StatelessTransportHangMitigationTests --skip "$GOLDEN_FILTER"
           swift test -Xswiftc -disable-upcoming-feature -Xswiftc MemberImportVisibility --filter StatelessTransportHangMitigationTests
+
+  ios-packages:
+    # iOS アプリの Foundation 単体（Apps/BlueTicker 配下の独立 SwiftPM パッケージ）のテスト。
+    # サーバーのパッケージとは依存を共有しないので、iOS 側の変更時だけ回す（ios-paths と同じ判定）。
+    needs: ios-paths
+    if: needs.ios-paths.outputs.run == 'true'
+    runs-on: ubuntu-latest
+    container: swift:6.1
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
 
       - name: Test HAPIS iOS consumer client
         working-directory: Apps/BlueTicker/HAPISConsumer
@@ -241,45 +279,6 @@ jobs:
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
           scripts/ci/golden-suite.sh
 
-  ci-scripts-selftest:
-    # 各チェックを意図的に壊した diff とクリーンな diff で検証する。
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Self-test scripts/ci
-        run: scripts/ci/tests/selftest.sh
-
-  diff-flags:
-    # issuer 単位の contains 照合 / 全件 .all() / トラッカー ID・URL の「新規」追加を hard fail。
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Flags (new occurrences only, baseline may only shrink)
-        env:
-          CI_BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          CI_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-        run: scripts/ci/flags.sh
-
-  golden-rules:
-    # ゴールデン変更時: 出典ノート / .checksums.json 更新 / 一括再生成の禁止。
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Golden checksums
-        run: scripts/ci/golden-suite.sh --checksums-only
-      - name: Golden-change rules
-        env:
-          CI_BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          CI_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          GOLDEN_BULK_APPROVED: ${{ contains(github.event.pull_request.labels.*.name, 'golden-bulk-approved') }}
-        run: scripts/ci/golden-rules.sh
-
   structure:
     # 構造変更ヒューリスティック。該当時は needs-architect ラベル + BLT_Architect webhook。
     # secrets 未設定なら警告のみで成功する。このジョブ自体は失敗させない。
@@ -303,24 +302,56 @@ jobs:
           ARCHITECT_WEBHOOK_AUTH: ${{ secrets.ARCHITECT_WEBHOOK_AUTH }}
         run: scripts/ci/structure.sh
 
-  repo-invariants:
-    # 方式A（Cloudflare Access・エッジ信頼）は「Tunnel 経由限定 + 公開ポート閉鎖 + Access ポリシー」の
-    # 3点セットで初めて成立する（.agents/skills/deploy/SKILL.md「Cloudflare Access」）。fly.toml に
-    # [http_service] / [[services]]（＝公開 LB・ポート）が復活すると、この前提が崩れ
-    # origin が無検証で素通りになる。TOML としてパースして判定する（コメント中の文字列
-    # 一致による誤検知を避けるため。fly.toml 自身の警告コメントが `[http_service]` という
-    # 文字列を含む）。
-    # あわせて Package.swift の products が blt-server のみであることを検証する
-    #（配布 ticker の再追加を防ぐ。swift:6.1 コンテナに依存しない ubuntu ジョブへ置く）。
+  static-checks:
+    # 数秒で終わるスクリプト検査とリポジトリ不変条件をまとめる（runner を 1 つだけ起こす）。
+    # PR だけの検査（flags / golden-rules）はステップの if で絞る。前のステップが落ちても
+    # 残りの検査は結果を出す（!cancelled()）。
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
 
+      - name: Self-test scripts/ci
+        # 各チェックを意図的に壊した diff とクリーンな diff で検証する。
+        run: scripts/ci/tests/selftest.sh
+
+      - name: Flags (new occurrences only, baseline may only shrink)
+        # issuer 単位の contains 照合 / 全件 .all() / トラッカー ID・URL の「新規」追加を hard fail。
+        if: ${{ !cancelled() && github.event_name == 'pull_request' }}
+        env:
+          CI_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          CI_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: scripts/ci/flags.sh
+
+      - name: Golden checksums
+        # ゴールデン変更時: 出典ノート / .checksums.json 更新 / 一括再生成の禁止。
+        if: ${{ !cancelled() && github.event_name == 'pull_request' }}
+        run: scripts/ci/golden-suite.sh --checksums-only
+
+      - name: Golden-change rules
+        if: ${{ !cancelled() && github.event_name == 'pull_request' }}
+        env:
+          CI_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          CI_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          GOLDEN_BULK_APPROVED: ${{ contains(github.event.pull_request.labels.*.name, 'golden-bulk-approved') }}
+        run: scripts/ci/golden-rules.sh
+
+      # ---- リポジトリ不変条件
+      # 方式A（Cloudflare Access・エッジ信頼）は「Tunnel 経由限定 + 公開ポート閉鎖 + Access ポリシー」の
+      # 3点セットで初めて成立する（.agents/skills/deploy/SKILL.md「Cloudflare Access」）。fly.toml に
+      # [http_service] / [[services]]（＝公開 LB・ポート）が復活すると、この前提が崩れ
+      # origin が無検証で素通りになる。TOML としてパースして判定する（コメント中の文字列
+      # 一致による誤検知を避けるため。fly.toml 自身の警告コメントが `[http_service]` という
+      # 文字列を含む）。
+      # あわせて Package.swift の products が blt-server のみであることを検証する
+      #（配布 ticker の再追加を防ぐ）。
       - name: Package products が blt-server のみであること
+        if: ${{ !cancelled() }}
         run: |
           python3 - <<'PYEOF'
           import pathlib
@@ -363,6 +394,7 @@ jobs:
           PYEOF
 
       - name: fly.toml が serviceless を維持しているか検証
+        if: ${{ !cancelled() }}
         run: |
           python3 - <<'PYEOF'
           import sys
@@ -385,10 +417,13 @@ jobs:
           PYEOF
 
       - name: Feed Trend Worker の入力正規化
+        if: ${{ !cancelled() }}
         run: node --test workers/feed-trend/src/validate.test.js
 
       - name: Feed RSS Worker の組み立てと fail closed
+        if: ${{ !cancelled() }}
         run: node --test workers/feed-rss/src/rss.test.js workers/feed-rss/src/feed.test.js workers/feed-rss/src/parity.test.js workers/feed-rss/src/query.test.js
 
       - name: Legal Worker の経路
+        if: ${{ !cancelled() }}
         run: node --test workers/legal/src/rewrite.test.js

@@ -1,6 +1,9 @@
 // blt-server エントリポイント。
 // 使い方:
-//   blt-server [--host HOST] [--port PORT]                   REST サーバーを起動
+//   blt-server [--host HOST] [--port PORT]                   REST サーバーを起動（DB は読み取りのみ。migrate しない）
+//   blt-server migrate                                       未適用のマイグレーションを DATABASE_URL へ適用
+//                                                            （DDL 権限が要る。sync / ingest 等の書き込みコマンドも
+//                                                            冒頭で同じ適用を行う。配信サーバーのデプロイ前に実行する）
 //   blt-server sync [--from YYYY-MM-DD] [--to YYYY-MM-DD]    EDINET 書類一覧を DB へ同期
 //   blt-server ingest [--limit N] [--with-facts] [--stages financials,
 //                     filing-sections,breakdowns,statements,statement-notes,icons,overviews,
@@ -88,7 +91,9 @@ let argv = CommandLine.arguments
 
 do {
     // 第1引数がサブコマンドなら分岐する（無ければサーバー起動）。
-    if argv.count > 1, argv[1] == "sync" {
+    if argv.count > 1, argv[1] == "migrate" {
+        try await runMigrateCommand()
+    } else if argv.count > 1, argv[1] == "sync" {
         try await runDocumentSyncCommand(
             from: optionValue("--from", in: argv),
             to: optionValue("--to", in: argv)

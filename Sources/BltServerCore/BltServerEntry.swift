@@ -46,7 +46,7 @@ public func runBltServer(host: String = "127.0.0.1", port: Int = 3000) async thr
         // financials 等の大きな JSONB 応答の帯域削減（クライアントの Accept-Encoding: gzip に応答）。
         app.http.server.configuration.responseCompression = .enabled
 
-        try await configureDatabase(app)
+        try await configureDatabase(app, schema: .readOnly)
         if let urlString = Environment.get("DATABASE_URL"), !urlString.isEmpty {
             startMasterDataPolling(app: app)
         }

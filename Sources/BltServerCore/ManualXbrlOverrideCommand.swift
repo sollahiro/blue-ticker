@@ -196,7 +196,7 @@ private func withOverrideDatabase(
     try bootstrapBltLogging(from: &env)
     let app = try await Application.make(env)
     do {
-        try await configureDatabase(app)
+        try await configureDatabase(app, schema: write ? .migrate : .readOnly)
         try await body(app.db)
     } catch {
         try? await app.asyncShutdown()

@@ -8,14 +8,22 @@ default to `merge-base(origin/main, HEAD)..HEAD`; override with `--base/--head` 
 | Job (branch protection name) | Script | Fails on |
 |---|---|---|
 | `golden-suite` | `scripts/ci/golden-suite.sh` | checksum mismatch or any failing golden test |
-| `golden-rules` | `scripts/ci/golden-suite.sh --checksums-only` + `scripts/ci/golden-rules.sh` | golden change rules below |
-| `diff-flags` | `scripts/ci/flags.sh` | new flagged occurrence, or baseline growth |
-| `ci-scripts-selftest` | `scripts/ci/tests/selftest.sh` | any check misbehaving on crafted bad/clean diffs |
+| `static-checks` | `scripts/ci/tests/selftest.sh`, then on PRs `scripts/ci/flags.sh`, `scripts/ci/golden-suite.sh --checksums-only` + `scripts/ci/golden-rules.sh`, then the repo invariants (Package products, serviceless `fly.toml`, Worker unit tests) | any check misbehaving on crafted bad/clean diffs; new flagged occurrence or baseline growth; golden change rules below; a broken invariant |
+| `build-linux` / `build-macos` | `swift build --build-tests` | the package or its tests do not compile |
+| `unit-tests` | `swift test` (golden filter skipped) with a Postgres 16 service | any non-golden test, including `PostgresIntegrationTests` and `ReadOnlyRolePostgresTests` |
 | `structure` | `scripts/ci/structure.sh` | never (labels + notifies only) |
 
-`swift-macos` is not a required check. It only compiles the package on macOS
-(`swift build --build-tests`, no SwiftPM `.build` cache). Tests run on Linux
-(`swift-linux` and `golden-suite`).
+Each job has one responsibility, so a red check names what broke. `build-*` only compiles,
+`unit-tests` and `golden-suite` only test, and the short script checks share one runner in
+`static-checks` (each step still runs when an earlier one fails). `build-macos` has no SwiftPM
+`.build` cache, because a frozen cache entry has failed with a missing `_NumericsShims`.
+`ios-paths`, `ios` and `ios-packages` run only when `Apps/BlueTicker/` or `ci.yml` changes, so
+they are not required checks.
+
+`ReadOnlyRolePostgresTests` applies every migration as the owner, then serves the DB-backed
+`/v1` routes with a role that only has `SELECT` and `default_transaction_read_only = on`
+(the same grants as production `blt_reader`). A route that writes, runs DDL, or reads a table
+the role cannot see fails it.
 
 ## Golden set
 
@@ -30,9 +38,8 @@ default to `merge-base(origin/main, HEAD)..HEAD`; override with `--base/--head` 
 extra, or stale entries) and then runs `swift test --filter` over every suite declared
 in the golden Swift files, plus every suite declared in a Swift test file that fetches real
 XBRL (`SmokeCacheSupport.ensureCached`; R2 first, then EDINET). The filter comes from those
-files, so a new Oracle or real-XBRL suite is picked up automatically. `swift-linux` skips the
-same filter so the suites run only once and it never downloads XBRL; `swift-macos` only
-builds (it runs no tests, including the iOS helper packages, which `swift-linux` covers). Print the filter with `scripts/ci/golden-suite.sh --print-filter`.
+files, so a new Oracle or real-XBRL suite is picked up automatically. `unit-tests` skips the
+same filter so the suites run only once and it never downloads XBRL. Print the filter with `scripts/ci/golden-suite.sh --print-filter`.
 
 ## Golden-change rules (`golden-rules.sh`)
 
