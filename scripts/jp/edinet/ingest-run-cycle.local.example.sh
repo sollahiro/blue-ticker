@@ -39,6 +39,9 @@ else
 fi
 
 {
+  # blt-ingest の依存範囲が前回ビルドから変わったときだけ再ビルドする（ingest-common.sh）。
+  source "$REPO/scripts/jp/edinet/ingest-common.sh"
+  ingest_build_if_needed
   echo "===== $(date '+%Y-%m-%d %H:%M:%S') ingest-run-cycle 開始 (SKIP_03=${BLT_INGEST_SKIP_03:-0} SKIP_06=${BLT_INGEST_SKIP_06:-0}) ====="
   "$REPO/scripts/jp/edinet/ingest-run-cycle.sh"
   echo "===== $(date '+%Y-%m-%d %H:%M:%S') ingest-run-cycle 本体完了。post hooks ====="

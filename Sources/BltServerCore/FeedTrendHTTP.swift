@@ -1,6 +1,7 @@
 // Feed Trend の Analytics Engine Worker への HTTP 送受信。
 // origin 非依存（URL + Bearer）。失敗しても API は落とさない。Vapor 非依存。
 
+import BltStoreCore
 import BlueTickerCore
 import Foundation
 import Logging

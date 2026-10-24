@@ -9,6 +9,8 @@ import Vapor
 
 @testable import BlueTickerCore
 @testable import BltServerCore
+@testable import BltStoreCore
+@testable import BltIngestCore
 
 private func makeContext() -> BltServerContext {
     let dir = FileManager.default.temporaryDirectory

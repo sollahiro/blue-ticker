@@ -2,6 +2,7 @@
 // origin はトークンを検証しない（docs/api-auth.md）。公開到達はエッジ / HAPIS 側。
 // Access / HAPIS の認証ミドルウェアは載せない。HAPIS 専用 env も持たない。
 
+import BltStoreCore
 import Foundation
 
 /// 非 loopback bind での無認証起動をプロセス開始時に拒否する（fail-closed）。

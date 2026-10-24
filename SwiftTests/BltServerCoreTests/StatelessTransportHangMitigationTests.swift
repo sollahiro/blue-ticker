@@ -12,6 +12,8 @@ import Testing
 import MCP
 
 @testable import BltServerCore
+@testable import BltStoreCore
+@testable import BltIngestCore
 
 @Suite struct StatelessTransportHangMitigationTests {
 

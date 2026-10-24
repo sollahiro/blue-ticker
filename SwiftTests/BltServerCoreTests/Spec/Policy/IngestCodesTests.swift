@@ -3,6 +3,8 @@
 import Testing
 
 @testable import BltServerCore
+@testable import BltStoreCore
+@testable import BltIngestCore
 
 @Suite("parseIngestCodes")
 struct IngestCodesTests {

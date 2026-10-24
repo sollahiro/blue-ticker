@@ -9,7 +9,8 @@ Region `JP` · Source `EDINET`。命名規約は `.agents/rules/regions.md`。
 | 取得 | `Sources/BlueTicker/API/EdinetAPIClient.swift` 等 |
 | 解析 | `Sources/BlueTicker/Analysis/` |
 | 定数・コンテキスト | `Sources/BlueTicker/Constants/Xbrl.swift` |
-| 配信・取り込み | `blt-server`（REST / ingest） |
+| 取り込み | `blt-ingest`（Mac 専用。sync / ingest / migrate。Vapor なし） |
+| 配信 | `blt-server`（Fly。REST / MCP。DB は読み取りのみ） |
 | ローカル cache | `tmp_cache/edinet/` |
 
 ## 定期 ingest ジョブ
@@ -35,7 +36,7 @@ Region `JP` · Source `EDINET`。命名規約は `.agents/rules/regions.md`。
 | `ingest-job.local.example.sh` | `local/*.local.sh` | job 単体ラッパー |
 
 ```bash
-swift build -c release --product blt-server
+swift build -c release --product blt-ingest
 cp scripts/jp/edinet/ingest.local.env.example scripts/jp/edinet/ingest.local.env
 cp scripts/jp/edinet/ingest-run-cycle.local.example.sh \
    scripts/jp/edinet/ingest-run-cycle.local.sh

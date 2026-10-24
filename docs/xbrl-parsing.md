@@ -117,7 +117,7 @@ smoke/
 
 smoke・goldenの期待値はどちらも言語非依存で残るべき資産（`SPEC_ORACLE`＝L0）にあたる。突合する Swift テストコードは L1（`HARNESS_ONLY`）。成功時の詳細 stdout は既定で抑制し、`BLT_TEST_VERBOSE=1` のときだけ出す（`TestVerboseLog`）。テストを移行耐性の観点で層分けする指針は `.agents/skills/xbrl-development/SKILL.md` を参照。
 
-XBRL キャッシュ（`tmp_cache/edinet/`、git 管理外のローカル専用）は `SmokeCacheSupport`（`SwiftTests/BlueTickerTests/SmokeCacheSupport.swift`）が自動管理します。`BLT_EDINET_API_KEY` 環境変数（`blt-server` と共通）が設定されていれば、各テストが対象 docID の不足分を EDINET から自動ダウンロードしてから照合します。未設定でキャッシュも無い docID は個別に SKIP され、テスト全体は失敗しません（Keychain・`ticker config` は不使用）。期待値 JSON は旧 Python 実装の出力をゴールデンとして凍結したもので、更新するにはテストの差分出力を確認し、正しければ上書きします。
+XBRL キャッシュ（`tmp_cache/edinet/`、git 管理外のローカル専用）は `SmokeCacheSupport`（`SwiftTests/BlueTickerTests/SmokeCacheSupport.swift`）が自動管理します。`BLT_EDINET_API_KEY` 環境変数（`blt-ingest` / `blt-server` と共通）が設定されていれば、各テストが対象 docID の不足分を EDINET から自動ダウンロードしてから照合します。未設定でキャッシュも無い docID は個別に SKIP され、テスト全体は失敗しません（Keychain・`ticker config` は不使用）。期待値 JSON は旧 Python 実装の出力をゴールデンとして凍結したもので、更新するにはテストの差分出力を確認し、正しければ上書きします。
 
 `RealXbrlBreakdown*Tests.swift` はキャッシュ先が `~/.config/blue-ticker/analysis_cache/` と異なる（`smoke/smoke_expected/` の期待値 JSON を経由しない）ため、上記スモーク一式とは別系統として扱ってください。
 
@@ -184,11 +184,11 @@ assets/taxonomy/labels/
 
 ### 4.2 ingest ホストがファイルを得る経路
 
-本番 ingest は Sorahiro 手元 Mac のみ（launchd が repo checkout から `blt-server` をビルド）。Docker / Fly では ingest しない。ラベルファイルは repo の `assets/taxonomy/labels/` に置き、実行時は checkout から読む。
+本番 ingest は Sorahiro 手元 Mac のみ（launchd が repo checkout から `blt-ingest` をビルド。Vapor / MCP を含まず、依存範囲が変わったときだけ再ビルドする）。Docker / Fly では ingest しない。ラベルファイルは repo の `assets/taxonomy/labels/` に置き、実行時は checkout から読む。
 
 | 実行場所 | バイナリ | ラベルファイル |
 |---|---|---|
-| 本番 ingest（手元 Mac、launchd → `scripts/jp/edinet/*.local.sh`） | repo で `swift build -c release --product blt-server` | git の `assets/taxonomy/labels/`。`ingest-common.sh` が `BLUE_TICKER_ASSETS_PATH=$REPO/assets` を既定セット |
+| 本番 ingest（手元 Mac、launchd → `scripts/jp/edinet/*.local.sh`） | repo で `swift build -c release --product blt-ingest` | git の `assets/taxonomy/labels/`。`ingest-common.sh` が `BLUE_TICKER_ASSETS_PATH=$REPO/assets` を既定セット |
 | CI `swift test` | テストプロセス | checkout された `assets/taxonomy/labels/`（CWD = パッケージ根） |
 
 `resolveAssetFileURL("taxonomy")` が `BLUE_TICKER_ASSETS_PATH` → CWD `assets/` → 実行ファイル隣接 `assets/` の順で探す。launchd ラッパーは repo 根でビルド・実行する（雛形 `ingest-run-cycle.local.example.sh`）。`assets/taxonomy/labels` が見つからないか読めないときは ingest プロセスあたり 1 回、そのパスと `BLUE_TICKER_ASSETS_PATH` を stderr に警告する（黙ってコード側 sentinel だけに落とさない）。

@@ -18,6 +18,8 @@ import Testing
 import Vapor
 
 @testable import BltServerCore
+@testable import BltStoreCore
+@testable import BltIngestCore
 
 // 単一の実 Postgres DB を共有するため直列実行する（並列だと autoMigrate/autoRevert が競合する）。
 @Suite(.serialized) struct PostgresIntegrationTests {

@@ -3,6 +3,7 @@
 // 逆引きは上場企業どうしだけ（`related_code` が付いた行）。出資先（investee）の逆引きはしない。
 // 公開可否は `isPubliclyServableRelation`。`needs_review` は応答に載せない。住所も載せない。
 
+import BltStoreCore
 import BlueTickerCore
 import Fluent
 import Foundation

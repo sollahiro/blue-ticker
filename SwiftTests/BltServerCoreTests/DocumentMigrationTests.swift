@@ -8,6 +8,8 @@ import Testing
 import Vapor
 
 @testable import BltServerCore
+@testable import BltStoreCore
+@testable import BltIngestCore
 
 /// インメモリ SQLite で 書類同期 マイグレーションを適用した Application を生成し、
 /// body 実行後に確実に shutdown する（Application.make は asyncShutdown が必須）。

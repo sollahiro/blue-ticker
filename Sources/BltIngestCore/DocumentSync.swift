@@ -1,0 +1,325 @@
+// 書類同期: EDINET 書類一覧を DB（edinet_documents）へ取り込み、
+// 同期高水位（edinet_sync_state.synced_through）を進める。
+// 取得・正規化は BlueTickerCore のファサード（fetchDocumentsForSync）に委譲し、
+// ここでは DB への upsert と高水位更新のみを担う。
+// 外国法人・組合は master の提出者種別（`foreignFilerCodes()`）で fetch / apply から落とし、
+// 既存行は sync 時に `edinet_documents` から削除する。
+
+import BltStoreCore
+import BlueTickerCore
+import FluentKit
+import FluentSQL
+import Foundation
+import SQLKit
+
+/// 同期結果のサマリ。
+public struct DocumentSyncSummary: Sendable, Equatable {
+    public let from: String
+    public let to: String
+    /// 実際に DB へ書き込んだ synced_through（部分失敗時は to より前になる）。
+    public let syncedThrough: String
+    public let fetched: Int
+    public let created: Int
+    public let updated: Int
+}
+
+enum DocumentSyncError: Error, CustomStringConvertible {
+    /// 初回同期で開始日が決められない（同期状態なし・--from 未指定）。
+    case missingStartDate
+    /// DATABASE_URL 未設定で DB が無い。
+    case databaseUnavailable
+    /// EDINET API キーが未設定。
+    case apiKeyMissing
+
+    var description: String {
+        switch self {
+        case .missingStartDate:
+            return "初回同期では --from YYYY-MM-DD で開始日を指定してください（同期状態が未作成のため）。"
+        case .databaseUnavailable:
+            return "DATABASE_URL が未設定です。同期には DB 接続が必要です。"
+        case .apiKeyMissing:
+            return "EDINET API キーが未設定です。BLT_EDINET_API_KEY 環境変数を設定してください。"
+        }
+    }
+}
+
+/// EDINET 書類を期間取得して DB へ upsert し、synced_through を to へ進める。
+/// from 解決順位: 明示指定 > 既存 synced_through > （いずれも無ければ）missingStartDate。
+func runDocumentSync(
+    context: BltServerContext,
+    db: Database,
+    from: String?,
+    to: String,
+    logger: Logger? = nil
+) async throws -> DocumentSyncSummary {
+    let resolvedFrom = try await resolveStartDate(from: from, db: db, logger: logger)
+    let previousSyncedThrough = try await loadSyncedThrough(db: db, logger: logger)
+    let fetchResult = await context.fetchDocumentsForSync(from: resolvedFrom, to: to)
+    let excludedCodes = await context.foreignFilerCodes()
+    _ = try await purgeForeignFilerDocuments(
+        excludedCodes: excludedCodes, db: db, logger: logger)
+    let listedSecByEdinet = await context.listedSecCodeByEdinetCode()
+    _ = try await fillMissingListedSecCodes(
+        listedSecCodeByEdinetCode: listedSecByEdinet, db: db, logger: logger)
+    let counts = try await applyDocuments(
+        fetchResult.records, db: db, excludedCodes: excludedCodes, logger: logger)
+    let syncedThrough = computeDocumentSyncedThrough(
+        from: resolvedFrom,
+        to: to,
+        previousSyncedThrough: previousSyncedThrough,
+        applyCompleted: counts.completed,
+        failedFetchDates: fetchResult.failedDates
+    )
+    if syncedThrough != to {
+        logger?.warning(
+            "書類同期を部分完了: requested_to=\(to) synced_through=\(syncedThrough) apply_completed=\(counts.completed) failed_fetch_days=\(fetchResult.failedDates.count)"
+        )
+    }
+    try await upsertSyncState(syncedThrough: syncedThrough, db: db, logger: logger)
+
+    return DocumentSyncSummary(
+        from: resolvedFrom, to: to, syncedThrough: syncedThrough,
+        fetched: fetchResult.records.count,
+        created: counts.created, updated: counts.updated)
+}
+
+/// レコードを edinet_documents へ upsert する（docID 一致で更新、無ければ作成）。
+/// 外国法人・組合（`excludedCodes`＝master の 4 桁コード）は作成も更新もしない。
+/// 各 DB 操作は withDbRetry で一過性の接続断（Neon scale-to-zero 等）に対して再試行する
+/// （EDINET 取得の空白中に suspend され、直後の DB 操作が死んだ接続で失敗するのを回復。ingest と同思想）。
+func applyDocuments(
+    _ records: [EdinetDocumentRecord], db: Database,
+    excludedCodes: Set<String> = [], logger: Logger? = nil
+) async throws -> (created: Int, updated: Int, completed: Bool) {
+    var created = 0
+    var updated = 0
+    var skipped = 0
+    var unhealthyRetries = 0
+    for record in records {
+        // 他ステージと同様、各項目の先頭で判定する。
+        if unhealthyRetries >= Api.ingestDbUnhealthyRetryThreshold {
+            logger?.error(
+                "DB接続が不安定なため 書類同期 sync を中断します(リトライ\(unhealthyRetries)回・残り\(records.count - created - updated - skipped)件は次回スケジュールで再試行)"
+            )
+            return (created, updated, completed: false)
+        }
+        if !shouldStoreEdinetDocumentForSync(
+            secCode: record.secCode, excludedCodes: excludedCodes
+        ) {
+            skipped += 1
+            continue
+        }
+        let existingID = try await withDbRetry(
+            logger: logger, context: "docID=\(record.docID)", onRetry: { unhealthyRetries += 1 }
+        ) {
+            try await EdinetDocument.find(record.docID, on: db)
+        }
+        if existingID != nil {
+            try await withDbRetry(
+                logger: logger, context: "docID=\(record.docID)",
+                onRetry: { unhealthyRetries += 1 }
+            ) {
+                guard let row = try await EdinetDocument.find(record.docID, on: db) else { return }
+                row.apply(record)
+                try await row.update(on: db)
+            }
+            updated += 1
+        } else {
+            try await withDbRetry(
+                logger: logger, context: "docID=\(record.docID)",
+                onRetry: { unhealthyRetries += 1 }
+            ) {
+                // モデルはリトライ試行のたびに新規生成する（withOperationTimeout の既知の
+                // トレードオフにより、タイムアウト後も切り離されたタスクが遅延完了することがあり、
+                // 同一インスタンスを試行間で使い回すと Fluent の `_$idExists` 二重更新で precondition
+                // が trap しうるため）。
+                let model = EdinetDocument()
+                model.id = record.docID
+                model.apply(record)
+                try await createIdempotently(
+                    create: { try await model.create(on: db) },
+                    recover: {
+                        guard let recovered = try await EdinetDocument.find(record.docID, on: db)
+                        else { return false }
+                        recovered.apply(record)
+                        try await recovered.update(on: db)
+                        return true
+                    }
+                )
+            }
+            created += 1
+        }
+    }
+    if skipped > 0 {
+        logger?.notice(
+            "書類同期: 外国法人・組合 \(skipped) 件をスキップ",
+            metadata: [
+                "event": "sync_foreign_filer_skipped",
+                "skipped": .stringConvertible(skipped),
+            ])
+    }
+    return (created, updated, completed: true)
+}
+
+/// 既存の外国法人・組合行を `edinet_documents` から削除する。
+/// 他テーブルの `doc_id` は論理参照のみ（FK なし）。ingest は `listedCodes()` で対象外のため
+/// statements / notes / breakdowns は作られない想定で、ここでは書類一覧だけを落とす。
+/// Feed / filings の DB 経路はこのテーブルだけを読む。
+func purgeForeignFilerDocuments(
+    excludedCodes: Set<String>, db: Database, logger: Logger? = nil
+) async throws -> Int {
+    let secCodes = Set(excludedCodes.flatMap(edinetSecCodes(forIssuerCode:)))
+    guard !secCodes.isEmpty else { return 0 }
+    return try await withDbRetry(logger: logger, context: "purge_foreign_filers") {
+        let rows = try await EdinetDocument.query(on: db)
+            .filter(\.$secCode ~~ Array(secCodes))
+            .all()
+        for row in rows {
+            try await row.delete(on: db)
+        }
+        if !rows.isEmpty {
+            logger?.notice(
+                "書類同期: 外国法人・組合の既存行 \(rows.count) 件を削除",
+                metadata: [
+                    "event": "sync_foreign_filer_purged",
+                    "purged": .stringConvertible(rows.count),
+                ])
+        }
+        return rows.count
+    }
+}
+
+/// 部分失敗時は高水位を進めない（または取得失敗日の前日までに留める）。
+func computeDocumentSyncedThrough(
+    from: String,
+    to: String,
+    previousSyncedThrough: String?,
+    applyCompleted: Bool,
+    failedFetchDates: [String]
+) -> String {
+    guard applyCompleted else {
+        return previousSyncedThrough ?? from
+    }
+    var advanceTo = to
+    if let earliestFailed = failedFetchDates.filter({ $0 >= from && $0 <= to }).sorted().first,
+       let dayBefore = dayBeforeISO(earliestFailed) {
+        advanceTo = min(advanceTo, dayBefore)
+    }
+    return advanceTo
+}
+
+/// 現在の synced_through を読む（未作成なら nil）。
+func loadSyncedThrough(db: Database, logger: Logger? = nil) async throws -> String? {
+    try await withDbRetry(logger: logger, context: "sync_state") {
+        try await EdinetSyncState.find(EdinetSyncState.singletonID, on: db)?.syncedThrough
+    }
+}
+
+/// from 解決順位: 明示指定 > 既存 synced_through > missingStartDate。
+func resolveStartDate(from: String?, db: Database, logger: Logger? = nil) async throws -> String {
+    if let f = from, !f.isEmpty { return f }
+    let state = try await withDbRetry(logger: logger, context: "sync_state") {
+        try await EdinetSyncState.find(EdinetSyncState.singletonID, on: db)
+    }
+    if let state { return state.syncedThrough }
+    throw DocumentSyncError.missingStartDate
+}
+
+/// synced_through を upsert する（単一行）。
+func upsertSyncState(syncedThrough: String, db: Database, logger: Logger? = nil) async throws {
+    try await withDbRetry(logger: logger, context: "sync_state") {
+        let state = try await EdinetSyncState.find(EdinetSyncState.singletonID, on: db) ?? EdinetSyncState()
+        state.id = EdinetSyncState.singletonID
+        state.syncedThrough = syncedThrough
+        try await state.save(on: db)
+    }
+}
+
+// MARK: - read 経路（REST filings）
+
+/// 既存行で `sec_code` が空のものへ、上場 master の EDINETコード→5 桁証券コードを書く。
+/// 過去日キャッシュが提出当日の欠落を抱えたまま残るため、再取得せずに直す。
+/// 非空の `sec_code` は触らない。欠落行だけを `doc_id` の keyset ページで読む。
+func fillMissingListedSecCodes(
+    listedSecCodeByEdinetCode: [String: String], db: Database, logger: Logger? = nil,
+    pageSize: Int = 200
+) async throws -> Int {
+    guard !listedSecCodeByEdinetCode.isEmpty else { return 0 }
+    var filled = 0
+    var afterDocID: String? = nil
+    while true {
+        let last = afterDocID
+        let page = try await withDbRetry(
+            logger: logger, context: "sec_code 欠落の補完 after=\(last ?? "")"
+        ) {
+            var query = EdinetDocumentListing.query(on: db)
+                .filter(.sql(emptySecCodeSQL))
+                .sort(\.$id)
+            if let last { query = query.filter(\.$id > last) }
+            return try await query.limit(pageSize).all()
+        }
+        if page.isEmpty { break }
+        for listing in page {
+            let existing = listing.secCode?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            guard existing.isEmpty, let docID = listing.id else { continue }
+            guard let mapped = listedSecCodeByEdinetCode[listing.edinetCode],
+                listedTickerCode(fromSecCode: mapped) != nil
+            else { continue }
+            try await withDbRetry(logger: logger, context: "docID=\(docID) sec_code fill") {
+                guard let row = try await EdinetDocument.find(docID, on: db) else { return }
+                let current = row.secCode?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                guard current.isEmpty else { return }
+                row.secCode = mapped
+                try await row.update(on: db)
+            }
+            filled += 1
+        }
+        afterDocID = page.last?.id
+        if page.count < pageSize { break }
+    }
+    if filled > 0 {
+        logger?.notice(
+            "書類同期: sec_code 欠落 \(filled) 件を master の EDINETコードから補完",
+            metadata: [
+                "event": "sync_sec_code_filled_from_master",
+                "filled": .stringConvertible(filled),
+            ])
+    }
+    return filled
+}
+
+// MARK: - CLI エントリ
+
+/// `blt-ingest sync` の本体。DB へ接続してマイグレーションを適用し、同期を実行する。
+/// to 未指定なら UTC の当日。DATABASE_URL 未設定なら databaseUnavailable を投げる。
+public func runDocumentSyncCommand(from: String?, to: String?) async throws {
+    guard let context = await makeBltServerContext() else {
+        throw DocumentSyncError.apiKeyMissing
+    }
+    guard let urlString = bltEnvironmentValue("DATABASE_URL"), !urlString.isEmpty else {
+        throw DocumentSyncError.databaseUnavailable
+    }
+
+    let app = try BltCommandDatabase.connect(urlString: urlString, label: "blt-ingest")
+    do {
+        try await migrateBltSchema(app)
+        let summary = try await runDocumentSync(
+            context: context, db: app.db, from: from, to: to ?? todayUTC(), logger: app.logger)
+        app.logger.notice(
+            "書類同期 sync summary",
+            metadata: [
+                "event": "sync_summary",
+                "target": "documents",
+                "from": .string(summary.from),
+                "to": .string(summary.to),
+                "synced_through": .string(summary.syncedThrough),
+                "fetched": .stringConvertible(summary.fetched),
+                "created": .stringConvertible(summary.created),
+                "updated": .stringConvertible(summary.updated),
+            ])
+    } catch {
+        await app.asyncShutdown()
+        throw error
+    }
+    await app.asyncShutdown()
+}

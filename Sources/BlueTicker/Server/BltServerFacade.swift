@@ -300,7 +300,7 @@ public extension BltServerContext {
     }
 
     /// 財務サマリ（公開契約 `FinancialsResponse`）を計算する。
-    /// 財務取り込み（`blt-server ingest` → Neon 保存）の単一の実装点。
+    /// 財務取り込み（`blt-ingest ingest` → Neon 保存）の単一の実装点。
     /// EDINET 取得・XBRL パースを伴う高コスト処理。「有価証券報告書未提出」（対象外）と
     /// 「抽出失敗」を区別して返す（戻り値パターン、issue #86）。
     func computeFinancials(code: String, years: Int) async -> FinancialsComputeResult {

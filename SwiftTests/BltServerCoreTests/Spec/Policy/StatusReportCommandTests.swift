@@ -1,4 +1,4 @@
-// buildIngestStatusReport（`blt-server status-report` の DB 集計ロジック）を検証する。
+// buildIngestStatusReport（`blt-ingest status-report` の DB 集計ロジック）を検証する。
 // CLI エントリ（runStatusReportCommand）は Application 起動・stdout 出力のみの薄い I/O 層のため
 // 対象外（他 Stage の run*Command 自体を直接テストしないのと同じ方針）。
 // ネットワーク・EDINET 非依存（フェイク行を DB へ直接投入して検証する）。
@@ -11,6 +11,8 @@ import Testing
 import Vapor
 
 @testable import BltServerCore
+@testable import BltStoreCore
+@testable import BltIngestCore
 
 private func withMigratedApp(_ body: (Application) async throws -> Void) async throws {
     let app = try await Application.make(.testing)

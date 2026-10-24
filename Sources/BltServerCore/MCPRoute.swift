@@ -8,6 +8,7 @@
 // `mcp.<domain>` は MCP 専用サブドメインのため、パスを付けず `mcp.<domain>` そのもので
 // 接続できるようにルートパスへ統一した（`/mcp` は廃止）。
 
+import BltStoreCore
 import BlueTickerCore
 import BltMcpServerCore
 import Fluent

@@ -1,7 +1,7 @@
 name: CI
 
 # 配布 `ticker` / Homebrew release / 開発 CLI `TickerDev` は廃止済み。
-# 検証対象は blt-server（唯一の product）とテストスイート、iOS クライアントの
+# 検証対象は blt-ingest・blt-server の 2 product とテストスイート、iOS クライアントの
 # シミュレータ向けコンパイル、および fly.toml の serviceless 不変条件。
 # デプロイは deploy.yml（CI 成功後）。
 #
@@ -42,7 +42,7 @@ jobs:
         run: swift build --build-tests -Xswiftc -disable-upcoming-feature -Xswiftc MemberImportVisibility
 
   build-macos:
-    # 本番 ingest は Mac で走るので、macOS でパッケージがビルドできることを確認する。
+    # 本番 ingest（blt-ingest）は Mac で走るので、macOS でパッケージがビルドできることを確認する。
     # テストは実行しない（unit-tests / golden-suite / ios-packages が Linux で回す）。
     # SwiftPM の .build キャッシュは使わない。キーが Package.resolved ハッシュだけだと
     # エントリが凍り、復元成功後に `_NumericsShims` 欠落で落ちることがある
@@ -51,6 +51,27 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+
+      - name: blt-ingest が Vapor / MCP をリンクしないこと
+        # 本番 ingest（Mac の launchd）がビルドするのは blt-ingest だけ。空のビルドディレクトリで
+        # blt-ingest だけをビルドし、Vapor と MCP（swift-sdk）のモジュールがコンパイルされていないことを確かめる。
+        # SwiftPM は全ターゲットの <Target>.build ディレクトリ（output-file-map だけ）を作るため、
+        # ディレクトリではなく .swiftmodule の有無で判定する。判定を確実にするため専用の --scratch-path を使う。
+        run: |
+          swift build --product blt-ingest --scratch-path .build-ingest \
+            -Xswiftc -disable-upcoming-feature -Xswiftc MemberImportVisibility
+          if [ -z "$(find .build-ingest -name 'BltIngestCore.swiftmodule' -print -quit)" ]; then
+            echo "::error::BltIngestCore.swiftmodule が見つかりません（判定の前提が崩れています）"
+            exit 1
+          fi
+          leaked=$(find .build-ingest \( -name 'Vapor.swiftmodule' -o -name 'MCP.swiftmodule' \) -print)
+          if [ -n "$leaked" ]; then
+            echo "::error::blt-ingest のビルドに Vapor / MCP が含まれています（BltStoreCore / BltIngestCore の依存を確認してください）"
+            echo "$leaked"
+            exit 1
+          fi
+          echo "OK: blt-ingest は Vapor / MCP をリンクしていません"
+          rm -rf .build-ingest
 
       - name: Build
         # swift-nio 2.101.x が upcoming feature MemberImportVisibility を有効化する。
@@ -348,9 +369,9 @@ jobs:
       # origin が無検証で素通りになる。TOML としてパースして判定する（コメント中の文字列
       # 一致による誤検知を避けるため。fly.toml 自身の警告コメントが `[http_service]` という
       # 文字列を含む）。
-      # あわせて Package.swift の products が blt-server のみであることを検証する
+      # あわせて Package.swift の products が blt-ingest と blt-server であることを検証する
       #（配布 ticker の再追加を防ぐ）。
-      - name: Package products が blt-server のみであること
+      - name: Package products が blt-ingest と blt-server であること
         if: ${{ !cancelled() }}
         run: |
           python3 - <<'PYEOF'
@@ -383,9 +404,9 @@ jobs:
               r"\.(?:executable|library|plugin)\(\s*name:\s*\"([^\"]+)\"",
               block,
           )
-          if names != ["blt-server"]:
+          if names != ["blt-ingest", "blt-server"]:
               print(
-                  f"expected products=['blt-server'], got {names}. "
+                  f"expected products=['blt-ingest', 'blt-server'], got {names}. "
                   "配布 ticker は廃止済みです（docs/architecture.md）。",
                   file=sys.stderr,
               )

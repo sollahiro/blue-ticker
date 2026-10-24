@@ -180,7 +180,7 @@ Release Archive は HAPIS 本番 + App Attest production。Internal TestFlight �
 - 対象は最新 FY の Summary 水準値だけ。YoY / Waterfall / Breakdown / Notes は混ぜない
 - 業種チップの候補はクライアント側の表示用カタログ。`GET /v1/companies?sector=` は足さない
 
-Screen REST は `GET /v1/screen`（`screen_index` 読み取り。`sector` 完全一致 + `<metric>_min` / `<metric>_max` の AND + `sort` / `order` / `limit`（既定 `roic` / `desc` / 50、上限 200））。許可リストは上の 12 指標。応答は `items[]`（メタ + core4 + フィルタ / ソートに使った指標。`payout_ratio` 投影時は `payout_ratio_3y` も）と `returned` / `matched` / `sort`。索引未生成（0 行）は 404、フィルタ 0 件は 200 で空配列。iOS 条件検索はスナップショットが取れないときだけこれを呼ぶ。`screen_index` は財務 ingest 直後に 1 社ずつ派生更新し、公開床（servable）の `company_financials` は現行 fin-vN 一致を問わず次回 ingest で投影する（列定義変更後の手動一発は `blt-server screen-rebuild`。`screenIndexVersion` = `screen-v4`。`fin-vN` は上げない）。skills カタログには載せない。
+Screen REST は `GET /v1/screen`（`screen_index` 読み取り。`sector` 完全一致 + `<metric>_min` / `<metric>_max` の AND + `sort` / `order` / `limit`（既定 `roic` / `desc` / 50、上限 200））。許可リストは上の 12 指標。応答は `items[]`（メタ + core4 + フィルタ / ソートに使った指標。`payout_ratio` 投影時は `payout_ratio_3y` も）と `returned` / `matched` / `sort`。索引未生成（0 行）は 404、フィルタ 0 件は 200 で空配列。iOS 条件検索はスナップショットが取れないときだけこれを呼ぶ。`screen_index` は財務 ingest 直後に 1 社ずつ派生更新し、公開床（servable）の `company_financials` は現行 fin-vN 一致を問わず次回 ingest で投影する（列定義変更後の手動一発は `blt-ingest screen-rebuild`。`screenIndexVersion` = `screen-v4`。`fin-vN` は上げない）。skills カタログには載せない。
 
 ### スナップショット（`GET /v1/screen/snapshot`）
 

@@ -61,9 +61,9 @@ set -a; . ./.env; set +a
 
 スキーマ（DDL）を変えるのは Mac の書き込み側だけ。Fly の `blt-server`（配信）は起動時に migrate せず、読み取りロール `blt_reader` で動く。
 
-- `blt-server migrate` は未適用のマイグレーションだけを `DATABASE_URL` へ適用する。`sync` / `ingest` / `master-data-upload` / `screen-rebuild` / `overrides add|revoke` も冒頭で同じ適用を行う。`status-report` / `overrides list` / サーバー起動は適用しない。
+- `blt-ingest migrate` は未適用のマイグレーションだけを `DATABASE_URL` へ適用する。`sync` / `ingest` / `master-data-upload` / `screen-rebuild` / `overrides add|revoke` も冒頭で同じ適用を行う。`status-report` / `overrides list` / サーバー起動は適用しない。
 - マイグレーションを含む PR を main に入れたら、次の順で出す。
-  1. Mac で `DATABASE_URL="$BLT_NEON_WRITE_DATABASE_URL" ./.build/release/blt-server migrate`
+  1. Mac で `DATABASE_URL="$BLT_NEON_WRITE_DATABASE_URL" ./.build/release/blt-ingest migrate`
   2. GitHub Actions の Deploy を workflow_dispatch で実行する。差分に `Sources/*/Migrations/` を含む自動デプロイは、Deploy ワークフローが失敗で止める（成功扱いにすると次の push で判定から外れるため）。
 - デプロイ後は `/healthz` の `cache_versions` で、DB の中身とサーバーが話す版がずれていないかを確認する。
 
@@ -127,7 +127,7 @@ relations                … 取引先・関係会社（最新有報1件。区�
 バグ修正確認・訂正有報・needs_review 解消:
 
 ```bash
-DATABASE_URL="$BLT_NEON_WRITE_DATABASE_URL" ./.build/release/blt-server ingest \
+DATABASE_URL="$BLT_NEON_WRITE_DATABASE_URL" ./.build/release/blt-ingest ingest \
   --codes 7203 --doc-ids S100W0S7 \
   --stages financials,statements,statement-notes,breakdowns,filing-sections \
   --note-types per_share_information
@@ -138,9 +138,9 @@ DATABASE_URL="$BLT_NEON_WRITE_DATABASE_URL" ./.build/release/blt-server ingest \
 Screen 索引の列定義が変わったあと（`sales_cagr_3y` / screen-v3 指標の追加、screen-v4 の配当性向 3 年平均など）は `fin-vN` を上げない。次回の financials ingest は公開床（servable）の `company_financials` から screen_index を投影する（現行 fin-vN 一致・skip は問わない）。手動で急ぐときだけ WRITE で一発再生成する:
 
 ```bash
-DATABASE_URL="$BLT_NEON_WRITE_DATABASE_URL" ./.build/release/blt-server screen-rebuild
+DATABASE_URL="$BLT_NEON_WRITE_DATABASE_URL" ./.build/release/blt-ingest screen-rebuild
 # 部分実行（走査 N 件。孤児削除はしない）:
-DATABASE_URL="$BLT_NEON_WRITE_DATABASE_URL" ./.build/release/blt-server screen-rebuild --limit 100
+DATABASE_URL="$BLT_NEON_WRITE_DATABASE_URL" ./.build/release/blt-ingest screen-rebuild --limit 100
 ```
 
 `/healthz` の `cache_versions.screen_index` がイメージの `screenIndexVersion` と一致することを確認する。

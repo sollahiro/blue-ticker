@@ -10,6 +10,8 @@ import Vapor
 
 @testable import BlueTickerCore
 @testable import BltServerCore
+@testable import BltStoreCore
+@testable import BltIngestCore
 
 private func withRelationsApp(
     databases: Bool = true, _ body: (Application) async throws -> Void

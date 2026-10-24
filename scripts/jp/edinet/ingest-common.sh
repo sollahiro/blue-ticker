@@ -13,7 +13,7 @@ if [[ "${ZSH_EVAL_CONTEXT:-}" != *:file* && "${ZSH_EVAL_CONTEXT:-}" != *:cmdsubs
 fi
 
 REPO="${REPO:-$(cd "$(dirname "${(%):-%x}")/../../.." && pwd)}"
-BLT_SERVER="${BLT_SERVER:-$REPO/.build/release/blt-server}"
+BLT_INGEST="${BLT_INGEST:-$REPO/.build/release/blt-ingest}"
 INGEST_LOCAL_ENV="${INGEST_LOCAL_ENV:-$REPO/scripts/jp/edinet/ingest.local.env}"
 # launchd / 手動ジョブの CWD が repo 根でないときも標準ラベル _lab.xml を見つける。
 export BLUE_TICKER_ASSETS_PATH="${BLUE_TICKER_ASSETS_PATH:-$REPO/assets}"
@@ -54,8 +54,8 @@ ingest_require_ready() {
     return 1
   fi
 
-  if [[ ! -x "$BLT_SERVER" ]]; then
-    echo "ERROR: $BLT_SERVER がありません。swift build -c release --product blt-server を先に実行してください" >&2
+  if [[ ! -x "$BLT_INGEST" ]]; then
+    echo "ERROR: $BLT_INGEST がありません。swift build -c release --product blt-ingest を先に実行してください" >&2
     return 1
   fi
 
@@ -65,7 +65,30 @@ ingest_require_ready() {
 ingest_run() {
   local job_name="${INGEST_JOB_NAME:-ingest}"
   echo "=== ${job_name}: $* ==="
-  "$BLT_SERVER" "$@"
+  "$BLT_INGEST" "$@"
+}
+
+# blt-ingest の依存範囲が前回ビルドしたコミットから変わったときだけ release ビルドする（launchd ラッパー用）。
+# blt-ingest は Vapor / MCP をリンクしないので、配信側（BltServerCore 等）だけの変更では再ビルドしない。
+# 判定はコミット単位（作業ツリーの未コミット変更は見ない）。
+BLT_INGEST_BUILD_PATHS=(Sources/BlueTicker Sources/BltStoreCore Sources/BltIngestCore Sources/BltIngest Package.swift Package.resolved)
+ingest_build_if_needed() {
+  local stamp="$REPO/.build/blt-ingest.built-commit"
+  local head
+  head="$(git -C "$REPO" rev-parse HEAD)" || return 1
+  if [[ -x "$BLT_INGEST" && -f "$stamp" ]]; then
+    local built
+    built="$(<"$stamp")"
+    if git -C "$REPO" cat-file -e "${built}^{commit}" 2>/dev/null \
+      && git -C "$REPO" diff --quiet "$built" "$head" -- "${BLT_INGEST_BUILD_PATHS[@]}"; then
+      echo "ingest: blt-ingest は最新（built=${built:0:12}）"
+      return 0
+    fi
+  fi
+  echo "=== build: swift build -c release --product blt-ingest (head=${head:0:12}) ==="
+  (cd "$REPO" && swift build -c release --product blt-ingest) || return 1
+  mkdir -p "$REPO/.build"
+  printf '%s\n' "$head" > "$stamp"
 }
 
 ingest_post_hooks() {

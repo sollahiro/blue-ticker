@@ -1,6 +1,7 @@
 // Feed Trend の Application.storage 配線。テストは registerRoutes 前に注入する。
 // production は env（BLT_FEED_TREND_URL / TOKEN）。testing は未注入なら no-op（ネットワーク禁止）。
 
+import BltStoreCore
 import BlueTickerCore
 import Vapor
 

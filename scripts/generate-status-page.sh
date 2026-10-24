@@ -3,7 +3,7 @@
 #
 # 手元の定期ジョブ末尾（全ステージ完了後）から呼ばれる想定。5ステージ
 # （financials/statements/filing_sections/breakdown_product_service/breakdown_geography）の
-# カバレッジ・鮮度を「blt-server status-report」（DB read-only、銘柄コード一覧そのものは
+# カバレッジ・鮮度を「blt-ingest status-report」（DB read-only、銘柄コード一覧そのものは
 # 出力しない）で取得する。notes や unpublished 軸は含めない（本スクリプトは
 # status-report が返すステージのみを反映する）。
 #
@@ -12,7 +12,7 @@
 #   skip（git は触らない。サイトをまだ置いていない／リポジトリ外で別管理の場合）。
 # 書き込みのみ。git commit / git push はしない。
 #
-# 「最終更新」表示は毎回 blt-server status-report 実行時刻（JST）に更新する。
+# 「最終更新」表示は毎回 blt-ingest status-report 実行時刻（JST）に更新する。
 #
 # 使い方:
 #   set -a; . ./.env; set +a
@@ -30,7 +30,7 @@
 set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
-BLT_SERVER="$REPO/.build/release/blt-server"
+BLT_INGEST="${BLT_INGEST:-$REPO/.build/release/blt-ingest}"
 
 if [ -z "${BLT_STATUS_HTML:-}" ]; then
   echo "status-page: skip (BLT_STATUS_HTML unset)"
@@ -56,14 +56,14 @@ if ! command -v jq >/dev/null 2>&1; then
   exit 1
 fi
 
-if [ ! -x "$BLT_SERVER" ]; then
-  echo "ERROR: $BLT_SERVER が見つからないか実行権限がありません（先に 'swift build -c release --product blt-server' を実行してください）" >&2
+if [ ! -x "$BLT_INGEST" ]; then
+  echo "ERROR: $BLT_INGEST が見つからないか実行権限がありません（先に 'swift build -c release --product blt-ingest' を実行してください）" >&2
   exit 1
 fi
 
-report_json="$("$BLT_SERVER" status-report)"
+report_json="$("$BLT_INGEST" status-report)"
 if [ -z "$report_json" ] || ! echo "$report_json" | jq -e . >/dev/null 2>&1; then
-  echo "ERROR: blt-server status-report の出力が JSON として解釈できません" >&2
+  echo "ERROR: blt-ingest status-report の出力が JSON として解釈できません" >&2
   exit 1
 fi
 
