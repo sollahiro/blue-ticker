@@ -674,9 +674,12 @@ enum SegmentInfoLLMNormalizer {
         func cells(_ values: [Double?]) -> [String] {
             values.map { value in value.map(formattedAmount) ?? "" }
         }
-        let collapsed = Array(rows.prefix(firstHeading))
-            + blocks.map { [$0.name] + cells($0.external!) }
-            + [[reconciling.label] + cells(rebased), [grandTotal.label] + cells(grandTotal.values)]
+        var collapsed: [[String]] = Array(rows.prefix(firstHeading))
+        for block in blocks {
+            collapsed.append([block.name] + cells(block.external ?? []))
+        }
+        collapsed.append([reconciling.label] + cells(rebased))
+        collapsed.append([grandTotal.label] + cells(grandTotal.values))
         var copy = table
         copy.markdown = BreakdownExtractor.gridToMarkdown(collapsed)
         return copy
@@ -687,7 +690,7 @@ enum SegmentInfoLLMNormalizer {
         var digits = String(magnitude)
         var grouped = ""
         while digits.count > 3 {
-            grouped = "," + digits.suffix(3) + grouped
+            grouped = "," + String(digits.suffix(3)) + grouped
             digits = String(digits.dropLast(3))
         }
         return (value < 0 ? "△" : "") + digits + grouped
