@@ -442,7 +442,7 @@ public func runStatusReportCommand() async throws {
     try bootstrapBltLogging(from: &env)
     let app = try await Application.make(env)
     do {
-        try await configureDatabase(app)
+        try await configureDatabase(app, schema: .readOnly)
         let listed = await context.listedCompanyCodes()
         let priority = await context.priorityIngestCodes()
         let report = try await buildIngestStatusReport(

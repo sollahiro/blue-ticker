@@ -22,7 +22,7 @@ Neon write・訂正有報は `.agents/skills/production-ingest/SKILL.md`。リ�
 | `CF_ACCESS_TEAM_DOMAIN` | 設定時 Access モード（エッジ信頼）。非 loopback ではこれか `BLT_ALLOW_UNAUTHENTICATED=1` が必須 |
 | `BLT_ALLOW_UNAUTHENTICATED` | `1` のときだけ非 loopback の無認証起動を許可（手元 `0.0.0.0` / 段階 B HAPIS 背後）。詳細は `docs/api-auth.md` |
 | `CLOUDFLARE_TUNNEL_TOKEN` | 設定時のみ cloudflared 起動 |
-| `DATABASE_URL` | プロセス束縛（未設定＝ステートレス）。手元は disposable、Fly ではその環境の Neon を直接指定 |
+| `DATABASE_URL` | プロセス束縛（未設定＝ステートレス）。手元は disposable、Fly では読み取りロール `blt_reader` の接続文字列（`BLT_NEON_READ_DATABASE_URL`）。サーバーは起動時に migrate しないので書き込み権限は不要。マイグレーションは Mac から `blt-server migrate`（`docs/ingest-policy.md`「出荷順」） |
 | `BLT_FEED_TREND_URL` / `BLT_FEED_TREND_TOKEN` | 匿名 Feed Trend カウンター（未設定＝emit なし。`GET /v1/feed/trend` は 503）。Worker は `api.*` の前段に置かない |
 
 `/healthz` は認証不要。`cache_versions` でイメージの版を確認。
@@ -33,11 +33,12 @@ Neon write・訂正有報は `.agents/skills/production-ingest/SKILL.md`。リ�
 
 ```bash
 fly launch --no-deploy --copy-config --name blt-server --region nrt
-fly secrets set BLT_EDINET_API_KEY=xxxxx DATABASE_URL='postgres://...neon.tech/...?sslmode=require'
+# DATABASE_URL は読み取りロール blt_reader の接続文字列（書き込み URL を Fly に置かない）
+fly secrets set BLT_EDINET_API_KEY=xxxxx DATABASE_URL='postgres://blt_reader:...neon.tech/...?sslmode=require'
 fly volumes create blt_data --region nrt --size 1
 fly deploy
-fly ssh console -C "/app/blt-server sync --from 2024-01-01"
-# 重い ingest は Fly で OOM しうる → ローカルから Neon 向けに実行推奨
+# migrate / sync / ingest は Fly では動かない（読み取りロールのため）。Mac から書き込み URL で実行する
+# （docs/ingest-policy.md「出荷順」）
 ```
 
 ### GitHub Actions

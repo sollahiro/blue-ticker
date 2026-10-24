@@ -121,7 +121,7 @@ XBRL キャッシュ（`tmp_cache/edinet/`、git 管理外のローカル専用�
 
 `RealXbrlBreakdown*Tests.swift` はキャッシュ先が `~/.config/blue-ticker/analysis_cache/` と異なる（`smoke/smoke_expected/` の期待値 JSON を経由しない）ため、上記スモーク一式とは別系統として扱ってください。
 
-CI では `swift-linux` と必須チェック `golden-suite` に repo secret `BLT_EDINET_API_KEY` を渡しており、実データでの照合が毎回走ります（`.github/workflows/ci.yml`）。`swift-macos` はビルド確認のみでテストは実行しません。未設定（fork からの PR 等）では各テストが SKIP し、ジョブは失敗しません。
+CI では必須チェック `golden-suite` に repo secret `BLT_EDINET_API_KEY` を渡しており、実データでの照合が毎回走ります（`.github/workflows/ci.yml`）。`build-linux` / `build-macos` はビルド確認のみでテストは実行しません。未設定（fork からの PR 等）では各テストが SKIP し、ジョブは失敗しません。
 
 ### 3.2 対象企業
 

@@ -37,7 +37,7 @@ public func runMasterDataUploadCommand(path: String) async throws {
     try bootstrapBltLogging(from: &env)
     let app = try await Application.make(env)
     do {
-        try await configureDatabase(app)
+        try await configureDatabase(app, schema: .migrate)
         try await upsertMasterDataSnapshot(data, db: app.db, logger: app.logger)
         app.logger.notice("EDINET マスタデータを Neon へ反映しました（\(data.count) bytes）。")
     } catch {

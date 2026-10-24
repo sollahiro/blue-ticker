@@ -57,6 +57,16 @@ set -a; . ./.env; set +a
 
 `BLT_INGEST_WRITE=1` のとき `ingest-common.sh` が `DATABASE_URL="$BLT_NEON_WRITE_DATABASE_URL"` を束縛する（未設定なら停止）。
 
+## 出荷順（マイグレーション）
+
+スキーマ（DDL）を変えるのは Mac の書き込み側だけ。Fly の `blt-server`（配信）は起動時に migrate せず、読み取りロール `blt_reader` で動く。
+
+- `blt-server migrate` は未適用のマイグレーションだけを `DATABASE_URL` へ適用する。`sync` / `ingest` / `master-data-upload` / `screen-rebuild` / `overrides add|revoke` も冒頭で同じ適用を行う。`status-report` / `overrides list` / サーバー起動は適用しない。
+- マイグレーションを含む PR を main に入れたら、次の順で出す。
+  1. Mac で `DATABASE_URL="$BLT_NEON_WRITE_DATABASE_URL" ./.build/release/blt-server migrate`
+  2. GitHub Actions の Deploy を workflow_dispatch で実行する。差分に `Sources/*/Migrations/` を含む自動デプロイは、Deploy ワークフローが失敗で止める（成功扱いにすると次の push で判定から外れるため）。
+- デプロイ後は `/healthz` の `cache_versions` で、DB の中身とサーバーが話す版がずれていないかを確認する。
+
 ## 環境変数（ジョブ共通）
 
 `ingest.local.env` に書く運用向け変数（CLI 上書きも可）:

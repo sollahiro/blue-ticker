@@ -375,7 +375,7 @@ public func runDocumentSyncCommand(from: String?, to: String?) async throws {
     try bootstrapBltLogging(from: &env)
     let app = try await Application.make(env)
     do {
-        try await configureDatabase(app)
+        try await configureDatabase(app, schema: .migrate)
         let summary = try await runDocumentSync(
             context: context, db: app.db, from: from, to: to ?? todayUTC(), logger: app.logger)
         app.logger.notice(
