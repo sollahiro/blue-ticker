@@ -57,6 +57,27 @@ enum IxbrlTableHTML {
         }
     }
 
+    private static let cellOpenPattern = try! NSRegularExpression(
+        pattern: #"<t[dh]\b([^>]*)>(?:.*?)</t[dh]>"#,
+        options: [.caseInsensitive, .dotMatchesLineSeparators])
+    private static let rowspanPattern = try! NSRegularExpression(
+        pattern: #"rowspan\s*=\s*["']?([0-9]+)"#, options: [.caseInsensitive])
+
+    /// 行の各セルの rowspan（無ければ 1）。`cellBodies` と同じ順。
+    static func cellRowspans(in rowHTML: String) -> [Int] {
+        let ns = NSRange(rowHTML.startIndex..., in: rowHTML)
+        return cellOpenPattern.matches(in: rowHTML, range: ns).map { match in
+            guard let attrsRange = Range(match.range(at: 1), in: rowHTML) else { return 1 }
+            let attrs = String(rowHTML[attrsRange])
+            let attrsNS = NSRange(attrs.startIndex..., in: attrs)
+            guard let span = rowspanPattern.firstMatch(in: attrs, range: attrsNS),
+                  let spanRange = Range(span.range(at: 1), in: attrs),
+                  let value = Int(attrs[spanRange])
+            else { return 1 }
+            return max(1, value)
+        }
+    }
+
     /// セルに含まれる、指定タグの ix:nonFraction の contextRef 一覧（無ければ空）。
     static func factContextRefs(in cellHTML: String, tag: String) -> [String] {
         let ns = NSRange(cellHTML.startIndex..., in: cellHTML)

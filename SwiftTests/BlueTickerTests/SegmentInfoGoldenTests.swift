@@ -448,4 +448,74 @@ import Testing
         let needsReview: Bool = snapshot.needsReview
         #expect(needsReview == false)
     }
+
+    /// 米国基準の積み上げ表。事業ごとに 外部顧客 / セグメント間 / 計 が並び、末尾の
+    /// 全社（共通）及びセグメント間取引消去 △186,953 は「計」の和を連結合計へつなぐ。
+    /// 外部顧客の行を採るときは、調整行を 連結合計 − 外部顧客の和 = 全社（共通）外部 11,034 にする。
+    // source: code=6758 fy_end=2021-03-31 doc_id=S100LM4N page=207 field=segment.全社（共通）
+    // source: code=6758 fy_end=2021-03-31 doc_id=S100LM4N page=207 field=segment.ゲーム＆ネットワークサービス
+    @Test func stackedExternalBlocksRebaseCorporateAdjustment() async throws {
+        let markdown = """
+            |                         |           |           |
+            |-------------------------|-----------|-----------|
+            | 項目                      | 2019年度    | 2020年度    |
+            | 項目                      | 金額（百万円）   | 金額（百万円）   |
+            | 売上高及び営業収入：              |           |           |
+            | ゲーム＆ネットワークサービス：         |           |           |
+            | 外部顧客に対するもの              | 1,919,760 | 2,604,713 |
+            | セグメント間取引                | 57,791    | 51,565    |
+            | 計                       | 1,977,551 | 2,656,278 |
+            | 音　楽：                    |           |           |
+            | 外部顧客に対するもの              | 838,592   | 927,250   |
+            | セグメント間取引                | 11,317    | 12,617    |
+            | 計                       | 849,909   | 939,867   |
+            | 映　画：                    |           |           |
+            | 外部顧客に対するもの              | 1,010,714 | 757,580   |
+            | セグメント間取引                | 1,140     | 1,187     |
+            | 計                       | 1,011,854 | 758,767   |
+            | エレクトロニクス・プロダクツ＆ソリューション： |           |           |
+            | 外部顧客に対するもの              | 1,969,880 | 1,902,887 |
+            | セグメント間取引                | 21,388    | 17,843    |
+            | 計                       | 1,991,268 | 1,920,730 |
+            | イメージング＆センシング・ソリューション：   |           |           |
+            | 外部顧客に対するもの              | 985,259   | 937,859   |
+            | セグメント間取引                | 85,317    | 74,638    |
+            | 計                       | 1,070,576 | 1,012,497 |
+            | 金　融：                    |           |           |
+            | 外部顧客に対するもの              | 1,299,847 | 1,661,520 |
+            | セグメント間取引                | 7,901     | 7,401     |
+            | 計                       | 1,307,748 | 1,668,921 |
+            | その他：                    |           |           |
+            | 外部顧客に対するもの              | 214,999   | 196,517   |
+            | セグメント間取引                | 36,421    | 32,736    |
+            | 計                       | 251,420   | 229,253   |
+            | 全社（共通）及びセグメント間取引消去      | △200,441  | △186,953  |
+            | 連結合計                    | 8,259,885 | 8,999,360 |
+            """
+        let table = BreakdownTable(heading: "セグメント情報", markdown: markdown, period: "当期")
+        let rebased = SegmentInfoLLMNormalizer.rebasingStackedExternalBlocks(table)
+        let grid = BreakdownExtractor.markdownToGrid(rebased.markdown)
+        let corporate = try #require(grid.first { $0.first?.contains("消去") == true })
+        #expect(corporate.last == "11,034")
+        #expect(grid.contains { $0.first == "ゲーム＆ネットワークサービス" && $0.last == "2,604,713" })
+        #expect(!grid.contains { $0.first == "計" })
+
+        let yen = Financial.millionYen
+        let (snapshotOrNil, audit) = await SegmentInfoLLMNormalizer.normalize(
+            ExtractedBreakdown(method: "html_table", tables: [table], facts: []),
+            consolidatedSales: 8_999_360 * yen,
+            decider: FakeRevenueRecognitionColumnDecider(selected: "t0_c2"),
+            fiscalYearEnd: "2021-03-31", docID: "S100LM4N-golden",
+            publishedAxis: breakdownAxisSegment)
+        let snapshot = try #require(
+            snapshotOrNil,
+            "notes=\(audit?.notes ?? "nil") reason=\(audit?.notApplicableReason ?? "nil")")
+        let rows = Self.segmentRows(snapshot)
+        #expect(rows["ゲーム＆ネットワークサービス"] == 2_604_713 * yen)
+        #expect(rows["金融"] == 1_661_520 * yen)
+        #expect(rows["その他"] == 196_517 * yen)
+        let reconciling = snapshot.rows.filter { $0.rowKind == "reconciling" }
+        #expect(reconciling.map(\.amount) == [11_034 * yen])
+        #expect(snapshot.denominator == 8_999_360 * yen)
+    }
 }

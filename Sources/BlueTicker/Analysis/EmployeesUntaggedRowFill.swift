@@ -277,6 +277,9 @@ enum EmployeesUntaggedRowFill {
             guard tableHTML.contains(tag) else { continue }
             var anchored = false
             var rows: [TableRow] = []
+            // 人数セルが縦に結合され、下の行がラベルだけのとき（4263 S100Z4GF の
+            // DTxプロダクト事業／DTxプラットフォーム事業 35 名）、下の行のラベルを同じ行に連ねる。
+            var spanned: (row: Int, remaining: Int)?
             let tableNS = NSRange(tableHTML.startIndex..., in: tableHTML)
             for rowMatch in IxbrlTableHTML.rowPattern.matches(in: tableHTML, range: tableNS) {
                 guard let rowRange = Range(rowMatch.range, in: tableHTML) else { continue }
@@ -285,13 +288,25 @@ enum EmployeesUntaggedRowFill {
                 for cell in cells where IxbrlTableHTML.factContextRefs(in: cell, tag: tag).contains(where: { anchorRefs.contains($0) }) {
                     anchored = true
                 }
+                if let span = spanned, span.remaining > 0 {
+                    spanned = (span.row, span.remaining - 1)
+                    let label = cells.first.map(IxbrlTableHTML.plainText) ?? ""
+                    if cells.count == 1, containsJapanese(label) {
+                        rows[span.row].label += "・" + label
+                        continue
+                    }
+                }
                 guard cells.count >= 2 else { continue }
                 let label = IxbrlTableHTML.plainText(cells[0])
                 guard containsJapanese(label) else { continue }
-                for cell in cells.dropFirst() {
+                let rowspans = IxbrlTableHTML.cellRowspans(in: rowHTML)
+                for (index, cell) in cells.enumerated().dropFirst() {
                     guard let amount = leadingNumber(IxbrlTableHTML.plainText(cell)) else { continue }
                     let tagged = !IxbrlTableHTML.factContextRefs(in: cell, tag: tag).isEmpty
                     rows.append(TableRow(label: label, amount: amount, tagged: tagged))
+                    let span = index < rowspans.count ? rowspans[index] : 1
+                    let labelSpan = rowspans.first ?? 1
+                    spanned = span > labelSpan ? (rows.count - 1, span - labelSpan) : nil
                     break
                 }
             }

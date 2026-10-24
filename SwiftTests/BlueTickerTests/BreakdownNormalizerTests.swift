@@ -2097,4 +2097,105 @@ import Foundation
         #expect(snap.denominator == 11_308_275_000_000)
         #expect(!snap.warnings.contains("sales_denominator_aligned_to_segment_total"))
     }
+
+    private static func nonConsolidatedFact(
+        _ tag: String, _ member: String?, _ thousands: Double, instant: Bool = false
+    ) -> BreakdownFact {
+        let period = instant ? "CurrentYearInstant" : "CurrentYearDuration"
+        var dimensions = ["ConsolidatedOrNonConsolidatedAxis": "NonConsolidatedMember"]
+        if let member { dimensions["OperatingSegmentsAxis"] = member }
+        return BreakdownFact(
+            tag: tag,
+            contextRef: "\(period)_NonConsolidatedMember" + (member.map { "_\($0)" } ?? ""),
+            dimensions: dimensions,
+            value: thousands * 1_000, label: nil, unitRef: "JPY", decimals: "-3"
+        )
+    }
+
+    /// 単体のみの 2477。主力セグメントが売上の 99.8% でも segment のまま。
+    /// 報告セグメント合計（TotalOfReportableSegmentsAndOthersMember）だけが小計で、分母は損益計算書の売上高。
+    // source: code=2477 fy_end=2026-06-30 doc_id=S100Z3MW page=54 field=segment.アプリケーションサービス事業
+    // source: code=2477 fy_end=2026-06-30 doc_id=S100Z3MW page=2 field=segment.denominator
+    @Test func nonConsolidatedDominantSegmentStaysSegment() throws {
+        let app = "ApplicationServiceReportableSegmentMember"
+        let media = "InternetMediaReportableSegmentMember"
+        let facts = [
+            Self.nonConsolidatedFact("RevenuesFromExternalCustomers", nil, 2_414_083),
+            Self.nonConsolidatedFact("RevenuesFromExternalCustomers", app, 2_408_545),
+            Self.nonConsolidatedFact("RevenuesFromExternalCustomers", media, 5_537),
+            Self.nonConsolidatedFact(
+                "RevenuesFromExternalCustomers", "TotalOfReportableSegmentsAndOthersMember", 2_414_083),
+            Self.nonConsolidatedFact("RevenuesFromExternalCustomers", "ReconcilingItemsMember", 0),
+            Self.nonConsolidatedFact("OperatingIncome", nil, 1_747_457),
+            Self.nonConsolidatedFact("OperatingIncome", app, 1_915_264),
+            Self.nonConsolidatedFact("OperatingIncome", media, -2_432),
+            Self.nonConsolidatedFact(
+                "OperatingIncome", "TotalOfReportableSegmentsAndOthersMember", 1_912_831),
+            Self.nonConsolidatedFact("OperatingIncome", "ReconcilingItemsMember", -165_373),
+        ]
+        let result = ExtractedBreakdown(method: "xbrl_facts", tables: [], facts: facts)
+        let snap = try #require(
+            BreakdownNormalizer.normalize(result, consolidatedSales: 2_414_083_000))
+        let appRow = try #require(snap.rows.first { $0.labelRaw == app })
+        #expect(appRow.rowKind == "segment")
+        #expect(appRow.amount == 2_408_545_000)
+        #expect(appRow.profit == 1_915_264_000)
+        let mediaRow = try #require(snap.rows.first { $0.labelRaw == media })
+        #expect(mediaRow.rowKind == "segment")
+        #expect(mediaRow.amount == 5_537_000)
+        #expect(mediaRow.profit == -2_432_000)
+        #expect(snap.denominator == 2_414_083_000)
+        #expect(!snap.warnings.contains("sales_denominator_aligned_to_segment_total"))
+        #expect(snap.needsReview == false)
+    }
+
+    /// 単体のみの提出会社は個別の資産合計（財務諸表計上額）を segment_assets の分母にする。
+    /// 行の和 7,145,285 ではなく貸借対照表の 7,145,287。
+    // source: code=2477 fy_end=2026-06-30 doc_id=S100Z3MW page=38 field=capex.segment_assets.denominator
+    @Test func nonConsolidatedFilerUsesEntityTotalAsSegmentAssetsDenominator() throws {
+        let facts = [
+            Self.nonConsolidatedFact("Assets", nil, 7_145_287, instant: true),
+            Self.nonConsolidatedFact(
+                "Assets", "ApplicationServiceReportableSegmentMember", 475_431, instant: true),
+            Self.nonConsolidatedFact(
+                "Assets", "InternetMediaReportableSegmentMember", 832, instant: true),
+            Self.nonConsolidatedFact(
+                "Assets", "TotalOfReportableSegmentsAndOthersMember", 476_264, instant: true),
+            Self.nonConsolidatedFact("Assets", "ReconcilingItemsMember", 6_669_022, instant: true),
+        ]
+        let snapshot = try #require(BreakdownNormalizer.normalizeSegmentAssets(facts: facts))
+        #expect(snapshot.denominator == 7_145_287_000)
+        #expect(!snapshot.warnings.contains("segment_assets_segment_sum_far_from_total"))
+    }
+
+    /// のれん償却額の全社分 3,702 千円が、セグメント表の調整額（ReconcilingItemsMember）と
+    /// のれん表の全社・消去（UnallocatedAmountsAndEliminationMember）の両方に載る。
+    /// 片方だけ残し、分母は 3,702 千円（7,404 千円ではない）。
+    // source: code=7320 fy_end=2026-06-30 doc_id=S100Z3SN page=101 field=goodwill_amortization.調整額
+    // source: code=7320 fy_end=2026-06-30 doc_id=S100Z3SN page=102 field=goodwill_amortization.denominator
+    @Test func goodwillAmortizationDoesNotDoubleCountCorporateAmount() throws {
+        func fact(_ member: String?, _ thousands: Double) -> BreakdownFact {
+            BreakdownFact(
+                tag: "AmortizationOfGoodwillSGA",
+                contextRef: "CurrentYearDuration" + (member.map { "_\($0)" } ?? ""),
+                dimensions: member.map { ["OperatingSegmentsAxis": $0] } ?? [:],
+                value: thousands * 1_000, label: nil, unitRef: "JPY", decimals: "-3")
+        }
+        let facts = [
+            fact(nil, 3_702),
+            fact("ReconcilingItemsMember", 3_702),
+            fact("ReportableSegmentsMember", 0),
+            fact("UnallocatedAmountsAndEliminationMember", 3_702),
+            fact("ExtendTechBusinessReportableSegmentsMember", 0),
+            fact("FinTechBusinessReportableSegmentMember", 0),
+            fact("HomeworthTechBusinessReportableSegmentsMember", 0),
+            fact("LifeTechBusinessReportableSegmentMember", 0),
+        ]
+        let snapshot = try #require(BreakdownNormalizer.normalizeGoodwillAmortization(facts: facts))
+        #expect(snapshot.denominator == 3_702_000)
+        let reconciling = snapshot.rows.filter { $0.rowKind == "reconciling" }
+        #expect(reconciling.count == 1)
+        #expect(reconciling.map(\.amount).reduce(0, +) == 3_702_000)
+        #expect(snapshot.needsReview == false)
+    }
 }
