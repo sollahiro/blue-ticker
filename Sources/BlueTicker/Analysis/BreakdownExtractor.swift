@@ -362,7 +362,7 @@ enum BreakdownExtractor {
                 tables = tables + etcTables
             }
         }
-        tables = tables.filter { !isProductServiceTable($0) }
+        tables = tables.filter { !isProductServiceTable($0) && !isMajorCustomerTable($0) }
         let relatedMarkdown = Set(
             (relatedInfoTablesEmbeddedInSegmentNote(xbrlDir: xbrlDir)
                 + relatedInfoTablesInDedicatedBlocks(xbrlDir: xbrlDir)).map(\.markdown))
@@ -443,6 +443,18 @@ enum BreakdownExtractor {
             return true
         }
         return productOrServiceRelatedInfoHeadingKeywords.contains { table.heading.contains($0) }
+    }
+
+    /// 関連情報「主要な顧客ごとの情報」の表（見出し行が「顧客の名称又は氏名」「相手先」）。
+    /// 顧客名の行は報告セグメントではない（6526 / 6920 / 4568）。
+    static func isMajorCustomerTable(_ table: BreakdownTable) -> Bool {
+        let header = markdownToGrid(table.markdown).prefix(3).flatMap { $0 }
+        return header.contains { cell in
+            let compact = cell.replacingOccurrences(of: " ", with: "")
+                .replacingOccurrences(of: "\u{3000}", with: "")
+            return compact.contains("顧客の名称") || compact.hasPrefix("相手先")
+                || compact.hasPrefix("販売先")
+        }
     }
 
     /// 関連情報の専用タグ（製品・サービス、地域）に載った表。単一セグメントの会社は
