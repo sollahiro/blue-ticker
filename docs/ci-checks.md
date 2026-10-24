@@ -28,9 +28,11 @@ default to `merge-base(origin/main, HEAD)..HEAD`; override with `--base/--head` 
 
 `golden-suite.sh` checks every fixture against `.checksums.json` (no missing,
 extra, or stale entries) and then runs `swift test --filter` over every suite declared
-in the golden Swift files. The filter comes from those files, so a new Oracle suite is
-picked up automatically. `swift-linux` skips the same filter so the suites run only once;
-`swift-macos` does not run tests. Print the filter with `scripts/ci/golden-suite.sh --print-filter`.
+in the golden Swift files, plus every suite declared in a Swift test file that fetches real
+XBRL (`SmokeCacheSupport.ensureCached`; R2 first, then EDINET). The filter comes from those
+files, so a new Oracle or real-XBRL suite is picked up automatically. `swift-linux` skips the
+same filter so the suites run only once and it never downloads XBRL; `swift-macos` only
+builds (it runs no tests, including the iOS helper packages, which `swift-linux` covers). Print the filter with `scripts/ci/golden-suite.sh --print-filter`.
 
 ## Golden-change rules (`golden-rules.sh`)
 
