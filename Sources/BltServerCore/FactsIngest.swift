@@ -281,7 +281,7 @@ public func runFactsIngestCommand(
         }
         let forceDocIDs = (docIDs ?? []).union(overrideForce.docIDs)
         let financialsExplicitCodes: Set<String>?
-        if let docIDs {
+        if docIDs != nil {
             var fromDocs = Set(listedFilingSets.keep.map(\.code))
             fromDocs.formUnion(publicBreakdownSets.keep.map(\.code))
             fromDocs.formUnion(deterministicMetricsFilingSets.keep.map(\.code))

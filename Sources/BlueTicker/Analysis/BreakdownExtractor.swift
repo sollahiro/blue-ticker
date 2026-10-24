@@ -681,7 +681,7 @@ enum BreakdownExtractor {
     /// 表のセルを地の文に混ぜない。段落が無い TextBlock は本文全体を1つにする。
     private static func omissionSentenceSources(in html: String) -> [String] {
         guard let doc = try? SwiftSoup.parse(html) else { return [html] }
-        try? doc.select("table").remove()
+        _ = try? doc.select("table").remove()
         let paragraphs = (try? doc.select("p"))?.array() ?? []
         if paragraphs.isEmpty {
             let text = bs4Text(doc, strip: true)

@@ -9,7 +9,7 @@ export INGEST_JOB_NAME="job-07-relations"
 
 ingest_require_ready
 
-LIMIT="${BLT_INGEST_RELATIONS_LIMIT:-80}"
+LIMIT="${BLT_INGEST_RELATIONS_LIMIT:-100}"
 
 ingest_run ingest --stages relations --limit "$LIMIT"
 
