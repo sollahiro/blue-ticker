@@ -167,7 +167,7 @@ Wayback は **バイト取得の代用** であってマップ値ではない。
 - キー: `company-icons/{code}.*`。秘密は既存 `BLT_R2_*`
 - 差し替えの Before/After 仮置きは `company-icons/review/{date}/{code}-before|after.*`。本番キーは GO 前に上書きしない
 - 無い／入らない場合は止めて報告。新しい CLI フラグや恒常スクリプトを足さない
-- バイトを先に持っている（添付・Wayback・ワンオフ PNG）ときは既存 R2 経路で PUT してよい。その後 **マップを CDN にして** `blt-server ingest --stages icons --codes` で DB 行を書く
+- バイトを先に持っている（添付・Wayback・ワンオフ PNG）ときは既存 R2 経路で PUT してよい。その後 **マップを CDN にして** `blt-ingest ingest --stages icons --codes` で DB 行を書く
 - SQL で `company_icons` を upsert しない（ingest の skip / source_url 照合から外れる）
 - 同一キー上書き時は CDN `max-age=14400` に注意
 
@@ -217,7 +217,7 @@ Git に Linear ID（`BLT-N`）を新たに書かない。
 
 ```bash
 swift build -c release -Xswiftc -disable-upcoming-feature -Xswiftc MemberImportVisibility --product blt-server
-DATABASE_URL="$BLT_NEON_WRITE_DATABASE_URL" ./.build/release/blt-server ingest --stages icons --codes <codes>
+DATABASE_URL="$BLT_NEON_WRITE_DATABASE_URL" ./.build/release/blt-ingest ingest --stages icons --codes <codes>
 ```
 
 `<codes>` = この PR の新規ピン + キャッチアップ（マップ済み・未格納／版ずれ）。

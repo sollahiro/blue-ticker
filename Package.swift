@@ -9,13 +9,20 @@ import PackageDescription
 // | SwiftSoup                     | 壊れた HTML/XBRL 注記パース  | BlueTickerCore, BlueTickerTests             |
 // | ZIPFoundation                 | EDINET XBRL ZIP 展開         | BlueTickerCore, BlueTickerTests             |
 // | swift-crypto                  | R2 SigV4 HMAC-SHA256         | BlueTickerCore（Vapor 推移的だが Core 直接）|
+// | fluent-kit                    | ORM（Vapor なし）            | BltStoreCore, BltIngestCore                 |
+// | sql-kit                       | 生 SQL                       | BltStoreCore, BltIngestCore                 |
+// | swift-log / swift-nio         | ログ / DB 接続のイベントループ | BltStoreCore, BltIngestCore               |
 // | vapor                         | REST トランスポート          | BltServerCore, BltServerCoreTests           |
-// | fluent                        | ORM                          | BltServerCore, BltServerCoreTests           |
-// | fluent-postgres-driver        | Neon / Postgres              | BltServerCore, BltServerCoreTests           |
+// | fluent                        | ORM の Vapor 連携            | BltServerCore, BltServerCoreTests           |
+// | fluent-postgres-driver        | Neon / Postgres              | BltStoreCore 以上, BltServerCoreTests       |
 // | fluent-sqlite-driver          | テスト用インメモリ DB        | BltServerCoreTests のみ                     |
 // | swift-sdk (MCP)               | MCP プロトコル               | BltMcpServerCore, BltMcpServerCoreTests     |
 //
-// ターゲット間: BltServer → BltServerCore → BlueTickerCore / BltMcpServerCore
+// ターゲット間（取り込みと配信の分離）:
+//   blt-ingest（Mac 専用・書き込み）: BltIngest → BltIngestCore → BltStoreCore → BlueTickerCore
+//   blt-server（Fly 専用・読み取り）: BltServer → BltServerCore → BltStoreCore / BltMcpServerCore
+// BltStoreCore（Models・格納済みデータの読み取り・DB 接続）と BltIngestCore は Vapor / MCP に依存しない。
+// マイグレーション（DDL）は BltIngestCore にだけ置く（blt-server は読み取りロールで動く）。
 // Core は Vapor/Fluent を参照しない（AGENTS.md / docs/architecture.md）。
 // 検証: smoke/golden の後、使い捨て Neon へ ingest して /v1 契約を確認する。
 // =============================================================================
@@ -26,6 +33,7 @@ let package = Package(
         .macOS(.v13),
     ],
     products: [
+        .executable(name: "blt-ingest", targets: ["BltIngest"]),
         .executable(name: "blt-server", targets: ["BltServer"]),
     ],
     dependencies: [
@@ -33,6 +41,10 @@ let package = Package(
         .package(url: "https://github.com/weichsel/ZIPFoundation.git", from: "0.9.19"),
         .package(url: "https://github.com/vapor/vapor.git", from: "4.92.0"),
         .package(url: "https://github.com/vapor/fluent.git", from: "4.9.0"),
+        .package(url: "https://github.com/vapor/fluent-kit.git", from: "1.52.2"),
+        .package(url: "https://github.com/vapor/sql-kit.git", from: "3.33.0"),
+        .package(url: "https://github.com/apple/swift-log.git", from: "1.6.3"),
+        .package(url: "https://github.com/apple/swift-nio.git", from: "2.81.0"),
         .package(url: "https://github.com/vapor/fluent-postgres-driver.git", from: "2.8.0"),
         .package(url: "https://github.com/vapor/fluent-sqlite-driver.git", from: "4.6.0"),
         .package(url: "https://github.com/modelcontextprotocol/swift-sdk.git", from: "0.12.1"),
@@ -67,10 +79,47 @@ let package = Package(
                 .swiftLanguageMode(.v6),
             ]
         ),
+        // Models・格納済みデータの読み取り・DB 接続（Vapor なし）。取り込みと配信の両方が使う。
+        .target(
+            name: "BltStoreCore",
+            dependencies: [
+                "BlueTickerCore",
+                .product(name: "FluentKit", package: "fluent-kit"),
+                .product(name: "FluentSQL", package: "fluent-kit"),
+                .product(name: "SQLKit", package: "sql-kit"),
+                .product(name: "FluentPostgresDriver", package: "fluent-postgres-driver"),
+                .product(name: "Logging", package: "swift-log"),
+                .product(name: "NIOCore", package: "swift-nio"),
+                .product(name: "NIOPosix", package: "swift-nio"),
+            ],
+            path: "Sources/BltStoreCore",
+            swiftSettings: [
+                .swiftLanguageMode(.v6),
+            ]
+        ),
+        // 取り込み・書き込み・マイグレーション（Vapor / MCP なし。Mac の blt-ingest だけが使う）。
+        .target(
+            name: "BltIngestCore",
+            dependencies: [
+                "BlueTickerCore",
+                "BltStoreCore",
+                .product(name: "FluentKit", package: "fluent-kit"),
+                .product(name: "FluentSQL", package: "fluent-kit"),
+                .product(name: "SQLKit", package: "sql-kit"),
+                .product(name: "FluentPostgresDriver", package: "fluent-postgres-driver"),
+                .product(name: "Logging", package: "swift-log"),
+            ],
+            path: "Sources/BltIngestCore",
+            swiftSettings: [
+                .swiftLanguageMode(.v6),
+            ]
+        ),
+        // 配信（REST・MCP）。DB は読み取りのみ。
         .target(
             name: "BltServerCore",
             dependencies: [
                 "BlueTickerCore",
+                "BltStoreCore",
                 "BltMcpServerCore",
                 .product(name: "Vapor", package: "vapor"),
                 .product(name: "Fluent", package: "fluent"),
@@ -81,11 +130,24 @@ let package = Package(
                 .swiftLanguageMode(.v6),
             ]
         ),
+        // エントリのみ。取り込み・書き込みは BltIngestCore 経由。
+        .executableTarget(
+            name: "BltIngest",
+            dependencies: [
+                "BltIngestCore",
+                "BltStoreCore",
+            ],
+            path: "Sources/BltIngest",
+            swiftSettings: [
+                .swiftLanguageMode(.v6),
+            ]
+        ),
         // エントリのみ。Web/DB は BltServerCore 経由（BlueTickerCore を直接リンクしない）。
         .executableTarget(
             name: "BltServer",
             dependencies: [
                 "BltServerCore",
+                "BltStoreCore",
             ],
             path: "Sources/BltServer",
             swiftSettings: [
@@ -105,6 +167,8 @@ let package = Package(
             name: "BltServerCoreTests",
             dependencies: [
                 "BltServerCore",
+                "BltStoreCore",
+                "BltIngestCore",
                 .product(name: "Fluent", package: "fluent"),
                 .product(name: "FluentPostgresDriver", package: "fluent-postgres-driver"),
                 .product(name: "FluentSQLiteDriver", package: "fluent-sqlite-driver"),

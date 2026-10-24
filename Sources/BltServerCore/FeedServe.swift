@@ -3,6 +3,7 @@
 // items は listed だけ・必要件数だけ読む。total.day / total.week は COUNT。
 // 同一 Fluent 接続へ並列に投げない（SQLite テストとリクエスト単位のプール接続）。
 
+import BltStoreCore
 import BlueTickerCore
 import Fluent
 import FluentSQL

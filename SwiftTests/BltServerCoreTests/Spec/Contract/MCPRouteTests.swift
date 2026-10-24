@@ -11,6 +11,8 @@ import Vapor
 @testable import BlueTickerCore
 @testable import BltMcpServerCore
 @testable import BltServerCore
+@testable import BltStoreCore
+@testable import BltIngestCore
 
 private func makeMcpContext() -> BltServerContext {
     let dir = FileManager.default.temporaryDirectory

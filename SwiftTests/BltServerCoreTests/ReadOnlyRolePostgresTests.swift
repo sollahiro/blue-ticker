@@ -17,6 +17,8 @@ import Vapor
 
 @testable import BlueTickerCore
 @testable import BltServerCore
+@testable import BltStoreCore
+@testable import BltIngestCore
 
 @Suite(.serialized) struct ReadOnlyRolePostgresTests {
     private static let postgresURL = ProcessInfo.processInfo.environment["BLT_TEST_POSTGRES_URL"]

@@ -53,14 +53,15 @@ EU / ESEF 製品トラックは中止。
 
 ## ターゲット構成と依存方向
 
-Core に Vapor/Fluent をリンクさせない。実行バイナリは薄く、Web/DB は `BltServerCore` に閉じる。
+Core に Vapor/Fluent をリンクさせない。実行バイナリは薄い。取り込み（書き込み・マイグレーション）は Mac 専用の `blt-ingest`、配信（REST / MCP。DB は読み取りのみ）は Fly の `blt-server` に分け、両者が共有する Models・格納済みデータの読み取り・DB 接続は Vapor なしの `BltStoreCore` に置く。`blt-ingest` は Vapor / MCP をリンクしない（CI の build-macos で検査）。
 
 外部パッケージの一覧・用途・リンク先は **`Package.swift` 先頭コメントが正本**（`.agents/rules/architecture.md`）。
 
 ```mermaid
 graph TD
     subgraph exe["実行ターゲット"]
-        blt["BltServer"]
+        ing["BltIngest（blt-ingest・Mac）"]
+        blt["BltServer（blt-server・Fly）"]
     end
     subgraph mcp["BltMcpServerCore"]
         MCP["MCP.Server / Tools"]
@@ -72,14 +73,21 @@ graph TD
         API["API/"]
         Infra["Infrastructure/ · Utils/ · Models/ · Constants/"]
     end
-    subgraph servercore["BltServerCore"]
-        Transport["Routes / Entry"]
-        DB["Database · Migrations"]
-        Ingest["*Ingest / DocumentSync"]
+    subgraph storecore["BltStoreCore（Vapor なし）"]
+        Models["Models / 格納済みデータの読み取り / DB 接続"]
     end
+    subgraph ingestcore["BltIngestCore（Vapor なし）"]
+        Ingest["*Ingest / DocumentSync / Migrations"]
+    end
+    subgraph servercore["BltServerCore（Vapor）"]
+        Transport["Routes / MCPRoute / Entry"]
+    end
+    ing --> ingestcore
+    ingestcore --> storecore
     blt --> servercore
-    servercore --> core
+    servercore --> storecore
     servercore --> mcp
+    storecore --> core
     mcp --> core
     Server --> Services
     Services --> Analysis
@@ -87,7 +95,7 @@ graph TD
     Ingest --> Server
 ```
 
-products は `blt-server` のみ。同一モジュール内の依存はレビューで担保（`AGENTS.md` と同趣旨）:
+products は `blt-ingest` と `blt-server` の 2 つ。同一モジュール内の依存はレビューで担保（`AGENTS.md` と同趣旨）:
 
 - `Services/` → `Server/` 禁止
 - `Analysis/` `API/` `Utils/` → `Services/` `Server/` 禁止

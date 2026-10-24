@@ -5,6 +5,8 @@ import Foundation
 import Testing
 
 @testable import BltServerCore
+@testable import BltStoreCore
+@testable import BltIngestCore
 @testable import BlueTickerCore
 
 private func perShareFound(docID: String) -> StatementNoteLoadResult {

@@ -92,3 +92,4 @@ workers/**/.dev.vars
 *.cert
 secrets/
 credentials/
+.build-ingest/

@@ -5,6 +5,8 @@ import Logging
 import Testing
 
 @testable import BltServerCore
+@testable import BltStoreCore
+@testable import BltIngestCore
 
 @Suite struct JsonLogHandlerTests {
     @Test func formatsOneLineJsonWithMetadata() throws {

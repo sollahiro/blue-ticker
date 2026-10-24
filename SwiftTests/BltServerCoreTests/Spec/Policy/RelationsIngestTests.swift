@@ -9,6 +9,8 @@ import Testing
 import Vapor
 
 @testable import BltServerCore
+@testable import BltStoreCore
+@testable import BltIngestCore
 @testable import BlueTickerCore
 
 private func withMigratedApp(_ body: (Application) async throws -> Void) async throws {

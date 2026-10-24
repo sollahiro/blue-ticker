@@ -6,6 +6,8 @@
 import Testing
 
 @testable import BltServerCore
+@testable import BltStoreCore
+@testable import BltIngestCore
 
 @Suite("prioritized")
 struct IngestPriorityTests {

@@ -34,7 +34,7 @@ Actual upstream ingest requires the real `BLT_EDINET_API_KEY` and its own test s
 
 ## Screen fixture/rebuild checks
 
-`blt-server screen-rebuild` and `GET /v1/screen` exist on current `main` (BLT-49).
+`blt-ingest screen-rebuild` and `GET /v1/screen` exist on current `main`.
 
 - `company_financials` requires code, response JSONB, cache_version, requested_years.
 - Minimal response: schema_version=2, code/name/market/sector/currency/unit, years.
@@ -42,7 +42,7 @@ Actual upstream ingest requires the real `BLT_EDINET_API_KEY` and its own test s
   excluded from `screen_index`.
 - Read current `companyFinancialsCacheVersion` from FinancialsContract.swift; do not
   hardcode a version into a reusable test. Below-floor rows should be excluded.
-- Execute `blt-server screen-rebuild` with the same explicit local DATABASE_URL
+- Execute `blt-ingest screen-rebuild` with the same explicit local DATABASE_URL
   (this is a subcommand; unknown argv falls through to the HTTP server).
   Assert both CLI summary and subsequent real HTTP response.
 - Empty `screen_index` (0 rows) is HTTP 404. Filter 0 matches with a generated index

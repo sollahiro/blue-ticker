@@ -2,6 +2,7 @@
 // パスごとに BltServerContext ファサードを呼び、その BltServerResponse を Vapor の Response へ変換する。
 // 公開エンドポイント・レスポンス契約は NIO 実装時と不変（docs/blt-server-roadmap.md 参照）。
 
+import BltStoreCore
 import BlueTickerCore
 import BltMcpServerCore
 import Fluent
@@ -421,16 +422,6 @@ func iconURLs(
 }
 
 // MARK: - 格納済みデータ提供ロジック（REST ルートと MCP ツールディスパッチの共通処理）
-
-/// DB 格納済みデータ提供の結果。Vapor に依存しないため MCP ディスパッチからも直接呼べる。
-enum StoredDataServeResult {
-    /// 成功。JSON 値（`[String: Any]`）。
-    case ok([String: Any])
-    /// 未格納・未抽出（404 相当）。
-    case notFound
-    /// DB 未接続・読み取り失敗（503 相当）。
-    case dbUnavailable
-}
 
 /// `stored` 系エンドポイントの DB 読み取り共通枠。db ガード（未接続→dbUnavailable）→
 /// `withDbRetry`（読み取りリトライ）→ nil→notFound / throw→dbUnavailable。

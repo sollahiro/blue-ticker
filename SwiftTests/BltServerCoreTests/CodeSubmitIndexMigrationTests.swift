@@ -8,6 +8,8 @@ import Testing
 import Vapor
 
 @testable import BltServerCore
+@testable import BltStoreCore
+@testable import BltIngestCore
 
 private func withMigratedApp(
     includeIndexMigration: Bool = true,

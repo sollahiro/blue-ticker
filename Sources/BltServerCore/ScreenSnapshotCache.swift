@@ -6,6 +6,7 @@
 // 起動直後で作り置きがまだ無いときだけ、そのリクエストで作って置く。
 // 手元から Neon に ingest した直後に反映したいときはサーバーを再起動する。
 
+import BltStoreCore
 import BlueTickerCore
 import Fluent
 import Foundation
