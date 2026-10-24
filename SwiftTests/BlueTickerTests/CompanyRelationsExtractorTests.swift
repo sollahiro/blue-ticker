@@ -198,6 +198,84 @@ private func rows(_ result: CompanyRelationsExtractor.Result, section: String) -
         #expect(parsed.rows.map(\.votingRatio) == [100.0])
     }
 
+    @Test func bracketedLabelsAndCountRowsAreNotRows() {
+        // 括弧で囲んだ事業区分の見出し・横結合の見出し・社数の集計行は相手ではない。社名を含む集計の行は残す。
+        let html = """
+            <table>
+            <tr><td>名称</td><td>住所</td><td>資本金</td><td>主要な事業の内容</td><td>議決権の所有割合（％）</td><td>関係内容</td></tr>
+            <tr><td>（連結子会社）</td><td></td><td></td><td></td><td></td><td></td></tr>
+            <tr><td>（繊維）</td><td></td><td></td><td></td><td></td><td></td></tr>
+            <tr><td colspan="2">国内</td><td></td><td></td><td></td><td></td></tr>
+            <tr><td>コー㈱</td><td>東京都</td><td>50</td><td>製造</td><td>100.0</td><td>有</td></tr>
+            <tr><td>コーニ㈱ その他６社</td><td>東京都</td><td>50</td><td>販売</td><td>54.0</td><td>有</td></tr>
+            <tr><td>その他（27社）</td><td></td><td></td><td></td><td></td><td></td></tr>
+            <tr><td>合 計 127社</td><td></td><td></td><td></td><td></td><td></td></tr>
+            <tr><td>〔物流などのサービス〕 合計３社</td><td></td><td></td><td></td><td></td><td></td></tr>
+            <tr><td>持分法適用関連会社 ２社</td><td></td><td></td><td></td><td></td><td></td></tr>
+            </table>
+            """
+        let parsed = CompanyRelationsExtractor.parseAffiliatedEntities(
+            html: html, section: relationSectionAffiliatedEntities, defaultKind: nil)
+        #expect(parsed.rows.map(\.nameRaw) == ["コー㈱", "コーニ㈱ その他６社"])
+        #expect(parsed.rows.allSatisfy { $0.kind == relationKindSubsidiary })
+    }
+
+    @Test func bracketedKindHeadingSwitchesKindEvenWithValuesInTheRow() {
+        // 「＜親会社＞」の見出しのセルに、縦結合した隣の列の値が入っていても見出しとして読む。
+        let html = """
+            <table>
+            <tr><td>名称</td><td>住所</td><td>資本金</td><td>主要な事業の内容</td><td>議決権の所有又は被所有割合（％）</td><td>関係内容</td></tr>
+            <tr><td>＜親会社＞</td><td>東京都</td><td>60百万円</td><td>持株</td><td rowspan="2">被所有 60.9</td><td>－</td></tr>
+            <tr><td>オヤ㈱</td><td>東京都</td><td>60百万円</td><td>持株</td><td>－</td></tr>
+            <tr><td>《連結子会社》</td><td></td><td></td><td></td><td></td><td></td></tr>
+            <tr><td>コー㈱</td><td>大阪市</td><td>10百万円</td><td>販売</td><td>100.0</td><td>有</td></tr>
+            </table>
+            """
+        let parsed = CompanyRelationsExtractor.parseAffiliatedEntities(
+            html: html, section: relationSectionAffiliatedEntities, defaultKind: nil)
+        #expect(parsed.pending.isEmpty)
+        #expect(parsed.rows.map(\.nameRaw) == ["オヤ㈱", "コー㈱"])
+        #expect(parsed.rows.map(\.kind) == [relationKindParent, relationKindSubsidiary])
+        #expect(parsed.rows.map(\.votingRatio) == [60.9, 100.0])
+    }
+
+    @Test func tableInsideRelationCellDoesNotSplitTheOuterTable() {
+        // 「関係内容」欄の中の表で外側の表を切らない（切ると後ろの会社の行を落とし、中の表の項目名を会社にする）。
+        let html = """
+            <table>
+            <tr><td>名称</td><td>住所</td><td>資本金</td><td>主要な事業の内容</td><td>議決権の所有割合（％）</td><td>関係内容</td></tr>
+            <tr><td>（連結子会社）</td><td></td><td></td><td></td><td></td><td></td></tr>
+            <tr><td>コー㈱</td><td>東京都</td><td>450</td><td>製造</td><td>100</td>
+            <td><table><tr><td>役員の兼任等</td><td>兼任１名</td></tr><tr><td>営業上の取引</td><td>製品の製造</td></tr></table></td></tr>
+            <tr><td>コーニ㈱</td><td>東京都</td><td>100</td><td>販売</td><td>100</td>
+            <td><table><tr><td>役員の兼任等</td><td>兼任２名</td></tr></table></td></tr>
+            </table>
+            """
+        let parsed = CompanyRelationsExtractor.parseAffiliatedEntities(
+            html: html, section: relationSectionAffiliatedEntities, defaultKind: nil)
+        #expect(parsed.rows.map(\.nameRaw) == ["コー㈱", "コーニ㈱"])
+        #expect(parsed.rows.map(\.votingRatio) == [100, 100])
+    }
+
+    @Test func transposedFinancialInfoTableIsNotRead() {
+        // 会社を列に並べた損益情報の表（「名称」の見出しがあり、行が「①売上収益」）。
+        let html = """
+            <table>
+            <tr><td>名称</td><td>住所</td><td>資本金</td><td>主要な事業の内容</td><td>議決権の所有割合（％）</td><td>関係内容</td></tr>
+            <tr><td>（連結子会社）</td><td></td><td></td><td></td><td></td><td></td></tr>
+            <tr><td>コー㈱</td><td>東京都</td><td>50</td><td>製造</td><td>100.0</td><td>有</td></tr>
+            </table>
+            <table>
+            <tr><td>名称</td><td>コー㈱（日本基準）</td><td>コーニ Inc.（IFRS）</td></tr>
+            <tr><td>①売上収益</td><td>61,932百万円</td><td>101,832百万円</td></tr>
+            <tr><td>②経常利益</td><td>4,432百万円</td><td>－</td></tr>
+            </table>
+            """
+        let parsed = CompanyRelationsExtractor.parseAffiliatedEntities(
+            html: html, section: relationSectionAffiliatedEntities, defaultKind: nil)
+        #expect(parsed.rows.map(\.nameRaw) == ["コー㈱"])
+    }
+
     @Test func secondLineOfRowSpannedNameAddsToThePreviousRow() {
         // 名称を縦に結合した表では、合計の下の段に間接所有の内数が来る。
         let html = """
