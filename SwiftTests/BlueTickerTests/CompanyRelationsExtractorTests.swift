@@ -147,6 +147,76 @@ private func rows(_ result: CompanyRelationsExtractor.Result, section: String) -
         #expect(parsed.rows.allSatisfy { $0.decidedBy == relationDecidedByRule && !$0.needsReview })
     }
 
+    @Test func votingRatioCellSplitsTotalIndirectAndCloseParties() {
+        typealias Cell = CompanyRelationsExtractor.VotingRatioCell
+        let cases: [(String, Cell?)] = [
+            ("100.0", Cell(total: 100.0)),
+            ("100.0 (66.5)", Cell(total: 100.0, indirect: 66.5)),
+            ("(0.79) 51.49", Cell(total: 51.49, indirect: 0.79)),
+            ("(100.0)", Cell(total: 100.0, indirect: 100.0)),
+            ("100.0％ (100.0％)", Cell(total: 100.0, indirect: 100.0)),
+            ("※2 100.0 [66.5]", Cell(total: 100.0, closeParties: 66.5)),
+            ("※１ 45.0", Cell(total: 45.0)),
+            ("※15.01", Cell(total: 15.01)),
+            ("(注２) 100.0 (100.0)", Cell(total: 100.0, indirect: 100.0)),
+            ("100.0(1.0)(注)3、6", Cell(total: 100.0, indirect: 1.0)),
+            ("20.0(注6)", Cell(total: 20.0)),
+            ("被所有 46.3 (14.9) [0.6]", Cell(total: 46.3, indirect: 14.9, closeParties: 0.6)),
+            ("被所有66.1(注)2", Cell(total: 66.1)),
+            ("20.6 (0.1) 〔0.8〕", Cell(total: 20.6, indirect: 0.1, closeParties: 0.8)),
+            ("－ [100.0]", Cell(closeParties: 100.0)),
+            ("100.0 (－) [－]", Cell(total: 100.0)),
+            ("(被所有)", nil),
+            ("―", nil),
+            ("6,022,109", nil),
+            ("千US$ 14,662", nil),
+        ]
+        for (text, expected) in cases {
+            #expect(CompanyRelationsExtractor.votingRatioCell(text) == expected, "\(text)")
+        }
+    }
+
+    @Test func financialInfoTablesCountsAndSpanningLabelsAreNotRows() {
+        // 「主要な損益情報等」の表は列数が同じでも続きの表ではない。「12社」の集計行と全列にまたがる見出しも相手ではない。
+        let html = """
+            <table>
+            <tr><td>名称</td><td>住所</td><td>資本金</td><td>主要な事業の内容</td><td>議決権の所有割合（％）</td><td>関係内容</td></tr>
+            <tr><td>（連結子会社）</td><td></td><td></td><td></td><td></td><td></td></tr>
+            <tr><td colspan="6">●製造等</td></tr>
+            <tr><td>コー㈱</td><td>東京都</td><td>50</td><td>製造</td><td>100.0</td><td>有</td></tr>
+            <tr><td>12社</td><td></td><td></td><td></td><td></td><td></td></tr>
+            <tr><td>(販売カンパニー) 24社</td><td></td><td></td><td></td><td></td><td></td></tr>
+            </table>
+            <table>
+            <tr><td></td><td>売上高</td><td>経常利益</td><td>当期純利益</td><td>純資産額</td><td>総資産額</td></tr>
+            <tr><td>コー㈱</td><td>182,260</td><td>14,289</td><td>6,176</td><td>133,915</td><td>185,994</td></tr>
+            </table>
+            """
+        let parsed = CompanyRelationsExtractor.parseAffiliatedEntities(
+            html: html, section: relationSectionAffiliatedEntities, defaultKind: nil)
+        #expect(parsed.rows.map(\.nameRaw) == ["コー㈱"])
+        #expect(parsed.rows.map(\.votingRatio) == [100.0])
+    }
+
+    @Test func secondLineOfRowSpannedNameAddsToThePreviousRow() {
+        // 名称を縦に結合した表では、合計の下の段に間接所有の内数が来る。
+        let html = """
+            <table>
+            <tr><td>会社名</td><td>住所</td><td>資本金</td><td>主な事業の内容</td><td>議決権所有割合（％）</td><td>関係内容</td></tr>
+            <tr><td>（連結子会社）</td><td></td><td></td><td></td><td></td><td></td></tr>
+            <tr><td rowspan="2">コー㈱</td><td rowspan="2">大阪市</td><td>百万元</td><td rowspan="2">卸売</td><td>52.6</td><td rowspan="2">有</td></tr>
+            <tr><td>4,923</td><td>(0.1)</td></tr>
+            <tr><td>コーニ㈱</td><td>東京都</td><td>50</td><td>販売</td><td>100.0</td><td>有</td></tr>
+            </table>
+            """
+        let parsed = CompanyRelationsExtractor.parseAffiliatedEntities(
+            html: html, section: relationSectionAffiliatedEntities, defaultKind: nil)
+        #expect(parsed.rows.map(\.nameRaw) == ["コー㈱", "コーニ㈱"])
+        #expect(parsed.rows.map(\.votingRatio) == [52.6, 100.0])
+        #expect(parsed.rows.map(\.votingRatioIndirect) == [0.1, nil])
+        #expect(parsed.rows.map(\.position) == [0, 1])
+    }
+
     @Test func unmarkedGroupTableIsPendingForJev() {
         let html = """
             <table>

@@ -56,6 +56,12 @@ final class CompanyRelation: Model, @unchecked Sendable {
     @OptionalField(key: "voting_ratio")
     var votingRatio: Double?
 
+    @OptionalField(key: "voting_ratio_indirect")
+    var votingRatioIndirect: Double?
+
+    @OptionalField(key: "voting_ratio_close_parties")
+    var votingRatioCloseParties: Double?
+
     /// 相手が上場なら 4 桁コード（`via_listed_parent` は親のコード）。
     @OptionalField(key: "related_code")
     var relatedCode: String?
@@ -135,6 +141,8 @@ final class CompanyRelation: Model, @unchecked Sendable {
         self.amountYen = draft.amountYen
         self.segmentLabel = draft.segmentLabel
         self.votingRatio = draft.votingRatio
+        self.votingRatioIndirect = draft.votingRatioIndirect
+        self.votingRatioCloseParties = draft.votingRatioCloseParties
         self.relatedCode = nil
         self.resolution = nil
         self.resolverKey = nil

@@ -203,7 +203,15 @@ enum CompanyRelationsExtractor {
             let outsideKind = outsideHeadingKind(segment.precedingParagraphs)
             let layout: GroupTableLayout
             var bodyStart: Int
-            if let found = groupTableLayout(table.grid) {
+            // 関係会社表の下に付く「主要な損益情報等」の表（列数が同じでも続きの表ではない）。
+            // 議決権の列を持つ表の右端の列に損益情報があるだけなら関係会社表として読む。
+            let found = groupTableLayout(table.grid)
+            if found?.ownedRatioColumn == nil, isFinancialInfoTable(table.grid) {
+                previous = nil
+                carriedKind = nil
+                continue
+            }
+            if let found {
                 layout = found
                 bodyStart = found.headerRow + 1
                 // 改ページで見出し行だけを繰り返した続きの表は、前の表の区分を引き継ぐ。
@@ -221,6 +229,7 @@ enum CompanyRelationsExtractor {
             }
             previous = layout
             var headingKind = outsideKind ?? carriedKind
+            var previousRawName: String?
             var pendingRows: [Int] = []
             var pendingCells: [[String]] = []
             while bodyStart < table.grid.count {
@@ -231,6 +240,8 @@ enum CompanyRelationsExtractor {
                     headingKind = kind
                     continue
                 }
+                // 全列にまたがる見出し（「●探鉱・開発・生産等」）は相手ではない。
+                if isSpanningLabelRow(row) { continue }
                 var (prefixKind, name) = stripKindPrefix(rawName)
                 // 「（持分法適用会社）澤藤電機㈱」のように区分の先頭行の名称に付いた区分語は、次の区分までの行にも効く。
                 if let prefixKind { headingKind = prefixKind }
@@ -239,13 +250,22 @@ enum CompanyRelationsExtractor {
                 let kind = headingKind ?? defaultKind
                 let isPassive = kind == relationKindParent || kind == relationKindOtherRelated
                 let ratioColumn = isPassive ? layout.passiveRatioColumn : layout.ownedRatioColumn
-                let ratio = ratioColumn.flatMap { firstNumber(row[$0]) }
+                let ratio = ratioColumn.flatMap { votingRatioCell(row[$0]) } ?? VotingRatioCell()
+                // 名称を縦に結合した 2 段目の行（「52.6」の下の段に「(0.1)」）は、前の行の議決権の続き。
+                if let last = rows.indices.last, previousRawName == rawName, rows[last].section == section {
+                    rows[last].votingRatio = rows[last].votingRatio ?? ratio.total
+                    rows[last].votingRatioIndirect = rows[last].votingRatioIndirect ?? ratio.indirect
+                    rows[last].votingRatioCloseParties = rows[last].votingRatioCloseParties ?? ratio.closeParties
+                    continue
+                }
+                previousRawName = rawName
                 let business = layout.businessColumn.map { compactLabel(row[$0]) }.flatMap {
                     $0.isEmpty || isDash($0) ? nil : $0
                 }
                 var draft = CompanyRelationDraft(
                     section: section, kind: kind ?? relationKindUnclassified,
-                    position: rows.count, nameRaw: name, segmentLabel: business, votingRatio: ratio)
+                    position: rows.count, nameRaw: name, segmentLabel: business, votingRatio: ratio.total,
+                    votingRatioIndirect: ratio.indirect, votingRatioCloseParties: ratio.closeParties)
                 if kind == nil {
                     draft.decidedBy = relationDecidedByJev
                     draft.needsReview = true
@@ -266,6 +286,79 @@ enum CompanyRelationsExtractor {
             }
         }
         return GroupExtraction(rows: rows, pending: pending)
+    }
+
+    /// 議決権の割合のセル。`total` は間接所有を含む合計、`indirect` は（ ）の内数、`closeParties` は［ ］の外数。
+    struct VotingRatioCell: Equatable {
+        var total: Double? = nil
+        var indirect: Double? = nil
+        var closeParties: Double? = nil
+    }
+
+    /// 「100.0(66.5)」「(0.79) 51.49」「※2 100.0 [66.5]」「被所有 46.3 (14.9) [0.6]」「－ [100.0]」「20.6 (0.1) 〔0.8〕」を読む。
+    /// 注記の印（※2・(注2)・(注)3、6・＊1）は外す。全部が間接所有の「(100.0)」は合計も 100.0。
+    /// 割合として読めないセル（100 を超える数・数が余る）は nil。
+    static func votingRatioCell(_ text: String) -> VotingRatioCell? {
+        var t = singleLine(text.precomposedStringWithCompatibilityMapping)
+        for pattern in votingRatioNoisePatterns {
+            t = pattern.stringByReplacingMatches(
+                in: t, range: NSRange(location: 0, length: (t as NSString).length), withTemplate: " ")
+        }
+        func takeGroup(_ pattern: NSRegularExpression) -> (found: Bool, value: Double?, ok: Bool) {
+            let ns = t as NSString
+            let matches = pattern.matches(in: t, range: NSRange(location: 0, length: ns.length))
+            guard !matches.isEmpty else { return (false, nil, true) }
+            var values: [Double] = []
+            for m in matches { values += numbers(in: ns.substring(with: m.range(at: 1))) }
+            t = pattern.stringByReplacingMatches(
+                in: t, range: NSRange(location: 0, length: ns.length), withTemplate: " ")
+            return (true, values.first, values.count <= 1)
+        }
+        let close = takeGroup(votingRatioBracketPattern)
+        let indirect = takeGroup(votingRatioParenPattern)
+        let rest = numbers(in: t)
+        guard close.ok, indirect.ok, rest.count <= 1 else { return nil }
+        var cell = VotingRatioCell(total: rest.first, indirect: indirect.value, closeParties: close.value)
+        if cell.total == nil, rest.isEmpty, !close.found { cell.total = cell.indirect }
+        let values = [cell.total, cell.indirect, cell.closeParties].compactMap { $0 }
+        guard values.allSatisfy({ $0 <= 100 }) else { return nil }
+        return values.isEmpty ? nil : cell
+    }
+
+    private static let votingRatioNoisePatterns: [NSRegularExpression] = [
+        #"\(\s*注\s*\)\s*[0-9]+(?:\s*[、,.・]\s*[0-9]+)*"#,
+        #"\(\s*注\s*[0-9]+(?:\s*[、,.・]\s*[0-9]+)*\s*\)"#,
+        #"注\s*[0-9]+(?:\s*[、,.・]\s*[0-9]+)*(?=\s|$|\()"#,
+        // 「※2 100.0」は印。間を空けない「※15.01」は数字の前の印だけ（※ の付いた 15.01）。
+        #"[※*]\s*[0-9]+(?:\s*[、,・]\s*[0-9]+)*(?=\s|\(|\[|〔)"#,
+        #"(?<=\s)[※*]\s*[0-9]+\s*$"#,
+        #"被所有|所有|%|,"#,
+    ].map { try! NSRegularExpression(pattern: $0) }
+    private static let votingRatioParenPattern = try! NSRegularExpression(pattern: #"\(([^()]*)\)"#)
+    private static let votingRatioBracketPattern = try! NSRegularExpression(pattern: #"[\[〔]([^\[\]〔〕]*)[\]〕]"#)
+
+    private static func numbers(in text: String) -> [Double] {
+        let ns = text as NSString
+        return numberPattern.matches(in: text, range: NSRange(location: 0, length: ns.length))
+            .compactMap { Double(ns.substring(with: $0.range)) }
+    }
+
+    /// 「主要な損益情報等」の表（売上高・総資産額などの列）。関係会社表の続きとして読まない。
+    static func isFinancialInfoTable(_ grid: [[String]]) -> Bool {
+        grid.prefix(3).contains { row in
+            row.contains { cell in
+                let c = compactCell(cell)
+                return c.contains("損益情報") || c.hasPrefix("売上高") || c.hasPrefix("(1)売上高")
+                    || c.hasPrefix("①売上高") || c.hasPrefix("売上収益")
+            }
+        }
+    }
+
+    /// 全列が同じ文字列の行（区分語のない、表の幅いっぱいの見出し）。
+    private static func isSpanningLabelRow(_ row: [String]) -> Bool {
+        let cells = row.map(compactCell)
+        guard row.count >= 3, let first = cells.first, !first.isEmpty else { return false }
+        return cells.allSatisfy { $0 == first }
     }
 
     struct GroupTableLayout {
@@ -733,7 +826,7 @@ enum CompanyRelationsExtractor {
     }
 
     private static let aggregateRowPattern = try! NSRegularExpression(
-        pattern: #"^(その他|他)(の)?[0-9０-９]+社"#)
+        pattern: #"^(その他|他)(の)?[0-9０-９]+社|^[0-9０-９]+社$|^\(.*\)[0-9０-９]+社$|^その他.*[0-9０-９]+社$"#)
 
     /// 相手の名前として採るか（合計・計・その他・単位行・注記行・数字だけを落とす）。
     static func isCounterpartyName(_ name: String) -> Bool {

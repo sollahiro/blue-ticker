@@ -18,6 +18,7 @@ private func withMigratedApp(_ body: (Application) async throws -> Void) async t
         app.migrations.add(CreateEdinetDocument())
         app.migrations.add(AddParentDocIDToEdinetDocuments())
         app.migrations.add(CreateCompanyRelations())
+        app.migrations.add(AddVotingRatioDetailToCompanyRelations())
         try await app.autoMigrate()
         try await body(app)
     } catch {

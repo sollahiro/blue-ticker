@@ -19,6 +19,7 @@ private func withRelationsApp(
         if databases {
             app.databases.use(.sqlite(.memory), as: .sqlite)
             app.migrations.add(CreateCompanyRelations())
+            app.migrations.add(AddVotingRatioDetailToCompanyRelations())
             try await app.autoMigrate()
         }
         let dir = FileManager.default.temporaryDirectory
@@ -47,13 +48,15 @@ private func seed(
     _ app: Application, code: String, docID: String = "S100TEST", section: String, kind: String,
     position: Int = 0, name: String, relatedCode: String? = nil, resolution: String? = nil,
     decidedBy: String = relationDecidedByRule, needsReview: Bool = false, amount: Double? = nil,
-    votingRatio: Double? = nil, rank: Int? = nil, ratio: Double? = nil, shares: Double? = nil,
+    votingRatio: Double? = nil, votingRatioIndirect: Double? = nil, votingRatioCloseParties: Double? = nil,
+    rank: Int? = nil, ratio: Double? = nil, shares: Double? = nil,
     bookValue: Double? = nil, address: String? = nil, sectionStatus: String? = nil,
     warning: String? = nil
 ) async throws {
     let draft = CompanyRelationDraft(
         section: section, kind: kind, position: position, nameRaw: name, amountYen: amount,
-        votingRatio: votingRatio, decidedBy: decidedBy, needsReview: needsReview, shares: shares,
+        votingRatio: votingRatio, votingRatioIndirect: votingRatioIndirect,
+        votingRatioCloseParties: votingRatioCloseParties, decidedBy: decidedBy, needsReview: needsReview, shares: shares,
         bookValueYen: bookValue, isDeemed: kind == relationKindInvestee ? false : nil,
         holder: kind == relationKindInvestee ? relationHolderReportingCompany : nil, ratio: ratio,
         rank: rank, address: address, sectionStatus: sectionStatus)
@@ -146,7 +149,7 @@ private func relations(_ json: [String: Any]?) -> [[String: Any]] {
         try await withRelationsApp { app in
             try await seed(
                 app, code: "4324", section: relationSectionAffiliatedEntities, kind: relationKindSubsidiary,
-                position: 0, name: "㈱電通", votingRatio: 100)
+                position: 0, name: "㈱電通", votingRatio: 100, votingRatioIndirect: 30, votingRatioCloseParties: 5)
             try await seed(
                 app, code: "4324", section: relationSectionAffiliatedEntities, kind: relationKindAffiliate,
                 position: 1, name: "㈱関連", votingRatio: 30)
@@ -169,6 +172,9 @@ private func relations(_ json: [String: Any]?) -> [[String: Any]] {
             #expect(items[0]["voting_ratio"] as? Double == 61.8)
             #expect(items[0]["voting_ratio_basis"] as? String == relationVotingRatioBasisOwned)
             #expect(items[1]["company"] is NSNull)
+            #expect(items[1]["voting_ratio_indirect"] as? Double == 30)
+            #expect(items[1]["voting_ratio_close_parties"] as? Double == 5)
+            #expect(items[0]["voting_ratio_indirect"] is NSNull)
             #expect(items.allSatisfy { $0["type"] as? String == "group" })
 
             let (_, affiliate) = try await send(app, "/v1/companies/4324/relations?type=affiliate")

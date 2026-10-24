@@ -23,6 +23,8 @@ struct RelationServeRow: Sendable, Equatable {
     var amountYen: Double?
     var segmentLabel: String?
     var votingRatio: Double?
+    var votingRatioIndirect: Double?
+    var votingRatioCloseParties: Double?
     var relatedCode: String?
     var resolution: String?
     var needsReview: Bool
@@ -49,6 +51,8 @@ struct RelationServeRow: Sendable, Equatable {
         amountYen = model.amountYen
         segmentLabel = model.segmentLabel
         votingRatio = model.votingRatio
+        votingRatioIndirect = model.votingRatioIndirect
+        votingRatioCloseParties = model.votingRatioCloseParties
         relatedCode = model.relatedCode
         resolution = model.resolution
         needsReview = model.needsReview
@@ -334,7 +338,11 @@ private func groupRelationItems(
         for reason in item.reasons where !existing.reasons.contains(reason) {
             existing.reasons.append(reason)
         }
-        if existing.votingRatio == nil { existing.votingRatio = item.votingRatio }
+        if existing.votingRatio == nil, existing.votingRatioIndirect == nil, existing.votingRatioCloseParties == nil {
+            existing.votingRatio = item.votingRatio
+            existing.votingRatioIndirect = item.votingRatioIndirect
+            existing.votingRatioCloseParties = item.votingRatioCloseParties
+        }
         merged[key] = existing
     }
     let ownGroup = own.filter {
@@ -349,6 +357,7 @@ private func groupRelationItems(
             item: CompanyRelationItem(
                 type: relationTypeGroup, kind: row.kind, company: ref(row.relatedCode),
                 nameRaw: row.nameRaw, reasons: ownReasons(row), votingRatio: row.votingRatio,
+                votingRatioIndirect: row.votingRatioIndirect, votingRatioCloseParties: row.votingRatioCloseParties,
                 evidence: evidence(row)))
     }
     for row in reverse {

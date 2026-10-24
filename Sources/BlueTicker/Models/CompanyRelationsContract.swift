@@ -8,7 +8,7 @@ import Foundation
 
 /// `company_relations.cache_version`。抽出・格納の意味を破壊的に変えたときだけ上げる
 /// （`.agents/rules/versioning.md`）。名前解決の結果（`related_code` / `resolution`）は版に含めない。
-public let companyRelationsCacheVersion = "relations-v1"
+public let companyRelationsCacheVersion = "relations-v2"
 
 // MARK: - section（材料の節）
 
@@ -90,8 +90,12 @@ public struct CompanyRelationDraft: Sendable, Equatable {
     public var amountYen: Double?
     /// 顧客表の「関連するセグメント名」、関係会社表の「主要な事業の内容」。
     public var segmentLabel: String?
-    /// 関係会社表の議決権の所有（親会社・その他の関係会社は被所有）割合（％、記載どおり）。
+    /// 関係会社表の議決権の所有（親会社・その他の関係会社は被所有）割合（％、記載どおり）。間接所有を含む合計。
     public var votingRatio: Double?
+    /// 議決権の割合のうち間接所有の内数（「100.0(66.5)」の括弧）。
+    public var votingRatioIndirect: Double?
+    /// 緊密な者・同意している者の議決権の外数（「100.0[30.0]」の［ ］）。
+    public var votingRatioCloseParties: Double?
     public var decidedBy: String
     public var needsReview: Bool
     public var shares: Double?
@@ -111,6 +115,7 @@ public struct CompanyRelationDraft: Sendable, Equatable {
     public init(
         section: String, kind: String, position: Int, nameRaw: String,
         amountYen: Double? = nil, segmentLabel: String? = nil, votingRatio: Double? = nil,
+        votingRatioIndirect: Double? = nil, votingRatioCloseParties: Double? = nil,
         decidedBy: String = relationDecidedByRule, needsReview: Bool = false,
         shares: Double? = nil, bookValueYen: Double? = nil, purpose: String? = nil,
         isDeemed: Bool? = nil, holder: String? = nil, ratio: Double? = nil, rank: Int? = nil,
@@ -123,6 +128,8 @@ public struct CompanyRelationDraft: Sendable, Equatable {
         self.amountYen = amountYen
         self.segmentLabel = segmentLabel
         self.votingRatio = votingRatio
+        self.votingRatioIndirect = votingRatioIndirect
+        self.votingRatioCloseParties = votingRatioCloseParties
         self.decidedBy = decidedBy
         self.needsReview = needsReview
         self.shares = shares
@@ -383,13 +390,15 @@ public struct CompanyRelationItem: Codable, Sendable, Equatable {
     public var amountYen: Double?
     public var segmentLabel: String?
     public var votingRatio: Double?
+    public var votingRatioIndirect: Double?
+    public var votingRatioCloseParties: Double?
     public var investee: CompanyRelationInvestee?
     public var majorShareholder: CompanyRelationMajorShareholder?
     public var evidence: CompanyRelationEvidence
 
     /// `voting_ratio` の向き。関係会社表の議決権欄は区分で向きが決まる（親会社・その他の関係会社の行は被所有）。
     public var votingRatioBasis: String? {
-        guard votingRatio != nil else { return nil }
+        guard votingRatio != nil || votingRatioIndirect != nil || votingRatioCloseParties != nil else { return nil }
         switch kind {
         case relationKindParent, relationKindOtherRelated: return relationVotingRatioBasisOwnedBy
         case relationKindSubsidiary, relationKindAffiliate: return relationVotingRatioBasisOwned
@@ -405,6 +414,8 @@ public struct CompanyRelationItem: Codable, Sendable, Equatable {
         case segmentLabel = "segment_label"
         case votingRatio = "voting_ratio"
         case votingRatioBasis = "voting_ratio_basis"
+        case votingRatioIndirect = "voting_ratio_indirect"
+        case votingRatioCloseParties = "voting_ratio_close_parties"
         case investee
         case majorShareholder = "major_shareholder"
         case evidence
@@ -413,8 +424,8 @@ public struct CompanyRelationItem: Codable, Sendable, Equatable {
     public init(
         type: String, kind: String, company: CompanyRelationCompanyRef?, nameRaw: String,
         reasons: [String], amountYen: Double? = nil, segmentLabel: String? = nil,
-        votingRatio: Double? = nil, investee: CompanyRelationInvestee? = nil,
-        majorShareholder: CompanyRelationMajorShareholder? = nil, evidence: CompanyRelationEvidence
+        votingRatio: Double? = nil, votingRatioIndirect: Double? = nil, votingRatioCloseParties: Double? = nil,
+        investee: CompanyRelationInvestee? = nil, majorShareholder: CompanyRelationMajorShareholder? = nil, evidence: CompanyRelationEvidence
     ) {
         self.type = type
         self.kind = kind
@@ -425,6 +436,8 @@ public struct CompanyRelationItem: Codable, Sendable, Equatable {
         self.amountYen = amountYen
         self.segmentLabel = segmentLabel
         self.votingRatio = votingRatio
+        self.votingRatioIndirect = votingRatioIndirect
+        self.votingRatioCloseParties = votingRatioCloseParties
         self.investee = investee
         self.majorShareholder = majorShareholder
         self.evidence = evidence
@@ -442,6 +455,8 @@ public struct CompanyRelationItem: Codable, Sendable, Equatable {
         amountYen = try c.decodeIfPresent(Double.self, forKey: .amountYen)
         segmentLabel = try c.decodeIfPresent(String.self, forKey: .segmentLabel)
         votingRatio = try c.decodeIfPresent(Double.self, forKey: .votingRatio)
+        votingRatioIndirect = try c.decodeIfPresent(Double.self, forKey: .votingRatioIndirect)
+        votingRatioCloseParties = try c.decodeIfPresent(Double.self, forKey: .votingRatioCloseParties)
         investee = try c.decodeIfPresent(CompanyRelationInvestee.self, forKey: .investee)
         majorShareholder = try c.decodeIfPresent(CompanyRelationMajorShareholder.self, forKey: .majorShareholder)
         evidence = try c.decode(CompanyRelationEvidence.self, forKey: .evidence)
@@ -459,6 +474,8 @@ public struct CompanyRelationItem: Codable, Sendable, Equatable {
         try c.encode(segmentLabel, forKey: .segmentLabel)
         try c.encode(votingRatio, forKey: .votingRatio)
         try c.encode(votingRatioBasis, forKey: .votingRatioBasis)
+        try c.encode(votingRatioIndirect, forKey: .votingRatioIndirect)
+        try c.encode(votingRatioCloseParties, forKey: .votingRatioCloseParties)
         try c.encode(investee, forKey: .investee)
         try c.encode(majorShareholder, forKey: .majorShareholder)
         try c.encode(evidence, forKey: .evidence)
