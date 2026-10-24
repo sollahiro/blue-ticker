@@ -2167,4 +2167,35 @@ import Foundation
         #expect(snapshot.denominator == 7_145_287_000)
         #expect(!snapshot.warnings.contains("segment_assets_segment_sum_far_from_total"))
     }
+
+    /// のれん償却額の全社分 3,702 千円が、セグメント表の調整額（ReconcilingItemsMember）と
+    /// のれん表の全社・消去（UnallocatedAmountsAndEliminationMember）の両方に載る。
+    /// 片方だけ残し、分母は 3,702 千円（7,404 千円ではない）。
+    // source: code=7320 fy_end=2026-06-30 doc_id=S100Z3SN page=101 field=goodwill_amortization.調整額
+    // source: code=7320 fy_end=2026-06-30 doc_id=S100Z3SN page=102 field=goodwill_amortization.denominator
+    @Test func goodwillAmortizationDoesNotDoubleCountCorporateAmount() throws {
+        func fact(_ member: String?, _ thousands: Double) -> BreakdownFact {
+            BreakdownFact(
+                tag: "AmortizationOfGoodwillSGA",
+                contextRef: "CurrentYearDuration" + (member.map { "_\($0)" } ?? ""),
+                dimensions: member.map { ["OperatingSegmentsAxis": $0] } ?? [:],
+                value: thousands * 1_000, label: nil, unitRef: "JPY", decimals: "-3")
+        }
+        let facts = [
+            fact(nil, 3_702),
+            fact("ReconcilingItemsMember", 3_702),
+            fact("ReportableSegmentsMember", 0),
+            fact("UnallocatedAmountsAndEliminationMember", 3_702),
+            fact("ExtendTechBusinessReportableSegmentsMember", 0),
+            fact("FinTechBusinessReportableSegmentMember", 0),
+            fact("HomeworthTechBusinessReportableSegmentsMember", 0),
+            fact("LifeTechBusinessReportableSegmentMember", 0),
+        ]
+        let snapshot = try #require(BreakdownNormalizer.normalizeGoodwillAmortization(facts: facts))
+        #expect(snapshot.denominator == 3_702_000)
+        let reconciling = snapshot.rows.filter { $0.rowKind == "reconciling" }
+        #expect(reconciling.count == 1)
+        #expect(reconciling.map(\.amount).reduce(0, +) == 3_702_000)
+        #expect(snapshot.needsReview == false)
+    }
 }

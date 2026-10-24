@@ -909,6 +909,7 @@ enum BreakdownNormalizer {
             amounts[member] = fact.value
         }
         demoteRedundantParentSegments(kinds: &kinds, amounts: amounts, total: total)
+        dropDuplicatedReconcilingMember(kinds: &kinds, amounts: &amounts, total: total)
         var ofWhichMembers: Set<String> = []
         if applyOfWhichNestedChildDemotion {
             ofWhichMembers = demotePartialNestedChildren(
@@ -1016,6 +1017,33 @@ enum BreakdownNormalizer {
         }
         guard candidates.count == 1, let parent = candidates.first else { return }
         kinds[parent] = "subtotal"
+    }
+
+    /// セグメント表の調整額（`ReconcilingItemsMember`）と、指標ごとの表の「全社・消去」
+    /// （`UnallocatedAmountsAndEliminationMember`）が同じ全社分を二重に持つとき、後者を落とす。
+    /// 両方を足すと全社合計を 5% 超え、片方を外すと ±5% に収まるときだけ（Solvvy 7320 S100Z3SN の
+    /// のれん償却額: 調整額 3,702 と のれん表の全社・消去 3,702、合計 3,702 千円）。
+    private static func dropDuplicatedReconcilingMember(
+        kinds: inout [String: String], amounts: inout [String: Double], total: Double?
+    ) {
+        guard let total, total > 0 else { return }
+        let adjustment = "ReconcilingItemsMember"
+        let duplicate = countBasisEliminationMemberName
+        guard kinds[adjustment] == "reconciling", kinds[duplicate] == "reconciling",
+              let adjustmentAmount = amounts[adjustment], let duplicateAmount = amounts[duplicate],
+              adjustmentAmount != 0,
+              abs(adjustmentAmount - duplicateAmount) <= max(1.0, abs(adjustmentAmount) * 0.001)
+        else { return }
+        let included = reconciledAmount(kinds: kinds, amounts: amounts)
+        guard abs(included - total) / total > 0.05 else { return }
+        var trial = kinds
+        trial[duplicate] = nil
+        var trialAmounts = amounts
+        trialAmounts[duplicate] = nil
+        let sum = reconciledAmount(kinds: trial, amounts: trialAmounts)
+        guard abs(sum - total) / total <= 0.05 else { return }
+        kinds = trial
+        amounts = trialAmounts
     }
 
     /// 親を分割しきれない presentation 子（有報の「うち」）を `subtotal` へ落とす。
