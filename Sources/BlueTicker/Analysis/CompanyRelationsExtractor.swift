@@ -745,62 +745,14 @@ enum CompanyRelationsExtractor {
         var precedingText: String { precedingParagraphs.joined(separator: " ") }
     }
 
-    private static let tableTagPattern = try! NSRegularExpression(
-        pattern: #"<(/?)table\b[^>]*>"#, options: [.caseInsensitive])
-
-    /// 入れ子を数えた最上位の表の範囲（「関係内容」欄の中の表で外側の表を切らない）。閉じていない表は末尾まで。
-    private static func topLevelTableRanges(_ html: String) -> [NSRange] {
-        let ns = html as NSString
-        var ranges: [NSRange] = []
-        var depth = 0
-        var start = 0
-        for m in tableTagPattern.matches(in: html, range: NSRange(location: 0, length: ns.length)) {
-            if m.range(at: 1).length == 0 {
-                if depth == 0 { start = m.range.location }
-                depth += 1
-            } else if depth > 0 {
-                depth -= 1
-                if depth == 0 { ranges.append(NSRange(location: start, length: m.range.upperBound - start)) }
-            }
-        }
-        if depth > 0 { ranges.append(NSRange(location: start, length: ns.length - start)) }
-        return ranges
-    }
-
-    /// 表の中の表を、その文字列（セルの値として 1 つの段落）に置き換える。
-    private static func flattenNestedTables(_ tableHTML: String) -> String {
-        let ns = tableHTML as NSString
-        var nested: [NSRange] = []
-        var depth = 0
-        var start = 0
-        for m in tableTagPattern.matches(in: tableHTML, range: NSRange(location: 0, length: ns.length)) {
-            if m.range(at: 1).length == 0 {
-                depth += 1
-                if depth == 2 { start = m.range.location }
-            } else if depth > 0 {
-                if depth == 2 { nested.append(NSRange(location: start, length: m.range.upperBound - start)) }
-                depth -= 1
-            }
-        }
-        guard !nested.isEmpty else { return tableHTML }
-        var out = tableHTML
-        for range in nested.reversed() {
-            let inner = (out as NSString).substring(with: range)
-            let text = ((try? SwiftSoup.parseBodyFragment(inner).text()) ?? "")
-                .replacingOccurrences(of: "&", with: "&amp;").replacingOccurrences(of: "<", with: "&lt;")
-            out = (out as NSString).replacingCharacters(in: range, with: "<span>\(text)</span>")
-        }
-        return out
-    }
-
     /// TextBlock を「直前の段落＋表」の並びに分ける。最後の要素は表の後ろの段落だけ（`table == nil`）。
     static func splitTables(_ html: String) -> [HTMLSegment] {
         let ns = html as NSString
         var segments: [HTMLSegment] = []
         var cursor = 0
-        for range in topLevelTableRanges(html) {
+        for range in HTMLTables.topLevelRanges(in: html) {
             let before = ns.substring(with: NSRange(location: cursor, length: range.location - cursor))
-            let tableHTML = flattenNestedTables(ns.substring(with: range))
+            let tableHTML = HTMLTables.flattenNested(ns.substring(with: range))
             segments.append(
                 HTMLSegment(precedingParagraphs: paragraphs(before), table: parseTable(tableHTML)))
             cursor = range.upperBound

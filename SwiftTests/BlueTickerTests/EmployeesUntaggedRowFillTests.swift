@@ -45,6 +45,31 @@ import Testing
         #expect(filled.rows.map(\.amount).reduce(0, +) == 107)
     }
 
+    @Test func tableInsideALabelCellDoesNotCutTheOuterTable() {
+        let nested = html([
+            ("<table><tr><td><p>Ａ事業</p></td></tr></table>", "60", true), ("Ｂ事業", "40", true),
+            ("純粋持株会社等", "7", false), ("合計", "107", false),
+        ])
+        let tables = EmployeesUntaggedRowFill.parseTables(
+            html: nested, tag: "NumberOfEmployees", anchorRefs: ["Cur_SegA"])
+        #expect(tables.count == 1)
+        #expect(tables.first?.rows.first?.label == "Ａ事業")
+        let base = snapshot(rows: [("AMember", 60, "segment"), ("BMember", 40, "segment")], denominator: 107)
+        let filled = EmployeesUntaggedRowFill.apply(snapshot: base, tables: tables)
+        #expect(filled.rows.last?.label == "純粋持株会社等")
+        #expect(filled.rows.last?.amount == 7)
+    }
+
+    @Test func tableWrappedInALayoutTableIsReadAsTheInnerTable() {
+        let inner = html([
+            ("Ａ事業", "60", true), ("Ｂ事業", "40", true), ("純粋持株会社等", "7", false), ("合計", "107", false),
+        ])
+        let tables = EmployeesUntaggedRowFill.parseTables(
+            html: "<table><tr><td>\(inner)</td></tr></table>", tag: "NumberOfEmployees", anchorRefs: ["Cur_SegA"])
+        #expect(tables.count == 1)
+        #expect(tables.first?.rows.map(\.label) == ["Ａ事業", "Ｂ事業", "純粋持株会社等", "合計"])
+    }
+
     @Test func doesNothingWhenUntaggedRowsDoNotMatchTheGap() {
         let tables = EmployeesUntaggedRowFill.parseTables(
             html: html([("Ａ事業", "60", true), ("本社", "5", false), ("合計", "107", false)]),

@@ -103,11 +103,7 @@ enum EmployeesUntaggedRowFill {
     /// 純関数。`fromTotalOnlyTable` の表読み（構造と和の一致だけ。セグメント別かは見ない）。
     static func totalOnlyTables(html: String, tag: String, total: Double) -> [TotalOnlyTable] {
         var out: [TotalOnlyTable] = []
-        let whole = NSRange(html.startIndex..., in: html)
-        for tableMatch in IxbrlTableHTML.tablePattern.matches(in: html, range: whole) {
-            guard let tableRange = Range(tableMatch.range, in: html) else { continue }
-            let tableHTML = String(html[tableRange])
-            guard tableHTML.contains(tag) else { continue }
+        for tableHTML in IxbrlTableHTML.tables(in: html, containing: tag) {
             let grid = gridRows(in: tableHTML)
             for (r, row) in grid.enumerated() {
                 for (c, cell) in row.cells.enumerated()
@@ -270,11 +266,7 @@ enum EmployeesUntaggedRowFill {
 
     static func parseTables(html: String, tag: String, anchorRefs: Set<String>) -> [Table] {
         var out: [Table] = []
-        let whole = NSRange(html.startIndex..., in: html)
-        for tableMatch in IxbrlTableHTML.tablePattern.matches(in: html, range: whole) {
-            guard let tableRange = Range(tableMatch.range, in: html) else { continue }
-            let tableHTML = String(html[tableRange])
-            guard tableHTML.contains(tag) else { continue }
+        for tableHTML in IxbrlTableHTML.tables(in: html, containing: tag) {
             var anchored = false
             var rows: [TableRow] = []
             // 人数セルが縦に結合され、下の行がラベルだけのとき（4263 S100Z4GF の

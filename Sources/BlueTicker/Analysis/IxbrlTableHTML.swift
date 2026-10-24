@@ -4,8 +4,6 @@
 import Foundation
 
 enum IxbrlTableHTML {
-    static let tablePattern = try! NSRegularExpression(
-        pattern: #"<table\b.*?</table>"#, options: [.caseInsensitive, .dotMatchesLineSeparators])
     static let rowPattern = try! NSRegularExpression(
         pattern: #"<tr\b.*?</tr>"#, options: [.caseInsensitive, .dotMatchesLineSeparators])
     private static let cellPattern = try! NSRegularExpression(
@@ -32,14 +30,9 @@ enum IxbrlTableHTML {
         }
     }
 
-    /// `html` の `<table>` のうち `tag` を含むもの（出現順）。
+    /// `html` の `<table>` のうち `tag` を自身のセルに含むもの（出現順）。入れ子の扱いは `HTMLTables`。
     static func tables(in html: String, containing tag: String) -> [String] {
-        let whole = NSRange(html.startIndex..., in: html)
-        return tablePattern.matches(in: html, range: whole).compactMap { match in
-            guard let range = Range(match.range, in: html) else { return nil }
-            let table = String(html[range])
-            return table.contains(tag) ? table : nil
-        }
+        HTMLTables.tables(in: html, containing: tag)
     }
 
     /// 表の `<tr>` ごとの HTML（出現順）。
