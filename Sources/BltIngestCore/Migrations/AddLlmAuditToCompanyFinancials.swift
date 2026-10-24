@@ -5,6 +5,9 @@ import BltStoreCore
 import FluentKit
 
 struct AddLlmAuditToCompanyFinancials: AsyncMigration {
+    // 適用済みの記録（_fluent_migrations）と一致させるため、移動前のモジュール名で固定する。
+    var name: String { "BltServerCore.AddLlmAuditToCompanyFinancials" }
+
     func prepare(on database: Database) async throws {
         try await database.schema(CompanyFinancials.schema)
             .field("llm_audit", .json)

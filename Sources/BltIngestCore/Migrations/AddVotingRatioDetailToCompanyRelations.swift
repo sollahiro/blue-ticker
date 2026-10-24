@@ -6,6 +6,9 @@ import BltStoreCore
 import FluentKit
 
 struct AddVotingRatioDetailToCompanyRelations: AsyncMigration {
+    // 適用済みの記録（_fluent_migrations）と一致させるため、移動前のモジュール名で固定する。
+    var name: String { "BltServerCore.AddVotingRatioDetailToCompanyRelations" }
+
     func prepare(on database: Database) async throws {
         // SQLite（テスト）は 1 文で 1 列しか足せない。
         try await database.schema(CompanyRelation.schema).field("voting_ratio_indirect", .double).update()

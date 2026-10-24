@@ -9,6 +9,9 @@ import FluentKit
 import SQLKit
 
 struct CreateCompanyRelations: AsyncMigration {
+    // 適用済みの記録（_fluent_migrations）と一致させるため、移動前のモジュール名で固定する。
+    var name: String { "BltServerCore.CreateCompanyRelations" }
+
     func prepare(on database: Database) async throws {
         try await database.schema(CompanyRelation.schema)
             .id()

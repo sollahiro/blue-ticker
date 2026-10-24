@@ -6,6 +6,9 @@ import FluentKit
 import SQLKit
 
 struct AddFeedQueryIndexesToEdinetDocuments: AsyncMigration {
+    // 適用済みの記録（_fluent_migrations）と一致させるため、移動前のモジュール名で固定する。
+    var name: String { "BltServerCore.AddFeedQueryIndexesToEdinetDocuments" }
+
     func prepare(on database: Database) async throws {
         guard let sql = database as? SQLDatabase else { return }
         try await sql.create(index: "idx_edinet_documents_doc_type_submit")

@@ -11,6 +11,9 @@ import FluentKit
 import SQLKit
 
 struct AddCodeSubmitDateTimeIndexes: AsyncMigration {
+    // 適用済みの記録（_fluent_migrations）と一致させるため、移動前のモジュール名で固定する。
+    var name: String { "BltServerCore.AddCodeSubmitDateTimeIndexes" }
+
     func prepare(on database: Database) async throws {
         guard let sql = database as? SQLDatabase else { return }
         try await sql.raw(

@@ -16,6 +16,9 @@ import FluentKit
 private let legacyCompanySegmentBreakdownsSchema = "company_segment_breakdowns"
 
 struct CreateCompanySegmentBreakdowns: AsyncMigration {
+    // 適用済みの記録（_fluent_migrations）と一致させるため、移動前のモジュール名で固定する。
+    var name: String { "BltServerCore.CreateCompanySegmentBreakdowns" }
+
     func prepare(on database: Database) async throws {
         try await database.schema(legacyCompanySegmentBreakdownsSchema)
             .field("id", .string, .identifier(auto: false))
