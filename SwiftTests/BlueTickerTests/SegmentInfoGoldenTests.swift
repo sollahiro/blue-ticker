@@ -501,13 +501,15 @@ import Testing
         #expect(!grid.contains { $0.first == "計" })
 
         let yen = Financial.millionYen
-        let (snapshotOrNil, _) = await SegmentInfoLLMNormalizer.normalize(
+        let (snapshotOrNil, audit) = await SegmentInfoLLMNormalizer.normalize(
             ExtractedBreakdown(method: "html_table", tables: [table], facts: []),
             consolidatedSales: 8_999_360 * yen,
             decider: FakeRevenueRecognitionColumnDecider(selected: "t0_c2"),
             fiscalYearEnd: "2021-03-31", docID: "S100LM4N-golden",
             publishedAxis: breakdownAxisSegment)
-        let snapshot = try #require(snapshotOrNil)
+        let snapshot = try #require(
+            snapshotOrNil,
+            "notes=\(audit?.notes ?? "nil") reason=\(audit?.notApplicableReason ?? "nil")")
         let rows = Self.segmentRows(snapshot)
         #expect(rows["ゲーム＆ネットワークサービス"] == 2_604_713 * yen)
         #expect(rows["金融"] == 1_661_520 * yen)
