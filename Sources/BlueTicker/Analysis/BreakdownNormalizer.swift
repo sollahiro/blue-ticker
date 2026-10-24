@@ -1202,7 +1202,7 @@ enum BreakdownNormalizer {
     /// employees / rd の人数・費用基準は呼ばない（既存の全社合計は呼び出し側の `total`）。
     ///
     /// 連結を優先し、連結が無ければ非連結へフォールバックする（他軸の従来動作）。
-    /// `segment_assets` だけフォールバックしない: 銀行は連結の無 dimension `NoncurrentAssets`
+    /// `segment_assets` は原則フォールバックしない（セグメント fact 自体が個別のときだけ使う）: 銀行は連結の無 dimension `NoncurrentAssets`
     /// が無く、個別固定資産を EntityTotal に載せると表のセグメント行・分母は正しいのに
     /// `segment_assets_entity_total_differs_from_table_total` が立つ
     ///（8306 `S100YJQO` / 8411 `S100YF8Y` / 8309 `S100YBGM`）。
@@ -1220,8 +1220,21 @@ enum BreakdownNormalizer {
         if !consolidatedFacts.isEmpty {
             return consolidatedFacts.sorted { $0.contextRef < $1.contextRef }.first
         }
-        guard allowNonConsolidatedEntityTotal else { return nil }
+        // 単体のみの提出会社（2477 S100Z3MW）はセグメント fact 自体が個別コンテキストに載る。
+        // そのときの個別 EntityTotal は財務諸表計上額そのものなので、連結限定の軸でも使う。
+        guard allowNonConsolidatedEntityTotal
+            || segmentFactsAreNonConsolidated(facts: facts, tag: tag)
+        else { return nil }
         return candidateFacts.sorted { $0.contextRef < $1.contextRef }.first
+    }
+
+    private static func segmentFactsAreNonConsolidated(facts: [BreakdownFact], tag: String) -> Bool {
+        let segmentFacts = facts.filter {
+            $0.tag == tag && isCurrentPeriod($0.contextRef)
+                && XBRLUtils.primaryBreakdownMember($0.dimensions) != nil
+        }
+        return !segmentFacts.isEmpty
+            && !segmentFacts.contains(where: isConsolidated)
     }
 
     private static func withEntityTotal(
