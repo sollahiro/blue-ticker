@@ -3,7 +3,7 @@
 
 Subcommands (wrapped by scripts/ci/*.sh):
   golden-files            list golden paths tracked at HEAD
-  golden-filter           print the swift test --filter regex for golden suites
+  golden-filter           print the swift test --filter regex for golden and real-XBRL suites
   verify-checksums        verify smoke/smoke_expected/.checksums.json
   flags                   new-occurrence flags in base..head (hard fail)
   baseline                regenerate scripts/ci/flags-baseline.tsv from the tree
@@ -147,11 +147,22 @@ def cmd_golden_files(ns) -> int:
     return 0
 
 
+# Swift test files that fetch real XBRL (R2, then EDINET) run with the golden suites too,
+# so swift-linux needs no network and an EDINET outage cannot crash it.
+REAL_XBRL_MARKER = "SmokeCacheSupport.ensureCached"
+
+
+def fetches_real_xbrl(path: str) -> bool:
+    return (path.startswith("SwiftTests/") and path.endswith(".swift")
+            and not path.endswith("/SmokeCacheSupport.swift")
+            and REAL_XBRL_MARKER in (ROOT / path).read_text(encoding="utf-8"))
+
+
 def golden_suite_names() -> list[str]:
     names = set()
     decl = re.compile(r"^\s*(?:@\w+(?:\([^)]*\))?\s+)*(?:final\s+|public\s+|internal\s+)*(?:struct|class)\s+(\w+Tests)\b")
     for p in tracked_files("HEAD"):
-        if is_golden(p) and p.endswith(".swift"):
+        if p.endswith(".swift") and (is_golden(p) or fetches_real_xbrl(p)):
             for line in (ROOT / p).read_text(encoding="utf-8").splitlines():
                 m = decl.match(line)
                 if m:

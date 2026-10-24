@@ -14,7 +14,8 @@ on:
 jobs:
   swift-macos:
     # 本番 ingest は Mac で走るので、macOS でパッケージがビルドできることだけ確認する。
-    # テストは Linux（swift-linux と必須チェック golden-suite）。必須チェックではない。
+    # テストは実行しない（iOS 補助パッケージのテストも含めて Linux の swift-linux と
+    # 必須チェック golden-suite で回す）。必須チェックではない。
     # SwiftPM の .build キャッシュは使わない。キーが Package.resolved ハッシュだけだと
     # エントリが凍り、復元成功後に `_NumericsShims` 欠落で落ちることがある
     # （同一キー swiftpm-macos-<hash>-miv1 の成功/失敗が混在）。
@@ -29,26 +30,6 @@ jobs:
         # swift-nio 修正までの一時措置。詳細: .agents/rules/architecture.md / .agents/skills/deploy/SKILL.md
         # `--build-tests` はテストを実行せず、テストターゲットのコンパイルまで見る。
         run: swift build --build-tests -Xswiftc -disable-upcoming-feature -Xswiftc MemberImportVisibility
-
-      - name: Test HAPIS iOS consumer client
-        working-directory: Apps/BlueTicker/HAPISConsumer
-        run: swift test -Xswiftc -disable-upcoming-feature -Xswiftc MemberImportVisibility
-
-      - name: Test iOS zero-axis fill helper
-        working-directory: Apps/BlueTicker/ZeroAxisFill
-        run: swift test -Xswiftc -disable-upcoming-feature -Xswiftc MemberImportVisibility
-
-      - name: Test iOS fund look-through math
-        working-directory: Apps/BlueTicker/FundMath
-        run: swift test -Xswiftc -disable-upcoming-feature -Xswiftc MemberImportVisibility
-
-      - name: Test iOS top feed RSS parsing
-        working-directory: Apps/BlueTicker/FeedRSS
-        run: swift test -Xswiftc -disable-upcoming-feature -Xswiftc MemberImportVisibility
-
-      - name: Test iOS screen snapshot search
-        working-directory: Apps/BlueTicker/ScreenSnapshot
-        run: swift test -Xswiftc -disable-upcoming-feature -Xswiftc MemberImportVisibility
 
   ios-paths:
     # macos-26 を毎回起こさない。iOS アプリ本体と、このワークフロー（ios ジョブ定義）の
@@ -186,9 +167,6 @@ jobs:
       - name: Test
         env:
           BLT_TEST_POSTGRES_URL: postgres://postgres:blt@postgres:5432/blt?sslmode=disable
-          # SmokeTests / RealXbrl* が不足 XBRL を EDINET から取得する。
-          # 未設定（fork からの PR 等）では自動的に SKIP される。
-          BLT_EDINET_API_KEY: ${{ secrets.BLT_EDINET_API_KEY }}
         # swift-nio 2.101.x の _NIOFileSystem が Linux で `import CSystem` を欠くため、
         # swift-nio が有効化する upcoming feature MemberImportVisibility (Swift 6.1+) 下で
         # st_ctim 等がエラー化する。macOS も同フラグが無いと EventSource が
@@ -200,9 +178,10 @@ jobs:
         # （run 32031247211: elapsed 160s）。加えて MCP の 200 秒打ち切りと
         # in-memory SQLite の接続分裂が起きる（run 32125967324）。テスト内容は維持する。
         #
-        # ゴールデンスイート（SmokeTests / SegmentParityTests / *GoldenTests / Spec/Oracle/**）は
-        # 必須チェック `golden-suite` ジョブ（scripts/ci/golden-suite.sh）で別プロセス実行する。
-        # ここでは同じフィルタで skip して二重実行しない（docs/ci-checks.md）。
+        # ゴールデンスイート（SmokeTests / SegmentParityTests / *GoldenTests / Spec/Oracle/**）と
+        # 実 XBRL を取得するスイート（SmokeCacheSupport.ensureCached を使うもの）は、必須チェック
+        # `golden-suite` ジョブ（scripts/ci/golden-suite.sh、R2 → EDINET）で別プロセス実行する。
+        # ここでは同じフィルタで skip して二重実行せず、XBRL も取りに行かない（docs/ci-checks.md）。
         run: |
           command -v python3 >/dev/null || (apt-get update -qq && apt-get install -y -qq python3 >/dev/null)
           git config --global --add safe.directory "$GITHUB_WORKSPACE"

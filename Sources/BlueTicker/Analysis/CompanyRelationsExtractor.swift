@@ -232,9 +232,11 @@ enum CompanyRelationsExtractor {
                     continue
                 }
                 var (prefixKind, name) = stripKindPrefix(rawName)
+                // 「（持分法適用会社）澤藤電機㈱」のように区分の先頭行の名称に付いた区分語は、次の区分までの行にも効く。
+                if let prefixKind { headingKind = prefixKind }
                 name = cleanCounterpartyName(name)
                 guard isCounterpartyName(name), name != compactLabel(layout.headerName) else { continue }
-                let kind = prefixKind ?? headingKind ?? defaultKind
+                let kind = headingKind ?? defaultKind
                 let isPassive = kind == relationKindParent || kind == relationKindOtherRelated
                 let ratioColumn = isPassive ? layout.passiveRatioColumn : layout.ownedRatioColumn
                 let ratio = ratioColumn.flatMap { firstNumber(row[$0]) }
@@ -741,6 +743,8 @@ enum CompanyRelationsExtractor {
         if c.hasSuffix("合計") && c.count <= 6 { return false }
         if c.contains("単位") { return false }
         if c.hasPrefix("注") || c.hasPrefix("(注") || c.hasPrefix("※") { return false }
+        // 表の中に入った注記の文（「…を記載しております。」）。社名は句点で終わらない。
+        if c.hasSuffix("。") { return false }
         if c.allSatisfy({ $0.isNumber || $0 == "," || $0 == "." }) { return false }
         let ns = c as NSString
         if aggregateRowPattern.firstMatch(in: c, range: NSRange(location: 0, length: ns.length)) != nil {

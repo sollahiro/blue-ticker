@@ -117,6 +117,36 @@ private func rows(_ result: CompanyRelationsExtractor.Result, section: String) -
         #expect(o.rows.map(\.votingRatio) == [100.0, 49.0])
     }
 
+    @Test func namePrefixKindCarriesToFollowingRowsAndTables() {
+        // 区分語は区分の先頭行の名称にだけ付き、続く行（改ページ後の続きの表も）は同じ区分になる。
+        // 表の中に入った注記の文は行にしない。
+        let html = """
+            <table>
+            <tr><td>会社名</td><td>住所</td><td>資本金</td><td>主な事業の内容</td><td>議決権の所有割合又は被所有割合（％）</td><td>関係内容</td></tr>
+            <tr><td>（連結子会社） コー㈱</td><td>東京都</td><td>50</td><td>製造</td><td>100.0</td><td>有</td></tr>
+            <tr><td>コーニ㈱</td><td>東京都</td><td>50</td><td>販売</td><td>100.0</td><td>有</td></tr>
+            </table>
+            <table>
+            <tr><td>会社名</td><td>住所</td><td>資本金</td><td>主な事業の内容</td><td>議決権の所有割合又は被所有割合（％）</td><td>関係内容</td></tr>
+            <tr><td>コーサン㈱</td><td>大阪市</td><td>50</td><td>製造</td><td>91.7</td><td>有</td></tr>
+            <tr><td>（持分法適用会社） カンレン㈱</td><td>大阪市</td><td>50</td><td>部品</td><td>30.0</td><td>有</td></tr>
+            <tr><td>カンレンニ㈱</td><td>大阪市</td><td>50</td><td>販売</td><td>20.0</td><td>有</td></tr>
+            <tr><td>（その他の関係会社） オヤ AG</td><td>ドイツ</td><td>100</td><td>製造</td><td>被所有 44.26</td><td>有</td></tr>
+            <tr><td>オヤニ㈱</td><td>愛知県</td><td>100</td><td>製造</td><td>被所有 37.46</td><td>有</td></tr>
+            <tr><td>「主な事業の内容」欄には、セグメントの名称を記載しております。</td><td></td><td></td><td></td><td></td><td></td></tr>
+            </table>
+            """
+        let parsed = CompanyRelationsExtractor.parseAffiliatedEntities(
+            html: html, section: relationSectionAffiliatedEntities, defaultKind: nil)
+        #expect(parsed.pending.isEmpty)
+        #expect(parsed.rows.map(\.nameRaw) == ["コー㈱", "コーニ㈱", "コーサン㈱", "カンレン㈱", "カンレンニ㈱", "オヤ AG", "オヤニ㈱"])
+        #expect(parsed.rows.map(\.kind) == [
+            relationKindSubsidiary, relationKindSubsidiary, relationKindSubsidiary,
+            relationKindAffiliate, relationKindAffiliate, relationKindOtherRelated, relationKindOtherRelated,
+        ])
+        #expect(parsed.rows.allSatisfy { $0.decidedBy == relationDecidedByRule && !$0.needsReview })
+    }
+
     @Test func unmarkedGroupTableIsPendingForJev() {
         let html = """
             <table>
