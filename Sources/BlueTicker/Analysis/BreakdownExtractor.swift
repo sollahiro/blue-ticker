@@ -362,9 +362,12 @@ enum BreakdownExtractor {
                 tables = tables + etcTables
             }
         }
-        tables = tables.filter { !isProductServiceTable($0) }
+        tables = tables.filter {
+            !isProductServiceTable($0) && !isMajorCustomerTable($0) && !isGoodwillBalanceTable($0)
+        }
         let relatedMarkdown = Set(
-            relatedInfoTablesEmbeddedInSegmentNote(xbrlDir: xbrlDir).map(\.markdown))
+            (relatedInfoTablesEmbeddedInSegmentNote(xbrlDir: xbrlDir)
+                + relatedInfoTablesInDedicatedBlocks(xbrlDir: xbrlDir)).map(\.markdown))
         if !relatedMarkdown.isEmpty {
             tables = tables.filter { table in
                 // 積み上げセグメント損益（富士フイルム）は関連情報キーワードに巻き込まれても残す。
@@ -442,6 +445,42 @@ enum BreakdownExtractor {
             return true
         }
         return productOrServiceRelatedInfoHeadingKeywords.contains { table.heading.contains($0) }
+    }
+
+    /// 関連情報「主要な顧客ごとの情報」の表（見出し行が「顧客の名称又は氏名」「相手先」）。
+    /// 顧客名の行は報告セグメントではない（6526 / 6920 / 4568）。
+    static func isMajorCustomerTable(_ table: BreakdownTable) -> Bool {
+        let header = markdownToGrid(table.markdown).prefix(3).flatMap { $0 }
+        return header.contains { cell in
+            let compact = cell.replacingOccurrences(of: " ", with: "")
+                .replacingOccurrences(of: "\u{3000}", with: "")
+            return compact.contains("顧客の名称") || compact.hasPrefix("相手先")
+                || compact.hasPrefix("販売先")
+        }
+    }
+
+    /// 関連情報「のれんの償却額及び未償却残高」の表（行が「当期償却額」「当期末残高」）。
+    /// セグメント列を持たない単一セグメント会社では金額行が事業区分に見える（4579）。
+    static func isGoodwillBalanceTable(_ table: BreakdownTable) -> Bool {
+        let labels = markdownToGrid(table.markdown).compactMap(\.first).map {
+            $0.replacingOccurrences(of: " ", with: "").replacingOccurrences(of: "\u{3000}", with: "")
+        }
+        return labels.contains { $0.contains("当期償却額") }
+            && labels.contains { $0.contains("当期末残高") || $0.contains("未償却残高") }
+    }
+
+    /// 関連情報の専用タグ（製品・サービス、地域）に載った表。単一セグメントの会社は
+    /// セグメント情報のブロックに同じ表を見出しなしで載せる（6526 / 3673 / 7198）。
+    /// 同じ markdown の表は報告セグメント表ではない。
+    static func relatedInfoTablesInDedicatedBlocks(xbrlDir: URL) -> [BreakdownTable] {
+        extractFromTextBlocks(
+            xbrlDir: xbrlDir,
+            dedicatedTags: Xbrl.productOrServiceTextBlockTags
+                .union(Xbrl.geographyTextBlockTags),
+            mixedTags: [],
+            dedicatedHeading: productOrServiceHeading,
+            mixedKeywords: []
+        )
     }
 
     static func relatedInfoTablesEmbeddedInSegmentNote(xbrlDir: URL) -> [BreakdownTable] {
