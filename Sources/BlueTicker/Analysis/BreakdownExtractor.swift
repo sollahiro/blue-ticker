@@ -362,7 +362,9 @@ enum BreakdownExtractor {
                 tables = tables + etcTables
             }
         }
-        tables = tables.filter { !isProductServiceTable($0) && !isMajorCustomerTable($0) }
+        tables = tables.filter {
+            !isProductServiceTable($0) && !isMajorCustomerTable($0) && !isGoodwillBalanceTable($0)
+        }
         let relatedMarkdown = Set(
             (relatedInfoTablesEmbeddedInSegmentNote(xbrlDir: xbrlDir)
                 + relatedInfoTablesInDedicatedBlocks(xbrlDir: xbrlDir)).map(\.markdown))
@@ -455,6 +457,16 @@ enum BreakdownExtractor {
             return compact.contains("顧客の名称") || compact.hasPrefix("相手先")
                 || compact.hasPrefix("販売先")
         }
+    }
+
+    /// 関連情報「のれんの償却額及び未償却残高」の表（行が「当期償却額」「当期末残高」）。
+    /// セグメント列を持たない単一セグメント会社では金額行が事業区分に見える（4579）。
+    static func isGoodwillBalanceTable(_ table: BreakdownTable) -> Bool {
+        let labels = markdownToGrid(table.markdown).compactMap(\.first).map {
+            $0.replacingOccurrences(of: " ", with: "").replacingOccurrences(of: "\u{3000}", with: "")
+        }
+        return labels.contains { $0.contains("当期償却額") }
+            && labels.contains { $0.contains("当期末残高") || $0.contains("未償却残高") }
     }
 
     /// 関連情報の専用タグ（製品・サービス、地域）に載った表。単一セグメントの会社は
