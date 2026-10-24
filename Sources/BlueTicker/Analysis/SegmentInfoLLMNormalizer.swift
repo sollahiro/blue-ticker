@@ -402,10 +402,19 @@ enum SegmentInfoLLMNormalizer {
                 && !isPeriodColumnHeader(compact)
         }
         let segmentLike = named.filter { _, header in
-            !isSkippedTotalColumn(header)
+            !isSkippedTotalColumn(header) && !isAmountUnitHeader(header)
         }
         guard segmentLike.count >= 2 else { return false }
         return !metricRows(in: table).isEmpty
+    }
+
+    /// 「金額（百万円）」「（単位：百万円）」は単位だけの列見出しで、セグメント名ではない。
+    static func isAmountUnitHeader(_ header: String) -> Bool {
+        let leaf = headerLeaf(header)
+        if RevenueRecognitionCandidates.isUnitCaptionHeader(leaf) { return true }
+        guard BreakdownExtractor.parseUnitCaption(RevenueRecognitionCandidates.compactCell(leaf)) != nil
+        else { return false }
+        return RevenueRecognitionCandidates.unitCaptionRemainder(leaf) == "金額"
     }
 
     static func isPeriodColumnHeader(_ header: String) -> Bool {
