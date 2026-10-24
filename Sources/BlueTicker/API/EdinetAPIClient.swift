@@ -266,7 +266,7 @@ actor EdinetAPIClient {
                 try await Task.sleep(nanoseconds: UInt64(pow(2.0, Double(attempt))) * 1_000_000_000)
             }
             do {
-                let (data, response) = try await URLSession.shared.data(from: url)
+                let (data, response) = try await NoRedirectFetch.data(from: url)
                 guard let http = response as? HTTPURLResponse else { throw EdinetError.invalidResponse }
 
                 if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
@@ -304,7 +304,7 @@ actor EdinetAPIClient {
                 try await Task.sleep(nanoseconds: UInt64(pow(2.0, Double(attempt))) * 1_000_000_000)
             }
             do {
-                let (data, response) = try await URLSession.shared.data(from: url)
+                let (data, response) = try await NoRedirectFetch.data(from: url)
                 guard let http = response as? HTTPURLResponse,
                       (200..<300).contains(http.statusCode)
                 else { throw URLError(.badServerResponse) }
