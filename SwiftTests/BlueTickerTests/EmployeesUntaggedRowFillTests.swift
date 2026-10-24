@@ -168,4 +168,26 @@ import Testing
         #expect(EmployeesUntaggedRowFill.rowsOverlapSegmentLabels(rows, ["銀行業務"]))
         #expect(!EmployeesUntaggedRowFill.rowsOverlapSegmentLabels(rows, ["自動車", "金融"]))
     }
+
+    /// 2 セグメント共通の人数が縦結合セル1つに載り、下の行がラベルだけの表。
+    /// 結合した2行を1行（ラベルは「・」でつなぐ）として差額に足す。
+    // source: code=4263 fy_end=2026-06-30 doc_id=S100Z4GF page=78 field=employees.DTxプロダクト事業・DTxプラットフォーム事業
+    @Test func joinsLabelsOfRowsSharingAVerticallyMergedCountCell() {
+        let html = """
+            <table><tr><td>報告セグメントの名称</td><td>従業員数（名）</td></tr>
+            <tr><td><p>DTxプロダクト事業</p></td><td rowspan="2"><p>35</p></td></tr>
+            <tr><td><p>DTxプラットフォーム事業</p></td></tr>
+            <tr><td><p>全社（共通）</p></td>\(cell("15", tagged: true, ref: "Cur_Corporate"))</tr>
+            <tr><td><p>合計</p></td><td><p>50</p></td></tr></table>
+            """
+        let tables = EmployeesUntaggedRowFill.parseTables(
+            html: html, tag: "NumberOfEmployees", anchorRefs: ["Cur_Corporate"])
+        let base = snapshot(rows: [("CorporateSharedMember", 15, "reconciling")], denominator: 50)
+        let filled = EmployeesUntaggedRowFill.apply(snapshot: base, tables: tables)
+        let added = filled.rows.last
+        #expect(added?.label == "DTxプロダクト事業・DTxプラットフォーム事業")
+        #expect(added?.amount == 35)
+        #expect(added?.rowKind == "segment")
+        #expect(filled.rows.map(\.amount).reduce(0, +) == 50)
+    }
 }

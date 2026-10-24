@@ -72,6 +72,30 @@ import Foundation
         #expect(corporateShared.label == "全社（共通）")
     }
 
+    // MARK: - サスメド S100Z4GF（2 セグメント共通の人数）
+
+    /// 2 セグメント共通の 35 名はどのセグメント member にも fact が無い。表の未タグ行として
+    /// 1 行で足し、全社（共通）15 と合わせて 50 名に閉じる。
+    // source: code=4263 fy_end=2026-06-30 doc_id=S100Z4GF page=78 field=employees.DTxプロダクト事業・DTxプラットフォーム事業
+    @Test func susmedSharedSegmentHeadcountBecomesOneRow() async throws {
+        guard await Self.ensureAvailable("S100Z4GF") else { return }
+        let xbrlDir = Self.xbrlDir("S100Z4GF")
+        let contextMap = BreakdownExtractor.loadDimensionContextMap(xbrlDir: xbrlDir)
+        let facts = BreakdownExtractor.extractFactsByDimension(
+            xbrlDir: xbrlDir, dimensionKeywords: Xbrl.businessSegmentDimensionKeywords,
+            contextMap: contextMap)
+        let snapshot = try #require(
+            BreakdownNormalizer.normalizeEmployees(facts: facts, total: 50, axis: "employees"))
+        let filled = EmployeesUntaggedRowFill.fill(snapshot: snapshot, facts: facts, xbrlDir: xbrlDir)
+        let shared = try #require(filled.rows.first { $0.amount == 35 })
+        #expect(shared.label?.contains("DTxプロダクト事業") == true)
+        #expect(shared.label?.contains("DTxプラットフォーム事業") == true)
+        #expect(shared.rowKind == "segment")
+        let included = filled.rows.filter { $0.rowKind == "segment" || $0.rowKind == "reconciling" }
+        #expect(included.map(\.amount).reduce(0, +) == 50)
+        #expect(filled.needsReview == false)
+    }
+
     @Test func kyoceraResearchAndDevelopmentResolvesWithoutWarning() async throws {
         guard await Self.ensureAvailable("S100TSIJ") else { return }
         let xbrlDir = Self.xbrlDir("S100TSIJ")
