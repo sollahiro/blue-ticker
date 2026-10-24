@@ -364,7 +364,8 @@ enum BreakdownExtractor {
         }
         tables = tables.filter { !isProductServiceTable($0) }
         let relatedMarkdown = Set(
-            relatedInfoTablesEmbeddedInSegmentNote(xbrlDir: xbrlDir).map(\.markdown))
+            (relatedInfoTablesEmbeddedInSegmentNote(xbrlDir: xbrlDir)
+                + relatedInfoTablesInDedicatedBlocks(xbrlDir: xbrlDir)).map(\.markdown))
         if !relatedMarkdown.isEmpty {
             tables = tables.filter { table in
                 // 積み上げセグメント損益（富士フイルム）は関連情報キーワードに巻き込まれても残す。
@@ -442,6 +443,20 @@ enum BreakdownExtractor {
             return true
         }
         return productOrServiceRelatedInfoHeadingKeywords.contains { table.heading.contains($0) }
+    }
+
+    /// 関連情報の専用タグ（製品・サービス、地域）に載った表。単一セグメントの会社は
+    /// セグメント情報のブロックに同じ表を見出しなしで載せる（6526 / 3673 / 7198）。
+    /// 同じ markdown の表は報告セグメント表ではない。
+    static func relatedInfoTablesInDedicatedBlocks(xbrlDir: URL) -> [BreakdownTable] {
+        extractFromTextBlocks(
+            xbrlDir: xbrlDir,
+            dedicatedTags: Xbrl.productOrServiceTextBlockTags
+                .union(Xbrl.geographyTextBlockTags),
+            mixedTags: [],
+            dedicatedHeading: productOrServiceHeading,
+            mixedKeywords: []
+        )
     }
 
     static func relatedInfoTablesEmbeddedInSegmentNote(xbrlDir: URL) -> [BreakdownTable] {
