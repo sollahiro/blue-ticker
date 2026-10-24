@@ -46,11 +46,14 @@ struct RelationsClassifyRow: Equatable, Sendable {
 func runRelationsIngest(
     db: Database, listedCodes: Set<String>, limit: Int?, explicitCodes: Set<String>? = nil,
     priorityCodes: Set<String> = [], cachedDocIDs: Set<String> = [], forceDocIDs: Set<String> = [],
+    onlyDocIDs: Set<String>? = nil,
     retryJevPending: Bool = true, directory: RelationNameDirectory, logger: Logger? = nil,
     extract: CompanyRelationsExtracting
 ) async throws -> RelationsIngestSummary {
+    // `--doc-ids` 指定時はその書類だけを対象にする（未指定の会社へ広げない）。
     let baseCandidates = try await latestAnnualReportPerCompany(
-        db: db, listedCodes: listedCodes, explicitCodes: explicitCodes, logger: logger)
+        db: db, listedCodes: listedCodes, explicitCodes: explicitCodes, logger: logger
+    ).filter { onlyDocIDs?.contains($0.docID) ?? true }
     var unhealthyRetries = 0
     let classify = try await withDbRetry(
         logger: logger, context: "関係取り込み 分類", onRetry: { unhealthyRetries += 1 }

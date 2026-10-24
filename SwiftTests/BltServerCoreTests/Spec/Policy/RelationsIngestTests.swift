@@ -105,6 +105,24 @@ private func rows(_ code: String, _ db: Database) async throws -> [CompanyRelati
         }
     }
 
+    @Test func onlyDocIDsLimitsCandidatesToThoseFilings() async throws {
+        // `--doc-ids` 指定時は、その書類の会社だけを取り込む（ほかの上場会社へ広げない）。
+        try await withMigratedApp { app in
+            try await seedDoc("S6384", secCode: "63840", db: app.db)
+            try await seedDoc("S6962", secCode: "69620", db: app.db)
+            let summary = try await runRelationsIngest(
+                db: app.db, listedCodes: ["6384", "6962"], limit: nil, forceDocIDs: ["S6384"],
+                onlyDocIDs: ["S6384"], directory: directory
+            ) { docID, _ in
+                #expect(docID == "S6384")
+                return extraction([customer("株式会社大真空")])
+            }
+            #expect(summary.attempted == 1)
+            #expect(try await rows("6384", app.db).count == 1)
+            #expect(try await rows("6962", app.db).isEmpty)
+        }
+    }
+
     @Test func failedExtractionWritesNothing() async throws {
         try await withMigratedApp { app in
             try await seedDoc("S1", secCode: "63840", db: app.db)
