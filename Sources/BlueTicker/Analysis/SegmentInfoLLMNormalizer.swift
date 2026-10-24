@@ -89,7 +89,8 @@ enum SegmentInfoLLMNormalizer {
     ) async -> (snapshot: BreakdownSnapshot?, audit: LLMBreakdownAudit?) {
         guard !result.tables.isEmpty else { return (nil, nil) }
         let parsed = RevenueRecognitionCandidates.parse(
-            tables: mergingSplitSegmentMatrices(result.tables.map(collapsingSegmentBlocks)))
+            tables: mergingSplitSegmentMatrices(
+                result.tables.map { collapsingSegmentBlocks(rebasingStackedExternalBlocks($0)) }))
         let columns = RevenueRecognitionCandidates.amountColumns(in: parsed)
         guard !columns.isEmpty else { return (nil, nil) }
 
@@ -584,6 +585,114 @@ enum SegmentInfoLLMNormalizer {
     /// 左端の列にセグメント名、その下に「(1) 外部顧客に対する売上高」「事業利益」などの指標が
     /// 縦に並ぶ表（6981 S100LPV9）を、セグメントを行・期間を列にした表へ畳む。
     /// 各セグメントの外部顧客への売上高の行だけを残す。2 ブロック以上がどれも売上行を持つときだけ。
+    /// ラベル1列の積み上げ表（6758 S100LM4N の米国基準「売上高及び営業収入」）。事業ごとに
+    /// 見出し → 外部顧客に対するもの → セグメント間取引 → 計 が並び、末尾の
+    /// 「全社（共通）及びセグメント間取引消去」は各事業の「計」の和を連結合計へつなぐ調整
+    /// （△186,953）であり、外部顧客の和とはつながらない。各事業の外部顧客の行と、
+    /// 連結合計 − 外部顧客の和（全社（共通）の外部顧客分 11,034）の調整行だけの表に組み直す。
+    /// どの金額列でも「計」の和 + 調整 = 連結合計 が成り立ち、外部顧客の和 + 調整 は成り立たない
+    /// ときだけ。それ以外の形はそのまま返す。
+    static func rebasingStackedExternalBlocks(_ table: BreakdownTable) -> BreakdownTable {
+        let grid = BreakdownExtractor.markdownToGrid(table.markdown)
+        let width = grid.map(\.count).max() ?? 0
+        guard width >= 2 else { return table }
+        let rows = grid.map { $0 + Array(repeating: "", count: width - $0.count) }
+        func label(_ row: [String]) -> String { RevenueRecognitionCandidates.compactCell(row[0]) }
+        func amounts(_ row: [String]) -> [Double?] {
+            row.dropFirst().map { cell in
+                RevenueRecognitionCandidates.isAmountCell(cell)
+                    ? RevenueRecognitionCandidates.parseAmount(cell) : nil
+            }
+        }
+        func hasAmount(_ row: [String]) -> Bool { amounts(row).contains { $0 != nil } }
+        func isHeading(_ text: String) -> Bool { text.hasSuffix("：") || text.hasSuffix(":") }
+
+        guard let firstHeading = rows.firstIndex(where: { isHeading(label($0)) && !hasAmount($0) })
+        else { return table }
+        struct Block { var name: String; var external: [Double?]?; var total: [Double?]? }
+        var blocks: [Block] = []
+        var open: Block?
+        var reconciling: (label: String, values: [Double?])?
+        var grandTotal: (label: String, values: [Double?])?
+        for row in rows[firstHeading...] {
+            let text = label(row)
+            if !hasAmount(row) {
+                guard isHeading(text), reconciling == nil else { return table }
+                if let block = open, block.external != nil || block.total != nil { return table }
+                open = Block(name: String(text.dropLast()), external: nil, total: nil)
+                continue
+            }
+            if var block = open {
+                if text.contains("外部顧客"), block.external == nil {
+                    block.external = amounts(row)
+                } else if text.hasPrefix("セグメント間"), block.external != nil, block.total == nil {
+                    // 内部取引は捨てる（計の検算にだけ使う）。
+                } else if text == "計", block.external != nil {
+                    block.total = amounts(row)
+                    blocks.append(block)
+                    open = nil
+                    continue
+                } else {
+                    return table
+                }
+                open = block
+                continue
+            }
+            if reconciling == nil, grandTotal == nil,
+               text.contains("消去") || text.contains("調整") || text.contains("全社")
+            {
+                reconciling = (text, amounts(row))
+            } else if reconciling != nil, grandTotal == nil, text.contains("合計") {
+                grandTotal = (text, amounts(row))
+            } else {
+                return table
+            }
+        }
+        guard open == nil, blocks.count >= 2, let reconciling, let grandTotal else { return table }
+
+        var rebased: [Double?] = []
+        var checkedColumns = 0
+        for column in 0..<(width - 1) {
+            guard let total = grandTotal.values[column], let adjustment = reconciling.values[column]
+            else {
+                rebased.append(nil)
+                continue
+            }
+            let externals = blocks.compactMap { $0.external?[column] }
+            let totals = blocks.compactMap { $0.total?[column] }
+            guard externals.count == blocks.count, totals.count == blocks.count else { return table }
+            let tolerance = max(1.0, abs(total) * 0.0005)
+            let externalSum = externals.reduce(0, +)
+            guard abs(totals.reduce(0, +) + adjustment - total) <= tolerance,
+                  abs(externalSum + adjustment - total) > tolerance
+            else { return table }
+            rebased.append(total - externalSum)
+            checkedColumns += 1
+        }
+        guard checkedColumns > 0 else { return table }
+
+        func cells(_ values: [Double?]) -> [String] {
+            values.map { value in value.map(formattedAmount) ?? "" }
+        }
+        let collapsed = Array(rows.prefix(firstHeading))
+            + blocks.map { [$0.name] + cells($0.external!) }
+            + [[reconciling.label] + cells(rebased), [grandTotal.label] + cells(grandTotal.values)]
+        var copy = table
+        copy.markdown = BreakdownExtractor.gridToMarkdown(collapsed)
+        return copy
+    }
+
+    private static func formattedAmount(_ value: Double) -> String {
+        let magnitude = Int64(abs(value).rounded())
+        var digits = String(magnitude)
+        var grouped = ""
+        while digits.count > 3 {
+            grouped = "," + digits.suffix(3) + grouped
+            digits = String(digits.dropLast(3))
+        }
+        return (value < 0 ? "△" : "") + digits + grouped
+    }
+
     static func collapsingSegmentBlocks(_ table: BreakdownTable) -> BreakdownTable {
         let grid = BreakdownExtractor.markdownToGrid(table.markdown)
         let width = grid.map(\.count).max() ?? 0

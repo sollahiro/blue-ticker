@@ -471,6 +471,50 @@ import Foundation
         #expect(!segmentLabels.contains(where: { $0.contains("デジタルソフトウェア") }))
     }
 
+    /// Sony 6758 FY2021–23: 報告セグメント表（外部顧客）。製品カテゴリー表ではない。
+    /// 分母は 売上高及び金融ビジネス収入（全社（共通）の外部売上を含む連結合計）。
+    // source: code=6758 fy_end=2024-03-31 doc_id=S100TS7P page=151 field=segment.G&NS
+    // source: code=6758 fy_end=2023-03-31 doc_id=S100QZT6 page=144 field=segment.G&NS
+    // source: code=6758 fy_end=2022-03-31 doc_id=S100OJ0K page=134 field=segment.G&NS
+    @Test(arguments: [
+        ("S100TS7P", [4_172_994, 1_594_955, 1_486_717, 2_414_946, 1_503_906, 1_760_731, 75_784] as [Double],
+         13_020_768.0),
+        ("S100QZT6", [3_538_533, 1_364_815, 1_364_887, 2_436_739, 1_301_481, 1_443_996, 72_338] as [Double],
+         11_539_837.0),
+        ("S100OJ0K", [2_674_356, 1_100_532, 1_236_399, 2_297_886, 992_200, 1_524_811, 82_264] as [Double],
+         9_921_513.0),
+    ])
+    func sonyPriorYearsUseReportableSegmentTable(
+        docID: String, millions: [Double], denominatorMillion: Double
+    ) async throws {
+        guard await Self.ensureAvailable(docID) else { return }
+        let dir = Self.xbrlDir(docID)
+        let yen = Financial.millionYen
+        let needles: [[String]] = [
+            ["G&NS", "ゲーム"], ["音楽"], ["映画"],
+            ["ET&S", "EP&S", "エンタテインメント・テクノロジー", "エレクトロニクス"],
+            ["I&SS", "イメージング"], ["金融"], ["その他"],
+        ]
+        let financials = StatementFinancialsResolver.resolve(xbrlDir: dir)
+        let coverage = financials?.geographyCoverageSales ?? financials?.sales
+        let reportable = BreakdownExtractor.extractReportableSegmentInfo(xbrlDir: dir)
+        let (segment, source, _) = await SegmentBreakdownResolver.resolve(
+            reportable: reportable, consolidatedSales: coverage,
+            labelsByTag: XBRLUtils.loadLabelsByTag(in: dir))
+        #expect(source == .xbrlFacts)
+        let snap = try #require(segment)
+        #expect(snap.axis == breakdownAxisSegment)
+        #expect(snap.denominator == denominatorMillion * yen)
+        for (needle, million) in zip(needles, millions) {
+            let row = try #require(snap.rows.first { row in
+                let blob = (row.label ?? "") + row.labelRaw
+                return row.rowKind == "segment" && needle.contains(where: { blob.contains($0) })
+            })
+            #expect(row.amount == million * yen)
+        }
+        #expect(snap.rows.filter { $0.rowKind == "segment" }.count == 7)
+    }
+
     /// Takeda 4502 S100YB5L: 単一セグメント 医薬品事業。製品は収益の分解。
     // source: code=4502 fy_end=2026-03-31 doc_id=S100YB5L page=169 field=segment.医薬品事業
     // source: code=4502 fy_end=2026-03-31 doc_id=S100YB5L page=170 field=product_service.ENTYVIO
