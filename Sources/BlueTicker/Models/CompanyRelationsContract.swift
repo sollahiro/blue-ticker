@@ -236,6 +236,11 @@ public let relationReasonJevClassified = "jev_classified"
 /// `reasons`: 相手側の有報に載っている行（仕入先・親会社の逆引き・大株主になっている会社）。
 public let relationReasonDisclosedByCounterparty = "disclosed_by_counterparty"
 
+/// `voting_ratio_basis`: 提出会社が相手の議決権を持つ割合（子会社・関連会社の行）。
+public let relationVotingRatioBasisOwned = "owned"
+/// `voting_ratio_basis`: 相手が提出会社の議決権を持つ割合（被所有。親会社・その他の関係会社の行）。
+public let relationVotingRatioBasisOwnedBy = "owned_by"
+
 /// `limit` の既定と上限。
 public let companyRelationsDefaultLimit = 200
 public let companyRelationsMaxLimit = 1000
@@ -382,6 +387,16 @@ public struct CompanyRelationItem: Codable, Sendable, Equatable {
     public var majorShareholder: CompanyRelationMajorShareholder?
     public var evidence: CompanyRelationEvidence
 
+    /// `voting_ratio` の向き。関係会社表の議決権欄は区分で向きが決まる（親会社・その他の関係会社の行は被所有）。
+    public var votingRatioBasis: String? {
+        guard votingRatio != nil else { return nil }
+        switch kind {
+        case relationKindParent, relationKindOtherRelated: return relationVotingRatioBasisOwnedBy
+        case relationKindSubsidiary, relationKindAffiliate: return relationVotingRatioBasisOwned
+        default: return nil
+        }
+    }
+
     public enum CodingKeys: String, CodingKey, CaseIterable {
         case type, kind, basis, company
         case nameRaw = "name_raw"
@@ -389,6 +404,7 @@ public struct CompanyRelationItem: Codable, Sendable, Equatable {
         case amountYen = "amount_yen"
         case segmentLabel = "segment_label"
         case votingRatio = "voting_ratio"
+        case votingRatioBasis = "voting_ratio_basis"
         case investee
         case majorShareholder = "major_shareholder"
         case evidence
@@ -414,6 +430,23 @@ public struct CompanyRelationItem: Codable, Sendable, Equatable {
         self.evidence = evidence
     }
 
+    /// `voting_ratio_basis` は `kind` と `voting_ratio` から決まるので読まない。
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        type = try c.decode(String.self, forKey: .type)
+        kind = try c.decode(String.self, forKey: .kind)
+        basis = try c.decode(String.self, forKey: .basis)
+        company = try c.decodeIfPresent(CompanyRelationCompanyRef.self, forKey: .company)
+        nameRaw = try c.decode(String.self, forKey: .nameRaw)
+        reasons = try c.decode([String].self, forKey: .reasons)
+        amountYen = try c.decodeIfPresent(Double.self, forKey: .amountYen)
+        segmentLabel = try c.decodeIfPresent(String.self, forKey: .segmentLabel)
+        votingRatio = try c.decodeIfPresent(Double.self, forKey: .votingRatio)
+        investee = try c.decodeIfPresent(CompanyRelationInvestee.self, forKey: .investee)
+        majorShareholder = try c.decodeIfPresent(CompanyRelationMajorShareholder.self, forKey: .majorShareholder)
+        evidence = try c.decode(CompanyRelationEvidence.self, forKey: .evidence)
+    }
+
     public func encode(to encoder: Encoder) throws {
         var c = encoder.container(keyedBy: CodingKeys.self)
         try c.encode(type, forKey: .type)
@@ -425,6 +458,7 @@ public struct CompanyRelationItem: Codable, Sendable, Equatable {
         try c.encode(amountYen, forKey: .amountYen)
         try c.encode(segmentLabel, forKey: .segmentLabel)
         try c.encode(votingRatio, forKey: .votingRatio)
+        try c.encode(votingRatioBasis, forKey: .votingRatioBasis)
         try c.encode(investee, forKey: .investee)
         try c.encode(majorShareholder, forKey: .majorShareholder)
         try c.encode(evidence, forKey: .evidence)

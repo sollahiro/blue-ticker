@@ -167,6 +167,7 @@ private func relations(_ json: [String: Any]?) -> [[String: Any]] {
                 items[0]["reasons"] as? [String]
                     == [relationResolutionNameExact, relationReasonDisclosedByCounterparty])
             #expect(items[0]["voting_ratio"] as? Double == 61.8)
+            #expect(items[0]["voting_ratio_basis"] as? String == relationVotingRatioBasisOwned)
             #expect(items[1]["company"] is NSNull)
             #expect(items.allSatisfy { $0["type"] as? String == "group" })
 
@@ -176,6 +177,8 @@ private func relations(_ json: [String: Any]?) -> [[String: Any]] {
             let (_, parent) = try await send(app, "/v1/companies/4812/relations?type=parent")
             #expect(relations(parent).count == 1)
             #expect((relations(parent).first?["company"] as? [String: Any])?["code"] as? String == "4324")
+            // 親会社の行の議決権は被所有（4324 が 4812 の 61.8% を持つ）。
+            #expect(relations(parent).first?["voting_ratio_basis"] as? String == relationVotingRatioBasisOwnedBy)
         }
     }
 
