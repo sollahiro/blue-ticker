@@ -16,6 +16,9 @@ enum RenameCompanySegmentBreakdownsToCompanyBreakdownsError: Error, CustomString
 }
 
 struct RenameCompanySegmentBreakdownsToCompanyBreakdowns: AsyncMigration {
+    // 適用済みの記録（_fluent_migrations）と一致させるため、移動前のモジュール名で固定する。
+    var name: String { "BltServerCore.RenameCompanySegmentBreakdownsToCompanyBreakdowns" }
+
     func prepare(on database: Database) async throws {
         guard let sql = database as? SQLDatabase else {
             throw RenameCompanySegmentBreakdownsToCompanyBreakdownsError.databaseIsNotSQL

@@ -5,6 +5,9 @@ import BltStoreCore
 import FluentKit
 
 struct DropCompanyHalfFinancials: AsyncMigration {
+    // 適用済みの記録（_fluent_migrations）と一致させるため、移動前のモジュール名で固定する。
+    var name: String { "BltServerCore.DropCompanyHalfFinancials" }
+
     func prepare(on database: Database) async throws {
         try await database.schema("company_half_financials").delete()
     }

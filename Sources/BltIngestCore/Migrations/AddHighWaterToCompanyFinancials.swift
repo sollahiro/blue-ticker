@@ -9,6 +9,9 @@ import BltStoreCore
 import FluentKit
 
 struct AddHighWaterToCompanyFinancials: AsyncMigration {
+    // 適用済みの記録（_fluent_migrations）と一致させるため、移動前のモジュール名で固定する。
+    var name: String { "BltServerCore.AddHighWaterToCompanyFinancials" }
+
     func prepare(on database: Database) async throws {
         try await database.schema(CompanyFinancials.schema).field("high_water", .string).update()
         try await database.schema("company_half_financials").field("high_water", .string).update()

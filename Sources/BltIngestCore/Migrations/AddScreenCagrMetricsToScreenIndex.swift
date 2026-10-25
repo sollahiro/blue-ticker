@@ -14,6 +14,9 @@ import FluentKit
 import SQLKit
 
 struct AddScreenCagrMetricsToScreenIndex: AsyncMigration {
+    // 適用済みの記録（_fluent_migrations）と一致させるため、移動前のモジュール名で固定する。
+    var name: String { "BltServerCore.AddScreenCagrMetricsToScreenIndex" }
+
     static let columns = [
         "operating_margin_cagr_3y", "roic_cagr_3y",
     ]

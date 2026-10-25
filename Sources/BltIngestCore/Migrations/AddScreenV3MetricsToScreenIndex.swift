@@ -11,6 +11,9 @@ import FluentKit
 import SQLKit
 
 struct AddScreenV3MetricsToScreenIndex: AsyncMigration {
+    // 適用済みの記録（_fluent_migrations）と一致させるため、移動前のモジュール名で固定する。
+    var name: String { "BltServerCore.AddScreenV3MetricsToScreenIndex" }
+
     static let columns = [
         "cfo", "cfo_margin", "fcf", "operating_margin_yoy", "roic_yoy", "payout_ratio",
     ]

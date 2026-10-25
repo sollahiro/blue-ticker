@@ -7,6 +7,9 @@ import FluentKit
 import SQLKit
 
 struct AddParentDocIDToEdinetDocuments: AsyncMigration {
+    // 適用済みの記録（_fluent_migrations）と一致させるため、移動前のモジュール名で固定する。
+    var name: String { "BltServerCore.AddParentDocIDToEdinetDocuments" }
+
     func prepare(on database: Database) async throws {
         try await database.schema(EdinetDocument.schema)
             .field("parent_doc_id", .string)

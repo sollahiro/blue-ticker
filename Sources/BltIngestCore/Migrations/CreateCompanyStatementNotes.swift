@@ -6,6 +6,9 @@ import BltStoreCore
 import FluentKit
 
 struct CreateCompanyStatementNotes: AsyncMigration {
+    // 適用済みの記録（_fluent_migrations）と一致させるため、移動前のモジュール名で固定する。
+    var name: String { "BltServerCore.CreateCompanyStatementNotes" }
+
     func prepare(on database: Database) async throws {
         try await database.schema(CompanyStatementNote.schema)
             .field("id", .string, .identifier(auto: false))

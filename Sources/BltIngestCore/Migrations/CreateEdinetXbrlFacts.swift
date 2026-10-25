@@ -6,6 +6,9 @@ import BltStoreCore
 import FluentKit
 
 struct CreateEdinetXbrlFacts: AsyncMigration {
+    // 適用済みの記録（_fluent_migrations）と一致させるため、移動前のモジュール名で固定する。
+    var name: String { "BltServerCore.CreateEdinetXbrlFacts" }
+
     func prepare(on database: Database) async throws {
         try await database.schema(EdinetXbrlFacts.schema)
             .field("doc_id", .string, .identifier(auto: false))

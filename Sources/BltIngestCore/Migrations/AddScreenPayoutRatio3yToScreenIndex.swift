@@ -9,6 +9,9 @@ import FluentKit
 import SQLKit
 
 struct AddScreenPayoutRatio3yToScreenIndex: AsyncMigration {
+    // 適用済みの記録（_fluent_migrations）と一致させるため、移動前のモジュール名で固定する。
+    var name: String { "BltServerCore.AddScreenPayoutRatio3yToScreenIndex" }
+
     static let columns = [
         "payout_ratio_y1", "payout_ratio_y2", "payout_ratio_y3",
     ]
