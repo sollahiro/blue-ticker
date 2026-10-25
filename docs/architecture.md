@@ -39,11 +39,11 @@ EU / ESEF 製品トラックは中止。
 
 ## デプロイモード
 
-配布 CLI `ticker` / 開発 CLI `TickerDev` は廃止。製品接点は REST。検証は `swift test`（smoke/golden）と、使い捨て Neon へ ingest したうえでの `/v1`。MCP は開発検証用。
+配布 CLI `ticker` / 開発 CLI `TickerDev` は廃止。製品接点は REST。検証は `swift test`（smoke/golden）と、ローカル Postgres へ ingest したうえでの `/v1`。MCP は開発検証用。
 
 | モード | EDINET | blt-server | 状態 |
 |---|---|---|---|
-| local verify | キャッシュ or 取得 | 任意（契約確認時は disposable DB） | 開発 |
+| local verify | キャッシュ or 取得 | 任意（契約確認時はローカル Postgres） | 開発 |
 | remote (self-host) | blt-server | 同一マシン | 基盤あり |
 | remote (cloud) | blt-server | Fly (nrt) + Neon | **本番** |
 
@@ -158,7 +158,7 @@ Neon 接続・R2 秘密・LLM キーの正本は `.env.example`。プロセス�
 | `CF_ACCESS_TEAM_DOMAIN` | 設定時 Access モード（エッジ信頼）。非 loopback ではこれか `BLT_ALLOW_UNAUTHENTICATED=1` が必須 |
 | `BLT_ALLOW_UNAUTHENTICATED` | `1` のときだけ非 loopback の無認証起動を許可（手元 `0.0.0.0` / 段階 B HAPIS 背後）。詳細は `api-auth.md` |
 | `CLOUDFLARE_TUNNEL_TOKEN` | 設定時のみ cloudflared 起動 |
-| `DATABASE_URL` | プロセス束縛（未設定＝ステートレス）。手元は disposable、Fly ではその環境の Neon を直接指定 |
+| `DATABASE_URL` | プロセス束縛（未設定＝ステートレス）。手元の既定は `BLT_NEON_READ_DATABASE_URL`、Fly では読み取りロール `blt_reader` |
 | `BLT_FEED_TREND_URL` / `BLT_FEED_TREND_TOKEN` | 匿名 Feed Trend カウンター（未設定＝emit なし。`GET /v1/feed/trend` は 503）。Worker は `api.*` の前段に置かない |
 
 `/healthz` は認証不要。`cache_versions` でイメージの版を確認。Bearer は廃止済み。
