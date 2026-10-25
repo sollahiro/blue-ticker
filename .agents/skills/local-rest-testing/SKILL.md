@@ -23,10 +23,11 @@ Actual upstream ingest requires the real `BLT_EDINET_API_KEY` and its own test s
    to local-only values and publish an unused port on **127.0.0.1**, not all interfaces.
    Example: `container run -d --name blt-pg-test -p 127.0.0.1:<pg-port>:5432 -e POSTGRES_USER=...
    -e POSTGRES_PASSWORD=... -e POSTGRES_DB=... postgres:16`
-3. Start `.build/debug/blt-server --host 127.0.0.1 --port <unused-port>` with
-   `DATABASE_URL=postgres://<local-user>:<local-password>@127.0.0.1:<pg-port>/<db>?sslmode=disable`
-   and the dummy `BLT_EDINET_API_KEY`. Migrations apply automatically.
-4. Verify the server log reports startup and migration completion. Seed via
+3. Apply the schema with `.build/debug/blt-ingest migrate` and
+   `DATABASE_URL=postgres://<local-user>:<local-password>@127.0.0.1:<pg-port>/<db>?sslmode=disable`.
+   `blt-server` never migrates; it only reads.
+4. Start `.build/debug/blt-server --host 127.0.0.1 --port <unused-port>` with the same `DATABASE_URL`
+   and the dummy `BLT_EDINET_API_KEY`. Verify the server log reports startup. Seed via
    `container exec -i blt-pg-test psql -v ON_ERROR_STOP=1 -U <user> -d <db>`.
    Never inherit a production DATABASE_URL; explicitly override it with loopback.
 5. To test storage absence, start a second process on another port using

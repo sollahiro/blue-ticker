@@ -22,7 +22,7 @@ Neon write・訂正有報は `.agents/skills/production-ingest/SKILL.md`。リ�
 | `CF_ACCESS_TEAM_DOMAIN` | 設定時 Access モード（エッジ信頼）。非 loopback ではこれか `BLT_ALLOW_UNAUTHENTICATED=1` が必須 |
 | `BLT_ALLOW_UNAUTHENTICATED` | `1` のときだけ非 loopback の無認証起動を許可（手元 `0.0.0.0` / 段階 B HAPIS 背後）。詳細は `docs/api-auth.md` |
 | `CLOUDFLARE_TUNNEL_TOKEN` | 設定時のみ cloudflared 起動 |
-| `DATABASE_URL` | プロセス束縛（未設定＝ステートレス）。手元は disposable、Fly では読み取りロール `blt_reader` の接続文字列（`BLT_NEON_READ_DATABASE_URL`）。サーバーは起動時に migrate しないので書き込み権限は不要。マイグレーションは Mac から `blt-ingest migrate`（`docs/ingest-policy.md`「出荷順」） |
+| `DATABASE_URL` | プロセス束縛（未設定＝ステートレス）。手元の既定は `BLT_NEON_READ_DATABASE_URL`、Fly では読み取りロール `blt_reader` の接続文字列（`BLT_NEON_READ_DATABASE_URL`）。サーバーは起動時に migrate しないので書き込み権限は不要。マイグレーションは Mac から `blt-ingest migrate`（`docs/ingest-policy.md`「出荷順」） |
 | `BLT_FEED_TREND_URL` / `BLT_FEED_TREND_TOKEN` | 匿名 Feed Trend カウンター（未設定＝emit なし。`GET /v1/feed/trend` は 503）。Worker は `api.*` の前段に置かない |
 
 `/healthz` は認証不要。`cache_versions` でイメージの版を確認。
@@ -177,7 +177,7 @@ Neon / Fly Volume の内容は EDINET から `sync`→`ingest` で再導出可�
 
 ### Neon（代替容易）
 
-結合点はプロセス束縛の `DATABASE_URL` のみ（手元では `BLT_NEON_DISPOSABLE_DATABASE_URL` 等を代入）。標準 Postgres（JSONB）。`withDbRetry` は cold start 対策で他 Postgres でも無害。切替: dump/restore または再 ingest → secret 差し替え。
+結合点はプロセス束縛の `DATABASE_URL` のみ（手元では `BLT_NEON_READ_DATABASE_URL` 等を代入）。標準 Postgres（JSONB）。`withDbRetry` は cold start 対策で他 Postgres でも無害。切替: dump/restore または再 ingest → secret 差し替え。
 
 ### 内訳（Jev / OpenRouter Decisions）
 

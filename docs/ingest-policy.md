@@ -37,7 +37,7 @@
 
 ## 本番 write
 
-手元 `.env` の既定 `DATABASE_URL` は disposable のまま。write 可否も `ingest.local.env` の `BLT_INGEST_WRITE=1` で切替。
+手元 `.env` の既定 `DATABASE_URL` は読み取り専用（`BLT_NEON_READ_DATABASE_URL`）のまま。write 可否も `ingest.local.env` の `BLT_INGEST_WRITE=1` で切替。
 
 ```bash
 cp scripts/jp/edinet/ingest.local.env.example scripts/jp/edinet/ingest.local.env

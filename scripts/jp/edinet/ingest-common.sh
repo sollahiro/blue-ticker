@@ -32,7 +32,7 @@ ingest_load_local_config() {
 ingest_load_local_config
 
 ingest_require_ready() {
-  if [[ -z "${DATABASE_URL:-}" && -z "${BLT_NEON_WRITE_DATABASE_URL:-}" && -z "${BLT_NEON_DISPOSABLE_DATABASE_URL:-}" ]]; then
+  if [[ -z "${DATABASE_URL:-}" && -z "${BLT_NEON_WRITE_DATABASE_URL:-}" ]]; then
     echo "ERROR: DATABASE_URL 未設定。.env を load してください（set -a; . ./.env; set +a）" >&2
     return 1
   fi
@@ -45,8 +45,12 @@ ingest_require_ready() {
     export DATABASE_URL="$BLT_NEON_WRITE_DATABASE_URL"
     echo "ingest: WRITE 接続（BLT_NEON_WRITE_DATABASE_URL）"
   elif [[ -z "${DATABASE_URL:-}" ]]; then
-    export DATABASE_URL="${BLT_NEON_DISPOSABLE_DATABASE_URL:-}"
-    echo "ingest: disposable 接続（DATABASE_URL 未設定のため BLT_NEON_DISPOSABLE_DATABASE_URL）"
+    echo "ERROR: DATABASE_URL 未設定です。本番へ書くなら BLT_INGEST_WRITE=1、検証ならローカル Postgres を DATABASE_URL に指定してください" >&2
+    return 1
+  elif [[ -n "${BLT_NEON_READ_DATABASE_URL:-}" && "$DATABASE_URL" == "$BLT_NEON_READ_DATABASE_URL" ]]; then
+    # 読み取りロールでは migrate も書き込みも拒否される。途中で落ちる前に止める。
+    echo "ERROR: DATABASE_URL が読み取り専用（BLT_NEON_READ_DATABASE_URL）です。本番へ書くなら BLT_INGEST_WRITE=1、検証ならローカル Postgres を DATABASE_URL に指定してください" >&2
+    return 1
   fi
 
   if [[ -z "${BLT_EDINET_API_KEY:-}" ]]; then
