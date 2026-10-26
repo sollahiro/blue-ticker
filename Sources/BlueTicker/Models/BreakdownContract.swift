@@ -37,13 +37,21 @@ public let breakdownAxisEmployees = "employees"
 /// 数値タグとセグメント fact は決定論。無いときは Jev が本文の文を分類して当期総額を選ぶ
 /// （金額はコードが円へ換算する。値の生成はしない）。
 public let breakdownAxisResearchAndDevelopment = "research_and_development"
-/// のれん（全社合計）のセグメント別内訳軸（2026-08-12追加）。決定論のみ
-/// （LLMフォールバックなし）。`goodwill_and_intangibles` note_type（IFRS連結限定の種類別明細）とは別物
-/// ——本軸はJ-GAAP企業がBS/注記に持つ「のれん」単一タグをセグメントdimensionで内訳化する
-/// （実データ検証: オークマ・三井住友・三菱UFJ）。
+/// 報告セグメント別ののれん（2026-08-12追加、2026-10 に期首/期末/償却/減損の名前付きセルへ統合）。
+/// 決定論のみ（LLMフォールバックなし）。会社合計の種類別のれんは `goodwill_and_intangibles`
+/// および将来の `fixed_assets` 軸。本軸はセグメント行と開示された調整行だけ。
 public let breakdownAxisGoodwill = "goodwill"
-/// 報告セグメント別ののれんの償却額（2026-08-20追加）。決定論のみ。
+/// 旧公開軸。報告セグメント別ののれんの償却額（2026-08-20追加）。`goodwill` の
+/// `amortization` セルへ統合したため REST / MCP / skills から廃止。
 public let breakdownAxisGoodwillAmortization = "goodwill_amortization"
+/// goodwill 行の名前付きセル。期首未償却残高（円）。
+public let goodwillCellOpening = "opening"
+/// goodwill 行の名前付きセル。期末未償却残高（円）。
+public let goodwillCellClosing = "closing"
+/// goodwill 行の名前付きセル。当期償却額（円）。IFRS は通常 null。
+public let goodwillCellAmortization = "amortization"
+/// goodwill 行の名前付きセル。のれんの減損損失（円）。固定資産全体の減損表は使わない。
+public let goodwillCellImpairment = "impairment"
 /// 報告セグメント別の持分法会計処理される投資（2026-08-20追加）。決定論のみ。
 public let breakdownAxisEquityMethodInvestments = "equity_method_investments"
 /// 設備投資マトリクス（資産 Instant / フロー Duration / Overview Duration）。
@@ -149,6 +157,7 @@ public let retiredBreakdownAxes = [
     breakdownAxisCapitalExpendituresOverview,
     breakdownAxisNoncurrentAssetAdditions,
     "business",
+    breakdownAxisGoodwillAmortization,
 ]
 
 /// product_service / geography を除く、報告セグメント別の決定論指標軸。
@@ -156,7 +165,6 @@ public let breakdownSegmentMetricAxes = [
     breakdownAxisEmployees,
     breakdownAxisResearchAndDevelopment,
     breakdownAxisGoodwill,
-    breakdownAxisGoodwillAmortization,
     breakdownAxisEquityMethodInvestments,
     breakdownAxisCapex,
 ]
@@ -200,7 +208,9 @@ public let employeesBreakdownCacheVersion = "breakdown-employees-v2"
 /// 本文の当期総額、タグ付き行の不足分、研究開発費の外の金額を本文から足す処理は非破壊。
 /// 既存行は行削除または `--codes` で再計算する。分母を製造費用込みの注記へ替えるのも同じ。
 public let researchAndDevelopmentBreakdownCacheVersion = "breakdown-research-and-development-v2"
-public let goodwillBreakdownCacheVersion = "breakdown-goodwill-v2"
+/// v2: 期末 `amount` だけのセグメント内訳。
+/// v3: 名前付きセル opening / closing / amortization / impairment。旧 amount 行は比較不能。
+public let goodwillBreakdownCacheVersion = "breakdown-goodwill-v3"
 /// v2: 分母を segment+reconciling に固定（表小計の閾値切替を廃止）。
 /// v3: 連結の無 dimension EntityTotal があるとき分母を連結 BS 計上額に固定。差額表と segment の同額 reconciling を dedupe。
 /// v4: ingest 時に jpcrp 標準 member の日本語ラベルを補完（生 `*Member` 表示の誤表示）。
@@ -396,7 +406,8 @@ public let segmentBreakdownMinServableVersion = 1
 public let geographyBreakdownMinServableVersion = 1
 public let employeesBreakdownMinServableVersion = 1
 public let researchAndDevelopmentBreakdownMinServableVersion = 1
-public let goodwillBreakdownMinServableVersion = 1
+/// v3 未満の amount 専用行は配信しない（再 ingest まで 404）。
+public let goodwillBreakdownMinServableVersion = 3
 public let segmentAssetsBreakdownMinServableVersion = 1
 public let goodwillAmortizationBreakdownMinServableVersion = 1
 public let equityMethodInvestmentsBreakdownMinServableVersion = 1
@@ -581,10 +592,14 @@ public struct BreakdownRowPayload: Codable, Sendable, Equatable {
     public var categoryGroup: String?
     /// 収益分解・うち内数の明細。フラット表・加算行は nil。
     public var category: String?
-    /// interest_bearing_debt 軸の名前付きセル。期首残高（円）。他軸は nil。
+    /// interest_bearing_debt / goodwill 軸の名前付きセル。期首残高（円）。他軸は nil。
     public var opening: Double?
-    /// interest_bearing_debt 軸の名前付きセル。期末残高（円）。他軸は nil。
+    /// interest_bearing_debt / goodwill 軸の名前付きセル。期末残高（円）。他軸は nil。
     public var closing: Double?
+    /// goodwill 軸の名前付きセル。当期償却額（円）。他軸は nil。
+    public var amortization: Double?
+    /// goodwill 軸の名前付きセル。のれんの減損損失（円）。他軸は nil。
+    public var impairment: Double?
     /// interest_bearing_debt 明細行が合計に入るか。合計行・他軸は nil。
     public var inTotal: Bool?
     /// interest_bearing_debt の in_total=false の理由（`ibdExcludedReasons`）。他は nil。
@@ -608,7 +623,7 @@ public struct BreakdownRowPayload: Codable, Sendable, Equatable {
         case segmentAssets, flow, capitalExpendituresOverview
         case categoryGroup = "category_group"
         case category
-        case opening, closing
+        case opening, closing, amortization, impairment
         case inTotal = "in_total"
         case excludedReason = "excluded_reason"
         case pairedRowIndex = "paired_row_index"
@@ -625,6 +640,7 @@ public struct BreakdownRowPayload: Codable, Sendable, Equatable {
         capitalExpendituresOverview: Double? = nil,
         categoryGroup: String? = nil, category: String? = nil,
         opening: Double? = nil, closing: Double? = nil,
+        amortization: Double? = nil, impairment: Double? = nil,
         debtSource: String? = nil, maturityClass: String? = nil,
         inTotal: Bool? = nil, excludedReason: String? = nil, pairedRowIndex: Int? = nil,
         sourceTag: String? = nil, segmentBasis: String? = nil, disclosureBasis: String? = nil
@@ -642,6 +658,8 @@ public struct BreakdownRowPayload: Codable, Sendable, Equatable {
         self.category = category
         self.opening = opening
         self.closing = closing
+        self.amortization = amortization
+        self.impairment = impairment
         self.inTotal = inTotal
         self.excludedReason = excludedReason
         self.pairedRowIndex = pairedRowIndex
@@ -676,6 +694,8 @@ public struct BreakdownRowPayload: Codable, Sendable, Equatable {
             Double.self, forKey: .capitalExpendituresOverview)
         opening = try container.decodeIfPresent(Double.self, forKey: .opening)
         closing = try container.decodeIfPresent(Double.self, forKey: .closing)
+        amortization = try container.decodeIfPresent(Double.self, forKey: .amortization)
+        impairment = try container.decodeIfPresent(Double.self, forKey: .impairment)
         inTotal = try container.decodeIfPresent(Bool.self, forKey: .inTotal)
         excludedReason = try container.decodeIfPresent(String.self, forKey: .excludedReason)
         pairedRowIndex = try container.decodeIfPresent(Int.self, forKey: .pairedRowIndex)
@@ -710,6 +730,8 @@ public struct BreakdownRowPayload: Codable, Sendable, Equatable {
         try container.encodeIfPresent(category, forKey: .category)
         try container.encodeIfPresent(opening, forKey: .opening)
         try container.encodeIfPresent(closing, forKey: .closing)
+        try container.encodeIfPresent(amortization, forKey: .amortization)
+        try container.encodeIfPresent(impairment, forKey: .impairment)
         try container.encodeIfPresent(inTotal, forKey: .inTotal)
         try container.encodeIfPresent(excludedReason, forKey: .excludedReason)
         try container.encodeIfPresent(pairedRowIndex, forKey: .pairedRowIndex)
@@ -746,6 +768,11 @@ public struct BreakdownSnapshotPayload: Codable, Sendable, Equatable {
     public var segmentAssets: CapexMetricTotalsPayload?
     public var flow: CapexMetricTotalsPayload?
     public var capitalExpendituresOverview: CapexMetricTotalsPayload?
+    /// goodwill 軸の指標別分母。開示が無いときは null。
+    public var opening: CapexMetricTotalsPayload?
+    public var closing: CapexMetricTotalsPayload?
+    public var amortization: CapexMetricTotalsPayload?
+    public var impairment: CapexMetricTotalsPayload?
 
     public init(
         axis: String, denominator: Double, denominatorTag: String, rows: [BreakdownRowPayload],
@@ -753,7 +780,9 @@ public struct BreakdownSnapshotPayload: Codable, Sendable, Equatable {
         sameAs: String? = nil, disclosureBasis: String? = nil, employeesJoin: String? = nil,
         flowMetric: String? = nil, segmentAssets: CapexMetricTotalsPayload? = nil,
         flow: CapexMetricTotalsPayload? = nil,
-        capitalExpendituresOverview: CapexMetricTotalsPayload? = nil
+        capitalExpendituresOverview: CapexMetricTotalsPayload? = nil,
+        opening: CapexMetricTotalsPayload? = nil, closing: CapexMetricTotalsPayload? = nil,
+        amortization: CapexMetricTotalsPayload? = nil, impairment: CapexMetricTotalsPayload? = nil
     ) {
         self.axis = axis
         self.denominator = denominator
@@ -769,6 +798,10 @@ public struct BreakdownSnapshotPayload: Codable, Sendable, Equatable {
         self.segmentAssets = segmentAssets
         self.flow = flow
         self.capitalExpendituresOverview = capitalExpendituresOverview
+        self.opening = opening
+        self.closing = closing
+        self.amortization = amortization
+        self.impairment = impairment
     }
 }
 
@@ -952,6 +985,19 @@ public extension BreakdownRowPayload {
         return object
     }
 
+    /// goodwill 軸の行。`amount` / `profit` は出さない（名前付きセルが正）。欠測セルは null。
+    func goodwillJsonObject() -> [String: Any] {
+        [
+            "label_raw": labelRaw,
+            "label": label,
+            "row_kind": rowKind,
+            goodwillCellOpening: opening ?? NSNull(),
+            goodwillCellClosing: closing ?? NSNull(),
+            goodwillCellAmortization: amortization ?? NSNull(),
+            goodwillCellImpairment: impairment ?? NSNull(),
+        ]
+    }
+
     /// capex 軸の行。`amount` は出さない（名前付きセルが正）。欠測セルは null。
     func capexJsonObject() -> [String: Any] {
         var object: [String: Any] = [
@@ -974,6 +1020,9 @@ public extension BreakdownSnapshotPayload {
     func jsonObject() -> [String: Any] {
         if axis == breakdownAxisCapex {
             return capexJsonObject()
+        }
+        if axis == breakdownAxisGoodwill {
+            return goodwillJsonObject()
         }
         if axis == breakdownAxisInterestBearingDebt {
             return [
@@ -1005,6 +1054,22 @@ public extension BreakdownSnapshotPayload {
             object[breakdownEmployeesJoinKey] = employeesJoin
         }
         return object
+    }
+
+    /// goodwill 軸の公開形。単一 `amount` / 単一 `denominator` は出さない。
+    /// 欠測セル・欠測分母は null。分母は開示された合計であり、セグメントの和ではない。
+    func goodwillJsonObject() -> [String: Any] {
+        [
+            "axis": axis,
+            goodwillCellOpening: opening?.jsonObject() ?? NSNull(),
+            goodwillCellClosing: closing?.jsonObject() ?? NSNull(),
+            goodwillCellAmortization: amortization?.jsonObject() ?? NSNull(),
+            goodwillCellImpairment: impairment?.jsonObject() ?? NSNull(),
+            "rows": rows.map { $0.goodwillJsonObject() },
+            "source_kind": sourceKind,
+            "needs_review": needsReview,
+            "warnings": warnings,
+        ]
     }
 
     /// capex 軸の公開形。単一 `amount` / 単一 `denominator` は出さない。

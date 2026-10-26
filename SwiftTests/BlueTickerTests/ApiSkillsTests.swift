@@ -120,7 +120,11 @@ import Testing
         #expect(!skill.description.contains("axis=business"))
         #expect(skill.description.contains("needs_review"))
         #expect(skill.description.contains("interest_bearing_debt_lease_denominator_from_notes"))
-        #expect(apiSkillsSchemaVersion == 7)
+        #expect(apiSkillsSchemaVersion == 8)
+        #expect(!axis.description.contains("goodwill_amortization"))
+        #expect(!skill.description.contains("goodwill_amortization"))
+        #expect(skill.description.contains("amortization"))
+        #expect(retiredBreakdownAxes.contains(breakdownAxisGoodwillAmortization))
         #expect(skill.description.contains("segment_basis"))
         #expect(skill.description.contains("dominant_90pct"))
     }

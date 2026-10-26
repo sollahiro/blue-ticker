@@ -920,6 +920,53 @@ enum Xbrl {
         "GoodwillBeforeOffsetting",
     ]
 
+    /// 報告セグメント別の期末未償却残高。Instant の標準タグに加え、Duration の会社拡張
+    /// `UnamortizedBalanceOfGoodwill` と IFRS `GoodwillIFRS`。financials の会社合計正本
+    /// （`goodwillSegmentTags`）には足さない。
+    static let goodwillSegmentClosingTags: [String] = [
+        "Goodwill",
+        "GoodwillBeforeOffsetting",
+        "GoodwillIFRS",
+        "UnamortizedBalanceOfGoodwill",
+    ]
+
+    /// 報告セグメントに配分していないのれんの説明。数値は生成せず、行の reconciling 判定に使う。
+    static let goodwillUnallocatedToReportableSegmentsTextBlockTag =
+        "DescriptionOfAmortizationOfGoodwillOrUnamortizedBalanceOfGoodwillNotAllocatedToReportableSegments"
+
+    /// 報告セグメントごとののれん償却額・未償却残高の TextBlock。
+    static let goodwillAmortizationAndUnamortizedBalanceTextBlockTag =
+        "InformationAboutAmortizationOfGoodwillAndUnamortizedBalanceForEachReportableSegmentTextBlock"
+
+    /// 報告セグメントごとの固定資産の減損損失 TextBlock。表の数値はのれん専用ではない。
+    /// 当期本文が該当事項なしのときだけ減損セルを 0 にする。
+    static let segmentImpairmentLossOfNonCurrentAssetsOrGoodwillTextBlockTag =
+        "InformationAboutImpairmentLossOfNonCurrentAssetsOrGoodwillEtcForEachReportableSegmentTextBlock"
+
+    /// セグメント情報等の親注記。専用タグが無く見出しだけ HTML に載る書類用。
+    static let segmentInformationEtcTextBlockTags: [String] = [
+        "NotesSegmentInformationEtcConsolidatedFinancialStatementsTextBlock",
+        "NotesSegmentInformationEtcFinancialStatementsTextBlock",
+    ]
+
+    /// のれん専用の減損タグ。`ImpairmentLossEL`（固定資産全体）は入れない。
+    static let segmentGoodwillImpairmentTags: [String] = [
+        "ImpairmentLossOnGoodwill",
+        "ImpairmentLossOfGoodwill",
+        "GoodwillImpairmentLoss",
+        "ImpairmentLossOnGoodwillIFRS",
+        "ImpairmentLossOfGoodwillIFRS",
+        "ImpairmentLossOnGoodwillSGA",
+    ]
+
+    static func isGoodwillImpairmentTag(_ tag: String) -> Bool {
+        if tag.contains("ImpairmentLossEL") { return false }
+        if tag.contains("Accumulated") { return false }
+        let goodwill = tag.localizedCaseInsensitiveContains("Goodwill")
+        let impairment = tag.localizedCaseInsensitiveContains("Impairment")
+        return goodwill && impairment
+    }
+
     // MARK: - 報告セグメント別指標（breakdown 軸）
     //
     // 同じ日本語の表項目でも会計基準・タクソノミによりタグが分かれるため、

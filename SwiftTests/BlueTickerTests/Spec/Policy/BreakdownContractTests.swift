@@ -18,7 +18,16 @@ import Testing
         // fact-only axes do not share allTablesFromHtml / keywordTablesFromHtml.
         #expect(employeesBreakdownCacheVersion == "breakdown-employees-v2")
         #expect(researchAndDevelopmentBreakdownCacheVersion == "breakdown-research-and-development-v2")
-        #expect(goodwillBreakdownCacheVersion == "breakdown-goodwill-v2")
+        #expect(goodwillBreakdownCacheVersion == "breakdown-goodwill-v3")
+        #expect(goodwillBreakdownMinServableVersion == 3)
+        #expect(isServableBreakdown(
+            source: breakdownSourceXbrlFacts, cacheVersion: "breakdown-goodwill-v2",
+            axis: breakdownAxisGoodwill) == false)
+        #expect(isServableBreakdown(
+            source: breakdownSourceXbrlFacts, cacheVersion: goodwillBreakdownCacheVersion,
+            axis: breakdownAxisGoodwill))
+        #expect(retiredBreakdownAxes.contains(breakdownAxisGoodwillAmortization))
+        #expect(isSupportedBreakdownAxis(breakdownAxisGoodwillAmortization) == false)
         #expect(segmentAssetsBreakdownCacheVersion == "breakdown-segment-assets-v4")
     }
 
