@@ -622,14 +622,14 @@ enum StatementFinancialsResolver {
     /// 「法人税等」の部分一致は「法人税等調整額」に当たるため使わない。
     private static func resolveUSGAAPIncomeTax(_ items: [StatementLineItem]) -> Double? {
         for item in items {
-            guard item.unit != "JPYPerShares", let label = item.label else { continue }
+            guard !AmountUnit.isPerShare(unitRef: item.unit), let label = item.label else { continue }
             let stripped = USGAAPHtml.stripSectionPrefix(label)
             if stripped == "法人税等合計" || stripped.hasSuffix("法人税等合計") {
                 return item.value
             }
         }
         for item in items {
-            guard item.unit != "JPYPerShares", let label = item.label else { continue }
+            guard !AmountUnit.isPerShare(unitRef: item.unit), let label = item.label else { continue }
             if USGAAPHtml.stripSectionPrefix(label) == "法人税等" {
                 return item.value
             }
@@ -637,7 +637,7 @@ enum StatementFinancialsResolver {
         var current: Double?
         var deferred: Double?
         for item in items {
-            guard item.unit != "JPYPerShares", let label = item.label else { continue }
+            guard !AmountUnit.isPerShare(unitRef: item.unit), let label = item.label else { continue }
             if label.contains("未払") { continue }
             let stripped = USGAAPHtml.stripSectionPrefix(label)
             if stripped.contains("法人税等調整") {
@@ -701,7 +701,7 @@ enum StatementFinancialsResolver {
         _ fieldSet: inout FieldSet, lines: [StatementLineItem]
     ) {
         for item in lines {
-            guard item.unit != "JPYPerShares" else { continue }
+            guard !AmountUnit.isPerShare(unitRef: item.unit) else { continue }
             guard item.value != 0 else { continue }
             var fv = fieldSet[item.tag] ?? FieldValue(current: nil, prior: nil)
             fv.current = item.value
@@ -770,7 +770,7 @@ enum StatementFinancialsResolver {
         for line in lines {
             if isOperatingProfitLine(line) { break }
             if byTag[line.tag] == nil { byTag[line.tag] = line }
-            guard line.unit != "JPYPerShares", isTopLineRevenueTag(line.tag),
+            guard !AmountUnit.isPerShare(unitRef: line.unit), isTopLineRevenueTag(line.tag),
                   !isOfWhichLine(line)
             else { continue }
             if revenueLines.contains(where: { $0.tag == line.tag }) { continue }
@@ -991,21 +991,21 @@ enum StatementFinancialsResolver {
         _ items: [StatementLineItem]
     ) -> (value: Double, labelOverride: String?)? {
         for item in items {
-            guard let label = item.label, item.unit != "JPYPerShares" else { continue }
+            guard let label = item.label, !AmountUnit.isPerShare(unitRef: item.unit) else { continue }
             let stripped = USGAAPHtml.stripSectionPrefix(label)
             if isUSGAAPRevenueTotalLabel(stripped) {
                 return (item.value, stripped)
             }
         }
         for item in items {
-            guard let label = item.label, item.unit != "JPYPerShares" else { continue }
+            guard let label = item.label, !AmountUnit.isPerShare(unitRef: item.unit) else { continue }
             let stripped = USGAAPHtml.stripSectionPrefix(label)
             if stripped == "売上高" {
                 return (item.value, nil)
             }
         }
         for item in items {
-            guard let label = item.label, item.unit != "JPYPerShares" else { continue }
+            guard let label = item.label, !AmountUnit.isPerShare(unitRef: item.unit) else { continue }
             let stripped = USGAAPHtml.stripSectionPrefix(label)
             if stripped.hasSuffix("売上高")
                 && !stripped.contains("製品") && !stripped.contains("サービス")
@@ -1018,7 +1018,7 @@ enum StatementFinancialsResolver {
             USGAAPHtml.stripSectionPrefix($0.label ?? "") == "営業利益"
         }) {
             for item in items.prefix(opIndex) {
-                guard let label = item.label, item.unit != "JPYPerShares" else { continue }
+                guard let label = item.label, !AmountUnit.isPerShare(unitRef: item.unit) else { continue }
                 if USGAAPHtml.stripSectionPrefix(label) == "合計" {
                     return (item.value, nil)
                 }
@@ -1040,7 +1040,7 @@ enum StatementFinancialsResolver {
 
     private static func resolveUSGAAPNetProfit(_ items: [StatementLineItem]) -> Double? {
         for item in items {
-            guard let label = item.label, item.unit != "JPYPerShares" else { continue }
+            guard let label = item.label, !AmountUnit.isPerShare(unitRef: item.unit) else { continue }
             if label.contains("当社株主に帰属する") || label.contains("当社株主帰属当期純利益") {
                 return item.value
             }

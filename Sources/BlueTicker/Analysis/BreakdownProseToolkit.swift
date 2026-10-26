@@ -372,12 +372,8 @@ enum BreakdownProseToolkit {
 
     /// 文中の単位語（億円 / 百万円 / 千円）だけ。表キャプションの contains 判定とは別。
     static func yenScale(forUnit unit: String) -> Double? {
-        switch unit {
-        case "億円": return 100_000_000
-        case "百万円": return Financial.millionYen
-        case "千円": return 1_000
-        default: return nil
-        }
+        guard unit != AmountUnit.plainYen.token else { return nil }
+        return AmountUnit.yenMultiplier(forToken: unit)
     }
 
     static func yen(magnitude: Double, unit: String) -> Double? {

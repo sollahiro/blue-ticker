@@ -1340,11 +1340,7 @@ enum BreakdownExtractor {
             if !captured.isEmpty { return captured }
         }
 
-        let tokens = [
-            "百万ユーロ", "百万米ドル", "千米ドル", "千ユーロ",
-            "十億円", "百万円", "千円", "億円",
-        ]
-        for token in tokens where compact.contains(token) {
+        for token in AmountUnit.prefixedCaptionTokens where compact.contains(token) {
             return token
         }
 

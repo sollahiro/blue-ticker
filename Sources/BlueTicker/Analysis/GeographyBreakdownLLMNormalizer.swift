@@ -1323,19 +1323,8 @@ enum GeographyBreakdownLLMNormalizer {
         tableTotal: Double?,
         consolidatedSales: Double?
     ) -> String {
-        guard let total = tableTotal, total != 0,
-              let sales = consolidatedSales, sales != 0
-        else { return "other" }
-        let yenOK = unitScaleTolerance.contains(abs(total / sales))
-        let thousandOK = unitScaleTolerance.contains(
-            abs(total * BreakdownLLMAmountScale.thousandYen / sales))
-        let millionOK = unitScaleTolerance.contains(
-            abs(total * Financial.millionYen / sales))
-        let hits = [
-            (yenOK, "yen"), (thousandOK, "thousand_yen"), (millionOK, "million_yen"),
-        ].filter(\.0)
-        if hits.count == 1 { return hits[0].1 }
-        return "other"
+        AmountUnit.inferredLlmDeclaredUnit(
+            tableTotal: tableTotal, consolidatedSales: consolidatedSales, tolerance: unitScaleTolerance)
     }
 
     private static func jevPayload(

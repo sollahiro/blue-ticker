@@ -534,19 +534,8 @@ enum SegmentInfoLLMNormalizer {
         tableTotal: Double?,
         consolidatedSales: Double?
     ) -> String {
-        guard let total = tableTotal, total != 0,
-              let sales = consolidatedSales, sales != 0
-        else { return "other" }
-        let yenOK = denominatorTolerance.contains(abs(total / sales))
-        let thousandOK = denominatorTolerance.contains(
-            abs(total * BreakdownLLMAmountScale.thousandYen / sales))
-        let millionOK = denominatorTolerance.contains(
-            abs(total * Financial.millionYen / sales))
-        let hits = [
-            (yenOK, "yen"), (thousandOK, "thousand_yen"), (millionOK, "million_yen"),
-        ].filter(\.0)
-        if hits.count == 1 { return hits[0].1 }
-        return "other"
+        AmountUnit.inferredLlmDeclaredUnit(
+            tableTotal: tableTotal, consolidatedSales: consolidatedSales, tolerance: denominatorTolerance)
     }
 
     static func isSingleSegmentDisclosure(
