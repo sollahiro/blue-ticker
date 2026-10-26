@@ -51,8 +51,7 @@ geography は変えない。本邦90％の `not_found` は既存の Jev ゲー�
 | `geography` | 地域別注記 |
 | `employees` | 従業員数のセグメント別内訳 |
 | `research_and_development` | 研究開発費のセグメント別内訳 |
-| `goodwill` | のれん |
-| `goodwill_amortization` | 報告セグメントごとののれんの償却額 |
+| `goodwill` | 報告セグメント別ののれん（セル `opening` / `closing` / `amortization` / `impairment`） |
 | `equity_method_investments` | 報告セグメントごとの持分法会計処理される投資 |
 | `capex` | 設備投資マトリクス（行=セグメント / 調整額 / EntityTotal。セル= `segment_assets` / `flow` / `capital_expenditures_overview`）。`flow` は書類単位で資本的支出があればそれ、無ければ非流動性資産への追加額。旧 4 軸名は廃止 |
 | `interest_bearing_debt` | 有利子負債（社債・借入金＋リース負債）。行=負債の行、セル= `opening` / `closing`、行ごとに `source`・`maturity_class`・`in_total`・`excluded_reason`・`paired_row_index`。合計は `in_total=true` の行だけ |
@@ -68,8 +67,7 @@ geography は変えない。本邦90％の `not_found` は既存の Jev ゲー�
 | `geography` | 地域別売上（関連情報。報告セグメントのコピーはしない。省略は `same_as`） |
 | `employees` | 従業員内訳 |
 | `research_and_development` | 研究開発費内訳（発生支出） |
-| `goodwill` | のれん |
-| `goodwill_amortization` | のれんの償却額 |
+| `goodwill` | 報告セグメント別ののれん（`opening` / `closing` / `amortization` / `impairment`） |
 | `equity_method_investments` | 持分法投資 |
 | `capex` | 設備投資マトリクス |
 | `interest_bearing_debt` | 有利子負債内訳 |
@@ -77,6 +75,8 @@ geography は変えない。本邦90％の `not_found` は既存の Jev ゲー�
 | `goodwill_and_intangibles` | のれん及び無形資産の種類別 |
 
 旧 `segment_assets` / `capital_expenditures` / `noncurrent_asset_additions` / `capital_expenditures_overview` は REST / MCP / skills から削除した（breaking。`apiSkillsSchemaVersion` 2、`breakdown-capex-v1`）。
+
+旧 `goodwill_amortization` は `goodwill` の `amortization` セルへ統合した（breaking。`apiSkillsSchemaVersion` 8、`breakdown-goodwill-v3`、read 床 3）。公開 JSON は capex と同様に行の `amount` を出さず、セルごとの分母を出す。分母は開示された合計であり、セグメントの和ではない。固定資産全体の減損表（`ImpairmentLossEL` / 「報告セグメントごとの固定資産の減損損失」）は使わない。該当事項なしは 0。会社合計の種類別のれんは対象外。`fin-vN` は上げない。
 
 ## 契約・永続化
 
@@ -164,6 +164,7 @@ v2（`breakdown-interest-bearing-debt-v2`）: 行と合計が変わる変更（�
 
 - 2026-10: 軸 `property_plant_equipment` / `goodwill_and_intangibles` を追加し、notes の同名2種類を廃止（breaking。`apiSkillsSchemaVersion` 5）。
 - 2026-10: 軸 `interest_bearing_debt` を追加（`average_rate` は公開前に廃止し、`in_total` / `excluded_reason` / `paired_row_index` を追加。未公開の軸なので `cache_version` は v1 のまま）（互換追加。`schema_version` / `apiSkillsSchemaVersion` は据え置き）。/financials `interest_bearing_debt` の正本をこの軸へ（`fin-vN` は上げず組立指紋で再組立）。
+- 2026-10: 軸 `goodwill` を期首/期末/償却/減損の名前付きセルに統合し、`goodwill_amortization` を廃止（breaking。`apiSkillsSchemaVersion` 8、`breakdown-goodwill-v3`）。`fin-vN` / `screen-vN` は据え置き。
 
 ## 非目標
 

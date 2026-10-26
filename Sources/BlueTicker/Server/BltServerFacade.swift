@@ -1128,26 +1128,33 @@ public extension BltServerContext {
     }
 
     /// 内訳取り込み: 書類1件分の goodwill 軸内訳を解決する（2026-08-12追加）。決定論のみ、LLMなし。
-    ///
-    /// `Xbrl.goodwillSegmentTags` の無dimension fact から本関数が独立に解決する（`resolveItem`）。
+    /// セルは opening / closing / amortization / impairment。会社合計の Instant のれんは
+    /// 期末分母のフォールバック（銀行の Goodwill / GoodwillBeforeOffsetting 分離）にだけ使う。
     func resolveGoodwillBreakdown(docID: String, correctionDocIDs: [String] = []) async -> BreakdownResolveResult {
         guard let xbrlDir = await downloadAnnualFilingXbrl(
             docID: docID, correctionDocIDs: correctionDocIDs
         ) else { return .failed }
         let cached = await businessSegmentDimensionCache.load(docID: docID, xbrlDir: xbrlDir)
+        let memberParents = XBRLUtils.operatingSegmentMemberParents(in: xbrlDir)
         let goodwill = BreakdownFinancialsResolver.financialsCanonicalGoodwillItem(xbrlDir: xbrlDir)
+        let companyTotal: (value: Double, tag: String)? =
+            goodwill.value.flatMap { value in
+                guard let tag = goodwill.tag else { return nil }
+                return (value, tag)
+            }
+        let notes = GoodwillNoteFlags.load(from: xbrlDir)
         guard
-            let snapshot = BreakdownNormalizer.normalizeGoodwill(
-                facts: cached.facts, total: goodwill.value, totalTag: goodwill.tag,
-                axis: breakdownAxisGoodwill, labelsByTag: cached.labelsByTag)
+            let payload = GoodwillNormalizer.normalize(
+                facts: cached.facts, labelsByTag: cached.labelsByTag,
+                memberParents: memberParents, companyClosingTotal: companyTotal, notes: notes)
         else {
             return .notApplicable(reason: breakdownNotApplicableNotFound)
         }
         let extracted = ExtractedBreakdown(method: "xbrl_facts", tables: [], facts: cached.facts)
-        let hash = breakdownContentHash(extracted: extracted, consolidatedSales: goodwill.value)
+        let hash = breakdownPayloadContentHash(payload)
         return breakdownByRecordingOverlayRegressions(
             .resolved(
-                payload: breakdownSnapshotPayload(from: snapshot), source: breakdownSourceXbrlFacts,
+                payload: payload, source: breakdownSourceXbrlFacts,
                 contentHash: hash, audit: nil),
             xbrlDir: xbrlDir)
     }
@@ -1214,9 +1221,6 @@ private extension BltServerContext {
         let cached = await businessSegmentDimensionCache.load(docID: docID, xbrlDir: xbrlDir)
         let snapshot: BreakdownSnapshot?
         switch axis {
-        case breakdownAxisGoodwillAmortization:
-            snapshot = BreakdownNormalizer.normalizeGoodwillAmortization(
-                facts: cached.facts, labelsByTag: cached.labelsByTag)
         case breakdownAxisEquityMethodInvestments:
             snapshot = BreakdownNormalizer.normalizeEquityMethodInvestments(
                 facts: cached.facts, labelsByTag: cached.labelsByTag)
@@ -1447,12 +1451,6 @@ enum CapexProseFillResult {
 }
 
 public extension BltServerContext {
-    /// 報告セグメント別ののれんの償却額を解決する。
-    func resolveGoodwillAmortizationBreakdown(docID: String, correctionDocIDs: [String] = []) async -> BreakdownResolveResult {
-        await resolveSegmentMetricBreakdown(
-            docID: docID, axis: breakdownAxisGoodwillAmortization, correctionDocIDs: correctionDocIDs)
-    }
-
     /// 報告セグメント別の持分法会計処理される投資を解決する。
     func resolveEquityMethodInvestmentsBreakdown(docID: String, correctionDocIDs: [String] = []) async -> BreakdownResolveResult {
         await resolveSegmentMetricBreakdown(

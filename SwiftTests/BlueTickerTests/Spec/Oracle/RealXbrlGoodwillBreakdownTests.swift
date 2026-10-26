@@ -254,5 +254,185 @@ import Foundation
         guard await Self.ensureAvailable("S100VWVY") else { return }
         #expect(Self.resolveGoodwill(docID: "S100VWVY") == nil)
     }
+
+    private static func resolveMerged(docID: String) -> BreakdownSnapshotPayload? {
+        let dir = xbrlDir(docID)
+        let contextMap = BreakdownExtractor.loadDimensionContextMap(xbrlDir: dir)
+        let facts = BreakdownExtractor.extractFactsByDimension(
+            xbrlDir: dir, dimensionKeywords: Xbrl.businessSegmentDimensionKeywords,
+            contextMap: contextMap)
+        let labelsByTag = XBRLUtils.breakdownMemberLabels(in: dir)
+        let memberParents = XBRLUtils.operatingSegmentMemberParents(in: dir)
+        let allTagElements = XBRLUtils.collectAllNumericElements(in: dir, nilAsZero: false)
+        let totalItem = resolveItem(
+            fieldSetFromInstant(allTagElements), tags: Xbrl.goodwillSegmentTags)
+        let companyTotal: (value: Double, tag: String)? =
+            totalItem.current.flatMap { value in
+                guard let tag = totalItem.tag else { return nil }
+                return (value, tag)
+            }
+        return GoodwillNormalizer.normalize(
+            facts: facts, labelsByTag: labelsByTag, memberParents: memberParents,
+            companyClosingTotal: companyTotal, notes: GoodwillNoteFlags.load(from: dir))
+    }
+
+    private static func row(
+        _ payload: BreakdownSnapshotPayload, labelContains needle: String
+    ) -> BreakdownRowPayload? {
+        let compactNeedle = needle.replacingOccurrences(of: " ", with: "")
+            .replacingOccurrences(of: "　", with: "")
+        return payload.rows.first { row in
+            let compact = row.label.replacingOccurrences(of: " ", with: "")
+                .replacingOccurrences(of: "　", with: "")
+            return compact.contains(compactNeedle)
+        }
+    }
+
+    // source: code=2871 fy_end=2025-03-31 doc_id=S100VYA0 page=114 field=goodwill.amortization
+    @Test func nichireiGoodwillAmortizationCells() async throws {
+        guard await Self.ensureAvailable("S100VYA0") else { return }
+        let payload = try #require(Self.resolveMerged(docID: "S100VYA0"))
+        let food = try #require(Self.row(payload, labelContains: "加工食品"))
+        let logistics = try #require(Self.row(payload, labelContains: "低温物流"))
+        #expect(food.closing == 751_000_000)
+        #expect(food.amortization == 126_000_000)
+        #expect(food.impairment == nil)
+        #expect(logistics.closing == 6_604_000_000)
+        #expect(logistics.amortization == 577_000_000)
+        #expect(payload.amortization?.denominator == 703_000_000)
+    }
+
+    // source: code=6103 fy_end=2025-03-31 doc_id=S100W043 page=96 field=goodwill.impairment
+    @Test func okumaGoodwillImpairmentIsZeroWhenNoneDisclosed() async throws {
+        guard await Self.ensureAvailable("S100W043") else { return }
+        let payload = try #require(Self.resolveMerged(docID: "S100W043"))
+        let europe = try #require(
+            payload.rows.first { $0.labelRaw == "EuropeReportableSegmentsMember" })
+        #expect(europe.closing == 1_053_000_000)
+        #expect(europe.impairment == 0)
+    }
+
+    // source: code=8316 fy_end=2025-03-31 doc_id=S100W0S7 page=225 field=goodwill.amortization
+    @Test func smfgGoodwillAmortizationCells() async throws {
+        guard await Self.ensureAvailable("S100W0S7") else { return }
+        let payload = try #require(Self.resolveMerged(docID: "S100W0S7"))
+        let retail = try #require(
+            payload.rows.first { $0.labelRaw == "RetailBusinessUnitReportableSegmentMember" })
+        let global = try #require(
+            payload.rows.first { $0.labelRaw == "GlobalBusinessUnitReportableSegmentMember" })
+        let head = try #require(
+            payload.rows.first { $0.labelRaw == "HeadOfficeAccountsEtcReportableSegmentMember" })
+        #expect(retail.closing == 20_709_000_000)
+        #expect(retail.amortization == 9_462_000_000)
+        #expect(global.closing == 161_611_000_000)
+        #expect(global.amortization == 13_754_000_000)
+        #expect(head.rowKind == "reconciling")
+        #expect(head.amortization == 9_695_000_000)
+        #expect(payload.amortization?.denominator == 32_912_000_000)
+    }
+
+    // source: code=6841 fy_end=2025-03-31 doc_id=S100VY8X page=112 field=goodwill.amortization
+    @Test func yokogawaGoodwillAmortizationCells() async throws {
+        guard await Self.ensureAvailable("S100VY8X") else { return }
+        let payload = try #require(Self.resolveMerged(docID: "S100VY8X"))
+        let control = try #require(
+            payload.rows.first {
+                $0.labelRaw == "IndustrialAutomationAndControlReportableSegmentsMember"
+            })
+        #expect(control.closing == 6_563_000_000)
+        #expect(control.amortization == 1_800_000_000)
+        #expect(control.impairment == nil)
+    }
+
+    // source: code=8630 fy_end=2025-03-31 doc_id=S100R1LR page=192 field=goodwill.amortization
+    @Test func sompoGoodwillAmortizationCells() async throws {
+        guard await Self.ensureAvailable("S100R1LR") else { return }
+        let payload = try #require(Self.resolveMerged(docID: "S100R1LR"))
+        let overseas = try #require(
+            payload.rows.first { $0.labelRaw == "OverseasInsuranceBusinessReportableSegmentsMember" })
+        let nursing = try #require(
+            payload.rows.first { $0.labelRaw == "NursingCareAndSeniorBusinessReportableSegmentsMember" })
+        #expect(overseas.closing == 118_746_000_000)
+        #expect(overseas.amortization == 25_003_000_000)
+        #expect(nursing.closing == 78_983_000_000)
+        #expect(nursing.amortization == 5_274_000_000)
+        #expect(payload.amortization?.denominator == 30_277_000_000)
+        #expect(overseas.impairment == nil)
+    }
+
+    // source: code=9602 fy_end=2026-02-28 doc_id=S100Y5O3 page=124 field=goodwill.closing
+    @Test func tohoDurationUnamortizedBalanceClosing() async throws {
+        guard await Self.ensureAvailable("S100Y5O3") else { return }
+        let payload = try #require(Self.resolveMerged(docID: "S100Y5O3"))
+        let anime = try #require(Self.row(payload, labelContains: "アニメ"))
+        #expect(anime.rowKind == "segment")
+        #expect(anime.closing == 15_448_000_000)
+        #expect(payload.amortization?.denominator == 1_051_000_000)
+    }
+
+    // source: code=6501 fy_end=2026-03-31 doc_id=S100YGBO page=128 field=goodwill.closing
+    @Test func hitachiGoodwillIFRSClosingAndNullAmortization() async throws {
+        guard await Self.ensureAvailable("S100YGBO") else { return }
+        let payload = try #require(Self.resolveMerged(docID: "S100YGBO"))
+        let digital = try #require(Self.row(payload, labelContains: "デジタルシステム"))
+        #expect(digital.rowKind == "segment")
+        #expect(digital.closing == 1_429_043_000_000)
+        #expect(payload.closing?.denominator == 2_647_501_000_000)
+        #expect(digital.amortization == nil)
+        #expect(payload.amortization == nil)
+    }
+
+    // source: code=6367 fy_end=2026-03-31 doc_id=S100YFQL page=156 field=goodwill.impairment
+    @Test func daikinDoesNotTakeSegmentWideImpairmentAsGoodwill() async throws {
+        guard await Self.ensureAvailable("S100YFQL") else { return }
+        let payload = try #require(Self.resolveMerged(docID: "S100YFQL"))
+        let air = try #require(Self.row(payload, labelContains: "空調・冷凍機"))
+        #expect(air.impairment == nil || air.impairment == 0)
+        #expect(air.impairment != 11_849_000_000)
+        for row in payload.rows {
+            #expect(row.impairment != 11_849_000_000)
+        }
+    }
+
+    // source: code=8075 fy_end=2026-03-31 doc_id=S100YEV4 page=103 field=goodwill.closing
+    @Test func shinshoNestedSubtotalIsNotASegment() async throws {
+        guard await Self.ensureAvailable("S100YEV4") else { return }
+        let payload = try #require(Self.resolveMerged(docID: "S100YEV4"))
+        let aluminum = try #require(Self.row(payload, labelContains: "アルミ・銅"))
+        #expect(aluminum.rowKind == "segment")
+        #expect(aluminum.closing == 235_000_000)
+        let metalSubtotal = try #require(Self.row(payload, labelContains: "金属小計"))
+        #expect(metalSubtotal.rowKind == "subtotal")
+        #expect(payload.closing?.denominator == 235_000_000)
+    }
+
+    // source: code=9033 fy_end=2026-03-31 doc_id=S100YI48 page=98 field=goodwill.closing
+    @Test func hirodenUnallocatedGoodwillIsReconciling() async throws {
+        guard await Self.ensureAvailable("S100YI48") else { return }
+        let payload = try #require(Self.resolveMerged(docID: "S100YI48"))
+        let segments = payload.rows.filter { $0.rowKind == "segment" }
+        let reconciling = payload.rows.filter { $0.rowKind == "reconciling" }
+        #expect(segments.isEmpty)
+        #expect(reconciling.count == 1)
+        let row = try #require(reconciling.first)
+        #expect(row.closing == 52_000_000)
+        #expect(row.opening == 0)
+        #expect(row.amortization == 0)
+        #expect(row.impairment == nil)
+        #expect(payload.closing?.denominator == 52_000_000)
+    }
+
+    // source: code=7320 fy_end=2026-06-30 doc_id=S100Z3SN page=101 field=goodwill.amortization
+    @Test func solvvyMergedGoodwillDedupesCorporateAmortization() async throws {
+        guard await Self.ensureAvailable("S100Z3SN") else { return }
+        let payload = try #require(Self.resolveMerged(docID: "S100Z3SN"))
+        let reconciling = payload.rows.filter { $0.rowKind == "reconciling" }
+        #expect(reconciling.count == 1)
+        let row = try #require(Self.row(payload, labelContains: "全社・消去"))
+        #expect(row.rowKind == "reconciling")
+        #expect(row.closing == 12_341_000)
+        #expect(row.amortization == 3_702_000)
+        #expect(payload.amortization?.denominator == 3_702_000)
+    }
 }
 

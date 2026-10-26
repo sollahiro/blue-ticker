@@ -45,6 +45,11 @@ struct BreakdownSnapshot: Equatable {
     var employeesJoin: String? = nil
 }
 
+enum BreakdownFactPeriod {
+    case current
+    case prior
+}
+
 enum BreakdownNormalizer {
 
     /// ExtractedBreakdown（xbrl_facts）と連結外部売上から BreakdownSnapshot を組み立てる。
@@ -653,31 +658,55 @@ enum BreakdownNormalizer {
     }
 
     /// のれんのセグメント別内訳（内訳取り込み goodwill 軸、2026-08-12追加）。
-    /// `normalizeCountBasis` と異なり、候補タグ（`Xbrl.goodwillSegmentTags`）は「最初に現れたタグ」
+    /// `normalizeCountBasis` と異なり、候補タグ（`Xbrl.goodwillSegmentClosingTags`）は「最初に現れたタグ」
     /// ではなく「セグメント dimension 付き fact を実際に持つ最初のタグ」を選ぶ。実データ検証
     /// （三井住友・三菱UFJ）: 全社合計は無dimensionの`Goodwill`タグにしか無く、セグメント別内訳は
     /// 別タグ`GoodwillBeforeOffsetting`にしかない（同一タグの中に両方が同居するオークマ型とは限らない）。
     /// `normalizeCountBasis`のタグ選択（"最初に現れる"）だと`Goodwill`が先に見つかった時点で確定し、
     /// dimension付きfactを1件も持たないまま`perMember`が空になり誤ってnilを返してしまう。
+    /// Instant を優先し、無ければ Duration（会社拡張の未償却残高）。分母は開示合計であり
+    /// セグメントの和では埋めない。
     static func normalizeGoodwill(
         facts: [BreakdownFact], total: Double?, totalTag: String? = nil, axis: String,
-        labelsByTag: [String: String] = [:], memberParents: [String: String] = [:]
+        labelsByTag: [String: String] = [:], memberParents: [String: String] = [:],
+        period: BreakdownFactPeriod = .current,
+        unallocatedToReportableSegments: Bool = false
     ) -> BreakdownSnapshot? {
         var amountTag: String?
         var perMember: [String: BreakdownFact] = [:]
-        for tag in Xbrl.goodwillSegmentTags {
-            let candidate = resolvePerMember(facts: facts, tag: tag)
-            if !candidate.isEmpty {
+        var requireInstant: Bool?
+        for tag in Xbrl.goodwillSegmentClosingTags {
+            let instant = resolvePerMember(
+                facts: facts, tag: tag, period: period, requireInstant: true)
+            if !instant.isEmpty {
                 amountTag = tag
-                perMember = candidate
+                perMember = instant
+                requireInstant = true
+                break
+            }
+            let duration = resolvePerMember(
+                facts: facts, tag: tag, period: period, requireInstant: false)
+            if !duration.isEmpty {
+                amountTag = tag
+                perMember = duration
+                requireInstant = false
                 break
             }
         }
         guard let amountTag, !perMember.isEmpty else { return nil }
+        perMember = withEntityTotal(
+            perMember, facts: facts, tag: amountTag, period: period, requireInstant: requireInstant)
+        let entity = resolveEntityTotal(
+            facts: facts, tag: amountTag, period: period, requireInstant: requireInstant)
+        let resolvedTotal = total ?? entity?.value
+        let resolvedTag = totalTag ?? entity?.tag ?? amountTag
 
         return buildCountBasisSnapshot(
-            perMember: perMember, amountTag: totalTag ?? amountTag, total: total, axis: axis,
-            warningPrefix: "goodwill", labelsByTag: labelsByTag, memberParents: memberParents)
+            perMember: perMember, amountTag: resolvedTag, total: resolvedTotal, axis: axis,
+            warningPrefix: "goodwill", labelsByTag: labelsByTag, memberParents: memberParents,
+            warnOnDerivedTotal: false, useEntityTotalAsDenominator: resolvedTotal != nil,
+            allowDerivedSumAsDenominator: false,
+            unallocatedToReportableSegments: unallocatedToReportableSegments)
     }
 
     /// 「報告セグメントごとの情報」に載る数値指標を、指標ごとの breakdown 軸へ正規化する。
@@ -735,7 +764,26 @@ enum BreakdownNormalizer {
         normalizeSegmentMetric(
             facts: facts, amountTags: Xbrl.segmentGoodwillAmortizationTags, axis: axis,
             warningPrefix: "goodwill_amortization", labelsByTag: labelsByTag,
-            memberParents: memberParents)
+            memberParents: memberParents,
+            useConsolidatedEntityTotalAsDenominatorWhenPresent: true,
+            allowDerivedSumAsDenominator: false)
+    }
+
+    /// のれん専用の減損損失。`ImpairmentLossEL`（固定資産全体）は候補に入れない。
+    static func normalizeGoodwillImpairment(
+        facts: [BreakdownFact], axis: String = breakdownAxisGoodwill,
+        labelsByTag: [String: String] = [:], memberParents: [String: String] = [:]
+    ) -> BreakdownSnapshot? {
+        var tags = Xbrl.segmentGoodwillImpairmentTags
+        for tag in Set(facts.map(\.tag)).sorted() where Xbrl.isGoodwillImpairmentTag(tag) {
+            if !tags.contains(tag) { tags.append(tag) }
+        }
+        return normalizeSegmentMetric(
+            facts: facts, amountTags: tags, axis: axis,
+            warningPrefix: "goodwill_impairment", labelsByTag: labelsByTag,
+            memberParents: memberParents,
+            useConsolidatedEntityTotalAsDenominatorWhenPresent: true,
+            allowDerivedSumAsDenominator: false)
     }
 
     /// 持分法会計処理される投資。
@@ -889,7 +937,8 @@ enum BreakdownNormalizer {
         useEntityTotalAsDenominator: Bool = true,
         allowDerivedSumAsDenominator: Bool = true,
         applyOfWhichNestedChildDemotion: Bool = false,
-        applyTaggedTotalEqualToDenominator: Bool = false
+        applyTaggedTotalEqualToDenominator: Bool = false,
+        unallocatedToReportableSegments: Bool = false
     ) -> BreakdownSnapshot? {
         var kinds: [String: String] = [:]
         for member in perMember.keys {
@@ -897,18 +946,23 @@ enum BreakdownNormalizer {
                 || countBasisAdditiveBucketMemberNames.contains(member)
             {
                 kinds[member] = "reconciling"
-            } else if Xbrl.segmentSubtotalMemberNames.contains(member) {
+            } else if Xbrl.segmentSubtotalMemberNames.contains(member)
+                || isNestedSubtotalMember(member, label: labelsByTag[member])
+            {
                 kinds[member] = "subtotal"
             } else {
                 kinds[member] = "segment"
             }
         }
         promoteSoleReportableSegmentsMember(kinds: &kinds)
+        reclassifyUnallocatedReportableSegments(
+            kinds: &kinds, unallocated: unallocatedToReportableSegments)
         var amounts: [String: Double] = [:]
         for (member, fact) in perMember {
             amounts[member] = fact.value
         }
-        demoteRedundantParentSegments(kinds: &kinds, amounts: amounts, total: total)
+        demoteRedundantParentSegments(
+            kinds: &kinds, amounts: amounts, total: total, labelsByTag: labelsByTag)
         dropDuplicatedReconcilingMember(kinds: &kinds, amounts: &amounts, total: total)
         var ofWhichMembers: Set<String> = []
         if applyOfWhichNestedChildDemotion {
@@ -992,18 +1046,43 @@ enum BreakdownNormalizer {
     private static func promoteSoleReportableSegmentsMember(kinds: inout [String: String]) {
         guard kinds[countBasisReportableSegmentsMemberName] == "subtotal" else { return }
         let segmentMembers = kinds.keys.filter { kinds[$0] == "segment" }
-        guard segmentMembers.allSatisfy({ Xbrl.segmentOtherBusinessMemberNames.contains($0) }) else {
-            return
-        }
+        // 子が0件のとき `allSatisfy` は true になるので、親だけを segment に昇格しない
+        // （報告セグメントに配分していないのれんが 報告セグメント 行になる）。
+        guard !segmentMembers.isEmpty,
+            segmentMembers.allSatisfy({ Xbrl.segmentOtherBusinessMemberNames.contains($0) })
+        else { return }
         kinds[countBasisReportableSegmentsMemberName] = "segment"
+    }
+
+    /// 子セグメント値が無く、注記が報告セグメントへ配分していないと書くとき、親を調整行にする。
+    private static func reclassifyUnallocatedReportableSegments(
+        kinds: inout [String: String], unallocated: Bool
+    ) {
+        guard unallocated, kinds[countBasisReportableSegmentsMemberName] != nil else { return }
+        let childSegments = kinds.keys.filter {
+            $0 != countBasisReportableSegmentsMemberName && kinds[$0] == "segment"
+        }
+        guard childSegments.isEmpty else { return }
+        kinds[countBasisReportableSegmentsMemberName] = "reconciling"
+    }
+
+    /// 入れ子の「小計」member（ラベルまたは名前）。ReportableSegment とタグされていても小計。
+    static func isNestedSubtotalMember(_ member: String, label: String?) -> Bool {
+        if member.contains("Subtotal") { return true }
+        let compact = (label ?? "")
+            .replacingOccurrences(of: " ", with: "")
+            .replacingOccurrences(of: "　", with: "")
+        return compact == "小計" || compact.hasSuffix("小計")
     }
 
     /// 子セグメントと同居する親小計を subtotal へ落とす。含めると分母から 5% 超ずれ、
     /// その1 member を除外すると ±5% に収まる場合のみ（候補が複数なら触らない）。
     /// 実データ: 花王 S100XT6G 従業員の `GlobalConsumerCareBusinessReportableSegmentMember`
     /// は化粧品・HBC・ハイジーンの親であり、除外すると全社 31,514 人と一致する。
+    /// 候補が複数でも、ラベルまたは名前が入れ子小計なものが1つだけならそれを落とす。
     private static func demoteRedundantParentSegments(
-        kinds: inout [String: String], amounts: [String: Double], total: Double?
+        kinds: inout [String: String], amounts: [String: Double], total: Double?,
+        labelsByTag: [String: String] = [:]
     ) {
         guard let total, total > 0 else { return }
         let included = reconciledAmount(kinds: kinds, amounts: amounts)
@@ -1015,7 +1094,16 @@ enum BreakdownNormalizer {
             let sum = reconciledAmount(kinds: trial, amounts: amounts)
             return sum > 0 && abs(sum - total) / total <= 0.05
         }
-        guard candidates.count == 1, let parent = candidates.first else { return }
+        let parent: String?
+        if candidates.count == 1 {
+            parent = candidates.first
+        } else {
+            let labelled = candidates.filter {
+                isNestedSubtotalMember($0, label: labelsByTag[$0])
+            }
+            parent = labelled.count == 1 ? labelled.first : nil
+        }
+        guard let parent else { return }
         kinds[parent] = "subtotal"
     }
 
@@ -1212,8 +1300,13 @@ enum BreakdownNormalizer {
     /// 1件もなければ非連結（子会社を持たない小規模企業）にフォールバックする
     /// （resolveItemPreferCurrent と同じ「優先→フォールバック」の非対称ルール）。
     /// facts は tag+contextRef でソート済みのため、member 内の採用順は決定的。
-    private static func resolvePerMember(facts: [BreakdownFact], tag: String) -> [String: BreakdownFact] {
-        let candidateFacts = facts.filter { $0.tag == tag && isCurrentPeriod($0.contextRef) }
+    static func resolvePerMember(
+        facts: [BreakdownFact], tag: String, period: BreakdownFactPeriod = .current,
+        requireInstant: Bool? = nil
+    ) -> [String: BreakdownFact] {
+        let candidateFacts = facts.filter {
+            $0.tag == tag && matchesPeriod($0.contextRef, period: period, requireInstant: requireInstant)
+        }
         let consolidatedFacts = candidateFacts.filter(isConsolidated)
         let source = consolidatedFacts.isEmpty ? candidateFacts : consolidatedFacts
 
@@ -1235,11 +1328,13 @@ enum BreakdownNormalizer {
     /// `segment_assets_entity_total_differs_from_table_total` が立つ
     ///（8306 `S100YJQO` / 8411 `S100YF8Y` / 8309 `S100YBGM`）。
     /// セグメント member 行の抽出（`resolvePerMember`）は変えない。
-    private static func resolveEntityTotal(
-        facts: [BreakdownFact], tag: String, allowNonConsolidatedEntityTotal: Bool = true
+    static func resolveEntityTotal(
+        facts: [BreakdownFact], tag: String, allowNonConsolidatedEntityTotal: Bool = true,
+        period: BreakdownFactPeriod = .current, requireInstant: Bool? = nil
     ) -> BreakdownFact? {
         let candidateFacts = facts.filter {
-            $0.tag == tag && isCurrentPeriod($0.contextRef)
+            $0.tag == tag
+                && matchesPeriod($0.contextRef, period: period, requireInstant: requireInstant)
                 && XBRLUtils.primaryBreakdownMember($0.dimensions) == nil
         }
         let consolidatedFacts = candidateFacts.filter {
@@ -1251,14 +1346,19 @@ enum BreakdownNormalizer {
         // 単体のみの提出会社（2477 S100Z3MW）はセグメント fact 自体が個別コンテキストに載る。
         // そのときの個別 EntityTotal は財務諸表計上額そのものなので、連結限定の軸でも使う。
         guard allowNonConsolidatedEntityTotal
-            || segmentFactsAreNonConsolidated(facts: facts, tag: tag)
+            || segmentFactsAreNonConsolidated(
+                facts: facts, tag: tag, period: period, requireInstant: requireInstant)
         else { return nil }
         return candidateFacts.sorted { $0.contextRef < $1.contextRef }.first
     }
 
-    private static func segmentFactsAreNonConsolidated(facts: [BreakdownFact], tag: String) -> Bool {
+    private static func segmentFactsAreNonConsolidated(
+        facts: [BreakdownFact], tag: String, period: BreakdownFactPeriod = .current,
+        requireInstant: Bool? = nil
+    ) -> Bool {
         let segmentFacts = facts.filter {
-            $0.tag == tag && isCurrentPeriod($0.contextRef)
+            $0.tag == tag
+                && matchesPeriod($0.contextRef, period: period, requireInstant: requireInstant)
                 && XBRLUtils.primaryBreakdownMember($0.dimensions) != nil
         }
         return !segmentFacts.isEmpty
@@ -1267,12 +1367,14 @@ enum BreakdownNormalizer {
 
     private static func withEntityTotal(
         _ perMember: [String: BreakdownFact], facts: [BreakdownFact], tag: String,
-        allowNonConsolidatedEntityTotal: Bool = true
+        allowNonConsolidatedEntityTotal: Bool = true,
+        period: BreakdownFactPeriod = .current, requireInstant: Bool? = nil
     ) -> [String: BreakdownFact] {
         guard perMember[Xbrl.entityTotalMemberName] == nil,
               let entity = resolveEntityTotal(
                 facts: facts, tag: tag,
-                allowNonConsolidatedEntityTotal: allowNonConsolidatedEntityTotal)
+                allowNonConsolidatedEntityTotal: allowNonConsolidatedEntityTotal,
+                period: period, requireInstant: requireInstant)
         else { return perMember }
         var result = perMember
         result[Xbrl.entityTotalMemberName] = entity
@@ -1348,9 +1450,32 @@ enum BreakdownNormalizer {
             || Xbrl.instantContextPatterns.contains(where: contextRef.contains)
     }
 
+    static func isPriorPeriodContext(_ contextRef: String) -> Bool {
+        Xbrl.priorDurationContextPatterns.contains(where: contextRef.contains)
+            || Xbrl.priorInstantContextPatterns.contains(where: contextRef.contains)
+    }
+
+    static func isInstantContext(_ contextRef: String) -> Bool {
+        Xbrl.instantContextPatterns.contains(where: contextRef.contains)
+            || Xbrl.priorInstantContextPatterns.contains(where: contextRef.contains)
+    }
+
     /// 当期コンテキストかどうか（セグメント軸は Member 修飾があるため ContextHelpers は使わず判定する）。
     private static func isCurrentPeriod(_ contextRef: String) -> Bool {
         isCurrentPeriodContext(contextRef)
+    }
+
+    private static func matchesPeriod(
+        _ contextRef: String, period: BreakdownFactPeriod, requireInstant: Bool?
+    ) -> Bool {
+        let periodOK: Bool
+        switch period {
+        case .current: periodOK = isCurrentPeriodContext(contextRef)
+        case .prior: periodOK = isPriorPeriodContext(contextRef)
+        }
+        guard periodOK else { return false }
+        guard let requireInstant else { return true }
+        return isInstantContext(contextRef) == requireInstant
     }
 
     /// segment 行の member ラベルが地域名キーワードと全一致すれば geography、

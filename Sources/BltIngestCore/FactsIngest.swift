@@ -431,14 +431,6 @@ public func runFactsIngestCommand(
                         docID: docID, correctionDocIDs: correctionIDsByOriginal[docID] ?? [])
                 },
                 BreakdownStage(
-                    axis: breakdownAxisGoodwillAmortization,
-                    target: "breakdowns-\(breakdownAxisGoodwillAmortization)",
-                    listedCodes: deterministicMetricsListed, limit: unpublishedLimit, candidateSets: unpublishedSets
-                ) { docID in
-                    await context.resolveGoodwillAmortizationBreakdown(
-                        docID: docID, correctionDocIDs: correctionIDsByOriginal[docID] ?? [])
-                },
-                BreakdownStage(
                     axis: breakdownAxisEquityMethodInvestments,
                     target: "breakdowns-\(breakdownAxisEquityMethodInvestments)",
                     listedCodes: deterministicMetricsListed, limit: unpublishedLimit, candidateSets: unpublishedSets
