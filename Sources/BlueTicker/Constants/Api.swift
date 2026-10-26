@@ -195,7 +195,9 @@ public enum Api {
     /// レスポンス形を破壊的に変更したときのみ +1 する。
     /// v3（2026-10-26）: 金額を百万円から基本単位（円・ドル）の整数へ、`unit` を `units` マップへ、
     /// `years[].currency` を追加、CCC 要因を `ccc_dso_effect` / `ccc_dio_effect` / `ccc_dpo_effect` へ改名。
-    static let financialsSchemaVersion = 3
+    /// v4（2026-10-27）: `roe` の分母を期末の純資産合計から期末の親会社持分（非支配持分・新株予約権を除く）へ、
+    /// `financial_leverage` を総資産 ÷ 親会社持分へ（`roe` = `net_margin` × `asset_turnover` × `financial_leverage`）。
+    static let financialsSchemaVersion = 4
 
     /// 書類同期で DB へ取り込む書類種別（日次書類の全件 → DB。seed 種別に絞る）。
     /// 有報・半期・四半期＋訂正有報のみ。訂正四半期(150)・訂正半期(170) は意図的に含めない

@@ -48,6 +48,15 @@ extension XBRLUtils {
 private final class XBRLNumericsParser: NSObject, XMLParserDelegate {
     var results: XbrlFactIndex = [:]
 
+    /// 同じタグ・同じ context に通貨違いの fact が並ぶもの（外貨建て開示の邦貨併記。三井海洋開発 6269
+    /// S100XU6C は主要な経営指標等の BPS を USDPerShares 21.26 と JPYPerShares 3327.57 の両方で持つ）。
+    /// 文書末で開示通貨のほうを `results` に残す。
+    private var currencyAlternates: [String: [String: [XbrlFact]]] = [:]
+    /// 本表タクソノミ（jppfs / jpigp）の金額 fact の通貨ごとの件数。最多を開示通貨とする。
+    private var statementCurrencyCounts: [String: Int] = [:]
+    private static let statementTaxonomyPrefixes = ["jppfs_cor:", "jpigp_cor:"]
+    private var currentQualifiedName = ""
+
     private let allowedTags: Set<String>?
     private let nilAsZero: Bool
     private let labelsByTag: [String: String]
@@ -95,6 +104,7 @@ private final class XBRLNumericsParser: NSObject, XMLParserDelegate {
         if let allowed = allowedTags, !allowed.contains(localTag) { return }
         guard let ctx = attributeDict["contextRef"], !ctx.isEmpty else { return }
         currentLocalTag = localTag
+        currentQualifiedName = qName ?? elementName
         currentCtx = ctx
         currentText = ""
         currentAttrs = attributeDict
@@ -161,6 +171,31 @@ private final class XBRLNumericsParser: NSObject, XMLParserDelegate {
         }
         if !orderByRole.isEmpty { fact.orderByRole = orderByRole }
 
+        let currency = AmountUnit.currency(unitRef: fact.unitRef)
+        if let currency, !AmountUnit.isPerShare(unitRef: fact.unitRef),
+            Self.statementTaxonomyPrefixes.contains(where: { currentQualifiedName.hasPrefix($0) })
+        {
+            statementCurrencyCounts[currency, default: 0] += 1
+        }
+        if let currency, let existing = results[currentLocalTag]?[currentCtx],
+            let existingCurrency = AmountUnit.currency(unitRef: existing.unitRef),
+            existingCurrency != currency
+        {
+            currencyAlternates[currentLocalTag, default: [:]][currentCtx, default: [existing]].append(fact)
+        }
         results[currentLocalTag, default: [:]][currentCtx] = fact
+    }
+
+    func parserDidEndDocument(_ parser: XMLParser) {
+        guard !currencyAlternates.isEmpty,
+            let reporting = statementCurrencyCounts.max(by: { ($0.value, $1.key) < ($1.value, $0.key) })?.key
+        else { return }
+        for (tag, byCtx) in currencyAlternates {
+            for (ctx, facts) in byCtx {
+                if let preferred = facts.last(where: { AmountUnit.currency(unitRef: $0.unitRef) == reporting }) {
+                    results[tag]?[ctx] = preferred
+                }
+            }
+        }
     }
 }

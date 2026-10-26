@@ -16,10 +16,13 @@ import Foundation
         grossProfit: Double? = nil, sga: Double? = nil,
         opLabel: String? = nil, salesLabel: String? = nil,
         roic: Double? = nil, nopatMargin: Double? = nil, turnover: Double? = nil,
-        roe: Double? = nil, totalAssets: Double? = nil, netAssets: Double? = nil
+        roe: Double? = nil, totalAssets: Double? = nil, netAssets: Double? = nil,
+        parentEquity: Double? = nil
     ) -> YearEntry {
         var raw = RawData()
         raw.sales = sales
+        // ROE のレバレッジ分母は親会社持分。指定が無ければ純資産と同じ（非支配持分なし）とする。
+        raw.parentEquity = parentEquity ?? netAssets
         raw.op = op
         raw.np = np
         raw.salesLabel = salesLabel

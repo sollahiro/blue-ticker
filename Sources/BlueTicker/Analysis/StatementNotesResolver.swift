@@ -523,13 +523,14 @@ enum StatementNotesResolver {
 
     /// IFRS企業の「1株当たり親会社株主持分」相当値。EDINETタクソノミ上は
     /// `EquityToAssetRatioIFRSSummaryOfBusinessResults`（自己資本比率）という誤った名前だが、
-    /// `unitRef=JPYPerShares`（円/株）の場合のみ実体は円建て金額（実データ確認済み）。
-    /// US-GAAP企業では同名タグが `unitRef=pure`（真の比率、0〜1）で使われるため、unitRef を
-    /// 見ずにタグ名だけで判定してはならない（実データ確認済み: 小松製作所 S100QYNI）。
+    /// `unitRef` が1株当たり金額（`JPYPerShares` / 外貨建て開示の `USDPerShares`）の場合のみ実体は金額
+    /// （実データ確認済み）。US-GAAP企業では同名タグが `unitRef=pure`（真の比率、0〜1）で使われるため、
+    /// unitRef を見ずにタグ名だけで判定してはならない（実データ確認済み: 小松製作所 S100QYNI）。
+    /// 外貨建て開示が邦貨併記で円の値も持つときは、fact 収集が開示通貨の値を残す（6269 S100XU6C）。
     private static func resolveEquityPerShareIFRSMislabeled(xbrlDir: URL) -> Double? {
         let facts = XBRLUtils.collectAllNumericFacts(in: xbrlDir)
         guard let fact = facts["EquityToAssetRatioIFRSSummaryOfBusinessResults"]?["CurrentYearInstant"],
-              fact.unitRef == "JPYPerShares"
+              AmountUnit.isPerShare(unitRef: fact.unitRef)
         else { return nil }
         return fact.value
     }

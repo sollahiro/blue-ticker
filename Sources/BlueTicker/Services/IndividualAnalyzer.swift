@@ -155,6 +155,7 @@ struct IndividualAnalyzer {
         raw.op = statementMain?.operatingProfit.map { $0 / millionYen }
         raw.np = statementMain?.netProfit.map { $0 / millionYen }
         raw.netAssets = statementMain?.netAssets.map { $0 / millionYen }
+        raw.parentEquity = statementMain?.parentEquity.map { $0 / millionYen }
         raw.cfo = statementMain?.cfo.map { $0 / millionYen }
         raw.cfi = statementMain?.cfi.map { $0 / millionYen }
         // 設備投資: breakdown overview source → CF（#6）
@@ -235,8 +236,8 @@ struct IndividualAnalyzer {
             calc.cfc = cfo + cfi
         }
 
-        // ROE
-        if let np = raw.np, let eq = raw.netAssets, eq > 0 {
+        // ROE（親会社株主に帰属する当期純利益 ÷ 期末の親会社持分）
+        if let np = raw.np, let eq = raw.parentEquity, eq > 0 {
             calc.roe = (np / eq) * percent
         }
 
