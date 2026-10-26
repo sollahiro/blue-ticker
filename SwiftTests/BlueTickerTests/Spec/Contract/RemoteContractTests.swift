@@ -8,6 +8,7 @@ import Testing
     private let emptyFinancialsYear = #"""
         {
           "fy_end": null, "financial_period": null, "cur_per_type": null, "doc_id": null,
+          "currency": "JPY",
           "sales_label": null, "gross_profit_label": null, "op_label": null, "sga_label": null,
           "sales": null, "gross_profit": null, "gross_profit_margin": null, "sga": null,
           "operating_profit": null, "operating_margin": null, "nopat": null,
@@ -68,7 +69,7 @@ import Testing
         #expect(
             NSDictionary(dictionary: decoded.summaryJsonObject(fields: ["sales", "eps"])) == [
                 "fy_end": "2025-03", "financial_period": NSNull(), "doc_id": NSNull(),
-                "sales": 0, "eps": NSNull(),
+                "currency": "JPY", "sales": 0, "eps": NSNull(),
             ])
         #expect(decoded.analysisJsonObject(prior: nil)["net_cash_change"] is NSNull)
     }
@@ -82,7 +83,8 @@ import Testing
         #expect(NSDictionary(dictionary: year.jsonObject()) == expected)
     }
 
-    /// MetricsResult → 契約 JSON → MetricsResult で、v2 で追加したフィールドを含め往復する。
+    /// MetricsResult → 格納 JSON（Codable、`company_financials.payload`）→ MetricsResult で、
+    /// v2 で追加したフィールドを含め往復する。公開 JSON（金額は基本単位）は格納形とは別。
     @Test func financialsContractRoundTripsRenderedFields() throws {
         var raw = RawData.blank
         raw.sales = 1000
@@ -118,9 +120,8 @@ import Testing
         let response = FinancialsResponse(
             code: "7203", name: "トヨタ自動車", sector: "輸送用機器", market: "プライム", result: result)
 
-        // サーバー出力（全キー存在）→ シリアライズ → クライアント側デコード。
-        let object = response.jsonObject()
-        let data = try JSONSerialization.data(withJSONObject: object)
+        // 格納（JSONB）→ 読み出し。
+        let data = try JSONEncoder().encode(response)
         let decoded = try JSONDecoder().decode(FinancialsResponse.self, from: data)
 
         #expect(decoded.schemaVersion == Api.financialsSchemaVersion)

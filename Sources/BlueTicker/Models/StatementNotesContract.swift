@@ -160,7 +160,8 @@ public let allSharesNotApplicableReasons: [String] = [
 public let legacyIssuedSharesUnitUnresolvedWarning = "issued_shares_unit_unresolved"
 
 /// `shares` の公開契約の1行。`key` は `eps` / `diluted_eps` / `bps` / `issued_shares`。
-/// `label` は有報の表示名、`unit` は `yen_per_share` / `shares`。
+/// `label` は有報の表示名、`unit` は格納値 `yen_per_share` / `shares`（応答では単位コード
+/// `currency_per_share` / `shares`。通貨は `SharesResponse.currency`）。
 public struct SharesItem: Codable, Sendable, Equatable {
     public var key: String
     public var label: String?
@@ -179,7 +180,7 @@ public struct SharesItem: Codable, Sendable, Equatable {
             "key": key,
             "label": label as Any? ?? NSNull(),
             "value": value,
-            "unit": unit as Any? ?? NSNull(),
+            "unit": AmountUnit.code(unitRef: unit)?.rawValue as Any? ?? NSNull(),
         ]
     }
 }
@@ -189,22 +190,26 @@ public struct SharesItem: Codable, Sendable, Equatable {
 public struct SharesResponse: Codable, Sendable, Equatable {
     public var code: String
     public var docId: String
+    /// 1株当たり金額の通貨（ISO 4217）。同じ書類の損益計算書の通貨。
+    public var currency: String
     public var items: [SharesItem]
 
     private enum CodingKeys: String, CodingKey {
         case code
         case docId = "doc_id"
+        case currency
         case items
     }
 
-    public init(code: String, docId: String, items: [SharesItem]) {
+    public init(code: String, docId: String, currency: String = AmountUnit.jpy, items: [SharesItem]) {
         self.code = code
         self.docId = docId
+        self.currency = currency
         self.items = items
     }
 
     public func jsonObject() -> [String: Any] {
-        ["code": code, "doc_id": docId, "items": items.map { $0.jsonObject() }]
+        ["code": code, "doc_id": docId, "currency": currency, "items": items.map { $0.jsonObject() }]
     }
 }
 

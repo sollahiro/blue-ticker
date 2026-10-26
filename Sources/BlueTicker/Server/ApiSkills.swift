@@ -7,7 +7,8 @@ import Foundation
 // MARK: - 契約型
 
 /// REST skills 応答の `schema_version`。形を破壊的に変えたときのみ +1。
-public let apiSkillsSchemaVersion = 8
+/// v9（2026-10-26）: 金額を基本単位（円・ドル）へ統一し、financials / waterfall に `units` / `currency` を載せた。
+public let apiSkillsSchemaVersion = 9
 
 /// パラメータの置き場所（REST パス変数 / クエリ）。
 public enum ApiSkillParameterLocation: String, Sendable {
@@ -114,9 +115,10 @@ public struct ApiSkill: Sendable {
 /// get_financial_summary / get_waterfall の MCP outputSchema（同一 envelope）。
 private let mcpOutputSchemaFinancialEnvelope =
     """
-    {"type":"object","required":["schema_version","code","name","sector","market","currency","unit","years"],\
+    {"type":"object","required":["schema_version","code","name","sector","market","currency","units","years"],\
     "properties":{"schema_version":{"type":"integer"},"code":{"type":"string"},"name":{"type":"string"},\
-    "sector":{"type":"string"},"market":{"type":"string"},"currency":{"type":"string"},"unit":{"type":"string"},\
+    "sector":{"type":"string"},"market":{"type":"string"},"currency":{"type":["string","null"]},\
+    "units":{"type":"object","additionalProperties":{"type":"string"}},\
     "years":{"type":"array","items":{"type":"object"}}}}
     """
 
@@ -277,7 +279,10 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                 銘柄コードの財務サマリーを年度別に返します（格納済みデータのみ。未集計の場合は空を返します）。
                 損益・CF・バランスシート・収益性指標（水準値）を含みます。直近\(Api.financialsYearsDefault)年分を返します。
                 前年差・要因分解（増減分析）は get_waterfall を使ってください。
-                金額単位は百万円（JPY）、比率は%、株主指標は円。
+                単位は応答の units（キー → 単位コード）が正です。currency_amount は通貨の基本単位（円・ドル）の整数で、
+                通貨は years[].currency（ISO 4217。外貨建て開示の会社は USD など）。percent は %（1 = 1%）、
+                percentage_points は % ポイント、times は倍、days は日、currency_per_share は1株当たり、shares は株、persons は人です。
+                トップの currency は全年度が同じ通貨のときだけ値があり、混在すると null です。
                 銀行業は有利子負債に預金を含めないため、net_cash / net_de / roic / nopat_margin /
                 invested_capital_turnover は null です（interest_bearing_debt は返します）。
                 営業利益行の無い銀行業は operating_profit が業務純益（業務粗利益 − 営業経費、op_label「業務純益」）、
@@ -319,7 +324,7 @@ public func apiSkillsCatalog() -> [ApiSkill] {
             instructions: """
                 Summary（水準値）。増減分解が必要なら get-waterfall。
                 格納済みデータのみ。未集計は 404、DB 非接続は 503。ライブ計算へはフォールバックしない。
-                金額単位は百万円（JPY）、比率は%、株主指標は円。
+                単位は units、通貨は years[].currency（fields で絞っても currency は常に返る）。
                 MCP は years / fields 固定（既定年数・全キー）。REST のみクエリで調整可。
                 fields は値を変えずキーを絞るだけ。fy_end / financial_period / doc_id は常に返る。
                 不明キーを含むと 400。
@@ -334,8 +339,12 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                 銘柄コードの増減分析（前年差分解）を年度別に返します（格納済みデータのみ。未集計の場合は空を返します）。
                 get_financial_summary と同じ水準値に加え、事業利益ウォーターフォール（売上差/粗利率差/販管費差影響）、
                 ROIC・ROE前年差の要因分解、ネットキャッシュ前年差（現金差/負債差影響）、
-                運転資本・CCC前年差（売掛金/棚卸資産/買掛金差影響、DSO/DIO/DPO差影響）を含みます。直近\(Api.financialsYearsDefault)年分を返します。
-                金額単位は百万円（JPY）、比率は%、日数は日。
+                運転資本・CCC前年差（売掛金/棚卸資産/買掛金差影響、ccc_dso_effect / ccc_dio_effect / ccc_dpo_effect）を含みます。直近\(Api.financialsYearsDefault)年分を返します。
+                単位は応答の units（キー → 単位コード）が正です。currency_amount は通貨の基本単位（円・ドル）の整数で、
+                通貨は years[].currency（ISO 4217。外貨建て開示の会社は USD など）。percent は %（1 = 1%）、
+                percentage_points は % ポイント、times は倍、days は日、currency_per_share は1株当たり、shares は株、persons は人です。
+                トップの currency は全年度が同じ通貨のときだけ値があり、混在すると null です。
+                要因（*_impact / *_effect）は和が親の前年差に一致する向きの符号です（買掛金・DPO・有利子負債は前期 − 当期）。
                 銀行業は net_cash / net_de / roic / nopat_margin / invested_capital_turnover と、
                 ネットキャッシュ前年差（net_cash_change / debt_change_impact）、ROIC 要因分解が null です。
                 銀行業の事業利益は業務純益（= operating_profit）で、同じ3項目に 経常収益差 / 業務粗利益率（業務粗利益 ÷ 経常収益）差 /
@@ -473,6 +482,8 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                 interest_bearing_debt_lease_denominator_from_notes が付きます（404 にはしません）。
                 要確認（needs_review）の行は出しません。行があるのに needs_review で出さないときは
                 404 reason unknown（メッセージは「公開していません」。未算出の reason 無し 404 とは別）です。
+                金額（amount / denominator / 各セル）は基本単位で、応答の unit（currency_amount、employees 軸は persons）と
+                currency（ISO 4217。employees 軸は null）が単位です。
                 property_plant_equipment / goodwill_and_intangibles は報告セグメントではなく資産の種類別で、
                 IFRS 連結の注記の正味帳簿価額（amount、円）です。行の source_tag は値を読んだ XBRL 要素のローカル名です。
                 直前の連続した行の和になる行は row_kind=subtotal で、その内訳行は category_group に小計の名前を持ちます。
@@ -554,6 +565,8 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                 全項目（企業拡張タグ含む）を返します。持分変動計算書は合計列のみ（資本構成員別の
                 行列展開はしない）。対象は上場企業（日経225は ingest の処理順の優先のみ）。doc_id を省略すると最新の
                 有価証券報告書を使用します。EPS・BPS・発行済株式数は別ツール get-shares の対象。
+                値は基本単位（円・ドル）で、年度の currency（ISO 4217）が通貨です。行の unit は
+                currency_amount / currency_per_share / shares（読めない単位は null）です。
                 """,
             method: "GET",
             path: "/v1/companies/{code}/statement",
@@ -613,7 +626,7 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                 対象は上場企業。doc_id を省略すると最新の有価証券報告書を使用します。
                 items は key（eps / continuing_eps / discontinued_eps / diluted_eps / continuing_diluted_eps /
                 discontinued_diluted_eps / bps / issued_shares）・label（表示名）・value・unit
-                （yen_per_share / shares）の行で、開示の無い key は行ごと省きます（潜在株式が無い会社の
+                （currency_per_share / shares）の行で。1株当たり金額の通貨はトップの currency（ISO 4217）です。、開示の無い key は行ごと省きます（潜在株式が無い会社の
                 diluted_eps など）。continuing_* / discontinued_* は IFRS で継続事業・非継続事業別の EPS を
                 損益計算書に開示している会社だけにあります。
                 取得できない場合はエラー応答とともに reason が返ることがあります
@@ -648,8 +661,8 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                 """,
             mcpOutputSchema:
                 """
-                {"type":"object","required":["code","doc_id","items"],"properties":{"code":\
-                {"type":"string"},"doc_id":{"type":"string"},"items":{"type":"array","items":\
+                {"type":"object","required":["code","doc_id","currency","items"],"properties":{"code":\
+                {"type":"string"},"doc_id":{"type":"string"},"currency":{"type":"string"},"items":{"type":"array","items":\
                 {"type":"object","required":["key","value"],"properties":{"key":{"type":"string"},\
                 "label":{"type":["string","null"]},"value":{"type":"number"},\
                 "unit":{"type":["string","null"]}}}}}}

@@ -35,9 +35,10 @@ struct SummaryView: View {
         let cashValues = response.years.flatMap { [
             $0.netCash, $0.cfo, $0.cfi, Format.freeCashFlow($0),
         ] }
+        let currency = response.currency ?? Format.latestYear(response.years)?.currency
         return MoneyScales(
-            pl: Format.commonScale(for: plValues),
-            cash: Format.commonScale(for: cashValues)
+            pl: Format.commonScale(for: plValues, currency: currency),
+            cash: Format.commonScale(for: cashValues, currency: currency)
         )
     }
 

@@ -7,11 +7,11 @@ import Testing
 private let sample = """
     {"code":["0001","0002","0003","0004"],"count":4,
      "market":["プライム","プライム","スタンダード","プライム"],
-     "metrics":{"net_de":[0.2,0.1,1.5,null],"roic":[20,25,10,30],"sales":[50000,5000,null,90000]},
+     "metrics":{"net_de":[0.2,0.1,1.5,null],"roic":[20,25,10,30],"sales":[50000000000,5000000000,null,90000000000]},
      "name":["会社0001","会社0002","会社0003","会社0004"],
      "payout_ratio_3y":[[30,null,40],[null,null,null],[1,2,3],[null,null,null]],
      "period_end":["2025-03-31","2025-03-31","2025-03-31","2025-03-31"],
-     "schema_version":1,"screen_version":"screen-v4",
+     "schema_version":2,"screen_version":"screen-v4",
      "sector":["電気機器","電気機器","電気機器","輸送用機器"]}
     """
 
@@ -29,7 +29,7 @@ private let sample = """
     }
 
     @Test func rejectsOtherSchemaVersionAndRaggedColumns() {
-        let otherVersion = sample.replacingOccurrences(of: "\"schema_version\":1", with: "\"schema_version\":2")
+        let otherVersion = sample.replacingOccurrences(of: "\"schema_version\":2", with: "\"schema_version\":1")
         #expect(ScreenSnapshot.parse(Data(otherVersion.utf8)) == nil)
         let ragged = sample.replacingOccurrences(of: "\"roic\":[20,25,10,30]", with: "\"roic\":[20,25,10]")
         #expect(ScreenSnapshot.parse(Data(ragged.utf8)) == nil)
@@ -47,7 +47,7 @@ private let sample = """
         let filtered = ScreenSnapshot.search(
             rows, sectors: ["電気機器"],
             filters: [
-                .init(key: "sales", min: 10000, max: nil),
+                .init(key: "sales", min: 10_000_000_000, max: nil),
                 .init(key: "net_de", min: nil, max: 1),
             ],
             sort: "roic")

@@ -34,6 +34,8 @@ struct RawData: Codable {
     var bps: Double?
     var shOutFY: Double?
     var cashEq: Double?
+    /// 金額の通貨（ISO 4217）。nil は円（通貨を持つ前の格納行）。
+    var currency: String?
 
     enum CodingKeys: String, CodingKey {
         case curPerType = "CurPerType"; case curFYSt = "CurFYSt"; case curFYEn = "CurFYEn"
@@ -41,7 +43,7 @@ struct RawData: Codable {
         case op = "OP"; case np = "NP"; case netAssets = "NetAssets"
         case cfo = "CFO"; case cfi = "CFI"; case capex = "Capex"; case buyback = "Buyback"
         case rd = "RD"; case eps = "EPS"; case bps = "BPS"; case shOutFY = "ShOutFY"
-        case cashEq = "CashEq"
+        case cashEq = "CashEq"; case currency = "Currency"
     }
 }
 

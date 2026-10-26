@@ -82,10 +82,18 @@ package func loadStoredBreakdown(
         return .notApplicable(reason: reason)
     }
 
+    // 金額（amount / denominator / 各セル）は基本単位。employees 軸だけ人数で通貨を持たない。
+    // 通貨は同じ書類の statement から読む（外貨建て開示 6269 は USD）。statement が無ければ円。
+    let unit = breakdownAmountUnit(axis: row.axis)
+    let currency: Any = unit == .persons
+        ? NSNull()
+        : ((try? await loadStoredStatementYear(code: code4, docID: docID, db: db))??.currency ?? AmountUnit.jpy)
     var result: [String: Any] = [
         "code": code4,
         "doc_id": docID,
         "axis": row.axis,
+        "currency": currency,
+        "unit": unit.rawValue,
         "breakdown": row.payload.jsonObject(),
     ]
     // LLM 経由の行のみ（xbrl_facts 経由は llmAudit が無い）。denominator_tag が

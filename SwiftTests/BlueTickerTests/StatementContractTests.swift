@@ -179,4 +179,25 @@ import Testing
         #expect(statementNoteCacheVersion(forType: statementNoteTypeSgaExpenseBreakdown)
             == sgaExpenseBreakdownNoteCacheVersion)
     }
+
+    /// 応答の行 `unit` は単位コード、通貨は年度の `currency`（最初の金額行の unitRef）。
+    @Test func statementJsonCarriesUnitCodesAndCurrency() {
+        let year = StatementYear(
+            fyEnd: "2025-12-31", financialPeriod: "FY", docId: "S100XU6C",
+            balanceSheet: [StatementLineItem(tag: "Assets", label: nil, value: 1, unit: "USD", order: nil)],
+            incomeStatement: [
+                StatementLineItem(tag: "BasicEPS", label: nil, value: 5.28, unit: "USDPerShares", order: nil),
+                StatementLineItem(tag: "Ratio", label: nil, value: 0.1, unit: "pure", order: nil),
+            ],
+            cashFlow: [])
+        let json = year.jsonObject()
+        #expect(json["currency"] as? String == "USD")
+        #expect((json["balance_sheet"] as? [[String: Any]])?.first?["unit"] as? String == "currency_amount")
+        let income = json["income_statement"] as? [[String: Any]]
+        #expect(income?[0]["unit"] as? String == "currency_per_share")
+        #expect(income?[1]["unit"] is NSNull)
+        #expect(StatementResponse(
+            schemaVersion: 1, code: "6269", name: nil, sector: nil, market: nil, years: []
+        ).jsonObject()["schema_version"] as? Int == statementSchemaVersion)
+    }
 }

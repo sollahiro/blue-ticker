@@ -3,7 +3,7 @@ import Foundation
 /// マイファンドのルックスルー計算。入力は最新 FY の Summary 一株指標（`eps` / `bps`、円/株）。
 /// Notes EPS は使わない。欠測は `nil`（UI は「—」）で、合計からも除外する。
 enum FundMath {
-    /// Summary 最新 FY の一株指標。単位は円/株（本表の百万円とは別）。
+    /// Summary 最新 FY の一株指標。単位は円/株。
     struct PerShare: Equatable, Sendable {
         var fyEnd: String? = nil
         var epsYen: Double? = nil

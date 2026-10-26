@@ -5,6 +5,8 @@ import Foundation
 
 /// `company_financials` 組立が読む本表水準値（円単位）。派生指標は含まない。
 struct StatementFinancialsValues {
+    /// 本表金額の通貨（ISO 4217、`AmountUnit.currency(unitRef:)`）。外貨建て開示（6269 の USD）を区別する。
+    var currency: String?
     var sales: Double?
     var salesLabel: String?
     var operatingProfit: Double?
@@ -110,15 +112,19 @@ enum StatementFinancialsResolver {
             statementTypes: [.balanceSheet, .incomeStatement, .cashFlow, .changesInEquity]
         ) else { return nil }
 
+        var bundle: ResolveBundle
         if accountingStandard == "US-GAAP" {
-            return ResolveBundle(
+            bundle = ResolveBundle(
                 values: resolveFromUSGAAPStatement(year, tagElements: tagElements),
                 incomeStatement: year.incomeStatement,
                 skipSgaJev: true)
+        } else {
+            bundle = resolveFromStructuredStatement(
+                year, tagElements: tagElements, accountingStandard: accountingStandard,
+                edinetIndustry: edinetIndustry, sgaTagPolicy: sgaTagPolicy)
         }
-        return resolveFromStructuredStatement(
-            year, tagElements: tagElements, accountingStandard: accountingStandard,
-            edinetIndustry: edinetIndustry, sgaTagPolicy: sgaTagPolicy)
+        bundle.values.currency = year.currency
+        return bundle
     }
 
     // MARK: - J-GAAP / IFRS（構造化 XBRL タグ）

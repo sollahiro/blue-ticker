@@ -10,10 +10,10 @@
 
 import Foundation
 
-enum AmountUnit {
+public enum AmountUnit {
     /// 公開契約の単位コード（応答の `units` マップの値）。金額は通貨に依らず `currency_amount`、
     /// 通貨は応答の `currency` が持つ。
-    enum Code: String, Sendable, CaseIterable {
+    public enum Code: String, Sendable, CaseIterable {
         case currencyAmount = "currency_amount"
         case currencyPerShare = "currency_per_share"
         case shares
@@ -31,7 +31,7 @@ enum AmountUnit {
         var multiplier: Double
     }
 
-    static let jpy = "JPY"
+    public static let jpy = "JPY"
 
     /// 接頭辞付きの単位語。部分一致で探すときはこの順に当てる（外貨 → 十億円 → 百万円 → 千円 → 億円 → 兆円。
     /// 十億円を億円より先に当てる。兆円は本文の「1兆円」に当たりやすいので最後）。素の「円」は部分一致では使わない（「円/株」「円安」に当たる）。
@@ -132,14 +132,16 @@ enum AmountUnit {
     // MARK: - XBRL unitRef
 
     /// `unitRef` が1株当たり金額か（`JPYPerShares` / `USDPerShares` など）。
-    static func isPerShare(unitRef: String?) -> Bool {
+    public static func isPerShare(unitRef: String?) -> Bool {
         guard let unitRef else { return false }
         return unitRef.hasSuffix("PerShares") || unitRef.hasSuffix("PerShare")
     }
 
     /// `unitRef` の通貨（ISO 4217）。`JPY` / `USD` / `JPYPerShares` など通貨建てだけ。株数・pure は nil。
-    static func currency(unitRef: String?) -> String? {
+    /// HTML 表から組んだ行の `yen` も JPY として読む。
+    public static func currency(unitRef: String?) -> String? {
         guard var unit = unitRef?.trimmingCharacters(in: .whitespaces), !unit.isEmpty else { return nil }
+        if unit == "yen" { return jpy }
         for suffix in ["PerShares", "PerShare"] where unit.hasSuffix(suffix) {
             unit = String(unit.dropLast(suffix.count))
         }
@@ -148,9 +150,10 @@ enum AmountUnit {
     }
 
     /// `unitRef` の単位コード。pure（比率・人数など意味がタグで決まる）は nil。
-    static func code(unitRef: String?) -> Code? {
+    public static func code(unitRef: String?) -> Code? {
         guard let unitRef else { return nil }
         if unitRef == "shares" || unitRef == "Shares" { return .shares }
+        if unitRef == "yen_per_share" { return .currencyPerShare }
         guard currency(unitRef: unitRef) != nil else { return nil }
         return isPerShare(unitRef: unitRef) ? .currencyPerShare : .currencyAmount
     }

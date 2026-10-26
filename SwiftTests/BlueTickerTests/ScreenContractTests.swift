@@ -30,6 +30,19 @@ import Testing
         #expect(abs(cagr - 10) < 1e-9)
     }
 
+    /// 外貨建ての最新期は金額指標（sales / cfo / fcf）を持たない（円の閾値と比べられない）。比率は残す。
+    @Test func screenRowDropsAmountMetricsForForeignCurrencyYear() throws {
+        let row = try #require(try response(years: [
+            ["fy_end": "2025-12-31", "currency": "USD", "sales": 4581.0, "cfo": 500.0, "capex": 100.0,
+             "roic": 7.0],
+        ]).screenRow())
+        #expect(row[.sales] == nil)
+        #expect(row[.cfo] == nil)
+        #expect(row[.fcf] == nil)
+        #expect(row[.roic] == 7)
+        #expect(row[.cfoMargin] != nil)
+    }
+
     @Test func screenRowDerivesSalesCagr3yFromMoreThanThreeYears() throws {
         let row = try response(years: [
             ["fy_end": "2021-03-31", "sales": 27_214_594.0],
@@ -245,7 +258,7 @@ import Testing
 
     @Test func parseScreenQueryDefaultsAndRanges() throws {
         let query = try parseScreenQuery([
-            "sector": "電気機器", "roic_min": "15", "sales_min": "10000", "sales_max": "500000",
+            "sector": "電気機器", "roic_min": "15", "sales_min": "10000000000", "sales_max": "500000000000",
             "net_de_max": "1",
         ]).get()
         #expect(query.sector == "電気機器")
@@ -253,6 +266,7 @@ import Testing
         #expect(query.order == .desc)
         #expect(query.limit == Api.screenLimitDefault)
         #expect(query.ranges[.roic] == ScreenRange(min: 15, max: nil))
+        // クエリは円、`ranges` は格納単位（百万円）。
         #expect(query.ranges[.sales] == ScreenRange(min: 10000, max: 500000))
         #expect(query.ranges[.netDe] == ScreenRange(min: nil, max: 1))
         #expect(query.projectedMetrics == [.sales, .operatingMargin, .roic, .netDe, .salesCagr3y])
@@ -323,7 +337,10 @@ import Testing
         #expect(item?["code"] as? String == "7203")
         #expect(item?["period_end"] as? String == "2025-03-31")
         #expect(item?["roic"] as? Double == 10)
-        #expect(item?["sales"] as? Double == 1100)
+        #expect(item?["sales"] as? Double == 1_100_000_000)
+        #expect(json["currency"] as? String == "JPY")
+        #expect((json["units"] as? [String: String])?["sales"] == "currency_amount")
+        #expect((json["units"] as? [String: String])?["roic"] == "percent")
         #expect(item?["net_de"] is NSNull)
         #expect(item?["operating_margin"] is NSNull)
         #expect(item?["sales_cagr_3y"] is NSNull)

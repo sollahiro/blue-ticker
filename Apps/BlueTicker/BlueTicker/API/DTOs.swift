@@ -49,13 +49,15 @@ struct FinancialsResponse: Codable {
     var name: String
     var sector: String
     var market: String
-    var currency: String
-    var unit: String
+    /// 全年度が同じ通貨のときだけ値がある（混在は null）。年度ごとは `years[].currency`。
+    var currency: String?
+    /// キー → 単位コード（`currency_amount` は通貨の基本単位）。
+    var units: [String: String]?
     var years: [FinancialsYear]
 
     enum CodingKeys: String, CodingKey {
         case schemaVersion = "schema_version"
-        case code, name, sector, market, currency, unit, years
+        case code, name, sector, market, currency, units, years
     }
 }
 
@@ -65,6 +67,8 @@ struct FinancialsYear: Codable, Hashable, Identifiable {
     var fyEnd: String?
     var financialPeriod: String?
     var docId: String?
+    /// 金額の通貨（ISO 4217）。金額は通貨の基本単位（円なら円）。
+    var currency: String?
 
     var sales: Double?
     var grossProfit: Double?
@@ -90,7 +94,7 @@ struct FinancialsYear: Codable, Hashable, Identifiable {
     var nonCurrentAssets: Double?
     var currentLiabilities: Double?
     var netAssets: Double?
-    /// 最新 FY の Summary 一株当たり当期純利益。単位は円/株（本表の百万円ではない）。
+    /// 最新 FY の Summary 一株当たり当期純利益。単位は円/株。
     var eps: Double?
     /// 最新 FY の Summary 一株当たり純資産。単位は円/株。
     var bps: Double?
@@ -115,6 +119,7 @@ struct FinancialsYear: Codable, Hashable, Identifiable {
         case fyEnd = "fy_end"
         case financialPeriod = "financial_period"
         case docId = "doc_id"
+        case currency
         case sales
         case grossProfit = "gross_profit"
         case grossProfitMargin = "gross_profit_margin"

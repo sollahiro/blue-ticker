@@ -88,13 +88,17 @@ package func loadStoredShares(code: String, docId: String?, db: Database) async 
     if anchorDocID == nil, case .found(let body) = issued, let found = body["doc_id"] as? String {
         anchorDocID = found
     }
-    var incomeStatement: [StatementLineItem] = []
-    if let anchorDocID, let row = try await CompanyStatement.find(anchorDocID, on: db),
-        row.code == String(code.prefix(4)), isServableStatementCacheVersion(row.cacheVersion)
-    {
-        incomeStatement = row.payload.incomeStatement
-    }
+    let incomeStatement = try await loadStoredStatementYear(code: code, docID: anchorDocID, db: db)?
+        .incomeStatement ?? []
     return composeShares(perShare: perShare, issuedShares: issued, incomeStatement: incomeStatement)
+}
+
+/// 同じ書類の格納済み statement（read 可能な版のときだけ）。通貨や1株当たり行を引くのに使う。
+package func loadStoredStatementYear(code: String, docID: String?, db: Database) async throws -> StatementYear? {
+    guard let docID, let row = try await CompanyStatement.find(docID, on: db),
+        row.code == String(code.prefix(4)), isServableStatementCacheVersion(row.cacheVersion)
+    else { return nil }
+    return row.payload
 }
 
 /// `shares` が発行済株式の注記行を使ってよいか。旧版の推移の表パーサが付けた円単位の警告
@@ -141,16 +145,23 @@ package func composeShares(
             }
         }
     }
+    let currency = incomeStatement.lazy
+        .filter { !AmountUnit.isPerShare(unitRef: $0.unit) }
+        .compactMap { AmountUnit.currency(unitRef: $0.unit) }
+        .first ?? AmountUnit.jpy
     // 継続・非継続は基本的／希薄化後それぞれの直後に置く。親の行が無ければ（有報に載らない等）
-    // 継続・非継続も出さない（内訳だけが浮くのを避ける）。円以外の単位は混ぜない。
+    // 継続・非継続も出さない（内訳だけが浮くのを避ける）。書類の通貨以外の1株当たり金額は混ぜない。
     for (tag, key, label, after) in sharesOperationsPerShareItems.reversed() {
         guard let index = items.firstIndex(where: { $0.key == after }),
-            let line = incomeStatement.first(where: { $0.tag == tag && $0.unit == "JPYPerShares" })
+            let line = incomeStatement.first(where: {
+                $0.tag == tag && AmountUnit.isPerShare(unitRef: $0.unit)
+                    && AmountUnit.currency(unitRef: $0.unit) == currency
+            })
         else { continue }
         items.insert(SharesItem(key: key, label: label, value: line.value, unit: "yen_per_share"), at: index + 1)
     }
     if let code, let docID, !items.isEmpty {
-        return .found(SharesResponse(code: code, docId: docID, items: items).jsonObject())
+        return .found(SharesResponse(code: code, docId: docID, currency: currency, items: items).jsonObject())
     }
     if case .notApplicable(let reason) = perShare { return .notApplicable(reason: reason) }
     if case .notApplicable(let reason) = issuedShares { return .notApplicable(reason: reason) }

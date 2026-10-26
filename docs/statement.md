@@ -25,7 +25,7 @@
 
 ## 契約（骨組み）
 
-`StatementContract.swift`: `statementCacheVersion` / min servable、`StatementLineItem`（tag, label, value, unit, order, section?, is_total?, components?）。SS は合計列のみ（`changes_in_equity`）。
+`StatementContract.swift`: `statementCacheVersion` / min servable、`StatementLineItem`（tag, label, value, unit, order, section?, is_total?, components?）。SS は合計列のみ（`changes_in_equity`）。格納の `unit` は unitRef（JPY / USD / JPYPerShares / yen 等）のまま、応答では単位コード（`currency_amount` / `currency_per_share` / `shares`、読めないものは null）に直し、年度に `currency`（BS → PL → CF の最初の金額行の通貨）を付ける（schema 2）。
 
 行の `label` は presentation の `preferredLabel` が指すロールの文言。`preferredLabel` が無い arc は提出ラベル（標準ロール優先で1つに収束）を使う。ただし収束したラベルが別の表の arc が `preferredLabel` で指すロール（セグメント表用の positiveLabel / alt 等）の文言なら、本表には標準ロールの文言（提出側、無ければ標準タクソノミ）を出す（8766 S100YLS8 / 8725 S100YNCJ の `ProfitLossAttributableToOwnersOfParentIFRS` は「親会社の所有者」。どの arc も指さない alt だけの BS 科目 2413 S100YJ25「短期借入金」は従来どおり）。
 
@@ -33,7 +33,7 @@ IFRS の1株当たり利益の行（`Xbrl.ifrsPerShareStatementTags`。基本的
 
 ## shares
 
-EPS・希薄化後 EPS・BPS・発行済株式総数を、有報の記載そのままで返す（`SharesResponse` = {code, doc_id, items}。`StatementNotesContract.swift`）。items の `key` は `eps` / `continuing_eps` / `discontinued_eps` / `diluted_eps` / `continuing_diluted_eps` / `discontinued_diluted_eps` / `bps` / `issued_shares`（この順）、`label` は有報の表示名、`unit` は `yen_per_share` / `shares`。開示の無い key は行ごと省く。
+EPS・希薄化後 EPS・BPS・発行済株式総数を、有報の記載そのままで返す（`SharesResponse` = {code, doc_id, currency, items}。`StatementNotesContract.swift`）。items の `key` は `eps` / `continuing_eps` / `discontinued_eps` / `diluted_eps` / `continuing_diluted_eps` / `discontinued_diluted_eps` / `bps` / `issued_shares`（この順）、`label` は有報の表示名、`unit` は `currency_per_share` / `shares`（格納は `yen_per_share`）。`currency` は同じ書類の損益計算書の通貨（statement が無ければ JPY）。開示の無い key は行ごと省く。
 
 - 値の源泉は財務諸表注記取り込み（`company_statement_notes`）の2注記。`per_share_information`（EPS・希薄化後 EPS・BPS）と `issued_shares_and_capital` の期末発行済株式数（`as_of_period_end.issued_shares`、【株式の総数等】→主要な経営指標等の推移のタグ）。書類は 1株当たり情報の行に揃え、別書類の発行済株式は混ぜない。
 - 資本金・資本準備金と「発行済株式総数、資本金等の推移」の表は返さず、取り込みもしない（提出会社単体の値で、連結の分析にほとんど使わないため）。`issued_shares_and_capital` の行は期末の発行済株式総数だけ。`cache_version` は据え置き（期末値の意味は変わらない。旧行が持つ資本金・推移のキーは読まない）。旧表パーサの円単位警告（`issued_shares_unit_unresolved`）だけで要確認の旧行も、発行済株式数は shares が返す。

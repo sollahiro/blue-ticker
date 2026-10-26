@@ -598,13 +598,13 @@ struct BreakdownView: View {
             switch self {
             case .salesChange:
                 guard year.sales != nil, prior.sales != nil, prior.grossProfitMargin != nil else { return nil }
-                return "(\(Format.autoYen(year.sales)) − \(Format.autoYen(prior.sales))) × \(Format.percent(prior.grossProfitMargin))"
+                return "(\(Format.autoYen(year.sales, currency: year.currency)) − \(Format.autoYen(prior.sales, currency: year.currency))) × \(Format.percent(prior.grossProfitMargin))"
             case .grossMarginChange:
                 guard year.sales != nil, year.grossProfitMargin != nil, prior.grossProfitMargin != nil else { return nil }
-                return "\(Format.autoYen(year.sales)) × (\(Format.percent(year.grossProfitMargin)) − \(Format.percent(prior.grossProfitMargin)))"
+                return "\(Format.autoYen(year.sales, currency: year.currency)) × (\(Format.percent(year.grossProfitMargin)) − \(Format.percent(prior.grossProfitMargin)))"
             case .sgaChange:
                 guard year.sga != nil, prior.sga != nil else { return nil }
-                return "−(\(Format.autoYen(year.sga)) − \(Format.autoYen(prior.sga)))"
+                return "−(\(Format.autoYen(year.sga, currency: year.currency)) − \(Format.autoYen(prior.sga, currency: year.currency)))"
             case .roicMargin:
                 guard year.nopatMargin != nil, prior.nopatMargin != nil, prior.investedCapitalTurnover != nil else {
                     return nil
@@ -656,7 +656,7 @@ struct BreakdownView: View {
                     FactorRow(kind: .grossMarginChange, value: year.grossMarginChangeImpact),
                     FactorRow(kind: .sgaChange, value: year.sgaChangeImpact),
                 ],
-                format: Format.autoYen,
+                format: { Format.autoYen($0, currency: year.currency) },
                 totalTitle: "前年差",
                 totalValue: year.businessProfitChange
             )
@@ -735,7 +735,7 @@ struct BreakdownView: View {
     private func metricLabel(_ year: FinancialsYear) -> String {
         switch metric {
         case .businessProfit:
-            return Format.autoYen(year.businessProfit)
+            return Format.autoYen(year.businessProfit, currency: year.currency)
         case .roic:
             return Format.percent(year.roic, digits: 2)
         case .roe:

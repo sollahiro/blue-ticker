@@ -118,6 +118,8 @@ struct FinancialsYear: Codable, Sendable {
     var financialPeriod: String?
     var curPerType: String?
     var docId: String?
+    /// 金額の通貨（ISO 4217）。nil は円（通貨を持つ前の格納行）。
+    var currency: String?
     var salesLabel: String?
     var grossProfitLabel: String?
     var opLabel: String?
@@ -199,6 +201,7 @@ struct FinancialsYear: Codable, Sendable {
         case financialPeriod = "financial_period"
         case curPerType = "cur_per_type"
         case docId = "doc_id"
+        case currency
         case salesLabel = "sales_label"
         case grossProfitLabel = "gross_profit_label"
         case opLabel = "op_label"
@@ -276,6 +279,7 @@ struct FinancialsYear: Codable, Sendable {
             case .financialPeriod: try container.encode(financialPeriod, forKey: key)
             case .curPerType: try container.encode(curPerType, forKey: key)
             case .docId: try container.encode(docId, forKey: key)
+            case .currency: try container.encode(currency ?? AmountUnit.jpy, forKey: key)
             case .salesLabel: try container.encode(salesLabel, forKey: key)
             case .grossProfitLabel: try container.encode(grossProfitLabel, forKey: key)
             case .opLabel: try container.encode(opLabel, forKey: key)
@@ -356,6 +360,7 @@ extension FinancialsYear {
         financialPeriod = entry.financialPeriod
         curPerType = raw.curPerType
         docId = calc.docID
+        currency = raw.currency
         salesLabel = raw.salesLabel
         grossProfitLabel = calc.grossProfitLabel
         opLabel = calc.opLabel
@@ -436,6 +441,7 @@ extension FinancialsYear {
     func toYearEntry() -> YearEntry {
         var raw = RawData.blank
         raw.curPerType = curPerType
+        raw.currency = currency
         raw.salesLabel = salesLabel
         raw.sales = sales
         raw.op = operatingProfit
@@ -569,9 +575,10 @@ extension FinancialsYear {
         dict["inventory_change_impact"] = delta(inventory, prior?.inventory)
         dict["accounts_payable_change_impact"] = delta(prior?.accountsPayable, accountsPayable)
         dict["ccc_change"] = delta(ccc, prior?.ccc)
-        dict["dso_change_impact"] = delta(dso, prior?.dso)
-        dict["dio_change_impact"] = delta(dio, prior?.dio)
-        dict["dpo_change_impact"] = delta(prior?.dpo, dpo)
+        // CCC 前年差の要因（日）。和が ccc_change に一致する向き（DPO は前期 − 当期）。
+        dict["ccc_dso_effect"] = delta(dso, prior?.dso)
+        dict["ccc_dio_effect"] = delta(dio, prior?.dio)
+        dict["ccc_dpo_effect"] = delta(prior?.dpo, dpo)
         return dict
     }
 }
@@ -579,12 +586,64 @@ extension FinancialsYear {
 // MARK: - Summary 射影（REST `?fields=`）
 
 /// 射影しても落とさない年度識別キー。どの年度・どの書類の値かを失わせないため常に残す。
-public let financialsSummaryIdentityKeys: Set<String> = ["fy_end", "financial_period", "doc_id"]
+public let financialsSummaryIdentityKeys: Set<String> = ["fy_end", "financial_period", "doc_id", "currency"]
 
 /// `?fields=` に指定できる Summary 公開キー（`years[]` 要素のキー）。Waterfall 専用キーは含まない。
 public let financialsSummaryFieldKeys: Set<String> = Set(
     FinancialsYear.CodingKeys.allCases.map(\.rawValue)
 ).subtracting(FinancialsYear.analysisOnlyKeys)
+
+// MARK: - 単位（schema 3）
+
+/// financials / waterfall の `years[]` 各キーの単位。応答の `units` に載せる正本。
+/// 金額（`currency_amount`）は基本単位（円・ドル）の整数、通貨は `years[].currency`。
+/// waterfall の要因（`*_effect` / `*_change_impact`）は、和が親の前年差に一致する向きの符号。
+let financialsUnits: [String: AmountUnit.Code] = {
+    var units: [String: AmountUnit.Code] = [:]
+    let amounts = [
+        "sales", "gross_profit", "sga", "operating_profit", "nopat", "net_profit",
+        "interest_bearing_debt", "interest_expense", "total_assets", "current_assets",
+        "non_current_assets", "ppe_total", "current_liabilities", "non_current_liabilities",
+        "net_assets", "accounts_receivable", "inventory", "accounts_payable", "working_capital",
+        "cash_equivalents", "net_cash", "cfo", "cfi", "cfc", "capex", "buyback", "rd",
+        "cf_treasury_stock", "dividend_ss", "dividend_paid_cf",
+        "business_profit", "business_profit_change", "sales_change_impact",
+        "gross_margin_change_impact", "sga_change_impact",
+        "net_cash_change", "cash_change_impact", "debt_change_impact", "working_capital_change",
+        "accounts_receivable_change_impact", "inventory_change_impact", "accounts_payable_change_impact",
+    ]
+    for key in amounts { units[key] = .currencyAmount }
+    for key in [
+        "gross_profit_margin", "operating_margin", "effective_tax_rate", "roe", "roic",
+        "nopat_margin", "business_profit_margin", "net_margin",
+    ] { units[key] = .percent }
+    for key in [
+        "roic_delta", "roic_margin_effect", "roic_turnover_effect", "roe_delta",
+        "roe_net_margin_effect", "roe_asset_turnover_effect", "roe_leverage_effect",
+    ] { units[key] = .percentagePoints }
+    for key in ["invested_capital_turnover", "net_de", "asset_turnover", "financial_leverage"] {
+        units[key] = .times
+    }
+    for key in ["dso", "dio", "dpo", "ccc", "ccc_change", "ccc_dso_effect", "ccc_dio_effect", "ccc_dpo_effect"] {
+        units[key] = .days
+    }
+    units["eps"] = .currencyPerShare
+    units["bps"] = .currencyPerShare
+    units["issued_shares"] = .shares
+    units["employees"] = .persons
+    return units
+}()
+
+/// 格納値（百万通貨単位）の金額キーを基本単位の整数へ直す。それ以外の値は変えない。
+func financialsPublicYearObject(_ object: [String: Any]) -> [String: Any] {
+    var out = object
+    for (key, value) in object where financialsUnits[key] == .currencyAmount {
+        guard let number = value as? Double ?? (value as? Int).map(Double.init) else { continue }
+        // 整数値の Double（JSON では小数点なしで出る）。円の上限 ~4e14 は Double で正確に表せる。
+        out[key] = (number * Financial.millionYen).rounded()
+    }
+    return out
+}
 
 /// `?fields=` クエリの解析結果。
 public enum FinancialsFieldsQuery: Sendable, Equatable {
@@ -717,34 +776,18 @@ extension FinancialsResponse {
     }
 
     /// 全キーを含む JSON オブジェクト（years 各要素も null 補完する）。サーバー応答用。
-    /// public: BltServerCore の 財務取り込み read 経路が格納済みレスポンスを JSON へ落とすために使う。
+    /// 金額は基本単位（円・ドル）へ直し、`units` を付ける（`publicEnvelope`）。
     public func jsonObject() -> [String: Any] {
-        [
-            "schema_version": schemaVersion,
-            "code": code,
-            "name": name,
-            "sector": sector,
-            "market": market,
-            "currency": currency,
-            "unit": unit,
-            "years": years.map { $0.jsonObject() },
-        ]
+        publicEnvelope(years.map { $0.jsonObject() })
     }
 
     /// Summary（financials）応答用の全キー JSON オブジェクト（`years` 各要素は
     /// `analysisOnlyKeys` を除いた水準値のみ）。public: BltServerCore の financials read 経路が使う。
     /// `fields` を渡すと `years[]` の各要素をそのキー集合へ射影する（封筒キーは常に全て返す）。
     public func summaryJsonObject(fields: Set<String>? = nil) -> [String: Any] {
-        [
-            "schema_version": schemaVersion,
-            "code": code,
-            "name": name,
-            "sector": sector,
-            "market": market,
-            "currency": currency,
-            "unit": unit,
-            "years": years.map { $0.summaryJsonObject(fields: fields) },
-        ]
+        publicEnvelope(
+            years.map { $0.summaryJsonObject(fields: fields) },
+            keys: fields.map { $0.union(financialsSummaryIdentityKeys) } ?? financialsSummaryFieldKeys)
     }
 
     /// Waterfall（waterfall）応答用の全キー JSON オブジェクト。`years`（新しい順）を隣接ペアで走査し、
@@ -753,17 +796,31 @@ extension FinancialsResponse {
     /// が保持する①②③の増減分解フィールドは ingest 時に計算済みで、trim 済みの集合とも整合している）。
     /// public: BltServerCore の waterfall read 経路が使う。
     public func analysisJsonObject() -> [String: Any] {
-        [
-            "schema_version": schemaVersion,
+        publicEnvelope(
+            years.indices.map { i in
+                years[i].analysisJsonObject(prior: i + 1 < years.count ? years[i + 1] : nil)
+            },
+            keys: Set(financialsUnits.keys).union(financialsSummaryIdentityKeys))
+    }
+
+    /// 公開封筒。格納値は百万（通貨単位）建てなので、`currency_amount` のキーだけ基本単位の整数へ直す。
+    /// `currency` は全年度が同じ通貨のときだけ値を持つ（年度ごとの `years[].currency` が正）。
+    /// `schema_version` は格納行の値ではなく現行の契約版。
+    private func publicEnvelope(
+        _ yearObjects: [[String: Any]], keys: Set<String>? = nil
+    ) -> [String: Any] {
+        let converted = yearObjects.map(financialsPublicYearObject)
+        let currencies = Set(years.map { $0.currency ?? AmountUnit.jpy })
+        let unitKeys = keys ?? Set(financialsUnits.keys)
+        return [
+            "schema_version": Api.financialsSchemaVersion,
             "code": code,
             "name": name,
             "sector": sector,
             "market": market,
-            "currency": currency,
-            "unit": unit,
-            "years": years.indices.map { i in
-                years[i].analysisJsonObject(prior: i + 1 < years.count ? years[i + 1] : nil)
-            },
+            "currency": currencies.count <= 1 ? (currencies.first ?? AmountUnit.jpy) as Any : NSNull(),
+            "units": financialsUnits.filter { unitKeys.contains($0.key) }.mapValues(\.rawValue),
+            "years": converted,
         ]
     }
 

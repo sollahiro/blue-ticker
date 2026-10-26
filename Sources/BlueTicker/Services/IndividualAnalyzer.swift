@@ -150,6 +150,7 @@ struct IndividualAnalyzer {
         raw.curFYEn = fyEnd
         raw.curPerType = doc["period_type"] as? String ?? "FY"
         raw.discDate = doc["submitDateTime"] as? String
+        raw.currency = statementMain?.currency
         raw.sales = statementMain?.sales.map { $0 / millionYen }
         raw.op = statementMain?.operatingProfit.map { $0 / millionYen }
         raw.np = statementMain?.netProfit.map { $0 / millionYen }
