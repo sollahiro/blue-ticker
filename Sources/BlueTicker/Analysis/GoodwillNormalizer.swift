@@ -167,7 +167,7 @@ enum GoodwillNormalizer {
                 denominator: snapshot.denominator, denominatorTag: snapshot.denominatorTag)
         }
         if noneDisclosed {
-            return CapexMetricTotalsPayload(denominator: 0, denominatorTag: "none_disclosed")
+            return CapexMetricTotalsPayload(denominator: 0, denominatorTag: goodwillCellStatusNoneDisclosed)
         }
         return nil
     }

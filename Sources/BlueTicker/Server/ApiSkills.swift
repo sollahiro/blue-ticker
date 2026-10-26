@@ -444,7 +444,10 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                 axis=goodwill は報告セグメント別ののれんです。行は名前付きセル opening（期首未償却残高）/
                 closing（期末未償却残高）/ amortization（当期償却額）/ impairment（のれんの減損損失）で、
                 行の amount は使いません。欠測セルは null です。分母はセルごとに開示された合計です
-                （セグメントの和ではありません）。固定資産全体の減損表は使いません。該当事項なしは 0 です。
+                （セグメントの和ではありません）。セル分母の status は disclosed（開示された合計）/
+                none_disclosed（該当事項なし。denominator 0、denominator_tag null）です。
+                行の in_total=true（segment / reconciling）を足すと分母になり、subtotal は false です。
+                固定資産全体の減損表は使いません。該当事項なしは 0 です。
                 旧のれん償却額軸は廃止です（unknown axis と同じ 404）。
                 interest_bearing_debt は社債・借入金とリース負債を1表にした有利子負債です。
                 行は名前付きセル opening（期首残高）/ closing（期末残高）、

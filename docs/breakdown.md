@@ -76,7 +76,7 @@ geography は変えない。本邦90％の `not_found` は既存の Jev ゲー�
 
 旧 `segment_assets` / `capital_expenditures` / `noncurrent_asset_additions` / `capital_expenditures_overview` は REST / MCP / skills から削除した（breaking。`apiSkillsSchemaVersion` 2、`breakdown-capex-v1`）。
 
-旧 `goodwill_amortization` は `goodwill` の `amortization` セルへ統合した（breaking。`apiSkillsSchemaVersion` 8、`breakdown-goodwill-v3`、read 床 3）。公開 JSON は capex と同様に行の `amount` を出さず、セルごとの分母を出す。分母は開示された合計であり、セグメントの和ではない。固定資産全体の減損表（`ImpairmentLossEL` / 「報告セグメントごとの固定資産の減損損失」）は使わない。該当事項なしは 0。会社合計の種類別のれんは対象外。`fin-vN` は上げない。
+旧 `goodwill_amortization` は `goodwill` の `amortization` セルへ統合した（breaking。`apiSkillsSchemaVersion` 8、`breakdown-goodwill-v3`、read 床 3）。公開 JSON は capex と同様に行の `amount` を出さず、セルごとの分母を出す。分母は開示された合計であり、セグメントの和ではない。セル分母は `status`（`disclosed` / `none_disclosed`）を持ち、該当事項なしは `denominator` 0・`denominator_tag` null。行の `in_total`（subtotal だけ false）を足すと分母になる。固定資産全体の減損表（`ImpairmentLossEL` / 「報告セグメントごとの固定資産の減損損失」）は使わない。該当事項なしは 0。会社合計の種類別のれんは対象外。`fin-vN` は上げない。
 
 ## 契約・永続化
 

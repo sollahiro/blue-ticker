@@ -296,6 +296,40 @@ import Foundation
         return (facts, XBRLUtils.breakdownMemberLabels(in: dir))
     }
 
+    // source: code=9537 fy_end=2026-03-31 doc_id=S100YIW6 page=46 field=employees
+    // `XxxSegmentsReportableSegmentsMember` は葉のセグメント名。小計に落とさない。
+    @Test func hokurikuGasSegmentsReportableSegmentsLeavesStaySegments() async throws {
+        guard await Self.ensureAvailable("S100YIW6") else { return }
+        let (facts, labels) = Self.employeesFactsAndLabels("S100YIW6")
+        let snapshot = try #require(
+            BreakdownNormalizer.normalizeEmployees(
+                facts: facts, total: 652, axis: "employees", labelsByTag: labels))
+        for (member, amount) in [
+            ("EngineeringSegmentsReportableSegmentsMember", 36.0),
+            ("LPGSegmentsReportableSegmentsMember", 12.0),
+            ("LivingServiceSegmentsReportableSegmentsMember", 48.0),
+            ("PlumingSegmentsReportableSegmentsMember", 67.0),
+        ] {
+            let row = try #require(snapshot.rows.first { $0.labelRaw == member })
+            #expect(row.rowKind == "segment")
+            #expect(row.amount == amount)
+        }
+    }
+
+    // source: code=1605 fy_end=2020-12-31 doc_id=S100L16P page=14 field=employees
+    // 日本〜米州を結合したセル 2,893 人＋全社（共通）270 人の表。報告セグメントを segment に残す。
+    @Test func inpexSoleReportableSegmentsMemberStaysSegment() async throws {
+        guard await Self.ensureAvailable("S100L16P") else { return }
+        let (facts, labels) = Self.employeesFactsAndLabels("S100L16P")
+        let snapshot = try #require(
+            BreakdownNormalizer.normalizeEmployees(
+                facts: facts, total: 3_163, axis: "employees", labelsByTag: labels))
+        let row = try #require(snapshot.rows.first { $0.labelRaw == "ReportableSegmentsMember" })
+        #expect(row.rowKind == "segment")
+        #expect(row.amount == 2_893)
+        #expect(snapshot.needsReview == false)
+    }
+
     @Test func yokogawaEmployeesAndRDMatchDisclosedSegmentTotals() async throws {
         guard await Self.ensureAvailable("S100VY8X") else { return }
         let (facts, labels) = Self.employeesFactsAndLabels("S100VY8X")
