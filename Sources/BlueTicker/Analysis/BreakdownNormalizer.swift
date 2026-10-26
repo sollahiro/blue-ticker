@@ -694,11 +694,11 @@ enum BreakdownNormalizer {
             }
         }
         guard let amountTag, !perMember.isEmpty else { return nil }
-        perMember = withEntityTotal(
-            perMember, facts: facts, tag: amountTag, period: period, requireInstant: requireInstant)
+        // EntityTotal は分母だけに使う（会社合計の種類別は本軸の行にしない）。
         let entity = resolveEntityTotal(
             facts: facts, tag: amountTag, period: period, requireInstant: requireInstant)
-        let resolvedTotal = total ?? entity?.value
+        let taggedTotal = perMember[countBasisReportableSegmentsMemberName]?.value
+        let resolvedTotal = total ?? entity?.value ?? taggedTotal
         let resolvedTag = totalTag ?? entity?.tag ?? amountTag
 
         return buildCountBasisSnapshot(
@@ -722,18 +722,29 @@ enum BreakdownNormalizer {
         labelsByTag: [String: String], memberParents: [String: String] = [:],
         allowNonConsolidatedEntityTotal: Bool = true,
         useConsolidatedEntityTotalAsDenominatorWhenPresent: Bool = false,
-        allowDerivedSumAsDenominator: Bool = true
+        allowDerivedSumAsDenominator: Bool = true,
+        fallbackDenominatorToReportableSegmentsMember: Bool = false
     ) -> BreakdownSnapshot? {
         guard let amountTag = amountTags.first(where: { tag in
             !resolvePerMember(facts: facts, tag: tag).isEmpty
         }) else { return nil }
+        let members = resolvePerMember(facts: facts, tag: amountTag)
         let perMember = withEntityTotal(
-            resolvePerMember(facts: facts, tag: amountTag), facts: facts, tag: amountTag,
+            members, facts: facts, tag: amountTag,
             allowNonConsolidatedEntityTotal: allowNonConsolidatedEntityTotal)
         guard !perMember.isEmpty else { return nil }
-        let total = resolveEntityTotal(
+        let entity = resolveEntityTotal(
             facts: facts, tag: amountTag,
             allowNonConsolidatedEntityTotal: allowNonConsolidatedEntityTotal)?.value
+        let taggedTotal = members[countBasisReportableSegmentsMemberName]?.value
+        let total: Double?
+        if let entity, entity > 0 {
+            total = entity
+        } else if fallbackDenominatorToReportableSegmentsMember, let taggedTotal, taggedTotal > 0 {
+            total = taggedTotal
+        } else {
+            total = entity
+        }
         let useEntityDenom = useConsolidatedEntityTotalAsDenominatorWhenPresent && total != nil
         return buildCountBasisSnapshot(
             perMember: perMember, amountTag: amountTag, total: total, axis: axis,
@@ -766,7 +777,8 @@ enum BreakdownNormalizer {
             warningPrefix: "goodwill_amortization", labelsByTag: labelsByTag,
             memberParents: memberParents,
             useConsolidatedEntityTotalAsDenominatorWhenPresent: true,
-            allowDerivedSumAsDenominator: false)
+            allowDerivedSumAsDenominator: false,
+            fallbackDenominatorToReportableSegmentsMember: true)
     }
 
     /// のれん専用の減損損失。`ImpairmentLossEL`（固定資産全体）は候補に入れない。
@@ -783,7 +795,8 @@ enum BreakdownNormalizer {
             warningPrefix: "goodwill_impairment", labelsByTag: labelsByTag,
             memberParents: memberParents,
             useConsolidatedEntityTotalAsDenominatorWhenPresent: true,
-            allowDerivedSumAsDenominator: false)
+            allowDerivedSumAsDenominator: false,
+            fallbackDenominatorToReportableSegmentsMember: true)
     }
 
     /// 持分法会計処理される投資。
@@ -962,7 +975,8 @@ enum BreakdownNormalizer {
             amounts[member] = fact.value
         }
         demoteRedundantParentSegments(
-            kinds: &kinds, amounts: amounts, total: total, labelsByTag: labelsByTag)
+            kinds: &kinds, amounts: amounts, total: total, labelsByTag: labelsByTag,
+            memberParents: memberParents)
         dropDuplicatedReconcilingMember(kinds: &kinds, amounts: &amounts, total: total)
         var ofWhichMembers: Set<String> = []
         if applyOfWhichNestedChildDemotion {
@@ -1069,6 +1083,9 @@ enum BreakdownNormalizer {
     /// 入れ子の「小計」member（ラベルまたは名前）。ReportableSegment とタグされていても小計。
     static func isNestedSubtotalMember(_ member: String, label: String?) -> Bool {
         if member.contains("Subtotal") { return true }
+        // 提出者の入れ子グループ（金属セグメント / 機械・溶接セグメント）。
+        // `ProcessedFoodsReportableSegmentsMember` のような葉 member は含まない。
+        if member.contains("SegmentsReportableSegment") { return true }
         let compact = (label ?? "")
             .replacingOccurrences(of: " ", with: "")
             .replacingOccurrences(of: "　", with: "")
@@ -1082,7 +1099,7 @@ enum BreakdownNormalizer {
     /// 候補が複数でも、ラベルまたは名前が入れ子小計なものが1つだけならそれを落とす。
     private static func demoteRedundantParentSegments(
         kinds: inout [String: String], amounts: [String: Double], total: Double?,
-        labelsByTag: [String: String] = [:]
+        labelsByTag: [String: String] = [:], memberParents: [String: String] = [:]
     ) {
         guard let total, total > 0 else { return }
         let included = reconciledAmount(kinds: kinds, amounts: amounts)
@@ -1101,7 +1118,14 @@ enum BreakdownNormalizer {
             let labelled = candidates.filter {
                 isNestedSubtotalMember($0, label: labelsByTag[$0])
             }
-            parent = labelled.count == 1 ? labelled.first : nil
+            if labelled.count == 1 {
+                parent = labelled.first
+            } else {
+                let nestedParents = candidates.filter { member in
+                    amounts.keys.contains { child in memberParents[child] == member }
+                }
+                parent = nestedParents.count == 1 ? nestedParents.first : nil
+            }
         }
         guard let parent else { return }
         kinds[parent] = "subtotal"

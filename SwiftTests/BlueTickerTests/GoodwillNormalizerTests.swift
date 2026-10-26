@@ -69,10 +69,15 @@ import Testing
                 tag: "Goodwill", member: "MetalsSubtotalReportableSegmentsMember",
                 value: 235_000_000,
                 context: "CurrentYearInstant_MetalsSubtotalReportableSegmentsMember"),
+            fact(
+                tag: "Goodwill", member: "MetarsSegmentsReportableSegmentMember",
+                value: 235_000_000,
+                context: "CurrentYearInstant_MetarsSegmentsReportableSegmentMember"),
         ]
         let labels = [
             "AluminumAndCopperReportableSegmentsMember": "アルミ・銅",
             "MetalsSubtotalReportableSegmentsMember": "金属小計",
+            "MetarsSegmentsReportableSegmentMember": "金属セグメント",
         ]
         let snapshot = try #require(
             BreakdownNormalizer.normalizeGoodwill(
@@ -82,8 +87,11 @@ import Testing
             snapshot.rows.first { $0.labelRaw == "AluminumAndCopperReportableSegmentsMember" })
         let subtotal = try #require(
             snapshot.rows.first { $0.labelRaw == "MetalsSubtotalReportableSegmentsMember" })
+        let grouped = try #require(
+            snapshot.rows.first { $0.labelRaw == "MetarsSegmentsReportableSegmentMember" })
         #expect(aluminum.rowKind == "segment")
         #expect(subtotal.rowKind == "subtotal")
+        #expect(grouped.rowKind == "subtotal")
         #expect(snapshot.denominator == 235_000_000)
         #expect(snapshot.needsReview == false)
     }
@@ -187,5 +195,73 @@ import Testing
             GoodwillNoteText.isUnallocated("のれんの償却額及び未償却残高は、報告セグメントに配分しておりません。"))
         #expect(
             GoodwillNoteText.isAmortizationNone("のれんの償却額は発生しておりません。"))
+        let note = """
+            【報告セグメントごとののれんの償却額及び未償却残高に関する情報】
+            前連結会計年度（自 2024年４月１日 至 2025年３月31日）
+            記載すべき該当事項はありません。
+            当連結会計年度（自 2025年４月１日 至 2026年３月31日）
+            のれんの償却額及び未償却残高は、報告セグメントに配分しておりません。
+            のれんの償却額は発生しておりません。
+            【報告セグメントごとの固定資産の減損損失に関する情報】
+            前連結会計年度 該当事項はありません。
+            当連結会計年度 該当事項はありません。
+            """
+        let prior = GoodwillNoteText.headingPeriod(
+            note, heading: GoodwillNoteText.goodwillAmortizationHeading, current: false)
+        let currentImp = GoodwillNoteText.headingPeriod(
+            note, heading: GoodwillNoteText.segmentImpairmentHeading, current: true)
+        #expect(GoodwillNoteText.isNoneDisclosed(prior))
+        #expect(GoodwillNoteText.isNoneDisclosed(currentImp))
+        #expect(GoodwillNoteText.isUnallocated(note))
+    }
+
+    @Test func amortizationDenominatorFallsBackToReportableSegmentsMember() throws {
+        let facts = [
+            fact(
+                tag: "AmortizationOfGoodwillSGA", member: "RetailBusinessUnitReportableSegmentMember",
+                value: 9_462_000_000, context: "CurrentYearDuration_Retail"),
+            fact(
+                tag: "AmortizationOfGoodwillSGA", member: "GlobalBusinessUnitReportableSegmentMember",
+                value: 13_754_000_000, context: "CurrentYearDuration_Global"),
+            fact(
+                tag: "AmortizationOfGoodwillSGA",
+                member: "HeadOfficeAccountsEtcReportableSegmentMember",
+                value: 9_695_000_000, context: "CurrentYearDuration_Head"),
+            fact(
+                tag: "AmortizationOfGoodwillSGA", member: "ReportableSegmentsMember",
+                value: 32_912_000_000, context: "CurrentYearDuration_ReportableSegmentsMember"),
+        ]
+        let snapshot = try #require(BreakdownNormalizer.normalizeGoodwillAmortization(facts: facts))
+        #expect(snapshot.denominator == 32_912_000_000)
+        #expect(snapshot.denominator != 32_911_000_000)
+    }
+
+    @Test func assembleMergesAdjustmentAndUnallocatedReconciling() throws {
+        let closing = BreakdownSnapshot(
+            axis: breakdownAxisGoodwill, denominator: 12_341_000, denominatorTag: "Goodwill",
+            rows: [
+                BreakdownRow(
+                    labelRaw: "UnallocatedAmountsAndEliminationMember", label: "全社・消去",
+                    amount: 12_341_000, share: 1, profit: nil, rowKind: "reconciling")
+            ],
+            sourceKind: breakdownSourceXbrlFacts, needsReview: false, warnings: [])
+        let amortization = BreakdownSnapshot(
+            axis: breakdownAxisGoodwill, denominator: 3_702_000,
+            denominatorTag: "AmortizationOfGoodwillSGA",
+            rows: [
+                BreakdownRow(
+                    labelRaw: "ReconcilingItemsMember", label: "調整額",
+                    amount: 3_702_000, share: 1, profit: nil, rowKind: "reconciling")
+            ],
+            sourceKind: breakdownSourceXbrlFacts, needsReview: false, warnings: [])
+        let payload = try #require(
+            GoodwillNormalizer.assemble(
+                opening: nil, closing: closing, amortization: amortization, impairment: nil))
+        let reconciling = payload.rows.filter { $0.rowKind == "reconciling" }
+        #expect(reconciling.count == 1)
+        #expect(reconciling.first?.label == "全社・消去")
+        #expect(reconciling.first?.closing == 12_341_000)
+        #expect(reconciling.first?.amortization == 3_702_000)
+        #expect(payload.amortization?.denominator == 3_702_000)
     }
 }

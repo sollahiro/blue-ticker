@@ -29,15 +29,27 @@ struct GoodwillNoteFlags: Equatable {
             tag: Xbrl.goodwillUnallocatedToReportableSegmentsTextBlockTag)
         let impairmentCurrent = texts.current(
             tag: Xbrl.segmentImpairmentLossOfNonCurrentAssetsOrGoodwillTextBlockTag)
+        let segmentEtc = Xbrl.segmentInformationEtcTextBlockTags
+            .compactMap { texts.current(tag: $0) }.joined(separator: "\n")
         let unallocatedText = unallocatedCurrent ?? ""
+        let goodwillHeadingCurrent = GoodwillNoteText.headingPeriod(
+            segmentEtc, heading: GoodwillNoteText.goodwillAmortizationHeading, current: true)
+        let goodwillHeadingPrior = GoodwillNoteText.headingPeriod(
+            segmentEtc, heading: GoodwillNoteText.goodwillAmortizationHeading, current: false)
+        let impairmentHeadingCurrent = GoodwillNoteText.headingPeriod(
+            segmentEtc, heading: GoodwillNoteText.segmentImpairmentHeading, current: true)
         return GoodwillNoteFlags(
             unallocatedToReportableSegments: GoodwillNoteText.isUnallocated(unallocatedText)
+                || GoodwillNoteText.isUnallocated(segmentEtc)
                 || unallocatedCurrent != nil,
             openingNoneDisclosed: GoodwillNoteText.isNoneDisclosed(goodwillNotePrior)
-                || GoodwillNoteText.isNoneDisclosed(unallocatedPrior),
+                || GoodwillNoteText.isNoneDisclosed(unallocatedPrior)
+                || GoodwillNoteText.isNoneDisclosed(goodwillHeadingPrior),
             amortizationNoneDisclosed: GoodwillNoteText.isAmortizationNone(unallocatedText)
-                || GoodwillNoteText.isAmortizationNone(goodwillNoteCurrent ?? ""),
-            impairmentNoneDisclosed: GoodwillNoteText.isNoneDisclosed(impairmentCurrent))
+                || GoodwillNoteText.isAmortizationNone(goodwillNoteCurrent ?? "")
+                || GoodwillNoteText.isAmortizationNone(goodwillHeadingCurrent ?? ""),
+            impairmentNoneDisclosed: GoodwillNoteText.isNoneDisclosed(impairmentCurrent)
+                || GoodwillNoteText.isNoneDisclosed(impairmentHeadingCurrent))
     }
 }
 
@@ -86,12 +98,11 @@ enum GoodwillNormalizer {
         func append(from snapshot: BreakdownSnapshot?, cell: GoodwillCell) {
             guard let snapshot else { return }
             for source in snapshot.rows {
+                if source.labelRaw == Xbrl.entityTotalMemberName { continue }
                 let kind = remappedRowKind(source)
+                if kind == breakdownRowKindEntityTotal { continue }
                 if let existing = index[source.labelRaw], rows.indices.contains(existing) {
                     write(cell, amount: source.amount, into: &rows[existing])
-                    if kind == breakdownRowKindEntityTotal {
-                        rows[existing].rowKind = breakdownRowKindEntityTotal
-                    }
                     continue
                 }
                 var row = BreakdownRowPayload(
@@ -108,6 +119,7 @@ enum GoodwillNormalizer {
         append(from: amortization, cell: .amortization)
         append(from: impairment, cell: .impairment)
 
+        mergeDuplicateReconcilingRows(&rows)
         applyNoneDisclosedZeros(to: &rows, notes: notes)
 
         var warnings: [String] = []
@@ -160,6 +172,31 @@ enum GoodwillNormalizer {
         return nil
     }
 
+    /// セグメント表の調整額と、のれん表の全社・消去が別 member に載るとき1行にまとめる。
+    /// セルは period ごとに違う金額なので、同額判定はしない。
+    private static func mergeDuplicateReconcilingRows(_ rows: inout [BreakdownRowPayload]) {
+        let adjustment = "ReconcilingItemsMember"
+        let unallocated = "UnallocatedAmountsAndEliminationMember"
+        guard let adjustmentIndex = rows.firstIndex(where: {
+            $0.labelRaw == adjustment && $0.rowKind == "reconciling"
+        }),
+            let unallocatedIndex = rows.firstIndex(where: {
+                $0.labelRaw == unallocated && $0.rowKind == "reconciling"
+            }),
+            adjustmentIndex != unallocatedIndex
+        else { return }
+        func mergeCell(_ keep: Double?, _ other: Double?) -> Double? { keep ?? other }
+        rows[unallocatedIndex].opening = mergeCell(
+            rows[unallocatedIndex].opening, rows[adjustmentIndex].opening)
+        rows[unallocatedIndex].closing = mergeCell(
+            rows[unallocatedIndex].closing, rows[adjustmentIndex].closing)
+        rows[unallocatedIndex].amortization = mergeCell(
+            rows[unallocatedIndex].amortization, rows[adjustmentIndex].amortization)
+        rows[unallocatedIndex].impairment = mergeCell(
+            rows[unallocatedIndex].impairment, rows[adjustmentIndex].impairment)
+        rows.remove(at: adjustmentIndex)
+    }
+
     /// 該当事項なし / 償却額は発生しておりません。既存の抽出値は上書きしない。
     private static func applyNoneDisclosedZeros(
         to rows: inout [BreakdownRowPayload], notes: GoodwillNoteFlags
@@ -186,11 +223,12 @@ enum GoodwillNoteText {
     }
 
     static func load(from xbrlDir: URL) -> [Entry] {
-        let wanted: Set<String> = [
-            Xbrl.goodwillUnallocatedToReportableSegmentsTextBlockTag,
-            Xbrl.goodwillAmortizationAndUnamortizedBalanceTextBlockTag,
-            Xbrl.segmentImpairmentLossOfNonCurrentAssetsOrGoodwillTextBlockTag,
-        ]
+        let wanted = Set(
+            [
+                Xbrl.goodwillUnallocatedToReportableSegmentsTextBlockTag,
+                Xbrl.goodwillAmortizationAndUnamortizedBalanceTextBlockTag,
+                Xbrl.segmentImpairmentLossOfNonCurrentAssetsOrGoodwillTextBlockTag,
+            ] + Xbrl.segmentInformationEtcTextBlockTags)
         var entries: [Entry] = []
         var dirs = [xbrlDir]
         dirs.append(contentsOf: overlayDirectories(in: xbrlDir))
@@ -242,6 +280,37 @@ enum GoodwillNoteText {
 
     static func isAmortizationNone(_ text: String) -> Bool {
         compactText(text).contains("償却額は発生しておりません")
+    }
+
+    static let goodwillAmortizationHeading = "報告セグメントごとののれんの償却額及び未償却残高に関する情報"
+    static let segmentImpairmentHeading = "報告セグメントごとの固定資産の減損損失に関する情報"
+
+    /// セグメント情報等の親 TextBlock から、見出し配下の前/当連結会計年度本文を取る。
+    static func headingPeriod(_ text: String, heading: String, current: Bool) -> String? {
+        let compactHeading = compactText(heading)
+        guard !compactHeading.isEmpty else { return nil }
+        let compact = compactText(text)
+        guard let headingRange = compact.range(of: compactHeading) else { return nil }
+        var section = String(compact[headingRange.upperBound...])
+        if let next = section.range(of: "【") {
+            section = String(section[..<next.lowerBound])
+        }
+        let currentMarks = ["当連結会計年度", "当事業年度"]
+        let priorMarks = ["前連結会計年度", "前事業年度"]
+        let startMarks = current ? currentMarks : priorMarks
+        let endMarks = current ? priorMarks : currentMarks
+        var best: String?
+        for mark in startMarks {
+            guard let start = section.range(of: mark) else { continue }
+            var body = String(section[start.upperBound...])
+            for end in endMarks {
+                if let range = body.range(of: end) {
+                    body = String(body[..<range.lowerBound])
+                }
+            }
+            if best == nil || body.count < best!.count { best = body }
+        }
+        return best ?? (section.isEmpty ? nil : section)
     }
 
     private static func compactText(_ text: String) -> String {

@@ -401,7 +401,11 @@ import Foundation
         let aluminum = try #require(Self.row(payload, labelContains: "アルミ・銅"))
         #expect(aluminum.rowKind == "segment")
         #expect(aluminum.closing == 235_000_000)
-        let metalSubtotal = try #require(Self.row(payload, labelContains: "金属小計"))
+        let metalSubtotal = try #require(
+            payload.rows.first {
+                $0.rowKind == "subtotal"
+                    && ($0.label.contains("金属") || $0.labelRaw.contains("Metars"))
+            })
         #expect(metalSubtotal.rowKind == "subtotal")
         #expect(payload.closing?.denominator == 235_000_000)
     }

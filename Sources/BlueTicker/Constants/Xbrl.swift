@@ -943,6 +943,12 @@ enum Xbrl {
     static let segmentImpairmentLossOfNonCurrentAssetsOrGoodwillTextBlockTag =
         "InformationAboutImpairmentLossOfNonCurrentAssetsOrGoodwillEtcForEachReportableSegmentTextBlock"
 
+    /// セグメント情報等の親注記。専用タグが無く見出しだけ HTML に載る書類用。
+    static let segmentInformationEtcTextBlockTags: [String] = [
+        "NotesSegmentInformationEtcConsolidatedFinancialStatementsTextBlock",
+        "NotesSegmentInformationEtcFinancialStatementsTextBlock",
+    ]
+
     /// のれん専用の減損タグ。`ImpairmentLossEL`（固定資産全体）は入れない。
     static let segmentGoodwillImpairmentTags: [String] = [
         "ImpairmentLossOnGoodwill",
