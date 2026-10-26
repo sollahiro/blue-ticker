@@ -27,6 +27,7 @@ import Testing
         return dir
     }
 
+    // source: code=6269 fy_end=2025-12-31 doc_id=S100XU6C page=2 field=shares.bps
     @Test func foreignCurrencyFilingKeepsReportingCurrencyPerShareValues() async throws {
         guard let dir = await Self.dir("S100XU6C") else { return }
         let facts = XBRLUtils.collectAllNumericFacts(in: dir)
@@ -37,6 +38,7 @@ import Testing
         #expect(StatementNotesResolver.financialsCanonicalEps(xbrlDir: dir) == 5.28)
     }
 
+    // source: code=6269 fy_end=2025-12-31 doc_id=S100XU6C page=60 field=financials.parent_equity
     @Test func ifrsParentEquityExcludesNonControllingInterests() async throws {
         guard let dir = await Self.dir("S100XU6C") else { return }
         let v = try #require(StatementFinancialsResolver.resolve(xbrlDir: dir))
@@ -45,6 +47,7 @@ import Testing
         #expect(v.parentEquity == 1_452_809_000)
     }
 
+    // source: code=7974 fy_end=2025-03-31 doc_id=S100W73A page=54 field=financials.parent_equity
     @Test func jgaapParentEquityIsNetAssetsLessNonControllingInterests() async throws {
         guard let dir = await Self.dir("S100W73A") else { return }
         let v = try #require(StatementFinancialsResolver.resolve(xbrlDir: dir))
