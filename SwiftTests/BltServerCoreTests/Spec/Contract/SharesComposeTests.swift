@@ -130,7 +130,8 @@ private func keys(_ body: [String: Any]) -> [String] {
         #expect(items[1]["value"] as? Double == 172.51)
         #expect(items[1]["label"] as? String == "継続事業の基本的１株当たり当期利益")
         #expect(items[5]["value"] as? Double == -225.8)
-        #expect(items[5]["unit"] as? String == "yen_per_share")
+        #expect(items[5]["unit"] as? String == "currency_per_share")
+        #expect(body["currency"] as? String == "JPY")
     }
 
     @Test func operationsSplitNeedsParentAndYen() throws {
@@ -145,5 +146,19 @@ private func keys(_ body: [String: Any]) -> [String] {
                 Self.incomeLine("ContinuingOperationsBasicEarningsLossPerShareIFRS", 1, unit: "USDPerShares")
             ])
         #expect(keys(try #require(foundBody(usd))) == ["eps", "diluted_eps", "bps"])
+    }
+
+    /// 外貨建て開示の書類は損益計算書の通貨を currency に載せ、同じ通貨の1株当たり行だけ足す。
+    // 三井海洋開発 6269（S100XU6C）は statement が USD / USDPerShares。値は合成。
+    @Test func foreignCurrencyDocumentCarriesItsCurrency() throws {
+        let result = composeShares(
+            perShare: perShareFound(docID: "S100YE2C"), issuedShares: .absent,
+            incomeStatement: [
+                Self.incomeLine("RevenueIFRS", 4_581_232_000, unit: "USD"),
+                Self.incomeLine("ContinuingOperationsBasicEarningsLossPerShareIFRS", 5.28, unit: "USDPerShares"),
+            ])
+        let body = try #require(foundBody(result))
+        #expect(body["currency"] as? String == "USD")
+        #expect(keys(body) == ["eps", "continuing_eps", "diluted_eps", "bps"])
     }
 }

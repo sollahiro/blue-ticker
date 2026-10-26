@@ -212,7 +212,7 @@ private func valueJSONObject(_ value: Value) -> [String: Any]? {
             outputSchemaRequiredKeys(try #require(byName["get_filings"]))
                 == ["code", "name", "filings"])
         let financialRequired: Set<String> = [
-            "schema_version", "code", "name", "sector", "market", "currency", "unit", "years",
+            "schema_version", "code", "name", "sector", "market", "currency", "units", "years",
         ]
         #expect(
             outputSchemaRequiredKeys(try #require(byName["get_financial_summary"])) == financialRequired)
@@ -228,7 +228,7 @@ private func valueJSONObject(_ value: Value) -> [String: Any]? {
                 == ["schema_version", "code", "name", "sector", "market", "years"])
         #expect(
             outputSchemaRequiredKeys(try #require(byName["get_shares"]))
-                == ["code", "doc_id", "items"])
+                == ["code", "doc_id", "currency", "items"])
         #expect(
             outputSchemaRequiredKeys(try #require(byName["get_feed_updates"]))
                 == ["schema_version", "date", "days", "total", "items"])

@@ -270,8 +270,8 @@ private func send(
             let y = try #require(years.first)
             #expect(Set(y.keys) == financialsSummaryIdentityKeys.union(["sales", "operating_profit"]))
             // 値は射影しても変わらない。
-            #expect(y["sales"] as? Double == 1000.0)
-            #expect(y["operating_profit"] as? Double == 100.0)
+            #expect(y["sales"] as? Double == 1_000_000_000)
+            #expect(y["operating_profit"] as? Double == 100_000_000)
         }
     }
 

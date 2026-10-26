@@ -77,7 +77,9 @@ public func isServableStatementCacheVersion(_ version: String) -> Bool {
 
 /// Statement API の公開契約バージョン。`blueTickerVersion` とは独立。
 /// レスポンス形を破壊的に変更したときのみ +1 する（`Api.financialsSchemaVersion` と同型）。
-public let statementSchemaVersion = 1
+/// v2（2026-10-26）: 行の `unit` を unitRef（JPY / JPYPerShares / yen）から単位コード
+/// （`currency_amount` / `currency_per_share` / `shares`）へ、年度に `currency` を追加。
+public let statementSchemaVersion = 2
 
 // MARK: - 契約型
 
@@ -188,6 +190,13 @@ public struct StatementLineItem: Codable, Sendable {
     /// 非 nil（`docs/statement.md`）。`section` は BS/CF の固定区分、または科目縦 SS の
     /// 区分見出し。該当しない行は nil。`components` は `is_total` が true かつ構成要素が
     /// 解決できた場合のみ非 nil。
+    /// statement 応答の行。`unit` を格納の unitRef から単位コードへ直す（通貨は年度の `currency`）。
+    func statementJsonObject() -> [String: Any] {
+        var object = jsonObject()
+        object["unit"] = AmountUnit.code(unitRef: unit)?.rawValue as Any? ?? NSNull()
+        return object
+    }
+
     public func jsonObject() -> [String: Any] {
         [
             "tag": tag,
@@ -252,16 +261,26 @@ public struct StatementYear: Codable, Sendable {
             try container.decodeIfPresent([StatementLineItem].self, forKey: .changesInEquity) ?? []
     }
 
-    /// REST/MCP 応答用 JSON オブジェクト。
+    /// 本表の金額行（1株当たりを除く）の通貨（ISO 4217）。BS → PL → CF の順で最初に読めたもの。
+    public var currency: String? {
+        for item in balanceSheet + incomeStatement + cashFlow
+        where !AmountUnit.isPerShare(unitRef: item.unit) {
+            if let currency = AmountUnit.currency(unitRef: item.unit) { return currency }
+        }
+        return nil
+    }
+
+    /// REST/MCP 応答用 JSON オブジェクト。金額は基本単位（円・ドル）、通貨は `currency`。
     public func jsonObject() -> [String: Any] {
         [
             "fy_end": fyEnd as Any? ?? NSNull(),
             "financial_period": financialPeriod as Any? ?? NSNull(),
             "doc_id": docId as Any? ?? NSNull(),
-            "balance_sheet": balanceSheet.map { $0.jsonObject() },
-            "income_statement": incomeStatement.map { $0.jsonObject() },
-            "cash_flow": cashFlow.map { $0.jsonObject() },
-            "changes_in_equity": changesInEquity.map { $0.jsonObject() },
+            "currency": currency as Any? ?? NSNull(),
+            "balance_sheet": balanceSheet.map { $0.statementJsonObject() },
+            "income_statement": incomeStatement.map { $0.statementJsonObject() },
+            "cash_flow": cashFlow.map { $0.statementJsonObject() },
+            "changes_in_equity": changesInEquity.map { $0.statementJsonObject() },
         ]
     }
 }
@@ -305,7 +324,7 @@ public struct StatementResponse: Codable, Sendable {
     /// docs/statement.md）。
     public func jsonObject() -> [String: Any] {
         [
-            "schema_version": schemaVersion,
+            "schema_version": statementSchemaVersion,
             "code": code,
             "name": name as Any? ?? NSNull(),
             "sector": sector as Any? ?? NSNull(),

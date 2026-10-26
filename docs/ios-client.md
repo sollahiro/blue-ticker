@@ -137,7 +137,7 @@ Release Archive は HAPIS 本番 + App Attest production。Internal TestFlight �
 
 手元の保有から利益・純資産・投資元本とファンドROEを見る。税務プロダクトではない。サーバーの portfolio API は足さない。指標は `GET /v1/companies/{code}/financials` の最新 FY（`years[].fy_end` が最大）の `eps` / `bps` だけ。キー名は Summary 公開 JSON の `eps` / `bps`（円/株）。Notes `per_share_information` はクライアントから呼ばない。欠測は「—」で、その行・銘柄を合計から外す（捏造しない）。公開 UI は「ルックスルー」「投下資本」を出さない（計算は同じ。表示は純利益 / 純資産 / 投資元本）。
 
-計算（円。本表の百万円スケールは使わない）:
+計算（円。API の金額も円〈financials schema 3〉）:
 
 - 純利益（ルックスルー利益）= EPS（円/株）× 株数
 - 純資産（ルックスルー純資産）= BPS（円/株）× 株数
@@ -175,7 +175,7 @@ Release Archive は HAPIS 本番 + App Attest production。Internal TestFlight �
 - サーバー許可リスト（12 指標。screen-v3 で 6 → 12。screen-v4 は `payout_ratio` の意味を最新 FY 単年から直近 3 期算術平均へ差し替えるだけでキーは増やさない。旧 `operating_margin_yoy` / `roic_yoy` は物理列だけ nullable で残し、許可リスト・書き込み・応答から外す）: `sales`（サイズ。UI プリセットでは使わない）/ `operating_margin` / `roic` / `roe`（API は残す。UI では絞らない）/ `net_de` / `sales_cagr_3y` / `cfo` / `cfo_margin` / `fcf` / `operating_margin_cagr_3y` / `roic_cagr_3y` / `payout_ratio`
 - 銀行業（Summary の銀行判定。`DepositsLiabilitiesBNK` または EDINET 提出者業種＝銀行業）は `roic` / `net_de` / `roic_cagr_3y` が null（2026-10-12）。null 行はソート・フィルタで落ちるため、ROIC 順の既定ソートと `net_de_max` 条件の結果に銀行は載らない
 - 3 期売上 CAGR `sales_cagr_3y` は `screen_index` の派生列。最新 Summary 年から売上 > 0 の直近 3 期を取り、`((latest/oldest)^(1/2) - 1) * 100`。3 期に満たなければ null。Summary の `years[]` には CAGR / YoY キーを足さない
-- screen-v3 の派生列（いずれも ingest 時に Summary から派生。Summary の同義語と単位・符号は揃える）: `cfo` = 営業 CF（百万円）。`cfo_margin` = cfo ÷ sales × 100（%）で sales ≤ 0 は null。`fcf` = cfo − capex（百万円。Summary の `cfc` = cfo + cfi とは別物）。`operating_margin_cagr_3y` / `roic_cagr_3y` = 3 期年平均変化幅（pp/年、直近の非欠測 3 期で（最新 − 最古）÷ 2。利益率・ROIC は負やゼロ跨ぎがあり得るため幾何 CAGR ではなく pp の年率変化。期の選定は `sales_cagr_3y` と同じで 3 期に満たなければ null）
+- screen-v3 の派生列（いずれも ingest 時に Summary から派生。Summary の同義語と単位・符号は揃える）: `cfo` = 営業 CF（格納は百万円、応答は円）。`cfo_margin` = cfo ÷ sales × 100（%）で sales ≤ 0 は null。`fcf` = cfo − capex（格納は百万円、応答は円。Summary の `cfc` = cfo + cfi とは別物）。`operating_margin_cagr_3y` / `roic_cagr_3y` = 3 期年平均変化幅（pp/年、直近の非欠測 3 期で（最新 − 最古）÷ 2。利益率・ROIC は負やゼロ跨ぎがあり得るため幾何 CAGR ではなく pp の年率変化。期の選定は `sales_cagr_3y` と同じで 3 期に満たなければ null）
 - screen-v4: `payout_ratio` は最新 FY 単年を残さず、直近 3 期の年次性向（各期 `dividend_ss` ÷ `net_profit` × 100）の算術平均に置き換える。3 期とも定義できるときだけ。欠ける・赤字（net_profit ≤ 0）・配当行無しはその期を null とし平均も null（無配と未抽出を区別しない。特別配当も区別しない。SS 当期帰属を採り CF 実払いは使わない）。表示用の年次系列 `payout_ratio_3y`（古→新、不足は先頭 null、許可リスト外）は `payout_ratio` を投影するときだけ `items[]` に載せる
 - 対象は最新 FY の Summary 水準値だけ。YoY / Waterfall / Breakdown / Notes は混ぜない
 - 業種チップの候補はクライアント側の表示用カタログ。`GET /v1/companies?sector=` は足さない

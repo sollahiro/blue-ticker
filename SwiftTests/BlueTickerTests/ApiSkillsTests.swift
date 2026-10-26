@@ -120,7 +120,7 @@ import Testing
         #expect(!skill.description.contains("axis=business"))
         #expect(skill.description.contains("needs_review"))
         #expect(skill.description.contains("interest_bearing_debt_lease_denominator_from_notes"))
-        #expect(apiSkillsSchemaVersion == 8)
+        #expect(apiSkillsSchemaVersion == 9)
         #expect(!axis.description.contains("goodwill_amortization"))
         #expect(!skill.description.contains("goodwill_amortization"))
         #expect(skill.description.contains("amortization"))

@@ -33,6 +33,11 @@ public let breakdownEmployeesJoinKey = "employees_join"
 public let breakdownWarningEmployeesJoinUnavailable = "employees_join_unavailable"
 /// 従業員数のセグメント別内訳軸（2026-08-01追加）。決定論のみ（LLMフォールバックなし）。
 public let breakdownAxisEmployees = "employees"
+
+/// 内訳の金額フィールド（amount / denominator / 各セル）の単位。employees 軸だけ人数、他は通貨の基本単位。
+public func breakdownAmountUnit(axis: String) -> AmountUnit.Code {
+    axis == breakdownAxisEmployees ? .persons : .currencyAmount
+}
 /// 研究開発費（全社合計）のセグメント別内訳軸（2026-08-01追加）。
 /// 数値タグとセグメント fact は決定論。無いときは Jev が本文の文を分類して当期総額を選ぶ
 /// （金額はコードが円へ換算する。値の生成はしない）。

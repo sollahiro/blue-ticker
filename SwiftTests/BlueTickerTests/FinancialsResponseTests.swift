@@ -21,8 +21,48 @@ import Testing
         #expect(resp["sector"] as? String == "輸送用機器")
         #expect(resp["market"] as? String == "プライム")
         #expect(resp["currency"] as? String == "JPY")
-        #expect(resp["unit"] as? String == "百万円")
+        #expect(resp["unit"] == nil)
+        #expect((resp["units"] as? [String: String])?["sales"] == "currency_amount")
+        #expect((resp["units"] as? [String: String])?["roe"] == "percent")
         #expect((resp["years"] as? [[String: Any]])?.isEmpty == true)
+    }
+
+    /// 金額は格納（百万）から基本単位の整数へ。通貨は年度ごとで、混在するとトップは null。
+    @Test func amountsAreBaseUnitsAndCurrencyIsPerYear() throws {
+        let result = try decodeResult(#"""
+        {"code":"6269","years":[
+          {"fy_end":"2025-12-31","FinancialPeriod":"FY",
+           "RawData":{"Sales":4581.232,"EPS":5.28,"Currency":"USD"},"CalculatedData":{"ROE":12.5,"DSO":40}},
+          {"fy_end":"2024-12-31","FinancialPeriod":"FY",
+           "RawData":{"Sales":3700.5},"CalculatedData":{}}
+        ]}
+        """#)
+        let resp = FinancialsResponse(
+            code: "6269", name: "三井海洋開発", sector: "機械", market: "プライム", result: result)
+        let summary = resp.summaryJsonObject()
+        let years = try #require(summary["years"] as? [[String: Any]])
+        #expect(years[0]["currency"] as? String == "USD")
+        #expect(years[0]["sales"] as? Double == 4_581_232_000)
+        #expect(years[0]["eps"] as? Double == 5.28)
+        #expect(years[0]["roe"] as? Double == 12.5)
+        #expect(years[1]["currency"] as? String == "JPY")
+        #expect(summary["currency"] is NSNull)
+        let units = try #require(summary["units"] as? [String: String])
+        #expect(units["sales"] == "currency_amount")
+        #expect(units["eps"] == "currency_per_share")
+        #expect(units["employees"] == "persons")
+        #expect(units["issued_shares"] == "shares")
+        #expect(units["dso"] == nil)  // Waterfall 専用キーは Summary の units に載せない
+        let waterfallUnits = try #require(resp.analysisJsonObject()["units"] as? [String: String])
+        #expect(waterfallUnits["dso"] == "days")
+        #expect(waterfallUnits["ccc_dpo_effect"] == "days")
+        #expect(waterfallUnits["roe_delta"] == "percentage_points")
+        #expect(waterfallUnits["asset_turnover"] == "times")
+        // 格納形（Codable）は百万のまま往復する。
+        let stored = try JSONDecoder().decode(
+            FinancialsResponse.self, from: JSONEncoder().encode(resp))
+        #expect(stored.years[0].sales == 4581.232)
+        #expect(stored.years[0].currency == "USD")
     }
 
     @Test func cacheVersionNumberParsesFinVN() {
@@ -72,7 +112,7 @@ import Testing
     }
 
     @Test func schemaVersionIsStableInteger() {
-        #expect(Api.financialsSchemaVersion == 2)
+        #expect(Api.financialsSchemaVersion == 3)
     }
 
     @Test func assemblyFingerprintJoinsCanonicalVersionsInFixedOrder() {
@@ -133,8 +173,8 @@ import Testing
         }
         // 水準値（ticker summarize が表示する項目）は残る。
         #expect(y["roic"] as? Double == 9.0)
-        #expect(y["net_cash"] as? Double == 110)
-        #expect(y["accounts_receivable"] as? Double == 200)
+        #expect(y["net_cash"] as? Double == 110000000)
+        #expect(y["accounts_receivable"] as? Double == 200000000)
     }
 
     // MARK: - `?fields=` 射影（BLT-57）
@@ -165,14 +205,15 @@ import Testing
         #expect(projected.count == full.count)
         let y = projected[0]
         #expect(Set(y.keys) == financialsSummaryIdentityKeys.union(["net_cash"]))
-        #expect(y["net_cash"] as? Double == 110)
+        #expect(y["net_cash"] as? Double == 110000000)
     }
 
     @Test func summaryProjectionKeepsEnvelopeKeys() throws {
         let resp = try financialsResponse().summaryJsonObject(fields: ["sales"])
         #expect(resp["schema_version"] as? Int == Api.financialsSchemaVersion)
         #expect(resp["code"] as? String == "7203")
-        #expect(resp["unit"] as? String == "百万円")
+        #expect(resp["currency"] as? String == "JPY")
+        #expect(resp["units"] as? [String: String] == ["sales": "currency_amount"])
     }
 
     /// 銀行業の期（cash はあるが net_cash を出さない）は有利子負債ベースの Waterfall 差分も null。
@@ -196,8 +237,8 @@ import Testing
         #expect(newer["net_cash_change"] is NSNull)
         #expect(newer["debt_change_impact"] is NSNull)
         // 預金を除く有利子負債と現金の差分自体は残す。
-        #expect(newer["interest_bearing_debt"] as? Double == 40)
-        #expect(newer["cash_change_impact"] as? Double == 50)
+        #expect(newer["interest_bearing_debt"] as? Double == 40000000)
+        #expect(newer["cash_change_impact"] as? Double == 50000000)
     }
 
     @Test func nonBankYearsDoNotWithholdRatios() throws {
@@ -212,21 +253,22 @@ import Testing
         let older = years[1]
 
         // ④ ネットキャッシュ前年差
-        #expect(newer["net_cash_change"] as? Double == 70)
-        #expect(newer["cash_change_impact"] as? Double == 50)
-        #expect(newer["debt_change_impact"] as? Double == 20)
+        #expect(newer["net_cash_change"] as? Double == 70000000)
+        #expect(newer["cash_change_impact"] as? Double == 50000000)
+        #expect(newer["debt_change_impact"] as? Double == 20000000)
 
         // ⑤ 運転資本前年差
-        #expect(newer["working_capital_change"] as? Double == 20)
-        #expect(newer["accounts_receivable_change_impact"] as? Double == 20)
-        #expect(newer["inventory_change_impact"] as? Double == 10)
-        #expect(newer["accounts_payable_change_impact"] as? Double == -10)
+        #expect(newer["working_capital_change"] as? Double == 20000000)
+        #expect(newer["accounts_receivable_change_impact"] as? Double == 20000000)
+        #expect(newer["inventory_change_impact"] as? Double == 10000000)
+        #expect(newer["accounts_payable_change_impact"] as? Double == -10000000)
 
         // ⑤ CCC前年差
         #expect(newer["ccc_change"] as? Double == 8)
-        #expect(newer["dso_change_impact"] as? Double == 5)
-        #expect(newer["dio_change_impact"] as? Double == 5)
-        #expect(newer["dpo_change_impact"] as? Double == -2)
+        #expect(newer["ccc_dso_effect"] as? Double == 5)
+        #expect(newer["ccc_dio_effect"] as? Double == 5)
+        #expect(newer["ccc_dpo_effect"] as? Double == -2)
+        #expect(newer["dso_change_impact"] == nil)
 
         // 最古年（前期なし）は新規④⑤フィールドが null。
         #expect(older["net_cash_change"] is NSNull)

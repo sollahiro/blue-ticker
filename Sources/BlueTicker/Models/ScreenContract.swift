@@ -38,7 +38,7 @@ public let screenIndexVersion = "screen-v4"
 
 /// Screen の数値指標（許可リスト）。rawValue が REST クエリ名・応答キー・`screen_index` 列名。
 public enum ScreenMetric: String, CaseIterable, Sendable {
-    /// 売上高（百万円）。サイズ用。iOS プリセットでは使わない。
+    /// 売上高（格納は百万円、公開は円）。サイズ用。iOS プリセットでは使わない。
     case sales
     /// 営業利益率（%、開示営業利益 ÷ 売上高）。
     case operatingMargin = "operating_margin"
@@ -50,11 +50,11 @@ public enum ScreenMetric: String, CaseIterable, Sendable {
     case netDe = "net_de"
     /// 3 期売上 CAGR（%、売上 > 0 の直近 3 期・2 年間）。足りなければ null。
     case salesCagr3y = "sales_cagr_3y"
-    /// 営業CF（百万円）。最新 FY の Summary `cfo`。高CF・サイズ用。
+    /// 営業CF（格納は百万円、公開は円）。最新 FY の Summary `cfo`。高CF・サイズ用。
     case cfo
     /// 営業CFマージン（%、cfo ÷ sales ×100）。sales > 0 と cfo があるときだけ。
     case cfoMargin = "cfo_margin"
-    /// FCF（百万円、cfo − capex）。Summary `cfc`（= cfo + cfi）とは別定義。両方あるときだけ。
+    /// FCF（格納は百万円、公開は円。cfo − capex）。Summary `cfc`（= cfo + cfi）とは別定義。両方あるときだけ。
     case fcf
     /// 営業利益率の 3 期年平均変化幅（pp/年）。直近の非欠測 3 期で（最新 − 最古）÷ 2。
     case operatingMarginCagr3y = "operating_margin_cagr_3y"
@@ -68,6 +68,29 @@ public enum ScreenMetric: String, CaseIterable, Sendable {
     public static let coreDisplayMetrics: [ScreenMetric] = [
         .roic, .operatingMargin, .salesCagr3y, .netDe,
     ]
+
+    /// 公開面（応答・クエリ・スナップショット）の単位。金額は円。
+    var unit: AmountUnit.Code {
+        switch self {
+        case .sales, .cfo, .fcf: return .currencyAmount
+        case .operatingMargin, .roic, .roe, .salesCagr3y, .cfoMargin, .payoutRatio: return .percent
+        case .netDe: return .times
+        case .operatingMarginCagr3y, .roicCagr3y: return .percentagePoints
+        }
+    }
+
+    /// `screen_index` の格納値（金額は百万円）に掛けると公開値になる倍率。
+    var publicScale: Double { unit == .currencyAmount ? Financial.millionYen : 1 }
+
+    /// 格納値 → 公開値。金額は円の整数へ丸める。
+    func publicValue(_ stored: Double) -> Double {
+        unit == .currencyAmount ? (stored * publicScale).rounded() : stored
+    }
+}
+
+/// `GET /v1/screen` と snapshot の `units`（指標 → 単位コード）。金額は円（`currency` は常に JPY）。
+public func screenUnitsJSON(_ metrics: [ScreenMetric] = ScreenMetric.allCases) -> [String: String] {
+    Dictionary(uniqueKeysWithValues: metrics.map { ($0.rawValue, $0.unit.rawValue) })
 }
 
 /// `screen_index` 1 行（1 社の最新 FY）。
@@ -119,7 +142,9 @@ extension FinancialsResponse {
         func put(_ metric: ScreenMetric, _ value: Double?) {
             if let value, value.isFinite { metrics[metric] = value }
         }
-        put(.sales, latest.sales)
+        // 金額指標は円建ての年だけ（外貨建て開示は円の閾値と比べられない）。
+        let isYen = (latest.currency ?? AmountUnit.jpy) == AmountUnit.jpy
+        put(.sales, isYen ? latest.sales : nil)
         put(.operatingMargin, latest.operatingMargin)
         put(.roic, latest.roic)
         put(.roe, latest.roe)
@@ -127,9 +152,9 @@ extension FinancialsResponse {
         put(.salesCagr3y, salesCagr3y(from: dated.map(\.1)))
 
         // screen-v3。
-        put(.cfo, latest.cfo)
+        put(.cfo, isYen ? latest.cfo : nil)
         put(.cfoMargin, cfoMargin(cfo: latest.cfo, sales: latest.sales))
-        put(.fcf, freeCashFlow(cfo: latest.cfo, capex: latest.capex))
+        put(.fcf, isYen ? freeCashFlow(cfo: latest.cfo, capex: latest.capex) : nil)
         put(.operatingMarginCagr3y, metricCagr3y(from: dated.map(\.1), metric: \.operatingMargin))
         // 銀行業は roic / net_de を出さない（latest が null）。旧組立の期が混在しても
         // roic の 3 期変化幅を出さないよう、最新期が銀行なら roic_cagr_3y も入れない。
@@ -245,6 +270,7 @@ public struct ScreenQuery: Sendable, Equatable {
     /// 単一業種の後方互換ビュー（複数指定・未指定は nil）。新規コードは `sectors` を使う。
     public var sector: String? { sectors.count == 1 ? sectors.first : nil }
     /// `{metric}_min` / `{metric}_max`。対象指標が null の行は落とす（0 扱いにしない）。
+    /// 値は `screen_index` の格納単位（金額は百万円）。`parseScreenQuery` が円から直す。
     public var ranges: [ScreenMetric: ScreenRange]
     /// `sort=`（既定 `roic`）。null の行は結果に載せない。
     public var sort: ScreenMetric
@@ -310,8 +336,10 @@ public func parseScreenQuery(_ raw: [String: String]) -> Result<ScreenQuery, Scr
                 guard let number = Double(trimmed), number.isFinite else {
                     return .failure(.invalidValue(key: key, value: value))
                 }
+                // クエリは公開単位（金額は円）。`ranges` は `screen_index` の格納単位（百万円）で持つ。
+                let stored = number / metric.publicScale
                 var range = query.ranges[metric] ?? ScreenRange(min: nil, max: nil)
-                if isMin { range.min = number } else { range.max = number }
+                if isMin { range.min = stored } else { range.max = stored }
                 query.ranges[metric] = range
             } else {
                 unknown.append(key)
@@ -370,7 +398,7 @@ public func screenResponseJSON(
             "period_end": row.periodEnd,
         ]
         for metric in projected {
-            item[metric.rawValue] = row[metric].map { $0 as Any } ?? NSNull()
+            item[metric.rawValue] = row[metric].map { metric.publicValue($0) as Any } ?? NSNull()
         }
         if projected.contains(.payoutRatio) {
             item["payout_ratio_3y"] = row.payoutRatio3y.map { $0.map { $0 as Any } ?? NSNull() }
@@ -378,6 +406,8 @@ public func screenResponseJSON(
         return item
     }
     return [
+        "currency": AmountUnit.jpy,
+        "units": screenUnitsJSON(projected),
         "items": items,
         "returned": items.count,
         "matched": matched,
@@ -389,7 +419,8 @@ public func screenResponseJSON(
 
 /// `GET /v1/screen/snapshot` の形の版。列の増減・丸め・並びが変わったときだけ上げる。
 /// 中身の版は `screen_version`（`screenIndexVersion`）で別に返す。
-public let screenSnapshotSchemaVersion = 1
+/// v2（2026-10-26）: 金額指標（sales / cfo / fcf）を百万円から円へ、`currency` / `units` を追加。
+public let screenSnapshotSchemaVersion = 2
 
 /// スナップショットの数値の小数桁。全行を配るため桁を落としてサイズを抑える。
 /// 閾値（整数・ネット D/E は 1 桁）との比較で境界がずれるのは 0.00005 未満の行だけ。
@@ -407,11 +438,13 @@ public func screenSnapshotJSON(rows: [ScreenRow]) -> [String: Any] {
     }
     var metrics: [String: Any] = [:]
     for metric in ScreenMetric.allCases {
-        metrics[metric.rawValue] = sorted.map { number($0[metric]) }
+        metrics[metric.rawValue] = sorted.map { number($0[metric].map(metric.publicValue)) }
     }
     return [
         "schema_version": screenSnapshotSchemaVersion,
         "screen_version": screenIndexVersion,
+        "currency": AmountUnit.jpy,
+        "units": screenUnitsJSON(),
         "count": sorted.count,
         "code": sorted.map(\.code),
         "name": sorted.map(\.name),

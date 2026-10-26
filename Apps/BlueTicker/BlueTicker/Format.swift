@@ -18,31 +18,42 @@ enum Format {
         return "\(year % 100)年\(month)月期"
     }
 
-    /// API の百万円を、3〜4桁になる単位へ自動変換。整数部が2桁なら小数1桁。
-    static func autoYen(_ millionYen: Double?) -> String {
-        guard let millionYen else { return "—" }
-        let scale = yenScale(abs(millionYen))
-        return scaledYen(millionYen, scale: scale) + scale.unit
+    /// API の金額（通貨の基本単位。円なら円）を、3〜4桁になる単位へ自動変換。整数部が2桁なら小数1桁。
+    /// `currency` は ISO 4217（`years[].currency`）。円以外は「百万ドル」のように通貨名を付ける。
+    static func autoYen(_ amount: Double?, currency: String? = nil) -> String {
+        guard let amount else { return "—" }
+        let scale = yenScale(abs(amount), currency: currency)
+        return scaledYen(amount, scale: scale) + scale.unit
     }
 
     /// 指定の単位で金額文字列を返す。単位サフィックスは付けない。
-    static func scaledYen(_ millionYen: Double?, scale: YenScale) -> String {
-        guard let millionYen else { return "—" }
-        let scaled = millionYen / scale.divisor
+    static func scaledYen(_ amount: Double?, scale: YenScale) -> String {
+        guard let amount else { return "—" }
+        let scaled = amount / scale.divisor
         return groupedNumber(scaled, fractionDigits: scale.fractionDigits)
     }
 
     /// 指定した値群から最適な共通の金額単位を返す。
-    static func commonScale(for values: [Double?]) -> YenScale? {
+    static func commonScale(for values: [Double?], currency: String? = nil) -> YenScale? {
         let maxValue = values.compactMap { $0 }.map(abs).max() ?? 0
         guard maxValue > 0 else { return nil }
-        return yenScale(maxValue)
+        return yenScale(maxValue, currency: currency)
     }
 
-    /// 百万円 → 億円。サフィックス付き。
-    static func okuYen(_ value: Double?) -> String {
-        guard let value else { return "—" }
-        return groupedNumber(value / 100.0) + "億円"
+    /// 円 → 億円。サフィックス付き。
+    static func okuYen(_ yen: Double?) -> String {
+        guard let yen else { return "—" }
+        return groupedNumber(yen / 100_000_000) + "億円"
+    }
+
+    /// 応答の通貨のうち、全年度で同じものの表示名（円・ドル・ユーロ。ほかは通貨コード）。
+    static func currencyName(_ currency: String?) -> String {
+        switch currency ?? "JPY" {
+        case "JPY": return "円"
+        case "USD": return "ドル"
+        case "EUR": return "ユーロ"
+        case let other: return other
+        }
     }
 
     static func chronological(_ years: [FinancialsYear]) -> [FinancialsYear] {
@@ -163,12 +174,15 @@ enum Format {
         var fractionDigits: Int
     }
 
-    private static func yenScale(_ absMillion: Double) -> YenScale {
+    private static func yenScale(_ absAmount: Double, currency: String? = nil) -> YenScale {
+        // 判定は百万単位で行う（百万・億・十億・兆）。API は基本単位なので先に百万で割る。
+        let absMillion = absAmount / 1_000_000
+        let name = currencyName(currency)
         let units: [(divisor: Double, name: String)] = [
-            (1, "百万円"),
-            (100, "億円"),
-            (1_000, "十億円"),
-            (1_000_000, "兆円"),
+            (1, "百万" + name),
+            (100, "億" + name),
+            (1_000, "十億" + name),
+            (1_000_000, "兆" + name),
         ]
         let inRange = units.filter { scaled in
             let value = absMillion / scaled.divisor
@@ -186,7 +200,7 @@ enum Format {
         }
         let scaled = absMillion / chosen.divisor
         return YenScale(
-            divisor: chosen.divisor,
+            divisor: chosen.divisor * 1_000_000,
             unit: chosen.name,
             fractionDigits: scaled < 100 ? 1 : 0
         )

@@ -8,7 +8,8 @@ import Foundation
 /// フィルタ・ソート対象が null の行は落とす、同値はコード昇順）。
 enum ScreenSnapshot {
     /// 応答の形の版（サーバー `screenSnapshotSchemaVersion`）。違う版は解析しない。
-    static let schemaVersion = 1
+    /// v2: 金額指標（sales / cfo / fcf）が百万円から円になった。
+    static let schemaVersion = 2
     /// 前回の取得からこの間は再検証しない（3 日。サーバーの作り直し間隔
     /// `Api.screenSnapshotRebuildIntervalSeconds` と同じ）。
     static let revalidateInterval: TimeInterval = 3 * 24 * 60 * 60

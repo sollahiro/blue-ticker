@@ -406,12 +406,12 @@ private func codes(_ json: [String: Any]?) -> [String] {
             }
 
             let (status, json) = try await send(
-                app, "/v1/screen?sector=%E9%9B%BB%E6%B0%97%E6%A9%9F%E5%99%A8&sales_min=10000&net_de_max=1")
+                app, "/v1/screen?sector=%E9%9B%BB%E6%B0%97%E6%A9%9F%E5%99%A8&sales_min=10000000000&net_de_max=1")
             #expect(status == .ok)
             #expect(codes(json) == ["0001"])
             #expect(json?["matched"] as? Int == 1)
             let item = (json?["items"] as? [[String: Any]])?.first
-            #expect(item?["sales"] as? Double == 50000)
+            #expect(item?["sales"] as? Double == 50_000_000_000)
             #expect(item?["roic"] as? Double == 20)
             #expect(item?["net_de"] as? Double == 0.2)
             #expect(item?["operating_margin"] is NSNull)
@@ -508,7 +508,7 @@ private func codes(_ json: [String: Any]?) -> [String] {
             #expect(codes(json) == ["0001"])
             let item = (json?["items"] as? [[String: Any]])?.first
             #expect(item?["cfo_margin"] as? Double == 15)
-            #expect(item?["fcf"] as? Double == 200)
+            #expect(item?["fcf"] as? Double == 200_000_000)
             #expect(item?["payout_ratio"] == nil)
 
             // 高還元: payout_ratio（3 年平均）≥ 20 → 0001 のみ（0002 は 10、0003 は null）。

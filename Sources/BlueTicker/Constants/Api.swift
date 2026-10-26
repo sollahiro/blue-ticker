@@ -193,7 +193,9 @@ public enum Api {
 
     /// financials レスポンスの公開契約バージョン。blueTickerVersion とは独立。
     /// レスポンス形を破壊的に変更したときのみ +1 する。
-    static let financialsSchemaVersion = 2
+    /// v3（2026-10-26）: 金額を百万円から基本単位（円・ドル）の整数へ、`unit` を `units` マップへ、
+    /// `years[].currency` を追加、CCC 要因を `ccc_dso_effect` / `ccc_dio_effect` / `ccc_dpo_effect` へ改名。
+    static let financialsSchemaVersion = 3
 
     /// 書類同期で DB へ取り込む書類種別（日次書類の全件 → DB。seed 種別に絞る）。
     /// 有報・半期・四半期＋訂正有報のみ。訂正四半期(150)・訂正半期(170) は意図的に含めない
