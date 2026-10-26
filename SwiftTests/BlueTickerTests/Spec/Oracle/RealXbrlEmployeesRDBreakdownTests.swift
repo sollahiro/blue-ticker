@@ -296,7 +296,7 @@ import Foundation
         return (facts, XBRLUtils.breakdownMemberLabels(in: dir))
     }
 
-    // source: code=9537 doc_id=S100YIW6 field=employees
+    // source: code=9537 fy_end=2026-03-31 doc_id=S100YIW6 page=46 field=employees
     // `XxxSegmentsReportableSegmentsMember` は葉のセグメント名。小計に落とさない。
     @Test func hokurikuGasSegmentsReportableSegmentsLeavesStaySegments() async throws {
         guard await Self.ensureAvailable("S100YIW6") else { return }
@@ -316,8 +316,8 @@ import Foundation
         }
     }
 
-    // source: code=1605 doc_id=S100L16P field=employees
-    // 報告セグメント計＋全社（共通）だけの表。報告セグメントを segment に残す。
+    // source: code=1605 fy_end=2020-12-31 doc_id=S100L16P page=14 field=employees
+    // 日本〜米州を結合したセル 2,893 人＋全社（共通）270 人の表。報告セグメントを segment に残す。
     @Test func inpexSoleReportableSegmentsMemberStaysSegment() async throws {
         guard await Self.ensureAvailable("S100L16P") else { return }
         let (facts, labels) = Self.employeesFactsAndLabels("S100L16P")
