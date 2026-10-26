@@ -188,14 +188,9 @@ enum BreakdownLLMAmountScale {
         return BreakdownExtractor.parseUnitCaption(table.heading)
     }
 
-    /// `parseUnitCaption` の語を円倍率へ。十億円を億円より先に見る。未知語は nil（推測しない）。
+    /// `parseUnitCaption` の語を円倍率へ（`AmountUnit`）。十億円を億円より先に見る。未知語・外貨は nil（推測しない）。
     static func yenScale(forHeaderToken token: String) -> Double? {
-        if token.contains("十億円") { return 1_000_000_000 }
-        if token.contains("億円") { return 100_000_000 }
-        if token.contains("百万円") { return Financial.millionYen }
-        if token.contains("千円") { return thousandYen }
-        if token == "円" { return 1 }
-        return nil
+        AmountUnit.yenMultiplier(containedIn: token)
     }
 
     /// 正規化器が共有するスケール適用。warnings は呼び出し側が既存配列へ append する。

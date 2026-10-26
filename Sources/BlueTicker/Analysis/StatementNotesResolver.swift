@@ -709,15 +709,11 @@ enum StatementNotesResolver {
         return nil
     }
 
-    /// 設備投資表の金額単位。表内のいずれかのセルの単位表記から判定する（億円→百万円→千円の
-    /// 優先順。ヘッダー行の「設備投資金額（億円）」のような表記を含む行がデータ行とは限らない
+    /// 設備投資表の金額単位。表内のいずれかのセルの単位表記から判定する（大きい単位を優先。
+    /// ヘッダー行の「設備投資金額（億円）」のような表記を含む行がデータ行とは限らない
     /// ため、行ではなくセル単位で走査する）。
     private static func capexTableScale(_ rows: [[String]]) -> Double? {
-        let cells = rows.flatMap { $0 }
-        if cells.contains(where: { $0.contains("億円") }) { return 100_000_000 }
-        if cells.contains(where: { $0.contains("百万円") }) { return 1_000_000 }
-        if cells.contains(where: { $0.contains("千円") }) { return 1_000 }
-        return nil
+        rows.flatMap { $0 }.compactMap { AmountUnit.yenScale(containedIn: $0)?.multiplier }.max()
     }
 
     /// 設備投資表の見出し行判定。数値セルを含まず見出し語を含む行を見出しとみなす。

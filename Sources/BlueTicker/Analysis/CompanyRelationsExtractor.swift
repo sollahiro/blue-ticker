@@ -913,13 +913,7 @@ enum CompanyRelationsExtractor {
     }
 
     private static func unitMultiplier(_ unit: String) -> Double? {
-        switch unit {
-        case "千円": return 1_000
-        case "百万円": return 1_000_000
-        case "億円": return 100_000_000
-        case "円": return 1
-        default: return nil
-        }
+        AmountUnit.yenMultiplier(forToken: unit)
     }
 
     private static let numberPattern = try! NSRegularExpression(pattern: #"[0-9]+(?:\.[0-9]+)?"#)

@@ -56,13 +56,8 @@ enum BorrowingsSchedule {
         if let inTable = scale(in: tableText) { return inTable }
         let heading = precedingText(of: table, maxChars: 80)
         // 直前テキストに複数の単位があれば表に最も近い（最後の）ものを使う
-        var best: (index: String.Index, scale: Double)?
-        for (unit, value) in [("千円", 1_000.0), ("百万円", Financial.millionYen), ("億円", 100_000_000.0)] {
-            if let r = heading.range(of: unit, options: .backwards), best == nil || r.lowerBound > best!.index {
-                best = (r.lowerBound, value)
-            }
-        }
-        return best?.scale ?? Financial.millionYen
+        return AmountUnit.lastYenScale(in: heading, among: ["千円", "百万円", "億円", "十億円"])?.multiplier
+            ?? Financial.millionYen
     }
 
     /// 連結財務諸表を作成する会社か。true のとき単体タグへのフォールバックを抑止する（連結優先）。

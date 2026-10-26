@@ -707,7 +707,7 @@ enum RevenueRecognitionCandidates {
             .replacingOccurrences(of: "）", with: "")
             .replacingOccurrences(of: "(", with: "")
             .replacingOccurrences(of: ")", with: "")
-        for unit in ["百万ユーロ", "百万米ドル", "千米ドル", "千ユーロ", "十億円", "百万円", "千円", "億円"] {
+        for unit in AmountUnit.prefixedCaptionTokens {
             token = token.replacingOccurrences(of: unit, with: "")
         }
         return token
