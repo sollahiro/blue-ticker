@@ -1060,11 +1060,12 @@ enum BreakdownNormalizer {
     private static func promoteSoleReportableSegmentsMember(kinds: inout [String: String]) {
         guard kinds[countBasisReportableSegmentsMemberName] == "subtotal" else { return }
         let segmentMembers = kinds.keys.filter { kinds[$0] == "segment" }
-        // 子が0件のとき `allSatisfy` は true になるので、親だけを segment に昇格しない
-        // （報告セグメントに配分していないのれんが 報告セグメント 行になる）。
-        guard !segmentMembers.isEmpty,
-            segmentMembers.allSatisfy({ Xbrl.segmentOtherBusinessMemberNames.contains($0) })
-        else { return }
+        // 子が0件（報告セグメント計＋全社だけ）でも昇格する。実データ: 1605 S100L16P 従業員は
+        // 報告セグメント 2,893 人＋全社 270 人。報告セグメントに配分していないのれんは
+        // 後段の `reclassifyUnallocatedReportableSegments` が調整行へ戻す。
+        guard segmentMembers.allSatisfy({ Xbrl.segmentOtherBusinessMemberNames.contains($0) }) else {
+            return
+        }
         kinds[countBasisReportableSegmentsMemberName] = "segment"
     }
 
@@ -1081,15 +1082,27 @@ enum BreakdownNormalizer {
     }
 
     /// 入れ子の「小計」member（ラベルまたは名前）。ReportableSegment とタグされていても小計。
+    /// `XxxSegmentsReportableSegmentsMember` は葉のセグメントにも使われる命名
+    /// （9537 `LPGSegmentsReportableSegmentsMember`、8798 `ASPSegmentsReportableSegmentsMember`）
+    /// なので名前では判定しない。入れ子グループ（8075 金属セグメント）は
+    /// `demoteRedundantParentSegments` が合計とずれるときだけ `isNestedGroupMember` で落とす。
     static func isNestedSubtotalMember(_ member: String, label: String?) -> Bool {
         if member.contains("Subtotal") { return true }
-        // 提出者の入れ子グループ（金属セグメント / 機械・溶接セグメント）。
-        // `ProcessedFoodsReportableSegmentsMember` のような葉 member は含まない。
-        if member.contains("SegmentsReportableSegment") { return true }
-        let compact = (label ?? "")
+        let compact = compactMemberLabel(label)
+        return compact == "小計" || compact.hasSuffix("小計")
+    }
+
+    /// 提出者の入れ子グループ（8075 S100YEV4 `MetarsSegmentsReportableSegmentMember`「金属セグメント」）。
+    /// presentation では葉と兄弟に並ぶので親子では判定できない。名前とラベルの両方が
+    /// グループの形のときだけ真。分類ではなく、合計とずれたときの親落としの候補選びにだけ使う。
+    static func isNestedGroupMember(_ member: String, label: String?) -> Bool {
+        member.contains("SegmentsReportableSegment") && compactMemberLabel(label).hasSuffix("セグメント")
+    }
+
+    private static func compactMemberLabel(_ label: String?) -> String {
+        (label ?? "")
             .replacingOccurrences(of: " ", with: "")
             .replacingOccurrences(of: "　", with: "")
-        return compact == "小計" || compact.hasSuffix("小計")
     }
 
     /// 子セグメントと同居する親小計を subtotal へ落とす。含めると分母から 5% 超ずれ、
@@ -1117,6 +1130,7 @@ enum BreakdownNormalizer {
         } else {
             let labelled = candidates.filter {
                 isNestedSubtotalMember($0, label: labelsByTag[$0])
+                    || isNestedGroupMember($0, label: labelsByTag[$0])
             }
             if labelled.count == 1 {
                 parent = labelled.first

@@ -36,6 +36,10 @@ import Testing
         let rows = try #require(json["rows"] as? [[String: Any]])
         #expect(rows.first?["amount"] == nil)
         #expect(rows.first?[goodwillCellClosing] as? Double == 100)
+        #expect(rows.first?["in_total"] as? Bool == true)
+        let closing = try #require(json[goodwillCellClosing] as? [String: Any])
+        #expect(closing["status"] as? String == goodwillCellStatusDisclosed)
+        #expect(closing["denominator_tag"] as? String == "Goodwill")
         #expect(retiredBreakdownAxes.contains(breakdownAxisGoodwillAmortization))
         #expect(isSupportedBreakdownAxis(breakdownAxisGoodwillAmortization) == false)
     }
@@ -93,6 +97,45 @@ import Testing
         #expect(subtotal.rowKind == "subtotal")
         #expect(grouped.rowKind == "subtotal")
         #expect(snapshot.denominator == 235_000_000)
+        #expect(snapshot.needsReview == false)
+    }
+
+    /// 9537 S100YIW6 型。`XxxSegmentsReportableSegmentsMember` は葉のセグメント名にも使われる。
+    @Test func segmentsReportableSegmentsLeafNamesStaySegments() throws {
+        let facts = [
+            fact(
+                tag: "NumberOfEmployees", member: "LPGSegmentsReportableSegmentsMember", value: 12,
+                context: "CurrentYearInstant_LPGSegmentsReportableSegmentsMember"),
+            fact(
+                tag: "NumberOfEmployees", member: "PlumingSegmentsReportableSegmentsMember", value: 67,
+                context: "CurrentYearInstant_PlumingSegmentsReportableSegmentsMember"),
+            fact(
+                tag: "NumberOfEmployees", member: "CorporateSharedMember", value: 21,
+                context: "CurrentYearInstant_CorporateSharedMember"),
+        ]
+        let snapshot = try #require(
+            BreakdownNormalizer.normalizeEmployees(
+                facts: facts, total: 100, axis: breakdownAxisEmployees))
+        let segments = snapshot.rows.filter { $0.rowKind == "segment" }.map(\.labelRaw).sorted()
+        #expect(segments == ["LPGSegmentsReportableSegmentsMember", "PlumingSegmentsReportableSegmentsMember"])
+        #expect(snapshot.needsReview == false)
+    }
+
+    /// 1605 S100L16P 型。報告セグメント計＋全社だけの従業員表は報告セグメントを segment に残す。
+    @Test func soleReportableSegmentsMemberWithCorporateSharedIsSegment() throws {
+        let facts = [
+            fact(
+                tag: "NumberOfEmployees", member: "ReportableSegmentsMember", value: 2_893,
+                context: "CurrentYearInstant_ReportableSegmentsMember"),
+            fact(
+                tag: "NumberOfEmployees", member: "CorporateSharedMember", value: 270,
+                context: "CurrentYearInstant_CorporateSharedMember"),
+        ]
+        let snapshot = try #require(
+            BreakdownNormalizer.normalizeEmployees(
+                facts: facts, total: 3_163, axis: breakdownAxisEmployees))
+        let row = try #require(snapshot.rows.first { $0.labelRaw == "ReportableSegmentsMember" })
+        #expect(row.rowKind == "segment")
         #expect(snapshot.needsReview == false)
     }
 
@@ -184,6 +227,33 @@ import Testing
         #expect(europe.impairment == 0)
         #expect(europe.amortization == nil)
         #expect(payload.impairment?.denominator == 0)
+        let json = payload.jsonObject()
+        let impairment = try #require(json[goodwillCellImpairment] as? [String: Any])
+        #expect(impairment["status"] as? String == goodwillCellStatusNoneDisclosed)
+        #expect(impairment["denominator"] as? Double == 0)
+        #expect(impairment["denominator_tag"] is NSNull)
+        #expect(json[goodwillCellAmortization] is NSNull)
+    }
+
+    @Test func subtotalRowIsNotInTotal() throws {
+        let closing = BreakdownSnapshot(
+            axis: breakdownAxisGoodwill, denominator: 100, denominatorTag: "Goodwill",
+            rows: [
+                BreakdownRow(
+                    labelRaw: "AMember", label: "A", amount: 100, share: 1, profit: nil,
+                    rowKind: "segment"),
+                BreakdownRow(
+                    labelRaw: "ReportableSegmentsMember", label: "報告セグメント計", amount: 100,
+                    share: nil, profit: nil, rowKind: "subtotal"),
+            ],
+            sourceKind: breakdownSourceXbrlFacts, needsReview: false, warnings: [])
+        let payload = try #require(
+            GoodwillNormalizer.assemble(
+                opening: nil, closing: closing, amortization: nil, impairment: nil))
+        let rows = try #require(payload.jsonObject()["rows"] as? [[String: Any]])
+        let inTotal = Dictionary(
+            uniqueKeysWithValues: rows.map { ($0["label_raw"] as! String, $0["in_total"] as! Bool) })
+        #expect(inTotal == ["AMember": true, "ReportableSegmentsMember": false])
     }
 
     @Test func noneDisclosedTextHelpers() {

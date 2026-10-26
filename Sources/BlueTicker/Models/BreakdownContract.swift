@@ -52,6 +52,10 @@ public let goodwillCellClosing = "closing"
 public let goodwillCellAmortization = "amortization"
 /// goodwill 行の名前付きセル。のれんの減損損失（円）。固定資産全体の減損表は使わない。
 public let goodwillCellImpairment = "impairment"
+/// goodwill 軸のセル分母の状態。開示された合計がある。
+public let goodwillCellStatusDisclosed = "disclosed"
+/// goodwill 軸のセル分母の状態。注記が「該当事項なし」等と書く（分母 0 は合計 0 の意味）。
+public let goodwillCellStatusNoneDisclosed = "none_disclosed"
 /// 報告セグメント別の持分法会計処理される投資（2026-08-20追加）。決定論のみ。
 public let breakdownAxisEquityMethodInvestments = "equity_method_investments"
 /// 設備投資マトリクス（資産 Instant / フロー Duration / Overview Duration）。
@@ -569,6 +573,23 @@ public struct CapexMetricTotalsPayload: Codable, Sendable, Equatable {
     func jsonObject() -> [String: Any] {
         ["denominator": denominator, "denominator_tag": denominatorTag]
     }
+
+    /// goodwill 軸のセル分母。`status` で「該当事項なし」の 0 と開示された合計を分ける。
+    /// 該当事項なしは格納時の `denominatorTag` が `none_disclosed`。公開形では tag を null にする。
+    func goodwillJsonObject() -> [String: Any] {
+        if denominatorTag == goodwillCellStatusNoneDisclosed {
+            return [
+                "status": goodwillCellStatusNoneDisclosed,
+                "denominator": denominator,
+                "denominator_tag": NSNull(),
+            ]
+        }
+        return [
+            "status": goodwillCellStatusDisclosed,
+            "denominator": denominator,
+            "denominator_tag": denominatorTag,
+        ]
+    }
 }
 
 /// BreakdownRow（内部型）の公開 Codable 写経。
@@ -986,11 +1007,13 @@ public extension BreakdownRowPayload {
     }
 
     /// goodwill 軸の行。`amount` / `profit` は出さない（名前付きセルが正）。欠測セルは null。
+    /// `in_total` は分母（開示合計）に足し込まれる行か。subtotal だけが false。
     func goodwillJsonObject() -> [String: Any] {
         [
             "label_raw": labelRaw,
             "label": label,
             "row_kind": rowKind,
+            "in_total": rowKind != "subtotal",
             goodwillCellOpening: opening ?? NSNull(),
             goodwillCellClosing: closing ?? NSNull(),
             goodwillCellAmortization: amortization ?? NSNull(),
@@ -1061,10 +1084,10 @@ public extension BreakdownSnapshotPayload {
     func goodwillJsonObject() -> [String: Any] {
         [
             "axis": axis,
-            goodwillCellOpening: opening?.jsonObject() ?? NSNull(),
-            goodwillCellClosing: closing?.jsonObject() ?? NSNull(),
-            goodwillCellAmortization: amortization?.jsonObject() ?? NSNull(),
-            goodwillCellImpairment: impairment?.jsonObject() ?? NSNull(),
+            goodwillCellOpening: opening?.goodwillJsonObject() ?? NSNull(),
+            goodwillCellClosing: closing?.goodwillJsonObject() ?? NSNull(),
+            goodwillCellAmortization: amortization?.goodwillJsonObject() ?? NSNull(),
+            goodwillCellImpairment: impairment?.goodwillJsonObject() ?? NSNull(),
             "rows": rows.map { $0.goodwillJsonObject() },
             "source_kind": sourceKind,
             "needs_review": needsReview,
