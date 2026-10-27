@@ -1193,44 +1193,61 @@ enum BorrowingsSchedule {
         return result
     }
 
-    /// ディスコ S100YC6I・中外製薬 S100XTBJ 実データ検証（2026-08-04）: 借入金等明細表／社債・借入金
-    /// 注記が無くても、リース負債のみ計上している会社がある（無借金だがオペレーティングリース資産を
-    /// 保有）。「リース取引に関する注記」専用タグを最終フォールバックとして試す。この注記はリース
-    /// 以外の話題を含まないため、他の経路と異なり社債・借入金キーワード必須の候補選定は適用しない。
-    private static func parseLeaseOnlyNote(xbrlDir: URL) -> (rows: [Row], totalCurrent: Double?, totalPrior: Double?)? {
-        if let html = XBRLUtils.extractTextblockHtml(in: xbrlDir, textblockTag: Xbrl.jGaapLeasesNoteTextblockTag),
-           let soup = try? SwiftSoup.parse(html),
-           let tables = (try? soup.select("table"))?.array() {
-            // 監査指摘（2026-08-05）: 「前/当を含む最初の表」を無絞りで採用しており、リース以外の
-            // 話題を持つ表を誤って拾う理論上の余地はある。ただしディスコ S100YC6I 実データ検証では
-            // 表本体に「リース」という語自体が無い（区分ラベルが「１年内」「１年超」のみ）ため、
-            // 表内キーワード必須にすると正当なケースまで壊れる。本タグはリース以外の話題を含まない
-            // 単一トピック注記のため、`hasExplicitTotalRow` と同様「合計」行を持つ最初の表という
-            // 制約のみに留める（`parseComparisonTable` 自体が合計行の無い表を弾く）。
-            // 宮崎太陽銀行 S100YG72 実データ検証（2026-10-12）: 借入金等明細表は「該当事項はありません」、
-            // リース注記の最初の前/当表は貸手側の「リース料債権部分の金額 5,894 / 5,592」で、
-            // 借手のリース債務として読んでいた。貸手側の表は候補にしない（無ければ nil）。
-            // 2表目「リース料債権部分の金額の回収予定額」（1年以内…）も貸手側なので、直前の見出しが
-            // 「貸手」の区分にある表も除く。
-            let lessorTables = lessorSectionTables(in: soup)
-            let table = tables.first {
-                let t = (try? $0.text()) ?? ""
-                return t.contains("前") && t.contains("当") && !isLessorLeaseTableText(t)
-                    && !lessorTables.contains(ObjectIdentifier($0))
-            }
-            if let table, let result = parseComparisonTable(table) {
-                return tagged(result, Xbrl.jGaapLeasesNoteTextblockTag)
-            }
+    /// 借手のオペレーティング・リースの未経過リース料（解約不能の将来支払義務）の表か。
+    /// J-GAAP では BS のリース債務ではなく off-balance の契約義務なので、有利子負債にも
+    /// 借入金等明細のフォールバックにも入れない。見出しは表の外（「オペレーティング・リース
+    /// 取引のうち解約不能のものに係る未経過リース料」）にあり、表本体は「１年内／１年超／合計」
+    /// だけなので、表テキストではなく直前の見出しで判定する。ファイナンス・リースの未経過
+    /// リース料（リース債務の内訳）は見出しが「オペレーティング」ではないので残す。
+    static func isOperatingLeaseCommitmentTable(_ table: Element) -> Bool {
+        let heading = precedingText(of: table, maxChars: 120)
+        guard heading.contains("オペレーティング") else { return false }
+        return heading.contains("未経過") || heading.contains("解約不能")
+    }
+
+    /// J-GAAP「リース取引に関する注記」。Statement に有利子負債・リース負債があるときの補充だけ。
+    /// 無借金の BS を未経過リース料で置き換えない（アイル S100Z8PG・ディスコ S100YC6I）。
+    /// この注記はリース以外の話題を含まないため、他の経路と異なり社債・借入金キーワード必須の
+    /// 候補選定は適用しない。
+    private static func parseJGaapLeaseOnlyNote(xbrlDir: URL) -> (rows: [Row], totalCurrent: Double?, totalPrior: Double?)? {
+        guard IBDExtractor.statementHasInterestBearingDebtItems(xbrlDir: xbrlDir) else { return nil }
+        guard let html = XBRLUtils.extractTextblockHtml(in: xbrlDir, textblockTag: Xbrl.jGaapLeasesNoteTextblockTag),
+              let soup = try? SwiftSoup.parse(html),
+              let tables = (try? soup.select("table"))?.array() else { return nil }
+        // 監査指摘（2026-08-05）: 「前/当を含む最初の表」を無絞りで採用しており、リース以外の
+        // 話題を持つ表を誤って拾う理論上の余地はある。ただしファイナンス・リースの未経過
+        // リース料は表本体に「リース」という語自体が無い（区分ラベルが「１年内」「１年超」のみ）
+        // ため、表内キーワード必須にすると正当なケースまで壊れる。本タグはリース以外の話題を
+        // 含まない単一トピック注記のため、合計行を持つ最初の表という制約に留める。
+        // 宮崎太陽銀行 S100YG72 実データ検証（2026-10-12）: 借入金等明細表は「該当事項はありません」、
+        // リース注記の最初の前/当表は貸手側の「リース料債権部分の金額 5,894 / 5,592」で、
+        // 借手のリース債務として読んでいた。貸手側の表は候補にしない（無ければ nil）。
+        // 2表目「リース料債権部分の金額の回収予定額」（1年以内…）も貸手側なので、直前の見出しが
+        // 「貸手」の区分にある表も除く。
+        // Statement にリース債務があっても、同じ注記のオペレーティング・リース
+        // 未経過リース料（off-balance）を拾わない。
+        let lessorTables = lessorSectionTables(in: soup)
+        let table = tables.first {
+            let t = (try? $0.text()) ?? ""
+            return t.contains("前") && t.contains("当") && !isLessorLeaseTableText(t)
+                && !lessorTables.contains(ObjectIdentifier($0))
+                && !isOperatingLeaseCommitmentTable($0)
         }
+        guard let table, let result = parseComparisonTable(table) else { return nil }
+        return tagged(result, Xbrl.jGaapLeasesNoteTextblockTag)
+    }
+
+    /// IFRS「リース」注記。IFRS 16 のオンバランス負債で、BS に専用タグが無く「その他」に
+    /// 含まれている会社（中外製薬 S100XTBJ）の置換フォールバック。J-GAAP のオフバランス
+    /// 未経過リース料とは別物なので Statement 科目の有無では落とさない。
+    private static func parseIFRSLeaseOnlyNote(xbrlDir: URL) -> (rows: [Row], totalCurrent: Double?, totalPrior: Double?)? {
         // 中外製薬 S100XTBJ 実データ検証（2026-08-04）: このタグはリース以外の話題を含まないため
         // 「リース負債」1行のみでも有効な満期構成ペアテーブルとみなす（通常経路の2行以上要件
         // ＝無関係な表の誤選択防止は、単一トピックの本タグには不要）。
-        if let html = XBRLUtils.extractTextblockHtml(in: xbrlDir, textblockTag: Xbrl.ifrsLeasesTextblockTag),
-           let soup = try? SwiftSoup.parse(html),
-           let paired = parseMaturityBucketPairTables(in: soup, minMatchingRows: 1) {
-            return tagged(paired, Xbrl.ifrsLeasesTextblockTag)
-        }
-        return nil
+        guard let html = XBRLUtils.extractTextblockHtml(in: xbrlDir, textblockTag: Xbrl.ifrsLeasesTextblockTag),
+              let soup = try? SwiftSoup.parse(html),
+              let paired = parseMaturityBucketPairTables(in: soup, minMatchingRows: 1) else { return nil }
+        return tagged(paired, Xbrl.ifrsLeasesTextblockTag)
     }
 
     /// 三井物産 S100YAVT 実データ検証（2026-08-04）: 連結BSの短期負債・1年内返済予定の長期負債・
@@ -1264,13 +1281,24 @@ enum BorrowingsSchedule {
     /// 表探索の入口。直接タグ（揃っている場合）→ J-GAAP附属明細表 → IFRS注記（専用タグ→汎用タグの順）
     /// の順にフォールバックする。US-GAAP 巨大注記は `extractRows` のみが読む（IBD は HTML 仮想タグ
     /// ＋オペレーティング・リース加算を維持するため `extract` には載せない）。
-    private static func parseTable(xbrlDir: URL) -> (rows: [Row], totalCurrent: Double?, totalPrior: Double?)? {
-        parseDirectDebtFacts(xbrlDir: xbrlDir)
+    /// `includeLeaseOnlyNote`: J-GAAP リース注記。IBD の置換フォールバック（`extract`）では
+    /// false。Statement に科目があるときの補充（`extractRows`）だけ true。
+    /// IFRS 16 リース注記はオンバランスなので `extract` でも読む。
+    private static func parseTable(
+        xbrlDir: URL, includeLeaseOnlyNote: Bool
+    ) -> (rows: [Row], totalCurrent: Double?, totalPrior: Double?)? {
+        let core = parseDirectDebtFacts(xbrlDir: xbrlDir)
             ?? parseJGaapScheduleTable(xbrlDir: xbrlDir)
             ?? parseIFRSNotesTable(xbrlDir: xbrlDir)
             ?? parseIFRSFinancialInstrumentsNote(xbrlDir: xbrlDir)
-            ?? parseLeaseOnlyNote(xbrlDir: xbrlDir)
-            ?? parseRollforwardNote(xbrlDir: xbrlDir)
+        if let core { return core }
+        if includeLeaseOnlyNote, let jgaap = parseJGaapLeaseOnlyNote(xbrlDir: xbrlDir) {
+            return jgaap
+        }
+        if let ifrs = parseIFRSLeaseOnlyNote(xbrlDir: xbrlDir) {
+            return ifrs
+        }
+        return parseRollforwardNote(xbrlDir: xbrlDir)
     }
 
     /// US-GAAP 連結の借入金等明細。附属明細表タグは注記へのクロスリファレンスのみ（表なし）で、
@@ -1632,7 +1660,7 @@ enum BorrowingsSchedule {
     /// 借入金等明細表から有利子負債を積み上げ抽出する。
     /// IBD を XBRL タグで解決できない場合のフォールバック（会計基準は問わない）。
     static func extract(xbrlDir: URL, accountingStandard: String) -> IBDResult? {
-        guard let parsed = parseTable(xbrlDir: xbrlDir) else { return nil }
+        guard let parsed = parseTable(xbrlDir: xbrlDir, includeLeaseOnlyNote: false) else { return nil }
         let components: [IBDComponentEntry] = parsed.rows.map { ($0.label, $0.current, $0.prior) }
         return IBDResult(
             total: parsed.totalCurrent,
@@ -1647,6 +1675,6 @@ enum BorrowingsSchedule {
     /// 平均利率も保持したまま行を返す（IBD 合算には使わない生の明細表データ）。
     /// US-GAAP は附属明細表タグがクロスリファレンスのみのため、巨大注記 HTML を追加で読む。
     static func extractRows(xbrlDir: URL) -> (rows: [Row], totalCurrent: Double?, totalPrior: Double?)? {
-        parseTable(xbrlDir: xbrlDir) ?? parseUSGAAPNotesTable(xbrlDir: xbrlDir)
+        parseTable(xbrlDir: xbrlDir, includeLeaseOnlyNote: true) ?? parseUSGAAPNotesTable(xbrlDir: xbrlDir)
     }
 }

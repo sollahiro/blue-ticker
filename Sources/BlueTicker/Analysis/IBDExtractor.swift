@@ -91,6 +91,9 @@ enum IBDExtractor {
             // 連結BSに有利子負債タグが無い企業（リース債務が明細表のみに記載される等）:
             // 連結附属明細表「借入金等明細表」から積み上げる。合計にはリース債務が含まれるため、
             // 後続のリース加算をスキップして即返す。
+            // J-GAAP リース注記だけの置換はしない（オペレーティング・リースの未経過リース料
+            // で有利子負債を発明していた）。IFRS 16 のリース注記はオンバランスのため明細表が
+            // 無い会社（中外製薬 S100XTBJ）ではここで読む。
             return scheduleResult
         } else if let dir = xbrlDir, hasLargeXbrlFile(in: dir) {
             // インスタンス文書が十分大きいのにIBDタグが皆無 → 無借金企業とみなす
@@ -257,6 +260,20 @@ enum IBDExtractor {
         tags.insert(Xbrl.bankMarkerTag)
         return tags
     }()
+
+    /// 貸借対照表に既知の有利子負債・リース負債科目があるか。
+    /// 注記フォールバックが Statement を置き換えてよいかの判定に使う。
+    static func statementHasInterestBearingDebtItems(xbrlDir: URL) -> Bool {
+        let allTags = XBRLUtils.collectAllNumericElements(in: xbrlDir, nilAsZero: false)
+        let std = detectAccountingStandard(allTags)
+        let fieldSet = statementInstantFieldSet(
+            xbrlDir: xbrlDir, allTags: allTags, accountingStandard: std)
+        if resolveIBD(fieldSet).tag != nil { return true }
+        return Xbrl.leaseLiabilitiesBSTags.contains { tag in
+            guard let fv = fieldSet[tag] else { return false }
+            return fv.current != nil || fv.prior != nil
+        }
+    }
 
     /// statement 本表の IBD 当期値で Instant FieldSet を上書きする。
     /// `extractCanonical` の fact 収集は `nilAsZero: false` のため、当期 `xsi:nil` は落ちる。
