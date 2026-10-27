@@ -18,7 +18,7 @@
 
 | 用途 | ホスト | 認証 |
 |---|---|---|
-| curl / スクリプト / CI | `https://api.sollahiro.com` | Access Service Token |
+| curl / スクリプト / CI | `https://api.yuholab.com` | Access Service Token |
 
 ### REST API
 
@@ -28,7 +28,7 @@
 export CF_ACCESS_CLIENT_ID='....access'
 export CF_ACCESS_CLIENT_SECRET='...'
 
-curl -s "https://api.sollahiro.com/v1/companies/7203/financials?years=1" \
+curl -s "https://api.yuholab.com/v1/companies/7203/financials?years=1" \
   -H "CF-Access-Client-Id: $CF_ACCESS_CLIENT_ID" \
   -H "CF-Access-Client-Secret: $CF_ACCESS_CLIENT_SECRET" \
   | jq '.schema_version, .code'

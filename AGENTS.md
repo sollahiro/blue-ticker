@@ -11,5 +11,5 @@
 - 新機能・XBRL・本番 ingest・release・tracker・デプロイ・会社アイコン週次ピンは対応する `.agents/skills/` に従う。会社アイコンの manualSources・WRITE ingest・失敗の手順訂正は `.agents/skills/company-icons/SKILL.md`。
 - 外部 API・CLI・DB schema・設定・公開契約の変更と、本番 write / 公開範囲の拡張はユーザー確認なしに行わない。
 - MCP（`BltMcpServerCore`）は開発時（Cursor / 手元）専用。製品面は REST と iOS。ChatGPT Apps は凍結。コードは削除せず、MCP を製品面として拡張しない。
-- クラウドセッションから REST を叩くときは `https://api.sollahiro.com/v1/` を使う（認証はプロキシが注入。API キー不要）。まず `GET /v1/skills` で能力カタログ、`GET /v1/skills/{id}` で各エンドポイントの詳細を見る。銘柄コード不明なら `GET /v1/companies?q=` で検索し、`code` を `/v1/companies/{code}/overview|filings|financials` 等に渡す。未集計は 404、DB 非接続は 503。
+- クラウドセッションから REST を叩くときは `https://api.yuholab.com/v1/` を使う（認証はプロキシが注入。API キー不要）。まず `GET /v1/skills` で能力カタログ、`GET /v1/skills/{id}` で各エンドポイントの詳細を見る。銘柄コード不明なら `GET /v1/companies?q=` で検索し、`code` を `/v1/companies/{code}/overview|filings|financials` 等に渡す。未集計は 404、DB 非接続は 503。
 - Contract `cache_version` / `fin-vN` / `screen-vN` は**破壊的変更**のときだけバンプする。細粒度・非破壊の修正はバンプせず、対象行・コードの削除または再指定と `--codes` で直す。正本は `.agents/rules/versioning.md`。

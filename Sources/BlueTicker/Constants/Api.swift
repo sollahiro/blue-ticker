@@ -10,7 +10,7 @@ public enum Api {
     static let openrouterDecisionsModel = "typesafe/jev-1.13"
 
     /// remote バックエンドの既定 blt-server URL（契約ドキュメント・クライアント既定用。秘密情報ではない）。
-    static let defaultRemoteServerURL = "https://api.sollahiro.com"
+    static let defaultRemoteServerURL = "https://api.yuholab.com"
 
     // 検索キャッシュ TTL（日）
     static let searchEmptyTTLDays = 1
