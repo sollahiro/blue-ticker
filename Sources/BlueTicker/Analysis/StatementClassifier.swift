@@ -198,10 +198,11 @@ enum StatementClassifier {
             {
                 return standard
             }
-            return plainLabel
+            // 提出 _lab.xml は会社拡張だけを持つことが多い。標準科目は標準タクソノミの標準ラベルで補う。
+            return plainLabel ?? variants[xbrlStandardLabelRole]
         }
         guard let variant = variants[preferredLabelRole] else {
-            return plainLabel
+            return plainLabel ?? variants[xbrlStandardLabelRole]
         }
         return variant
     }
