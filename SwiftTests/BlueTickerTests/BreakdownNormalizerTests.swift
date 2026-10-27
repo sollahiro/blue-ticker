@@ -393,7 +393,7 @@ import Foundation
     }
 
     /// segment 軸では報告セグメント member が地域名でも混在でも axis_ambiguous にしない
-    ///（BLT-194。product_service 側の軸判定を segment に流用しない）。
+    ///（product_service 側の軸判定を segment に流用しない）。
     @Test func reportableSegmentAxisDoesNotFlagMixedOrUnrecognizedGeographyMembers() throws {
         let mixed = [
             ("FoodsBusinessMember", 40_000_000_000.0),
