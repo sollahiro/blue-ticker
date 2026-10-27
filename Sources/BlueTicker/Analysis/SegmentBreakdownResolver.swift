@@ -31,7 +31,8 @@ enum SegmentBreakdownResolver {
             method: "xbrl_facts", tables: reportable.tables, facts: reportable.facts,
             rowLabelsByTag: reportable.rowLabelsByTag)
         var factsSnapshot = BreakdownNormalizer.normalize(
-            factsInput, consolidatedSales: consolidatedSales, labelsByTag: labelsByTag)
+            factsInput, consolidatedSales: consolidatedSales, labelsByTag: labelsByTag,
+            reportableSegmentAxis: true)
         if let snapshot = factsSnapshot {
             factsSnapshot = BreakdownNormalizer.publishingAsSegment(snapshot)
         }
@@ -61,7 +62,7 @@ enum SegmentBreakdownResolver {
             if let tag = picked.tag,
                let withProfit = BreakdownNormalizer.normalize(
                    factsInput, consolidatedSales: consolidatedSales, labelsByTag: labelsByTag,
-                   profitTagOverride: tag)
+                   profitTagOverride: tag, reportableSegmentAxis: true)
             {
                 factsSnapshot = BreakdownNormalizer.publishingAsSegment(withProfit)
             }
