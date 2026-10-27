@@ -733,6 +733,50 @@ import Testing
         #expect(items.first?.label == "現金及び預金")
     }
 
+    @Test func fallsBackToStandardLabelRoleWhenPlainLabelIsMissing() {
+        // 提出 _lab.xml が会社拡張だけだと fact.label が nil。
+        // loadLabelRoleVariants が既に載せている標準タクソノミの標準ラベルで補う（ローダは増やさない）。
+        let plRole = role("StatementOfIncome")
+        let tag = "InterestIncomeNOI"
+        let facts: XbrlFactIndex = [
+            tag: [
+                "CurrentYearDuration": XbrlFact(
+                    tag: tag, contextRef: "CurrentYearDuration", value: 42_618,
+                    consolidation: "", role: plRole, label: nil)
+            ]
+        ]
+        let labelRoleVariantsByTag: [String: [String: String]] = [
+            tag: ["http://www.xbrl.org/2003/role/label": "受取利息"]
+        ]
+        let items = StatementClassifier.extractLineItems(
+            from: facts, sectionType: .incomeStatement,
+            labelRoleVariantsByTag: labelRoleVariantsByTag)
+        #expect(items.first?.label == "受取利息")
+    }
+
+    @Test func fallsBackToStandardLabelWhenPreferredVariantAndPlainLabelAreMissing() {
+        let bsRole = role("BalanceSheet")
+        let tag = "CashAndDeposits"
+        let facts: XbrlFactIndex = [
+            tag: [
+                "CurrentYearInstant": XbrlFact(
+                    tag: tag, contextRef: "CurrentYearInstant", value: 100,
+                    consolidation: "", role: bsRole, label: nil)
+            ]
+        ]
+        let preferredLabelByRoleTag: [String: [String: String]] = [
+            bsRole: [tag: "http://www.xbrl.org/2003/role/totalLabel"]
+        ]
+        let labelRoleVariantsByTag: [String: [String: String]] = [
+            tag: ["http://www.xbrl.org/2003/role/label": "現金及び預金"]
+        ]
+        let items = StatementClassifier.extractLineItems(
+            from: facts, sectionType: .balanceSheet,
+            preferredLabelByRoleTag: preferredLabelByRoleTag,
+            labelRoleVariantsByTag: labelRoleVariantsByTag)
+        #expect(items.first?.label == "現金及び預金")
+    }
+
     @Test func doesNotOverridePreferredLabelWithPeriodEndVariantOutsideCashFlow() {
         // 回帰テスト（Opus 監査で発見・修正、2026-07-31）: BS の合計行タグが標準タクソノミの
         // periodEndLabel（多くの JPFS/IFRS の資産・負債・純資産系タグに存在）を持つ場合、
