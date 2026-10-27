@@ -62,9 +62,12 @@ enum BreakdownNormalizer {
     /// （第一生命: 計 11,373,330 ≠ 連結財務諸表計上額 9,873,251）。
     /// `profitTagOverride` は決定論で利益タグが決まらず、Jev が既存の行から選んだタグ
     ///（`SegmentProfitJevPicker`）。外部売上基準の経路だけに効く（銀行・保険は専用タグ）。
+    /// `reportableSegmentAxis` は segment 軸から呼ぶとき true。報告セグメントの member は
+    /// 地域名でも事業名でもそのまま報告セグメントなので、事業／地域の軸判定で要レビューにしない。
     static func normalize(
         _ result: ExtractedBreakdown, consolidatedSales: Double?,
-        labelsByTag: [String: String] = [:], profitTagOverride: String? = nil
+        labelsByTag: [String: String] = [:], profitTagOverride: String? = nil,
+        reportableSegmentAxis: Bool = false
     ) -> BreakdownSnapshot? {
         guard result.method == "xbrl_facts", !result.facts.isEmpty else { return nil }
 
@@ -72,7 +75,7 @@ enum BreakdownNormalizer {
            let snapshot = normalizeSalesBasis(
                facts: result.facts, tables: result.tables, rowLabelsByTag: result.rowLabelsByTag,
                consolidatedSales: consolidatedSales, labelsByTag: labelsByTag,
-               profitTagOverride: profitTagOverride)
+               profitTagOverride: profitTagOverride, reportableSegmentAxis: reportableSegmentAxis)
         {
             return snapshot
         }
@@ -105,7 +108,7 @@ enum BreakdownNormalizer {
     private static func normalizeSalesBasis(
         facts: [BreakdownFact], tables: [BreakdownTable], rowLabelsByTag: [String: Set<String>],
         consolidatedSales: Double, labelsByTag: [String: String] = [:],
-        profitTagOverride: String? = nil
+        profitTagOverride: String? = nil, reportableSegmentAxis: Bool = false
     ) -> BreakdownSnapshot? {
         var denominatorNeedsReview = false
         let denominatorTag: String
@@ -234,7 +237,8 @@ enum BreakdownNormalizer {
             )
         }
 
-        let (axis, axisNeedsReview) = classifyAxis(rows: rows)
+        let (axis, axisAmbiguous) = classifyAxis(rows: rows)
+        let axisNeedsReview = axisAmbiguous && !reportableSegmentAxis
         if axisNeedsReview { warnings.append("axis_ambiguous") }
         if denominatorNeedsReview { warnings.append("denominator_tag_ambiguous") }
 

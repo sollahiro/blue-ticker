@@ -392,6 +392,53 @@ import Foundation
         #expect(snap.needsReview == true)
     }
 
+    /// segment 軸では報告セグメント member が地域名でも混在でも axis_ambiguous にしない
+    ///（BLT-194。product_service 側の軸判定を segment に流用しない）。
+    @Test func reportableSegmentAxisDoesNotFlagMixedOrUnrecognizedGeographyMembers() throws {
+        let mixed = [
+            ("FoodsBusinessMember", 40_000_000_000.0),
+            ("ChemicalsBusinessMember", 30_000_000_000.0),
+            ("JapanReportableSegmentMember", 30_000_000_000.0),
+        ]
+        let mixedFacts = mixed.map { label, value in
+            BreakdownFact(
+                tag: "RevenuesFromExternalCustomers", contextRef: "CurrentYearDuration_\(label)",
+                dimensions: ["OperatingSegmentsAxis": label],
+                value: value, label: nil, unitRef: "JPY", decimals: "-6")
+        }
+        let mixedSnap = try #require(
+            BreakdownNormalizer.normalize(
+                ExtractedBreakdown(method: "xbrl_facts", tables: [], facts: mixedFacts),
+                consolidatedSales: 100_000_000_000, reportableSegmentAxis: true))
+        #expect(mixedSnap.needsReview == false)
+        #expect(!mixedSnap.warnings.contains("axis_ambiguous"))
+
+        // 7282 型: インドが地域キーワードに無く、日本・米州と同居すると混在扱いになる。
+        let india = [
+            ("JapanReportableSegmentMember", 447_868_000_000.0),
+            ("AmericasReportableSegmentMember", 425_037_000_000.0),
+            ("IndiaReportableSegmentMember", 51_492_000_000.0),
+        ]
+        let indiaFacts = india.map { label, value in
+            BreakdownFact(
+                tag: "RevenuesFromExternalCustomers", contextRef: "CurrentYearDuration_\(label)",
+                dimensions: ["OperatingSegmentsAxis": label],
+                value: value, label: nil, unitRef: "JPY", decimals: "-6")
+        }
+        let indiaSnap = try #require(
+            BreakdownNormalizer.normalize(
+                ExtractedBreakdown(method: "xbrl_facts", tables: [], facts: indiaFacts),
+                consolidatedSales: 924_397_000_000, reportableSegmentAxis: true))
+        #expect(indiaSnap.needsReview == false)
+        #expect(!indiaSnap.warnings.contains("axis_ambiguous"))
+        let defaultIndia = try #require(
+            BreakdownNormalizer.normalize(
+                ExtractedBreakdown(method: "xbrl_facts", tables: [], facts: indiaFacts),
+                consolidatedSales: 924_397_000_000))
+        #expect(defaultIndia.needsReview == true)
+        #expect(defaultIndia.warnings.contains("axis_ambiguous"))
+    }
+
     /// 資生堂型: 複数の JapanBusiness / AmericasBusiness ラッパ＋TravelRetail でも
     /// NXHD 免除に乗せず needs_review を維持する（Opus 監査 2026-07-25）。
     @Test func shiseidoStyleBusinessWrappersStillTriggerNeedsReviewDespiteMultipleBareGeos() throws {

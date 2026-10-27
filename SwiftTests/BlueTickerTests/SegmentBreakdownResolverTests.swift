@@ -88,6 +88,31 @@ import Testing
         #expect(byLabel["ヘルスケア"]?.profit != 60_698 * Self.yen)
     }
 
+    @Test func mixedBusinessAndGeographyMembersResolveFromFactsOnSegmentAxis() async throws {
+        let members: [(String, Double)] = [
+            ("NissinFoodsReportableSegmentMember", 241_940 * Self.yen),
+            ("MyojoFoodsReportableSegmentMember", 48_302 * Self.yen),
+            ("AmericasReportableSegmentMember", 163_713 * Self.yen),
+            ("ChinaReportableSegmentMember", 74_945 * Self.yen),
+        ]
+        let facts = members.map { member, value in
+            BreakdownFact(
+                tag: "RevenuesFromExternalCustomers",
+                contextRef: "CurrentYearDuration_\(member)",
+                dimensions: ["OperatingSegmentsAxis": member],
+                value: value, label: nil, unitRef: "JPY", decimals: "-6")
+        }
+        let reportable = ExtractedBreakdown(method: "xbrl_facts", tables: [], facts: facts)
+        let sales = members.reduce(0.0) { $0 + $1.1 }
+        let (snapshot, source, _) = await SegmentBreakdownResolver.resolve(
+            reportable: reportable, consolidatedSales: sales)
+        #expect(source == .xbrlFacts)
+        let snap = try #require(snapshot)
+        #expect(snap.axis == breakdownAxisSegment)
+        #expect(snap.needsReview == false)
+        #expect(snap.rows.filter { $0.rowKind == "segment" }.count == 4)
+    }
+
     @Test func geographyTablesDoNotBecomeSegmentSameAsWhenBothDisclosed() async {
         let geography = ExtractedBreakdown(
             method: "html_table",
