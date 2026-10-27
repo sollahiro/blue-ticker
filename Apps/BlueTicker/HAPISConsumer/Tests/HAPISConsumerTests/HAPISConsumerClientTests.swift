@@ -312,7 +312,7 @@ struct HAPISConsumerClientTests {
             ))
         #expect(
             !HAPISConsumerAuth.applies(
-                to: URL(string: "https://api.sollahiro.com/v1/companies")!,
+                to: URL(string: "https://api.yuholab.com/v1/companies")!,
                 gatewayBases: [gateway]
             ))
         let preview = URL(string: "https://hapis-blue-ticker-preview.sollahiro.workers.dev")!

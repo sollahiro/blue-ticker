@@ -131,14 +131,14 @@ private func valueJSONObject(_ value: Value) -> [String: Any]? {
         #expect(json?["error"] != nil)
     }
 
-    /// Cloudflare Tunnel は元の Host ヘッダー（例: api.sollahiro.com）をそのまま origin へ転送する。
+    /// Cloudflare Tunnel は元の Host ヘッダー（例: api.yuholab.com / mcp.yuholab.com）をそのまま origin へ転送する。
     /// デフォルトの検証パイプラインは OriginValidator.localhost() を含み、localhost 以外の
     /// Host を 421 で拒否するため、本番相当の Host ヘッダーでも通ることを回帰として固定する。
     @Test func toolsListSucceedsWithNonLocalhostHostHeader() async throws {
         let transport = try await makeTransport()
         let (status, json) = try await send(
             transport, ["jsonrpc": "2.0", "id": 5, "method": "tools/list", "params": [String: Any]()],
-            extraHeaders: ["Host": "api.sollahiro.com"])
+            extraHeaders: ["Host": "api.yuholab.com"])
 
         #expect(status == 200)
         let tools = (json?["result"] as? [String: Any])?["tools"] as? [[String: Any]]
