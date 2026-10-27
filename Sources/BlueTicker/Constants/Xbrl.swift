@@ -924,8 +924,10 @@ enum Xbrl {
         "ResearchAndDevelopmentCostsIFRS",
     ]
 
-    /// 一般管理費及び当期製造費用に含まれる研究開発費。活動タグの全社合計が無く、
-    /// 研究開発活動の本文総額とこの注記が一致するときだけ分母に使う。
+    /// 一般管理費及び当期製造費用に含まれる研究開発費の総額（連結注記の数値タグ）。
+    /// 活動・販管費タグの無 dimension 全社合計が無いとき、本文総額との一致、または
+    /// member 付き活動タグの当期連結値との一致で Summary `rd` と
+    /// research_and_development 軸の分母に使う。活動タグの全社合計がある書類は替えない。
     static let rdExpenseIncludedInGaAndManufacturingCostTag =
         "ResearchAndDevelopmentExpensesIncludedInGeneralAndAdministrativeExpensesAndManufacturingCostForCurrentPeriod"
 

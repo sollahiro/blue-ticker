@@ -1102,6 +1102,8 @@ public extension BltServerContext {
     /// タグ付き行が全社合計より 5% 以上足りないときは、差額と一致する本文1文を足す。
     /// タグ付き合計が全社合計を超えるときは、総額の外の金額を負の行で足す。
     /// 活動タグの全社合計が無く本文総額が製造費用込みの注記と一致するときは、その注記が分母になる。
+    /// 活動・販管費・費用タグの無 dimension 全社合計が無く、member 付き活動タグの当期連結値が
+    /// その注記と一致するときも同じ注記を分母にする。
     /// Summary の `rd` は本文だけの総額を読まず、この注記へ替わった分母は読む。
     func resolveResearchAndDevelopmentBreakdown(docID: String, correctionDocIDs: [String] = []) async -> BreakdownResolveResult {
         guard let xbrlDir = await downloadAnnualFilingXbrl(

@@ -79,6 +79,8 @@ enum BreakdownFinancialsResolver {
     /// financials の `rd` 分母と、その由来タグを返す。
     /// 活動タグの全社合計が無く販管費タグに落ち、研究開発活動の本文総額が
     /// 製造費用込みの注記と一致するときは、その注記を分母にする。
+    /// 活動・販管費・費用タグの無 dimension 全社合計が無く、member 付きの活動タグの当期値が
+    /// 製造費用込みの注記と一致するときもその注記を使う。
     static func financialsCanonicalRdItem(xbrlDir: URL) -> CanonicalValue {
         let allTags = XBRLUtils.collectAllNumericElements(in: xbrlDir, nilAsZero: false)
         let fieldSet = fieldSetFromDuration(allTags)
@@ -94,7 +96,22 @@ enum BreakdownFinancialsResolver {
         {
             return CanonicalValue(value: fieldSet[noteTag]?.current, tag: noteTag)
         }
+        if result.current == nil, let note = fieldSet[noteTag]?.current, note > 0,
+            activityMemberFactConfirms(note, allTags: allTags)
+        {
+            return CanonicalValue(value: note, tag: noteTag)
+        }
         return CanonicalValue(value: result.current, tag: result.tag)
+    }
+
+    /// 活動タグの当期 fact が member 付き（報告セグメント・報告セグメント計）だけにあり、
+    /// その金額が製造費用込みの注記の連結合計と一致するか。一致すれば注記は全社合計と確かめられる。
+    private static func activityMemberFactConfirms(_ note: Double, allTags: XbrlTagElements) -> Bool {
+        Xbrl.rdExpenseCommonTags.contains { tag in
+            (allTags[tag] ?? [:]).contains { ctx, value in
+                ContextHelpers.isConsolidatedDurationMember(ctx) && abs(value - note) < 1
+            }
+        }
     }
 
     /// financials の `interest_bearing_debt`。正本は breakdown `interest_bearing_debt` 軸の合計。

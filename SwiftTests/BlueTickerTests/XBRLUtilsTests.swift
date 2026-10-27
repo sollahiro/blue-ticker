@@ -115,6 +115,13 @@ import Foundation
         #expect(ContextHelpers.isConsolidatedInstant("CurrentYearInstant"))
         #expect(!(ContextHelpers.isConsolidatedInstant("CurrentYearInstant_NonConsolidated")))
         #expect(ContextHelpers.isNonConsolidatedDuration("CurrentYearDuration_NonConsolidatedMember"))
+        #expect(ContextHelpers.isConsolidatedDurationMember(
+            "CurrentYearDuration_EntertainmentBusinessReportableSegmentMember"))
+        #expect(ContextHelpers.isConsolidatedDurationMember("CurrentYearDuration_ReportableSegmentsMember"))
+        #expect(ContextHelpers.isConsolidatedDurationMember("FilingDateDuration_SomeMember"))
+        #expect(!(ContextHelpers.isConsolidatedDurationMember("CurrentYearDuration")))
+        #expect(!(ContextHelpers.isConsolidatedDurationMember("CurrentYearDuration_NonConsolidatedMember")))
+        #expect(!(ContextHelpers.isConsolidatedDurationMember("Prior1YearDuration_SomeMember")))
     }
 
     // MARK: - Label/Role cache (bounded FIFO) behavior
