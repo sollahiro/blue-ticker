@@ -63,6 +63,47 @@ private struct AllInterestBearingIBDDecider: InterestBearingDebtDeciding {
         return true
     }
 
+    /// 借入金・社債・リース債務が無く、リース注記がオペレーティング・リースの未経過リース料だけのとき
+    /// 有利子負債は 0（未経過リース料は off-balance の契約義務）。
+    /// source: code=3854 fy_end=2026-07-31 doc_id=S100Z8PG page=53 field=interest_bearing_debt
+    /// source: code=4519 fy_end=2025-12-31 doc_id=S100XTBJ page=8 field=borrowings_schedule.リース負債
+    @Test func operatingLeaseCommitmentsAreNotInterestBearingDebt() async throws {
+        for docID in ["S100Z8PG", "S100WVK4", "S100Z571", "S100WRPN", "S100YC6I", "S100YY0T", "S100YXFY"] {
+            guard await Self.ensureAvailable(docID) else { continue }
+            let result = IBDExtractor.extractCanonical(xbrlDir: Self.xbrlDir(docID))
+            #expect(result.method == "zero_debt", "\(docID) method=\(result.method)")
+            #expect(result.total == 0, "\(docID)")
+            #expect(result.priorTotal == 0, "\(docID)")
+            let resolution = await InterestBearingDebtBreakdown.resolve(
+                inputs: InterestBearingDebtBreakdown.inputs(xbrlDir: Self.xbrlDir(docID)),
+                decider: nil, docID: docID)
+            guard case .notApplicable = resolution else {
+                Issue.record("\(docID): expected notApplicable, got \(resolution)")
+                continue
+            }
+        }
+    }
+
+    /// 中外製薬 S100XTBJ: 借入金は無く、IFRS 16 リース負債は BS の「その他」に含まれ専用タグが無い。
+    /// 注記の帳簿価額はオンバランス債務なので有利子負債として残す（J-GAAP 未経過リース料とは別）。
+    @Test func ifrsLeaseNoteWithoutDedicatedBsTagIsStillInterestBearingDebt() async throws {
+        guard await Self.ensureAvailable("S100XTBJ") else { return }
+        let dir = Self.xbrlDir("S100XTBJ")
+        #expect(!IBDExtractor.statementHasInterestBearingDebtItems(xbrlDir: dir))
+        let result = IBDExtractor.extractCanonical(xbrlDir: dir)
+        #expect(result.method == "borrowings_schedule")
+        #expect(result.total == 25_711_000_000)
+        #expect(result.priorTotal == 10_897_000_000)
+        let notes = StatementNotesResolver.resolveBorrowingsSchedule(xbrlDir: dir)
+        guard case .resolved(let payload, _, _) = notes else {
+            Issue.record("expected borrowings_schedule resolved, got \(notes)")
+            return
+        }
+        let lease = payload.borrowingsComponents?.first { $0.label.contains("リース") }
+        #expect(lease?.currentBalance == 25_711_000_000)
+        #expect(lease?.priorBalance == 10_897_000_000)
+    }
+
     /// ソフトバンク: 明細表は売却及びリースバック表で帯外。BS 科目を使う。
     @Test func softBankUsesBalanceSheetWhenScheduleOutsideBand() async throws {
         guard await Self.ensureAvailable("S100YGH5") else { return }

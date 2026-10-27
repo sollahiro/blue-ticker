@@ -516,27 +516,23 @@ import Testing
         #expect(total.currentBalance == 292_013_000_000)
     }
 
-    // MARK: - borrowings_schedule（ディスコ S100YC6I、無借金だがリース負債のみ計上）
+    // MARK: - borrowings_schedule（ディスコ S100YC6I、無借金・リース負債の残高開示なし）
     //
-    // 実データ検証（2026-08-04、ユーザーとの対話で発見）: 借入金等明細表は「該当事項はありません」
-    // だが、J-GAAP「リース取引に関する注記」（標準タグ）に「区分｜前期｜当期」の単純な表
-    // （１年内／１年超／合計）でリース負債の残高が開示される。リース以外の話題を含まないタグの
-    // ため、通常の社債・借入金キーワード必須の候補選定を適用せず`parseLeaseOnlyNote`で解決する。
+    // 借入金等明細表は「該当事項はありません」。J-GAAP「リース取引に関する注記」の表
+    // （１年内／１年超／合計）は「オペレーティング・リース取引のうち解約不能のものに係る
+    // 未経過リース料」で、貸借対照表に載る債務ではない。旧 golden は当期 3,714 百万円・
+    // 前期 2,647 百万円をリース負債として固定していたが、同じ off-balance の契約義務を
+    // 有利子負債にしていた。有利子負債の明細として解決しない。
+    // source: code=6146 fy_end=2026-03-31 doc_id=S100YC6I page=1 field=borrowings_schedule
 
     @Test(.enabled(if: cacheAvailable("S100YC6I"), "XBRL cache S100YC6I not available"))
-    func goldenBorrowingsDiscoDebtFreeButHasLeaseLiabilities() throws {
+    func goldenBorrowingsDiscoOperatingLeaseCommitmentsAreNotBorrowings() throws {
         let result = StatementNotesResolver.resolveBorrowingsSchedule(
             xbrlDir: Self.xbrlDir("S100YC6I"))
-        guard case .resolved(let payload, let source, _) = result else {
-            Issue.record("expected .resolved, got \(result)")
+        guard case .notApplicable = result else {
+            Issue.record("expected .notApplicable, got \(result)")
             return
         }
-        #expect(source == statementNoteSourceXbrlFacts)
-        let components = try #require(payload.borrowingsComponents)
-
-        let total = try #require(components.first { $0.isTotal })
-        #expect(total.priorBalance == 2_647_000_000)
-        #expect(total.currentBalance == 3_714_000_000)
     }
 
     // MARK: - borrowings_schedule（中外製薬 S100XTBJ、無借金だがリース負債のみ計上・IFRS版）

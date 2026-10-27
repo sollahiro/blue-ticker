@@ -292,7 +292,77 @@ import Foundation
         }
     }
 
-    /// 借手側の表は従来どおり読む（貸手側の表が後ろにあっても）。
+    /// 借手側のオペレーティング・リース未経過リース料は off-balance の契約義務。借入金等明細表が
+    /// 空でも有利子負債にしない。見出しキーワードだけでは足りず、Statement に有利子負債が
+    /// 無いときの置換も止める（ファイナンス・リース風の「未経過リース料」表でも発明しない）。
+    @Test func testOperatingLeaseUnexpiredPaymentsAreNotInterestBearingDebt() {
+        func tr(_ cells: [String]) -> String {
+            "&lt;tr&gt;" + cells.map { "&lt;td&gt;\($0)&lt;/td&gt;" }.joined() + "&lt;/tr&gt;"
+        }
+        let header = tr(["", "前連結会計年度", "当連結会計年度"])
+        let operating = "&lt;p&gt;２．オペレーティング・リース取引&lt;/p&gt;"
+            + "&lt;p&gt;オペレーティング・リース取引のうち解約不能のものに係る未経過リース料&lt;/p&gt;"
+            + "&lt;p&gt;（単位：千円）&lt;/p&gt;&lt;table&gt;" + header
+            + tr(["１年内", "261,789", "357,616"])
+            + tr(["１年超", "1,228,396", "4,184,064"])
+            + tr(["合計", "1,490,185", "4,541,681"]) + "&lt;/table&gt;"
+        let operatingOnly = XBRLTestSupport.makeXbrlInstant("""
+            <jpcrp_cor:NotesLeasesConsolidatedFinancialStatementsTextBlock
+                contextRef="CurrentYearDuration">\(operating)</jpcrp_cor:NotesLeasesConsolidatedFinancialStatementsTextBlock>
+            <jpcrp_cor:AnnexedConsolidatedDetailedScheduleOfBorrowingsTextBlock
+                contextRef="CurrentYearDuration">&lt;p&gt;該当事項はありません。&lt;/p&gt;</jpcrp_cor:AnnexedConsolidatedDetailedScheduleOfBorrowingsTextBlock>
+        """)
+        XBRLTestSupport.withXbrlDir(operatingOnly) { dir in
+            #expect(BorrowingsSchedule.extractRows(xbrlDir: dir) == nil)
+            let result = extract(in: dir)
+            #expect(result.total != 4_541_681_000)
+            #expect(result.priorTotal != 1_490_185_000)
+            #expect(result.method != "borrowings_schedule")
+            #expect(!IBDExtractor.statementHasInterestBearingDebtItems(xbrlDir: dir))
+        }
+
+        // Statement が空なら、見出しに「オペレーティング」が無いファイナンス・リース風の表でも
+        // 有利子負債を発明しない（キーワード除外だけの修正では残る穴）。
+        let financeOnlyNoStatement = "&lt;p&gt;１．ファイナンス・リース取引&lt;/p&gt;"
+            + "&lt;p&gt;未経過リース料期末残高相当額&lt;/p&gt;&lt;table&gt;" + header
+            + tr(["１年内", "100", "120"]) + tr(["１年超", "300", "280"])
+            + tr(["合計", "400", "400"]) + "&lt;/table&gt;"
+        let financeXml = XBRLTestSupport.makeXbrlInstant("""
+            <jpcrp_cor:NotesLeasesConsolidatedFinancialStatementsTextBlock
+                contextRef="CurrentYearDuration">\(financeOnlyNoStatement)</jpcrp_cor:NotesLeasesConsolidatedFinancialStatementsTextBlock>
+        """)
+        XBRLTestSupport.withXbrlDir(financeXml) { dir in
+            #expect(BorrowingsSchedule.extractRows(xbrlDir: dir) == nil)
+            #expect(BorrowingsSchedule.extract(xbrlDir: dir, accountingStandard: "J-GAAP") == nil)
+            let result = extract(in: dir)
+            #expect(result.total != 400 * Financial.millionYen)
+            #expect(result.method != "borrowings_schedule")
+        }
+
+        // Statement にリース債務があるときだけ注記を補充する。オペレーティング表は見出しで除外。
+        // オペレーティングが先でも、見出しチェックが無いと未経過リース料を拾う。
+        let financeTable = "&lt;p&gt;１．ファイナンス・リース取引&lt;/p&gt;"
+            + "&lt;p&gt;未経過リース料期末残高相当額&lt;/p&gt;&lt;table&gt;" + header
+            + tr(["１年内", "100", "120"]) + tr(["１年超", "300", "280"])
+            + tr(["合計", "400", "400"]) + "&lt;/table&gt;"
+        for html in [financeTable + operating, operating + financeTable] {
+            let xml = XBRLTestSupport.makeXbrlInstant("""
+                <jppfs_cor:LeaseObligationsCL contextRef="CurrentYearInstant"
+                    unitRef="JPY">1</jppfs_cor:LeaseObligationsCL>
+                <jpcrp_cor:NotesLeasesConsolidatedFinancialStatementsTextBlock
+                    contextRef="CurrentYearDuration">\(html)</jpcrp_cor:NotesLeasesConsolidatedFinancialStatementsTextBlock>
+            """)
+            XBRLTestSupport.withXbrlDir(xml) { dir in
+                let parsed = BorrowingsSchedule.extractRows(xbrlDir: dir)
+                #expect(parsed?.totalCurrent == 400 * Financial.millionYen)
+                #expect(parsed?.totalPrior == 400 * Financial.millionYen)
+                #expect(parsed?.rows.contains { ($0.current ?? 0) > 1_000_000_000 } != true)
+            }
+        }
+    }
+
+    /// 借手側の表は従来どおり読む（貸手側の表が後ろにあっても）。Statement にリース債務がある
+    /// 補充経路。無借金の置換には使わない。
     @Test func testLeaseOnlyNoteStillReadsLesseeTableBeforeLessorSection() {
         func tr(_ cells: [String]) -> String {
             "&lt;tr&gt;" + cells.map { "&lt;td&gt;\($0)&lt;/td&gt;" }.joined() + "&lt;/tr&gt;"
@@ -303,12 +373,41 @@ import Foundation
             + "&lt;/table&gt;&lt;p&gt;（貸手側）&lt;/p&gt;&lt;table&gt;" + header
             + tr(["１年内", "9", "9"]) + tr(["合計", "9", "9"]) + "&lt;/table&gt;"
         let xml = XBRLTestSupport.makeXbrlInstant("""
+            <jppfs_cor:LeaseObligationsCL contextRef="CurrentYearInstant"
+                unitRef="JPY">1</jppfs_cor:LeaseObligationsCL>
             <jpcrp_cor:NotesLeasesConsolidatedFinancialStatementsTextBlock
                 contextRef="CurrentYearDuration">\(html)</jpcrp_cor:NotesLeasesConsolidatedFinancialStatementsTextBlock>
         """)
         XBRLTestSupport.withXbrlDir(xml) { dir in
             let parsed = BorrowingsSchedule.extractRows(xbrlDir: dir)
             #expect(parsed?.totalCurrent == 400 * Financial.millionYen)
+            let ibd = extract(in: dir)
+            #expect(ibd.method == "field_parser")
+            #expect(ibd.total == 1)
+        }
+    }
+
+    /// IFRS 16 リース注記はオンバランス。BS に専用タグが無くても帳簿価額を有利子負債にする。
+    @Test func testIfrsLeaseNoteWithoutStatementTagsIsInterestBearingDebt() {
+        func tr(_ cells: [String]) -> String {
+            "&lt;tr&gt;" + cells.map { "&lt;td&gt;\($0)&lt;/td&gt;" }.joined() + "&lt;/tr&gt;"
+        }
+        let html = "&lt;p&gt;前連結会計年度末（2024年12月31日）&lt;/p&gt;&lt;table&gt;"
+            + tr(["", "帳簿価額"]) + tr(["リース負債", "10,897"]) + "&lt;/table&gt;"
+            + "&lt;p&gt;当連結会計年度末（2025年12月31日）&lt;/p&gt;&lt;table&gt;"
+            + tr(["", "帳簿価額"]) + tr(["リース負債", "25,711"]) + "&lt;/table&gt;"
+        let xml = XBRLTestSupport.makeXbrlInstant("""
+            <jpcrp_cor:NotesLeasesConsolidatedFinancialStatementsIFRSTextBlock
+                contextRef="CurrentYearDuration">\(html)</jpcrp_cor:NotesLeasesConsolidatedFinancialStatementsIFRSTextBlock>
+        """)
+        XBRLTestSupport.withXbrlDir(xml) { dir in
+            #expect(!IBDExtractor.statementHasInterestBearingDebtItems(xbrlDir: dir))
+            let parsed = BorrowingsSchedule.extract(xbrlDir: dir, accountingStandard: "IFRS")
+            #expect(parsed?.method == "borrowings_schedule")
+            #expect(parsed?.total == 25_711 * Financial.millionYen)
+            #expect(parsed?.priorTotal == 10_897 * Financial.millionYen)
+            let rows = BorrowingsSchedule.extractRows(xbrlDir: dir)
+            #expect(rows?.totalCurrent == 25_711 * Financial.millionYen)
         }
     }
 
