@@ -264,9 +264,93 @@ import Testing
         #expect(ResearchAndDevelopmentProseTotalDecision.candidates(in: text).isEmpty)
     }
 
+    /// SPEC_ORACLE: ブシロード型。活動タグはセグメント member だけで、販管費は個別だけ。
+    /// 連結の全社合計は製造費用込みの注記だけにある。Summary `rd` はその注記。
+    @Test func segmentOnlyActivityTagFallsBackToManufacturingNoteTotal() throws {
+        let noteTag = Xbrl.rdExpenseIncludedInGaAndManufacturingCostTag
+        let xml = rdDurationXml(
+            activity: [("CurrentYearDuration_EntertainmentBusinessReportableSegmentMember", "811709000")],
+            noteCurrent: "811709000",
+            sga: [("CurrentYearDuration_NonConsolidatedMember", "100")],
+            extra: """
+                <jppfs_cor:NetSales contextRef="CurrentYearDuration" unitRef="JPY" decimals="0">1</jppfs_cor:NetSales>
+                <jppfs_cor:NetSales contextRef="CurrentYearDuration_NonConsolidatedMember" unitRef="JPY" decimals="0">1</jppfs_cor:NetSales>
+                """)
+        try XBRLTestSupport.withXbrlDir(xml) { dir in
+            let rd = BreakdownFinancialsResolver.financialsCanonicalRdItem(xbrlDir: dir)
+            #expect(rd.value == 811_709_000)
+            #expect(rd.tag == noteTag)
+        }
+    }
+
+    /// SPEC_ORACLE: member の活動額が注記と違うときは注記へ落ちない。
+    @Test func unmatchedActivityMemberDoesNotTakeTheManufacturingNote() throws {
+        let xml = rdDurationXml(
+            activity: [("CurrentYearDuration_EntertainmentBusinessReportableSegmentMember", "100")],
+            noteCurrent: "811709000")
+        try XBRLTestSupport.withXbrlDir(xml) { dir in
+            let rd = BreakdownFinancialsResolver.financialsCanonicalRdItem(xbrlDir: dir)
+            #expect(rd.value == nil)
+        }
+    }
+
+    /// SPEC_ORACLE: 個別 member だけが注記と同額でも、連結の全社合計にはしない。
+    @Test func nonConsolidatedActivityMemberDoesNotConfirmTheManufacturingNote() throws {
+        let xml = rdDurationXml(
+            activity: [("CurrentYearDuration_NonConsolidatedMember", "811709000")],
+            noteCurrent: "811709000",
+            extra: """
+                <jppfs_cor:NetSales contextRef="CurrentYearDuration" unitRef="JPY" decimals="0">1</jppfs_cor:NetSales>
+                <jppfs_cor:NetSales contextRef="CurrentYearDuration_NonConsolidatedMember" unitRef="JPY" decimals="0">1</jppfs_cor:NetSales>
+                """)
+        try XBRLTestSupport.withXbrlDir(xml) { dir in
+            let rd = BreakdownFinancialsResolver.financialsCanonicalRdItem(xbrlDir: dir)
+            #expect(rd.value == nil)
+        }
+    }
+
+    /// SPEC_ORACLE: 前期 member が注記と同額でも当期の全社合計にはしない。
+    @Test func priorActivityMemberDoesNotConfirmTheManufacturingNote() throws {
+        let xml = rdDurationXml(
+            activity: [("Prior1YearDuration_EntertainmentBusinessReportableSegmentMember", "811709000")],
+            noteCurrent: "811709000")
+        try XBRLTestSupport.withXbrlDir(xml) { dir in
+            let rd = BreakdownFinancialsResolver.financialsCanonicalRdItem(xbrlDir: dir)
+            #expect(rd.value == nil)
+        }
+    }
+
+    /// SPEC_ORACLE: 無 dimension の活動タグ全社合計がある書類は注記へ替えない。
+    @Test func undimensionedActivityTotalKeepsTheActivityTag() throws {
+        let xml = rdDurationXml(
+            activity: [
+                ("CurrentYearDuration", "74400000000"),
+                ("CurrentYearDuration_ReportableSegmentsMember", "811709000"),
+            ],
+            noteCurrent: "811709000")
+        try XBRLTestSupport.withXbrlDir(xml) { dir in
+            let rd = BreakdownFinancialsResolver.financialsCanonicalRdItem(xbrlDir: dir)
+            #expect(rd.value == 74_400_000_000)
+            #expect(rd.tag == "ResearchAndDevelopmentExpensesResearchAndDevelopmentActivities")
+        }
+    }
+
+    /// SPEC_ORACLE: ブシロード S100Z4J4。活動タグはセグメント member だけで、販管費タグは個別だけ。
+    /// 連結の全社合計は製造費用込みの注記 811,709千円（有報 p.92）だけにある。
+    @Test func bushiroadSegmentOnlyActivityTagFallsBackToManufacturingNote() async throws {
+        let docID = "S100Z4J4"
+        await SmokeCacheSupport.ensureCached([docID])
+        let dir = SmokeCacheSupport.cacheDir.appendingPathComponent("\(docID)_xbrl")
+        guard FileManager.default.fileExists(atPath: dir.path) else { return }
+        let rd = BreakdownFinancialsResolver.financialsCanonicalRdItem(xbrlDir: dir)
+        #expect(rd.value == 811_709_000)
+        #expect(rd.tag == Xbrl.rdExpenseIncludedInGaAndManufacturingCostTag)
+    }
+
     /// SPEC_ORACLE: 日産化学 S100W4NI。数値タグは無い。
     /// グループ全体 17,578百万円と、セグメント別の5文（合計が同じ17,578百万円）が別文。
     /// 当期総額が1文だけのとき、採用するのはその総額で、セグメント文は行にしない。
+    /// member 付き活動タグが無いので Summary `rd` は null のまま（本文総額は読まない）。
     @Test func nissanChemicalProseKeepsOnlyTheCompanyTotal() async throws {
         let docID = "S100W4NI"
         await SmokeCacheSupport.ensureCached([docID])
@@ -563,6 +647,40 @@ import Testing
             #expect(rd.value == item.yen, "\(item.docID) value \(String(describing: rd.value))")
         }
     }
+}
+
+private func rdDurationXml(
+    activity: [(String, String)] = [],
+    noteCurrent: String? = nil,
+    sga: [(String, String)] = [],
+    extra: String = ""
+) -> String {
+    var elements: [String] = []
+    for (ctx, value) in activity {
+        elements.append(
+            """
+            <jppfs_cor:ResearchAndDevelopmentExpensesResearchAndDevelopmentActivities \
+            contextRef="\(ctx)" unitRef="JPY" decimals="0">\(value)\
+            </jppfs_cor:ResearchAndDevelopmentExpensesResearchAndDevelopmentActivities>
+            """)
+    }
+    if let noteCurrent {
+        let tag = Xbrl.rdExpenseIncludedInGaAndManufacturingCostTag
+        elements.append(
+            """
+            <jppfs_cor:\(tag) contextRef="CurrentYearDuration" unitRef="JPY" decimals="0">\
+            \(noteCurrent)</jppfs_cor:\(tag)>
+            """)
+    }
+    for (ctx, value) in sga {
+        elements.append(
+            """
+            <jppfs_cor:ResearchAndDevelopmentExpensesSGA contextRef="\(ctx)" \
+            unitRef="JPY" decimals="0">\(value)</jppfs_cor:ResearchAndDevelopmentExpensesSGA>
+            """)
+    }
+    if !extra.isEmpty { elements.append(extra) }
+    return XBRLTestSupport.makeXbrlDuration(elements.joined(separator: "\n"))
 }
 
 private func shortfallSnapshot(denominator: Double, tagged: Double) -> BreakdownSnapshot {

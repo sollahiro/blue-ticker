@@ -4,7 +4,8 @@
 // 確率 0.9 以上の当期総額がちょうど1文のときだけ採用する。
 // セグメントへ配分できない開示は warnings に載せ、404 にはしない。
 // OPENROUTER_DECISION_API_KEY が無いときは呼ばない。cache_version は上げない。
-// Summary の rd は数値タグのまま（この経路は breakdown の分母だけ）。
+// Summary の rd は本文だけの総額を読まない（この経路は breakdown の分母だけ）。
+// 製造費用込みの注記へ替わった分母は Summary も読む（member 付き活動タグの一致を含む）。
 // 文の切り出し・円換算・残り行の照合は BreakdownProseToolkit に置く。
 
 import Foundation

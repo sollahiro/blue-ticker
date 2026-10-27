@@ -4,9 +4,19 @@ enum ContextHelpers {
 
     /// 連結の当期損益コンテキストかどうか。セグメント軸メンバー（Member末尾）は除外する。
     static func isConsolidatedDuration(_ ctx: String) -> Bool {
+        isConsolidatedCurrentDuration(ctx, memberAxis: false)
+    }
+
+    /// 連結の当期損益で、セグメント等の Member 軸が付いているかどうか。
+    /// `isConsolidatedDuration` は Member を除外するので、内訳 fact の照合にはこちらを使う。
+    static func isConsolidatedDurationMember(_ ctx: String) -> Bool {
+        isConsolidatedCurrentDuration(ctx, memberAxis: true)
+    }
+
+    private static func isConsolidatedCurrentDuration(_ ctx: String, memberAxis: Bool) -> Bool {
         Xbrl.durationContextPatterns.contains(where: { ctx.contains($0) })
             && !ctx.contains("_NonConsolidated")
-            && !ctx.hasSuffix("Member")
+            && ctx.hasSuffix("Member") == memberAxis
     }
 
     /// 連結の前期損益コンテキストかどうか。
