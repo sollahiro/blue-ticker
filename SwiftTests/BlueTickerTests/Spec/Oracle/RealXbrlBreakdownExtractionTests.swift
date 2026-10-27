@@ -199,6 +199,23 @@ import Foundation
         #expect(current.unitCaption == "百万円")
     }
 
+    // MARK: - 8439 東京センチュリー S100YDRI geography（入れ子見出し）
+
+    /// source: code=8439 fy_end=2026-03-31 doc_id=S100YDRI page=152 field=geography
+    /// 親「欧米」の下に 米国 / アイルランド / その他。先頭子の 米国 346,448 を親ラベルだけにしない。
+    @Test func tokyoCenturyNestedEuropeAmericaHeaderKeepsFirstChild() async throws {
+        guard await Self.ensureAvailable("S100YDRI") else { return }
+        let result = BreakdownExtractor.extractGeographyInfo(xbrlDir: Self.xbrlDir("S100YDRI"))
+        let parsed = RevenueRecognitionCandidates.parse(tables: result.tables)
+        let table = try #require(parsed.first { table in
+            table.columnHeaders.values.contains { $0.contains("アイルランド") }
+        })
+        let headers = Set(table.columnHeaders.values)
+        #expect(headers.contains { $0.contains("欧米") && $0.contains("米国") && !$0.contains("その他") })
+        #expect(!headers.contains("欧米"))
+        #expect(table.unresolvedNestedGeographyHeaders.isEmpty)
+    }
+
     // MARK: - アサヒ S100QG09 geography（2023-03-29、本番 unknown）
 
     @Test func asahi2023GeographyExtractionFindsJapanOverseasRevenueTable() async throws {
