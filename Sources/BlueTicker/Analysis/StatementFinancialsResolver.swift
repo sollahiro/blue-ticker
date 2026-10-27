@@ -18,6 +18,8 @@ struct StatementFinancialsValues {
     var currentLiabilities: Double?
     var nonCurrentLiabilities: Double?
     var netAssets: Double?
+    /// 親会社の所有者に帰属する持分（期末）。ROE の分母。非支配持分・新株予約権を含まない。
+    var parentEquity: Double? = nil
     var ppeTotal: Double?
     var accountsReceivable: Double?
     var inventory: Double?
@@ -244,6 +246,7 @@ enum StatementFinancialsResolver {
             currentLiabilities: bs.currentLiabilities,
             nonCurrentLiabilities: bs.nonCurrentLiabilities,
             netAssets: bs.netAssets,
+            parentEquity: resolveParentEquity(instantFS: instantFS, netAssets: bs.netAssets),
             ppeTotal: ppe.total,
             accountsReceivable: ar.current,
             inventory: inv.current,
@@ -275,6 +278,16 @@ enum StatementFinancialsResolver {
             values: values,
             incomeStatement: year.incomeStatement,
             skipSgaJev: isBank || isInsurance)
+    }
+
+    /// 期末の親会社持分。本表に親会社持分の行（IFRS / US-GAAP）があればそれ、無ければ
+    /// 純資産合計 − 非支配株主持分 − 新株予約権（日本基準。行が無い科目は 0）。
+    static func resolveParentEquity(instantFS: FieldSet, netAssets: Double?) -> Double? {
+        if let direct = resolveItem(instantFS, tags: Xbrl.parentEquityTags).current { return direct }
+        guard let netAssets else { return nil }
+        let nonControlling = resolveItem(instantFS, tags: Xbrl.nonControllingInterestsTags).current ?? 0
+        let subscriptionRights = resolveItem(instantFS, tags: Xbrl.subscriptionRightsToSharesTags).current ?? 0
+        return netAssets - nonControlling - subscriptionRights
     }
 
     // MARK: - US-GAAP（HTML Statement ラベル → 仮想タグ）
@@ -392,6 +405,10 @@ enum StatementFinancialsResolver {
             currentLiabilities: bs.currentLiabilities,
             nonCurrentLiabilities: bs.nonCurrentLiabilities,
             netAssets: bs.netAssets,
+            parentEquity: resolveItem(
+                fieldSetFromInstant(tagElements.filter { Xbrl.parentEquitySummaryTags.contains($0.key) }),
+                tags: Xbrl.parentEquitySummaryTags
+            ).current,
             ppeTotal: ppe.total,
             accountsReceivable: ar.current,
             inventory: inv.current,

@@ -202,7 +202,8 @@ func applyRoeWaterfallToYears(_ years: inout [YearEntry]) {
         let np = years[i].rawData.np
         let sales = years[i].rawData.sales
         let totalAssets = years[i].calculatedData.totalAssets
-        let netAssets = years[i].calculatedData.netAssets
+        // レバレッジの分母は ROE と同じ期末の親会社持分（純利益率 × 回転率 × レバレッジ = ROE）。
+        let netAssets = years[i].rawData.parentEquity
 
         guard let npV = np, let salesV = sales, let taV = totalAssets, let naV = netAssets,
               salesV != 0, taV != 0, naV > 0 else { continue }

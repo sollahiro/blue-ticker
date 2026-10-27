@@ -24,6 +24,8 @@ struct RawData: Codable {
     var op: Double?
     var np: Double?
     var netAssets: Double?
+    /// 期末の親会社持分（ROE の分母）。組立中だけ使い、`company_financials` には出さない。
+    var parentEquity: Double?
     var cfo: Double?
     var cfi: Double?
     var capex: Double?
@@ -40,7 +42,7 @@ struct RawData: Codable {
     enum CodingKeys: String, CodingKey {
         case curPerType = "CurPerType"; case curFYSt = "CurFYSt"; case curFYEn = "CurFYEn"
         case discDate = "DiscDate"; case salesLabel = "SalesLabel"; case sales = "Sales"
-        case op = "OP"; case np = "NP"; case netAssets = "NetAssets"
+        case op = "OP"; case np = "NP"; case netAssets = "NetAssets"; case parentEquity = "ParentEquity"
         case cfo = "CFO"; case cfi = "CFI"; case capex = "Capex"; case buyback = "Buyback"
         case rd = "RD"; case eps = "EPS"; case bps = "BPS"; case shOutFY = "ShOutFY"
         case cashEq = "CashEq"; case currency = "Currency"

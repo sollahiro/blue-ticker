@@ -112,7 +112,7 @@ import Testing
     }
 
     @Test func schemaVersionIsStableInteger() {
-        #expect(Api.financialsSchemaVersion == 3)
+        #expect(Api.financialsSchemaVersion == 4)
     }
 
     @Test func assemblyFingerprintJoinsCanonicalVersionsInFixedOrder() {

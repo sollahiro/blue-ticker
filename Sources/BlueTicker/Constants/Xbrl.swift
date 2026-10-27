@@ -635,6 +635,27 @@ enum Xbrl {
         ]),
     ]
 
+    // MARK: - 親会社持分（ROE の分母）
+
+    /// 親会社の所有者に帰属する持分（本表）。IFRS / US-GAAP は本表に直接の行がある。
+    static let parentEquityTags: [String] = [
+        "EquityAttributableToOwnersOfParentIFRS",
+        "EquityAttributableToOwnersOfParentUSGAAP",
+    ]
+
+    /// 主要な経営指標等の親会社持分。本表に行が無い US-GAAP（HTML 本表）の分母。
+    static let parentEquitySummaryTags: [String] = [
+        "EquityAttributableToOwnersOfParentUSGAAPSummaryOfBusinessResults",
+        "EquityAttributableToOwnersOfParentIFRSSummaryOfBusinessResults",
+        "EquityAttributableToOwnersOfParentJMISSummaryOfBusinessResults",
+    ]
+
+    /// 純資産から親会社持分を出すときに引く行（日本基準は純資産合計 − 非支配株主持分 − 新株予約権）。
+    static let nonControllingInterestsTags: [String] = [
+        "NonControllingInterests", "NonControllingInterestsIFRS",
+    ]
+    static let subscriptionRightsToSharesTags: [String] = ["SubscriptionRightsToShares"]
+
     // US-GAAP 非流動資産コンポーネント（HTML 仮想タグ積み上げ）
     static let usgaapHtmlNCAComponents: [[String]] = [
         ["USGAAP_HTML_PPENet"],

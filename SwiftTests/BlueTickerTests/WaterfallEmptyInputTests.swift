@@ -12,6 +12,7 @@ import Foundation
         raw.sales = 1000
         raw.op = 200
         raw.np = 150
+        raw.parentEquity = 1500
         var calc = CalculatedData()
         calc.grossProfit = 400
         calc.businessProfit = 200
