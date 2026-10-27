@@ -45,6 +45,26 @@ enum RevenueRecognitionCandidates {
         var totals: [Total]
         var groups: [GroupHeader]
         var structure: RevenueRecognitionTableStructure.Result = RevenueRecognitionTableStructure.undetermined
+        /// stub / 単位を除いたあとの見出し部品。入れ子の葉修復と年見出しの再 join に使う。
+        var columnHeaderParts: [Int: [String]] = [:]
+        /// 兄弟列では確定できず、Jev に残した親/子見出し（geography 経路だけが聞く）。
+        var unresolvedNestedGeographyHeaders: [UnresolvedNestedGeographyHeader] = []
+    }
+
+    /// 最下段の地域名が spanning として落ち、兄弟列が無いときに Jev へ渡す。
+    struct UnresolvedNestedGeographyHeader: Equatable, Sendable {
+        var column: Int
+        var parent: String
+        var child: String
+        var parts: [String]
+    }
+
+    /// 列見出し join の途中結果。`joinHeaderParts` の公開文字列と、落ちた葉の有無。
+    struct ColumnHeaderJoin: Equatable, Sendable {
+        var parts: [String]
+        var joined: String
+        var droppedBareGeographyLeaf: String?
+        var parentAbove: String?
     }
 
     struct Item: Equatable {
@@ -585,19 +605,82 @@ enum RevenueRecognitionCandidates {
     }
 
     static func joinHeaderParts(_ parts: [String]) -> String {
+        headerJoin(parts).joined
+    }
+
+    /// 列単位の join。最下段の既知地域名は spanning として落とす（従来どおり）。
+    /// 親見出しの colspan の先頭列だけ葉が落ちる修復は `applyNestedGeographyHeaderSiblingRepair`。
+    static func headerJoin(_ parts: [String]) -> ColumnHeaderJoin {
         let compact = parts.map(compactCell).filter { !$0.isEmpty }
         let withoutUnit = compact.filter { !isUnitCaptionHeader($0) }
         let withoutStub = withoutUnit.filter { !isStubAxisHeader($0) }
         var source = withoutStub.isEmpty ? withoutUnit : withoutStub
         source = collapseConsecutiveDuplicates(source)
+        let parentAbove = source.count >= 2 ? source[source.count - 2] : nil
         if let nested = nestedGeographyLeafLabel(source) {
-            return nested
+            return ColumnHeaderJoin(
+                parts: source, joined: nested, droppedBareGeographyLeaf: nil,
+                parentAbove: parentAbove)
         }
         let leaves = source.filter { !isSpanningParentHeader($0) }
-        if !leaves.isEmpty {
-            source = collapseConsecutiveDuplicates(leaves)
+        var dropped: String?
+        if source.count >= 2, let deepest = source.last, leaves.last != deepest,
+           !leaves.isEmpty,
+           RevenueRecognitionTableStructure.isBareGeographyLabel(deepest),
+           !isAggregateColumnHeader(deepest), !isPeriodHeadingLabel(deepest),
+           !isGeographySalesMetricLabel(deepest)
+        {
+            dropped = deepest
         }
-        return source.joined(separator: " / ")
+        var joinedSource = source
+        if !leaves.isEmpty {
+            joinedSource = collapseConsecutiveDuplicates(leaves)
+        }
+        return ColumnHeaderJoin(
+            parts: source, joined: joinedSource.joined(separator: " / "),
+            droppedBareGeographyLeaf: dropped, parentAbove: parentAbove)
+    }
+
+    /// 同じ親見出しの下に異なる子が並ぶ列は入れ子。落ちた既知地域名を 親 / 子 に戻す。
+    /// 子が全列で同じ（縦結合の spanning）ときは触らない。兄弟が無い列は unresolved に残す。
+    static func applyNestedGeographyHeaderSiblingRepair(
+        headers: inout [Int: String], joins: [Int: ColumnHeaderJoin]
+    ) -> [UnresolvedNestedGeographyHeader] {
+        var byParent: [String: [Int]] = [:]
+        for (column, join) in joins {
+            guard let parent = join.parentAbove else { continue }
+            byParent[parent, default: []].append(column)
+        }
+        var repairedParents: Set<String> = []
+        for (parent, columns) in byParent {
+            let deepest = Set(columns.compactMap { joins[$0]?.parts.last })
+            guard columns.count >= 2, deepest.count >= 2 else { continue }
+            repairedParents.insert(parent)
+            for column in columns {
+                guard let join = joins[column], let leaf = join.droppedBareGeographyLeaf else {
+                    continue
+                }
+                let remaining = join.parts.filter { !isSpanningParentHeader($0) }
+                headers[column] = collapseConsecutiveDuplicates(remaining + [leaf])
+                    .joined(separator: " / ")
+            }
+        }
+        var unresolved: [UnresolvedNestedGeographyHeader] = []
+        for (column, join) in joins.sorted(by: { $0.key < $1.key }) {
+            guard let leaf = join.droppedBareGeographyLeaf else { continue }
+            if let parent = join.parentAbove, repairedParents.contains(parent) { continue }
+            if headers[column]?.contains(leaf) == true { continue }
+            unresolved.append(
+                UnresolvedNestedGeographyHeader(
+                    column: column, parent: join.joined, child: leaf, parts: join.parts))
+        }
+        return unresolved
+    }
+
+    static func nestedParentChildLabel(parent: String, child: String) -> String {
+        collapseConsecutiveDuplicates([compactCell(parent), compactCell(child)])
+            .filter { !$0.isEmpty }
+            .joined(separator: " / ")
     }
 
     /// 入れ子の地域見出し。海外売上高/アジアは葉のアジア、アジア/タイはアジアタイ。
@@ -929,6 +1012,8 @@ enum RevenueRecognitionCandidates {
         let structure = RevenueRecognitionTableStructure.inspect(grid: rows, descriptionRows: descriptionRows)
         let firstData = structure.headerRowCount
         var headers: [Int: String] = [:]
+        var headerParts: [Int: [String]] = [:]
+        var headerJoins: [Int: ColumnHeaderJoin] = [:]
         for column in 0..<ncol {
             let parts = rows.prefix(firstData).compactMap { row -> String? in
                 guard column < row.count else { return nil }
@@ -941,17 +1026,21 @@ enum RevenueRecognitionCandidates {
                 }
                 return text.isEmpty ? nil : text
             }
-            let joined = joinHeaderParts(parts)
+            let join = headerJoin(parts)
             // 列0はラベル域（項目・売上高）のことが多いが、横並び地域表では
             // 日本 / その他 自体が金額列。stub 前提で飛ばすと 合計だけが候補になる。
             // 単位だけの見出しは join が空でも金額列として残す（デンソー t0_c2）。
             if column == 0 {
-                if !isColumnZeroAmountHeader(joined, dataRows: Array(rows.dropFirst(firstData))) {
+                if !isColumnZeroAmountHeader(join.joined, dataRows: Array(rows.dropFirst(firstData))) {
                     continue
                 }
             }
-            headers[column] = joined
+            headers[column] = join.joined
+            headerParts[column] = join.parts
+            headerJoins[column] = join
         }
+        let unresolved = applyNestedGeographyHeaderSiblingRepair(
+            headers: &headers, joins: headerJoins)
 
         var items: [Item] = []
         var totals: [Total] = []
@@ -1022,7 +1111,8 @@ enum RevenueRecognitionCandidates {
             tableIndex: index, grid: rows, headerRowCount: firstData, columnHeaders: headers,
             precedingCaption: table.precedingCaption, unitCaption: table.unitCaption,
             period: table.period, heading: table.heading,
-            items: items, totals: totals, groups: groups, structure: structure)
+            items: items, totals: totals, groups: groups, structure: structure,
+            columnHeaderParts: headerParts, unresolvedNestedGeographyHeaders: unresolved)
     }
 
     /// 同一全社合計で閉じる並行次元は加算しない。事業軸は製品・サービスブロックだけ残す。
