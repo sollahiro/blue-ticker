@@ -1,6 +1,6 @@
 # Legal page Worker
 
-iOS アプリ「有報LAB」の免責・プライバシー方針および利用規約（App Store のプライバシーポリシー URL・サポート URL の先）。静的 HTML だけ。認証もトークンも無い。ブルーティッカーAPI 自体の規約ページが要るときは、別ページとして `sollahiro.com/blue-ticker/...` に置く。
+iOS アプリ「有報LAB」の免責・プライバシー方針および利用規約（App Store のプライバシーポリシー URL・サポート URL の先）。静的 HTML だけ。認証もトークンも無い。有報LAB API 自体の規約ページが要るときは、別ページとして `sollahiro.com/blue-ticker/...` に置く。
 
 **この Worker を `api.*` / `mcp.*` の前段に置かない。** Tunnel + Access はそのまま。
 
@@ -15,7 +15,7 @@ iOS アプリ「有報LAB」の免責・プライバシー方針および利用�
 
 ## 旧 URL のリダイレクト
 
-Custom Domain `sollahiro.com` も残し、次の 6 パスだけを `yuholab.com` の対応ページへ 301 で直接飛ばす（`src/index.js` の `REDIRECTS`。末尾スラッシュの有無は問わない）。前方一致にはしないので、`sollahiro.com/blue-ticker/...` の他のパスは将来ブルーティッカーAPI のページに使える。
+Custom Domain `sollahiro.com` も残し、次の 6 パスだけを `yuholab.com` の対応ページへ 301 で直接飛ばす（`src/index.js` の `REDIRECTS`。末尾スラッシュの有無は問わない）。前方一致にはしないので、`sollahiro.com/blue-ticker/...` の他のパスは将来有報LAB API のページに使える。
 
 | 旧 URL（sollahiro.com） | 転送先 |
 |---|---|

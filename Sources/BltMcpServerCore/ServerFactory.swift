@@ -11,7 +11,7 @@ public let bltMcpServerName = "blt-mcp-server"
 public let bltMcpServerCapabilities = Server.Capabilities(tools: .init(listChanged: false))
 
 /// `Server(title:)` に渡す固定表示名。MCPRoute.swift の initialize 再送シムでも同じ値を使うため公開する。
-public let bltMcpServerTitle = "Blue Ticker"
+public let bltMcpServerTitle = "有報LAB"
 
 /// `Server(instructions:)` / `Initialize.Result(instructions:)` に渡す固定文。
 /// MCPRoute.swift の initialize 再送シムでも同じ値を使うため公開する。

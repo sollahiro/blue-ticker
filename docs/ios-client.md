@@ -8,12 +8,13 @@
 
 ## 名称（アプリと API）
 
-アプリのユーザー向け名称は **有報LAB**、英語（ラテン文字）表記は **YUHO LAB**（大文字・スペースあり）。1.2.0 から。旧作業名「有報ラボ（YuhoLab）」は使わない。アプリが使うサーバーは **ブルーティッカーAPI**（Blue Ticker API）で、改名しない。
+アプリのユーザー向け名称は **有報LAB**、英語（ラテン文字）表記は **YUHO LAB**（大文字・スペースあり）。1.2.0 から。旧作業名「有報ラボ（YuhoLab）」は使わない。アプリが使うサーバー（REST・MCP）の外向き名称も **有報LAB API**（YuhoLAB API）に揃える（2026-10-27）。旧名「ブルーティッカーAPI（Blue Ticker API）」は使わない。内部の抽出・解析ロジックは **BLT**（Business Line Terminal）と呼び、`blt-server`・`blt-ingest`・`BLT_*` などの `blt` 接頭辞はこの略として残す。
 
 | 対象 | 名称 |
 |---|---|
 | ホーム画面の表示名・App Store のアプリ名・法務ページ上のアプリ名 | 有報LAB / YUHO LAB |
-| REST `/v1`・blt-server・HAPIS・Workers・MCP・リポジトリ `sollahiro/blue-ticker` | ブルーティッカーAPI / Blue Ticker |
+| REST `/v1`・HAPIS・MCP の製品名・ドキュメント上の API 名 | 有報LAB API / YuhoLAB API |
+| 抽出・解析ロジック、`blt-server`・`blt-ingest`・`BLT_*` 環境変数などの内部名 | BLT（Business Line Terminal） |
 
 表示名の定義は `INFOPLIST_KEY_CFBundleDisplayName`（pbxproj。ja の `有報LAB`）と `InfoPlist.xcstrings`（ja `有報LAB` / en `YUHO LAB`）だけに置く。1.1.x の表示名は `Blue Ticker`。
 
@@ -25,7 +26,7 @@
 - ターゲット／スキーム `BlueTicker`、`PRODUCT_NAME`、型名 `BlueTickerApp`、置き場 `Apps/BlueTicker`
 - Xcode Cloud ワークフロー（下の「配布」）
 
-文書やコードの文言でアプリを指すときは有報LAB、サーバーを指すときはブルーティッカーAPI と書き分ける（「Blue Ticker のサーバー」のような混ぜ書きをしない）。
+文書やコードの文言でアプリを指すときは有報LAB、外向きの API を指すときは有報LAB API、内部の抽出・解析ロジックを指すときは BLT と書き分ける。リポジトリ名 `sollahiro/blue-ticker`・Swift モジュール `BlueTicker` / `BlueTickerCore`・R2 バケットなど「blue-ticker」と綴った識別子は、移行を決めるまで旧名のまま残る（Linear の有報LAB リブランディング計画で判断）。
 
 ## 置き場
 
@@ -99,7 +100,7 @@ Release Archive は HAPIS 本番 + App Attest production。Internal TestFlight �
 | 事業利益 | 売上総利益 − 販管費。分解の下部に「開示されている営業利益と一致しない場合がございます。」 |
 | 新着 | ウォッチリストだけ。名称検索の Feed 行には付けない。バッジの定義は未決のため v1 では出さない。Feed 行には提出日（`submitted_at`。矢印の左に「提出日」と日付）を出す |
 | 近くの本社 | v1 から外す（位置情報も HQ API も無い） |
-| ウォッチリスト | クライアントの SwiftData。同じ Apple ID の端末へ iCloud（CloudKit、コンテナ `iCloud.com.sollahiro.BlueTicker`）で同期する。保有の株数・取得単価・証券会社・口座の区分も同じ行なので一緒に同期する。ブルーティッカーAPI（HAPIS / blt-server）へは送らない。1 本のリスト。見出しは「あなたの追加した企業」。行は株数と取得単価（円/株）が両方入れば保有、欠けていればウォッチ（第三 enum は無い）。同じ銘柄は口座違いで複数行可。並べ替え UI と編集モードは置かない（削除は行のスワイプのみ）。保有行のキャプションは口座ではなく保有数量。保有・口座の入力は銘柄画面ツールバーの保有情報。起動時に概要・分解・Overview を先読みし、解析キャッシュを 7 日持つ |
+| ウォッチリスト | クライアントの SwiftData。同じ Apple ID の端末へ iCloud（CloudKit、コンテナ `iCloud.com.sollahiro.BlueTicker`）で同期する。保有の株数・取得単価・証券会社・口座の区分も同じ行なので一緒に同期する。有報LAB API（HAPIS / blt-server）へは送らない。1 本のリスト。見出しは「あなたの追加した企業」。行は株数と取得単価（円/株）が両方入れば保有、欠けていればウォッチ（第三 enum は無い）。同じ銘柄は口座違いで複数行可。並べ替え UI と編集モードは置かない（削除は行のスワイプのみ）。保有行のキャプションは口座ではなく保有数量。保有・口座の入力は銘柄画面ツールバーの保有情報。起動時に概要・分解・Overview を先読みし、解析キャッシュを 7 日持つ |
 | 解析キャッシュ | 概要・分解・Overview の REST 応答を端末 Caches に保存（標準 6 時間。ウォッチリスト銘柄は 7 日）。期限切れでも通信失敗時は最後の成功応答を出す。サーバーが 404 を返したら捨てる。検索はキャッシュしない。Feed は下の「Top feed」の端末保存を使う。会社アイコンは取れた画像を端末 Caches に 7 日持つ（配信に `Cache-Control` が無いため）。iOS は Core をリンクしないので `CacheManager` は使わない |
 | ファンド | タブ右端。公開 UI は「保有株数に応じた業績」（純利益 / 純資産 / 投資元本 / ファンドROE。ルックスルーは出さない）と「あなたの保有している企業」（ウォッチは出さない。リスト行と同じ会社アイコン。行は社名+コード、純利益・純資産・投資元本の 3 行。行タップで銘柄面）。保有・口座の入力は銘柄の `保有情報`。公開合計は銘柄単位で合算。バージョンはスクロール末尾に「バージョン x.y.z (ビルド n)」（B マークは廃止）。免責・プライバシー・利用規約はアプリ内に出さず、App Store 用の公開ページ（Cloudflare Worker `workers/legal/`、URL は `ios-privacy.md`）。サーバー切替・発行者 URL は出さない。Debug だけ開発ラボ（ローカル / HAPIS 本番）。開発ラボの銘柄面（キヤノン、トヨタ自動車、守谷輸送機工業、ファーストリテイリング、ジャパンエレベーターサービスHD）は通信なしで銘柄ツールバーの保有情報まで行ける（リストには入れない。保有を保存したときだけウォッチ行になる）。設定タブは復活させない |
 | 会社行 | 社名・業種に加え銘柄コードを載せる。社名は最大3行 |

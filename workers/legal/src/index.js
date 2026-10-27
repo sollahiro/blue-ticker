@@ -2,7 +2,7 @@
  * 有報LAB（iOS アプリ）の免責・プライバシー・利用規約。
  * 配信: yuholab.com の / と /privacy（免責・プライバシー）、/terms（利用規約）。workers.dev も同じ。
  * sollahiro.com の旧 URL 6 パスは yuholab.com の対応ページへ 301 で直接飛ばす。
- * 前方一致にしないのは、sollahiro.com/blue-ticker/... にブルーティッカーAPI のページを置けるようにするため。
+ * 前方一致にしないのは、sollahiro.com/blue-ticker/... に有報LAB API のページを置けるようにするため。
  */
 export const CANONICAL_ORIGIN = "https://yuholab.com";
 
