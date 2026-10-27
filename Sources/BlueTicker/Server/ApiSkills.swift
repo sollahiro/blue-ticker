@@ -799,7 +799,7 @@ public func apiSkillsListJSON() -> [String: Any] {
     [
         "schema_version": apiSkillsSchemaVersion,
         "overview": """
-            Blue Ticker REST API の能力カタログ。各 skill は MCP ツール説明に相当する「いつ使うか／どう呼ぶか」の案内。\
+            有報LAB API（REST）の能力カタログ。各 skill は MCP ツール説明に相当する「いつ使うか／どう呼ぶか」の案内。\
             詳細は GET /v1/skills/{id}。契約の正は REST。MCP は追従面。格納系は未集計 404・DB 非接続 503。
             """,
         "skills": apiSkillsCatalog().map { apiSkillSummaryJSON($0) },

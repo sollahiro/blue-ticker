@@ -119,10 +119,10 @@ test("privacy disclaimer matches product facts without overbroad liability", () 
   assert.match(html, /<title>有報LAB 免責事項およびプライバシーポリシー<\/title>/);
   assert.match(html, /<h1>有報LAB 免責事項およびプライバシーポリシー<\/h1>/);
   assert.match(html, /「アカウントのストレージを管理」から有報LAB のデータを削除してください/);
-  assert.match(html, /ブルーティッカーAPI（Blue Ticker API）から取得します/);
+  assert.match(html, /有報LAB API（YuhoLAB API）から取得します/);
   assert.doesNotMatch(html, /blueticker@sollahiro\.com/);
   assert.doesNotMatch(html, /\/blue-ticker\//);
-  assert.doesNotMatch(html, /Blue Ticker の|Blue Ticker 免責|Blue Ticker 利用規約/);
+  assert.doesNotMatch(html, /Blue Ticker|ブルーティッカー/);
   assert.match(
     html,
     /iOSのKeychainに保存された匿名トークンやApp Attestの記録は、アプリ削除だけでは消えない場合があります/,
@@ -173,13 +173,13 @@ test("terms page is auxiliary to the original filing", () => {
   assert.match(html, /<title>有報LAB 利用規約<\/title>/);
   assert.match(html, /<h1>有報LAB 利用規約<\/h1>/);
   assert.match(html, /「本アプリ」：運営者が配布する iOS アプリケーション「有報LAB」をいいます/);
-  assert.match(html, /本アプリは、運営者が運営するブルーティッカーAPI（Blue Ticker API）を利用して作られています/);
-  assert.match(html, /最終更新: 2026-10-22/);
+  assert.match(html, /本アプリは、運営者が運営する有報LAB API（YuhoLAB API）を利用して作られています/);
+  assert.match(html, /最終更新: 2026-10-27/);
   assert.match(html, /href="mailto:support@yuholab.com">support@yuholab.com</);
   assert.match(html, /<a href="\/privacy">https:\/\/yuholab.com\/privacy<\/a>/);
   assert.doesNotMatch(html, /blueticker@sollahiro\.com/);
   assert.doesNotMatch(html, /\/blue-ticker\//);
-  assert.doesNotMatch(html, /サービス「Blue Ticker」|アプリケーション「Blue Ticker」|Blue Ticker 利用規約/);
+  assert.doesNotMatch(html, /Blue Ticker|ブルーティッカー/);
   assert.doesNotMatch(html, /わかりやすい説明/);
   assert.doesNotMatch(html, /要確認/);
   assert.doesNotMatch(html, /対価の範囲/);

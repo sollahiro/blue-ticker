@@ -1,6 +1,6 @@
-# BLUE TICKER
+# 有報LAB API
 
-日本株の財務データ基盤。**Swift** 製の **REST API**（`blt-server`）が、EDINET 由来のデータを取り込み・提供します。近傍の製品面は REST と iOS。MCP は開発時（Cursor / 手元）のみ使い、製品としては伸ばしません。
+日本株の財務データ基盤。外向きの製品名は **有報LAB**（API・MCP も有報LAB）。内部の抽出・解析ロジックは **BLT**（Business Line Terminal）と呼び、`blt-*` の名前はこの略です。**Swift** 製の **REST API**（`blt-server`）が、EDINET 由来のデータを取り込み・提供します。近傍の製品面は REST と iOS。MCP は開発時（Cursor / 手元）のみ使い、製品としては伸ばしません。
 
 ## 主な機能
 
