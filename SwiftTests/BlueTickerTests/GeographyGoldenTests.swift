@@ -48,7 +48,10 @@ import Testing
         reviewProbability: Double? = nil,
         docID: String = "S-geo-golden",
         assignCurrentPeriod: Bool = true,
-        salesLabel: String? = nil
+        salesLabel: String? = nil,
+        nestedHeaderSelected: String? = NestedGeographyHeaderJevPicker.dropChildAsSpanning,
+        nestedHeaderFail: Bool = false,
+        nestedHeaderProbability: Double = 0.95
     ) async -> (BreakdownSnapshot?, LLMBreakdownAudit?) {
         var tables = BreakdownExtractor.allTablesFromHtml(html, defaultHeading: heading)
         if assignCurrentPeriod, !tables.isEmpty {
@@ -60,7 +63,10 @@ import Testing
             decider: FakeRevenueRecognitionColumnDecider(
                 selected: selected, confidence: confidence, pNone: pNone,
                 probabilities: probabilities,
-                reviewSelected: reviewSelected, reviewProbability: reviewProbability),
+                reviewSelected: reviewSelected, reviewProbability: reviewProbability,
+                nestedHeaderSelected: nestedHeaderSelected,
+                nestedHeaderProbability: nestedHeaderProbability,
+                nestedHeaderFail: nestedHeaderFail),
             fiscalYearEnd: "2026-03-31",
             docID: docID,
             salesLabel: salesLabel)
@@ -663,6 +669,102 @@ import Testing
         #expect(snapshot.rows.first { $0.labelRaw == "日本" }?.amount == 4_249_123_000.0)
         #expect(!snapshot.needsReview)
         #expect(publiclyServable(snapshot))
+    }
+
+    /// source: code=8439 fy_end=2026-03-31 doc_id=S100YDRI page=152 field=geography
+    /// 8439 型: 親「欧米」の colspan 下に 米国 / アイルランド / その他。
+    /// 既知地域名の先頭子だけ spanning として落ちない。兄弟列で 親 / 子 に戻す（Jev 不要）。
+    @Test func nestedEuropeAmericaFirstChildKeepsParentAndChild() async throws {
+        let html = """
+            <p>当連結会計年度</p>
+            <p>（単位：百万円）</p>
+            <table>
+              <tr>
+                <td rowspan="2"></td>
+                <td rowspan="2">日本</td>
+                <td colspan="3">欧米</td>
+                <td rowspan="2">アジア</td>
+                <td rowspan="2">中南米</td>
+                <td rowspan="2">合計</td>
+              </tr>
+              <tr>
+                <td>米国</td><td>アイルランド</td><td>その他</td>
+              </tr>
+              <tr>
+                <td>売上高</td>
+                <td>959,867</td><td>346,448</td><td>12,696</td><td>45,254</td>
+                <td>38,695</td><td>54,708</td><td>1,457,670</td>
+              </tr>
+            </table>
+            """
+        let (snapshotOrNil, _) = await normalize(
+            html: html, sales: yen(1_457_670), docID: "S100YDRI")
+        let snapshot = try #require(snapshotOrNil)
+        #expect(
+            Set(segmentLabels(snapshot))
+                == Set(["日本", "欧米/米国", "欧米/アイルランド", "欧米/その他", "アジア", "中南米"]))
+        #expect(snapshot.rows.first { $0.labelRaw == "欧米/米国" }?.amount == yen(346_448))
+        #expect(snapshot.rows.first { $0.labelRaw == "欧米" } == nil)
+        #expect(snapshot.rows.first { $0.labelRaw == "日本" }?.amount == yen(959_867))
+        #expect(!snapshot.needsReview)
+        #expect(publiclyServable(snapshot))
+    }
+
+    /// 兄弟が無い入れ子（親「欧米」の下に「米国」だけ）は Jev が 親 / 子 を選ぶ。
+    @Test func isolatedNestedGeographyHeaderKeepsParentAndChildViaJev() async throws {
+        let html = """
+            <p>当連結会計年度</p>
+            <p>（単位：百万円）</p>
+            <table>
+              <tr>
+                <td rowspan="2">日本</td>
+                <td>欧米</td>
+                <td rowspan="2">合計</td>
+              </tr>
+              <tr><td>米国</td></tr>
+              <tr>
+                <td>100</td><td>200</td><td>300</td>
+              </tr>
+            </table>
+            """
+        let (snapshotOrNil, _) = await normalize(
+            html: html, sales: yen(300), docID: "S-isolated-eu",
+            nestedHeaderSelected: NestedGeographyHeaderJevPicker.keepParentAndChild)
+        let snapshot = try #require(snapshotOrNil)
+        #expect(Set(segmentLabels(snapshot)) == Set(["日本", "欧米/米国"]))
+        #expect(snapshot.rows.first { $0.labelRaw == "欧米/米国" }?.amount == yen(200))
+        #expect(!snapshot.needsReview)
+        #expect(publiclyServable(snapshot))
+    }
+
+    /// 兄弟が無い入れ子で Jev が合意できないときは親ラベルのまま needs_review。
+    @Test func isolatedNestedGeographyHeaderFailsClosedToNeedsReview() async throws {
+        let html = """
+            <p>当連結会計年度</p>
+            <p>（単位：百万円）</p>
+            <table>
+              <tr>
+                <td rowspan="2">日本</td>
+                <td>欧米</td>
+                <td rowspan="2">合計</td>
+              </tr>
+              <tr><td>米国</td></tr>
+              <tr>
+                <td>100</td><td>200</td><td>300</td>
+              </tr>
+            </table>
+            """
+        let (snapshotOrNil, _) = await normalize(
+            html: html, sales: yen(300), docID: "S-isolated-eu-fail",
+            nestedHeaderFail: true)
+        let snapshot = try #require(snapshotOrNil)
+        #expect(segmentLabels(snapshot).contains("欧米"))
+        #expect(!segmentLabels(snapshot).contains("欧米/米国"))
+        #expect(snapshot.needsReview)
+        #expect(
+            snapshot.warnings.contains(
+                GeographyBreakdownLLMNormalizer.warningNestedGeographyHeaderUnresolved))
+        #expect(!publiclyServable(snapshot))
     }
 
     /// 7734 型: 日本 × 海外内訳（アジア/北米/欧州/その他）× 連結の入れ子見出し。

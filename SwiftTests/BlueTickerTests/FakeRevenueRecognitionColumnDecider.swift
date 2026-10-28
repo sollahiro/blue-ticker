@@ -3,7 +3,9 @@
 import Foundation
 @testable import BlueTickerCore
 
-actor FakeRevenueRecognitionColumnDecider: RevenueRecognitionColumnDeciding, GeographyExtractionReviewing {
+actor FakeRevenueRecognitionColumnDecider: RevenueRecognitionColumnDeciding, GeographyExtractionReviewing,
+    NestedGeographyHeaderDeciding
+{
     var selected: String?
     var containing: String?
     var confidence: Double
@@ -17,8 +19,13 @@ actor FakeRevenueRecognitionColumnDecider: RevenueRecognitionColumnDeciding, Geo
     var columnPickQueue: [String?]
     var columnFailRemaining: Int
     var reviewPickQueue: [(String?, Double?)]
+    var nestedHeaderSelected: String?
+    var nestedHeaderProbability: Double
+    var nestedHeaderFail: Bool
+    var nestedHeaderDisagreement: Bool
     private var columnPickOffset = 0
     private var reviewPickOffset = 0
+    private var nestedHeaderCall = 0
 
     init(
         selected: String? = nil, containing: String? = nil, confidence: Double = 0.9,
@@ -27,7 +34,11 @@ actor FakeRevenueRecognitionColumnDecider: RevenueRecognitionColumnDeciding, Geo
         reviewSelected: String? = nil, reviewProbability: Double? = nil,
         columnPickQueue: [String?] = [],
         columnFailRemaining: Int = 0,
-        reviewPickQueue: [(String?, Double?)] = []
+        reviewPickQueue: [(String?, Double?)] = [],
+        nestedHeaderSelected: String? = NestedGeographyHeaderJevPicker.dropChildAsSpanning,
+        nestedHeaderProbability: Double = 0.95,
+        nestedHeaderFail: Bool = false,
+        nestedHeaderDisagreement: Bool = false
     ) {
         self.selected = selected
         self.containing = containing
@@ -40,6 +51,10 @@ actor FakeRevenueRecognitionColumnDecider: RevenueRecognitionColumnDeciding, Geo
         self.columnPickQueue = columnPickQueue
         self.columnFailRemaining = columnFailRemaining
         self.reviewPickQueue = reviewPickQueue
+        self.nestedHeaderSelected = nestedHeaderSelected
+        self.nestedHeaderProbability = nestedHeaderProbability
+        self.nestedHeaderFail = nestedHeaderFail
+        self.nestedHeaderDisagreement = nestedHeaderDisagreement
     }
 
     func chooseColumn(
@@ -95,6 +110,27 @@ actor FakeRevenueRecognitionColumnDecider: RevenueRecognitionColumnDeciding, Geo
             probability: pick.1,
             options: GeographyBreakdownLLMNormalizer.reviewOptions,
             sentences: [])
+    }
+
+    func classifyNestedGeographyHeader(
+        table: RevenueRecognitionCandidates.ParsedTable,
+        header: RevenueRecognitionCandidates.UnresolvedNestedGeographyHeader,
+        docID: String
+    ) async -> JevChoiceAggregate.Sample {
+        let options = NestedGeographyHeaderJevPicker.optionKeys
+        if nestedHeaderFail {
+            return JevChoiceAggregate.Sample(
+                selected: nil, probability: nil, options: options, model: model)
+        }
+        if nestedHeaderDisagreement {
+            let selected = options[nestedHeaderCall % options.count]
+            nestedHeaderCall += 1
+            return JevChoiceAggregate.Sample(
+                selected: selected, probability: 0.9, options: options, model: model)
+        }
+        return JevChoiceAggregate.Sample(
+            selected: nestedHeaderSelected, probability: nestedHeaderProbability,
+            options: options, model: model)
     }
 
     /// 実 XBRL 回帰で、既知ラベルを含む分解表の全社列をスタブする。

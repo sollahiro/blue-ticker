@@ -100,8 +100,17 @@ enum GeographyBreakdownLLMNormalizer {
         guard !result.tables.isEmpty,
               let consolidatedSales, consolidatedSales != 0 else { return (nil, nil) }
 
-        let parsed = RevenueRecognitionCandidates.parse(tables: result.tables)
+        var parsed = RevenueRecognitionCandidates.parse(tables: result.tables)
             .map(collapsingSingleYearHeader)
+        var nestedHeaderNeedsReview = false
+        var nestedHeaderNotes: [String] = []
+        if let headerDecider = decider as? any NestedGeographyHeaderDeciding {
+            let resolved = await NestedGeographyHeaderJevPicker.resolve(
+                tables: parsed, decider: headerDecider, docID: docID)
+            parsed = resolved.tables
+            nestedHeaderNeedsReview = resolved.needsReview
+            nestedHeaderNotes = resolved.notes
+        }
         let columns = RevenueRecognitionCandidates.amountColumns(in: parsed)
         guard !columns.isEmpty else { return (nil, nil) }
 
@@ -159,6 +168,9 @@ enum GeographyBreakdownLLMNormalizer {
         if let resolved, resolved.forceReview {
             notes += " overridden=\(resolved.key)"
         }
+        if !nestedHeaderNotes.isEmpty {
+            notes += " nested_header=\(nestedHeaderNotes.joined(separator: ","))"
+        }
         var audit = LLMBreakdownAudit(
             sourceTableIndex: nil, periodColumn: resolved?.key ?? choice.selected, unit: "",
             profitDisclosed: false, notes: notes, jev: columnJev, columnJev: columnJev)
@@ -203,7 +215,8 @@ enum GeographyBreakdownLLMNormalizer {
         ) || RevenueRecognitionColumnNormalizer.isPriorOnlyColumn(
             selectedColumn, table: selectedTable)
         var warnings: [String] = []
-        var needsReview = columnUncertain || resolved.forceReview || priorPeriod
+        var needsReview =
+            columnUncertain || resolved.forceReview || priorPeriod || nestedHeaderNeedsReview
         switch columnAggregate.outcome {
         case .disagreement:
             warnings.append(warningColumnSampleDisagreement)
@@ -216,6 +229,7 @@ enum GeographyBreakdownLLMNormalizer {
             warnings.append(RevenueRecognitionColumnNormalizer.warningNoneOfTheseOverridden)
         }
         if priorPeriod { warnings.append(warningPriorPeriodColumn) }
+        if nestedHeaderNeedsReview { warnings.append(warningNestedGeographyHeaderUnresolved) }
 
         let tableTotalAmount = RevenueRecognitionCandidates.tableTotal(
             table: selectedTable, column: wholeCompanyColumn)?.amount
@@ -480,6 +494,9 @@ enum GeographyBreakdownLLMNormalizer {
     static let warningColumnSampleDisagreement = JevDecision.warningSampleDisagreement
     /// 列サンプルの成功が足りないとき。最終判定の correct では覆さない。
     static let warningColumnSampleInsufficient = JevDecision.warningSampleInsufficient
+    /// 入れ子見出しの Jev が合意できないとき。最終判定の correct では覆さない。
+    static let warningNestedGeographyHeaderUnresolved =
+        NestedGeographyHeaderJevPicker.warningUnresolved
     static let reviewCorrect = "correct"
     static let reviewWrong = "wrong"
     static let reviewOptions = [reviewCorrect, reviewWrong]
@@ -500,6 +517,7 @@ enum GeographyBreakdownLLMNormalizer {
             || warnings.contains(warningSelectedColumnMismatch)
             || warnings.contains(warningColumnSampleDisagreement)
             || warnings.contains(warningColumnSampleInsufficient)
+            || warnings.contains(warningNestedGeographyHeaderUnresolved)
     }
 
     static func relativeGap(_ amount: Double, _ reference: Double) -> Double {
@@ -807,11 +825,27 @@ enum GeographyBreakdownLLMNormalizer {
         let years = headerFiscalYearLabels(table)
         guard years.count == 1, let year = years.first else { return table }
         var copy = table
+        var changed = false
         for (column, header) in table.columnHeaders {
-            let parts = header.components(separatedBy: " / ")
+            let parts = table.columnHeaderParts[column]
+                ?? header.components(separatedBy: " / ")
             let kept = parts.filter { RevenueRecognitionCandidates.collapsedCell($0) != year }
             guard kept.count < parts.count, !kept.isEmpty else { continue }
-            copy.columnHeaders[column] = RevenueRecognitionCandidates.joinHeaderParts(kept)
+            let join = RevenueRecognitionCandidates.headerJoin(kept)
+            copy.columnHeaders[column] = join.joined
+            copy.columnHeaderParts[column] = join.parts
+            changed = true
+        }
+        if changed {
+            var joins: [Int: RevenueRecognitionCandidates.ColumnHeaderJoin] = [:]
+            for (column, header) in copy.columnHeaders {
+                let parts = copy.columnHeaderParts[column]
+                    ?? header.components(separatedBy: " / ")
+                joins[column] = RevenueRecognitionCandidates.headerJoin(parts)
+            }
+            copy.unresolvedNestedGeographyHeaders =
+                RevenueRecognitionCandidates.applyNestedGeographyHeaderSiblingRepair(
+                    headers: &copy.columnHeaders, joins: joins)
         }
         return copy
     }
@@ -1467,9 +1501,20 @@ enum GeographyBreakdownLLMNormalizer {
     }
 }
 
-struct OpenRouterGeographyColumnDecider: RevenueRecognitionColumnDeciding, GeographyExtractionReviewing {
+struct OpenRouterGeographyColumnDecider: RevenueRecognitionColumnDeciding, GeographyExtractionReviewing,
+    NestedGeographyHeaderDeciding
+{
     let client: any DecisionsCompleting
     var model: String = Api.openrouterDecisionsModel
+
+    func classifyNestedGeographyHeader(
+        table: RevenueRecognitionCandidates.ParsedTable,
+        header: RevenueRecognitionCandidates.UnresolvedNestedGeographyHeader,
+        docID: String
+    ) async -> JevChoiceAggregate.Sample {
+        await OpenRouterNestedGeographyHeaderDecider(client: client, model: model)
+            .classifyNestedGeographyHeader(table: table, header: header, docID: docID)
+    }
 
     func chooseColumn(
         columns: [RevenueRecognitionCandidates.AmountColumn],
