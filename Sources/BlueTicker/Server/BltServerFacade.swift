@@ -764,7 +764,7 @@ public extension BltServerContext {
     }
 
     /// 報告セグメント軸。出典はセグメント情報の報告セグメント表と XBRL ReportableSegment facts。
-    /// 製品表・地域別関連情報からは作らない。単一セグメント / 90%省略は連結売上の1行。
+    /// 製品表・地域別関連情報からは作らない。単一セグメント / 90%省略は連結売上の1行（単一セグメントで売上が無い年は金額 0）。
     func resolveSegmentBreakdown(docID: String, correctionDocIDs: [String] = []) async -> BreakdownResolveResult {
         guard let xbrlDir = await downloadAnnualFilingXbrl(
             docID: docID, correctionDocIDs: correctionDocIDs

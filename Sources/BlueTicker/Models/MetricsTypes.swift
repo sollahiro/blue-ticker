@@ -24,7 +24,7 @@ struct RawData: Codable {
     var op: Double?
     var np: Double?
     var netAssets: Double?
-    /// 期末の親会社持分（ROE の分母）。組立中だけ使い、`company_financials` には出さない。
+    /// ROE の分母（親会社持分の期首・期末平均。期首が取れなければ期末）。組立中だけ使い、`company_financials` には出さない。
     var parentEquity: Double?
     var cfo: Double?
     var cfi: Double?
