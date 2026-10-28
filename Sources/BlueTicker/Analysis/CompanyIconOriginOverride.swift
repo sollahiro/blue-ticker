@@ -340,6 +340,9 @@ enum CompanyIconOriginOverride {
             "https://www.santo.co.jp/app/wp-content/uploads/2025/06/cropped-favicon-192x192.png"),
         "2286": .imageURL("https://www.hayashikane.co.jp/_assets/img/common/ogp.png"),
         "3901": .imageURL("https://www.marklines.com/apple-touch-icon.png"),
+        // 2026-10-28 weekly: 公告行の URL が colspan 後続セルにあり extractor が空セルで落とす欠行。
+        // 公式 256 PNG（apple-touch 180 と同マーク）。差し替えはマップしない。
+        "2778": .imageURL("https://palemo.co.jp/wp-content/uploads/2026/08/favicon256.png"),
         "1333": .imageURL("https://www.umios.com/favicon/favicon_192.png"),
         "1444": .imageURL("https://reform-nisso.co.jp/favicons/apple-touch-icon-144x144.png"),
         "1518": .imageURL(

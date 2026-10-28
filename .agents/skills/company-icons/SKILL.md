@@ -231,7 +231,7 @@ DATABASE_URL="$BLT_NEON_WRITE_DATABASE_URL" ./.build/release/blt-ingest ingest -
 
 各行: `code` / 理由 (`blocked` | `needs_link` | `tls` | `timeout` | `low_vis_no_source` | `awaiting_go` | `rejected` | …) / 日付 / メモ
 
-毎ラン開始時に読み、対象から除外。新規スキップはピン PR に含める。
+毎ラン開始時に読み、対象から除外。新規スキップはピン PR に含める。`code` は証券コード 4 文字（`288A` のような英字を含む）。数字 4 桁だけにアンカーすると英字コードが台帳から漏れて再候補化される。
 
 - 会社固有の「取れない」→ 台帳
 - 手順・検証・ingest の穴 → この SKILL（次節）
@@ -269,6 +269,7 @@ DATABASE_URL="$BLT_NEON_WRITE_DATABASE_URL" ./.build/release/blt-ingest ingest -
 - **動的ラッパ。** `topics_file?img=/img/...` は実パスへ正規化してからマップする
 - **SNS の X。** 先頭 favicon が旧 Twitter マークの置き換え画像なら棄てる（ラクサス型）
 - **公告セルだけ見る。** 欠測分類は「公告掲載方法」行のセルだけから URL を取る。HTML 全体を連結すると紙面・注記委譲を誤って auto-capable にする
+- **公告 rowspan/colspan。** ラベル直後の td が空で URL が後続セルにあると現行 extractor は not_applicable。製品コードは weekly 範囲外なので手動ピンする
 - **壊れた公告ホスト。** セル内 URL が `.html` 連結・全角ハイフン・空白入りだと origin パース不能。自動 ingest 不能として公式 origin を別途探す
 - **差し替え仮置き。** Before/After は `company-icons/review/{date}/{code}-before|after.*`。本番 `company-icons/{code}.*` は visual GO 後の ingest まで上書きしない
 - **却下後のマークのみ。** ワードマーク付き After が却下されたら公式高解像からマークだけを切り、`review/` に新しい After を置きその code だけ再 webhook。マップは次の GO まで入れない

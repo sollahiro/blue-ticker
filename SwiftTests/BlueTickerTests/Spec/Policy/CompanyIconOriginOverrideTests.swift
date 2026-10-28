@@ -599,6 +599,25 @@ import Testing
         }
     }
 
+    /// 2026-10-28 weekly: listed × company_icons 欠行。公告ラベル直後セルが空で
+    /// URL は colspan 後続セル。公式 256 PNG（apple-touch 180 と同マーク）。
+    @Test func pins20261028WeeklyMissingListedManualImageURLs() {
+        let expected: [(String, String)] = [
+            ("2778", "https://palemo.co.jp/wp-content/uploads/2026/08/favicon256.png"),
+        ]
+        #expect(expected.count == 1)
+        #expect(Set(expected.map(\.0)).count == 1)
+        #expect(
+            Set(expected.map(\.0))
+                .isDisjoint(with: Set(CompanyIconOriginOverride.pronexusDisclosureHomepages.keys)))
+        for (code, url) in expected {
+            #expect(!url.contains("prtimes.jp"), "code=\(code)")
+            #expect(!url.contains("i0.wp.com"), "code=\(code)")
+            #expect(
+                CompanyIconOriginOverride.manualSources[code] == .imageURL(url), "code=\(code)")
+        }
+    }
+
     @Test func detectsPronexusDisclosureHosts() {
         #expect(CompanyIconOriginOverride.isPronexusDisclosureHost("https://www.pronexus.co.jp"))
         #expect(CompanyIconOriginOverride.isPronexusDisclosureHost("http://pronexus.co.jp"))
