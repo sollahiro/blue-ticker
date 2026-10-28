@@ -275,6 +275,7 @@ DATABASE_URL="$BLT_NEON_WRITE_DATABASE_URL" ./.build/release/blt-ingest ingest -
 - **横長の測り方。** 低視認は中央クロップではなく、アプリの aspect-fit（正方形に余白付き）で測る。花王 4452 の 1200×630 OGP はクロップだとマークが大きいが、フィット後は高さ約13%
 - **GO 条件付きクロップ。** 差し替え GO がマーク座標を条件にするときは再 webhook しない。指定矩形で切り、CDN マップして差し替え PR に入れる
 - **GO 後の公式 URL 再取得。** 非 ASCII パスは percent-encode してから GET。公式 HTML 上の Wix / GCS apple-touch は first-party。GO 済みで origin が 403 / TLS 不能なら After を CDN マップする
+- **Pronexus × imageURL。** `pronexusDisclosureHomepages` と `manualSources` の homepageOrigin は重ねない。GO 済み imageURL は Pronexus 16 社にも載せてよい（ingest は imageURL、origin リマップは Pronexus マップ）
 
 ## 完了条件
 

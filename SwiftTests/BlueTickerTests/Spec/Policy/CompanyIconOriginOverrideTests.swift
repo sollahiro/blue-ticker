@@ -99,9 +99,19 @@ import Testing
         #expect(
             CompanyIconOriginOverride.manualSources["2653"]
                 == .imageURL("https://www.aeon-kyushu.info/apple-touch-icon-precomposed.png"))
-        #expect(
-            Set(CompanyIconOriginOverride.manualSources.keys)
-                .isDisjoint(with: Set(CompanyIconOriginOverride.pronexusDisclosureHomepages.keys)))
+        let overlappingPronexus = Set(CompanyIconOriginOverride.manualSources.keys)
+            .intersection(Set(CompanyIconOriginOverride.pronexusDisclosureHomepages.keys))
+        let overlappingHomepageOrigins = overlappingPronexus.filter {
+            if case .homepageOrigin = CompanyIconOriginOverride.manualSources[$0] { return true }
+            return false
+        }
+        #expect(overlappingHomepageOrigins.isEmpty)
+        for code in overlappingPronexus {
+            guard case .imageURL = CompanyIconOriginOverride.manualSources[code] else {
+                Issue.record("expected imageURL overlap with Pronexus map: \(code)")
+                continue
+            }
+        }
         #expect(
             CompanyIconOriginOverride.originForFavicon(
                 code: "7203", extractedOrigin: "https://www.toyota.co.jp")

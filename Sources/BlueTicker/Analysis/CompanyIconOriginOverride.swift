@@ -547,7 +547,9 @@ enum CompanyIconOriginOverride {
         "4112": .imageURL("https://www.hodogaya.co.jp/wp/wp-content/uploads/2022/05/cropped-cropped-favicon-180x180.png"),
         "4196": .imageURL("https://corp.neo-m.jp/hubfs/%E3%83%8D%E3%82%AA%E3%83%AD%E3%82%B4%20-%20%E5%86%86%E3%81%AE%E8%BA%AB.png"),
         "4237": .imageURL("https://www.fujipream.co.jp/wp/wp-content/uploads/2023/10/cropped-favicon-180x180.png"),
-        "4238": .imageURL("https://www.miraial.co.jp/wp-content/uploads/2020/08/cropped-favicon-180x180.png"),
+        "4238": .imageURL(
+            "https://www.miraial.co.jp/wp-content/uploads/2020/08/cropped-favicon-180x180.png"),
+        // Pronexus 公告 origin マップは残す。ingest は 180 apple-touch。
         "4243": .imageURL("https://nix.co.jp/cms/wp-content/themes/nix/assets/img/common/apple-touch-icon.png"),
         "4284": .imageURL("https://www.solxyz.co.jp/wp-content/uploads/2021/02/cropped-favicon-180x180.png"),
         "428A": .imageURL("https://www.cypress-holdings.co.jp/wp-content/uploads/2025/08/cropped-favicon-180x180.png"),
