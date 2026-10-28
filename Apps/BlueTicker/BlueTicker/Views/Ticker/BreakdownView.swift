@@ -60,8 +60,15 @@ struct BreakdownView: View {
                         .foregroundStyle(Theme.textMuted)
                 }
                 if let selectedYear {
-                    factorChart(selectedYear, years: years)
-                } else {
+                    switch metric {
+                    case .businessProfit:
+                        factorChart(selectedYear, years: years)
+                    case .roe:
+                        duPontPanel(selectedYear)
+                    case .roic:
+                        EmptyView()
+                    }
+                } else if let factorPrompt {
                     Text(factorPrompt)
                         .font(.footnote)
                         .foregroundStyle(Theme.textMuted)
@@ -300,15 +307,51 @@ struct BreakdownView: View {
         return segments
     }
 
-    private var factorPrompt: String {
+    private var factorPrompt: String? {
         switch metric {
         case .businessProfit:
             return "年を選ぶと売上要因・利益率要因・販管費要因を表示します。"
         case .roic:
-            return "年を選ぶと利益率要因・回転率要因を表示します。"
+            return nil
         case .roe:
-            return "年を選ぶと純利益率要因・回転率要因・レバレッジ要因を表示します。"
+            return "年を選ぶと純利益率・総資産回転率・財務レバレッジを表示します。"
         }
+    }
+
+    /// ROE のデュポン3要素（その年の水準）。純利益率 × 総資産回転率 × 財務レバレッジ = ROE。
+    private func duPontPanel(_ year: FinancialsYear) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("\(Format.fyJapanese(year.fyEnd))のROEの内訳")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(Theme.text)
+            duPontRow(title: "純利益率", value: Format.percent(year.netMargin))
+            duPontRow(title: "× 総資産回転率", value: Format.times(year.assetTurnover))
+            duPontRow(title: "× 財務レバレッジ", value: Format.times(year.financialLeverage))
+            Rectangle()
+                .fill(Theme.textMuted.opacity(0.45))
+                .frame(height: 1)
+                .padding(.vertical, 2)
+            duPontRow(title: "= ROE", value: Format.percent(year.roe, digits: 2), emphasized: true)
+            Text("純利益率は純利益 ÷ 売上、総資産回転率は売上 ÷ 総資産、財務レバレッジは総資産 ÷ 自己資本です（いずれも期末）。")
+                .font(.caption)
+                .foregroundStyle(Theme.textMuted)
+        }
+        .padding(.top, 8)
+    }
+
+    private func duPontRow(title: String, value: String, emphasized: Bool = false) -> some View {
+        HStack(spacing: 8) {
+            Text(title)
+                .font(.caption.weight(emphasized ? .bold : .regular))
+                .foregroundStyle(Theme.text)
+            Spacer()
+            Text(value)
+                .font(.caption.monospacedDigit().weight(emphasized ? .semibold : .regular))
+                .foregroundStyle(Theme.text)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+        }
+        .accessibilityElement(children: .combine)
     }
 
     private func factorChart(_ year: FinancialsYear, years: [FinancialsYear]) -> some View {
@@ -430,20 +473,12 @@ struct BreakdownView: View {
         case salesChange
         case grossMarginChange
         case sgaChange
-        case roicMargin
-        case roicTurnover
-        case roeNetMargin
-        case roeTurnover
-        case roeLeverage
 
         var title: String {
             switch self {
             case .salesChange: "売上要因"
-            case .grossMarginChange, .roicMargin: "利益率要因"
+            case .grossMarginChange: "利益率要因"
             case .sgaChange: "販管費要因"
-            case .roicTurnover, .roeTurnover: "回転率要因"
-            case .roeNetMargin: "純利益率要因"
-            case .roeLeverage: "レバレッジ要因"
             }
         }
 
@@ -471,17 +506,7 @@ struct BreakdownView: View {
             switch self {
             case .salesChange:
                 return signsDisagree(year.sales, prior?.sales, contribution: year.salesChangeImpact)
-            case .roicTurnover:
-                return signsDisagree(
-                    year.investedCapitalTurnover, prior?.investedCapitalTurnover,
-                    contribution: year.roicTurnoverEffect)
-            case .roeTurnover:
-                return signsDisagree(
-                    year.assetTurnover, prior?.assetTurnover, contribution: year.roeAssetTurnoverEffect)
-            case .roeLeverage:
-                return signsDisagree(
-                    year.financialLeverage, prior?.financialLeverage, contribution: year.roeLeverageEffect)
-            case .grossMarginChange, .sgaChange, .roicMargin, .roeNetMargin:
+            case .grossMarginChange, .sgaChange:
                 return false
             }
         }
@@ -497,10 +522,6 @@ struct BreakdownView: View {
             switch self {
             case .salesChange:
                 return "粗利率がマイナスのときは、売上が増えると赤字も増えます。"
-            case .roicTurnover:
-                return "利益率がマイナスのときは、回転が上がると損失も増えます。"
-            case .roeTurnover, .roeLeverage:
-                return "純利益率がマイナスのときは、回転や借入が増えると損失も増えます。"
             default:
                 return nil
             }
@@ -511,10 +532,6 @@ struct BreakdownView: View {
                 switch self {
                 case .salesChange:
                     return "前年に比べて、売上の変化が利益を押し上げました。"
-                case .roicTurnover, .roeTurnover:
-                    return "前年に比べて、回転率の変化が収益性を押し上げました。"
-                case .roeLeverage:
-                    return "前年に比べて、レバレッジの変化が収益性を押し上げました。"
                 default:
                     break
                 }
@@ -526,16 +543,6 @@ struct BreakdownView: View {
                 return "前年に比べて、仕入れや製造の効率が良くなり、同じ売上から残る利益が増えました。"
             case .sgaChange:
                 return "前年に比べて、経費が減り、利益が増えました。"
-            case .roicMargin:
-                return "前年に比べて、同じお金でもより多く稼げるようになりました。"
-            case .roicTurnover:
-                return "前年に比べて、同じ資金でより多くの売り上げを出せました。"
-            case .roeNetMargin:
-                return "前年に比べて、売上に対して残る利益の割合が上がりました。"
-            case .roeTurnover:
-                return "前年に比べて、資産の使い方が良くなり、同じ資産でも売上が増えました。"
-            case .roeLeverage:
-                return "前年に比べて、借入などの比率が上がり、自己資本あたりの収益を押し上げました。"
             }
         }
 
@@ -544,10 +551,6 @@ struct BreakdownView: View {
                 switch self {
                 case .salesChange:
                     return "前年に比べて、売上の変化が利益を押し下げました。"
-                case .roicTurnover, .roeTurnover:
-                    return "前年に比べて、回転率の変化が収益性を押し下げました。"
-                case .roeLeverage:
-                    return "前年に比べて、レバレッジの変化が収益性を押し下げました。"
                 default:
                     break
                 }
@@ -559,16 +562,6 @@ struct BreakdownView: View {
                 return "前年に比べて、原価がかさみ、同じ売上から残る利益が減りました。"
             case .sgaChange:
                 return "前年に比べて、経費が増え、利益が減りました。"
-            case .roicMargin:
-                return "前年に比べて、同じお金でも稼げる額が減りました。"
-            case .roicTurnover:
-                return "前年に比べて、資金を効率よく活用できませんでした。"
-            case .roeNetMargin:
-                return "前年に比べて、売上に対して残る利益の割合が下がりました。"
-            case .roeTurnover:
-                return "前年に比べて、資産の使い方が悪くなり、同じ資産でも売上が減りました。"
-            case .roeLeverage:
-                return "前年に比べて、借入などの比率が下がり、自己資本あたりの収益を押し下げました。"
             }
         }
 
@@ -580,16 +573,6 @@ struct BreakdownView: View {
                 return "当期売上 × (当期粗利率 − 前期粗利率)"
             case .sgaChange:
                 return "−(当期販管費 − 前期販管費)"
-            case .roicMargin:
-                return "(当期NOPATマージン − 前期NOPATマージン) × 前期投下資本回転率"
-            case .roicTurnover:
-                return "当期NOPATマージン × (当期回転率 − 前期回転率)"
-            case .roeNetMargin:
-                return "(当期純利益率 − 前期純利益率) × 前期総資産回転率 × 前期財務レバレッジ"
-            case .roeTurnover:
-                return "当期純利益率 × (当期回転率 − 前期回転率) × 前期財務レバレッジ"
-            case .roeLeverage:
-                return "当期純利益率 × 当期総資産回転率 × (当期レバレッジ − 前期レバレッジ)"
             }
         }
 
@@ -605,31 +588,6 @@ struct BreakdownView: View {
             case .sgaChange:
                 guard year.sga != nil, prior.sga != nil else { return nil }
                 return "−(\(Format.autoYen(year.sga, currency: year.currency)) − \(Format.autoYen(prior.sga, currency: year.currency)))"
-            case .roicMargin:
-                guard year.nopatMargin != nil, prior.nopatMargin != nil, prior.investedCapitalTurnover != nil else {
-                    return nil
-                }
-                return "(\(Format.percent(year.nopatMargin)) − \(Format.percent(prior.nopatMargin))) × \(Format.times(prior.investedCapitalTurnover))"
-            case .roicTurnover:
-                guard year.nopatMargin != nil, year.investedCapitalTurnover != nil,
-                    prior.investedCapitalTurnover != nil
-                else { return nil }
-                return "\(Format.percent(year.nopatMargin)) × (\(Format.times(year.investedCapitalTurnover)) − \(Format.times(prior.investedCapitalTurnover)))"
-            case .roeNetMargin:
-                guard year.netMargin != nil, prior.netMargin != nil, prior.assetTurnover != nil,
-                    prior.financialLeverage != nil
-                else { return nil }
-                return "(\(Format.percent(year.netMargin)) − \(Format.percent(prior.netMargin))) × \(Format.times(prior.assetTurnover)) × \(Format.times(prior.financialLeverage))"
-            case .roeTurnover:
-                guard year.netMargin != nil, year.assetTurnover != nil, prior.assetTurnover != nil,
-                    prior.financialLeverage != nil
-                else { return nil }
-                return "\(Format.percent(year.netMargin)) × (\(Format.times(year.assetTurnover)) − \(Format.times(prior.assetTurnover))) × \(Format.times(prior.financialLeverage))"
-            case .roeLeverage:
-                guard year.netMargin != nil, year.assetTurnover != nil, year.financialLeverage != nil,
-                    prior.financialLeverage != nil
-                else { return nil }
-                return "\(Format.percent(year.netMargin)) × \(Format.times(year.assetTurnover)) × (\(Format.times(year.financialLeverage)) − \(Format.times(prior.financialLeverage)))"
             }
         }
     }
@@ -660,27 +618,9 @@ struct BreakdownView: View {
                 totalTitle: "前年差",
                 totalValue: year.businessProfitChange
             )
-        case .roic:
-            return FactorSpec(
-                factors: [
-                    FactorRow(kind: .roicMargin, value: year.roicMarginEffect),
-                    FactorRow(kind: .roicTurnover, value: year.roicTurnoverEffect),
-                ],
-                format: Format.percentPoints,
-                totalTitle: "前年差",
-                totalValue: year.roicDelta
-            )
-        case .roe:
-            return FactorSpec(
-                factors: [
-                    FactorRow(kind: .roeNetMargin, value: year.roeNetMarginEffect),
-                    FactorRow(kind: .roeTurnover, value: year.roeAssetTurnoverEffect),
-                    FactorRow(kind: .roeLeverage, value: year.roeLeverageEffect),
-                ],
-                format: Format.percentPoints,
-                totalTitle: "前年差",
-                totalValue: year.roeDelta
-            )
+        case .roic, .roe:
+            // ROE・ROIC の前年差の要因分解は廃止（ROE はデュポン3要素の水準を `duPontPanel` で出す）。
+            return FactorSpec(factors: [], format: Format.percentPoints, totalTitle: "前年差", totalValue: nil)
         }
     }
 
@@ -707,15 +647,17 @@ struct BreakdownView: View {
         return Theme.negative
     }
 
-    /// 前年差（要因分解の合計）がある年度だけ選べる。
+    /// 事業利益は前年差（要因分解の合計）がある年度、ROE はデュポン3要素がそろう年度だけ選べる。
+    /// ROIC は分解を出さないので選べない。
     private func isYearSelectable(_ year: FinancialsYear) -> Bool {
         switch metric {
         case .businessProfit:
             return year.businessProfitChange != nil
         case .roic:
-            return year.roicDelta != nil
+            return false
         case .roe:
-            return year.roeDelta != nil
+            return year.roe != nil && year.netMargin != nil && year.assetTurnover != nil
+                && year.financialLeverage != nil
         }
     }
 

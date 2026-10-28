@@ -96,8 +96,7 @@ struct IndividualAnalyzer {
         yearEntries.sort { ($0.fyEnd ?? "") > ($1.fyEnd ?? "") }
 
         applyOperatingProfitChangeToYears(&yearEntries)
-        applyRoicWaterfallToYears(&yearEntries)
-        applyRoeWaterfallToYears(&yearEntries)
+        applyRoeDuPontToYears(&yearEntries)
         applyWorkingCapitalAndCCCToYears(&yearEntries)
 
         var result = MetricsResult()
@@ -155,9 +154,7 @@ struct IndividualAnalyzer {
         raw.op = statementMain?.operatingProfit.map { $0 / millionYen }
         raw.np = statementMain?.netProfit.map { $0 / millionYen }
         raw.netAssets = statementMain?.netAssets.map { $0 / millionYen }
-        raw.parentEquity = Self.averageParentEquity(
-            closing: statementMain?.parentEquity, opening: statementMain?.priorParentEquity
-        ).map { $0 / millionYen }
+        raw.parentEquity = statementMain?.parentEquity.map { $0 / millionYen }
         raw.cfo = statementMain?.cfo.map { $0 / millionYen }
         raw.cfi = statementMain?.cfi.map { $0 / millionYen }
         // 設備投資: breakdown overview source → CF（#6）
@@ -238,9 +235,10 @@ struct IndividualAnalyzer {
             calc.cfc = cfo + cfi
         }
 
-        calc.roe = Self.returnOnEquity(
-            netProfit: raw.np, averageParentEquity: raw.parentEquity,
-            summaryUndisclosed: Self.summaryRoeIsUndisclosed(xbrlDir: xbrlDir))
+        // ROE（親会社株主に帰属する当期純利益 ÷ 期末の親会社持分）
+        if let np = raw.np, let eq = raw.parentEquity, eq > 0 {
+            calc.roe = (np / eq) * percent
+        }
 
         Self.applyInterestBearingDebtRatios(to: &calc, raw: raw, isBank: ibd.isBank)
 
@@ -309,36 +307,6 @@ func individualCacheIsReusable(_ cached: [String: Any]?, cacheVersion: String, r
 }
 
 extension IndividualAnalyzer {
-    /// ROE の分母。有報の自己資本利益率と同じく期首・期末の平均。期首が取れない（初回の有報など）ときは期末。
-    static func averageParentEquity(closing: Double?, opening: Double?) -> Double? {
-        guard let closing else { return nil }
-        guard let opening else { return closing }
-        return (closing + opening) / 2
-    }
-
-    /// ROE（%）= 親会社株主に帰属する当期純利益 ÷ 親会社持分の期首・期末平均。
-    /// 有報の主要な経営指標等が当期の ROE を「−」にしている年（当期純損失など）は出さない。
-    static func returnOnEquity(
-        netProfit: Double?, averageParentEquity: Double?, summaryUndisclosed: Bool
-    ) -> Double? {
-        guard !summaryUndisclosed, let netProfit, let equity = averageParentEquity, equity > 0 else {
-            return nil
-        }
-        return netProfit / equity * percent
-    }
-
-    /// 主要な経営指標等の当期の自己資本利益率が「−」（xsi:nil）か。
-    /// 連結の行があれば連結、無ければ個別の行で見る。行自体が無い書類は false（計算値を出す）。
-    static func summaryRoeIsUndisclosed(xbrlDir: URL) -> Bool {
-        let withNil = XBRLUtils.collectAllNumericFacts(in: xbrlDir, nilAsZero: true)
-        let disclosed = XBRLUtils.collectAllNumericFacts(in: xbrlDir, nilAsZero: false)
-        let contexts = ["CurrentYearDuration", "CurrentYearDuration_NonConsolidatedMember"]
-        guard let context = contexts.first(where: { ctx in
-            Xbrl.roeSummaryTags.contains { withNil[$0]?[ctx] != nil }
-        }) else { return false }
-        return Xbrl.roeSummaryTags.allSatisfy { disclosed[$0]?[context] == nil }
-    }
-
     /// 有利子負債ベースの比率（net_cash / net_de / roic / nopat_margin / invested_capital_turnover）を埋める。
     ///
     /// 銀行業（`InterestBearingDebtBreakdown.inputs` の `isBank` = 預金の銀行マーカータグあり、または

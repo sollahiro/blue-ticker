@@ -48,28 +48,4 @@ import Testing
         #expect(StatementFinancialsResolver.resolveParentEquity(instantFS: [:], netAssets: 1_000) == 1_000)
         #expect(StatementFinancialsResolver.resolveParentEquity(instantFS: [:], netAssets: nil) == nil)
     }
-
-    @Test func priorParentEquityUsesPriorColumns() {
-        let jgaap: FieldSet = [
-            "SubscriptionRightsToShares": FieldValue(current: 1_174_791, prior: 891_481),
-        ]
-        #expect(StatementFinancialsResolver.resolvePriorParentEquity(
-            instantFS: jgaap, priorNetAssets: 9_404_943) == 8_513_462)
-        #expect(StatementFinancialsResolver.resolvePriorParentEquity(instantFS: jgaap, priorNetAssets: nil) == nil)
-    }
-
-    /// ROE の分母は期首・期末平均（期首が無ければ期末）。有報が「−」の年と分母が正でない年は null。
-    @Test func roeAveragesOpeningAndClosingEquity() {
-        #expect(IndividualAnalyzer.averageParentEquity(closing: 120, opening: 80) == 100)
-        #expect(IndividualAnalyzer.averageParentEquity(closing: 120, opening: nil) == 120)
-        #expect(IndividualAnalyzer.averageParentEquity(closing: nil, opening: 80) == nil)
-        #expect(IndividualAnalyzer.returnOnEquity(
-            netProfit: 10, averageParentEquity: 100, summaryUndisclosed: false) == 10)
-        #expect(IndividualAnalyzer.returnOnEquity(
-            netProfit: -10, averageParentEquity: 100, summaryUndisclosed: false) == -10)
-        #expect(IndividualAnalyzer.returnOnEquity(
-            netProfit: -10, averageParentEquity: 100, summaryUndisclosed: true) == nil)
-        #expect(IndividualAnalyzer.returnOnEquity(
-            netProfit: 10, averageParentEquity: -5, summaryUndisclosed: false) == nil)
-    }
 }

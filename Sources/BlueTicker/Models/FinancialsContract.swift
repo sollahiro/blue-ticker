@@ -18,7 +18,7 @@ public enum FinancialsComputeResult: Sendable {
 
 /// Neon `company_financials.cache_version`。財務計算ロジックまたは本契約の意味変更時のみバンプ。
 /// `blueTickerVersion` とは独立（XBRL RAW の `xbrlFactsCacheVersion` と同思想）。経緯は Git。
-public let companyFinancialsCacheVersion = "fin-v24"
+public let companyFinancialsCacheVersion = "fin-v23"
 
 /// financials read（REST）が 200 を返す最低計算バージョン番号（`fin-vN` の N）。
 /// **明示指定**であり、「現行から 2 つ前」のような機械オフセットではない。人手で上げる。
@@ -107,7 +107,7 @@ public func isCurrentFinancialsAssemblyFingerprint(_ stored: String?) -> Bool {
 // | gross_profit_margin, operating_margin, nopat, nopat_margin | 派生（入力フィールドの組立後に再計算） | IndividualAnalyzer 内計算 | derived |
 // | roe, roic, net_cash, net_de, cfc, working_capital, dso/dio/dpo/ccc | 派生 | IndividualAnalyzer / Waterfall 投影 | derived |
 // | （銀行業）net_cash, net_de, roic, nopat_margin, invested_capital_turnover | 銀行（IBD の `isBank` = `DepositsLiabilitiesBNK` または EDINET 提出者業種＝銀行業）は null。預金を IBD に含めないため有利子負債ベースの比率は意味を持たない（2026-10-12）。interest_bearing_debt は残す。Waterfall の net_cash_change / debt_change_impact も null | IndividualAnalyzer.applyInterestBearingDebtRatios / FinancialsYear.withholdsBankRatios | derived |
-// | business_profit*, roic_delta*, roe_delta*, *_change_impact | Waterfall 専用派生。販管費が無い年の GP − OP 差額は Waterfall 内だけで使い sga へ書き戻さない。銀行は business_profit = 業務純益（= Summary operating_profit）で、既存3スロットに経常収益差・業務粗利益率差・営業経費差を入れ、和が前年差に一致する。両期の経常収益・業務粗利益・営業経費が揃わなければ前年差は null | Waterfall 関数（analysisOnlyKeys） | derived |
+// | business_profit*, net_margin / asset_turnover / financial_leverage（ROE デュポン3要素）, *_change_impact | Waterfall 専用派生（ROE・ROIC の前年差要因分解は 2026-10-28 廃止）。販管費が無い年の GP − OP 差額は Waterfall 内だけで使い sga へ書き戻さない。銀行は business_profit = 業務純益（= Summary operating_profit）で、既存3スロットに経常収益差・業務粗利益率差・営業経費差を入れ、和が前年差に一致する。両期の経常収益・業務粗利益・営業経費が揃わなければ前年差は null | Waterfall 関数（analysisOnlyKeys） | derived |
 //
 // Summary 非搭載（正本 API のみ、組立対象外）: goodwill 明細、PPE 区分明細、借入明細。
 
@@ -172,7 +172,7 @@ struct FinancialsYear: Codable, Sendable {
     var issuedShares: Double?
     var employees: Int?
 
-    // 増減分析（事業利益・ROIC・ROE）
+    // 増減分析（事業利益）と ROE のデュポン3要素
     var businessProfit: Double?
     var businessProfitMargin: Double?
     var businessProfitChange: Double?
@@ -182,13 +182,6 @@ struct FinancialsYear: Codable, Sendable {
     var netMargin: Double?
     var assetTurnover: Double?
     var financialLeverage: Double?
-    var roicDelta: Double?
-    var roicMarginEffect: Double?
-    var roicTurnoverEffect: Double?
-    var roeDelta: Double?
-    var roeNetMarginEffect: Double?
-    var roeAssetTurnoverEffect: Double?
-    var roeLeverageEffect: Double?
 
     // 運転資本・CCC
     var dso: Double?
@@ -257,13 +250,6 @@ struct FinancialsYear: Codable, Sendable {
         case netMargin = "net_margin"
         case assetTurnover = "asset_turnover"
         case financialLeverage = "financial_leverage"
-        case roicDelta = "roic_delta"
-        case roicMarginEffect = "roic_margin_effect"
-        case roicTurnoverEffect = "roic_turnover_effect"
-        case roeDelta = "roe_delta"
-        case roeNetMarginEffect = "roe_net_margin_effect"
-        case roeAssetTurnoverEffect = "roe_asset_turnover_effect"
-        case roeLeverageEffect = "roe_leverage_effect"
         case dso
         case dio
         case dpo
@@ -335,13 +321,6 @@ struct FinancialsYear: Codable, Sendable {
             case .netMargin: try container.encode(netMargin, forKey: key)
             case .assetTurnover: try container.encode(assetTurnover, forKey: key)
             case .financialLeverage: try container.encode(financialLeverage, forKey: key)
-            case .roicDelta: try container.encode(roicDelta, forKey: key)
-            case .roicMarginEffect: try container.encode(roicMarginEffect, forKey: key)
-            case .roicTurnoverEffect: try container.encode(roicTurnoverEffect, forKey: key)
-            case .roeDelta: try container.encode(roeDelta, forKey: key)
-            case .roeNetMarginEffect: try container.encode(roeNetMarginEffect, forKey: key)
-            case .roeAssetTurnoverEffect: try container.encode(roeAssetTurnoverEffect, forKey: key)
-            case .roeLeverageEffect: try container.encode(roeLeverageEffect, forKey: key)
             case .dso: try container.encode(dso, forKey: key)
             case .dio: try container.encode(dio, forKey: key)
             case .dpo: try container.encode(dpo, forKey: key)
@@ -422,13 +401,6 @@ extension FinancialsYear {
         netMargin = calc.netMargin
         assetTurnover = calc.assetTurnover
         financialLeverage = calc.financialLeverage
-        roicDelta = calc.roicDelta
-        roicMarginEffect = calc.roicMarginEffect
-        roicTurnoverEffect = calc.roicTurnoverEffect
-        roeDelta = calc.roeDelta
-        roeNetMarginEffect = calc.roeNetMarginEffect
-        roeAssetTurnoverEffect = calc.roeAssetTurnoverEffect
-        roeLeverageEffect = calc.roeLeverageEffect
 
         dso = calc.dso
         dio = calc.dio
@@ -500,13 +472,6 @@ extension FinancialsYear {
         calc.netMargin = netMargin
         calc.assetTurnover = assetTurnover
         calc.financialLeverage = financialLeverage
-        calc.roicDelta = roicDelta
-        calc.roicMarginEffect = roicMarginEffect
-        calc.roicTurnoverEffect = roicTurnoverEffect
-        calc.roeDelta = roeDelta
-        calc.roeNetMarginEffect = roeNetMarginEffect
-        calc.roeAssetTurnoverEffect = roeAssetTurnoverEffect
-        calc.roeLeverageEffect = roeLeverageEffect
         calc.dso = dso
         calc.dio = dio
         calc.dpo = dpo
@@ -535,8 +500,6 @@ extension FinancialsYear {
         "business_profit_change", "sales_change_impact",
         "gross_margin_change_impact", "sga_change_impact",
         "net_margin", "asset_turnover", "financial_leverage",
-        "roic_delta", "roic_margin_effect", "roic_turnover_effect",
-        "roe_delta", "roe_net_margin_effect", "roe_asset_turnover_effect", "roe_leverage_effect",
         "working_capital", "dso", "dio", "dpo", "ccc",
     ]
 
@@ -617,10 +580,6 @@ let financialsUnits: [String: AmountUnit.Code] = {
         "gross_profit_margin", "operating_margin", "effective_tax_rate", "roe", "roic",
         "nopat_margin", "business_profit_margin", "net_margin",
     ] { units[key] = .percent }
-    for key in [
-        "roic_delta", "roic_margin_effect", "roic_turnover_effect", "roe_delta",
-        "roe_net_margin_effect", "roe_asset_turnover_effect", "roe_leverage_effect",
-    ] { units[key] = .percentagePoints }
     for key in ["invested_capital_turnover", "net_de", "asset_turnover", "financial_leverage"] {
         units[key] = .times
     }
@@ -887,20 +846,13 @@ func uniquedYearsByFyEnd(_ years: [FinancialsYear]) -> [FinancialsYear] {
 extension FinancialsYear {
     /// Waterfall.swift が「前年あり」のとき（ループ k>=1）だけ設定する増減系フィールドを null へ戻す。
     /// trim で最古になった年をライブ経路（最古年は前年なし＝null）と一致させるために使う。
-    /// 対象は op 増減分解・ROIC 差分・ROE 差分の出力のみ（businessProfit/netMargin 等の
+    /// 対象は op 増減分解の出力のみ（businessProfit/netMargin 等の
     /// 各年で設定される項目は対象外）。Waterfall.swift の k>=1 代入箇所と対応させて維持すること。
     mutating func clearPriorDependentMetrics() {
         businessProfitChange = nil
         salesChangeImpact = nil
         grossMarginChangeImpact = nil
         sgaChangeImpact = nil
-        roicDelta = nil
-        roicMarginEffect = nil
-        roicTurnoverEffect = nil
-        roeDelta = nil
-        roeNetMarginEffect = nil
-        roeAssetTurnoverEffect = nil
-        roeLeverageEffect = nil
     }
 }
 

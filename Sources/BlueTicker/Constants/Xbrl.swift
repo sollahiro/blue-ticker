@@ -656,14 +656,6 @@ enum Xbrl {
     ]
     static let subscriptionRightsToSharesTags: [String] = ["SubscriptionRightsToShares"]
 
-    /// 主要な経営指標等の自己資本利益率。当期が「−」（xsi:nil）なら financials の `roe` も出さない。
-    static let roeSummaryTags: [String] = [
-        "RateOfReturnOnEquitySummaryOfBusinessResults",
-        "RateOfReturnOnEquityIFRSSummaryOfBusinessResults",
-        "RateOfReturnOnEquityUSGAAPSummaryOfBusinessResults",
-        "RateOfReturnOnEquityJMISSummaryOfBusinessResults",
-    ]
-
     // US-GAAP 非流動資産コンポーネント（HTML 仮想タグ積み上げ）
     static let usgaapHtmlNCAComponents: [[String]] = [
         ["USGAAP_HTML_PPENet"],

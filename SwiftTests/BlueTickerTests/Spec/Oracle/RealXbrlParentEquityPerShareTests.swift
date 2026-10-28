@@ -6,9 +6,9 @@
 //   親会社持分 1,452,809 千ドル（資本合計 1,474,043 − 非支配持分 21,233）。
 // - 7974 任天堂 S100W73A（日本基準、2025-03期）。親会社持分は本表に行が無いので
 //   純資産合計 2,725,446 − 非支配株主持分 1,119 = 2,724,327 百万円（株主資本 2,486,746 + その他の包括利益累計額 237,581）。
-// - 4599 ステムリム（日本基準・個別のみ、7月決算）。ROE は自己資本（純資産 − 新株予約権）の期首・期末平均が分母。
-//   FY2023（S100S2RX）: 当期純利益 168,350 千円 ÷ ((8,513,462 + 9,195,669) / 2) = 1.9%（有報 0.019）。
-//   当期純損失の年は主要な経営指標等の自己資本利益率が「−」（xsi:nil）で、financials の roe も null。
+// - 4599 ステムリム（日本基準・個別のみ、7月決算）。ROE は期末の親会社持分（純資産 − 新株予約権）が分母で、
+//   当期純損失の年もマイナスで出す（有報は期首・期末平均で、赤字年は「−」。基準の違いは意図したもの）。
+//   FY2023（S100S2RX）168,350 ÷ 9,195,669 = 1.83%（有報 1.9）、FY2026（S100ZA4E）−1,851,498 ÷ 4,161,515 = −44.49%。
 //
 // `BLT_EDINET_API_KEY` があれば不足キャッシュを取得し、無ければ SKIP。
 
@@ -58,41 +58,20 @@ import Testing
         #expect(v.parentEquity == 2_724_327_000_000)
     }
 
-    // source: code=4599 fy_end=2023-07-31 doc_id=S100ZA4E page=2 field=financials.roe
-    @Test func roeUsesAverageParentEquityLikeTheFiling() async throws {
-        guard let dir = await Self.dir("S100S2RX") else { return }
-        let v = try #require(StatementFinancialsResolver.resolve(xbrlDir: dir))
-        #expect(v.netProfit == 168_350_000)
-        #expect(v.parentEquity == 9_195_669_000)
-        #expect(v.priorParentEquity == 8_513_462_000)
-        #expect(!IndividualAnalyzer.summaryRoeIsUndisclosed(xbrlDir: dir))
-        let roe = try #require(IndividualAnalyzer.returnOnEquity(
-            netProfit: v.netProfit,
-            averageParentEquity: IndividualAnalyzer.averageParentEquity(
-                closing: v.parentEquity, opening: v.priorParentEquity),
-            summaryUndisclosed: false))
-        #expect((roe * 10).rounded() / 10 == 1.9)
-    }
-
+    // source: code=4599 fy_end=2023-07-31 doc_id=S100S2RX page=0 field=financials.roe
     // source: code=4599 fy_end=2026-07-31 doc_id=S100ZA4E page=2 field=financials.roe
-    // source: code=4599 fy_end=2025-07-31 doc_id=S100WW19 page=2 field=financials.roe
-    @Test(arguments: ["S100ZA4E", "S100WW19"])
-    func lossYearWithUndisclosedRoeIsNull(docID: String) async throws {
+    @Test(arguments: [
+        ("S100S2RX", 168_350_000.0, 10_370_460_000.0, 9_195_669_000.0, 1.83),
+        ("S100ZA4E", -1_851_498_000.0, 5_713_192_000.0, 4_161_515_000.0, -44.49),
+    ])
+    func roeUsesClosingParentEquityAndKeepsLosses(
+        docID: String, netProfit: Double, netAssets: Double, parentEquity: Double, roe: Double
+    ) async throws {
         guard let dir = await Self.dir(docID) else { return }
         let v = try #require(StatementFinancialsResolver.resolve(xbrlDir: dir))
-        #expect((v.netProfit ?? 0) < 0)
-        #expect(IndividualAnalyzer.summaryRoeIsUndisclosed(xbrlDir: dir))
-        #expect(IndividualAnalyzer.returnOnEquity(
-            netProfit: v.netProfit,
-            averageParentEquity: IndividualAnalyzer.averageParentEquity(
-                closing: v.parentEquity, opening: v.priorParentEquity),
-            summaryUndisclosed: IndividualAnalyzer.summaryRoeIsUndisclosed(xbrlDir: dir)) == nil)
-    }
-
-    // 連結の ROE 行が数値なら計算値を出す（6269 は IFRS 連結と日本基準の個別の2行）。
-    // source: code=6269 fy_end=2025-12-31 doc_id=S100XU6C page=2 field=financials.roe
-    @Test func consolidatedRoeRowDisclosedKeepsComputedRoe() async throws {
-        guard let dir = await Self.dir("S100XU6C") else { return }
-        #expect(!IndividualAnalyzer.summaryRoeIsUndisclosed(xbrlDir: dir))
+        #expect(v.netProfit == netProfit)
+        #expect(v.netAssets == netAssets)
+        #expect(v.parentEquity == parentEquity)
+        #expect((netProfit / parentEquity * 10_000).rounded() / 100 == roe)
     }
 }

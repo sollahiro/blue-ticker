@@ -197,7 +197,10 @@ public enum Api {
     /// `years[].currency` を追加、CCC 要因を `ccc_dso_effect` / `ccc_dio_effect` / `ccc_dpo_effect` へ改名。
     /// v4（2026-10-27）: `roe` の分母を期末の純資産合計から期末の親会社持分（非支配持分・新株予約権を除く）へ、
     /// `financial_leverage` を総資産 ÷ 親会社持分へ（`roe` = `net_margin` × `asset_turnover` × `financial_leverage`）。
-    static let financialsSchemaVersion = 4
+    /// v5（2026-10-28）: waterfall から ROE・ROIC の前年差の要因分解（`roe_delta` / `roe_*_effect` /
+    /// `roic_delta` / `roic_*_effect`）を外した。ROE のデュポン3要素（`net_margin` / `asset_turnover` /
+    /// `financial_leverage`）は残す。
+    static let financialsSchemaVersion = 5
 
     /// 書類同期で DB へ取り込む書類種別（日次書類の全件 → DB。seed 種別に絞る）。
     /// 有報・半期・四半期＋訂正有報のみ。訂正四半期(150)・訂正半期(170) は意図的に含めない

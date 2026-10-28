@@ -159,50 +159,18 @@ func applyWorkingCapitalAndCCCToYears(_ years: inout [YearEntry]) {
     }
 }
 
-// MARK: - ROIC Waterfall
+// MARK: - ROE DuPont
 
-/// 年次データに ROIC 前年差分解（NOPATMargin・投下資本回転率の2要因）を付与する。
+/// 年次データに ROE のデュポン3要素（純利益率・総資産回転率・財務レバレッジ）の水準を付与する。
+/// 前年差の要因分解は持たない（2026-10-28 廃止）。
 ///
-/// NOPATMargin と InvestedCapitalTurnover は IndividualAnalyzer.processDocument で
-/// 既に設定済みであることを前提とする。経常利益ベース（金融機関）も入力が揃えば対象。
-func applyRoicWaterfallToYears(_ years: inout [YearEntry]) {
-    let sortedIndices = years.indices.sorted { (years[$0].fyEnd ?? "") < (years[$1].fyEnd ?? "") }
-    guard sortedIndices.count > 1 else { return }  // 前年差は2期以上必要
-
-    for k in 1..<sortedIndices.count {
-        let curIdx = sortedIndices[k]
-        let priorIdx = sortedIndices[k - 1]
-
-        guard years[curIdx].calculatedData.roicDelta == nil else { continue }
-
-        let curCD = years[curIdx].calculatedData
-        let priorCD = years[priorIdx].calculatedData
-
-        // 経常利益ベース（金融機関）も同じチェーン分解。入力が揃えば前年差を出す。
-        guard let effects = roicWaterfallEffects(
-            roicCurr: curCD.roic, roicPrev: priorCD.roic,
-            nopatMarginCurr: curCD.nopatMargin, nopatMarginPrev: priorCD.nopatMargin,
-            turnoverCurr: curCD.investedCapitalTurnover, turnoverPrev: priorCD.investedCapitalTurnover
-        ) else { continue }
-
-        years[curIdx].calculatedData.roicDelta = effects.delta
-        years[curIdx].calculatedData.roicMarginEffect = effects.marginEffect
-        years[curIdx].calculatedData.roicTurnoverEffect = effects.turnoverEffect
-    }
-}
-
-// MARK: - ROE Waterfall
-
-/// 年次データに ROE 前年差分解（デュポン3要因）を付与する。
-///
-/// TotalAssets・NetAssets が CalculatedData に設定済みであることを前提とする。
-func applyRoeWaterfallToYears(_ years: inout [YearEntry]) {
-    // Step 1: DuPont 構成要素を計算
+/// TotalAssets・親会社持分が設定済みであることを前提とする。
+func applyRoeDuPontToYears(_ years: inout [YearEntry]) {
     for i in 0..<years.count {
         let np = years[i].rawData.np
         let sales = years[i].rawData.sales
         let totalAssets = years[i].calculatedData.totalAssets
-        // レバレッジの分母は ROE と同じ親会社持分の期首・期末平均（純利益率 × 回転率 × レバレッジ = ROE）。
+        // レバレッジの分母は ROE と同じ期末の親会社持分（純利益率 × 回転率 × レバレッジ = ROE）。
         let netAssets = years[i].rawData.parentEquity
 
         guard let npV = np, let salesV = sales, let taV = totalAssets, let naV = netAssets,
@@ -218,60 +186,4 @@ func applyRoeWaterfallToYears(_ years: inout [YearEntry]) {
             years[i].calculatedData.financialLeverage = taV / naV
         }
     }
-
-    // Step 2: 前年差を3要因に分解
-    let sortedIndices = years.indices.sorted { (years[$0].fyEnd ?? "") < (years[$1].fyEnd ?? "") }
-    guard sortedIndices.count > 1 else { return }  // 前年差は2期以上必要
-
-    for k in 1..<sortedIndices.count {
-        let curIdx = sortedIndices[k]
-        let priorIdx = sortedIndices[k - 1]
-
-        guard years[curIdx].calculatedData.roeDelta == nil else { continue }
-
-        let curCD = years[curIdx].calculatedData
-        let priorCD = years[priorIdx].calculatedData
-
-        guard let roeCurr = curCD.roe,
-              let roePrev = priorCD.roe,
-              let nmCurr = curCD.netMargin,
-              let nmPrev = priorCD.netMargin,
-              let atCurr = curCD.assetTurnover,
-              let atPrev = priorCD.assetTurnover,
-              let flCurr = curCD.financialLeverage,
-              let flPrev = priorCD.financialLeverage else { continue }
-
-        // netMargin は % 単位。チェーン分解式（ROIC と統一）:
-        // nmEffect  = (nm_curr - nm_prev) / 100 * at_prev * fl_prev * 100 = (nm_curr - nm_prev) * at_prev * fl_prev
-        // atEffect  = nm_curr / 100 * (at_curr - at_prev) * fl_prev * 100 = nm_curr * (at_curr - at_prev) * fl_prev
-        // levEffect = nm_curr / 100 * at_curr * (fl_curr - fl_prev) * 100 = nm_curr * at_curr * (fl_curr - fl_prev)
-        let roeDelta = roeCurr - roePrev
-        let nmEffect = (nmCurr - nmPrev) * atPrev * flPrev
-        let atEffect = nmCurr * (atCurr - atPrev) * flPrev
-        let levEffect = nmCurr * atCurr * (flCurr - flPrev)
-
-        years[curIdx].calculatedData.roeDelta = roeDelta
-        years[curIdx].calculatedData.roeNetMarginEffect = nmEffect
-        years[curIdx].calculatedData.roeAssetTurnoverEffect = atEffect
-        years[curIdx].calculatedData.roeLeverageEffect = levEffect
-    }
-}
-
-/// NOPAT マージン（%）× 投下資本回転率のチェーン分解。
-///
-/// `marginEffect = (nm_curr - nm_prev) * t_prev`
-/// `turnoverEffect = nm_curr * (t_curr - t_prev)`
-func roicWaterfallEffects(
-    roicCurr: Double?, roicPrev: Double?,
-    nopatMarginCurr: Double?, nopatMarginPrev: Double?,
-    turnoverCurr: Double?, turnoverPrev: Double?
-) -> (delta: Double, marginEffect: Double, turnoverEffect: Double)? {
-    guard let roicCurr, let roicPrev,
-        let nopatMarginCurr, let nopatMarginPrev,
-        let turnoverCurr, let turnoverPrev
-    else { return nil }
-    let delta = roicCurr - roicPrev
-    let marginEffect = (nopatMarginCurr - nopatMarginPrev) * turnoverPrev
-    let turnoverEffect = nopatMarginCurr * (turnoverCurr - turnoverPrev)
-    return (delta, marginEffect, turnoverEffect)
 }

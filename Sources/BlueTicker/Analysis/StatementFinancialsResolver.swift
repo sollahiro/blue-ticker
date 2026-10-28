@@ -20,8 +20,6 @@ struct StatementFinancialsValues {
     var netAssets: Double?
     /// 親会社の所有者に帰属する持分（期末）。ROE の分母。非支配持分・新株予約権を含まない。
     var parentEquity: Double? = nil
-    /// 前期末（当期首）の親会社持分。ROE の分母を期首・期末平均にするための期首側。
-    var priorParentEquity: Double? = nil
     var ppeTotal: Double?
     var accountsReceivable: Double?
     var inventory: Double?
@@ -249,8 +247,6 @@ enum StatementFinancialsResolver {
             nonCurrentLiabilities: bs.nonCurrentLiabilities,
             netAssets: bs.netAssets,
             parentEquity: resolveParentEquity(instantFS: instantFS, netAssets: bs.netAssets),
-            priorParentEquity: resolvePriorParentEquity(
-                instantFS: instantFS, priorNetAssets: bs.priorNetAssets),
             ppeTotal: ppe.total,
             accountsReceivable: ar.current,
             inventory: inv.current,
@@ -287,22 +283,10 @@ enum StatementFinancialsResolver {
     /// 期末の親会社持分。本表に親会社持分の行（IFRS / US-GAAP）があればそれ、無ければ
     /// 純資産合計 − 非支配株主持分 − 新株予約権（日本基準。行が無い科目は 0）。
     static func resolveParentEquity(instantFS: FieldSet, netAssets: Double?) -> Double? {
-        parentEquity(instantFS: instantFS, netAssets: netAssets, period: \.current)
-    }
-
-    /// 前期末（当期首）の親会社持分。期末と同じ規則で、同じ書類の前期末列から取る。
-    static func resolvePriorParentEquity(instantFS: FieldSet, priorNetAssets: Double?) -> Double? {
-        parentEquity(instantFS: instantFS, netAssets: priorNetAssets, period: \.prior)
-    }
-
-    private static func parentEquity(
-        instantFS: FieldSet, netAssets: Double?, period: KeyPath<ResolvedItem, Double?>
-    ) -> Double? {
-        if let direct = resolveItem(instantFS, tags: Xbrl.parentEquityTags)[keyPath: period] { return direct }
+        if let direct = resolveItem(instantFS, tags: Xbrl.parentEquityTags).current { return direct }
         guard let netAssets else { return nil }
-        let nonControlling = resolveItem(instantFS, tags: Xbrl.nonControllingInterestsTags)[keyPath: period] ?? 0
-        let subscriptionRights =
-            resolveItem(instantFS, tags: Xbrl.subscriptionRightsToSharesTags)[keyPath: period] ?? 0
+        let nonControlling = resolveItem(instantFS, tags: Xbrl.nonControllingInterestsTags).current ?? 0
+        let subscriptionRights = resolveItem(instantFS, tags: Xbrl.subscriptionRightsToSharesTags).current ?? 0
         return netAssets - nonControlling - subscriptionRights
     }
 
@@ -406,9 +390,6 @@ enum StatementFinancialsResolver {
         }
 
         let resolvedSalesLabel = salesLabelOverride ?? is_.salesLabel ?? "売上高"
-        let summaryParentEquity = resolveItem(
-            fieldSetFromInstant(tagElements.filter { Xbrl.parentEquitySummaryTags.contains($0.key) }),
-            tags: Xbrl.parentEquitySummaryTags)
         return StatementFinancialsValues(
             sales: is_.sales,
             salesLabel: resolvedSalesLabel,
@@ -424,8 +405,10 @@ enum StatementFinancialsResolver {
             currentLiabilities: bs.currentLiabilities,
             nonCurrentLiabilities: bs.nonCurrentLiabilities,
             netAssets: bs.netAssets,
-            parentEquity: summaryParentEquity.current,
-            priorParentEquity: summaryParentEquity.prior,
+            parentEquity: resolveItem(
+                fieldSetFromInstant(tagElements.filter { Xbrl.parentEquitySummaryTags.contains($0.key) }),
+                tags: Xbrl.parentEquitySummaryTags
+            ).current,
             ppeTotal: ppe.total,
             accountsReceivable: ar.current,
             inventory: inv.current,

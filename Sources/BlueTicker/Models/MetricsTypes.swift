@@ -24,7 +24,7 @@ struct RawData: Codable {
     var op: Double?
     var np: Double?
     var netAssets: Double?
-    /// ROE の分母（親会社持分の期首・期末平均。期首が取れなければ期末）。組立中だけ使い、`company_financials` には出さない。
+    /// 期末の親会社持分（ROE の分母）。組立中だけ使い、`company_financials` には出さない。
     var parentEquity: Double?
     var cfo: Double?
     var cfi: Double?
@@ -108,20 +108,13 @@ struct CalculatedData: Codable {
     // 書類ID
     var docID: String?
     var amendmentDocID: String?
-    // ROIC ウォーターフォール
+    // ROIC の構成要素
     var nopatMargin: Double?
     var investedCapitalTurnover: Double?
-    var roicDelta: Double?
-    var roicMarginEffect: Double?
-    var roicTurnoverEffect: Double?
-    // ROE ウォーターフォール
+    // ROE のデュポン3要素
     var netMargin: Double?
     var assetTurnover: Double?
     var financialLeverage: Double?
-    var roeDelta: Double?
-    var roeNetMarginEffect: Double?
-    var roeAssetTurnoverEffect: Double?
-    var roeLeverageEffect: Double?
     // CF自己株式・配当
     var cfTreasuryStock: Double?
     var dividendSS: Double?
@@ -164,13 +157,8 @@ struct CalculatedData: Codable {
         case ppeTotal = "PPETotal"; case ppeAccountingStandard = "PPEAccountingStandard"
         case docID = "DocID"; case amendmentDocID = "AmendmentDocID"
         case nopatMargin = "NOPATMargin"; case investedCapitalTurnover = "InvestedCapitalTurnover"
-        case roicDelta = "ROICDelta"; case roicMarginEffect = "ROICMarginEffect"
-        case roicTurnoverEffect = "ROICTurnoverEffect"
         case netMargin = "NetMargin"; case assetTurnover = "AssetTurnover"
         case financialLeverage = "FinancialLeverage"
-        case roeDelta = "ROEDelta"; case roeNetMarginEffect = "ROENetMarginEffect"
-        case roeAssetTurnoverEffect = "ROEAssetTurnoverEffect"
-        case roeLeverageEffect = "ROELeverageEffect"
         case cfTreasuryStock = "CFTreasuryStock"
         case dividendSS = "DividendSS"; case dividendPaidCF = "DividendPaidCF"
         case accountsReceivable = "AccountsReceivable"
