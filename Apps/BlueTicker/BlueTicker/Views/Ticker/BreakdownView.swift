@@ -3,16 +3,14 @@ import SwiftUI
 
 enum BreakdownMetric: String, CaseIterable, Identifiable {
     case businessProfit
-    case roic
-    case roe
+    case capitalEfficiency
 
     var id: String { rawValue }
 
     var title: String {
         switch self {
         case .businessProfit: "事業利益"
-        case .roic: "ROIC"
-        case .roe: "ROE"
+        case .capitalEfficiency: "資本効率"
         }
     }
 }
@@ -42,7 +40,6 @@ struct BreakdownView: View {
 
     private func content(_ response: FinancialsResponse) -> some View {
         let years = Format.chronological(response.years)
-        let selectedYear = years.first { $0.id == selectedYearID && isYearSelectable($0) }
         return ScrollView {
             VStack(alignment: .leading, spacing: 12) {
                 SegmentPills(
@@ -50,33 +47,11 @@ struct BreakdownView: View {
                     selection: $metric,
                     title: { $0.title }
                 )
-                if metric == .businessProfit {
-                    yearBars(years)
-                } else if years.contains(where: { metricValue($0) != nil }) {
-                    ratioChart(years)
-                } else {
-                    Text("\(metric.title) は未算出です。")
-                        .font(.footnote)
-                        .foregroundStyle(Theme.textMuted)
-                }
-                if let selectedYear {
-                    switch metric {
-                    case .businessProfit:
-                        factorChart(selectedYear, years: years)
-                    case .roe:
-                        duPontPanel(selectedYear)
-                    case .roic:
-                        EmptyView()
-                    }
-                } else if let factorPrompt {
-                    Text(factorPrompt)
-                        .font(.footnote)
-                        .foregroundStyle(Theme.textMuted)
-                }
-                if metric == .businessProfit {
-                    Text("事業利益は売上総利益 − 販管費です。開示されている営業利益と一致しない場合がございます。")
-                        .font(.footnote)
-                        .foregroundStyle(Theme.textMuted)
+                switch metric {
+                case .businessProfit:
+                    businessProfit(years)
+                case .capitalEfficiency:
+                    capitalEfficiency(years)
                 }
             }
             .padding(Theme.cardContentInset)
@@ -86,6 +61,27 @@ struct BreakdownView: View {
         .onChange(of: metric) { _, _ in
             selectedFactor = nil
         }
+    }
+
+    @ViewBuilder
+    private func businessProfit(_ years: [FinancialsYear]) -> some View {
+        if years.contains(where: { $0.businessProfit != nil }) {
+            yearBars(years)
+        } else {
+            Text("事業利益は未算出です。")
+                .font(.footnote)
+                .foregroundStyle(Theme.textMuted)
+        }
+        if let selectedYear = years.first(where: { $0.id == selectedYearID && isYearSelectable($0) }) {
+            factorChart(selectedYear, years: years)
+        } else {
+            Text("年を選ぶと売上要因・利益率要因・販管費要因を表示します。")
+                .font(.footnote)
+                .foregroundStyle(Theme.textMuted)
+        }
+        Text("事業利益は売上総利益 − 販管費です。開示されている営業利益と一致しない場合がございます。")
+            .font(.footnote)
+            .foregroundStyle(Theme.textMuted)
     }
 
     private func yearBars(_ years: [FinancialsYear]) -> some View {
@@ -127,67 +123,112 @@ struct BreakdownView: View {
         }
     }
 
-    private func ratioChart(_ years: [FinancialsYear]) -> some View {
-        let labels = years.map { Format.fy($0.fyEnd) }
-        let points = ratioPoints(years)
-        let anchors = ratioAnchors(years)
-        let segments = ratioSegments(points)
-        let selectedIndex = years.firstIndex { $0.id == selectedYearID && isYearSelectable($0) }
-        let selectedPosition = selectedIndex.map(Double.init)
-        let selectedSegment = selectedIndex.flatMap { index in
-            segments.first { $0.points.last?.index == Double(index) }
+    /// 資本効率。ROIC と ROE の推移を1枚の折れ線に重ね、その下に ROE のデュポン分解を直近5年分並べる。
+    @ViewBuilder
+    private func capitalEfficiency(_ years: [FinancialsYear]) -> some View {
+        if years.contains(where: { $0.roic != nil || $0.roe != nil }) {
+            ratioLegend(years)
+            ratioChart(years)
+        } else {
+            Text("ROIC・ROE は未算出です。")
+                .font(.footnote)
+                .foregroundStyle(Theme.textMuted)
         }
-        return Chart {
-            if let segment = selectedSegment {
-                ForEach(ratioFillAreas(segment)) { area in
-                    ForEach(area.points) { point in
-                        AreaMark(
-                            xStart: .value(metric.title, 0),
-                            xEnd: .value(metric.title, point.value),
-                            y: .value("年度", point.index),
-                            series: .value("fill", area.id)
-                        )
-                        .foregroundStyle(segment.color.opacity(0.15))
-                        .interpolationMethod(.linear)
+        duPontTable(Array(years.suffix(5)))
+    }
+
+    private enum RatioSeries: String, CaseIterable, Identifiable {
+        case roic
+        case roe
+
+        var id: String { rawValue }
+
+        var title: String {
+            switch self {
+            case .roic: "ROIC"
+            case .roe: "ROE"
+            }
+        }
+
+        var color: Color {
+            switch self {
+            case .roic: Theme.accent
+            case .roe: Theme.growthTint
+            }
+        }
+
+        func value(_ year: FinancialsYear) -> Double? {
+            switch self {
+            case .roic: year.roic
+            case .roe: year.roe
+            }
+        }
+    }
+
+    /// 凡例。値は線の上に出さず、ここに直近の値を添える（2本の注記が重なるため）。
+    private func ratioLegend(_ years: [FinancialsYear]) -> some View {
+        HStack(spacing: 16) {
+            ForEach(RatioSeries.allCases) { series in
+                let latest = years.last { series.value($0) != nil }
+                HStack(spacing: 6) {
+                    Circle()
+                        .fill(series.color)
+                        .frame(width: 8, height: 8)
+                    Text(series.title)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(Theme.text)
+                    if let latest {
+                        Text("\(Format.percent(series.value(latest), digits: 2))（\(Format.fy(latest.fyEnd))）")
+                            .font(.caption.monospacedDigit())
+                            .foregroundStyle(Theme.textMuted)
                     }
                 }
+                .accessibilityElement(children: .combine)
             }
-            ForEach(segments) { segment in
-                ForEach(segment.points) { point in
-                    LineMark(
-                        x: .value(metric.title, point.value),
-                        y: .value("年度", point.index),
-                        series: .value("line", segment.id)
+        }
+    }
+
+    private func ratioChart(_ years: [FinancialsYear]) -> some View {
+        let labels = years.map { Format.fy($0.fyEnd) }
+        let anchors = years.indices.filter { index in
+            RatioSeries.allCases.allSatisfy { $0.value(years[index]) == nil }
+        }
+        return Chart {
+            ForEach(RatioSeries.allCases) { series in
+                ForEach(ratioSegments(series, years: years)) { segment in
+                    ForEach(segment.points) { point in
+                        LineMark(
+                            x: .value("比率", point.value),
+                            y: .value("年度", point.index),
+                            series: .value("line", "\(series.rawValue)-\(segment.id)")
+                        )
+                        .foregroundStyle(series.color)
+                        .lineStyle(StrokeStyle(lineWidth: 3))
+                    }
+                }
+                ForEach(ratioPoints(series, years: years)) { point in
+                    PointMark(
+                        x: .value(series.title, point.value),
+                        y: .value("年度", point.index)
                     )
-                    .foregroundStyle(segment.color)
-                    .lineStyle(StrokeStyle(lineWidth: 3))
+                    .foregroundStyle(series.color)
+                    .symbolSize(45)
+                    .accessibilityLabel("\(labels[point.id]) \(series.title)")
+                    .accessibilityValue(Format.percent(point.value, digits: 2))
                 }
             }
             RuleMark(x: .value("zero", 0))
                 .foregroundStyle(Theme.text)
                 .lineStyle(StrokeStyle(lineWidth: 1))
-            // 欠損年も年度軸の domain に含め、目盛りと行間隔を全年度分保つ。
+            // 両方とも欠損の年も年度軸の domain に含め、目盛りと行間隔を全年度分保つ。
             // 値ではなく位置だけを表すので、読み上げ対象からは外す。
             ForEach(anchors, id: \.self) { index in
                 PointMark(
-                    x: .value(metric.title, 0),
+                    x: .value("比率", 0),
                     y: .value("年度", Double(index))
                 )
                 .opacity(0)
                 .accessibilityHidden(true)
-            }
-            ForEach(points) { point in
-                PointMark(
-                    x: .value(metric.title, point.value),
-                    y: .value("年度", point.index)
-                )
-                .foregroundStyle(point.index == selectedPosition ? Theme.accent : Theme.text)
-                .symbolSize(point.index == selectedPosition ? 90 : 45)
-                .annotation(position: .trailing, alignment: .leading, spacing: 4) {
-                    Text(Format.percent(point.value, digits: 1))
-                        .font(.caption2)
-                        .foregroundStyle(Theme.text)
-                }
             }
         }
         .chartYScale(domain: .automatic(includesZero: false, reversed: true))
@@ -216,29 +257,6 @@ struct BreakdownView: View {
                 }
             }
         }
-        .chartOverlay { proxy in
-            GeometryReader { geo in
-                Rectangle()
-                    .fill(.clear)
-                    .contentShape(Rectangle())
-                    .onTapGesture { location in
-                        guard let plot = proxy.plotFrame, !years.isEmpty else { return }
-                        let plotRect = geo[plot]
-                        let y = location.y - plotRect.origin.y
-                        var selected: Int?
-                        if let dataY: Double = proxy.value(atY: y) {
-                            selected = Int(dataY.rounded())
-                        } else {
-                            let normalized = max(0, min(1, y / plotRect.height))
-                            selected = Int((Double(years.count - 1) * (1.0 - normalized)).rounded())
-                        }
-                        guard let selected, years.indices.contains(selected),
-                            isYearSelectable(years[selected])
-                        else { return }
-                        selectedYearID = years[selected].id
-                    }
-            }
-        }
         .frame(height: CGFloat(max(160, years.count * 35)))
         .padding(.top, 4)
     }
@@ -246,7 +264,6 @@ struct BreakdownView: View {
     private struct Segment: Identifiable {
         var id: Int
         var points: [SegmentPoint]
-        var color: Color
     }
 
     private struct SegmentPoint: Identifiable {
@@ -256,102 +273,84 @@ struct BreakdownView: View {
     }
 
     /// 値のある年だけを、元の年度並びの位置（`index`）を保ったまま返す。
-    private func ratioPoints(_ years: [FinancialsYear]) -> [SegmentPoint] {
+    private func ratioPoints(_ series: RatioSeries, years: [FinancialsYear]) -> [SegmentPoint] {
         years.enumerated().compactMap { index, year in
-            metricValue(year).map { SegmentPoint(id: index, index: Double(index), value: $0) }
+            series.value(year).map { SegmentPoint(id: index, index: Double(index), value: $0) }
         }
-    }
-
-    /// 選択区間の塗り。0 を跨ぐ辺は交点で切り、マイナス側とプラス側で別の三角にする。
-    /// 同じ AreaMark 系列のまま補間すると、異符号の両端が一つの三角に潰れる。
-    private func ratioFillAreas(_ segment: Segment) -> [Segment] {
-        let vertices = segment.points.map {
-            ZeroAxisFill.Vertex(position: $0.index, value: $0.value)
-        }
-        return ZeroAxisFill.areas(vertices).enumerated().map { offset, area in
-            Segment(
-                id: offset,
-                points: area.enumerated().map { pointOffset, vertex in
-                    SegmentPoint(
-                        id: offset * 100 + pointOffset,
-                        index: vertex.position,
-                        value: vertex.value
-                    )
-                },
-                color: segment.color
-            )
-        }
-    }
-
-    /// 値のない年の位置。年度軸が縮まないよう不可視マークを置くために使う。
-    private func ratioAnchors(_ years: [FinancialsYear]) -> [Int] {
-        years.indices.filter { metricValue(years[$0]) == nil }
     }
 
     /// 隣り合う年どうしだけを結ぶ。欠損年を挟む区間は線を引かない。
-    private func ratioSegments(_ points: [SegmentPoint]) -> [Segment] {
-        let band = metricBand
-        var segments: [Segment] = []
-        for (start, end) in zip(points, points.dropFirst()) where end.index == start.index + 1 {
-            let midValue = (start.value + end.value) / 2
-            let yearIndex = Int(start.index)
-            segments.append(Segment(
+    private func ratioSegments(_ series: RatioSeries, years: [FinancialsYear]) -> [Segment] {
+        let points = ratioPoints(series, years: years)
+        return zip(points, points.dropFirst()).compactMap { start, end in
+            guard end.index == start.index + 1 else { return nil }
+            let yearIndex = start.id
+            return Segment(
                 id: yearIndex,
                 points: [
                     SegmentPoint(id: yearIndex * 2, index: start.index, value: start.value),
                     SegmentPoint(id: yearIndex * 2 + 1, index: end.index, value: end.value),
-                ],
-                color: band.color(for: midValue)
-            ))
-        }
-        return segments
-    }
-
-    private var factorPrompt: String? {
-        switch metric {
-        case .businessProfit:
-            return "年を選ぶと売上要因・利益率要因・販管費要因を表示します。"
-        case .roic:
-            return nil
-        case .roe:
-            return "年を選ぶと純利益率・総資産回転率・財務レバレッジを表示します。"
+                ]
+            )
         }
     }
 
-    /// ROE のデュポン3要素（その年の水準）。純利益率 × 総資産回転率 × 財務レバレッジ = ROE。
-    private func duPontPanel(_ year: FinancialsYear) -> some View {
+    /// ROE のデュポン3要素（各年の水準）。純利益率 × 総資産回転率 × 財務レバレッジ = ROE。
+    /// 年度は古い順に左から右（概要の表と同じ並び）。
+    private func duPontTable(_ years: [FinancialsYear]) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("\(Format.fyJapanese(year.fyEnd))のROEの内訳")
+            Text("ROEのデュポン分解")
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(Theme.text)
-            duPontRow(title: "純利益率", value: Format.percent(year.netMargin))
-            duPontRow(title: "× 総資産回転率", value: Format.times(year.assetTurnover))
-            duPontRow(title: "× 財務レバレッジ", value: Format.times(year.financialLeverage))
-            Rectangle()
-                .fill(Theme.textMuted.opacity(0.45))
-                .frame(height: 1)
-                .padding(.vertical, 2)
-            duPontRow(title: "= ROE", value: Format.percent(year.roe, digits: 2), emphasized: true)
-            Text("純利益率は純利益 ÷ 売上、総資産回転率は売上 ÷ 総資産、財務レバレッジは総資産 ÷ 自己資本です（いずれも期末）。")
+            Grid(alignment: .trailing, horizontalSpacing: 8, verticalSpacing: 6) {
+                GridRow {
+                    Color.clear
+                        .frame(width: 1, height: 1)
+                        .gridColumnAlignment(.leading)
+                    ForEach(years) { year in
+                        Text(Format.fy(year.fyEnd))
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(Theme.textMuted)
+                    }
+                }
+                duPontRow("純利益率", years: years) { Format.percent($0.netMargin, includeUnit: false) }
+                duPontRow("総資産回転率", years: years) { Format.times($0.assetTurnover, includeUnit: false) }
+                duPontRow("財務レバレッジ", years: years) { Format.times($0.financialLeverage, includeUnit: false) }
+                Rectangle()
+                    .fill(Theme.textMuted.opacity(0.45))
+                    .frame(height: 1)
+                    .gridCellUnsizedAxes(.horizontal)
+                duPontRow("ROE", years: years, emphasized: true) {
+                    Format.percent($0.roe, digits: 2, includeUnit: false)
+                }
+            }
+            Text("純利益率 × 総資産回転率 × 財務レバレッジ = ROE。純利益率・ROE は%、総資産回転率・財務レバレッジは倍です。純利益率は純利益 ÷ 売上、総資産回転率は売上 ÷ 総資産、財務レバレッジは総資産 ÷ 自己資本（いずれも期末）。")
                 .font(.caption)
                 .foregroundStyle(Theme.textMuted)
         }
         .padding(.top, 8)
     }
 
-    private func duPontRow(title: String, value: String, emphasized: Bool = false) -> some View {
-        HStack(spacing: 8) {
+    private func duPontRow(
+        _ title: String,
+        years: [FinancialsYear],
+        emphasized: Bool = false,
+        value: @escaping (FinancialsYear) -> String
+    ) -> some View {
+        GridRow {
             Text(title)
                 .font(.caption.weight(emphasized ? .bold : .regular))
                 .foregroundStyle(Theme.text)
-            Spacer()
-            Text(value)
-                .font(.caption.monospacedDigit().weight(emphasized ? .semibold : .regular))
-                .foregroundStyle(Theme.text)
                 .lineLimit(1)
-                .minimumScaleFactor(0.7)
+                .fixedSize()
+            ForEach(years) { year in
+                Text(value(year))
+                    .font(.caption.monospacedDigit().weight(emphasized ? .semibold : .regular))
+                    .foregroundStyle(Theme.text)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+            }
         }
-        .accessibilityElement(children: .combine)
     }
 
     private func factorChart(_ year: FinancialsYear, years: [FinancialsYear]) -> some View {
@@ -446,20 +445,12 @@ struct BreakdownView: View {
         .background(selected ? Theme.accent.opacity(0.12) : Color.clear)
     }
 
-    /// 「26年2月の利益は、前年より増えました」のように前年差の結論だけを見出しにする。
-    /// 金額の指標は「増えた/減った」、率の指標は「上がった/下がった」。
+    /// 「26年2月期の事業利益は、前年より増えました」のように前年差の結論だけを見出しにする。
     private func yearOutcomeTitle(_ year: FinancialsYear, total: Double?) -> String {
         let period = Format.fyJapanese(year.fyEnd)
-        guard let total else { return "\(period)の\(metric.title)" }
-        if total == 0 { return "\(period)の\(metric.title)は、前年とほぼ変わりませんでした" }
-        let verb: String
-        switch metric {
-        case .businessProfit:
-            verb = total > 0 ? "増えました" : "減りました"
-        case .roic, .roe:
-            verb = total > 0 ? "上がりました" : "下がりました"
-        }
-        return "\(period)の\(metric.title)は、前年より\(verb)"
+        guard let total else { return "\(period)の事業利益" }
+        if total == 0 { return "\(period)の事業利益は、前年とほぼ変わりませんでした" }
+        return "\(period)の事業利益は、前年より\(total > 0 ? "増えました" : "減りました")"
     }
 
     private struct FactorDetail {
@@ -606,33 +597,16 @@ struct BreakdownView: View {
     }
 
     private func factorSpec(_ year: FinancialsYear) -> FactorSpec {
-        switch metric {
-        case .businessProfit:
-            return FactorSpec(
-                factors: [
-                    FactorRow(kind: .salesChange, value: year.salesChangeImpact),
-                    FactorRow(kind: .grossMarginChange, value: year.grossMarginChangeImpact),
-                    FactorRow(kind: .sgaChange, value: year.sgaChangeImpact),
-                ],
-                format: { Format.autoYen($0, currency: year.currency) },
-                totalTitle: "前年差",
-                totalValue: year.businessProfitChange
-            )
-        case .roic, .roe:
-            // ROE・ROIC の前年差の要因分解は廃止（ROE はデュポン3要素の水準を `duPontPanel` で出す）。
-            return FactorSpec(factors: [], format: Format.percentPoints, totalTitle: "前年差", totalValue: nil)
-        }
-    }
-
-    private var metricBand: MetricBand {
-        switch metric {
-        case .roic:
-            return .higherBetter(lowBelow: 4, midFrom: 6, midTo: 8, highFrom: 10)
-        case .roe:
-            return .higherBetter(lowBelow: 5, midFrom: 8, midTo: 10, highFrom: 15)
-        case .businessProfit:
-            return .none
-        }
+        FactorSpec(
+            factors: [
+                FactorRow(kind: .salesChange, value: year.salesChangeImpact),
+                FactorRow(kind: .grossMarginChange, value: year.grossMarginChangeImpact),
+                FactorRow(kind: .sgaChange, value: year.sgaChangeImpact),
+            ],
+            format: { Format.autoYen($0, currency: year.currency) },
+            totalTitle: "前年差",
+            totalValue: year.businessProfitChange
+        )
     }
 
     private func outcomeColor(_ value: Double?) -> Color {
@@ -647,18 +621,9 @@ struct BreakdownView: View {
         return Theme.negative
     }
 
-    /// 事業利益は前年差（要因分解の合計）がある年度、ROE はデュポン3要素がそろう年度だけ選べる。
-    /// ROIC は分解を出さないので選べない。
+    /// 事業利益は前年差（要因分解の合計）がある年度だけ選べる。資本効率は年度を選ばない。
     private func isYearSelectable(_ year: FinancialsYear) -> Bool {
-        switch metric {
-        case .businessProfit:
-            return year.businessProfitChange != nil
-        case .roic:
-            return false
-        case .roe:
-            return year.roe != nil && year.netMargin != nil && year.assetTurnover != nil
-                && year.financialLeverage != nil
-        }
+        year.businessProfitChange != nil
     }
 
     private func priorYear(of year: FinancialsYear, in years: [FinancialsYear]) -> FinancialsYear? {
@@ -667,22 +632,11 @@ struct BreakdownView: View {
     }
 
     private func metricValue(_ year: FinancialsYear) -> Double? {
-        switch metric {
-        case .businessProfit: year.businessProfit
-        case .roic: year.roic
-        case .roe: year.roe
-        }
+        year.businessProfit
     }
 
     private func metricLabel(_ year: FinancialsYear) -> String {
-        switch metric {
-        case .businessProfit:
-            return Format.autoYen(year.businessProfit, currency: year.currency)
-        case .roic:
-            return Format.percent(year.roic, digits: 2)
-        case .roe:
-            return Format.percent(year.roe, digits: 2)
-        }
+        Format.autoYen(year.businessProfit, currency: year.currency)
     }
 
     private func load() async {
