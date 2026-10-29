@@ -19,6 +19,10 @@ actor ResponseCache {
     static let watchlistTTL: TimeInterval = 7 * 24 * 60 * 60
     /// メモリキャッシュの保持件数上限。超過分は参照の古いものからメモリのみ退避する。
     static let memoryLimit = 200
+    /// ディスクの置き場所の版。応答の単位・形が変わったら上げ、旧版のディレクトリは起動時に捨てる。
+    /// v2（2026-10-29）: financials / waterfall の金額が百万円から円になった（#564）。v1 の百万円応答を
+    /// 円として読むと「1.4 百万円」のように桁が 6 つずれるので、v1 は読まない。
+    static let formatVersion = 2
 
     private var memory: [String: ResponseCacheRecord] = [:]
     /// 参照順のキー列（末尾が直近。`memory` と同じキー集合を保つ）。
@@ -33,9 +37,9 @@ actor ResponseCache {
         } else {
             let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first
                 ?? FileManager.default.temporaryDirectory
-            self.directory = caches
-                .appendingPathComponent("blt-analysis", isDirectory: true)
-                .appendingPathComponent("v1", isDirectory: true)
+            let root = caches.appendingPathComponent("blt-analysis", isDirectory: true)
+            self.directory = root.appendingPathComponent("v\(Self.formatVersion)", isDirectory: true)
+            Self.removeOldVersions(in: root)
         }
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
@@ -140,6 +144,14 @@ actor ResponseCache {
             try raw.write(to: fileURL(for: key), options: .atomic)
         } catch {
             return
+        }
+    }
+
+    /// `root` 直下の旧版ディレクトリ（`v1` など、現行の `formatVersion` 未満）を消す。
+    private static func removeOldVersions(in root: URL) {
+        for version in 1..<formatVersion {
+            try? FileManager.default.removeItem(
+                at: root.appendingPathComponent("v\(version)", isDirectory: true))
         }
     }
 
