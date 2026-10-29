@@ -1503,6 +1503,10 @@ enum Xbrl {
         // axis=product_service, needs_review=false に確定してしまう（実データ検証: S100QH2B、2026-07-25）。
         "Eurasia",
         "MiddleEastAndAfrica",
+        // 野村マイクロ 6254 `TaiwanReportableSegmentsMember` / マブチ 6592
+        // `UnitedStatesReportableSegmentsMember`。`US` は `UnitedStates` に含まれない。
+        "Taiwan",
+        "UnitedStates",
     ]
 
     /// `segmentGeographyMemberKeywords` から「国内」「海外」相当の汎用修飾語（`Domestic`/`Overseas`）

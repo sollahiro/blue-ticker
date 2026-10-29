@@ -103,6 +103,7 @@ enum SegmentInfoPublishGuards {
             guard groups.count >= 2 else { continue }
             let unique = Set(groups)
             if unique.count <= 1 { return true }
+            if isNestedAndTopLevelOther(label: label, groups: groups) { continue }
             if unique.contains(where: {
                 $0.isEmpty || $0 == label || isMetricAsSegmentLabel($0)
             }) {
@@ -110,6 +111,16 @@ enum SegmentInfoPublishGuards {
             }
         }
         return false
+    }
+
+    /// 事業ブロック内の「その他」と表の最上位の「その他」は別の行（6758 S100W19Q / 4901 S100LV2D）。
+    /// 最上位（group 空かラベルと同じ）は1回だけ、残りはそれぞれ別の事業名の group のときだけ
+    /// 重なりとみなさない。
+    private static func isNestedAndTopLevelOther(label: String, groups: [String]) -> Bool {
+        guard RevenueRecognitionTableStructure.isOtherResidualLabel(label) else { return false }
+        let nested = groups.filter { !$0.isEmpty && $0 != label }
+        guard groups.count - nested.count <= 1, Set(nested).count == nested.count else { return false }
+        return nested.allSatisfy { $0 != label && !isMetricAsSegmentLabel($0) }
     }
 
     private static func hasMetricRowLabels(_ segments: [BreakdownRow]) -> Bool {

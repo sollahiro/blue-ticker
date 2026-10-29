@@ -668,6 +668,36 @@ import Foundation
         #expect(snapshot.warnings.contains(SegmentInfoPublishGuards.warningDuplicateSegmentLabels))
     }
 
+    // source: code=6758 fy_end=2025-03-31 doc_id=S100W19Q page=155 field=product_service その他 462,042 / 82,477
+    /// 事業ブロック内の「その他」と表の最上位の「その他」は別の行（ソニー型）。重なりにしない。
+    @Test func nestedAndTopLevelOtherAreNotDuplicates() async throws {
+        let markdown = """
+            | 項目 | 当連結会計年度 |
+            | ゲーム＆ネットワークサービス | |
+            | デジタルソフトウェア・アドオンコンテンツ | 2,290,498 |
+            | ハードウェア・その他 | 1,583,200 |
+            | 計 | 3,873,698 |
+            | エンタテインメント・テクノロジー＆サービス | |
+            | テレビ | 564,154 |
+            | その他 | 462,042 |
+            | 計 | 1,026,196 |
+            | イメージング＆センシング・ソリューション | 1,712,534 |
+            | その他 | 82,477 |
+            | 連結 | 6,694,905 |
+            """
+        let table = BreakdownTable(
+            heading: "製品・サービス別情報", markdown: markdown, period: "当期", unitCaption: "百万円")
+        let sales = 6_694_905 * Financial.millionYen
+        let (snapshotOrNil, _) = await Self.normalize(
+            tables: [table], sales: sales, fiscalYearEnd: "2025-03-31", docID: "S100W19Q")
+        let snapshot = try #require(snapshotOrNil)
+        let others = snapshot.rows.filter { $0.rowKind == "segment" && $0.labelRaw == "その他" }
+        #expect(others.count == 2)
+        #expect(!snapshot.warnings.contains(SegmentInfoPublishGuards.warningDuplicateSegmentLabels))
+        #expect(snapshot.warnings == [])
+        #expect(snapshot.needsReview == false)
+    }
+
     /// 前期列を採り、同じ表の当期列が売上に合う → 公開しない（キヤノン型）。
     @Test func priorPeriodColumnMatchingOtherYearNeedsReview() async throws {
         let markdown = """

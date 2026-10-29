@@ -815,6 +815,16 @@ public extension BltServerContext {
             docID: docID, correctionDocIDs: correctionDocIDs
         ) else { return .failed }
         let segments = BreakdownExtractor.extractProductServiceInfo(xbrlDir: xbrlDir)
+        // 報告セグメントが地域で、製品・サービス別が「単一の製品・事業（90％超）のため省略」だけなら
+        // product_service は地域だけ。表選択・same_as の判定に回さない（6254 S100YG4U / 6592 S100XUAX）。
+        if BreakdownExtractor.currentYearReportableOperatingSegmentSalesMemberCount(xbrlDir: xbrlDir) >= 2,
+           BreakdownExtractor.reportedOperatingSegmentsAreGeographic(xbrlDir: xbrlDir),
+           !SegmentInfoLLMNormalizer.hasUsableProductOrBusinessTable(
+               segments.tables.filter { !BreakdownExtractor.isPriorOnlyProductOrServiceTable($0) }),
+           BreakdownExtractor.productServiceOmissionText(xbrlDir: xbrlDir) != nil
+        {
+            return .notApplicable(reason: breakdownNotApplicableGeographyOnly)
+        }
         if segments.method == "not_found" || segments.tables.isEmpty {
             if let sameAs = await relatedInfoSameAsResult(
                 axis: .productService, docID: docID, xbrlDir: xbrlDir)

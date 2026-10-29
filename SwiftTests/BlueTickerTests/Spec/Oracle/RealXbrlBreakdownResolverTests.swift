@@ -242,6 +242,8 @@ import Foundation
         #expect(needsReview == false)
     }
 
+    // source: code=4506 fy_end=2026-03-31 doc_id=S100YH3M page=91 field=product_service 医薬品 453,283 / その他 11
+    /// 字下げだけの親子（医薬品 → 日本・北米・アジア → 製品）は最上位の 医薬品・その他 の2行に畳む。
     @Test func sumitomoResolvesViaSegmentInfoLLMFromProductTable() async throws {
         guard await Self.ensureAvailable("S100YH3M") else { return }
         let segments = BreakdownExtractor.extractSegmentInfo(xbrlDir: Self.xbrlDir("S100YH3M"))
@@ -257,9 +259,32 @@ import Foundation
 
         #expect(source == .segmentInfoLLM)
         #expect(snapshot?.axis == breakdownAxisProductService)
-        let labels = snapshot?.rows.map(\.labelRaw).joined(separator: " ") ?? ""
-        #expect(labels.contains("ラツーダ"))
-        #expect(labels.contains("オルゴビクス") || labels.contains("ORGOVYX"))
+        let segmentRows = snapshot?.rows.filter { $0.rowKind == "segment" } ?? []
+        let labels: [String] = segmentRows.map(\.labelRaw)
+        let amounts: [Double] = segmentRows.map(\.amount)
+        let needsReview: Bool? = snapshot?.needsReview
+        #expect(labels == ["医薬品", "その他"])
+        #expect(amounts == [453_283_000_000, 11_000_000])
+        #expect(needsReview == false)
+    }
+
+    // source: code=6254 fy_end=2026-03-31 doc_id=S100YG4U page=103 field=product_service 単一の製品・サービス 90％超で省略
+    // source: code=6592 fy_end=2025-12-31 doc_id=S100XUAX page=116 field=product_service 小型モーターの単一事業で省略
+    /// 報告セグメントが地域（Taiwan / UnitedStates を含む）で、製品・サービス別が省略文だけなら
+    /// product_service は geography_only の条件をすべて満たす。
+    @Test(arguments: ["S100YG4U", "S100XUAX"])
+    func geographicSegmentsWithOmittedProductInfo(docID: String) async throws {
+        guard await Self.ensureAvailable(docID) else { return }
+        let dir = Self.xbrlDir(docID)
+        let products = BreakdownExtractor.extractProductServiceInfo(xbrlDir: dir)
+        let memberCount = BreakdownExtractor.currentYearReportableOperatingSegmentSalesMemberCount(xbrlDir: dir)
+        let geographic = BreakdownExtractor.reportedOperatingSegmentsAreGeographic(xbrlDir: dir)
+        let usable = SegmentInfoLLMNormalizer.hasUsableProductOrBusinessTable(products.tables)
+        let omission = BreakdownExtractor.productServiceOmissionText(xbrlDir: dir)
+        #expect(memberCount >= 2)
+        #expect(geographic)
+        #expect(usable == false)
+        #expect(omission?.contains("記載を省略") == true)
     }
 
     @Test func eisaiResolvesViaSegmentInfoLLMFromNeurologyOncologyTable() async throws {
