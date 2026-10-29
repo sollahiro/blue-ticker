@@ -256,10 +256,6 @@ jobs:
         working-directory: Apps/BlueTicker/ZeroAxisFill
         run: swift test -Xswiftc -disable-upcoming-feature -Xswiftc MemberImportVisibility
 
-      - name: Test iOS fund look-through math
-        working-directory: Apps/BlueTicker/FundMath
-        run: swift test -Xswiftc -disable-upcoming-feature -Xswiftc MemberImportVisibility
-
       - name: Test iOS top feed RSS parsing
         working-directory: Apps/BlueTicker/FeedRSS
         run: swift test -Xswiftc -disable-upcoming-feature -Xswiftc MemberImportVisibility

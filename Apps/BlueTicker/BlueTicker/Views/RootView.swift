@@ -35,14 +35,6 @@ struct RootView: View {
             .toolbarTitleDisplayMode(.inline)
             .tabItem { Label("リスト", systemImage: "list.bullet") }
             .tag(2)
-
-            NavigationStack {
-                FundView()
-                    .navigationDestination(for: CompanyRef.self, destination: ticker)
-            }
-            .toolbarTitleDisplayMode(.inline)
-            .tabItem { Label("ファンド", systemImage: "chart.pie.fill") }
-            .tag(3)
         }
         .preferredColorScheme(.dark)
         .tint(Theme.accent)

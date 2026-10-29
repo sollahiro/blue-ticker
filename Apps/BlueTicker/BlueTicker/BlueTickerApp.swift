@@ -17,7 +17,7 @@ struct BlueTickerApp: App {
         .modelContainer(modelContainer)
     }
 
-    /// 同じ Apple ID の端末へリスト（保有情報を含む）を同期する。
+    /// 同じ Apple ID の端末へリストを同期する。
     /// CloudKit が使えないときは、既存のローカル店に落とす。
     private static func makeWatchlistContainer() -> ModelContainer {
         let schema = Schema([WatchedCompany.self])
