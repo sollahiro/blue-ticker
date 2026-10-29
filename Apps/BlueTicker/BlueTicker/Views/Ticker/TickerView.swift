@@ -17,7 +17,6 @@ struct TickerView: View {
     @State private var summarySection: SummarySection = .performance
     @State private var breakdownMetric: BreakdownMetric = .businessProfit
     @State private var resolvedSector = ""
-    @State private var showsHoldings = false
     @State private var showsCompanyCard = false
     /// 社名ピルの見た目を窓上のガラスへ渡したか。
     /// 渡したあとはタイトル用ガラスを出さず、同じガラスがカードへ広がる。
@@ -85,7 +84,6 @@ struct TickerView: View {
                 }
             }
             ToolbarItemGroup(placement: .topBarTrailing) {
-                Button("保有情報", systemImage: "square.and.pencil", action: openHoldings)
                 Button(
                     isWatched ? "リストから削除" : "リストに追加",
                     systemImage: isWatched ? "star.fill" : "star",
@@ -95,9 +93,6 @@ struct TickerView: View {
             }
         }
         .background { InteractivePopGestureEnabler(allowsPop: page == .summary && !showsCompanyCard) }
-        .navigationDestination(isPresented: $showsHoldings) {
-            TickerHoldingsView(code: company.code, onAddAccount: addAccount)
-        }
         .task { await hydrateSector() }
     }
 
@@ -199,7 +194,7 @@ struct TickerView: View {
     private func toggleWatch() {
         let matching = matchingRows
         if matching.isEmpty {
-            _ = insertWatchRow()
+            insertWatchRow()
         } else {
             for item in matching {
                 modelContext.delete(item)
@@ -208,15 +203,7 @@ struct TickerView: View {
         }
     }
 
-    private func openHoldings() {
-        if matchingRows.isEmpty {
-            _ = insertWatchRow()
-        }
-        showsHoldings = true
-    }
-
-    @discardableResult
-    private func insertWatchRow() -> WatchedCompany {
+    private func insertWatchRow() {
         let row = WatchedCompany(
             code: company.code,
             name: company.name,
@@ -226,28 +213,6 @@ struct TickerView: View {
         )
         modelContext.insert(row)
         Task { await APIClient.shared.pinCode(company.code) }
-        return row
-    }
-
-    private func addAccount() -> WatchedCompany {
-        if let blank = matchingRows.first(where: \.isBlankHoldingsRow) {
-            return blank
-        }
-        let template = matchingRows.first
-        let created =
-            template?.duplicateAccountRow(
-                sortOrder: WatchedCompany.nextSortOrder(among: watched)
-            )
-            ?? WatchedCompany(
-                code: company.code,
-                name: company.name,
-                sector: displaySector,
-                iconURL: company.iconURL,
-                sortOrder: WatchedCompany.nextSortOrder(among: watched)
-            )
-        modelContext.insert(created)
-        Task { await APIClient.shared.pinCode(company.code) }
-        return created
     }
 
     /// Feed から先に追加しても、後から取れた業種でウォッチ行を埋める。
@@ -389,13 +354,13 @@ private struct NavigationChrome {
     var trailingMinX: CGFloat = 0
     var controlHeight: CGFloat = 0
     var controlMidY: CGFloat = 0
-    /// 戻る円とピル、ピルと編集ボタンのあいだ。両方ともこの値。
+    /// 戻る円とピル、ピルと星のあいだ。両方ともこの値。
     var gap: CGFloat = 10
     var foundLeading = false
     var foundTrailing = false
     /// 左右の円ボタンが、バーの端に実際にあるときだけ真。
     var isPlausible = false
-    /// 編集と星の組の幅と、バーの余白から置いた。滑っている枠ではない。
+    /// 右上の星の幅と、バーの余白から置いた。滑っている枠ではない。
     var stable = false
     var foundControl: Bool { isPlausible }
 }
@@ -490,9 +455,9 @@ private struct CompanyGlassPresenter: UIViewRepresentable {
         private var revealAnimating = false
         /// ボタンのあいだに一度置いた枠。滑っている測り直しでは動かさない。
         private var pillFrameCommitted = false
-        /// 編集と星の組の幅で置けたか、push が終わったか。それまでは着地後の寸法へ合わせ直す。
+        /// 右上の星の幅で置けたか、push が終わったか。それまでは着地後の寸法へ合わせ直す。
         private var chromeSettled = false
-        /// 直前の測りが、組の幅と余白から置けている。
+        /// 直前の測りが、星の幅と余白から置けている。
         private var chromeStable = false
 
         func update(
@@ -791,7 +756,7 @@ private struct CompanyGlassPresenter: UIViewRepresentable {
             lockedNameWidth = pillWidth
         }
 
-        /// 幅も高さも社名の文字数によらない。戻ると編集ボタンのあいだ、高さはその端末の円ボタン。
+        /// 幅も高さも社名の文字数によらない。戻ると星のあいだ、高さはその端末の円ボタン。
         /// 左右の隙間は同じ。長い社名は同じ枠の中で2行。バー自体の高さは使わない。
         private func fittedPill(_ measured: CGRect, bar: UINavigationBar) -> CGRect {
             let chrome = navigationChrome(in: bar)
@@ -821,6 +786,7 @@ private struct CompanyGlassPresenter: UIViewRepresentable {
             var circleMidYs: [CGFloat] = []
             var capsuleWidths: [CGFloat] = []
             var capsuleHeights: [CGFloat] = []
+            var trailingDiscHeights: [CGFloat] = []
             func consider(_ view: UIView) {
                 // 遷移中は円の親がまだ透明なことがある。そこで打ち切ると、着地後もピルが出ない。
                 view.subviews.forEach(consider)
@@ -839,10 +805,12 @@ private struct CompanyGlassPresenter: UIViewRepresentable {
                     let onRight = visual.midX > barInWindow.midX || offTrailing
                     if onRight, bounds.height >= 36, bounds.height <= 72 {
                         let ratio = bounds.height > 1 ? bounds.width / bounds.height : 0
-                        // 編集と星の組。遷移元の履歴・編集ボタン（円1つ）はここには入らない。
+                        // 右上の星は円1つ。複数ボタンの組（カプセル）が来たときも測れるように残す。
                         if ratio >= 2.0 && ratio <= 2.7 {
                             capsuleWidths.append(bounds.width)
                             capsuleHeights.append(bounds.height)
+                        } else if abs(bounds.width - bounds.height) <= 4 {
+                            trailingDiscHeights.append(bounds.height)
                         }
                     }
                 }
@@ -870,8 +838,9 @@ private struct CompanyGlassPresenter: UIViewRepresentable {
             let rightSettled = Self.visibleDiscs(right)
             let settledDiameter = (leftButtons + rightSettled).map(\.height).min()
             let trailing = Self.trailingPair(right)
-            // 組の高さ（ガラスの円）。内側の 36pt 枠の最小値にはしない。
+            // 右上のガラスの高さ。内側の 36pt 枠の最小値にはしない。
             let diameter = Self.dominantHeight(capsuleHeights)
+                ?? Self.dominantHeight(trailingDiscHeights)
                 ?? Self.dominantHeight(circleHeights)
                 ?? settledDiameter
                 ?? trailing.map(\.height).min()
@@ -884,6 +853,7 @@ private struct CompanyGlassPresenter: UIViewRepresentable {
             )
             if let diameter,
                let width = Self.capsuleWidth(capsuleWidths, heights: capsuleHeights, diameter: diameter)
+                   ?? (trailingDiscHeights.isEmpty ? nil : diameter)
             {
                 let landedInset = Self.landedInset(
                     lead: leftButtons.max(by: { $0.maxX < $1.maxX }),
@@ -899,9 +869,9 @@ private struct CompanyGlassPresenter: UIViewRepresentable {
                     chrome.controlMidY = midY
                 }
             }
-            // 組の幅がまだ無いときだけ、見えている2円の中心から右端を置く。
-            if !chrome.foundTrailing, let diameter, trailing.count >= 2,
-               let trail = trailing.min(by: { $0.midX < $1.midX })
+            // 星の幅がまだ無いときだけ、見えている右の円の中心から右端を置く。
+            if !chrome.foundTrailing, let diameter,
+               let trail = (trailing.isEmpty ? rightSettled : trailing).min(by: { $0.midX < $1.midX })
             {
                 chrome.foundTrailing = true
                 chrome.trailingMinX = trail.midX - diameter / 2
@@ -951,7 +921,7 @@ private struct CompanyGlassPresenter: UIViewRepresentable {
             let trailingSpan = barInWindow.maxX - chrome.trailingMinX
             chrome.isPlausible = chrome.foundLeading && chrome.foundTrailing && height >= 28
                 && leadingSpan >= height * 0.7 && leadingSpan <= height * 2.4
-                && trailingSpan >= height * 1.5 && trailingSpan <= height * 3.6
+                && trailingSpan >= height * 0.7 && trailingSpan <= height * 3.6
             if !chrome.isPlausible {
                 chrome.foundLeading = false
                 chrome.foundTrailing = false
@@ -974,7 +944,7 @@ private struct CompanyGlassPresenter: UIViewRepresentable {
             return CGFloat(best.key)
         }
 
-        /// 編集と星の組。円の直径に対して、2つの円とあいだの隙間に収まる幅だけ。
+        /// 右上が複数ボタンの組のとき。円の直径に対して、2つの円とあいだの隙間に収まる幅だけ。
         private static func capsuleWidth(
             _ widths: [CGFloat], heights: [CGFloat], diameter: CGFloat
         ) -> CGFloat? {
@@ -1026,8 +996,8 @@ private struct CompanyGlassPresenter: UIViewRepresentable {
             }
         }
 
-        /// 同じ高さの円が2つ以上ある組。1つだけの遷移元ボタンは右端に使わない。
-        /// 複数あれば、見える円（いちばん低い組）を使う。
+        /// 同じ高さの円が2つ以上ある組。複数あれば、見える円（いちばん低い組）を使う。
+        /// 組が無いときは、右の円1つ（星）から置く。
         private static func trailingPair(_ frames: [CGRect]) -> [CGRect] {
             let circles = squareDiscs(frames).sorted { $0.height < $1.height }
             var groups: [[CGRect]] = []
@@ -1274,7 +1244,7 @@ private struct CompanyGlassPresenter: UIViewRepresentable {
             cardContainer = nil
         }
 
-        /// 遷移の残り時間でフェードする。0.20秒で先に終わると、戻る・編集よりピルだけ濃くなる。
+        /// 遷移の残り時間でフェードする。0.20秒で先に終わると、戻る・星よりピルだけ濃くなる。
         /// コーディネータの alongside には乗せない。相乗りすると終端の不透明へ飛ぶ。
         private func revealHost(alongside coordinator: UIViewControllerTransitionCoordinator? = nil) {
             concealGeneration += 1
@@ -1310,7 +1280,7 @@ private struct CompanyGlassPresenter: UIViewRepresentable {
             }
         }
 
-        /// push の残り時間。標準の戻る・編集ボタンが不透明になるのと揃える。
+        /// push の残り時間。標準の戻る・星ボタンが不透明になるのと揃える。
         private static func showDuration(matching coordinator: UIViewControllerTransitionCoordinator?) -> TimeInterval {
             guard let coordinator, coordinator.isAnimated, !coordinator.isCancelled else {
                 return CompanyPillReveal.showDuration

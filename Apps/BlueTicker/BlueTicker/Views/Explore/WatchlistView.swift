@@ -6,51 +6,61 @@ struct WatchlistView: View {
     @Environment(\.modelContext) private var modelContext
 
     var body: some View {
-        Group {
+        List {
             if companies.isEmpty {
-                ContentUnavailableView(
-                    "リストは空です",
-                    systemImage: "star",
-                    description: Text("銘柄画面から追加できます。")
-                )
+                Section {
+                    ContentUnavailableView(
+                        "リストは空です",
+                        systemImage: "star",
+                        description: Text("銘柄画面から追加できます。")
+                    )
+                }
+                .listRowBackground(Color.clear)
             } else {
-                List {
-                    Section {
-                        ForEach(listRows) { item in
-                            NavigationLink(value: CompanyRef(item)) {
-                                CompanyRowView(
-                                    company: CompanyRef(item),
-                                    caption: item.listCaption
-                                )
-                            }
-                            .listRowBackground(Theme.elevated)
+                Section {
+                    ForEach(companies) { item in
+                        NavigationLink(value: CompanyRef(item)) {
+                            CompanyRowView(company: CompanyRef(item))
                         }
-                        .onDelete(perform: delete)
-                    } header: {
-                        Text("あなたの追加した企業")
-                            .foregroundStyle(Theme.textMuted)
-                            .textCase(nil)
+                        .listRowBackground(Theme.elevated)
                     }
+                    .onDelete(perform: delete)
+                } header: {
+                    Text("あなたの追加した企業")
+                        .foregroundStyle(Theme.textMuted)
+                        .textCase(nil)
                 }
             }
+
+            #if DEBUG
+                Section("開発ラボ") {
+                    NavigationLink("サーバー / HAPIS") {
+                        SettingsView()
+                    }
+                    ForEach(Self.debugTickers) { company in
+                        NavigationLink(value: company) {
+                            Text(Format.displayName(company.name, fallback: company.code))
+                        }
+                    }
+                }
+            #endif
+
+            Section {
+                VersionMarkFooter()
+            }
+            .listRowBackground(Color.clear)
+            .listRowSeparator(.hidden)
+            .listRowInsets(EdgeInsets())
         }
         .bltChrome("リスト")
         .onAppear {
             WatchedCompany.repairSortOrderIfNeeded(companies)
-            WatchedCompany.pruneBlankRowsCoveredByHoldings(companies, in: modelContext)
-        }
-    }
-
-    /// 同じ銘柄に保有があるとき、残ったウォッチ行は出さない。
-    private var listRows: [WatchedCompany] {
-        companies.filter { item in
-            if item.isHolding { return true }
-            return !companies.contains { $0.code == item.code && $0.isHolding }
+            WatchedCompany.removeDuplicateCodes(companies, in: modelContext)
         }
     }
 
     private func delete(at offsets: IndexSet) {
-        let removed = offsets.map { listRows[$0] }
+        let removed = offsets.map { companies[$0] }
         let removedCodes = Set(removed.map(\.code))
         for item in removed {
             modelContext.delete(item)
@@ -63,4 +73,15 @@ struct WatchlistView: View {
         }
     }
 
+    #if DEBUG
+        /// 通信なしで銘柄面まで行く。リストやフィードには入れない。
+        /// 社名の長さだけ変えて、ピルの1行・2行を見る。
+        static let debugTickers: [CompanyRef] = [
+            CompanyRef(code: "7751", name: "キヤノン", sector: "電気機器"),
+            CompanyRef(code: "7203", name: "トヨタ自動車", sector: "輸送用機器"),
+            CompanyRef(code: "9076", name: "守谷輸送機工業", sector: "倉庫・運輸関連"),
+            CompanyRef(code: "9983", name: "ファーストリテイリング", sector: "小売業"),
+            CompanyRef(code: "6544", name: "ジャパンエレベーターサービスホールディングス", sector: "サービス業"),
+        ]
+    #endif
 }

@@ -35,13 +35,10 @@
 		AA0000000000000000000028 /* HAPISConsumerClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000028 /* HAPISConsumerClient.swift */; };
 		AA0000000000000000000031 /* HAPISOriginGate.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000031 /* HAPISOriginGate.swift */; };
 		AA0000000000000000000032 /* ZeroAxisFill.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000032 /* ZeroAxisFill.swift */; };
-		AA0000000000000000000033 /* FundMath.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000033 /* FundMath.swift */; };
 		AA0000000000000000000040 /* FeedRSS.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000040 /* FeedRSS.swift */; };
 		AA0000000000000000000041 /* FeedRSSStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000041 /* FeedRSSStore.swift */; };
 		AA0000000000000000000043 /* ScreenSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000043 /* ScreenSnapshot.swift */; };
 		AA0000000000000000000044 /* ScreenSnapshotStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000044 /* ScreenSnapshotStore.swift */; };
-		AA0000000000000000000034 /* FundView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000034 /* FundView.swift */; };
-		AA0000000000000000000035 /* FundPositionEditView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000035 /* FundPositionEditView.swift */; };
 		AA0000000000000000000037 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000037 /* PrivacyInfo.xcprivacy */; };
 		AA0000000000000000000042 /* InfoPlist.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000042 /* InfoPlist.xcstrings */; };
 /* End PBXBuildFile section */
@@ -79,13 +76,10 @@
 		BB0000000000000000000030 /* BlueTicker-Release.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "BlueTicker-Release.entitlements"; sourceTree = "<group>"; };
 		BB0000000000000000000031 /* HAPISOriginGate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HAPISOriginGate.swift; sourceTree = "<group>"; };
 		BB0000000000000000000032 /* ZeroAxisFill.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZeroAxisFill.swift; sourceTree = "<group>"; };
-		BB0000000000000000000033 /* FundMath.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FundMath.swift; sourceTree = "<group>"; };
 		BB0000000000000000000040 /* FeedRSS.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeedRSS.swift; sourceTree = "<group>"; };
 		BB0000000000000000000041 /* FeedRSSStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeedRSSStore.swift; sourceTree = "<group>"; };
 		BB0000000000000000000043 /* ScreenSnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenSnapshot.swift; sourceTree = "<group>"; };
 		BB0000000000000000000044 /* ScreenSnapshotStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenSnapshotStore.swift; sourceTree = "<group>"; };
-		BB0000000000000000000034 /* FundView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FundView.swift; sourceTree = "<group>"; };
-		BB0000000000000000000035 /* FundPositionEditView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FundPositionEditView.swift; sourceTree = "<group>"; };
 		BB0000000000000000000037 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		BB0000000000000000000038 /* Info-Release.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "Info-Release.plist"; sourceTree = "<group>"; };
 		BB0000000000000000000042 /* InfoPlist.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = InfoPlist.xcstrings; sourceTree = "<group>"; };
@@ -108,7 +102,6 @@
 				DD0000000000000000000002 /* BlueTicker */,
 				DD0000000000000000000009 /* HAPISConsumer */,
 				DD0000000000000000000010 /* ZeroAxisFill */,
-				DD0000000000000000000011 /* FundMath */,
 				DD0000000000000000000012 /* FeedRSS */,
 				DD0000000000000000000013 /* ScreenSnapshot */,
 				DD0000000000000000000003 /* Products */,
@@ -171,8 +164,6 @@
 			children = (
 				BB0000000000000000000009 /* RootView.swift */,
 				BB0000000000000000000021 /* VersionMarkFooter.swift */,
-				BB0000000000000000000034 /* FundView.swift */,
-				BB0000000000000000000035 /* FundPositionEditView.swift */,
 				BB0000000000000000000010 /* SettingsView.swift */,
 				DD0000000000000000000007 /* Explore */,
 				DD0000000000000000000008 /* Ticker */,
@@ -222,15 +213,6 @@
 			);
 			name = ZeroAxisFill;
 			path = ZeroAxisFill/Sources/ZeroAxisFill;
-			sourceTree = "<group>";
-		};
-		DD0000000000000000000011 /* FundMath */ = {
-			isa = PBXGroup;
-			children = (
-				BB0000000000000000000033 /* FundMath.swift */,
-			);
-			name = FundMath;
-			path = FundMath/Sources/FundMath;
 			sourceTree = "<group>";
 		};
 		DD0000000000000000000012 /* FeedRSS */ = {
@@ -350,13 +332,10 @@
 				AA0000000000000000000017 /* SummaryView.swift in Sources */,
 				AA0000000000000000000018 /* BreakdownView.swift in Sources */,
 				AA0000000000000000000032 /* ZeroAxisFill.swift in Sources */,
-				AA0000000000000000000033 /* FundMath.swift in Sources */,
 				AA0000000000000000000040 /* FeedRSS.swift in Sources */,
 				AA0000000000000000000041 /* FeedRSSStore.swift in Sources */,
 				AA0000000000000000000043 /* ScreenSnapshot.swift in Sources */,
 				AA0000000000000000000044 /* ScreenSnapshotStore.swift in Sources */,
-				AA0000000000000000000034 /* FundView.swift in Sources */,
-				AA0000000000000000000035 /* FundPositionEditView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
