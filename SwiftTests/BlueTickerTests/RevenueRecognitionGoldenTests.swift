@@ -1965,6 +1965,36 @@ import Testing
         #expect(totalAsRow == false)
     }
 
+    // source: code=2503 fy_end=2023-12-31 doc_id=S100T4MO page=161 field=product_service 連結 total
+    @Test func t4mo2503RenketsuRowIsTotal() async throws {
+        let html = """
+            <p>（単位：百万円）</p>
+            <table>
+              <tr><td colspan="4"></td><td>前年度(自2022年１月１日至2022年12月31日)</td><td>当年度(自2023年１月１日至2023年12月31日)</td></tr>
+              <tr><td colspan="4">国内ビール・スピリッツ</td><td>663,522</td><td>684,863</td></tr>
+              <tr><td colspan="4">国内飲料</td><td>243,257</td><td>255,028</td></tr>
+              <tr><td colspan="4">オセアニア酒類</td><td>255,900</td><td>280,990</td></tr>
+              <tr><td colspan="4">医薬</td><td>397,863</td><td>441,882</td></tr>
+              <tr><td colspan="4">その他</td><td></td><td></td></tr>
+              <tr><td></td><td colspan="3">国内ワイン</td><td>55,653</td><td>57,510</td></tr>
+              <tr><td></td><td colspan="3">北米飲料</td><td>216,165</td><td>250,142</td></tr>
+              <tr><td></td><td colspan="3">バイオケミカル</td><td>45,948</td><td>48,224</td></tr>
+              <tr><td></td><td colspan="3">その他</td><td>111,158</td><td>115,754</td></tr>
+              <tr><td></td><td colspan="3">合計</td><td>428,925</td><td>471,630</td></tr>
+              <tr><td colspan="4">連結</td><td>1,989,468</td><td>2,134,393</td></tr>
+            </table>
+            """
+        let snapshot = try await run(html: html, docID: "S100T4MO", fyEnd: "2023-12-31", pick: "t0_c5")
+        let denominator: Double = snapshot.denominator
+        let expectedDenom: Double = 2_134_393 * 1_000_000
+        let totalAsRow: Bool = snapshot.rows.contains { $0.label == "連結" }
+        let segmentCount: Int = snapshot.rows.filter { $0.rowKind == "segment" }.count
+        #expect(denominator == expectedDenom)
+        #expect(totalAsRow == false)
+        #expect(segmentCount == 8)
+        #expect(snapshot.needsReview == false)
+    }
+
     @Test func yjhn6904GaibuKokyakuNiTaisuruIsTotal() async throws {
         let html = """
             <p>当連結会計年度（自 2025年4月1日 至 2026年3月31日）</p>

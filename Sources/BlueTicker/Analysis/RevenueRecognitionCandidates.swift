@@ -1047,6 +1047,7 @@ enum RevenueRecognitionCandidates {
         var groups: [GroupHeader] = []
         var group = ""
         var lastClosedRow = firstData - 1
+        let lastAmountRow = structure.rows.last(where: \.hasAmount)?.index
         for classified in structure.rows {
             let i = classified.index
             if classified.amountKind == .subtotal {
@@ -1072,6 +1073,12 @@ enum RevenueRecognitionCandidates {
             let label = classified.category ?? classified.categoryGroup ?? ""
             if label.isEmpty { continue }
             if isAmountCell(label) { continue }
+            // 明細の後ろ、表末尾の金額付き `連結` 行は総合計（2503 S100T4MO）。
+            // `連結` だけの全社表（明細なし）は全社表の判定に残す。
+            if totalToken(label) == "連結", i == lastAmountRow, !items.isEmpty {
+                totals.append(Total(label: label, row: i))
+                continue
+            }
             if classified.labelKind == .categoryGroup, classified.category == nil {
                 items.append(Item(group: "", label: label, row: i, isPartial: false))
                 continue
