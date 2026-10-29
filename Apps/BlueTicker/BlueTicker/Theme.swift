@@ -144,15 +144,125 @@ enum MetricBand {
     }
 }
 
-enum TSESector {
-    static let catalog: [String] = [
-        "水産・農林業", "鉱業", "建設業", "食料品", "繊維製品", "パルプ・紙", "化学",
-        "医薬品", "石油・石炭製品", "ゴム製品", "ガラス・土石製品", "鉄鋼", "非鉄金属",
-        "金属製品", "機械", "電気機器", "輸送用機器", "精密機器", "その他製品",
-        "電気・ガス業", "陸運業", "海運業", "空運業", "倉庫・運輸関連業", "情報・通信業",
-        "卸売業", "小売業", "銀行業", "証券、商品先物取引業", "保険業", "その他金融業",
-        "不動産業", "サービス業",
-    ]
+/// 業種は TOPIX-17 で見せる。API の `sector` は EDINET の東証 33 業種名のままなので、
+/// 表示と業種フィルタはここで 17 業種に振り分け、検索には配下の 33 業種名を渡す。
+enum TOPIX17Sector: String, CaseIterable, Identifiable, Hashable {
+    case foods
+    case energy
+    case construction
+    case materials
+    case pharmaceutical
+    case automobiles
+    case steel
+    case machinery
+    case electronics
+    case itServices
+    case utilities
+    case transportation
+    case trading
+    case retail
+    case banks
+    case financials
+    case realEstate
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .foods: "食品"
+        case .energy: "エネルギー資源"
+        case .construction: "建設・資材"
+        case .materials: "素材・化学"
+        case .pharmaceutical: "医薬品"
+        case .automobiles: "自動車・輸送機"
+        case .steel: "鉄鋼・非鉄"
+        case .machinery: "機械"
+        case .electronics: "電機・精密"
+        case .itServices: "情報通信・サービス他"
+        case .utilities: "電力・ガス"
+        case .transportation: "運輸・物流"
+        case .trading: "商社・卸売"
+        case .retail: "小売"
+        case .banks: "銀行"
+        case .financials: "金融（除く銀行）"
+        case .realEstate: "不動産"
+        }
+    }
+
+    /// SF Symbols。
+    var symbol: String {
+        switch self {
+        case .foods: "fork.knife"
+        case .energy: "flame"
+        case .construction: "hammer"
+        case .materials: "flask"
+        case .pharmaceutical: "pills"
+        case .automobiles: "car"
+        case .steel: "cube.fill"
+        case .machinery: "gearshape.2"
+        case .electronics: "cpu"
+        case .itServices: "person.2"
+        case .utilities: "bolt"
+        case .transportation: "truck.box"
+        case .trading: "globe.asia.australia"
+        case .retail: "bag"
+        case .banks: "building.columns"
+        case .financials: "chart.line.uptrend.xyaxis"
+        case .realEstate: "house"
+        }
+    }
+
+    /// 配下の東証 33 業種。表記は API（EDINET コードリスト）に合わせる。
+    var tseSectors: [String] {
+        switch self {
+        case .foods: ["水産・農林業", "食料品"]
+        case .energy: ["鉱業", "石油・石炭製品"]
+        case .construction: ["建設業", "ガラス・土石製品", "金属製品"]
+        case .materials: ["繊維製品", "パルプ・紙", "化学"]
+        case .pharmaceutical: ["医薬品"]
+        case .automobiles: ["ゴム製品", "輸送用機器"]
+        case .steel: ["鉄鋼", "非鉄金属"]
+        case .machinery: ["機械"]
+        case .electronics: ["電気機器", "精密機器"]
+        case .itServices: ["情報・通信業", "サービス業", "その他製品"]
+        case .utilities: ["電気・ガス業"]
+        case .transportation: ["陸運業", "海運業", "空運業", "倉庫・運輸関連"]
+        case .trading: ["卸売業"]
+        case .retail: ["小売業"]
+        case .banks: ["銀行業"]
+        case .financials: ["証券、商品先物取引業", "保険業", "その他金融業"]
+        case .realEstate: ["不動産業"]
+        }
+    }
+
+    private static let byTSESector: [String: TOPIX17Sector] = {
+        var map: [String: TOPIX17Sector] = [:]
+        for group in allCases {
+            for sector in group.tseSectors {
+                map[sector] = group
+            }
+        }
+        return map
+    }()
+
+    /// 33 業種名から引く。末尾の「業」の有無の揺れ（「倉庫・運輸関連業」など）も受ける。
+    init?(tseSector: String) {
+        let name = tseSector.trimmingCharacters(in: .whitespaces)
+        if let group = Self.byTSESector[name] {
+            self = group
+        } else if name.hasSuffix("業"), let group = Self.byTSESector[String(name.dropLast())] {
+            self = group
+        } else if let group = Self.byTSESector[name + "業"] {
+            self = group
+        } else {
+            return nil
+        }
+    }
+
+    /// 33 業種名を 17 業種の表示名にする。振り分けられない名前（外国法人など）はそのまま返す。
+    static func displayName(for tseSector: String) -> String {
+        TOPIX17Sector(tseSector: tseSector)?.title ?? tseSector
+    }
 }
 
 extension View {
