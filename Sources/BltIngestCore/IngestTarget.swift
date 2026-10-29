@@ -1,6 +1,5 @@
 // `blt-ingest ingest --stages <csv>` の取り込み対象選択。
-// 既定（未指定）は全対象。数値 facts 永続は閉じたためここには含めない。
-// `--with-facts` は残存 CLI で製品経路ではない。
+// 既定（未指定）は全対象。
 
 import BltStoreCore
 import BlueTickerCore

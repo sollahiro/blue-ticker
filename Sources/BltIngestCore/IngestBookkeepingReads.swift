@@ -15,14 +15,6 @@ typealias IssuerHighWater = (
     secCode: String?, edinetCode: String, highWater: String?, newestAnnual: String?
 )
 
-/// 数値 fact 取り込みの分類結果。`missing` / `stale` は提出日時降順（従来の一覧走査と同じ）。
-/// `skipped` は現行 cache_version の格納済み書類数。
-struct FactsIngestClassifyWorklist: Equatable, Sendable {
-    var missing: [String]
-    var stale: [String]
-    var skipped: Int
-}
-
 /// 書類一覧の分類に使う列。テストのオラクルが DB 全表 `.all()` せずに同じ畳み込みを踏むため。
 struct DocumentListingFields: Equatable, Sendable {
     var id: String?
@@ -77,70 +69,6 @@ func annualReportDisclosureDocsFromFields(
     _ docs: [DocumentListingFields]
 ) -> [DocumentListingFields] {
     docs.filter(isAnnualReportDisclosure)
-}
-
-/// 従来の「全書類を新しい順に走査して missing / stale / skipped に分ける」と同じ結果。
-func factsIngestClassifyWorklistFromFields(
-    _ documents: [DocumentListingFields],
-    factsByID: [String: String],
-    currentVersion: String
-) -> FactsIngestClassifyWorklist {
-    let ordered = documents.sorted { $0.submitDateTime > $1.submitDateTime }
-    var missing: [String] = []
-    var stale: [String] = []
-    var skipped = 0
-    for doc in ordered {
-        guard let docID = doc.id else { continue }
-        guard let version = factsByID[docID] else {
-            missing.append(docID)
-            continue
-        }
-        if version != currentVersion {
-            stale.append(docID)
-        } else {
-            skipped += 1
-        }
-    }
-    return FactsIngestClassifyWorklist(missing: missing, stale: stale, skipped: skipped)
-}
-
-func factsIngestClassifyWorklist(
-    db: Database, currentVersion: String = xbrlFactsCacheVersion
-) async throws -> FactsIngestClassifyWorklist {
-    let sql = try requireSQLDatabase(db)
-    let workRows = try await sql.raw("""
-        SELECT \(ident: EdinetDocument.schema).\(ident: "doc_id") AS doc_id,
-            CASE WHEN \(ident: EdinetXbrlFacts.schema).\(ident: "doc_id") IS NULL THEN 0 ELSE 1 END AS is_stale
-        FROM \(ident: EdinetDocument.schema)
-        LEFT JOIN \(ident: EdinetXbrlFacts.schema)
-            ON \(ident: EdinetXbrlFacts.schema).\(ident: "doc_id")
-                = \(ident: EdinetDocument.schema).\(ident: "doc_id")
-        WHERE \(ident: EdinetXbrlFacts.schema).\(ident: "doc_id") IS NULL
-            OR \(ident: EdinetXbrlFacts.schema).\(ident: "cache_version") <> \(bind: currentVersion)
-        ORDER BY \(ident: EdinetDocument.schema).\(ident: "submit_date_time") DESC
-        """).all()
-    var missing: [String] = []
-    var stale: [String] = []
-    missing.reserveCapacity(workRows.count)
-    stale.reserveCapacity(workRows.count)
-    for row in workRows {
-        let docID = try row.decode(column: "doc_id", as: String.self)
-        if try sqlDecodeCount(row, column: "is_stale") == 0 {
-            missing.append(docID)
-        } else {
-            stale.append(docID)
-        }
-    }
-    let skippedRows = try await sql.raw("""
-        SELECT COUNT(*) AS n
-        FROM \(ident: EdinetDocument.schema)
-        INNER JOIN \(ident: EdinetXbrlFacts.schema)
-            ON \(ident: EdinetXbrlFacts.schema).\(ident: "doc_id")
-                = \(ident: EdinetDocument.schema).\(ident: "doc_id")
-        WHERE \(ident: EdinetXbrlFacts.schema).\(ident: "cache_version") = \(bind: currentVersion)
-        """).all()
-    let skipped = try skippedRows.first.map { try sqlDecodeCount($0) } ?? 0
-    return FactsIngestClassifyWorklist(missing: missing, stale: stale, skipped: skipped)
 }
 
 /// 従来の発行体集約（全 listing を畳む）と同じ結果。SQL `GROUP BY` のオラクル。

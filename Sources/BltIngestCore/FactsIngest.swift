@@ -1,120 +1,11 @@
-// 数値 fact 取り込み: edinet_documents の各書類について XBRL を取得（XBRL 取得キャッシュ）・パースし、
-// 数値 fact インデックスを edinet_xbrl_facts へ upsert する。
-// 取得・パースは BlueTickerCore のファサード（parseXbrlFactIndex）に委譲し、
-// ここでは候補選定・staleness 判定・DB upsert のみを担う（ネットワーク非依存でテスト可能）。
+// `blt-ingest ingest` の本体。財務取り込み・有報セクション・内訳・Statement・注記・
+// アイコン・Overview・関係を取り込む。数値 fact の Neon 永続（旧 edinet_xbrl_facts）は閉じた。
+// 配信も他 stage も生 XBRL を直接読む。
 
 import BltStoreCore
 import BlueTickerCore
 import FluentKit
 import Foundation
-
-/// 取り込み結果のサマリ。
-public struct FactsIngestSummary: Sendable, Equatable {
-    /// 取り込みを試みた書類数（skip を除く）。
-    public let attempted: Int
-    /// パース・格納に成功した書類数。
-    public let stored: Int
-    /// 取得・パース失敗（XBRL 無し等）でスキップした書類数。
-    public let failed: Int
-    /// 既に最新版でパース済みのためスキップした書類数。
-    public let skipped: Int
-}
-
-/// docID を受けて fact インデックスを返すパーサ（成功で payload、失敗で nil）。
-/// 本番は `context.parseXbrlFactIndex`、テストはフェイクを注入する。
-public typealias XbrlFactParser = @Sendable (String) async -> XbrlFactIndexPayload?
-
-/// edinet_documents の書類を新しい順に走査し、未パース or バージョン不一致のものを取り込む。
-/// `limit` は新規取り込み件数の上限（XBRL ダウンロードが重いためバッチ実行用）。
-/// `cachedDocIDs` はローカル XBRL 展開済み。欠測→版ずれの連結のうえ、キャッシュ済みを先頭へ寄せる。
-func runFactsIngest(
-    db: Database, limit: Int?, cachedDocIDs: Set<String> = [], logger: Logger? = nil,
-    parse: XbrlFactParser
-) async throws -> FactsIngestSummary {
-    var attempted = 0
-    var stored = 0
-    var failed = 0
-    var unhealthyRetries = 0
-
-    let worklist = try await withDbRetry(
-        logger: logger, context: "数値 fact 取り込み 分類", onRetry: { unhealthyRetries += 1 }
-    ) {
-        try await factsIngestClassifyWorklist(db: db)
-    }
-    var skipped = worklist.skipped
-
-    let candidates = prioritized(
-        worklist.missing + worklist.stale, codeOf: { $0 }, priorityCodes: cachedDocIDs)
-    // 分類フェーズと実処理フェーズでリトライ予算を分ける。
-    // 分類中の一過性リトライで処理フェーズが即中断しないようにする。
-    unhealthyRetries = 0
-
-    for cand in candidates {
-        let docID = cand
-        // continue（skip/failed）で下の判定を素通りされないよう、各項目の先頭で判定する。
-        if unhealthyRetries >= Api.ingestDbUnhealthyRetryThreshold {
-            logger?.error(
-                "DB接続が不安定なため数値 fact 取り込みを中断します(リトライ\(unhealthyRetries)回・残り\(candidates.count - attempted)件は次回スケジュールで再試行)"
-            )
-            break
-        }
-        let existing = try await withDbRetry(
-            logger: logger, context: "docID=\(docID)", onRetry: { unhealthyRetries += 1 }
-        ) {
-            try await EdinetXbrlFacts.find(docID, on: db)
-        }
-        if let row = existing, row.cacheVersion == xbrlFactsCacheVersion {
-            skipped += 1
-            continue
-        }
-        if let lim = limit, attempted >= lim { break }
-        attempted += 1
-        guard let payload = await parse(docID) else {
-            failed += 1
-            logger?.warning("数値 fact 取り込み失敗: docID=\(docID)")
-            continue
-        }
-        try await withDbRetry(
-            logger: logger, context: "docID=\(docID)", onRetry: { unhealthyRetries += 1 }
-        ) {
-            try await storeXbrlFacts(
-                existing: try await EdinetXbrlFacts.find(docID, on: db), docID: docID, facts: payload,
-                db: db)
-        }
-        stored += 1
-    }
-
-    return FactsIngestSummary(
-        attempted: attempted, stored: stored, failed: failed, skipped: skipped)
-}
-
-/// fact インデックスを edinet_xbrl_facts へ書き込む（既存行があれば更新、無ければ作成）。
-/// `existing` は当該リトライ試行内で find した行。試行をまたいでインスタンスを再利用しない。
-func storeXbrlFacts(
-    existing: EdinetXbrlFacts?, docID: String, facts: XbrlFactIndexPayload, db: Database
-) async throws {
-    let applyFields: (EdinetXbrlFacts) -> Void = { row in
-        row.facts = facts
-        row.cacheVersion = xbrlFactsCacheVersion
-    }
-    if let row = existing {
-        applyFields(row)
-        try await row.update(on: db)
-    } else {
-        let model = EdinetXbrlFacts()
-        model.id = docID
-        applyFields(model)
-        try await createIdempotently(
-            create: { try await model.create(on: db) },
-            recover: {
-                guard let recovered = try await EdinetXbrlFacts.find(docID, on: db) else { return false }
-                applyFields(recovered)
-                try await recovered.update(on: db)
-                return true
-            }
-        )
-    }
-}
 
 // MARK: - CLI エントリ
 
@@ -127,19 +18,13 @@ let financialsIngestYears = 6
 let unpublishedBreakdownIngestLimit = 30
 
 /// `blt-ingest ingest` の本体。DB へ接続し、
-/// 財務取り込み（計算済み財務サマリ）→ 半期財務取り込み（半期）→ 有報セクション取り込み（有報セクション）→
+/// 財務取り込み（計算済み財務サマリ）→ 有報セクション取り込み（有報セクション）→
 /// 内訳取り込み（product_service/geography・決定論指標軸ともに上場全体。日経225は処理順の先頭寄せ）を取り込む。
-///
-/// 数値 fact 取り込み（`edinet_xbrl_facts`）は **閉じた**。生 XBRL の R2 L2 から
-/// 再導出できるパース済み投影で、配信も他 stage も読まない。全件投影は Neon 512MB を超える。
-/// `--with-facts`（`includeFacts`）は残存 CLI で製品経路ではない。財務取り込みの
-/// `computeFinancials` は自前で生 XBRL を読むため、facts 行が無くても自足する。
 ///
 /// `targets` は実行する financials/filing-sections/breakdowns/statements/statement-notes/icons/overviews の集合
 /// （CLI: `--stages filing-sections` 等）。既定は全対象。icons は `BLT_R2_*` 環境変数未設定時は
 /// スキップされる。overviews は `OPENROUTER_OVERVIEW_API_KEY` 未設定時はスキップされる。
 /// 例えば有報セクション取り込みだけを先に流したいとき、重い financials の全件 drain を挟まずに済む。
-/// 数値 fact 取り込みは `targets` に含めない。
 /// `codes` は financials/filing-sections/breakdowns の対象を明示的な証券コード集合に絞る（CLI: `--codes 7203,6758`）。
 /// `docIDs` は会社-FY（原本 120 の doc_id）単位の再 ingest（CLI: `--doc-ids S100W0S7`）。
 /// 指定時は該当書類だけを keep し、cache_version / needs_review に関係なく再計算する（分類で
@@ -148,12 +33,11 @@ let unpublishedBreakdownIngestLimit = 30
 /// その doc の発行体だけ再計算する（他 FY は原本 120 を再読。overlay は訂正がある FY だけ）。
 /// バグ修正確認後などに特定銘柄だけを手動・単発で先に再計算したいケース向け（定期 launchd drain には
 /// 使わない）。指定時は `limit` を無視して該当コードを全件処理する（対象自体が小さいため）。
-/// 数値 fact 取り込みは `codes` の対象外（doc 単位のため、コードへの紐付けは別スコープ）。
 /// 内訳取り込み: product_service/geography・決定論指標軸ともに `listed`（上場全体。日経225=`priority`は
 /// 処理順の先頭寄せのみ）。`--codes` 指定時は全軸その集合。
 /// DATABASE_URL 未設定なら databaseUnavailable、EDINET キー未設定なら apiKeyMissing を投げる。
 public func runFactsIngestCommand(
-    limit: Int?, includeFacts: Bool = false,
+    limit: Int?,
     targets: Set<IngestTarget> = Set(IngestTarget.allCases),
     codes: Set<String>? = nil,
     docIDs: Set<String>? = nil,
@@ -182,7 +66,7 @@ public func runFactsIngestCommand(
                 metadata: ["event": "priority_codes_loaded", "count": "\(priority.count)"])
         }
         // `--codes` 指定時は financials/filing-sections の対象をその集合へ絞り、`limit` は無視して全件処理する
-        // （手動・単発の対象は小さい前提。数値 fact 取り込みは doc 単位のためスコープ外）。
+        // （手動・単発の対象は小さい前提）。
         let stageLimit = (codes == nil && docIDs == nil) ? limit : nil
         if let codes {
             app.logger.notice(
@@ -291,22 +175,6 @@ public func runFactsIngestCommand(
             financialsExplicitCodes = codes
         }
 
-        if includeFacts {
-            let s3 = try await runFactsIngest(
-                db: app.db, limit: limit, cachedDocIDs: cachedDocIDs,
-                logger: app.logger
-            ) { docID in
-                await context.parseXbrlFactIndex(
-                    docID: docID, correctionDocIDs: correctionIDsByOriginal[docID] ?? [])
-            }
-            logIngestSummary(
-                app.logger, target: "facts", attempted: s3.attempted, stored: s3.stored,
-                failed: s3.failed, skipped: s3.skipped)
-        } else {
-            app.logger.notice(
-                "facts ingest disabled",
-                metadata: ["event": "ingest_skipped", "target": "facts", "reason": "blt_23"])
-        }
         if targets.contains(.financials) {
             let s4 = try await runFinancialsIngest(
                 db: app.db, years: financialsIngestYears, limit: stageLimit, listedCodes: listed,

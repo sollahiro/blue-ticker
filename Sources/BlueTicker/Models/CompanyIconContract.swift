@@ -1,6 +1,6 @@
 // 会社アイコン取り込み（EDINET電子公告URL→favicon→R2、または手動 origin / 公式画像）の
 // 格納用バージョン定数。company_icons.cache_version（Neon）に埋め込む。blueTickerVersion
-// 非連動（fin-v2 / facts-v1 と同思想）。CorporateWebsiteExtractor の抽出ロジック、または
+// 非連動（fin-vN と同思想）。CorporateWebsiteExtractor の抽出ロジック、または
 // FaviconFetcher の取得・判定ロジックを変更したときのみ `companyIconsCacheVersion` をバンプする。
 // 手動行は `icons-manual` で、自動 ingest のバンプ対象外。
 

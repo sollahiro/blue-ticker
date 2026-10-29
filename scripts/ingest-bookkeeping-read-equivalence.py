@@ -21,7 +21,6 @@ import sys
 from collections import defaultdict
 from typing import Any
 
-FACTS_CACHE_VERSION = "facts-v1"
 ORDINANCE_010 = "010"
 DOC_TYPE_120 = "120"
 FRESHNESS_DOC_TYPES = ("120", "130")
@@ -133,87 +132,6 @@ def stage_ok(result: dict[str, Any]) -> bool:
     if "stages" in result:
         return all(stage_ok(s) for s in result["stages"])
     return result.get("ok", False)
-
-
-def facts_stage(url: str, facts_version: str) -> dict[str, Any]:
-    old_docs = psql_json(
-        url,
-        """
-        SELECT json_build_object(
-            'doc_id', doc_id,
-            'submit_date_time', submit_date_time
-        )
-        FROM edinet_documents
-        ORDER BY submit_date_time DESC
-        """,
-    )
-    old_facts = {
-        row["doc_id"]: row["cache_version"]
-        for row in psql_json(
-            url,
-            """
-            SELECT json_build_object('doc_id', doc_id, 'cache_version', cache_version)
-            FROM edinet_xbrl_facts
-            """,
-        )
-    }
-    missing: list[str] = []
-    stale: list[str] = []
-    skipped = 0
-    for doc in old_docs:
-        doc_id = doc["doc_id"]
-        version = old_facts.get(doc_id)
-        if version is None:
-            missing.append(doc_id)
-        elif version != facts_version:
-            stale.append(doc_id)
-        else:
-            skipped += 1
-    new_rows = psql_json(
-        url,
-        f"""
-        SELECT json_build_object('doc_id', d.doc_id, 'is_stale',
-            CASE WHEN f.doc_id IS NULL THEN 0 ELSE 1 END)
-        FROM edinet_documents d
-        LEFT JOIN edinet_xbrl_facts f ON f.doc_id = d.doc_id
-        WHERE f.doc_id IS NULL OR f.cache_version <> '{facts_version.replace("'", "''")}'
-        ORDER BY d.submit_date_time DESC
-        """,
-    )
-    new_missing: list[str] = []
-    new_stale: list[str] = []
-    for row in new_rows:
-        if row["is_stale"] == 0:
-            new_missing.append(row["doc_id"])
-        else:
-            new_stale.append(row["doc_id"])
-    new_skipped_rows = psql_json(
-        url,
-        f"""
-        SELECT COUNT(*)::int
-        FROM edinet_documents d
-        INNER JOIN edinet_xbrl_facts f ON f.doc_id = d.doc_id
-        WHERE f.cache_version = '{facts_version.replace("'", "''")}'
-        """,
-    )
-    new_skipped = int(new_skipped_rows[0]) if new_skipped_rows else 0
-    missing_diff = diff_sets(set(missing), set(new_missing))
-    stale_diff = diff_sets(set(stale), set(new_stale))
-    skipped_diff = 0 if skipped == new_skipped else 1
-    return {
-        "stage": "facts_classify",
-        "old": {"missing": len(missing), "stale": len(stale), "skipped": skipped},
-        "new": {"missing": len(new_missing), "stale": len(new_stale), "skipped": new_skipped},
-        "missing": missing_diff,
-        "stale": stale_diff,
-        "skipped_diff": skipped_diff,
-        "diff": missing_diff["diff"] + stale_diff["diff"] + skipped_diff,
-        "bytes_estimate": {
-            "old_rows": len(old_docs) + len(old_facts),
-            "new_rows": len(new_rows) + 1,
-            "note": "old hydrates every edinet_documents listing row plus every facts cache_version; new transfers missing+stale ids plus one COUNT",
-        },
-    }
 
 
 def annual_docs_stage(url: str) -> dict[str, Any]:
@@ -485,7 +403,6 @@ def count_stage(
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--url", default=os.environ.get("DATABASE_URL"))
-    parser.add_argument("--facts-cache-version", default=FACTS_CACHE_VERSION)
     parser.add_argument(
         "--codes",
         default="",
@@ -514,7 +431,6 @@ def main() -> int:
     keep = keep_doc_ids(args.url, codes)
 
     results = [
-        facts_stage(args.url, args.facts_cache_version),
         annual_docs_stage(args.url),
         high_water_stage(args.url),
         count_stage(

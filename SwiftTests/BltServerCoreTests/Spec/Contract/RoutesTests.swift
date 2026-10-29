@@ -95,7 +95,7 @@ private func send(
             #expect(status == .ok)
             #expect(json?["status"] as? String == "ok")
             let versions = json?["cache_versions"] as? [String: Any]
-            #expect(versions?["xbrl_facts"] as? String == xbrlFactsCacheVersion)
+            #expect(versions?["xbrl_facts"] == nil)
             #expect(versions?["company_financials"] as? String == companyFinancialsCacheVersion)
             #expect(versions?["company_financials_min_servable"] as? Int == companyFinancialsMinServableVersion)
             #expect(versions?["filing_sections"] as? String == filingSectionsCacheVersion)

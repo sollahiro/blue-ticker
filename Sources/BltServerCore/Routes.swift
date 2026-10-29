@@ -36,7 +36,6 @@ func registerRoutes(
         jsonResponse([
             "status": "ok",
             "cache_versions": [
-                "xbrl_facts": xbrlFactsCacheVersion,
                 "company_financials": companyFinancialsCacheVersion,
                 "company_financials_min_servable": companyFinancialsMinServableVersion,
                 "filing_sections": filingSectionsCacheVersion,

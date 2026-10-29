@@ -35,7 +35,7 @@ public let statementNoteTypeLeaseLiabilities = "lease_liabilities"
 /// resolver・cache_version・smoke/golden は実装済み。公開時に一覧へ戻す（進捗は Linear Team `blue-ticker`）。
 public let statementNoteTypeSgaExpenseBreakdown = "sga_expense_breakdown"
 
-/// ingest / `--note-types` バリデーション用の公開 note_type 一覧（`FactsIngest` の走査順）。
+/// ingest / `--note-types` バリデーション用の公開 note_type 一覧（ingest の走査順）。
 /// `sga_expense_breakdown` は未公開のため含めない。
 /// `borrowings_schedule` / `lease_liabilities` / `property_plant_equipment_schedule` /
 /// `goodwill_and_intangibles` は公開面から廃止（`retiredStatementNoteTypes`）。

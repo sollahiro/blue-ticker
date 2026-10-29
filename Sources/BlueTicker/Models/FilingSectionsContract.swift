@@ -3,13 +3,13 @@
 // この payload で Neon（company_filing_sections）へ格納し、read は DB から復元して返す。
 //
 // 内部型 ExtractedBreakdown（Analysis/BreakdownExtractor.swift, internal）は露出させず、
-// XBRL 数値 RAW の XbrlFact → XbrlFactRecord 写経と同じパターンで ExtractedBreakdownPayload へ写す。
+// ExtractedBreakdownPayload へ写す。
 // Foundation のみ依存（BlueTickerCore/Models 配置。Fluent モデルは BltServerCore 側）。
 
 import Foundation
 
 /// Neon 有報セクション取り込み キャッシュ（company_filing_sections.cache_version）の抽出／スキーマバージョン。
-/// blueTickerVersion 非連動（fin-v2 / facts-v1 と同思想）。抽出ロジック（XBRLParser / BreakdownExtractor /
+/// blueTickerVersion 非連動（fin-vN と同思想）。抽出ロジック（XBRLParser / BreakdownExtractor /
 /// cleanText の cap 等）または本 payload スキーマの意味を変えたときのみバンプする。
 /// セクションの「追加」はバンプ不要（section_keys 列の不一致で当該行のみ再抽出される）。
 ///

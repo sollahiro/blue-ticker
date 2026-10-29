@@ -17,7 +17,6 @@ private func withMigratedApp(_ body: (Application) async throws -> Void) async t
         app.databases.use(.sqlite(.memory), as: .sqlite)
         app.migrations.add(CreateEdinetDocument())
         app.migrations.add(AddParentDocIDToEdinetDocuments())
-        app.migrations.add(CreateEdinetXbrlFacts())
         app.migrations.add(CreateCompanyStatementNotes())
         app.migrations.add(CreateCompanySegmentBreakdowns())
         app.migrations.add(RenameCompanySegmentBreakdownsToCompanyBreakdowns())
@@ -55,56 +54,11 @@ private func seedDocument(
         ordinanceCode: ordinance, submitDateTime: submit, periodEnd: periodEnd)
 }
 
-private func seedFacts(_ docID: String, version: String, db: Database) async throws {
-    let row = EdinetXbrlFacts()
-    row.id = docID
-    row.facts = [
-        "NetSales": ["CurrentYearDuration": XbrlFactRecord(value: 1, consolidation: "consolidated")]
-    ]
-    row.cacheVersion = version
-    try await row.create(on: db)
-}
-
 private func packIssuer(_ row: IssuerHighWater) -> String {
     "\(row.secCode ?? "")|\(row.edinetCode)|\(row.highWater ?? "")|\(row.newestAnnual ?? "")"
 }
 
 @Suite struct IngestBookkeepingReadTests {
-
-    @Test func factsClassifyWorklistMatchesHydrateOracleIncludingNonAnnualDocs() async throws {
-        try await withMigratedApp { app in
-            var fields: [DocumentListingFields] = []
-            fields.append(
-                try await seedDocument(
-                    "MISS-NEW", db: app.db, docType: Api.docTypeAnnualReport,
-                    submit: "2025-06-22 09:00"))
-            fields.append(
-                try await seedDocument(
-                    "STALE", db: app.db, docType: "140", submit: "2025-06-21 09:00"))
-            fields.append(
-                try await seedDocument(
-                    "FRESH", db: app.db, docType: "160", submit: "2025-06-20 09:00"))
-            fields.append(
-                try await seedDocument(
-                    "MISS-OLD", db: app.db, secCode: "67580", edinetCode: "E00002",
-                    docType: Api.docTypeAnnualReport, ordinance: "030",
-                    submit: "2025-06-19 09:00"))
-            try await seedFacts("STALE", version: "facts-v0", db: app.db)
-            try await seedFacts("FRESH", version: xbrlFactsCacheVersion, db: app.db)
-
-            let oracle = factsIngestClassifyWorklistFromFields(
-                fields, factsByID: ["STALE": "facts-v0", "FRESH": xbrlFactsCacheVersion],
-                currentVersion: xbrlFactsCacheVersion)
-            let got = try await factsIngestClassifyWorklist(db: app.db)
-
-            #expect(got.missing == oracle.missing)
-            #expect(got.stale == oracle.stale)
-            #expect(got.skipped == oracle.skipped)
-            #expect(got.missing == ["MISS-NEW", "MISS-OLD"])
-            #expect(got.stale == ["STALE"])
-            #expect(got.skipped == 1)
-        }
-    }
 
     @Test func annualReportDisclosureDocsMatchInMemoryDocTypeAndOrdinanceFilter() async throws {
         try await withMigratedApp { app in
