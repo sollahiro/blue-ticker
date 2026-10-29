@@ -291,10 +291,10 @@ private func send(
             try await seedFinancials(app: app)
 
             let (status, json) = try await send(
-                app, "/v1/companies/7203/financials?fields=sales,bogus,roic_delta")
+                app, "/v1/companies/7203/financials?fields=sales,bogus,net_margin")
             #expect(status == .badRequest)
-            // Waterfall 専用キー（roic_delta）も Summary の公開キーではないため 400。
-            #expect(json?["error"] as? String == "fields に不明なキーがあります: bogus, roic_delta")
+            // Waterfall 専用キー（net_margin）も Summary の公開キーではないため 400。
+            #expect(json?["error"] as? String == "fields に不明なキーがあります: bogus, net_margin")
             #expect(json?["status"] as? Int == 400)
         }
     }

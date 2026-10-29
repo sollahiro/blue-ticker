@@ -96,8 +96,7 @@ struct IndividualAnalyzer {
         yearEntries.sort { ($0.fyEnd ?? "") > ($1.fyEnd ?? "") }
 
         applyOperatingProfitChangeToYears(&yearEntries)
-        applyRoicWaterfallToYears(&yearEntries)
-        applyRoeWaterfallToYears(&yearEntries)
+        applyRoeDuPontToYears(&yearEntries)
         applyWorkingCapitalAndCCCToYears(&yearEntries)
 
         var result = MetricsResult()

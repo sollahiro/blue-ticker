@@ -47,7 +47,7 @@ import Foundation
         calc.ccc = 123
         calc.nopatMargin = 7
         calc.investedCapitalTurnover = 1.1
-        calc.roeDelta = 1.5
+        calc.netMargin = 1.5
         calc.docID = "S100TEST"
         return YearEntry(
             fyEnd: "2024-03-31", financialPeriod: "2024年03月期",
@@ -103,7 +103,7 @@ import Foundation
         #expect(Set(calc!.keys) == [
             "ROE", "ROIC", "GrossProfit", "WorkingCapital",
             "DSO", "DIO", "DPO", "CCC",
-            "NOPATMargin", "InvestedCapitalTurnover", "ROEDelta", "DocID",
+            "NOPATMargin", "InvestedCapitalTurnover", "NetMargin", "DocID",
         ])
     }
 

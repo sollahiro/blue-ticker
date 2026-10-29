@@ -34,15 +34,9 @@ import Foundation
         #expect(years.isEmpty)
     }
 
-    @Test func roicWaterfallDoesNotCrashOnEmpty() {
+    @Test func roeDuPontDoesNotCrashOnEmpty() {
         var years: [YearEntry] = []
-        applyRoicWaterfallToYears(&years)
-        #expect(years.isEmpty)
-    }
-
-    @Test func roeWaterfallDoesNotCrashOnEmpty() {
-        var years: [YearEntry] = []
-        applyRoeWaterfallToYears(&years)
+        applyRoeDuPontToYears(&years)
         #expect(years.isEmpty)
     }
 
@@ -53,17 +47,5 @@ import Foundation
         applyOperatingProfitChangeToYears(&years)
         #expect(years[0].calculatedData.businessProfitChange == nil)
         #expect(years[0].calculatedData.salesChangeImpact == nil)
-    }
-
-    @Test func singlePeriodProducesNoRoicDelta() {
-        var years = [entry(fyEnd: "2025-03-31")]
-        applyRoicWaterfallToYears(&years)
-        #expect(years[0].calculatedData.roicDelta == nil)
-    }
-
-    @Test func singlePeriodProducesNoRoeDelta() {
-        var years = [entry(fyEnd: "2025-03-31")]
-        applyRoeWaterfallToYears(&years)
-        #expect(years[0].calculatedData.roeDelta == nil)
     }
 }

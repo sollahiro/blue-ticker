@@ -79,12 +79,11 @@ private func makeResponse(code: String, years: Int, newestYear: Int = 2025) thro
     return try JSONDecoder().decode(FinancialsResponse.self, from: data)
 }
 
-/// 前年依存フィールド（増減・ROIC/ROE 差分）を全年に入れた応答を新しい順で構築する。
+/// 前年依存フィールド（事業利益の増減）を全年に入れた応答を新しい順で構築する。
 /// trim 後の最古年でこれらが null 化されることを検証するために使う。
 private let priorDependentKeys = [
     "business_profit_change", "sales_change_impact", "gross_margin_change_impact",
-    "sga_change_impact", "roic_delta", "roic_margin_effect", "roic_turnover_effect",
-    "roe_delta", "roe_net_margin_effect", "roe_asset_turnover_effect", "roe_leverage_effect",
+    "sga_change_impact",
 ]
 /// フェイク計算器のヘルパー: makeResponse の結果を FinancialsComputeResult でラップする。
 private func fakeSuccess(code: String, years: Int, newestYear: Int = 2025) -> FinancialsComputeResult {
@@ -1280,7 +1279,7 @@ private final class LogCapture: LogHandler, @unchecked Sendable {
             #expect(years.count == 3)
             // 最新2年（前年あり）は前年依存値を保持。
             #expect(years[0]["business_profit_change"] as? Double != nil)
-            #expect(years[1]["roe_delta"] as? Double != nil)
+            #expect(years[1]["sales_change_impact"] as? Double != nil)
             // 縮めて最古になった年は前年依存値が全て null。
             for key in priorDependentKeys {
                 #expect(years[2][key] is NSNull, "\(key) should be null on trimmed oldest year")

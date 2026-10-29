@@ -2,7 +2,7 @@ import Testing
 import Foundation
 @testable import BlueTickerCore
 
-// applyOperatingProfitChangeToYears / applyRoicWaterfallToYears / applyRoeWaterfallToYears の数値仕様。
+// applyOperatingProfitChangeToYears / applyRoeDuPontToYears の数値仕様。
 // WaterfallEmptyInputTests が境界（空・単一期）を守るのに対し、本スイートは2期以上での
 // 分解値そのもの（補完・各要因効果の値・要因和 = 前年差の整合・ソート順）を固定する。
 // 厳密比較する値は2進小数で正確に表現できるもの（0.25 / 0.375 / 0.625 等）を選び、
@@ -251,50 +251,12 @@ import Foundation
         #expect(years[1].calculatedData.businessProfitChange == nil)
     }
 
-    // MARK: - ROIC 前年差の2要因
-
-    @Test func roicDeltaDecomposesIntoMarginAndTurnoverEffects() {
-        // NOPATMargin 10→12・回転率 0.75→1.0: ROIC 7.5 → 12
-        var years = [
-            entry(fyEnd: "2023-03-31", roic: 7.5, nopatMargin: 10, turnover: 0.75),
-            entry(fyEnd: "2024-03-31", roic: 12, nopatMargin: 12, turnover: 1.0),
-        ]
-        applyRoicWaterfallToYears(&years)
-        let cd = years[1].calculatedData
-        #expect(cd.roicDelta == 4.5)
-        #expect(cd.roicMarginEffect == 1.5)   // (12−10) × 0.75
-        #expect(cd.roicTurnoverEffect == 3.0) // 12 × (1.0−0.75)
-        #expect(cd.roicMarginEffect! + cd.roicTurnoverEffect! == cd.roicDelta!)
-    }
-
-    @Test func roicDecomposesFinancialInstitutions() {
-        // 経常利益ベース（金融機関）も入力が揃えば分解する
-        var years = [
-            entry(fyEnd: "2023-03-31", roic: 7.5, nopatMargin: 10, turnover: 0.75),
-            entry(fyEnd: "2024-03-31", opLabel: "経常利益", roic: 12, nopatMargin: 12, turnover: 1.0),
-        ]
-        applyRoicWaterfallToYears(&years)
-        let cd = years[1].calculatedData
-        #expect(cd.roicDelta == 4.5)
-        #expect(cd.roicMarginEffect == 1.5)
-        #expect(cd.roicTurnoverEffect == 3.0)
-    }
-
-    @Test func roicDeltaNilWhenPriorComponentMissing() {
-        var years = [
-            entry(fyEnd: "2023-03-31", roic: 7.5, turnover: 0.75),
-            entry(fyEnd: "2024-03-31", roic: 12, nopatMargin: 12, turnover: 1.0),
-        ]
-        applyRoicWaterfallToYears(&years)
-        #expect(years[1].calculatedData.roicDelta == nil)
-    }
-
     // MARK: - ROE: デュポン構成要素の導出
 
     @Test func roeDerivesDuPontComponents() {
         var years = [entry(
             fyEnd: "2024-03-31", sales: 1000, np: 100, totalAssets: 2000, netAssets: 500)]
-        applyRoeWaterfallToYears(&years)
+        applyRoeDuPontToYears(&years)
         let cd = years[0].calculatedData
         #expect(approx(cd.netMargin, 10))     // 100/1000 × 100
         #expect(cd.assetTurnover == 0.5)      // 1000/2000
@@ -305,41 +267,20 @@ import Foundation
         // 債務超過（純資産 ≤ 0）ではレバレッジが意味を成さないため導出しない
         var years = [entry(
             fyEnd: "2024-03-31", sales: 1000, np: 100, totalAssets: 2000, netAssets: -500)]
-        applyRoeWaterfallToYears(&years)
+        applyRoeDuPontToYears(&years)
         #expect(years[0].calculatedData.netMargin == nil)
         #expect(years[0].calculatedData.financialLeverage == nil)
     }
 
-    // MARK: - ROE 前年差の3要因
+    // MARK: - ROE: デュポン3要素の積
 
-    @Test func roeDeltaDecomposesIntoThreeFactors() {
-        // 純利益率のみ 10→12（回転率 0.5・レバレッジ 4 は不変）: ROE 20 → 24
-        var years = [
-            entry(fyEnd: "2023-03-31", sales: 1000, np: 100, roe: 20,
-                  totalAssets: 2000, netAssets: 500),
-            entry(fyEnd: "2024-03-31", sales: 1000, np: 120, roe: 24,
-                  totalAssets: 2000, netAssets: 500),
-        ]
-        applyRoeWaterfallToYears(&years)
-        let cd = years[1].calculatedData
-        #expect(cd.roeDelta == 4)
-        #expect(approx(cd.roeNetMarginEffect, 4))     // (12−10) × 0.5 × 4
-        #expect(approx(cd.roeAssetTurnoverEffect, 0))
-        #expect(approx(cd.roeLeverageEffect, 0))
-    }
-
-    @Test func roeFactorsSumToDeltaWhenAllFactorsMove() {
-        // nm 10→12・at 0.5→0.625・fl 4→3.2: チェーン分解は完全（要因和 = ROE 前年差）
-        var years = [
-            entry(fyEnd: "2023-03-31", sales: 1000, np: 100, roe: 20,
-                  totalAssets: 2000, netAssets: 500),
-            entry(fyEnd: "2024-03-31", sales: 1250, np: 150, roe: 24,
-                  totalAssets: 2000, netAssets: 625),
-        ]
-        applyRoeWaterfallToYears(&years)
-        let cd = years[1].calculatedData
-        #expect(cd.roeDelta == 4)
-        let sum = cd.roeNetMarginEffect! + cd.roeAssetTurnoverEffect! + cd.roeLeverageEffect!
-        #expect(approx(sum, cd.roeDelta!))
+    @Test func duPontComponentsMultiplyToRoe() {
+        // 純利益率 × 総資産回転率 × 財務レバレッジ = 純利益 ÷ 期末親会社持分（前年差の要因分解は持たない）
+        var years = [entry(
+            fyEnd: "2024-03-31", sales: 1250, np: 150, totalAssets: 2000, netAssets: 625)]
+        applyRoeDuPontToYears(&years)
+        let cd = years[0].calculatedData
+        let product = cd.netMargin! * cd.assetTurnover! * cd.financialLeverage!
+        #expect(approx(product, 150.0 / 625.0 * 100))
     }
 }

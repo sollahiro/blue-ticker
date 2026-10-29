@@ -149,7 +149,16 @@ enum SegmentBreakdownResolver {
         let allowOneRow = classification == .singleSegment
             || classification == .omittedDominant90pct
         guard allowOneRow else { return nil }
-        guard let amount = consolidatedSales, amount != 0 else { return nil }
+        // 単一セグメントは売上が無い年（創薬ベンチャーの事業収益「−」。4599 S100ZA4E）も
+        // 金額 0 の1行で出す。90%省略は売上が無いと主力事業の金額が決まらないので出さない。
+        let amount: Double
+        if let sales = consolidatedSales, sales != 0 {
+            amount = sales
+        } else if classification == .singleSegment {
+            amount = 0
+        } else {
+            return nil
+        }
 
         let members = currentSegmentMembers(in: reportable.facts)
         let member: String?
@@ -190,7 +199,7 @@ enum SegmentBreakdownResolver {
             labelRaw: member ?? label,
             label: label,
             amount: amount,
-            share: 1,
+            share: amount == 0 ? nil : 1,
             profit: nil,
             rowKind: "segment",
             segmentBasis: basis,

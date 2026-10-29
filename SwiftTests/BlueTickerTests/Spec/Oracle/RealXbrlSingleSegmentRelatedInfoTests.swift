@@ -62,4 +62,46 @@ import Testing
             #expect(row.amount == amount * unit)
         }
     }
+
+    // 事業収益が無い年の単一セグメント会社（4599 ステムリム、個別のみ・7月決算）。セグメント注記は
+    // 「再生誘導医薬事業の単一セグメントであるため、記載を省略」で、PL の事業収益は「−」。
+    // 売上が無くても segment 軸は404 にせず、金額 0 の1行で返す。FY2023（S100S2RX）は事業収益 2,350,000 千円。
+    // source: code=4599 fy_end=2026-07-31 doc_id=S100ZA4E page=100 field=segment.再生誘導医薬事業
+    // source: code=4599 fy_end=2025-07-31 doc_id=S100WW19 page=97 field=segment.再生誘導医薬事業
+    // source: code=4599 fy_end=2023-07-31 doc_id=S100S2RX page=0 field=segment.再生誘導医薬事業
+    @Test(arguments: [
+        ("S100ZA4E", 0.0),
+        ("S100WW19", 0.0),
+        ("S100S2RX", 2_350_000_000.0),
+    ])
+    func singleSegmentWithoutRevenueKeepsOneRow(docID: String, amount: Double) async throws {
+        guard let dir = await Self.ensureAvailable(docID) else { return }
+        let reportable = BreakdownExtractor.extractReportableSegmentInfo(xbrlDir: dir)
+        let financials = StatementFinancialsResolver.resolve(xbrlDir: dir)
+        let members = SegmentBreakdownResolver.currentSegmentMembers(in: reportable.facts)
+        let dedicated = BreakdownExtractor.dedicatedSingleSegmentDisclosureTexts(xbrlDir: dir)
+        let pattern = await SegmentNotePatternClassifier.classify(
+            axis: .segment,
+            signals: SegmentNotePatternSignals(
+                reportableMemberCount: members.count,
+                hasDedicatedSingleSegmentTag: dedicated.currentYear != nil,
+                hasReportableSegmentTable: !reportable.tables.isEmpty,
+                hasRelatedInfoTable: false,
+                prose: BreakdownExtractor.segmentNotePatternProse(xbrlDir: dir)),
+            docID: docID, decider: nil)
+        #expect(pattern.classification == .singleSegment)
+        let (segment, _, _) = await SegmentBreakdownResolver.resolve(
+            reportable: reportable,
+            consolidatedSales: financials?.geographyCoverageSales ?? financials?.sales,
+            labelsByTag: XBRLUtils.loadLabelsByTag(in: dir), docID: docID, xbrlDir: dir,
+            pattern: pattern)
+        let snapshot = try #require(segment, "\(docID): segment snapshot")
+        #expect(snapshot.denominator == amount)
+        let rows = snapshot.rows.filter { $0.rowKind == "segment" }
+        #expect(rows.count == 1)
+        let row = try #require(rows.first)
+        #expect((row.label ?? row.labelRaw) == "再生誘導医薬事業")
+        #expect(row.amount == amount)
+        #expect(row.share == (amount == 0 ? nil : 1))
+    }
 }

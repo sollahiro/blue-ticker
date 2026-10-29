@@ -56,7 +56,7 @@ import Testing
         let waterfallUnits = try #require(resp.analysisJsonObject()["units"] as? [String: String])
         #expect(waterfallUnits["dso"] == "days")
         #expect(waterfallUnits["ccc_dpo_effect"] == "days")
-        #expect(waterfallUnits["roe_delta"] == "percentage_points")
+        #expect(waterfallUnits["roe_delta"] == nil)  // ROE・ROIC の前年差の要因分解は廃止
         #expect(waterfallUnits["asset_turnover"] == "times")
         // 格納形（Codable）は百万のまま往復する。
         let stored = try JSONDecoder().decode(
@@ -112,7 +112,7 @@ import Testing
     }
 
     @Test func schemaVersionIsStableInteger() {
-        #expect(Api.financialsSchemaVersion == 4)
+        #expect(Api.financialsSchemaVersion == 5)
     }
 
     @Test func assemblyFingerprintJoinsCanonicalVersionsInFixedOrder() {
@@ -193,7 +193,7 @@ import Testing
         #expect(parseFinancialsFieldsQuery(" , ") == .all)
         #expect(parseFinancialsFieldsQuery("sales, operating_profit") == .projection(["sales", "operating_profit"]))
         // Waterfall 専用キーは Summary の射影対象外。
-        #expect(parseFinancialsFieldsQuery("roic_delta") == .unknownFields(["roic_delta"]))
+        #expect(parseFinancialsFieldsQuery("net_margin") == .unknownFields(["net_margin"]))
         #expect(parseFinancialsFieldsQuery("zzz,sales,aaa") == .unknownFields(["aaa", "zzz"]))
     }
 
