@@ -353,3 +353,31 @@ enum CompanyIconDecoder {
         return UIImage(cgImage: best)
     }
 }
+
+/// アイコン・社名・銘柄コードのタイル。リストタブで 3 列に並べ、縦にスクロールする。
+struct CompanyTile: View {
+    var company: CompanyRef
+
+    var body: some View {
+        VStack(spacing: 6) {
+            CompanyIconView(company, size: 44)
+            Text(Format.displayName(company.name, fallback: company.code))
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(Theme.text)
+                .multilineTextAlignment(.center)
+                .lineLimit(2, reservesSpace: true)
+                .minimumScaleFactor(0.85)
+            Text(company.code)
+                .font(.caption2.monospacedDigit())
+                .foregroundStyle(Theme.textMuted)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 12)
+        .padding(.horizontal, 6)
+        .background(Theme.card)
+        .clipShape(RoundedRectangle(cornerRadius: Theme.groupedInnerCornerRadius, style: .continuous))
+        .contentShape(RoundedRectangle(cornerRadius: Theme.groupedInnerCornerRadius, style: .continuous))
+        .accessibilityElement(children: .combine)
+    }
+}
+

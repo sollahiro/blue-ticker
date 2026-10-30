@@ -5,58 +5,74 @@ struct WatchlistView: View {
     @Query(sort: \WatchedCompany.sortOrder) private var companies: [WatchedCompany]
     @Environment(\.modelContext) private var modelContext
 
+    private let columns = Array(repeating: GridItem(.flexible(), spacing: 10, alignment: .top), count: 3)
+
     var body: some View {
-        List {
-            if companies.isEmpty {
-                Section {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 12) {
+                if companies.isEmpty {
                     ContentUnavailableView(
                         "リストは空です",
                         systemImage: "star",
                         description: Text("銘柄画面から追加できます。")
                     )
-                }
-                .listRowBackground(Color.clear)
-            } else {
-                Section {
-                    ForEach(companies) { item in
-                        NavigationLink(value: CompanyRef(item)) {
-                            CompanyRowView(company: CompanyRef(item))
-                        }
-                        .listRowBackground(Theme.elevated)
-                    }
-                    .onDelete(perform: delete)
-                } header: {
+                    .padding(.top, 40)
+                } else {
                     Text("あなたの追加した企業")
+                        .font(.subheadline.weight(.semibold))
                         .foregroundStyle(Theme.textMuted)
-                        .textCase(nil)
-                }
-            }
-
-            #if DEBUG
-                Section("開発ラボ") {
-                    NavigationLink("サーバー / HAPIS") {
-                        SettingsView()
-                    }
-                    ForEach(Self.debugTickers) { company in
-                        NavigationLink(value: company) {
-                            Text(Format.displayName(company.name, fallback: company.code))
+                        .padding(.horizontal, 4)
+                    LazyVGrid(columns: columns, spacing: 10) {
+                        ForEach(companies) { item in
+                            NavigationLink(value: CompanyRef(item)) {
+                                CompanyTile(company: CompanyRef(item))
+                            }
+                            .buttonStyle(.plain)
+                            .contextMenu {
+                                Button("リストから外す", systemImage: "trash", role: .destructive) {
+                                    remove(item)
+                                }
+                            }
                         }
                     }
                 }
-            #endif
 
-            Section {
+                #if DEBUG
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("開発ラボ")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(Theme.textMuted)
+                        NavigationLink("サーバー / HAPIS") {
+                            SettingsView()
+                        }
+                        ForEach(Self.debugTickers) { company in
+                            NavigationLink(value: company) {
+                                Text(Format.displayName(company.name, fallback: company.code))
+                            }
+                        }
+                    }
+                    .padding(.horizontal, 4)
+                    .padding(.top, 12)
+                #endif
+
                 VersionMarkFooter()
             }
-            .listRowBackground(Color.clear)
-            .listRowSeparator(.hidden)
-            .listRowInsets(EdgeInsets())
+            .padding(.horizontal, 12)
+            .padding(.top, 8)
         }
         .bltChrome("リスト")
         .onAppear {
             WatchedCompany.repairSortOrderIfNeeded(companies)
             WatchedCompany.removeDuplicateCodes(companies, in: modelContext)
         }
+    }
+
+    /// タイルは長押しのメニューから外す（行のスワイプ削除の代わり）。
+    private func remove(_ item: WatchedCompany) {
+        guard let index = companies.firstIndex(where: { $0.persistentModelID == item.persistentModelID }) else {
+            return
+        }
+        delete(at: IndexSet(integer: index))
     }
 
     private func delete(at offsets: IndexSet) {
