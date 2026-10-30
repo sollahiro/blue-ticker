@@ -160,7 +160,17 @@ enum RevenueRecognitionCandidates {
         let itemsByGroup = Dictionary(grouping: table.items, by: \.group)
         let orderedGroups = uniqueGroups(in: table)
         if orderedGroups.isEmpty {
+            let full = table.items.filter { !$0.isPartial }
+            let tops = tableTotal(table: table, column: column).flatMap {
+                indentedTopLevelRows(full.map { amounts[$0.row] ?? 0 }, total: $0.amount)
+            }
             for item in table.items {
+                if let tops, !item.isPartial,
+                   let fullIndex = full.firstIndex(where: { $0.row == item.row }),
+                   !tops.contains(fullIndex)
+                {
+                    continue
+                }
                 let amount = amounts[item.row] ?? 0
                 built.append(BuiltRow(
                     categoryGroup: item.label, category: nil, amount: amount,
@@ -284,6 +294,39 @@ enum RevenueRecognitionCandidates {
         built = mergeWrappedRows(built)
         built = collapseParentChildRows(built)
         return (built, needsReview)
+    }
+
+    /// 字下げだけで親子を表す平らな表（4506 S100W63T: 医薬品 → 日本・北米・アジア → 製品）。
+    /// 全行の和が表合計を超えるときだけ、表を入れ子に読み直す。各行は子を持たないか、
+    /// 直後の連続した行（孫を含む）がその金額に畳める親。最上位の行の和が表合計に一致する
+    /// 読み方が見つかれば最上位の行の位置を返し、無ければ nil（従来どおり全行）。
+    static func indentedTopLevelRows(_ amounts: [Double], total: Double) -> Set<Int>? {
+        guard amounts.count >= 3 else { return nil }
+        let all = amounts.reduce(0, +)
+        guard all > total, !sumMatches(all, subtotal: total, itemCount: amounts.count) else { return nil }
+        // rows[start..<end] を target に畳む。各リーダーは子を持たないか、子が自分の金額に畳める。
+        // 端数は足したリーダー 1 行につき 1 単位まで。
+        func leaders(_ start: Int, _ end: Int, _ target: Double, depth: Int, used: Int) -> [Int]? {
+            if start == end {
+                return sumMatches(0, subtotal: target, itemCount: used) ? [] : nil
+            }
+            guard depth <= 4, target > -Double(used + 1) else { return nil }
+            let lead = amounts[start]
+            for childEnd in (start + 1)...end {
+                if childEnd > start + 1,
+                   leaders(start + 1, childEnd, lead, depth: depth + 1, used: 0) == nil
+                {
+                    continue
+                }
+                if let rest = leaders(childEnd, end, target - lead, depth: depth, used: used + 1) {
+                    return [start] + rest
+                }
+            }
+            return nil
+        }
+        guard let tops = leaders(0, amounts.count, total, depth: 0, used: 0), tops.count < amounts.count
+        else { return nil }
+        return Set(tops)
     }
 
     static func tableTotal(table: ParsedTable, column: Int, preferredLabels: [String] = [
@@ -1138,12 +1181,18 @@ enum RevenueRecognitionCandidates {
             return true
         }
         let keep = Set(chosen.itemRows)
+        // 残すブロックの中だけにある見出し（4901 S100LV2D の事業セグメント名）は group として残す。
+        // 見出しが1つだけならブロックの次元名（8035 の「製品及びサービス」）なので落とす。
+        var keptGroups = Set(table.items.filter { !$0.group.isEmpty }.map(\.group)).filter { group in
+            table.items.filter { $0.group == group }.allSatisfy { keep.contains($0.row) }
+        }
+        if keptGroups.count < 2 { keptGroups = [] }
         table.items = table.items.filter { keep.contains($0.row) }.map { item in
             var copy = item
-            copy.group = ""
+            if !keptGroups.contains(item.group) { copy.group = "" }
             return copy
         }
-        table.groups = []
+        table.groups = table.groups.filter { keptGroups.contains($0.group) }
         return false
     }
 

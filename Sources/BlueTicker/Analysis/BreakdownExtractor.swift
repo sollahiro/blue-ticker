@@ -692,6 +692,33 @@ enum BreakdownExtractor {
         return nil
     }
 
+    /// 製品・サービス別情報の TextBlock が「単一の製品・事業のため（90％超のため）記載を省略」だけのときの本文。
+    /// 表のあるブロック・「セグメント情報に同様の情報を開示」型は返さない。専用タグは見ない。
+    /// 報告セグメントが地域のときの product_service `geography_only` に使う（6254 S100YG4U / 6592 S100XUAX）。
+    static func productServiceOmissionText(xbrlDir: URL) -> String? {
+        let concentration = singleSegmentConcentrationMarkers + ["単一事業"]
+        for root in XBRLUtils.xbrlSearchRoots(in: xbrlDir) {
+            for file in XBRLUtils.findXbrlFiles(in: root) {
+                guard let data = try? Data(contentsOf: file) else { continue }
+                let collector = TextBlockSAXCollector(targetTags: Xbrl.productOrServiceTextBlockTags)
+                let parser = XMLParser(data: data)
+                parser.delegate = collector
+                parser.parse()
+                for block in collector.blocks where !block.content.contains("<table") {
+                    let text = (try? SwiftSoup.parse(block.content))
+                        .map { bs4Text($0, strip: true) } ?? block.content
+                    let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                    guard trimmed.contains(singleSegmentDisclosureMarker),
+                          !singleSegmentDisclosureExclusionMarkers.contains(where: trimmed.contains),
+                          concentration.contains(where: trimmed.contains)
+                    else { continue }
+                    return trimmed
+                }
+            }
+        }
+        return nil
+    }
+
     /// セグメント注記の TextBlock から「記載を省略」を含む文を切る。表が無い当期ブロックも残す
     /// （太平電業 `S100TU63` の当期は省略文だけで、表は前期ブロックにしか無い）。
     /// Jev にはこの文を渡し、文の切り出し自体はコードが行う。

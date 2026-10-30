@@ -1965,6 +1965,87 @@ import Testing
         #expect(totalAsRow == false)
     }
 
+    // source: code=4506 fy_end=2026-03-31 doc_id=S100YH3M page=91 field=product_service indented parents
+    @Test func yh3m4506IndentedParentsCollapseToTopLevel() throws {
+        let html = """
+            <p>（単位：百万円）</p>
+            <table>
+              <tr><td></td><td>当連結会計年度(自2025年４月１日至2026年３月31日)</td></tr>
+              <tr><td>医薬品</td><td>453,283</td></tr>
+              <tr><td>日本</td><td>92,354</td></tr>
+              <tr><td>ゼプリオン・ゼプリオンTRI（持続性抗精神病剤）</td><td>3,214</td></tr>
+              <tr><td>ラツーダ（非定型抗精神病薬）</td><td>13,694</td></tr>
+              <tr><td>ツイミーグ（２型糖尿病治療剤）</td><td>10,581</td></tr>
+              <tr><td>メトグルコ（２型糖尿病治療剤）</td><td>7,431</td></tr>
+              <tr><td>エクア・エクメット（２型糖尿病治療剤）</td><td>8,742</td></tr>
+              <tr><td>ロナセンテープ（非定型抗精神病薬）</td><td>4,970</td></tr>
+              <tr><td>オーソライズド・ジェネリック品</td><td>12,121</td></tr>
+              <tr><td>その他</td><td>31,601</td></tr>
+              <tr><td>北米</td><td>337,923</td></tr>
+              <tr><td>オルゴビクス（進行性前立腺がん治療剤）</td><td>155,017</td></tr>
+              <tr><td>マイフェンブリー（子宮筋腫・子宮内膜症治療剤）</td><td>14,400</td></tr>
+              <tr><td>ジェムテサ（過活動膀胱治療剤）</td><td>95,986</td></tr>
+              <tr><td>リサイミック（他家培養胸腺組織/小児先天性無胸腺症治療剤）</td><td>6,322</td></tr>
+              <tr><td>アプティオム（抗てんかん剤）</td><td>14,944</td></tr>
+              <tr><td>その他</td><td>51,254</td></tr>
+              <tr><td>アジア</td><td>23,006</td></tr>
+              <tr><td>その他 (注)</td><td>11</td></tr>
+              <tr><td>日本</td><td>11</td></tr>
+              <tr><td>合計</td><td>453,294</td></tr>
+            </table>
+            """
+        let table = try parsedCurrent(html)
+        let (built, _) = RevenueRecognitionCandidates.buildRows(table: table, column: 1)
+        let labels: [String] = built.map { $0.category ?? $0.categoryGroup }
+        let amounts: [Double] = built.map(\.amount)
+        #expect(labels == ["医薬品", "その他 (注)"] || labels == ["医薬品", "その他"])
+        #expect(amounts == [453_283, 11])
+        // 子を持たない平らな表は畳まない。
+        let flat = RevenueRecognitionCandidates.indentedTopLevelRows([100, 50, 30], total: 180)
+        #expect(flat == nil)
+    }
+
+    // source: code=4901 fy_end=2025-03-31 doc_id=S100LV2D page=178 field=product_service segment headings
+    @Test func lv2d4901BusinessBlockKeepsSegmentHeadings() async throws {
+        let html = """
+            <p>（単位：百万円）</p>
+            <table>
+              <tr><td></td><td>前連結会計年度（百万円）</td><td>当連結会計年度（百万円）</td></tr>
+              <tr><td>日本</td><td>1,004,076</td><td>927,910</td></tr>
+              <tr><td>米州</td><td>424,257</td><td>416,341</td></tr>
+              <tr><td>欧州</td><td>296,623</td><td>267,902</td></tr>
+              <tr><td>アジア及びその他</td><td>590,185</td><td>580,366</td></tr>
+              <tr><td>売上高　合計</td><td>2,315,141</td><td>2,192,519</td></tr>
+              <tr><td>イメージング ソリューション</td><td></td><td></td></tr>
+              <tr><td>フォトイメージング</td><td>228,903</td><td>195,789</td></tr>
+              <tr><td>電子映像</td><td>72,005</td><td>68,180</td></tr>
+              <tr><td>光学デバイス</td><td>31,695</td><td>21,267</td></tr>
+              <tr><td>ヘルスケア＆マテリアルズ ソリューション</td><td></td><td></td></tr>
+              <tr><td>ヘルスケア</td><td>504,134</td><td>567,752</td></tr>
+              <tr><td>ディスプレイ材料</td><td>85,500</td><td>94,884</td></tr>
+              <tr><td>産業機材/電子材料/ファインケミカル</td><td>177,888</td><td>191,333</td></tr>
+              <tr><td>記録メディア</td><td>41,865</td><td>26,249</td></tr>
+              <tr><td>グラフィックシステム/インクジェット</td><td>213,569</td><td>171,145</td></tr>
+              <tr><td>その他</td><td>1,253</td><td>1,230</td></tr>
+              <tr><td>ドキュメント ソリューション</td><td></td><td></td></tr>
+              <tr><td>オフィスプロダクト＆プリンター</td><td>532,124</td><td>474,477</td></tr>
+              <tr><td>プロダクションサービス</td><td>116,045</td><td>96,948</td></tr>
+              <tr><td>ソリューション＆サービス</td><td>273,527</td><td>249,566</td></tr>
+              <tr><td>その他</td><td>36,633</td><td>33,699</td></tr>
+              <tr><td>売上高　合計</td><td>2,315,141</td><td>2,192,519</td></tr>
+            </table>
+            """
+        let snapshot = try await run(html: html, docID: "S100LV2D", fyEnd: "2025-03-31", pick: "t0_c2")
+        let others = snapshot.rows.filter { $0.rowKind == "segment" && $0.category == "その他" }
+        let otherGroups: [String?] = others.map(\.categoryGroup)
+        let geoKept: Bool = snapshot.rows.contains { $0.categoryGroup == "日本" }
+        let segmentCount: Int = snapshot.rows.filter { $0.rowKind == "segment" }.count
+        #expect(otherGroups == ["ヘルスケア＆マテリアルズ ソリューション", "ドキュメント ソリューション"])
+        #expect(geoKept == false)
+        #expect(segmentCount == 13)
+        #expect(snapshot.needsReview == false)
+    }
+
     // source: code=2503 fy_end=2023-12-31 doc_id=S100T4MO page=161 field=product_service 連結 total
     @Test func t4mo2503RenketsuRowIsTotal() async throws {
         let html = """
