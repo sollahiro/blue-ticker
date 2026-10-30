@@ -470,7 +470,8 @@ private struct ScreenPayoutHeadline: View {
             let piece = Text(Format.percent(value))
                 .foregroundStyle(value == nil ? Theme.textMuted : Theme.accent)
             if index == 0 { return piece }
-            return partial + Text("→").foregroundStyle(Theme.textMuted) + piece
+            let arrow = Text("→").foregroundStyle(Theme.textMuted)
+            return Text("\(partial)\(arrow)\(piece)")
         }
     }
 }
