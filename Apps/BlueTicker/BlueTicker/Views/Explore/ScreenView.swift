@@ -89,7 +89,7 @@ extension ScreenPreset {
 
 @Observable
 final class ScreenSession {
-    var selectedSectors: Set<String> = []
+    var selectedSectors: Set<TOPIX17Sector> = []
     var presetMatched: [ScreenPreset: Int] = [:]
     var countsLoading = true
     var loadedSectors: [String]?
@@ -108,11 +108,11 @@ struct ScreenView: View {
                     Text("業種を選ぶ")
                         .foregroundStyle(Theme.textMuted)
                     Spacer()
-                    Button("全選択") { session.selectedSectors = Set(TSESector.catalog) }
+                    Button("全選択") { session.selectedSectors = Set(TOPIX17Sector.allCases) }
                         .font(.footnote.weight(.semibold))
                         .foregroundStyle(Theme.accent)
                         .buttonStyle(.plain)
-                        .disabled(session.selectedSectors.count == TSESector.catalog.count)
+                        .disabled(session.selectedSectors.count == TOPIX17Sector.allCases.count)
                     Button("全解除") { session.selectedSectors.removeAll() }
                         .font(.footnote.weight(.semibold))
                         .foregroundStyle(Theme.accent)
@@ -188,12 +188,13 @@ struct ScreenView: View {
         session.loadedSectors = sectors
     }
 
-    /// 未選択と全選択は同じ（業種フィルタなし）。複数業種はサーバーの IN 検索が OR する。
+    /// 未選択と全選択は同じ（業種フィルタなし）。選んだ 17 業種は配下の 33 業種名に展開し、
+    /// サーバーの IN 検索（スナップショットは端末内の集合）が OR する。
     private var screenSectors: [String] {
-        if session.selectedSectors.isEmpty || session.selectedSectors.count == TSESector.catalog.count {
+        if session.selectedSectors.isEmpty || session.selectedSectors.count == TOPIX17Sector.allCases.count {
             return []
         }
-        return session.selectedSectors.sorted()
+        return session.selectedSectors.flatMap(\.tseSectors).sorted()
     }
 
     private func presetTint(_ preset: ScreenPreset) -> Color {
@@ -267,7 +268,7 @@ struct ScreenView: View {
             VStack(alignment: .leading, spacing: 8) {
                 ForEach(Array(packedSectorRows.enumerated()), id: \.offset) { _, row in
                     HStack(spacing: 6) {
-                        ForEach(row, id: \.self) { sector in
+                        ForEach(row) { sector in
                             sectorChip(sector)
                         }
                     }
@@ -284,8 +285,8 @@ struct ScreenView: View {
         .containerShape(outer)
     }
 
-    private var packedSectorRows: [[String]] {
-        let catalog = TSESector.catalog
+    private var packedSectorRows: [[TOPIX17Sector]] {
+        let catalog = TOPIX17Sector.allCases
         let rowCount = 3
         let perRow = Int(ceil(Double(catalog.count) / Double(rowCount)))
         return (0..<rowCount).compactMap { row in
@@ -296,7 +297,7 @@ struct ScreenView: View {
         }
     }
 
-    private func sectorChip(_ sector: String) -> some View {
+    private func sectorChip(_ sector: TOPIX17Sector) -> some View {
         let selected = session.selectedSectors.contains(sector)
         return Button {
             if selected {
@@ -305,7 +306,7 @@ struct ScreenView: View {
                 session.selectedSectors.insert(sector)
             }
         } label: {
-            SectorTag(sector: sector, selected: selected)
+            SectorTag(sector: sector.title, selected: selected, symbol: sector.symbol)
         }
         .buttonStyle(.plain)
     }

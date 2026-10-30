@@ -1618,7 +1618,7 @@ private struct CompanyMorphStack: View {
     }
 
     private var subtitle: String {
-        model.company.sector.isEmpty ? model.company.code : "\(model.company.code) · \(model.company.sector)"
+        model.company.sector.isEmpty ? model.company.code : "\(model.company.code) · \(TOPIX17Sector.displayName(for: model.company.sector))"
     }
 
     /// 開閉中はカード幅のまま字を置く。枠だけが伸び縮みする。

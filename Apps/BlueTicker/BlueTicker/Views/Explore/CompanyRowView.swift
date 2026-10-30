@@ -44,7 +44,11 @@ struct CompanyRowView: View {
             }
             Spacer(minLength: 0)
             if showsSector, !company.sector.isEmpty {
-                SectorTag(sector: company.sector, selected: true)
+                if let group = TOPIX17Sector(tseSector: company.sector) {
+                    SectorTag(sector: group.title, selected: true, symbol: group.symbol)
+                } else {
+                    SectorTag(sector: company.sector, selected: true)
+                }
             }
         }
         .padding(0)
@@ -59,22 +63,31 @@ struct SectorTag: View {
     var selected: Bool = false
     var height: CGFloat? = nil
     var tint: Color = Theme.positive
+    /// 業種アイコン（SF Symbols）。
+    var symbol: String? = nil
 
     var body: some View {
-        Text(sector)
-            .font(.caption.weight(.semibold))
-            .lineLimit(1)
-            .fixedSize(horizontal: true, vertical: false)
-            .padding(.horizontal, 10)
-            .padding(.vertical, height == nil ? 6 : 0)
-            .frame(height: height)
-            .background(selected ? tint.opacity(0.22) : Theme.idleTab)
-            .foregroundStyle(selected ? tint : .white)
-            .clipShape(Capsule())
-            .overlay {
-                Capsule()
-                    .stroke(selected ? tint : Color.clear, lineWidth: 1.5)
+        HStack(spacing: 4) {
+            if let symbol {
+                Image(systemName: symbol)
+                    .imageScale(.small)
+                    .accessibilityHidden(true)
             }
+            Text(sector)
+        }
+        .font(.caption.weight(.semibold))
+        .lineLimit(1)
+        .fixedSize(horizontal: true, vertical: false)
+        .padding(.horizontal, 10)
+        .padding(.vertical, height == nil ? 6 : 0)
+        .frame(height: height)
+        .background(selected ? tint.opacity(0.22) : Theme.idleTab)
+        .foregroundStyle(selected ? tint : .white)
+        .clipShape(Capsule())
+        .overlay {
+            Capsule()
+                .stroke(selected ? tint : Color.clear, lineWidth: 1.5)
+        }
     }
 }
 
