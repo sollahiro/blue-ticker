@@ -13,20 +13,12 @@ struct RootView: View {
     var body: some View {
         TabView(selection: $tab) {
             NavigationStack(path: $searchPath) {
-                TopView(query: $searchQuery, feed: feedSession)
+                TopView(query: $searchQuery, feed: feedSession, screen: screenSession)
                     .navigationDestination(for: CompanyRef.self, destination: ticker)
             }
             .toolbarTitleDisplayMode(.inline)
-            .tabItem { Label("名称検索", systemImage: "magnifyingglass") }
+            .tabItem { Label("ホーム", systemImage: "house") }
             .tag(0)
-
-            NavigationStack {
-                ScreenView(session: screenSession)
-                    .navigationDestination(for: CompanyRef.self, destination: ticker)
-            }
-            .toolbarTitleDisplayMode(.inline)
-            .tabItem { Label("条件検索", systemImage: "slider.horizontal.3") }
-            .tag(1)
 
             NavigationStack {
                 WatchlistView()
@@ -34,7 +26,7 @@ struct RootView: View {
             }
             .toolbarTitleDisplayMode(.inline)
             .tabItem { Label("リスト", systemImage: "list.bullet") }
-            .tag(2)
+            .tag(1)
         }
         .preferredColorScheme(.dark)
         .tint(Theme.accent)

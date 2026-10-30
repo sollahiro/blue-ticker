@@ -87,95 +87,58 @@ extension ScreenPreset {
     }
 }
 
+/// 条件検索の状態。業種の選択は結果一覧の業種タブで変え、条件一覧の件数もこの選択で数える。
+@MainActor
 @Observable
 final class ScreenSession {
     var selectedSectors: Set<TOPIX17Sector> = []
     var presetMatched: [ScreenPreset: Int] = [:]
     var countsLoading = true
     var loadedSectors: [String]?
-}
 
-struct ScreenView: View {
-    @Bindable var session: ScreenSession
+    /// 未選択と全選択は同じ（業種フィルタなし）。選んだ 17 業種は配下の 33 業種名に展開し、
+    /// サーバーの IN 検索（スナップショットは端末内の集合）が OR する。
+    var screenSectors: [String] {
+        if selectedSectors.isEmpty || selectedSectors.count == TOPIX17Sector.allCases.count {
+            return []
+        }
+        return selectedSectors.flatMap(\.tseSectors).sorted()
+    }
 
-    var body: some View {
-        Form {
-            Section {
-                sectorChips
-                    .listRowBackground(Theme.elevated)
-            } header: {
-                HStack {
-                    Text("業種を選ぶ")
-                        .foregroundStyle(Theme.textMuted)
-                    Spacer()
-                    Button("全選択") { session.selectedSectors = Set(TOPIX17Sector.allCases) }
-                        .font(.footnote.weight(.semibold))
-                        .foregroundStyle(Theme.accent)
-                        .buttonStyle(.plain)
-                        .disabled(session.selectedSectors.count == TOPIX17Sector.allCases.count)
-                    Button("全解除") { session.selectedSectors.removeAll() }
-                        .font(.footnote.weight(.semibold))
-                        .foregroundStyle(Theme.accent)
-                        .buttonStyle(.plain)
-                        .disabled(session.selectedSectors.isEmpty)
-                }
-                .textCase(nil)
-            } footer: {
-                Text("横にスライドして複数選べます。未選択は全業種です。")
-                    .foregroundStyle(Theme.textMuted)
-            }
+    func toggle(_ sector: TOPIX17Sector) {
+        if selectedSectors.contains(sector) {
+            selectedSectors.remove(sector)
+        } else {
+            selectedSectors.insert(sector)
+        }
+    }
 
-            Section {
-                ForEach(ScreenPreset.allCases) { preset in
-                    NavigationLink(value: ScreenQuery(sectors: screenSectors, preset: preset)) {
-                        presetRow(preset)
-                    }
-                    .listRowBackground(Theme.control)
-                }
-            } header: {
-                HStack {
-                    Text("こんな企業を探す")
-                        .foregroundStyle(Theme.textMuted)
-                    Spacer()
-                    if session.countsLoading {
-                        ProgressView()
-                            .controlSize(.small)
-                            .tint(Theme.textMuted)
-                            .accessibilityLabel("件数を読み込み中")
-                    }
-                }
-                .textCase(nil)
-            }
+    /// 選択中の業種で 6 プリセットの件数を数える。数え済みなら何もしない。
+    func refreshCounts() async {
+        let sectors = screenSectors
+        if loadedSectors == sectors {
+            countsLoading = false
+            return
         }
-        .bltChrome("条件検索")
-        .navigationDestination(for: ScreenQuery.self) { query in
-            ScreenResultsView(sectors: query.sectors, preset: query.preset)
+        // 保存済みのスナップショットがあれば通信せずに数える（debounce も要らない）。
+        if let rows = await ScreenSnapshotStore.shared.cachedRows() {
+            applyLocalCounts(rows, sectors: sectors)
+            return
         }
-        .task(id: screenSectors) {
-            let sectors = screenSectors
-            if session.loadedSectors == sectors {
-                session.countsLoading = false
-                return
-            }
-            // 保存済みのスナップショットがあれば通信せずに数える（debounce も要らない）。
-            if let rows = await ScreenSnapshotStore.shared.cachedRows() {
-                applyLocalCounts(rows, sectors: sectors)
-                return
-            }
-            session.countsLoading = true
-            try? await Task.sleep(for: .milliseconds(400))
-            guard !Task.isCancelled else { return }
-            let complete = await loadPresetCounts()
-            guard !Task.isCancelled, complete else { return }
-            session.loadedSectors = sectors
-        }
-        .task {
-            // 表示のたびに検証子で取り直す（間隔内は送らない）。新しい本文が来たら数え直す。
-            guard await ScreenSnapshotStore.shared.needsRevalidation(),
-                let fresh = await ScreenSnapshotStore.shared.revalidate()
-            else { return }
-            applyLocalCounts(fresh, sectors: screenSectors)
-        }
+        countsLoading = true
+        try? await Task.sleep(for: .milliseconds(400))
+        guard !Task.isCancelled else { return }
+        let complete = await loadPresetCounts(sectors: sectors)
+        guard !Task.isCancelled, complete else { return }
+        loadedSectors = sectors
+    }
+
+    /// 表示のたびに検証子で取り直す（間隔内は送らない）。新しい本文が来たら数え直す。
+    func revalidateSnapshot() async {
+        guard await ScreenSnapshotStore.shared.needsRevalidation(),
+            let fresh = await ScreenSnapshotStore.shared.revalidate()
+        else { return }
+        applyLocalCounts(fresh, sectors: screenSectors)
     }
 
     private func applyLocalCounts(_ rows: [ScreenSnapshot.Row], sectors: [String]) {
@@ -183,22 +146,43 @@ struct ScreenView: View {
         for preset in ScreenPreset.allCases {
             next[preset] = preset.search(rows, sectors: sectors, limit: 0).matched
         }
-        session.presetMatched = next
-        session.countsLoading = false
-        session.loadedSectors = sectors
+        presetMatched = next
+        countsLoading = false
+        loadedSectors = sectors
     }
 
-    /// 未選択と全選択は同じ（業種フィルタなし）。選んだ 17 業種は配下の 33 業種名に展開し、
-    /// サーバーの IN 検索（スナップショットは端末内の集合）が OR する。
-    private var screenSectors: [String] {
-        if session.selectedSectors.isEmpty || session.selectedSectors.count == TOPIX17Sector.allCases.count {
-            return []
+    /// 件数はまずスナップショット（`GET /v1/screen/snapshot` を 1 回）を取って端末内で数える。
+    /// 取れないときだけ既存 `GET /v1/screen` の `matched`（`limit=1`）に戻す。こちらは業種数に関わらず
+    /// 6 プリセットで 6 リクエスト（業種の複数選択はサーバーの IN 検索が 1 本で受ける）。
+    /// プリセットは直列（HAPIS 同時接続を増やさない。業種変更の debounce と合わせる）。
+    /// 戻り値は全プリセットの件数が揃ったか。欠けたときは確定させず、次の表示で取り直す。
+    private func loadPresetCounts(sectors: [String]) async -> Bool {
+        if let rows = await ScreenSnapshotStore.shared.rowsFetchingIfNeeded() {
+            guard !Task.isCancelled else { return false }
+            applyLocalCounts(rows, sectors: sectors)
+            return true
         }
-        return session.selectedSectors.flatMap(\.tseSectors).sorted()
+        var next: [ScreenPreset: Int] = [:]
+        for preset in ScreenPreset.allCases {
+            guard !Task.isCancelled else { return false }
+            do {
+                let response = try await APIClient.shared.screen(
+                    sectors: sectors, filters: preset.filters, limit: 1, sort: preset.sortMetric)
+                next[preset] = response.matched
+            } catch {
+                continue
+            }
+        }
+        guard !Task.isCancelled else { return false }
+        presetMatched = next
+        countsLoading = false
+        return next.count == ScreenPreset.allCases.count
     }
+}
 
-    private func presetTint(_ preset: ScreenPreset) -> Color {
-        switch preset {
+extension ScreenPreset {
+    var tint: Color {
+        switch self {
         case .quality: Theme.accent
         case .growth: Theme.growthTint
         case .healthyGrowth: Theme.positive
@@ -207,11 +191,46 @@ struct ScreenView: View {
         case .highPayout: Theme.payoutTint
         }
     }
+}
+
+/// トップの検索バーが空のときに出す条件一覧。`List` の中に置く。押すと `ScreenPreset` で結果一覧へ進む。
+/// 件数は置く側が `refreshCounts` / `revalidateSnapshot` で数える。
+struct ScreenPresetSection: View {
+    @Bindable var session: ScreenSession
+
+    var body: some View {
+        Section {
+            ForEach(ScreenPreset.allCases) { preset in
+                NavigationLink(value: preset) {
+                    presetRow(preset)
+                }
+            }
+        } header: {
+            HStack(spacing: 6) {
+                Text("条件から探す")
+                    .foregroundStyle(Theme.textMuted)
+                ForEach(TOPIX17Sector.allCases.filter { session.selectedSectors.contains($0) }) { sector in
+                    Image(systemName: sector.symbol)
+                        .imageScale(.small)
+                        .foregroundStyle(Theme.positive)
+                        .accessibilityLabel(sector.title)
+                }
+                Spacer()
+                if session.countsLoading {
+                    ProgressView()
+                        .controlSize(.small)
+                        .tint(Theme.textMuted)
+                        .accessibilityLabel("件数を読み込み中")
+                }
+            }
+            .textCase(nil)
+        }
+    }
 
     private func presetRow(_ preset: ScreenPreset) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 8) {
-                SectorTag(sector: preset.title, selected: true, tint: presetTint(preset))
+                SectorTag(sector: preset.title, selected: true, tint: preset.tint)
                 Text(preset.descriptionText)
                     .font(.body.weight(.semibold))
                     .foregroundStyle(Theme.text)
@@ -231,90 +250,71 @@ struct ScreenView: View {
         }
         .padding(.vertical, 6)
     }
+}
 
-    /// 件数はまずスナップショット（`GET /v1/screen/snapshot` を 1 回）を取って端末内で数える。
-    /// 取れないときだけ既存 `GET /v1/screen` の `matched`（`limit=1`）に戻す。こちらは業種数に関わらず
-    /// 6 プリセットで 6 リクエスト（業種の複数選択はサーバーの IN 検索が 1 本で受ける）。
-    /// プリセットは直列（HAPIS 同時接続を増やさない。業種変更の debounce と合わせる）。
-    /// 戻り値は全プリセットの件数が揃ったか。欠けたときは呼び出し側が確定させず、次のタブ表示で取り直す。
-    private func loadPresetCounts() async -> Bool {
-        let sectors = screenSectors
-        if let rows = await ScreenSnapshotStore.shared.rowsFetchingIfNeeded() {
-            guard !Task.isCancelled else { return false }
-            applyLocalCounts(rows, sectors: sectors)
-            return true
-        }
-        var next: [ScreenPreset: Int] = [:]
-        for preset in ScreenPreset.allCases {
-            guard !Task.isCancelled else { return false }
-            do {
-                let response = try await APIClient.shared.screen(
-                    sectors: sectors, filters: preset.filters, limit: 1, sort: preset.sortMetric)
-                next[preset] = response.matched
-            } catch {
-                continue
-            }
-        }
-        guard !Task.isCancelled else { return false }
-        session.presetMatched = next
-        session.countsLoading = false
-        return next.count == ScreenPreset.allCases.count
-    }
+/// 結果一覧の上に置く 17 業種タブ。横にスライドして複数選ぶ。選んだ業種はアイコンだけに縮む。
+/// 1 つ以上選んでいる間だけ先頭に「全解除」を出す。
+struct SectorFilterBar: View {
+    @Bindable var session: ScreenSession
 
-    private var sectorChips: some View {
-        let outer = RoundedRectangle(cornerRadius: Theme.groupedCornerRadius, style: .continuous)
-        let inner = RoundedRectangle(cornerRadius: Theme.groupedInnerCornerRadius, style: .continuous)
-        return ScrollView(.horizontal, showsIndicators: false) {
-            VStack(alignment: .leading, spacing: 8) {
-                ForEach(Array(packedSectorRows.enumerated()), id: \.offset) { _, row in
-                    HStack(spacing: 6) {
-                        ForEach(row) { sector in
-                            sectorChip(sector)
-                        }
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 6) {
+                if !session.selectedSectors.isEmpty {
+                    Button {
+                        session.selectedSectors.removeAll()
+                    } label: {
+                        Label("全解除", systemImage: "xmark")
+                            .font(.caption.weight(.semibold))
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .foregroundStyle(Theme.text)
+                            .background(Theme.idleTab, in: Capsule())
                     }
+                    .buttonStyle(.plain)
+                    .transition(.opacity.combined(with: .scale))
+                }
+                ForEach(TOPIX17Sector.allCases) { sector in
+                    chip(sector)
                 }
             }
+            .padding(.horizontal, 12)
             .padding(.vertical, 8)
-            .padding(.horizontal, 8)
+            .animation(.snappy(duration: 0.22), value: session.selectedSectors)
         }
         .scrollClipDisabled()
-        .clipShape(inner)
-        .padding(Theme.groupedContentInset)
-        .listRowInsets(EdgeInsets())
-        .listRowBackground(Theme.elevated)
-        .containerShape(outer)
     }
 
-    private var packedSectorRows: [[TOPIX17Sector]] {
-        let catalog = TOPIX17Sector.allCases
-        let rowCount = 3
-        let perRow = Int(ceil(Double(catalog.count) / Double(rowCount)))
-        return (0..<rowCount).compactMap { row in
-            let start = row * perRow
-            guard start < catalog.count else { return nil }
-            let end = min(start + perRow, catalog.count)
-            return Array(catalog[start..<end])
-        }
-    }
-
-    private func sectorChip(_ sector: TOPIX17Sector) -> some View {
+    private func chip(_ sector: TOPIX17Sector) -> some View {
         let selected = session.selectedSectors.contains(sector)
         return Button {
-            if selected {
-                session.selectedSectors.remove(sector)
-            } else {
-                session.selectedSectors.insert(sector)
-            }
+            session.toggle(sector)
         } label: {
-            SectorTag(sector: sector.title, selected: selected, symbol: sector.symbol)
+            Group {
+                if selected {
+                    Image(systemName: sector.symbol)
+                        .font(.caption.weight(.semibold))
+                        .frame(minWidth: 18)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 6)
+                        .foregroundStyle(Theme.positive)
+                        .background(Theme.sectorFill, in: Capsule())
+                        .overlay { Capsule().stroke(Theme.positive, lineWidth: 1.5) }
+                } else {
+                    SectorTag(sector: sector.title, selected: false, symbol: sector.symbol)
+                }
+            }
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(sector.title)
+        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 }
 
-private struct ScreenResultsView: View {
-    var sectors: [String]
+/// 条件検索結果一覧。上に業種タブ、下に指標付きの行。業種を変えるとその場で引き直す。
+struct ScreenResultsView: View {
     var preset: ScreenPreset
+    @Bindable var session: ScreenSession
 
     @State private var items: [ScreenItem] = []
     @State private var matched = 0
@@ -363,16 +363,20 @@ private struct ScreenResultsView: View {
                 }
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .safeAreaInset(edge: .top, spacing: 0) {
+            SectorFilterBar(session: session)
+        }
         .bltChrome(preset.title)
-        .task {
-            guard !loaded else { return }
-            await run()
+        .task(id: session.screenSectors) {
+            await run(sectors: session.screenSectors)
         }
     }
 
     /// スナップショットがあれば端末内で引く（REST と同じ 50 件）。無ければ `GET /v1/screen`。
-    private func run() async {
+    private func run(sectors: [String]) async {
         if let rows = await ScreenSnapshotStore.shared.rowsFetchingIfNeeded() {
+            guard !Task.isCancelled else { return }
             let result = preset.search(rows, sectors: sectors, limit: 50)
             items = result.rows.map(ScreenItem.init)
             matched = result.matched
@@ -380,17 +384,26 @@ private struct ScreenResultsView: View {
             loaded = true
             return
         }
+        if loaded {
+            // 業種の連打で通信を重ねない。
+            try? await Task.sleep(for: .milliseconds(400))
+            guard !Task.isCancelled else { return }
+        }
         do {
             let response = try await APIClient.shared.screen(
                 sectors: sectors, filters: preset.filters, sort: preset.sortMetric)
+            guard !Task.isCancelled else { return }
             items = response.items
             matched = response.matched
             errorMessage = nil
+        } catch is CancellationError {
+            return
         } catch APIClientError.http(let status, let message) where status == 404 {
             items = []
             matched = 0
             errorMessage = message.isEmpty ? "Screen 索引は未生成です" : message
         } catch {
+            guard !Task.isCancelled else { return }
             items = []
             matched = 0
             errorMessage = error.localizedDescription

@@ -315,11 +315,6 @@ enum ScreenPreset: String, CaseIterable, Identifiable, Hashable {
     }
 }
 
-struct ScreenQuery: Hashable {
-    var sectors: [String]
-    var preset: ScreenPreset
-}
-
 struct APIErrorBody: Codable {
     var error: String?
     var status: Int?
