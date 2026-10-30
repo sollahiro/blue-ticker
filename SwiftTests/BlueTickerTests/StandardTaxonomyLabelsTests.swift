@@ -158,6 +158,20 @@ import Testing
         }
     }
 
+    /// 現行版で廃止・改名された jppfs 科目（旧版で書かれた書類が使う）は旧版の標準ラベルで埋める。
+    /// 現行版にある科目のラベルは変えない。
+    @Test func removedConceptsFallBackToPreviousTaxonomyLabels() throws {
+        let standard = XBRLUtils.loadStandardTaxonomyLabels()
+        let variants = XBRLUtils.loadStandardTaxonomyLabelRoleVariants()
+        let role = "http://www.xbrl.org/2003/role/label"
+        #expect(standard["RightOfUseAssets"] == "使用権資産")
+        #expect(standard["RightOfUseAssetsNet"] == "使用権資産（純額）")
+        #expect(standard["AccumulatedDepreciationRightOfUseAssets"] == "減価償却累計額")
+        #expect(standard["SalesDiscountsNOE"] == "売上割引")
+        #expect(variants["SalesDiscountsNOE"]?[role] == "売上割引")
+        #expect(standard["NetSales"] == "売上高")
+    }
+
     @Test func deprecatedOnlyMemberDoesNotTakeDeprecatedOrDateLabel() throws {
         try XBRLTestSupport.withXbrlDir(
             nil,
