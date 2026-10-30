@@ -1059,7 +1059,7 @@ private struct CompanyGlassPresenter: UIViewRepresentable {
         /// SwiftUI のボタン内では UIKit アニメーションが止まっている。
         /// そのまま `UIView.animate` すると、閉じる矩形が終端へ飛ぶ。
         private func animateExpanded(_ expanded: Bool) {
-            let fire = { [weak self] in
+            let fire: @MainActor @Sendable () -> Void = { [weak self] in
                 guard let self else { return }
                 let enabled = UIView.areAnimationsEnabled
                 UIView.setAnimationsEnabled(true)
