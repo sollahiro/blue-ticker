@@ -3,21 +3,13 @@ import SwiftData
 import SwiftUI
 import UIKit
 
-enum TickerPage: Int, CaseIterable, Hashable, Identifiable {
-    case summary, breakdown
-
-    var id: TickerPage { self }
-}
-
 struct TickerView: View {
     var company: CompanyRef
     @Environment(\.modelContext) private var modelContext
     @Query private var watched: [WatchedCompany]
-    @State private var page: TickerPage = .summary
-    @State private var summarySection: SummarySection = .performance
-    @State private var breakdownMetric: BreakdownMetric = .businessProfit
     @State private var resolvedSector = ""
     @State private var showsCompanyCard = false
+    @State private var showsChat = false
     /// 社名ピルの見た目を窓上のガラスへ渡したか。
     /// 渡したあとはタイトル用ガラスを出さず、同じガラスがカードへ広がる。
     /// 戻ると右上はナビのまま。社名ピルだけナビのタイトル遷移から外す。
@@ -27,122 +19,76 @@ struct TickerView: View {
     @State private var contentWidth: CGFloat = 0
 
     var body: some View {
-        VStack(spacing: 0) {
-            cards
-            pageDots
-        }
-        .onGeometryChange(for: CGFloat.self, of: { $0.size.width }) { contentWidth = $0 }
-        .background(Theme.shell.ignoresSafeArea())
-        // ピルとカードはバーより上の一つのガラス。ビュー内オーバーレイは
-        // UIKit のバーより必ず下に合成されてかぶせられない。
-        .overlay {
-            CompanyGlassPresenter(
-                handedOff: $pillHandedOff,
-                expanded: showsCompanyCard,
-                pillRect: pillRect,
-                company: displayCompany,
-                onExpanded: { showsCompanyCard = $0 },
-                onFittedPill: { pillRect = $0 }
-            )
-        }
-        .navigationTitle("")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbarBackgroundVisibility(.hidden, for: .navigationBar)
-        .toolbarColorScheme(.dark, for: .navigationBar)
-        .toolbar {
-            // タイトル領域に置くと、戻ると右上グループの残りをシステムが割り当てる。
-            // 右上の幅を固定予約すると機種によって足りず、「…」へ折りたたまれる。
-            ToolbarItem(placement: .title) {
-                // 場所はタイトル位置のまま。見た目のガラスは窓上へ出す。
-                // ここに glassEffect を付けると、ナビのタイトルとして横スライドする。
-                if pillHandedOff {
-                    Color.clear
-                        .frame(width: max(pillRect.width, 1), height: max(pillRect.height, 1))
-                        .accessibilityElement(children: .ignore)
+        AnalysisView(code: company.code)
+            .onGeometryChange(for: CGFloat.self, of: { $0.size.width }) { contentWidth = $0 }
+            .background(Theme.shell.ignoresSafeArea())
+            // ピルとカードはバーより上の一つのガラス。ビュー内オーバーレイは
+            // UIKit のバーより必ず下に合成されてかぶせられない。
+            .overlay {
+                CompanyGlassPresenter(
+                    handedOff: $pillHandedOff,
+                    expanded: showsCompanyCard,
+                    pillRect: pillRect,
+                    company: displayCompany,
+                    onExpanded: { showsCompanyCard = $0 },
+                    onFittedPill: { pillRect = $0 }
+                )
+            }
+            .navigationTitle("")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackgroundVisibility(.hidden, for: .navigationBar)
+            .toolbarColorScheme(.dark, for: .navigationBar)
+            .toolbar {
+                // タイトル領域に置くと、戻ると右上グループの残りをシステムが割り当てる。
+                // 右上の幅を固定予約すると機種によって足りず、「…」へ折りたたまれる。
+                ToolbarItem(placement: .title) {
+                    // 場所はタイトル位置のまま。見た目のガラスは窓上へ出す。
+                    // ここに glassEffect を付けると、ナビのタイトルとして横スライドする。
+                    if pillHandedOff {
+                        Color.clear
+                            .frame(width: max(pillRect.width, 1), height: max(pillRect.height, 1))
+                            .accessibilityElement(children: .ignore)
+                            .accessibilityLabel(Format.displayName(company.name, fallback: company.code))
+                            .accessibilityHint("銘柄コード・業種・Overview を表示します")
+                            .accessibilityAddTraits(.isButton)
+                            .accessibilityAction { showsCompanyCard = true }
+                            .accessibilityHidden(showsCompanyCard)
+                    } else {
+                        Button {
+                            showsCompanyCard = true
+                        } label: {
+                            // 内容幅まで縮める。上限は中央タイトルが戻る・右ボタンに被らない幅。
+                            CompanyPillLabel(company: company)
+                        }
+                        .buttonStyle(.plain)
+                        .fixedSize(horizontal: true, vertical: true)
+                        .frame(maxWidth: titlePillMaxWidth)
+                        .clipped()
+                        .opacity(0)
+                        .onGeometryChange(for: CGRect.self) { proxy in
+                            proxy.frame(in: .global)
+                        } action: { pillRect = $0 }
                         .accessibilityLabel(Format.displayName(company.name, fallback: company.code))
                         .accessibilityHint("銘柄コード・業種・Overview を表示します")
-                        .accessibilityAddTraits(.isButton)
-                        .accessibilityAction { showsCompanyCard = true }
-                        .accessibilityHidden(showsCompanyCard)
-                } else {
-                    Button {
-                        showsCompanyCard = true
-                    } label: {
-                        // 内容幅まで縮める。上限は中央タイトルが戻る・右ボタンに被らない幅。
-                        CompanyPillLabel(company: company)
                     }
-                    .buttonStyle(.plain)
-                    .fixedSize(horizontal: true, vertical: true)
-                    .frame(maxWidth: titlePillMaxWidth)
-                    .clipped()
-                    .opacity(0)
-                    .onGeometryChange(for: CGRect.self) { proxy in
-                        proxy.frame(in: .global)
-                    } action: { pillRect = $0 }
-                    .accessibilityLabel(Format.displayName(company.name, fallback: company.code))
-                    .accessibilityHint("銘柄コード・業種・Overview を表示します")
+                }
+                ToolbarItemGroup(placement: .topBarTrailing) {
+                    Button(
+                        isWatched ? "リストから削除" : "リストに追加",
+                        systemImage: isWatched ? "star.fill" : "star",
+                        action: toggleWatch
+                    )
+                    .accessibilityAddTraits(isWatched ? .isSelected : [])
+                    Button("チャット", systemImage: "bubble.left.and.text.bubble.right") {
+                        showsChat = true
+                    }
                 }
             }
-            ToolbarItemGroup(placement: .topBarTrailing) {
-                Button(
-                    isWatched ? "リストから削除" : "リストに追加",
-                    systemImage: isWatched ? "star.fill" : "star",
-                    action: toggleWatch
-                )
-                .accessibilityAddTraits(isWatched ? .isSelected : [])
+            .sheet(isPresented: $showsChat) {
+                CompanyChatSheet(company: displayCompany)
             }
-        }
-        .background { InteractivePopGestureEnabler(allowsPop: page == .summary && !showsCompanyCard) }
-        .task { await hydrateSector() }
-    }
-
-    /// `TabView` の page は戻るジェスチャと食い違って、カードが途中で止まりやすい。
-    private var cards: some View {
-        GeometryReader { geo in
-            ScrollView(.horizontal) {
-                HStack(spacing: 0) {
-                    SummaryView(code: company.code, section: $summarySection)
-                        .frame(width: geo.size.width, height: geo.size.height)
-                        .id(TickerPage.summary)
-                    BreakdownView(code: company.code, metric: $breakdownMetric)
-                        .frame(width: geo.size.width, height: geo.size.height)
-                        .id(TickerPage.breakdown)
-                }
-                .scrollTargetLayout()
-            }
-            .scrollTargetBehavior(.paging)
-            .scrollPosition(id: scrolledPage)
-            .scrollIndicators(.hidden)
-            .scrollEdgeEffectHidden(true)
-            .contentMargins(.all, 0, for: .scrollContent)
-            .background { PagerSnapper() }
-        }
-    }
-
-    private var scrolledPage: Binding<TickerPage?> {
-        Binding(
-            get: { page },
-            set: { newValue in
-                guard let newValue else { return }
-                page = newValue
-            }
-        )
-    }
-
-    private var pageDots: some View {
-        HStack(spacing: 8) {
-            ForEach(TickerPage.allCases) { item in
-                Circle()
-                    .fill(page == item ? Theme.text : Theme.text.opacity(0.28))
-                    .frame(width: page == item ? 7 : 6, height: page == item ? 7 : 6)
-                    .accessibilityLabel(item == .summary ? "概要" : "分解")
-                    .accessibilityAddTraits(page == item ? .isSelected : [])
-            }
-        }
-        .frame(maxWidth: .infinity)
-        .frame(height: Theme.tickerPageDotGutter)
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel("カード \(page.rawValue + 1) / \(TickerPage.allCases.count)")
+            .background { InteractivePopGestureEnabler(allowsPop: !showsCompanyCard) }
+            .task { await hydrateSector() }
     }
 
     private var matchingRows: [WatchedCompany] {
@@ -225,39 +171,30 @@ struct TickerView: View {
     }
 }
 
-struct SegmentPills<Item: Identifiable & Hashable>: View {
-    var items: [Item]
-    @Binding var selection: Item
-    var title: (Item) -> String
-    @Namespace private var pill
+/// チャットの入口。HIG のシートでハーフから開く。チャット本体は未実装。
+private struct CompanyChatSheet: View {
+    var company: CompanyRef
+    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        HStack(spacing: 0) {
-            ForEach(items) { item in
-                let current = selection == item
-                Button {
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        selection = item
+        NavigationStack {
+            ContentUnavailableView {
+                Label("チャットは準備中です", systemImage: "bubble.left.and.text.bubble.right")
+            } description: {
+                Text("\(Format.displayName(company.name, fallback: company.code))について質問できるようになる予定です。")
+            }
+            .navigationTitle("チャット")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("閉じる", systemImage: "xmark", role: .close) {
+                        dismiss()
                     }
-                } label: {
-                    Text(title(item))
-                        .font(.subheadline.weight(current ? .semibold : .regular))
-                        .foregroundStyle(current ? Theme.text : Theme.textMuted)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 6)
-                        .background {
-                            if current {
-                                Capsule()
-                                    .fill(Color.white.opacity(0.16))
-                                    .matchedGeometryEffect(id: "pill", in: pill)
-                            }
-                        }
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel(title(item))
-                .accessibilityAddTraits(current ? .isSelected : [])
             }
         }
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
     }
 }
 
@@ -282,73 +219,6 @@ struct TickerStubView: View {
     }
 }
 
-/// 横スクロールがキャンセルされても、カード幅へスナップし直す。
-/// 通常のフリックは減速中に触らず、ネイティブの paging に任せる。
-private struct PagerSnapper: UIViewRepresentable {
-    func makeUIView(context: Context) -> UIView {
-        let view = UIView()
-        view.isUserInteractionEnabled = false
-        view.backgroundColor = .clear
-        return view
-    }
-
-    func updateUIView(_ uiView: UIView, context: Context) {
-        DispatchQueue.main.async {
-            context.coordinator.attach(from: uiView)
-        }
-    }
-
-    func makeCoordinator() -> Coordinator {
-        Coordinator()
-    }
-
-    final class Coordinator: NSObject {
-        private weak var scrollView: UIScrollView?
-
-        deinit {
-            scrollView?.panGestureRecognizer.removeTarget(self, action: nil)
-        }
-
-        func attach(from view: UIView) {
-            guard let scrollView = view.nearestHorizontalScrollView() else { return }
-            scrollView.isDirectionalLockEnabled = true
-            guard scrollView !== self.scrollView else { return }
-            self.scrollView?.panGestureRecognizer.removeTarget(self, action: nil)
-            self.scrollView = scrollView
-            scrollView.panGestureRecognizer.addTarget(self, action: #selector(handlePan(_:)))
-        }
-
-        @objc func handlePan(_ gesture: UIPanGestureRecognizer) {
-            switch gesture.state {
-            case .cancelled, .failed:
-                DispatchQueue.main.async { [weak self] in
-                    self?.snapToNearestPage(interruptDeceleration: true)
-                }
-            case .ended:
-                DispatchQueue.main.async { [weak self] in
-                    self?.snapToNearestPage(interruptDeceleration: false)
-                }
-            default:
-                break
-            }
-        }
-
-        private func snapToNearestPage(interruptDeceleration: Bool) {
-            guard let scrollView, !scrollView.isDragging, !scrollView.isTracking else { return }
-            if !interruptDeceleration, scrollView.isDecelerating { return }
-            let width = scrollView.bounds.width
-            guard width > 0 else { return }
-            let maxIndex = max((scrollView.contentSize.width / width).rounded(.down) - 1, 0)
-            let index = min(max((scrollView.contentOffset.x / width).rounded(), 0), maxIndex)
-            let target = CGPoint(x: index * width, y: scrollView.contentOffset.y)
-            let delta = abs(scrollView.contentOffset.x - target.x)
-            guard delta > 0.5 else { return }
-            scrollView.setContentOffset(target, animated: delta > 8)
-        }
-    }
-}
-
-/// 戻る・右上ボタンから測った、ピルを置く隙間。
 private struct NavigationChrome {
     var leadingMaxX: CGFloat = 0
     var trailingMinX: CGFloat = 0
@@ -1796,8 +1666,7 @@ private struct CompanyPillLabel: View {
     }
 }
 
-/// ナビバーを隠しても、概要では端スワイプで戻れるようにする。
-/// 分解から左へはカード送りだけにし、戻ると食い違わないようにする。
+/// ナビバーを隠しても、端スワイプで戻れるようにする。社名カードを広げているあいだは戻らない。
 private struct InteractivePopGestureEnabler: UIViewRepresentable {
     var allowsPop: Bool
 
@@ -1859,29 +1728,6 @@ private struct InteractivePopGestureEnabler: UIViewRepresentable {
 }
 
 private extension UIView {
-    func nearestHorizontalScrollView() -> UIScrollView? {
-        var current: UIView? = self
-        while let view = current {
-            if let found = view.horizontalScrollViewAmongDescendants() {
-                return found
-            }
-            current = view.superview
-        }
-        return nil
-    }
-
-    func horizontalScrollViewAmongDescendants() -> UIScrollView? {
-        if let scroll = self as? UIScrollView, scroll.contentSize.width > scroll.bounds.width + 1 {
-            return scroll
-        }
-        for subview in subviews {
-            if let found = subview.horizontalScrollViewAmongDescendants() {
-                return found
-            }
-        }
-        return nil
-    }
-
     func nearestNavigationController() -> UINavigationController? {
         var responder: UIResponder? = self
         while let current = responder {

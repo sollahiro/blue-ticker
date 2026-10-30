@@ -23,8 +23,8 @@
 		AA0000000000000000000014 /* ScreenView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000014 /* ScreenView.swift */; };
 		AA0000000000000000000015 /* WatchlistView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000015 /* WatchlistView.swift */; };
 		AA0000000000000000000016 /* TickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000016 /* TickerView.swift */; };
-		AA0000000000000000000017 /* SummaryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000017 /* SummaryView.swift */; };
-		AA0000000000000000000018 /* BreakdownView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000018 /* BreakdownView.swift */; };
+		AA0000000000000000000017 /* OverviewText.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000017 /* OverviewText.swift */; };
+		AA0000000000000000000018 /* AnalysisView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000018 /* AnalysisView.swift */; };
 		AA0000000000000000000019 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000019 /* Assets.xcassets */; };
 		AA0000000000000000000050 /* AppIcon.icon in Resources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000050 /* AppIcon.icon */; };
 		AA0000000000000000000021 /* VersionMarkFooter.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000021 /* VersionMarkFooter.swift */; };
@@ -61,8 +61,8 @@
 		BB0000000000000000000014 /* ScreenView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenView.swift; sourceTree = "<group>"; };
 		BB0000000000000000000015 /* WatchlistView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchlistView.swift; sourceTree = "<group>"; };
 		BB0000000000000000000016 /* TickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TickerView.swift; sourceTree = "<group>"; };
-		BB0000000000000000000017 /* SummaryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SummaryView.swift; sourceTree = "<group>"; };
-		BB0000000000000000000018 /* BreakdownView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BreakdownView.swift; sourceTree = "<group>"; };
+		BB0000000000000000000017 /* OverviewText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverviewText.swift; sourceTree = "<group>"; };
+		BB0000000000000000000018 /* AnalysisView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnalysisView.swift; sourceTree = "<group>"; };
 		BB0000000000000000000019 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		BB0000000000000000000050 /* AppIcon.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = AppIcon.icon; sourceTree = "<group>"; };
 		BB0000000000000000000020 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
@@ -187,8 +187,8 @@
 			isa = PBXGroup;
 			children = (
 				BB0000000000000000000016 /* TickerView.swift */,
-				BB0000000000000000000017 /* SummaryView.swift */,
-				BB0000000000000000000018 /* BreakdownView.swift */,
+				BB0000000000000000000017 /* OverviewText.swift */,
+				BB0000000000000000000018 /* AnalysisView.swift */,
 			);
 			path = Ticker;
 			sourceTree = "<group>";
@@ -329,8 +329,8 @@
 				AA0000000000000000000014 /* ScreenView.swift in Sources */,
 				AA0000000000000000000015 /* WatchlistView.swift in Sources */,
 				AA0000000000000000000016 /* TickerView.swift in Sources */,
-				AA0000000000000000000017 /* SummaryView.swift in Sources */,
-				AA0000000000000000000018 /* BreakdownView.swift in Sources */,
+				AA0000000000000000000017 /* OverviewText.swift in Sources */,
+				AA0000000000000000000018 /* AnalysisView.swift in Sources */,
 				AA0000000000000000000032 /* ZeroAxisFill.swift in Sources */,
 				AA0000000000000000000040 /* FeedRSS.swift in Sources */,
 				AA0000000000000000000041 /* FeedRSSStore.swift in Sources */,

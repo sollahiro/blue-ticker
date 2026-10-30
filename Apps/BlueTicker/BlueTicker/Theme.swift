@@ -19,8 +19,6 @@ enum Theme {
     static let headerPillHorizontalPadding: CGFloat = 14
     /// ピル内側の垂直余白。1行のときは隣接カプセルに近い高さになる。
     static let headerPillVerticalPadding: CGFloat = 5
-    /// 銘柄カード下端とタブバー上端のあいだ。ページ点を垂直中央に置く。
-    static let tickerPageDotGutter: CGFloat = 36
     /// iOS 26 の inset grouped セクションに近い連続円弧。業種セクションの外側。
     static let groupedCornerRadius: CGFloat = 26
     /// セクション枠と見切れマスクのあいだ。内側半径は `groupedCornerRadius - groupedContentInset`。
