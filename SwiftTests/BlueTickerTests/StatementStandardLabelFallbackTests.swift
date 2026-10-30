@@ -33,4 +33,25 @@ import Testing
             #expect(missing.isEmpty, "\(name) label nil: \(missing)")
         }
     }
+
+    /// SPEC_ORACLE: 2025年版タクソノミ（2024-11-01）で書かれた 4813 S100Y070。
+    /// 現行版で廃止された jppfs_cor:AccumulatedDepreciationRightOfUseAssets 等も名前が付く。
+    @Test func conceptsRemovedFromCurrentTaxonomyGetPreviousVersionLabels() async throws {
+        let docID = "S100Y070"
+        guard let dir = await xbrlDir(docID) else { return }
+        guard case .resolved(let year) = StatementAnalyzer.resolveFromXBRL(
+            xbrlDir: dir, docID: docID,
+            statementTypes: [.balanceSheet, .incomeStatement, .cashFlow, .changesInEquity])
+        else {
+            Issue.record("\(docID): statement not resolved")
+            return
+        }
+        let bs = year.balanceSheet
+        #expect(bs.contains { $0.tag == "AccumulatedDepreciationRightOfUseAssets" })
+        for (name, items) in [("PL", year.incomeStatement), ("BS", bs), ("CF", year.cashFlow),
+                              ("SS", year.changesInEquity)] {
+            let missing = items.filter { $0.label == nil }.map(\.tag)
+            #expect(missing.isEmpty, "\(name) label nil: \(missing)")
+        }
+    }
 }

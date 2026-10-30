@@ -228,6 +228,7 @@ extension XBRLUtils {
     /// 標準タクソノミのラベルリンクベースから {tag: 日本語標準ラベル} を作る。
     /// 第一入力は git 管理の `assets/taxonomy/labels/*_lab.xml`（jpcrp / jppfs / jpigp の日本語）。
     /// 任意の `assets/taxonomy/{GAAP,IFRS}/*.zip`（git 管理外）は欠測タグだけ埋める。
+    /// `assets/taxonomy/labels-removed/` は旧版にだけある概念で、最後に欠測タグだけ埋める。
     /// `loadLabelsByTag` へ載せるのは次元 member / `EntityTotal` のみ。Statement の
     /// `preferredLabel` 用 variants は欠測ロールだけ標準タクソノミで埋める（提出側ロール優先）。
     /// `assets/taxonomy/labels` が無いときはコード側 sentinel（`EntityTotal`）だけ残し、
@@ -293,6 +294,13 @@ extension XBRLUtils {
                 guard let extracted = try? extractTaxonomyZip(zipURL) else { continue }
                 defer { try? FileManager.default.removeItem(at: extracted) }
                 let parsed = parseTaxonomyLabels(in: extracted)
+                merge(parsed.collapsed, parsed.variants)
+            }
+            // 旧版タクソノミにだけある概念（現行版で廃止・改名された科目）。旧版で書かれた書類が
+            // 使い続けるので、現行版に無いタグだけ最後に埋める（現行ラベルは上書きしない）。
+            let removedDir = taxonomyDir.appendingPathComponent("labels-removed", isDirectory: true)
+            if isReadableDirectory(removedDir) {
+                let parsed = parseTaxonomyLabels(in: removedDir)
                 merge(parsed.collapsed, parsed.variants)
             }
         } else {

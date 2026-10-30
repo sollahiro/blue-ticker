@@ -180,6 +180,8 @@ assets/taxonomy/labels/
 
 出典は **2026年版 EDINETタクソノミ**（タクソノミ日付 **2025-11-01**。金融庁 2025-11-11 公表の本体 ZIP）。手順は `assets/taxonomy/labels/SOURCE.md`。手元に `assets/taxonomy/{GAAP,IFRS}/*.zip` がある場合は shipped に無いタグの補完だけ使う（ZIP 内の `deprecated/` と `_dep` lab も読まない）。
 
+現行版で廃止・改名された概念（旧版で書かれた書類が使う `jppfs_cor:RightOfUseAssets` / `SalesDiscountsNOE` 等）は、`assets/taxonomy/labels-removed/` に旧版（2024-11-01）の `_lab.xml` から現行版に無い概念だけを抜き出して置く。`labels/` とフル ZIP のあとに読み、欠測タグだけ埋める。再生成は `scripts/taxonomy/extract-removed-labels.py`、出典は同ディレクトリの `SOURCE.md`。
+
 `EntityTotal` はタクソノミ member ではなく合成キーのため、どの `_lab.xml` にも無い。ingest 時に jpcrp `EntityTotalMember` と同じ「連結合計又は会社合計」をコード側で足す。
 
 ### 4.2 ingest ホストがファイルを得る経路

@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<link:linkbase xmlns:link="http://www.xbrl.org/2003/linkbase" xmlns:xlink="http://www.w3.org/1999/xlink"><link:labelLink xlink:type="extended" xlink:role="http://www.xbrl.org/2003/role/link"><link:loc xlink:type="locator" xlink:href="../jpigp_cor_2024-11-01.xsd#jpigp_cor_RepaymentsOfFinanceLeaseObligationsFinCFIFRS" xlink:label="RepaymentsOfFinanceLeaseObligationsFinCFIFRS" />
+    <link:label xlink:type="resource" xlink:label="label_RepaymentsOfFinanceLeaseObligationsFinCFIFRS" xlink:role="http://www.xbrl.org/2003/role/label" xml:lang="ja" id="label_RepaymentsOfFinanceLeaseObligationsFinCFIFRS">ファイナンス・リース債務の返済による支出</link:label>
+    <link:label xlink:type="resource" xlink:label="label_RepaymentsOfFinanceLeaseObligationsFinCFIFRS_2" xlink:role="http://www.xbrl.org/2003/role/verboseLabel" xml:lang="ja" id="label_RepaymentsOfFinanceLeaseObligationsFinCFIFRS_2">ファイナンス・リース債務の返済による支出、財務活動によるキャッシュ・フロー（IFRS）</link:label>
+    <link:labelArc xlink:type="arc" xlink:arcrole="http://www.xbrl.org/2003/arcrole/concept-label" xlink:from="RepaymentsOfFinanceLeaseObligationsFinCFIFRS" xlink:to="label_RepaymentsOfFinanceLeaseObligationsFinCFIFRS" />
+    <link:labelArc xlink:type="arc" xlink:arcrole="http://www.xbrl.org/2003/arcrole/concept-label" xlink:from="RepaymentsOfFinanceLeaseObligationsFinCFIFRS" xlink:to="label_RepaymentsOfFinanceLeaseObligationsFinCFIFRS_2" />
+    </link:labelLink></link:linkbase>
