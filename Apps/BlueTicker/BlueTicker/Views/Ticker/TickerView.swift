@@ -75,7 +75,7 @@ struct TickerView: View {
                 ToolbarItemGroup(placement: .topBarTrailing) {
                     Button(
                         isWatched ? "リストから削除" : "リストに追加",
-                        systemImage: isWatched ? "star.fill" : "star",
+                        systemImage: isWatched ? "bookmark.fill" : "bookmark",
                         action: toggleWatch
                     )
                     .accessibilityAddTraits(isWatched ? .isSelected : [])
