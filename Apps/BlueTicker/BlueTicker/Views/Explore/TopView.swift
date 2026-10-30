@@ -225,7 +225,7 @@ struct TopView: View {
     }
 }
 
-/// 左上の白抜きロゴ。アセット `YuhoLabLogo`（SVG）が無いビルドでは文字で出す。
+/// 左上の白抜きロゴ。アセット `YuhoLabLogo`（SVG。元ファイルの影フィルタは外してある）。読めないときは文字で出す。
 struct YuhoLabLogo: View {
     var body: some View {
         Group {
