@@ -1465,7 +1465,7 @@ private struct CompanyMorphStack: View {
                         .accessibilityHidden(!model.expanded)
                     }
             }
-            Text(subtitle)
+            subtitle
                 .font(.caption)
                 .foregroundStyle(Theme.textMuted)
                 .padding(.horizontal, Theme.headerPillHorizontalPadding)
@@ -1487,8 +1487,14 @@ private struct CompanyMorphStack: View {
         .accessibilityHidden(!model.expanded && model.expansion < 0.02)
     }
 
-    private var subtitle: String {
-        model.company.sector.isEmpty ? model.company.code : "\(model.company.code) · \(TOPIX17Sector.displayName(for: model.company.sector))"
+    /// 銘柄コード · 業種。17 業種に振り分けられたら業種名の前にアイコンを置く。
+    private var subtitle: Text {
+        let code = model.company.code
+        let sector = model.company.sector
+        guard !sector.isEmpty else { return Text(code) }
+        let name = TOPIX17Sector.displayName(for: sector)
+        guard let group = TOPIX17Sector(tseSector: sector) else { return Text("\(code) · \(name)") }
+        return Text("\(code) · \(Image(systemName: group.symbol)) \(name)")
     }
 
     /// 開閉中はカード幅のまま字を置く。枠だけが伸び縮みする。
