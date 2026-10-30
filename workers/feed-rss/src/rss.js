@@ -88,7 +88,7 @@ export function buildRss({ items, now = new Date(), feedUrl }) {
   lines.push("    <link>https://yuholab.com</link>");
   lines.push(
     "    <description>EDINET に提出された上場会社の有価証券報告書（120）のヘッドラインのみを配信します。" +
-      "毎日 19:15（JST）に更新。対象は直近7日分と、期間に関係なく最新10件です。</description>"
+      "毎日 19:15（JST）に更新。対象は直近14日分と、期間に関係なく最新10件です。</description>"
   );
   lines.push("    <language>ja</language>");
   lines.push(`    <lastBuildDate>${utcToRfc822Jst(now)}</lastBuildDate>`);

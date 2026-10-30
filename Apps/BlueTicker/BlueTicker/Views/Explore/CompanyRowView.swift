@@ -23,9 +23,7 @@ struct CompanyRowView: View {
                     .foregroundStyle(Theme.text)
                     .lineLimit(3)
                     .truncationMode(.tail)
-                Text(company.code)
-                    .font(.subheadline)
-                    .foregroundStyle(Theme.textMuted)
+                codeLine
                 if let caption, !caption.isEmpty {
                     Text(caption)
                         .font(.caption)
@@ -43,18 +41,32 @@ struct CompanyRowView: View {
                 }
             }
             Spacer(minLength: 0)
-            if showsSector, !company.sector.isEmpty {
-                if let group = TOPIX17Sector(tseSector: company.sector) {
-                    SectorTag(sector: group.title, selected: true, symbol: group.symbol)
-                } else {
-                    SectorTag(sector: company.sector, selected: true)
-                }
-            }
         }
         .padding(0)
         .animation(nil, value: showsIcon)
         .animation(nil, value: showsSector)
         .animation(nil, value: locksNameLayout)
+    }
+
+    /// 銘柄コードの横に業種（アイコン＋業種名）。色分けはせず、コードと同じグレー。
+    private var codeLine: some View {
+        HStack(spacing: 8) {
+            Text(company.code)
+            if showsSector, !company.sector.isEmpty {
+                let group = TOPIX17Sector(tseSector: company.sector)
+                HStack(spacing: 3) {
+                    if let group {
+                        Image(systemName: group.symbol)
+                            .imageScale(.small)
+                            .accessibilityHidden(true)
+                    }
+                    Text(group?.title ?? company.sector)
+                        .lineLimit(1)
+                }
+            }
+        }
+        .font(.subheadline)
+        .foregroundStyle(Theme.textMuted)
     }
 }
 

@@ -5,8 +5,8 @@ import Foundation
 #endif
 
 /// Top feed の取得元。公開 RSS（`workers/feed-rss`。日次 19:15 JST に R2 へ生成）を読む。
-/// HAPIS・トークン・オリジン・Neon を通らない。出すのは直近の有報（120）10 件だけ
-/// （RSS は有報だけで、7 日窓＋期間に関係ない直近 10 件）。
+/// HAPIS・トークン・オリジン・Neon を通らない。出すのは直近 2 週間の有報（120）と、期間に関係ない直近 10 件
+/// （RSS も有報だけで、14 日窓＋期間に関係ない直近 10 件）。
 /// 銘柄コードは `<category domain="jp:sec_code">` から取る（タイトルから読まない）。
 /// 社名はタイトルの「社名（コード） 書類種別」から、コードの括弧より前を取る。
 enum FeedRSS {
@@ -15,12 +15,31 @@ enum FeedRSS {
     static let revalidateInterval: TimeInterval = 60 * 60
     /// Top feed に出す書類種別。有報（120）だけ。RSS も有報だけだが、他の種別が混ざっても出さない。
     static let topFeedDocTypes: Set<String> = ["120"]
-    /// Top feed に出す件数。REST の既定と同じ 10 件（RSS は有報を期間に関係なく直近 10 件載せる）。
-    static let topFeedLimit = 10
+    /// Top feed の期間。今日（JST）を含む直近 14 暦日。RSS の `FEED_DAYS` と同じ。
+    static let topFeedDays = 14
+    /// 期間に関係なく必ず出す件数。閑散期に 2 週間の窓が数件しか無くても、この件数は並べる
+    /// （RSS の `FEED_LATEST_MIN` と同じ 10 件）。
+    static let topFeedMinimum = 10
 
-    /// 解析した RSS から Top feed に出す行だけを残す（RSS の新しい順のまま先頭 `topFeedLimit` 件）。
-    static func topFeed(_ items: [Item]) -> [Item] {
-        Array(items.lazy.filter { topFeedDocTypes.contains($0.docType) }.prefix(topFeedLimit))
+    /// 解析した RSS から Top feed に出す行だけを残す。有報だけを RSS の新しい順のまま、
+    /// 先頭 `topFeedMinimum` 件か、提出日が直近 `topFeedDays` 暦日（JST）の行。行は新しい順なので先頭からの連続区間になる。
+    static func topFeed(_ items: [Item], now: Date = Date()) -> [Item] {
+        let cutoff = topFeedCutoffDate(now: now)
+        return items
+            .filter { topFeedDocTypes.contains($0.docType) }
+            .enumerated()
+            .filter { index, item in index < topFeedMinimum || String(item.submittedAt.prefix(10)) >= cutoff }
+            .map(\.element)
+    }
+
+    /// 窓の下限日（JST の `YYYY-MM-DD`、下限含む）。今日から `topFeedDays - 1` 日前。
+    static func topFeedCutoffDate(now: Date = Date()) -> String {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "Asia/Tokyo")!
+        let start = calendar.startOfDay(for: now)
+        let cutoff = calendar.date(byAdding: .day, value: -(max(topFeedDays, 1) - 1), to: start) ?? start
+        let parts = calendar.dateComponents([.year, .month, .day], from: cutoff)
+        return String(format: "%04d-%02d-%02d", parts.year ?? 0, parts.month ?? 0, parts.day ?? 0)
     }
 
     struct Item: Hashable, Identifiable, Sendable {
