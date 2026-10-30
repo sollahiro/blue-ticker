@@ -79,7 +79,7 @@ struct TickerView: View {
                         action: toggleWatch
                     )
                     .accessibilityAddTraits(isWatched ? .isSelected : [])
-                    Button("チャット", systemImage: "bubble.left.and.text.bubble.right") {
+                    Button("チャット", systemImage: "text.bubble") {
                         showsChat = true
                     }
                 }
@@ -179,7 +179,7 @@ private struct CompanyChatSheet: View {
     var body: some View {
         NavigationStack {
             ContentUnavailableView {
-                Label("チャットは準備中です", systemImage: "bubble.left.and.text.bubble.right")
+                Label("チャットは準備中です", systemImage: "text.bubble")
             } description: {
                 Text("\(Format.displayName(company.name, fallback: company.code))について質問できるようになる予定です。")
             }
