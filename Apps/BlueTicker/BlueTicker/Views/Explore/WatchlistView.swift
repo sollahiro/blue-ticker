@@ -13,7 +13,7 @@ struct WatchlistView: View {
                 if companies.isEmpty {
                     ContentUnavailableView(
                         "リストは空です",
-                        systemImage: "star",
+                        systemImage: "bookmark",
                         description: Text("銘柄画面から追加できます。")
                     )
                     .padding(.top, 40)

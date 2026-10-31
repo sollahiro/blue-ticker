@@ -89,6 +89,7 @@ struct FinancialsYear: Codable, Hashable, Identifiable {
     var cfo: Double?
     var cfi: Double?
     var capex: Double?
+    var employees: Int?
     var totalAssets: Double?
     var currentAssets: Double?
     var nonCurrentAssets: Double?
@@ -131,6 +132,7 @@ struct FinancialsYear: Codable, Hashable, Identifiable {
         case cfo
         case cfi
         case capex
+        case employees
         case totalAssets = "total_assets"
         case currentAssets = "current_assets"
         case nonCurrentAssets = "non_current_assets"
