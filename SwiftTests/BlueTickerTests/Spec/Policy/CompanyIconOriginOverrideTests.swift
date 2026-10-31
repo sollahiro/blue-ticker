@@ -1041,6 +1041,50 @@ import Testing
     }
 
     /// 603A: 欠行。先頭 rel=icon が 16.jpg のため公式 apple-touch 256.jpg。
+
+    /// 2026-10-31 weekly: listed × company_icons 欠行。Sorahiro visual GO 24 社。
+    /// 全 24 をサークルセーフ（512 白地、四隅が内接円内。正方形 70%）。NG 106 は台帳 visual_ng_20261031。
+    @Test func pins20261031WeeklyMissingListedManualImageURLs() {
+        let expected: [(String, String)] = [
+            ("1429", "https://icons.sollahiro.com/company-icons/1429.png"), // pragma: allowlist secret
+            ("1897", "https://icons.sollahiro.com/company-icons/1897.png"), // pragma: allowlist secret
+            ("2003", "https://icons.sollahiro.com/company-icons/2003.png"), // pragma: allowlist secret
+            ("2207", "https://icons.sollahiro.com/company-icons/2207.png"), // pragma: allowlist secret
+            ("2215", "https://icons.sollahiro.com/company-icons/2215.png"), // pragma: allowlist secret
+            ("2652", "https://icons.sollahiro.com/company-icons/2652.png"), // pragma: allowlist secret
+            ("3059", "https://icons.sollahiro.com/company-icons/3059.png"), // pragma: allowlist secret
+            ("3675", "https://icons.sollahiro.com/company-icons/3675.png"), // pragma: allowlist secret
+            ("3803", "https://icons.sollahiro.com/company-icons/3803.png"), // pragma: allowlist secret
+            ("3927", "https://icons.sollahiro.com/company-icons/3927.png"), // pragma: allowlist secret
+            ("3989", "https://icons.sollahiro.com/company-icons/3989.png"), // pragma: allowlist secret
+            ("4172", "https://icons.sollahiro.com/company-icons/4172.png"), // pragma: allowlist secret
+            ("4390", "https://icons.sollahiro.com/company-icons/4390.png"), // pragma: allowlist secret
+            ("4478", "https://icons.sollahiro.com/company-icons/4478.png"), // pragma: allowlist secret
+            ("4597", "https://icons.sollahiro.com/company-icons/4597.png"), // pragma: allowlist secret
+            ("5204", "https://icons.sollahiro.com/company-icons/5204.png"), // pragma: allowlist secret
+            ("5355", "https://icons.sollahiro.com/company-icons/5355.png"), // pragma: allowlist secret
+            ("5537", "https://icons.sollahiro.com/company-icons/5537.png"), // pragma: allowlist secret
+            ("5985", "https://icons.sollahiro.com/company-icons/5985.png"), // pragma: allowlist secret
+            ("6279", "https://icons.sollahiro.com/company-icons/6279.png"), // pragma: allowlist secret
+            ("6337", "https://icons.sollahiro.com/company-icons/6337.png"), // pragma: allowlist secret
+            ("8071", "https://icons.sollahiro.com/company-icons/8071.png"), // pragma: allowlist secret
+            ("8747", "https://icons.sollahiro.com/company-icons/8747.png"), // pragma: allowlist secret
+            ("9322", "https://icons.sollahiro.com/company-icons/9322.png"), // pragma: allowlist secret
+        ]
+        #expect(expected.count == 24)
+        #expect(Set(expected.map(\.0)).count == 24)
+        #expect(
+            Set(expected.map(\.0))
+                .isDisjoint(with: Set(CompanyIconOriginOverride.pronexusDisclosureHomepages.keys)))
+        for (code, url) in expected {
+            #expect(!url.contains("prtimes.jp"), "code=\(code)")
+            #expect(!url.contains("i0.wp.com"), "code=\(code)")
+            #expect(url.hasSuffix("/company-icons/\(code).png"), "code=\(code)")
+            let src = CompanyIconOriginOverride.manualSources[code]
+            #expect(src == .imageURL(url), "code=\(code)")
+        }
+    }
+
     @Test func pinsIgridSolutionsMissingListedManualImageURL() {
         let jpeg = "https://igrid.co.jp/wp-content/themes/igrid2024/dist/img/favicon/256.jpg"
         #expect(
