@@ -10,6 +10,8 @@ struct TickerView: View {
     @State private var resolvedSector = ""
     @State private var showsCompanyCard = false
     @State private var showsChat = false
+    /// ブックマーク押下の結果。上端に数秒だけ出す。
+    @State private var watchToast: WatchToast?
     /// 社名ピルの見た目を窓上のガラスへ渡したか。
     /// 渡したあとはタイトル用ガラスを出さず、同じガラスがカードへ広がる。
     /// 戻ると右上はナビのまま。社名ピルだけナビのタイトル遷移から外す。
@@ -20,6 +22,21 @@ struct TickerView: View {
 
     var body: some View {
         AnalysisView(code: company.code)
+            .overlay(alignment: .top) {
+                if let watchToast {
+                    WatchToastView(toast: watchToast)
+                        .padding(.horizontal, Theme.cardContentInset)
+                        .padding(.top, 8)
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                        .id(watchToast.id)
+                }
+            }
+            .task(id: watchToast?.id) {
+                guard watchToast != nil else { return }
+                try? await Task.sleep(for: .seconds(2))
+                guard !Task.isCancelled else { return }
+                withAnimation(.easeInOut(duration: 0.25)) { watchToast = nil }
+            }
             .onGeometryChange(for: CGFloat.self, of: { $0.size.width }) { contentWidth = $0 }
             .background(Theme.shell.ignoresSafeArea())
             // ピルとカードはバーより上の一つのガラス。ビュー内オーバーレイは
@@ -139,14 +156,19 @@ struct TickerView: View {
 
     private func toggleWatch() {
         let matching = matchingRows
+        let toast: WatchToast
         if matching.isEmpty {
             insertWatchRow()
+            toast = WatchToast(added: true)
         } else {
             for item in matching {
                 modelContext.delete(item)
             }
             Task { await APIClient.shared.unpinCode(company.code) }
+            toast = WatchToast(added: false)
         }
+        withAnimation(.spring(duration: 0.35)) { watchToast = toast }
+        AccessibilityNotification.Announcement(AttributedString(toast.message)).post()
     }
 
     private func insertWatchRow() {
@@ -168,6 +190,41 @@ struct TickerView: View {
         for existing in watched where existing.code == company.code && existing.sector.isEmpty {
             existing.sector = sector
         }
+    }
+}
+
+/// ブックマーク押下の結果。押すたびに id を変え、表示時間を数え直す。
+private struct WatchToast: Equatable {
+    var added: Bool
+    var id = UUID()
+
+    var message: String {
+        added ? "この銘柄をリストに追加しました" : "この銘柄をリストから削除しました"
+    }
+
+    var symbol: String {
+        added ? "bookmark.fill" : "bookmark.slash"
+    }
+}
+
+private struct WatchToastView: View {
+    var toast: WatchToast
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: toast.symbol)
+                .font(.title3)
+            Text(toast.message)
+                .font(.body.weight(.semibold))
+                .lineLimit(2)
+            Spacer(minLength: 0)
+        }
+        .foregroundStyle(Theme.text)
+        .padding(.horizontal, 20)
+        .padding(.vertical, 16)
+        .frame(maxWidth: .infinity)
+        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .accessibilityHidden(true)
     }
 }
 

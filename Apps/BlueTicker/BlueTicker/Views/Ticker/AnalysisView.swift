@@ -784,38 +784,38 @@ private struct CapitalEfficiencySection: View {
         .frame(height: ChartStyle.height)
     }
 
-    /// ROE のデュポン3要素（各年の水準）。純利益率 × 総資産回転率 × 財務レバレッジ = ROE。
-    /// 年度は古い順に左から右（概要の表と同じ並び）。
+    /// ROE のデュポン3要素。最新年度の値を並べ、隣に直近 5 年の推移をスパークラインで添える。
+    /// 純利益率 × 総資産回転率 × 財務レバレッジ = ROE。
     private func duPontTable(_ years: [FinancialsYear]) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("ROEのデュポン分解")
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(Theme.text)
-            Grid(alignment: .trailing, horizontalSpacing: 8, verticalSpacing: 6) {
-                GridRow {
-                    Color.clear
-                        .frame(width: 1, height: 1)
-                        .gridColumnAlignment(.leading)
-                    ForEach(years) { year in
-                        Text(Format.fy(year.fyEnd))
-                            .font(.caption2.weight(.semibold))
-                            .foregroundStyle(Theme.textMuted)
-                    }
-                }
-                duPontRow("純利益率", years: years) { Format.percent($0.netMargin, includeUnit: false) }
-                duPontRow("総資産回転率", years: years) { Format.times($0.assetTurnover, includeUnit: false) }
-                duPontRow("財務レバレッジ", years: years) { Format.times($0.financialLeverage, includeUnit: false) }
-                Rectangle()
-                    .fill(Theme.textMuted.opacity(0.45))
-                    .frame(height: 1)
-                    .gridCellUnsizedAxes(.horizontal)
-                duPontRow("ROE", years: years, emphasized: true) {
-                    Format.percent($0.roe, digits: 2, includeUnit: false)
+        let latest = years.last { $0.roe != nil } ?? years.last
+        return VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("ROEのデュポン分解")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(Theme.text)
+                Spacer()
+                if let latest {
+                    Text(Format.fy(latest.fyEnd))
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(Theme.textMuted)
                 }
             }
-            Text("純利益率 × 総資産回転率 × 財務レバレッジ = ROE。純利益率・ROE は%、総資産回転率・財務レバレッジは倍です。純利益率は純利益 ÷ 売上、総資産回転率は売上 ÷ 総資産、財務レバレッジは総資産 ÷ 自己資本（いずれも期末）。")
-                .font(.caption)
-                .foregroundStyle(Theme.textMuted)
+            duPontRow("純利益率", years: years, latest: latest, value: \.netMargin) {
+                Format.percent($0, includeUnit: true)
+            }
+            duPontRow("総資産回転率", years: years, latest: latest, value: \.assetTurnover) {
+                Format.times($0)
+            }
+            duPontRow("財務レバレッジ", years: years, latest: latest, value: \.financialLeverage) {
+                Format.times($0)
+            }
+            Rectangle()
+                .fill(Theme.textMuted.opacity(0.45))
+                .frame(height: 1)
+            duPontRow("ROE", years: years, latest: latest, value: \.roe, emphasized: true) {
+                Format.percent($0, digits: 2, includeUnit: true)
+            }
+            AnalysisNote(text: "純利益率 × 総資産回転率 × 財務レバレッジ = ROE。数値は最新年度、線は直近\(years.count)年の推移（古い順に左から右）です。純利益率は純利益 ÷ 売上、総資産回転率は売上 ÷ 総資産、財務レバレッジは総資産 ÷ 自己資本（いずれも期末）。")
         }
         .padding(.top, 8)
     }
@@ -823,25 +823,63 @@ private struct CapitalEfficiencySection: View {
     private func duPontRow(
         _ title: String,
         years: [FinancialsYear],
+        latest: FinancialsYear?,
+        value: KeyPath<FinancialsYear, Double?>,
         emphasized: Bool = false,
-        value: @escaping (FinancialsYear) -> String
+        format: (Double?) -> String
     ) -> some View {
-        GridRow {
+        HStack(spacing: 12) {
             Text(title)
                 .font(.caption.weight(emphasized ? .bold : .regular))
                 .foregroundStyle(Theme.text)
                 .lineLimit(1)
-                .fixedSize()
-            ForEach(years) { year in
-                Text(value(year))
-                    .font(.caption.monospacedDigit().weight(emphasized ? .semibold : .regular))
-                    .foregroundStyle(Theme.text)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
+                .frame(width: 92, alignment: .leading)
+            Text(format(latest?[keyPath: value]))
+                .font(.callout.monospacedDigit().weight(emphasized ? .bold : .semibold))
+                .foregroundStyle(Theme.text)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+                .frame(width: 76, alignment: .trailing)
+            Sparkline(
+                labels: years.map { Format.fy($0.fyEnd) },
+                points: ChartMath.linePoints(years) { $0[keyPath: value] },
+                color: emphasized ? RatioSeries.roe.color : ChartStyle.line
+            )
+            .frame(height: 30)
+            .accessibilityHidden(true)
+        }
+        .accessibilityElement(children: .combine)
+    }
+}
+
+/// 軸のない小さな折れ線。各年度に丸を打つ。欠損年を挟んだら線を切る。
+private struct Sparkline: View {
+    var labels: [String]
+    var points: [LinePoint]
+    var color: Color
+
+    var body: some View {
+        Chart {
+            ForEach(points) { point in
+                LineMark(
+                    x: .value("年度", point.label),
+                    y: .value("値", point.value),
+                    series: .value("線", "spark-\(point.run)")
+                )
+                .foregroundStyle(color)
+                .lineStyle(StrokeStyle(lineWidth: 1.5))
+                PointMark(x: .value("年度", point.label), y: .value("値", point.value))
+                    .foregroundStyle(color)
+                    .symbolSize(18)
             }
         }
+        .chartXScale(domain: labels)
+        .chartXAxis(.hidden)
+        .chartYAxis(.hidden)
+        .chartYScale(domain: .automatic(includesZero: false))
+        .chartLegend(.hidden)
+        .chartPlotStyle { $0.padding(.vertical, 4) }
     }
-
 }
 
 // MARK: - 労働生産性
