@@ -589,7 +589,7 @@ private struct CompanyGlassPresenter: UIViewRepresentable {
         ) {
             guard let container = cardContainer, !morphing, !model.expanded, model.expansion < 0.02 else { return }
             guard !pillFrameCommitted else { return }
-            var pill = fittedPill(model.pillRect, bar: nav.navigationBar)
+            let pill = fittedPill(model.pillRect, bar: nav.navigationBar)
             let previous = container.frame
             guard abs(pill.width - previous.width) > 1
                 || abs(pill.height - previous.height) > 1
