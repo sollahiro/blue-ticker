@@ -228,33 +228,6 @@ private struct WatchToastView: View {
     }
 }
 
-/// チャットの入口。HIG のシートでハーフから開く。チャット本体は未実装。
-private struct CompanyChatSheet: View {
-    var company: CompanyRef
-    @Environment(\.dismiss) private var dismiss
-
-    var body: some View {
-        NavigationStack {
-            ContentUnavailableView {
-                Label("チャットは準備中です", systemImage: "text.bubble")
-            } description: {
-                Text("\(Format.displayName(company.name, fallback: company.code))について質問できるようになる予定です。")
-            }
-            .navigationTitle("チャット")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("閉じる", systemImage: "xmark", role: .close) {
-                        dismiss()
-                    }
-                }
-            }
-        }
-        .presentationDetents([.medium, .large])
-        .presentationDragIndicator(.visible)
-    }
-}
-
 struct TickerStubView: View {
     var title: String
     var detail: String
