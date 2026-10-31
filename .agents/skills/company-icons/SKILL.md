@@ -26,7 +26,7 @@ App Icon は対象外。1社1枚。
 
 最初に `.agents/skills/company-icons/SKILL.md` を全文読む。禁止事項・候補出し・GO・R2・ingest・自己修正はそこが正本。
 
-やる: 毎ランは listed×`company_icons` の格納済み全件をトンボ計測し、low_vis / lockup / low_res（公式の大きいソースがあるもの。バッチ最大 20）を機械的に列挙してから、公式 HTTPS を manualSources に足す（Git はテキストのみ）。公式が無く外部だけなら外部 URL は Git 禁止、実 GET → R2 → CDN URL のみ。テスト 1:1。Ready PR。マージ後この CA が WRITE icons ingest。スキップ台帳を更新。ランで見つかった手順の穴はこの skill を直して同じ PR（または直後の PR）に含める。
+やる: 毎ランは listed×`company_icons` の格納済み全件をトンボ計測し、low_vis / lockup / low_res（公式の大きいソースがあるもの。バッチ最大 50）を機械的に列挙してから、公式 HTTPS を manualSources に足す（Git はテキストのみ）。公式が無く外部だけなら外部 URL は Git 禁止、実 GET → R2 → CDN URL のみ。テスト 1:1。Ready PR。マージ後この CA が WRITE icons ingest。スキップ台帳を更新。ランで見つかった手順の穴はこの skill を直して同じ PR（または直後の PR）に含める。
 
 やらない: PR Times 等をマップ／テストに書く、画像バイナリを Git へ、Core への画像パイプライン、icons-vN バンプ、TLS 弱体化、無関係リファクタ、明示のない Linear コメント、明示のない既存 URL 変更、Icon Clerk へ渡す。
 
@@ -90,7 +90,7 @@ icons weekly 専用。次の **5 条件がすべて揃ったときだけ**、Aut
 
 - Neon は本番（WRITE と同系統）を直接読む。RO ブランチは使わない
 - 候補: listed × `company_icons` 欠行、**格納済み全件のトンボ計測**（次節）、ingest 失敗ログ
-- 欠測ピンに件数上限は無い（PR が巨大なら分割してよい）。`low_res` 差し替えは毎ラン **最大 20**（後述）
+- 欠測ピンに件数上限は無い（PR が巨大なら分割してよい）。`low_res` 差し替えは毎ラン **最大 50**（後述）
 - main の `manualSources` キーとスキップ台帳を先に読み、重複させない
 
 ## 候補
@@ -109,7 +109,7 @@ icons weekly 専用。次の **5 条件がすべて揃ったときだけ**、Aut
 | **(b) `lockup`** | シンボルマーク＋ワードマーク／社名のロックアップで、フィット後の **短辺 &lt; 70%**（3539 型: 長辺 79%・高さ 34%） | シンボルだけを連結成分マスクで分離し 512 白地へ。**分離できるシンボルが無い純ワードマーク**（花王 4452、KEIO 9008）は長辺 80–88% なら短辺が小さくても候補にしない |
 | **(c) `low_res`** | 識別できるが格納 min 辺 **&lt; 128px**（2802 48px、2871/7963 32px ICO）**かつ** 公式に大きいマークがある（apple-touch 180+、header SVG/PNG、OGP のシンボル） | その公式ソースから 512。大きい公式ソースが無ければ引き伸ばさない。台帳 `low_res_no_source` |
 
-`(c)` は約 2000 件。毎ランは台帳・既存ピン・`awaiting_go` を飛ばし、**min 辺が小さい順 → 長辺 % が低い順**で最大 **20** 社。提案した code は台帳 `awaiting_go`、ソース無しは `low_res_no_source`。次ランが同じ 20 を繰り返さない。
+`(c)` は約 2000 件。毎ランは台帳・既存ピン・`awaiting_go` を飛ばし、**min 辺が小さい順 → 長辺 % が低い順**で最大 **50** 社。提案した code は台帳 `awaiting_go`、ソース無しは `low_res_no_source`。次ランが同じ 50 を繰り返さない。
 
 ### トンボ全件スキャン（毎ラン）
 
@@ -318,14 +318,14 @@ DATABASE_URL="$BLT_NEON_WRITE_DATABASE_URL" ./.build/release/blt-ingest ingest -
 - **却下後のマークのみ。** ワードマーク付き After が却下されたら公式高解像からマークだけを切り、`review/` に新しい After を置きその code だけ再 webhook。マップは次の GO まで入れない
 - **横長の測り方。** 低視認は中央クロップではなくトンボ（aspect-fit → 背景差 30 の外接長辺）。長辺 70% 未満が (a)。シンボル＋社名で短辺 70% 未満が (b) lockup（3539）。純ワードマーク（花王 4452、KEIO 9008）は長辺 80–88% なら短辺が小さくても候補にしない。After は 512 白地の長辺 80–88%（目安 85%）
 - **トンボ全件スキャン。** 欠測リストだけ見ると (a) padding（4075 60%）と (c) low_res を落とす。毎ラン listed×`company_icons` を測る。Pillow は SVG を開けないので `rsvg-convert`
-- **low_res バッチ。** min 辺 128px 未満は約 2000 件。公式の大きいソースがあるものだけ候補。無ければ台帳 `low_res_no_source`、引き伸ばさない。毎ラン 20 社（min 辺 → 長辺 %）。台帳・ピン・`awaiting_go` を飛ばし、処理済みを台帳に書いて繰り返さない
+- **low_res バッチ。** min 辺 128px 未満は約 2000 件。公式の大きいソースがあるものだけ候補。無ければ台帳 `low_res_no_source`、引き伸ばさない。毎ラン 50 社（min 辺 → 長辺 %）。台帳・ピン・`awaiting_go` を飛ばし、処理済みを台帳に書いて繰り返さない
 - **GO 条件付きクロップ。** 差し替え GO がマーク座標を条件にするときは再 webhook しない。指定矩形で切り、CDN マップして差し替え PR に入れる
 - **GO 後の公式 URL 再取得。** 非 ASCII パスは percent-encode してから GET。公式 HTML 上の Wix / GCS apple-touch は first-party。GO 済みで origin が 403 / TLS 不能なら After を CDN マップする
 - **Pronexus × imageURL。** `pronexusDisclosureHomepages` と `manualSources` の homepageOrigin は重ねない。GO 済み imageURL は Pronexus 16 社にも載せてよい（ingest は imageURL、origin リマップは Pronexus マップ）
 
 ## 完了条件
 
-- [ ] 本番 DB から listed×`company_icons` を読み、格納済み全件をトンボ計測した（(a) low_vis / (b) lockup / (c) low_res を列挙。測るときは台帳・ピンを外さない。low_res 提案は最大 20）
+- [ ] 本番 DB から listed×`company_icons` を読み、格納済み全件をトンボ計測した（(a) low_vis / (b) lockup / (c) low_res を列挙。測るときは台帳・ピンを外さない。low_res 提案は最大 50）
 - [ ] 欠測・ピン提案は台帳と既存マップを除外済み
 - [ ] 新規ピンは実 GET + マジックバイト + 視認性ゲート合格（この CA から取れる URL、または CDN）
 - [ ] ピンした実画像を **全て** Before/After でチャットに見せている（製品ブランドに限らない。欠測の Before は未格納。GO は差し替えのみ）。PR にはロゴなしガイド + 数値のみ
