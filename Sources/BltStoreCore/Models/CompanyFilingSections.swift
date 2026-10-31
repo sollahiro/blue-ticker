@@ -47,7 +47,7 @@ package final class CompanyFilingSections: Model, @unchecked Sendable {
 }
 
 /// 最新書類の選択用の軽量射影（`payload` の JSONB を転送しない）。
-/// filing-content の doc_id 省略経路で候補を選ぶのに使い、ペイロードは選んだ 1 行だけ読む（BLT-201）。
+/// filing-content の doc_id 省略経路で候補を選ぶのに使い、ペイロードは選んだ 1 行だけ読む。
 package final class CompanyFilingSectionsSelectionOnly: Model, @unchecked Sendable {
     package static let schema = CompanyFilingSections.schema
 

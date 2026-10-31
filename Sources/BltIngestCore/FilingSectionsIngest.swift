@@ -115,7 +115,7 @@ func runFilingSectionsIngest(
             )
             break
         }
-        // 存在確認と skip 判定は軽量射影で行い、ペイロードは読まない（BLT-200）。
+        // 存在確認と skip 判定は軽量射影で行い、ペイロードは読まない。
         let existing = try await withDbRetry(
             logger: logger, context: "docID=\(cand.docID)", onRetry: { unhealthyRetries += 1 }
         ) {
@@ -285,7 +285,7 @@ func filingSectionCandidates(
 /// 抽出済みセクションを company_filing_sections へ書き込む（既存行があれば更新、無ければ作成）。
 ///
 /// 既存行の更新ではペイロードを読まない。ペイロードは DB 側で比較し（Postgres の jsonb は
-/// キー順に依らない等値）、内容が変わったときだけ書く。同じなら TOAST を書き直さない（BLT-200）。
+/// キー順に依らない等値）、内容が変わったときだけ書く。同じなら TOAST を書き直さない。
 /// 版（cache_version / section_keys）と updated_at は内容が同じでも必ず進める
 /// （進めないと毎回 stale と判定されて再抽出が続く）。updated_at は「最後に確認した時刻」になる。
 func storeCompanyFilingSections(

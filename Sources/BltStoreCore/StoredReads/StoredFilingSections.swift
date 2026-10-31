@@ -26,7 +26,7 @@ package func loadStoredFilingSections(
     } else {
         // 最新会社有報（提出日時降順のうち、read 床以上・会社開示府令の先頭）。
         // 床判定は SQL では表現しにくいため code 単位で候補を取ってから選ぶ（社あたり直近数件）。
-        // 候補はペイロード無しの軽量射影で取り、ペイロードは選んだ 1 行だけ読む（BLT-201）。
+        // 候補はペイロード無しの軽量射影で取り、ペイロードは選んだ 1 行だけ読む。
         // 同時刻の並びを決めるため doc_id 降順を第 2 キーにする。
         let candidates = try await CompanyFilingSectionsSelectionOnly.query(on: db)
             .filter(\.$code == code4)

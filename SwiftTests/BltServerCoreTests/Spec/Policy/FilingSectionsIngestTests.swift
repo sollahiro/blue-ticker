@@ -289,7 +289,7 @@ private let keys = "business_risks,mda,segments"
         }
     }
 
-    /// 版だけ古く内容が同じ書類は、ペイロードを書かなくても版が現行に進み、次の回は skip される（BLT-200）。
+    /// 版だけ古く内容が同じ書類は、ペイロードを書かなくても版が現行に進み、次の回は skip される。
     @Test func ingestAdvancesVersionWhenPayloadUnchangedAndSkipsNextRun() async throws {
         try await withMigratedApp { app in
             try await seedDoc("S1", secCode: "72030", db: app.db)
@@ -487,7 +487,7 @@ private let keys = "business_risks,mda,segments"
         }
     }
 
-    /// 提出日時が同じ書類が複数あるときは doc_id 降順の先頭を選ぶ（BLT-201 で並びを決定的にした）。
+    /// 提出日時が同じ書類が複数あるときは doc_id 降順の先頭を選ぶ。
     @Test func loadByCodeBreaksSubmitTimeTieByDocIdDescending() async throws {
         try await withMigratedApp { app in
             try await seedStored(
