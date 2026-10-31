@@ -117,18 +117,31 @@ func rebuildScreenIndex(
     if reachedLimit {
         return ScreenRebuildSummary(scanned: scanned, indexed: indexed, removed: removed)
     }
-    let candidates = try await ScreenIndexCodeOnly.query(on: db).all().compactMap(\.id).filter {
-        !seen.contains($0)
-    }
-    if !candidates.isEmpty {
-        let present = Set(
-            try await CompanyFinancialsCacheVersionOnly.query(on: db).filter(\.$id ~~ candidates).all()
-                .compactMap(\.id))
-        let orphans = candidates.filter { !present.contains($0) }
-        if !orphans.isEmpty {
-            try await ScreenIndex.query(on: db).filter(\.$id ~~ orphans).delete()
-            removed += orphans.count
+    // 孤児の掃除も screen_index を code 昇順の keyset ページで読む（全件 `.all()` しない）。
+    var afterIndexCode: String? = nil
+    while true {
+        let last = afterIndexCode
+        let page = try await withDbRetry(
+            logger: logger, context: "screen-rebuild orphans after=\(last ?? "")"
+        ) {
+            var query = ScreenIndexCodeOnly.query(on: db).sort(\.$id)
+            if let last { query = query.filter(\.$id > last) }
+            return try await query.limit(pageSize).all()
         }
+        if page.isEmpty { break }
+        let candidates = page.compactMap(\.id).filter { !seen.contains($0) }
+        if !candidates.isEmpty {
+            let present = Set(
+                try await CompanyFinancialsCacheVersionOnly.query(on: db).filter(\.$id ~~ candidates)
+                    .all().compactMap(\.id))
+            let orphans = candidates.filter { !present.contains($0) }
+            if !orphans.isEmpty {
+                try await ScreenIndex.query(on: db).filter(\.$id ~~ orphans).delete()
+                removed += orphans.count
+            }
+        }
+        afterIndexCode = page.last?.id
+        if page.count < pageSize { break }
     }
     return ScreenRebuildSummary(scanned: scanned, indexed: indexed, removed: removed)
 }
