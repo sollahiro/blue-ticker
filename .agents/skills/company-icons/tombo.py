@@ -9,8 +9,9 @@ long side as a fraction of the square.
   python3 tombo.py ICON.png --overlay /tmp/icon-tombo.png
 
 Below 70% = 低視認. After images should land at 80–88% (target 85%).
-Overlay (optional) is a review PNG: red dashed 70%, green dashed 85%, blue bbox.
-Do not commit overlay PNGs or icon binaries.
+Overlay (optional) is a local / chat review PNG: red dashed 70%, green dashed 85%,
+blue bbox. Do not commit overlay PNGs or icon binaries. Do not post overlays or
+company logos on PRs or PR comments; PRs use the logo-free size guide plus numbers.
 """
 from __future__ import annotations
 
@@ -142,7 +143,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--overlay",
         type=Path,
-        help="Write overlay PNG. One input: this file. Several: this directory.",
+        help="Write overlay PNG for local/chat review only (not for PRs). One input: this file. Several: this directory.",
     )
     args = parser.parse_args(argv)
 

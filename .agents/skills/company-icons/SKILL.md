@@ -62,6 +62,7 @@ visual GO = ユーザー。merge = 通常は Maintainer risk GO のあと CA が
 - Icon Clerk へのハンドオフ
 - Wayback / アーカイブ URL をマップに書く
 - コードの発明。実在する証券コードだけ
+- PR 本文・PR コメントに会社ロゴを埋め込む・描画する（トンボ重ねを含む）
 
 ## 権限（visual GO / merge / WRITE）
 
@@ -136,7 +137,7 @@ visual GO でワードマーク／社名ロックアップが却下されマー�
 
 縦長／細いマークは **高さ** を 85% に、横長ワードマークは **幅** を 85% に合わせる。引き伸ばさない。ワードマークからマークだけを切り出すときは矩形クロップせず、マークの連結成分をマスクする（隣の字形が混入しない）。計測とオーバーレイは `.agents/skills/company-icons/tombo.py`（入力パス → 長辺 % を印字。`--overlay` で一時 PNG。オーバーレイもアイコン本体も Git に載せない）。
 
-Before/After レビューにはトンボ重ねを付ける。赤点線 70%、緑点線 85%、青枠がマーク外接。ラベルは HTML テキスト。アイコン本体に文字を焼き込まない。
+ロゴ入りトンボ重ねはローカル／チャット専用。PR 本文・PR コメントには会社ロゴを埋め込まない・描画しない。載せるのはロゴなしサイズガイド（`$BLT_R2_PUBLIC_BASE_URL/company-icons/review/guide/tombo_guide.png`。赤点線 70%、緑点線 85%）と計測値のテキストだけ。
 
 ### OGP 横長
 
@@ -179,6 +180,7 @@ Wayback は **バイト取得の代用** であってマップ値ではない。
 
 - キー: `company-icons/{code}.*`。秘密は既存 `BLT_R2_*`
 - 差し替えの Before/After 仮置きは `company-icons/review/{date}/{code}-before|after.*`。本番キーは GO 前に上書きしない
+- PR 用のロゴなしサイズガイドは `company-icons/review/guide/tombo_guide.png`（会社キーではない。Git にバイナリを載せない）
 - 無い／入らない場合は止めて報告。新しい CLI フラグや恒常スクリプトを足さない
 - バイトを先に持っている（添付・Wayback・ワンオフ PNG）ときは既存 R2 経路で PUT してよい。その後 **マップを CDN にして** `blt-ingest ingest --stages icons --codes` で DB 行を書く
 - SQL で `company_icons` を upsert しない（ingest の skip / source_url 照合から外れる）
@@ -190,7 +192,7 @@ Wayback は **バイト取得の代用** であってマップ値ではない。
 - `SwiftTests/BlueTickerTests/Spec/Policy/CompanyIconOriginOverrideTests.swift`（1:1）
 - `docs/icons-manual-skips.md`
 - 必要なら **この SKILL**（自己修正）と `.agents/skills/company-icons/tombo.py`
-- `tombo.py` は計測 CLI。オーバーレイ PNG は一時出力のみで commit しない
+- `tombo.py` は計測 CLI。オーバーレイ PNG は一時出力のみで commit しない。PR にオーバーレイを貼らない
 - cache ラベルは ingest 側 `icons-manual`。`companyIconsCacheVersion` は触らない
 - Cloud: `-Xswiftc -disable-upcoming-feature -Xswiftc MemberImportVisibility`
 - `swift test --filter CompanyIconOriginOverrideTests`
@@ -201,7 +203,7 @@ Wayback は **バイト取得の代用** であってマップ値ではない。
 
 短い現状を出す（GO 待ちの差し替えと欠測を混ぜない）:
 
-- 欠測ピン: code とソース種別（公式 URL / CDN）。visual GO 不要。**マップする画像は製品ブランドに限らず全て Before/After で見せる**（欠測の Before は未格納）。ラベルは HTML の UTF-8 テキスト、画像はアイコン本体のみ（焼き込み禁止）
+- 欠測ピン: code とソース種別（公式 URL / CDN）。visual GO 不要。**チャットでは**マップする画像を製品ブランドに限らず全て Before/After で見せる（欠測の Before は未格納）。PR にはロゴを載せない（次節）
 - 差し替え: ユーザー visual GO 済みだけ。未 GO は Before/After のみでマップに入れない
 - ingest はマージ後。未マージで WRITE しない
 - 差し替えと欠測を同じ Ready PR に載せない
@@ -214,7 +216,7 @@ Wayback は **バイト取得の代用** であってマップ値ではない。
 - 差し替えと欠測を混ぜていないこと。差し替えは記録済みユーザー visual GO のみ
 - `--codes` に **新規ピン + キャッチアップ**（マップにあるが欠行、または `icons-manual` であるべきのに古い `icons-vN`）
 - ピンした code → マップ値（公式 or CDN）。外部元 URL は PR 本文にも書かない
-- マップする画像は **全て** Before/After でユーザーに見せる。差し替えはトンボ重ね（赤 70% / 緑 85% / 青 bbox）を付ける。ラベルは HTML テキスト、Git にはバイナリを載せない
+- チャット／ローカルではマップする画像を **全て** Before/After で見せてよい（差し替えはトンボ重ね可）。**PR 本文・PR コメントには会社ロゴを埋め込まない・描画しない。** 載せるのはロゴなしサイズガイド（CDN）と計測値のテキストだけ。Git にはバイナリを載せない
 - スキップした code と理由
 - 外部／添付／TLS 回避で R2 したものはオブジェクトキー
 - このランで skill を直したらその要約
@@ -277,6 +279,7 @@ DATABASE_URL="$BLT_NEON_WRITE_DATABASE_URL" ./.build/release/blt-ingest ingest -
 - **Jetpack CDN。** 公式 WP 画像のミラー。同一パスの first-party が GET できるならそちらをマップする
 - **自社製品／コンシューマサイト。** 同一上場会社のサービス origin はコーポレートが timeout / 低視認のとき採用してよい（7203 / 581A / 9445 型）。別法人ホストは禁止のまま
 - **Before/After。** ラベルは HTML の UTF-8。アイコン画像に文字を焼き込まない（ビューア側のフォントで豆腐になる）
+- **PR にロゴを載せない。** 会社ロゴやロゴ入りトンボ重ねはローカル／チャット専用。PR はロゴなしガイド + 数値。GitHub の編集履歴に旧画像が残ることがあるので、載せる前に止める
 - **単色矩形。** apple-touch / favicon が塗りつぶしだけの PNG は会社マークではない（広済堂HD・アグレ型）
 - **株探。** 「会社サイト」列は origin 発見用。マップにもテストにも株探 URL を書かない
 - **英数字コード。** 株探の `?code=` に無い。公式 origin は Web 検索
