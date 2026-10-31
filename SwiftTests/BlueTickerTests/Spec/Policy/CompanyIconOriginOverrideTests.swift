@@ -1043,7 +1043,7 @@ import Testing
     /// 603A: 欠行。先頭 rel=icon が 16.jpg のため公式 apple-touch 256.jpg。
 
     /// 2026-10-31 weekly: listed × company_icons 欠行。Sorahiro visual GO 24 社。
-    /// 全 24 を 512 白地・長辺 80% aspect-fit（フレーム端まで埋まるため）。NG 106 は台帳 visual_ng_20261031。
+    /// 全 24 をサークルセーフ（512 白地、四隅が内接円内。正方形 70%）。NG 106 は台帳 visual_ng_20261031。
     @Test func pins20261031WeeklyMissingListedManualImageURLs() {
         let expected: [(String, String)] = [
             ("1429", "https://icons.sollahiro.com/company-icons/1429.png"), // pragma: allowlist secret

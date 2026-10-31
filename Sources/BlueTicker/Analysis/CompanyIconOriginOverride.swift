@@ -731,31 +731,31 @@ enum CompanyIconOriginOverride {
         "9978": .imageURL("https://www.bunkyodo.co.jp/wp-content/uploads/2021/10/cropped-favicon_512x512-180x180.jpg"),
         "9984": .imageURL("https://group.softbank/sites/default/files/assets/img/logo-group-square.png"),
         // 2026-10-31 weekly missing: listed × company_icons 欠行。Sorahiro visual GO 24 社。
-        // フレーム端まで埋まるとクリップするため、全 24 を 512 白地・長辺 80% aspect-fit（中身はそのまま）。NG 106 は台帳 visual_ng_20261031。
-        "1429": .imageURL("https://icons.sollahiro.com/company-icons/1429.png"), // R2 CDN 80% frame 512 // pragma: allowlist secret
-        "1897": .imageURL("https://icons.sollahiro.com/company-icons/1897.png"), // R2 CDN 80% frame 512 // pragma: allowlist secret
-        "2003": .imageURL("https://icons.sollahiro.com/company-icons/2003.png"), // R2 CDN 80% frame 512 // pragma: allowlist secret
-        "2207": .imageURL("https://icons.sollahiro.com/company-icons/2207.png"), // R2 CDN 80% frame 512 // pragma: allowlist secret
-        "2215": .imageURL("https://icons.sollahiro.com/company-icons/2215.png"), // R2 CDN 80% frame 512 // pragma: allowlist secret
-        "2652": .imageURL("https://icons.sollahiro.com/company-icons/2652.png"), // R2 CDN 80% frame 512 // pragma: allowlist secret
-        "3059": .imageURL("https://icons.sollahiro.com/company-icons/3059.png"), // R2 CDN 80% frame 512 // pragma: allowlist secret
-        "3675": .imageURL("https://icons.sollahiro.com/company-icons/3675.png"), // R2 CDN 80% frame 512 // pragma: allowlist secret
-        "3803": .imageURL("https://icons.sollahiro.com/company-icons/3803.png"), // R2 CDN 80% frame 512 // pragma: allowlist secret
-        "3927": .imageURL("https://icons.sollahiro.com/company-icons/3927.png"), // R2 CDN 80% frame 512 // pragma: allowlist secret
-        "3989": .imageURL("https://icons.sollahiro.com/company-icons/3989.png"), // R2 CDN 80% frame 512 // pragma: allowlist secret
-        "4172": .imageURL("https://icons.sollahiro.com/company-icons/4172.png"), // R2 CDN 80% frame 512 // pragma: allowlist secret
-        "4390": .imageURL("https://icons.sollahiro.com/company-icons/4390.png"), // R2 CDN 80% frame 512 // pragma: allowlist secret
-        "4478": .imageURL("https://icons.sollahiro.com/company-icons/4478.png"), // R2 CDN 80% frame 512 // pragma: allowlist secret
-        "4597": .imageURL("https://icons.sollahiro.com/company-icons/4597.png"), // R2 CDN 80% frame 512 // pragma: allowlist secret
-        "5204": .imageURL("https://icons.sollahiro.com/company-icons/5204.png"), // R2 CDN 80% frame 512 // pragma: allowlist secret
-        "5355": .imageURL("https://icons.sollahiro.com/company-icons/5355.png"), // R2 CDN 80% frame 512 // pragma: allowlist secret
-        "5537": .imageURL("https://icons.sollahiro.com/company-icons/5537.png"), // R2 CDN 80% frame 512 // pragma: allowlist secret
-        "5985": .imageURL("https://icons.sollahiro.com/company-icons/5985.png"), // R2 CDN 80% frame 512 // pragma: allowlist secret
-        "6279": .imageURL("https://icons.sollahiro.com/company-icons/6279.png"), // R2 CDN 80% frame 512 // pragma: allowlist secret
-        "6337": .imageURL("https://icons.sollahiro.com/company-icons/6337.png"), // R2 CDN 80% frame 512 // pragma: allowlist secret
-        "8071": .imageURL("https://icons.sollahiro.com/company-icons/8071.png"), // R2 CDN 80% frame 512 // pragma: allowlist secret
-        "8747": .imageURL("https://icons.sollahiro.com/company-icons/8747.png"), // R2 CDN 80% frame 512 // pragma: allowlist secret
-        "9322": .imageURL("https://icons.sollahiro.com/company-icons/9322.png"), // R2 CDN 80% frame 512 // pragma: allowlist secret
+        // サークルセーフ: 512 白地中央、四隅が内接円内。L=min(0.85, 1/sqrt(1+1/a^2))、正方形は 70%。NG 106 は台帳 visual_ng_20261031。
+        "1429": .imageURL("https://icons.sollahiro.com/company-icons/1429.png"), // R2 CDN circle-safe 512 // pragma: allowlist secret
+        "1897": .imageURL("https://icons.sollahiro.com/company-icons/1897.png"), // R2 CDN circle-safe 512 // pragma: allowlist secret
+        "2003": .imageURL("https://icons.sollahiro.com/company-icons/2003.png"), // R2 CDN circle-safe 512 // pragma: allowlist secret
+        "2207": .imageURL("https://icons.sollahiro.com/company-icons/2207.png"), // R2 CDN circle-safe 512 // pragma: allowlist secret
+        "2215": .imageURL("https://icons.sollahiro.com/company-icons/2215.png"), // R2 CDN circle-safe 512 // pragma: allowlist secret
+        "2652": .imageURL("https://icons.sollahiro.com/company-icons/2652.png"), // R2 CDN circle-safe 512 // pragma: allowlist secret
+        "3059": .imageURL("https://icons.sollahiro.com/company-icons/3059.png"), // R2 CDN circle-safe 512 // pragma: allowlist secret
+        "3675": .imageURL("https://icons.sollahiro.com/company-icons/3675.png"), // R2 CDN circle-safe 512 // pragma: allowlist secret
+        "3803": .imageURL("https://icons.sollahiro.com/company-icons/3803.png"), // R2 CDN circle-safe 512 // pragma: allowlist secret
+        "3927": .imageURL("https://icons.sollahiro.com/company-icons/3927.png"), // R2 CDN circle-safe 512 // pragma: allowlist secret
+        "3989": .imageURL("https://icons.sollahiro.com/company-icons/3989.png"), // R2 CDN circle-safe 512 // pragma: allowlist secret
+        "4172": .imageURL("https://icons.sollahiro.com/company-icons/4172.png"), // R2 CDN circle-safe 512 // pragma: allowlist secret
+        "4390": .imageURL("https://icons.sollahiro.com/company-icons/4390.png"), // R2 CDN circle-safe 512 // pragma: allowlist secret
+        "4478": .imageURL("https://icons.sollahiro.com/company-icons/4478.png"), // R2 CDN circle-safe 512 // pragma: allowlist secret
+        "4597": .imageURL("https://icons.sollahiro.com/company-icons/4597.png"), // R2 CDN circle-safe 512 // pragma: allowlist secret
+        "5204": .imageURL("https://icons.sollahiro.com/company-icons/5204.png"), // R2 CDN circle-safe 512 // pragma: allowlist secret
+        "5355": .imageURL("https://icons.sollahiro.com/company-icons/5355.png"), // R2 CDN circle-safe 512 // pragma: allowlist secret
+        "5537": .imageURL("https://icons.sollahiro.com/company-icons/5537.png"), // R2 CDN circle-safe 512 // pragma: allowlist secret
+        "5985": .imageURL("https://icons.sollahiro.com/company-icons/5985.png"), // R2 CDN circle-safe 512 // pragma: allowlist secret
+        "6279": .imageURL("https://icons.sollahiro.com/company-icons/6279.png"), // R2 CDN circle-safe 512 // pragma: allowlist secret
+        "6337": .imageURL("https://icons.sollahiro.com/company-icons/6337.png"), // R2 CDN circle-safe 512 // pragma: allowlist secret
+        "8071": .imageURL("https://icons.sollahiro.com/company-icons/8071.png"), // R2 CDN circle-safe 512 // pragma: allowlist secret
+        "8747": .imageURL("https://icons.sollahiro.com/company-icons/8747.png"), // R2 CDN circle-safe 512 // pragma: allowlist secret
+        "9322": .imageURL("https://icons.sollahiro.com/company-icons/9322.png"), // R2 CDN circle-safe 512 // pragma: allowlist secret
     ]
 
     static func manualSource(for code: String) -> CompanyIconManualSource? {
