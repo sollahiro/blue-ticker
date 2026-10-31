@@ -31,6 +31,9 @@ struct RootView: View {
         .preferredColorScheme(.dark)
         .tint(Theme.accent)
         .toolbarBackground(.hidden, for: .tabBar)
+        // 下へスクロールするとタブバーを丸く縮めて端へ寄せる。画面ごとに切り替えると、
+        // 戻り終わりで縮んだバーがアニメーションなしで戻るので、全画面で同じにする。
+        .tabBarMinimizeBehavior(.onScrollDown)
         .task(id: watched.map(\.code).joined(separator: ",")) {
             let codes = Array(Set(watched.map(\.code)))
             await APIClient.shared.setPinnedCodes(Set(codes))
