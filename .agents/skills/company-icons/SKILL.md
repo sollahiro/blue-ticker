@@ -299,7 +299,7 @@ DATABASE_URL="$BLT_NEON_WRITE_DATABASE_URL" ./.build/release/blt-ingest ingest -
 
 - [ ] 本番 DB から候補を取り、台帳と既存マップを除外済み
 - [ ] 新規ピンは実 GET + マジックバイト + 視認性ゲート合格（この CA から取れる URL、または CDN）
-- [ ] ピンした実画像を **全て** Before/After でユーザーに見せている（製品ブランドに限らない。欠測の Before は未格納。GO は差し替えのみ）
+- [ ] ピンした実画像を **全て** Before/After でチャットに見せている（製品ブランドに限らない。欠測の Before は未格納。GO は差し替えのみ）。PR にはロゴなしガイド + 数値のみ
 - [ ] 差し替えは Before/After とユーザー visual GO 済み（未 GO は含めない。欠測と混ぜない）
 - [ ] 外部由来は Git に外部 URL なし、R2 + CDN のみ
 - [ ] テスト緑、Ready PR、事前確認を出している
