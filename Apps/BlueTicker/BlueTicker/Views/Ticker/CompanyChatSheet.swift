@@ -257,6 +257,19 @@ private struct ChatBubble: View {
     var message: CompanyChatModel.Message
 
     var body: some View {
+        VStack(alignment: message.role == .user ? .trailing : .leading, spacing: 4) {
+            bubble
+            if !message.references.isEmpty {
+                Label("参照: " + message.references.joined(separator: "、"), systemImage: "doc.text.magnifyingglass")
+                    .font(.caption)
+                    .foregroundStyle(Theme.textMuted)
+                    .padding(.horizontal, 6)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: message.role == .user ? .trailing : .leading)
+    }
+
+    private var bubble: some View {
         HStack {
             if message.role == .user { Spacer(minLength: 48) }
             Group {
@@ -314,6 +327,7 @@ struct FinancialYearTool: Tool {
     let name = "getFinancialYear"
     let description = "指定した決算期の売上高・営業利益・営業利益率・純利益・ROE・ROIC・従業員数と、前期からの変化の要因を返す"
     let facts: ChatFacts
+    let log: ToolCallLog
 
     @Generable
     struct Arguments {
@@ -322,7 +336,31 @@ struct FinancialYearTool: Tool {
     }
 
     func call(arguments: Arguments) async throws -> String {
-        facts.yearDetail(fiscalYear: arguments.fiscalYear)
+        let year = arguments.fiscalYear
+        let period = facts.years.last { $0.fiscalYear == year }.map { ChatFacts.periodLabel($0.fyEnd) }
+        log.append(period.map { "\($0)の財務データ" } ?? "\(year)年の財務データ（該当なし）")
+        return facts.yearDetail(fiscalYear: year)
+    }
+}
+
+/// ツールが呼ばれた記録。回答の下に「参照」として出し、端末内で答えたのかを確かめられるようにする。
+final class ToolCallLog: @unchecked Sendable {
+    private let lock = NSLock()
+    private var entries: [String] = []
+
+    func append(_ entry: String) {
+        lock.lock()
+        defer { lock.unlock() }
+        entries.append(entry)
+    }
+
+    /// 溜まった記録を取り出して空にする。
+    func drain() -> [String] {
+        lock.lock()
+        defer { lock.unlock() }
+        let drained = entries
+        entries.removeAll()
+        return drained
     }
 }
 
@@ -339,6 +377,8 @@ final class CompanyChatModel {
         var role: Role
         var text: String
         var failed = false
+        /// この回答のためにツールで参照したもの。
+        var references: [String] = []
     }
 
     let company: CompanyRef
@@ -358,6 +398,7 @@ final class CompanyChatModel {
 
     private var apiOverview = ""
     private var session: LanguageModelSession?
+    private let toolLog = ToolCallLog()
     private var exchanges: [ChatContext.Exchange] = []
     private var started = false
 
@@ -418,12 +459,15 @@ final class CompanyChatModel {
     ) async throws -> String {
         let session = self.session ?? makeSession(facts: facts, carry: nil)
         self.session = session
+        _ = toolLog.drain()
         do {
             var latest = ""
             for try await snapshot in session.streamResponse(to: question) {
                 latest = snapshot.content
                 messages[index].text = latest
             }
+            var seen = Set<String>()
+            messages[index].references = toolLog.drain().filter { seen.insert($0).inserted }
             return latest
         } catch let error as LanguageModelSession.GenerationError {
             guard retryOnOverflow, case .exceededContextWindowSize = error else { throw error }
@@ -475,7 +519,7 @@ final class CompanyChatModel {
             text += "\n\nこれまでのやりとり（抜粋）:\n" + carry
         }
         let instructions = text
-        return LanguageModelSession(tools: [FinancialYearTool(facts: facts)]) {
+        return LanguageModelSession(tools: [FinancialYearTool(facts: facts, log: toolLog)]) {
             instructions
         }
     }
