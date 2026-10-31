@@ -93,6 +93,8 @@ enum CompanyIconOriginOverride {
     /// のワンオフ 512 白地を R2 CDN へ（公式の横長 OGP は残さない）。
     /// 2026-10-31: 3723 日本ファルコム F マーク / 9008 京王電鉄ワードマーク。Sorahiro visual GO
     /// のワンオフ 512 白地を R2 CDN へ（公式 URL は ingest 不能。本番キーへ先置き）。
+    /// 2026-10-31: 2802 / 2871 / 3539 / 4075 / 7963 / 9240。Sorahiro visual GO の
+    /// ワンオフ 512 白地を R2 CDN へ（本番キーへ先置き。ingest は CDN sha 一致後）。
     static let manualSources: [String: CompanyIconManualSource] = [
         "7203": .homepageOrigin("https://toyota.jp"),
         "9267": .homepageOrigin("https://www.genky.co.jp"),
@@ -153,7 +155,7 @@ enum CompanyIconOriginOverride {
         "3036": .imageURL("https://www.alconix.com/assets/img/ogimage.png"),
         "6966": .imageURL("https://www.mitsui-high-tec.com/common/img/ogp.jpg"),
         "9470": .imageURL("https://www.gakken.co.jp/ja/ogpImage/OGP_GHDcorp.png"),
-        "3539": .imageURL("https://jm-holdings.co.jp/img/ogp.jpg"),
+        "3539": .imageURL("https://icons.sollahiro.com/company-icons/3539.png"), // R2 CDN Jm mark 512 // pragma: allowlist secret
         "2767": .imageURL(
             "https://www.tsuburaya-fields.co.jp/newscms/wp-content/themes/tsuburaya/assets/img/ogp.png"),
         "2146": .imageURL("https://www.ut-g.co.jp/assets/img/common/ogp/ogp.png"),
@@ -501,7 +503,9 @@ enum CompanyIconOriginOverride {
         "2656": .imageURL("https://corp.vector.co.jp/wp-content/uploads/2023/03/cropped-vector_favicon-180x180.png"),
         "2735": .imageURL("https://www.watts-jp.com/wp-content/uploads/2025/08/cropped-%E3%81%B5%E3%81%81%E3%81%B30826%E5%AE%9A-2-01-180x180.png"),
         "2750": .imageURL("https://www.ishimitsu.co.jp/wp-content/uploads/2019/06/cropped-logo_mark-1-180x180.png"),
+        "2802": .imageURL("https://icons.sollahiro.com/company-icons/2802.png"), // R2 CDN Aj mark 512 // pragma: allowlist secret
         "2813": .imageURL("https://www.wakoushokuhin.co.jp/wp01/wp-content/uploads/2019/02/cropped-logo-180x180.png"),
+        "2871": .imageURL("https://icons.sollahiro.com/company-icons/2871.png"), // R2 CDN N mark 512 // pragma: allowlist secret
         "2884": .imageURL("https://www.y-food-h.com/wp-content/uploads/2021/11/cropped-apple-touch-icon-180x180.png"),
         "2901": .imageURL("https://ishigakifoods.co.jp/wp-content/uploads/2026/03/cropped-ishigaki-favicon-512-180x180.png"),
         "2926": .imageURL("https://shinozakiya.com/wp-content/uploads/2020/05/cropped-icon-180x180.jpg"),
@@ -547,7 +551,7 @@ enum CompanyIconOriginOverride {
         "3985": .imageURL("https://temona.co.jp/wp-content/plugins/all-in-one-seo-pack/images/default-user-image.png"),
         "4046": .imageURL("https://www.osaka-soda.co.jp/resources/apple-touch-icon.png"),
         "4064": .imageURL("https://www.carbide.co.jp/cms/wp-content/uploads/2021/08/cropped-1_1_rgb-180x180.png"),
-        "4075": .imageURL("https://www.brains-tech.co.jp/wp-content/uploads/2025/12/brains-tech_logo.png"),
+        "4075": .imageURL("https://icons.sollahiro.com/company-icons/4075.png"), // R2 CDN brains lockup 512 // pragma: allowlist secret
         "410A": .imageURL("https://www.gmo-c.jp/wp-content/uploads/2025/09/cropped-favicon_144x144-180x180.png"),
         "4112": .imageURL("https://www.hodogaya.co.jp/wp/wp-content/uploads/2022/05/cropped-cropped-favicon-180x180.png"),
         "4196": .imageURL("https://corp.neo-m.jp/hubfs/%E3%83%8D%E3%82%AA%E3%83%AD%E3%82%B4%20-%20%E5%86%86%E3%81%AE%E8%BA%AB.png"),
@@ -685,6 +689,7 @@ enum CompanyIconOriginOverride {
         "7917": .imageURL("https://www.zacros.co.jp/wp-content/uploads/2024/09/cropped-newlogo_fav-180x180.png"),
         "7936": .imageURL("https://assets.asics.com/page_types/4043/files/corp_ogp_original.jpg?1560319228"),
         "7946": .imageURL("https://cdn.prod.website-files.com/65656bd9b9576a75a4eca3d5/65b07dfba478bf4894a81402_koyosya-webclip.png"),
+        "7963": .imageURL("https://icons.sollahiro.com/company-icons/7963.png"), // R2 CDN Koken mark 512 // pragma: allowlist secret
         "7975": .imageURL("https://www.lihit-lab.com/wp-content/uploads/2021/10/cropped-favicon-180x180.jpg"),
         "7987": .imageURL("https://www.nakabayashi.co.jp/common/img/icon.png"),
         "8032": .imageURL("https://www.kamipa.co.jp/wp/wp-content/themes/jp-2017/touch-icon.png"),
@@ -706,7 +711,7 @@ enum CompanyIconOriginOverride {
         "9166": .imageURL("https://genda.jp/wp-content/uploads/2024/09/cropped-cropped-GENDA_favicon-150x150-1-180x180.png"),
         "9214": .imageURL("https://www.recovery-group.co.jp/wp-content/themes/recovery/images/common/logo_ogp.png"),
         "9229": .imageURL("https://sunwels.jp/wp-content/uploads/2025/04/cropped-siteicon-180x180.png"),
-        "9240": .imageURL("https://www.deliv.co.jp/hubfs/corp_2022/files/images/apple-touch-icon.png"),
+        "9240": .imageURL("https://icons.sollahiro.com/company-icons/9240.png"), // R2 CDN DC mark 512 // pragma: allowlist secret
         "9251": .imageURL("https://ab-company.co.jp/cropped-abc-logo_transparent-180x180.png"),
         "9278": .imageURL("https://www.bookoffgroup.co.jp/management/wp-content/uploads/2025/05/cropped-bogh-favicon-180x180.jpg"),
         "9279": .imageURL("https://cdn.prod.website-files.com/63ef03c2b82a66a06802f5f0/63ef0496a31e98089d9deb03_webclip.png"),
