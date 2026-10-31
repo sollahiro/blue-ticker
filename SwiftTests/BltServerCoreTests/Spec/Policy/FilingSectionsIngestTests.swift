@@ -454,6 +454,21 @@ private let keys = "business_risks,mda,segments"
         }
     }
 
+    /// 提出日時が同じ書類が複数あるときは doc_id 降順の先頭を選ぶ（BLT-201 で並びを決定的にした）。
+    @Test func loadByCodeBreaksSubmitTimeTieByDocIdDescending() async throws {
+        try await withMigratedApp { app in
+            try await seedStored(
+                "S-a", code: "7203", submit: "2025-06-20 09:00", db: app.db, payload: fakePayload("a"))
+            try await seedStored(
+                "S-b", code: "7203", submit: "2025-06-20 09:00", db: app.db, payload: fakePayload("b"))
+
+            let json = try #require(
+                try await loadStoredFilingSections(
+                    code: "7203", docId: nil, sections: nil, db: app.db))
+            #expect(json["doc_id"] as? String == "S-b")
+        }
+    }
+
     @Test func loadByDocIdReturnsThatDocument() async throws {
         try await withMigratedApp { app in
             try await seedStored("S24", code: "7203", submit: "2024-06-20 09:00", db: app.db)
