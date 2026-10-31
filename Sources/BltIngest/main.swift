@@ -5,7 +5,7 @@
 //                                                            （DDL 権限が要る。sync / ingest 等の書き込みコマンドも
 //                                                            冒頭で同じ適用を行う。blt-server のデプロイ前に実行する）
 //   blt-ingest sync [--from YYYY-MM-DD] [--to YYYY-MM-DD]    EDINET 書類一覧を DB へ同期
-//   blt-ingest ingest [--limit N] [--with-facts] [--stages financials,
+//   blt-ingest ingest [--limit N] [--stages financials,
 //                     filing-sections,breakdowns,statements,statement-notes,icons,overviews,
 //                     relations]
 //                     [--codes 7203,6758] [--doc-ids S100W0S7]
@@ -19,7 +19,6 @@
 //                                                            icons は BLT_R2_* 環境変数未設定時はスキップされる。
 //                                                            overviews は OPENROUTER_OVERVIEW_API_KEY 未設定時は
 //                                                            スキップされる。上場全体・最新有報1件（日経225は処理順）。
-//                                                            --with-facts は残存（数値 facts 永続は閉じた）。
 //                                                            --codes で対象を証券コード集合に絞り、--limit を無視して全件処理する。
 //                                                            --doc-ids は原本有報(120)の doc_id 単位（会社-FY）。
 //                                                            該当書類だけ再計算し、他 FY は purge しない。
@@ -109,7 +108,6 @@ do {
         }
         try await runFactsIngestCommand(
             limit: optionValue("--limit", in: argv).flatMap(Int.init),
-            includeFacts: argv.contains("--with-facts"),
             targets: targets,
             codes: codes,
             docIDs: docIDs,

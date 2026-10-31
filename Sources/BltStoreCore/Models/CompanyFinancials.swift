@@ -2,9 +2,9 @@
 // HTML 依存抽出・waterfall を含む高コスト計算を ingest 時に済ませて格納し、
 // REST の financials read 経路は EDINET 取得・XBRL パースなしで返せるようにする（OOM 回避）。
 //
-// edinet_xbrl_facts（XBRL 数値 RAW RAW）とは別物。こちらは 財務取り込み derived（計算結果）であり、
-// cache_version は companyFinancialsCacheVersion（blueTickerVersion 非連動）に連動する。
-// 計算ロジック変更時のみバンプし、月内 Micro バンプで全社再計算を強制しない（XBRL 数値 RAW と同思想）。
+// 財務取り込み derived（計算結果）。cache_version は companyFinancialsCacheVersion
+// （blueTickerVersion 非連動）に連動する。計算ロジック変更時のみバンプし、
+// 月内 Micro バンプで全社再計算を強制しない。
 // 公開契約は response の中身（FinancialsResponse）側であり、本テーブルはサーバー内部スキーマ。
 
 import BlueTickerCore

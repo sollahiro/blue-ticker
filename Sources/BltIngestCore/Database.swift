@@ -52,7 +52,7 @@ package func registerBltMigrations(_ migrations: Migrations) {
     migrations.add(CreateEdinetDocument())
     migrations.add(AddParentDocIDToEdinetDocuments())
     migrations.add(CreateEdinetSyncState())
-    // 数値 fact 取り込み: XBRL 数値 RAW（edinet_xbrl_facts、書類単位 JSONB）。
+    // 数値 fact 投影（閉じた。Create は履歴維持、テーブルは DropEdinetXbrlFacts で削除）。
     migrations.add(CreateEdinetXbrlFacts())
     // 財務取り込み: 計算済み財務サマリ（company_financials、企業単位 JSONB）。
     migrations.add(CreateCompanyFinancials())
@@ -99,6 +99,8 @@ package func registerBltMigrations(_ migrations: Migrations) {
     // 関係取り込み: 顧客・関係会社・出資先・大株主（company_relations、書類×相手単位）。stage は `relations`。
     migrations.add(CreateCompanyRelations())
     migrations.add(AddVotingRatioDetailToCompanyRelations())
+    // 閉じた数値 fact 投影テーブル edinet_xbrl_facts を削除（不可逆。IF EXISTS）。
+    migrations.add(DropEdinetXbrlFacts())
 }
 
 /// `blt-ingest migrate` エントリ。DATABASE_URL のスキーマへ未適用のマイグレーションだけを適用する。

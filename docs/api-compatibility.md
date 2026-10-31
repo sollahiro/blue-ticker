@@ -59,7 +59,7 @@ breaking 再編時は可能な範囲で:
 |---|---|
 | Neon `cache_version`（`fin-vN` 等）・min servable 床 | ingest / 配信世代の内部制御。公開契約に漏らさない |
 | `blueTickerVersion`（配布物バージョン） | CLI / キャッシュ用。REST `schema_version` とは独立 |
-| facts RAW | 非公開 |
+| 旧 `edinet_xbrl_facts`（数値 RAW 投影） | 削除済み。配信は生 XBRL から再導出 |
 
 ## 変更時の運用（段階 A）
 

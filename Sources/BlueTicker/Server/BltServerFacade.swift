@@ -1728,7 +1728,7 @@ private func ibdBreakdownContentHash(payload: BreakdownSnapshotPayload) -> Strin
     return String(format: "%016llx", hash)
 }
 
-/// 内部型 ExtractedBreakdown を公開格納用 ExtractedBreakdownPayload へ写経する（数値 fact 取り込み の XbrlFactRecord 方式）。
+/// 内部型 ExtractedBreakdown を公開格納用 ExtractedBreakdownPayload へ写経する。
 private func extractedBreakdownPayload(from r: ExtractedBreakdown) -> ExtractedBreakdownPayload {
     ExtractedBreakdownPayload(
         method: r.method,
@@ -1886,31 +1886,6 @@ func docTypeLabel(_ code: String) -> String? {
     case "170": return "訂正半期報告書"
     default: return nil
     }
-}
-
-// MARK: - 数値 fact 取り込み（XBRL 数値 fact）
-
-public extension BltServerContext {
-    /// 数値 fact 取り込み: 書類1件分の XBRL をダウンロード（XBRL 取得キャッシュ）してパースし、
-    /// 数値 fact インデックス（公開 Codable `XbrlFactIndexPayload`）を返す。
-    /// IndividualAnalyzer と同じ `nilAsZero: false` で収集し、財務取り込み が消費する値と一致させる。
-    /// ダウンロード失敗・fact 0 件は nil（戻り値パターン）。生 XBRL はローカルキャッシュに保持する。
-    func parseXbrlFactIndex(docID: String, correctionDocIDs: [String] = []) async -> XbrlFactIndexPayload? {
-        guard let xbrlDir = await downloadAnnualFilingXbrl(
-            docID: docID, correctionDocIDs: correctionDocIDs
-        ) else { return nil }
-        let facts = XBRLUtils.collectAllNumericFacts(in: xbrlDir, nilAsZero: false)
-        guard !facts.isEmpty else { return nil }
-        return facts.mapValues { ctxMap in ctxMap.mapValues(xbrlFactRecord(from:)) }
-    }
-}
-
-/// 内部型 `XbrlFact` を公開格納用 `XbrlFactRecord` へ写経する（欠落なく保持）。
-private func xbrlFactRecord(from f: XbrlFact) -> XbrlFactRecord {
-    XbrlFactRecord(
-        value: f.value, consolidation: f.consolidation, unitRef: f.unitRef,
-        decimals: f.decimals, role: f.role, section: f.section,
-        roles: f.roles, sections: f.sections, label: f.label, sourceFile: f.sourceFile)
 }
 
 // MARK: - Helpers

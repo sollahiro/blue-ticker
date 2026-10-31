@@ -3,8 +3,7 @@
 // （.json → JSONB カラム型・索引作成・String PK・@Timestamp・JSONB round-trip）を実 DB で検証する。
 //
 // BLT_TEST_POSTGRES_URL が設定されたときのみ実行する（未設定なら skip）。CI の
-// swift-linux ジョブでは常に設定される。EDINET ネットワークは不要で、
-// 数値 fact 取り込みは runFactsIngest にフェイクパーサを注入して DB 書き込み経路だけを通す。
+// unit-tests ジョブでは常に設定される。EDINET ネットワークは不要。
 //
 //   container run -d --name blt-pg -e POSTGRES_PASSWORD=blt -e POSTGRES_DB=blt -p 55432:5432 postgres:16-alpine
 //   BLT_TEST_POSTGRES_URL='postgres://postgres:blt@localhost:55432/blt?sslmode=disable' \
@@ -25,7 +24,7 @@ import Vapor
 @Suite(.serialized) struct PostgresIntegrationTests {
     private static let postgresURL = ProcessInfo.processInfo.environment["BLT_TEST_POSTGRES_URL"]
 
-    /// 実 Postgres に全マイグレーションを適用し、テスト後に revert する。
+    /// 実 Postgres に対象マイグレーションを適用し、テスト後に revert する。
     private func withPostgresApp(_ body: (Application) async throws -> Void) async throws {
         let app = try await Application.make(.testing)
         do {
@@ -35,6 +34,8 @@ import Vapor
             app.migrations.add(AddParentDocIDToEdinetDocuments())
             app.migrations.add(CreateEdinetSyncState())
             app.migrations.add(CreateEdinetXbrlFacts())
+            app.migrations.add(DropEdinetXbrlFacts())
+            app.migrations.add(CreateCompanyFilingSections())
             app.migrations.add(AddFeedQueryIndexesToEdinetDocuments())
             try? await app.autoRevert()  // 前回の残骸を掃除（初回は no-op）
             try await app.autoMigrate()
@@ -53,18 +54,30 @@ import Vapor
     }
 
     @Test(.enabled(if: postgresURL != nil, "BLT_TEST_POSTGRES_URL not set"))
-    func migrationsCreateJsonbColumnAndIndexes() async throws {
+    func migrationsCreateJsonbColumnAndIndexesAndDropClosedFactsTable() async throws {
         try await withPostgresApp { app in
             let db = try self.sql(app)
 
-            // facts は Postgres では JSONB（SQLite では TEXT のため SQLite テストでは検証できない）。
-            let factsType = try await db.raw(
+            // 有報セクション payload は Postgres では JSONB（SQLite では TEXT）。
+            let sectionsType = try await db.raw(
                 """
                 SELECT data_type FROM information_schema.columns
-                WHERE table_name = 'edinet_xbrl_facts' AND column_name = 'facts'
+                WHERE table_name = 'company_filing_sections' AND column_name = 'payload'
                 """
             ).first(decodingColumn: "data_type", as: String.self)
-            #expect(factsType == "jsonb")
+            #expect(sectionsType == "jsonb")
+
+            // 閉じた数値 fact 投影は Create のあと Drop され、テーブルが残らない。
+            let factsTable = try await db.raw(
+                """
+                SELECT 1 AS n FROM information_schema.tables
+                WHERE table_schema = 'public' AND table_name = 'edinet_xbrl_facts'
+                """
+            ).first(decodingColumn: "n", as: Int.self)
+            #expect(factsTable == nil)
+
+            // DROP TABLE IF EXISTS なので、既に無い状態でも再実行できる。
+            try await DropEdinetXbrlFacts().prepare(on: app.db)
 
             // edinet_documents の検索ホットパス用索引が張られていること。
             let indexRows = try await db.raw(
@@ -78,7 +91,7 @@ import Vapor
     }
 
     @Test(.enabled(if: postgresURL != nil, "BLT_TEST_POSTGRES_URL not set"))
-    func documentAndFactsWriteAndReadBackOnPostgres() async throws {
+    func documentWriteAndReadBackOnPostgres() async throws {
         try await withPostgresApp { app in
             // 書類同期: upsert 冪等性（同 docID 再投入で重複行を作らない）。
             let rec = EdinetDocumentRecord(
@@ -95,35 +108,6 @@ import Vapor
             let state = try #require(
                 try await EdinetSyncState.find(EdinetSyncState.singletonID, on: app.db))
             #expect(state.syncedThrough == "2025-06-20")
-
-            // 数値 fact: ingest（フェイクパーサ）で JSONB を書き、読み戻しで完全一致を確認。
-            let payload: XbrlFactIndexPayload = [
-                "NetSales": [
-                    "CurrentYearDuration": XbrlFactRecord(
-                        value: 148_129_000_000.0, consolidation: "non_consolidated", unitRef: "JPY",
-                        decimals: "-6", role: nil, section: "PL",
-                        roles: ["r1", "r2"], sections: ["PL"], label: "売上高", sourceFile: "f.xml"),
-                ],
-                "TotalAssets": [
-                    "CurrentYearInstant": XbrlFactRecord(value: 9999, consolidation: "consolidated"),
-                ],
-            ]
-            let summary = try await runFactsIngest(db: app.db, limit: nil) { _ in payload }
-            #expect(summary.stored == 1)
-            #expect(summary.attempted == 1)
-
-            let row = try #require(try await EdinetXbrlFacts.find("S100E2E1", on: app.db))
-            #expect(row.facts == payload)  // JSONB ネストマップ・配列・nil まで完全一致
-            #expect(row.cacheVersion == xbrlFactsCacheVersion)
-
-            // 再実行は現行バージョン済みのため skip（staleness 判定が Postgres でも効く）。
-            let rerun = try await runFactsIngest(db: app.db, limit: nil) { _ in
-                Issue.record("fresh document must not be re-parsed")
-                return payload
-            }
-            #expect(rerun.skipped == 1)
-            #expect(rerun.attempted == 0)
-            #expect(try await EdinetXbrlFacts.query(on: app.db).count() == 1)
         }
     }
 }

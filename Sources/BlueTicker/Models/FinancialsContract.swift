@@ -17,7 +17,7 @@ public enum FinancialsComputeResult: Sendable {
 }
 
 /// Neon `company_financials.cache_version`。財務計算ロジックまたは本契約の意味変更時のみバンプ。
-/// `blueTickerVersion` とは独立（XBRL RAW の `xbrlFactsCacheVersion` と同思想）。経緯は Git。
+/// `blueTickerVersion` とは独立。経緯は Git。
 public let companyFinancialsCacheVersion = "fin-v23"
 
 /// financials read（REST）が 200 を返す最低計算バージョン番号（`fin-vN` の N）。
