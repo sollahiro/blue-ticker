@@ -1785,6 +1785,13 @@ func mapEdinetDocumentRecords(
         guard let docID = doc["docID"] as? String, !docID.isEmpty else { continue }
         guard let docType = doc["docTypeCode"] as? String,
               Api.documentSyncDocTypes.contains(docType) else { continue }
+        // 府令 030（特定有価証券＝投信・信託受益証券等）は読み取り側が使わないので格納しない。
+        // 府令が欠けた書類は識別できないため残す（読み取り側の 010 絞り込みで落ちる）。
+        if let ordinance = nonEmptyString(doc["ordinanceCode"]),
+            !Api.isCompanyDisclosureOrdinance(ordinance)
+        {
+            continue
+        }
         guard seen.insert(docID).inserted else { continue }
         let edinetCode = nonEmptyString(doc["edinetCode"]) ?? ""
         let apiSecCode = nonEmptyString(doc["secCode"])

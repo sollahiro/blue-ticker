@@ -7,7 +7,8 @@ import Testing
 @Suite struct EdinetDocumentRecordMappingTests {
     private func doc(
         _ docID: String, docType: String, edinet: String = "E00001",
-        sec: String? = "72030", periodEnd: String? = "2025-03-31"
+        sec: String? = "72030", periodEnd: String? = "2025-03-31",
+        ordinance: String? = Api.ordinanceCompanyDisclosure
     ) -> [String: Any] {
         var d: [String: Any] = [
             "docID": docID,
@@ -18,7 +19,17 @@ import Testing
         ]
         if let sec { d["secCode"] = sec }
         if let periodEnd { d["periodEnd"] = periodEnd }
+        if let ordinance { d["ordinanceCode"] = ordinance }
         return d
+    }
+
+    @Test func dropsNonCompanyDisclosureOrdinance() {
+        let docs = [
+            doc("S-010", docType: "120"),
+            doc("S-030", docType: "120", ordinance: "030"),  // 特定有価証券（投信等）: 除外
+            doc("S-NONE", docType: "120", ordinance: nil),  // 府令不明: 残す
+        ]
+        #expect(mapEdinetDocumentRecords(docs).map(\.docID) == ["S-010", "S-NONE"])
     }
 
     @Test func keepsOnlySeedDocTypes() {
