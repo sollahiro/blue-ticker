@@ -77,16 +77,32 @@ private let sample = """
         #expect(FeedRSS.topFeed(items).map(\.docId) == ["S100AAAA"])
     }
 
-    @Test func topFeedStopsAtTenNewestAnnualReports() {
+    @Test func topFeedKeepsTenNewestAnnualReportsOutsideTheWindow() {
         let items = (0..<15).map { index in
             FeedRSS.Item(
                 docId: "S\(index)", code: "1000", name: "x", docType: index.isMultiple(of: 3) ? "160" : "120",
-                docTypeLabel: "", submittedAt: "", iconURL: nil)
+                docTypeLabel: "", submittedAt: "2026-01-01 09:00", iconURL: nil)
         }
-        let top = FeedRSS.topFeed(items)
-        #expect(top.count == FeedRSS.topFeedLimit)
+        let top = FeedRSS.topFeed(items, now: Date(timeIntervalSince1970: 1_793_000_000))
+        #expect(top.count == FeedRSS.topFeedMinimum)
         #expect(top.allSatisfy { $0.docType == "120" })
         #expect(top.first?.docId == "S1")
+    }
+
+    @Test func topFeedKeepsEveryAnnualReportInTheTwoWeekWindow() throws {
+        // 2026-10-30 12:00 JST。窓の下限は 13 日前の 2026-10-17。
+        let now = try #require(ISO8601DateFormatter().date(from: "2026-10-30T03:00:00Z"))
+        #expect(FeedRSS.topFeedCutoffDate(now: now) == "2026-10-17")
+        let inWindow = (0..<12).map { index in
+            FeedRSS.Item(
+                docId: "W\(index)", code: "1000", name: "x", docType: "120",
+                docTypeLabel: "", submittedAt: "2026-10-17 15:00", iconURL: nil)
+        }
+        let older = FeedRSS.Item(
+            docId: "OLD", code: "1000", name: "x", docType: "120",
+            docTypeLabel: "", submittedAt: "2026-10-16 23:59", iconURL: nil)
+        let top = FeedRSS.topFeed(inWindow + [older], now: now)
+        #expect(top.map(\.docId) == inWindow.map(\.docId))
     }
 
     @Test func emptyChannelIsEmptyList() throws {

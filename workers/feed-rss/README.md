@@ -12,8 +12,8 @@ Cron が 1 日 1 回 Neon を読み、RSS XML を R2 の静的オブジェクト
 ## 抽出条件（listed 判定は `/v1/feed/updates` と同じ）
 
 - 書類種別: 有価証券報告書 `120` だけ（`RSS_DOC_TYPES`）。訂正（`130`）・四半期（`140`）・半期（`160`）は出さない。同期対象・REST / MCP のフィードの種別（`FEED_DOC_TYPES` = `Api.feedAllowedDocTypes`）とは別の定数で、こちらは変えない
-- 期間: 直近 7 暦日（UTC、今日を含む。`feedInclusiveCutoffDateString(days: 7)` と同じ下限）
-- 期間に関係なく、新しい順に直近 10 件は必ず載せる（`FEED_LATEST_MIN`）。7 日窓に有報が少ない時期でも iOS の Top feed が REST 既定の 10 件を保てるように。期間を延ばすと 6 月の決算期に有報だけで上限を超えるので件数で区切る
+- 期間: 直近 14 暦日（UTC、今日を含む。`feedInclusiveCutoffDateString(days: 14)` と同じ数え方。iOS のホームのキュレーションが直近 2 週間を出すため）
+- 期間に関係なく、新しい順に直近 10 件は必ず載せる（`FEED_LATEST_MIN`）。14 日窓に有報が少ない時期でも iOS の Top feed が REST 既定の 10 件を保てるように。期間を延ばすと 6 月の決算期に有報だけで上限を超えるので件数で区切る
 - 上限: 200 件
 - クエリは 1 本（`FEED_SQL`）: 有報を新しい順に 200 件引き、`selectFeedRows` で「先頭 10 件」か「下限日以降」の行を残す。旧実装（窓のクエリ＋有報の直近 10 件のクエリ＋重複除去）と同じ結果になることを `src/query.test.js` で確かめている
 - 上場のみ: 府令 `010`（会社開示）・5 桁 `sec_code` 末尾 `0`・`00000` 以外

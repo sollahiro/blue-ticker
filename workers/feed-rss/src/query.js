@@ -11,12 +11,13 @@ export const FEED_DOC_TYPES = ["120", "130", "140", "160"];
 // FEED_DOC_TYPES の部分集合であること（parity.test.js）。
 export const RSS_DOC_TYPES = ["120"];
 
-// 直近 7 暦日（今日を含む）。`feedInclusiveCutoffDateString(days: 7)` に対応。
-export const FEED_DAYS = 7;
+// 直近 14 暦日（今日を含む）。iOS の Top feed（ホームのキュレーション）が直近 2 週間を出すため。
+// 下限の数え方は `feedInclusiveCutoffDateString(days:)` と同じ。REST / MCP のフィードの期間とは別。
+export const FEED_DAYS = 14;
 export const FEED_ITEM_LIMIT = 200;
 
 // 有報は期間に関係なく、新しい順にこの件数を必ず載せる。
-// 7 暦日の窓は閑散期に有報が数件しか無く、iOS の Top feed（有報だけを出す）が
+// 14 暦日の窓でも閑散期は有報が数件しか無く、iOS の Top feed（有報だけを出す）が
 // REST の既定（有報 10 件）より少なくなるため。期間ではなく件数で区切るのは、
 // 6 月の決算期に期間を延ばすと有報だけで FEED_ITEM_LIMIT を超えるから。
 export const FEED_LATEST_MIN = 10;

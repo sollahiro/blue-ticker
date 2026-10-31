@@ -227,6 +227,9 @@ struct TopView: View {
 
 /// 左上の白抜きロゴ。アセット `YuhoLabLogo`（SVG。元ファイルの影フィルタは外してある）。読めないときは文字で出す。
 struct YuhoLabLogo: View {
+    /// ナビゲーションバー（44pt）に近い高さ。SVG の viewBox は字の外接矩形に詰めてある。
+    static let height: CGFloat = 34
+
     var body: some View {
         Group {
             if let image = UIImage(named: "YuhoLabLogo") {
@@ -234,7 +237,7 @@ struct YuhoLabLogo: View {
                     .renderingMode(.template)
                     .resizable()
                     .scaledToFit()
-                    .frame(height: 22)
+                    .frame(height: Self.height)
             } else {
                 Text("有報LAB")
                     .font(.headline.weight(.heavy))
@@ -255,6 +258,8 @@ struct CurationCarousel: View {
     private static let rowsPerPage = 6
     private static let rowHeight: CGFloat = 56
     private static let interval: Duration = .seconds(6)
+    /// これより多いページは点ではなく「n / 総数」で出す（2 週間分は決算期に数十ページになる）。
+    private static let maxDots = 10
 
     private var pages: [[FeedRSS.Item]] {
         stride(from: 0, to: items.count, by: Self.rowsPerPage).map { start in
@@ -285,7 +290,12 @@ struct CurationCarousel: View {
             .frame(height: Self.rowHeight * CGFloat(Self.rowsPerPage) + 12 + CGFloat(Self.rowsPerPage - 1))
             .bltCardSurface()
 
-            if chunks.count > 1 {
+            if chunks.count > Self.maxDots {
+                Text("\(page + 1) / \(chunks.count)")
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(Theme.textMuted)
+                    .accessibilityLabel("\(chunks.count) ページ中 \(page + 1) ページ目")
+            } else if chunks.count > 1 {
                 HStack(spacing: 6) {
                     ForEach(chunks.indices, id: \.self) { index in
                         Capsule()
