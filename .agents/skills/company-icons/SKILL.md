@@ -271,9 +271,12 @@ DATABASE_URL="$BLT_NEON_WRITE_DATABASE_URL" ./.build/release/blt-ingest ingest -
 - **公告セルだけ見る。** 欠測分類は「公告掲載方法」行のセルだけから URL を取る。HTML 全体を連結すると紙面・注記委譲を誤って auto-capable にする
 - **公告 rowspan/colspan。** ラベル直後の td が空で URL が後続セルにあると現行 extractor は not_applicable。製品コードは weekly 範囲外なので手動ピンする
 - **壊れた公告ホスト。** セル内 URL が `.html` 連結・全角ハイフン・空白入りだと origin パース不能。自動 ingest 不能として公式 origin を別途探す
-- **差し替え仮置き。** Before/After は `company-icons/review/{date}/{code}-before|after.*`。本番 `company-icons/{code}.*` は visual GO 後の ingest まで上書きしない
+- **差し替え仮置き。** Before/After は `company-icons/review/{date}/{code}-before|after.*`。未 GO の差し替えで本番 `company-icons/{code}.*` を上書きしない。CDN マップする GO 済み画像は ingest が同じキーを取りに行くので、マップ PR の前に本番キーへ置く
 - **却下後のマークのみ。** ワードマーク付き After が却下されたら公式高解像からマークだけを切り、`review/` に新しい After を置きその code だけ再 webhook。マップは次の GO まで入れない
 - **横長の測り方。** 低視認は中央クロップではなく、アプリの aspect-fit（正方形に余白付き）で測る。花王 4452 の 1200×630 OGP はクロップだとマークが大きいが、フィット後は高さ約13%
+- **GO 条件付きクロップ。** 差し替え GO がマーク座標を条件にするときは再 webhook しない。指定矩形で切り、CDN マップして差し替え PR に入れる
+- **GO 後の公式 URL 再取得。** 非 ASCII パスは percent-encode してから GET。公式 HTML 上の Wix / GCS apple-touch は first-party。GO 済みで origin が 403 / TLS 不能なら After を CDN マップする
+- **Pronexus × imageURL。** `pronexusDisclosureHomepages` と `manualSources` の homepageOrigin は重ねない。GO 済み imageURL は Pronexus 16 社にも載せてよい（ingest は imageURL、origin リマップは Pronexus マップ）
 
 ## 完了条件
 
