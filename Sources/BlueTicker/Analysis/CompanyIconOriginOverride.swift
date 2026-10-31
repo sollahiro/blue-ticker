@@ -91,6 +91,8 @@ enum CompanyIconOriginOverride {
     /// Visual GO は PR #534（99 公式 URL + 3 マークのみ 512 CDN）。
     /// 2026-10-31: 4452 花王。横長 OGP はアプリの aspect-fit で低視認。Sorahiro visual GO
     /// のワンオフ 512 白地を R2 CDN へ（公式の横長 OGP は残さない）。
+    /// 2026-10-31: 3723 日本ファルコム F マーク / 9008 京王電鉄ワードマーク。Sorahiro visual GO
+    /// のワンオフ 512 白地を R2 CDN へ（公式 URL は ingest 不能。本番キーへ先置き）。
     static let manualSources: [String: CompanyIconManualSource] = [
         "7203": .homepageOrigin("https://toyota.jp"),
         "9267": .homepageOrigin("https://www.genky.co.jp"),
@@ -532,7 +534,7 @@ enum CompanyIconOriginOverride {
         "3622": .imageURL("https://www.netyear.net/common/img/favicon.png"),
         "3698": .imageURL("https://www.cri-mw.co.jp/wp/wp-content/themes/cri-mw/assets/images/common/app-icon.png"),
         "369A": .imageURL("https://a-tie.co.jp/wp/wp-content/uploads/2025/08/cropped-favicon-1-180x180.png"),
-        "3723": .imageURL("https://www.falcom.co.jp/page/wp-content/themes/falcom2022/assets/webclip_512.png"),
+        "3723": .imageURL("https://icons.sollahiro.com/company-icons/3723.png"), // R2 CDN Falcom F-mark 512 // pragma: allowlist secret
         "3727": .imageURL("https://www.aplix.co.jp/assets/images/favicon/apple-touch-icon.png"),
         "3773": .imageURL("https://www.advanced-media.co.jp/wp-content/themes/advanced-media-html/dist/assets/images/web-clipicon.png"),
         "3775": .imageURL("https://www.gaiax.co.jp/wp-content/uploads/2021/03/cropped-gaiax-favicon-1-180x180.png"),
@@ -697,7 +699,7 @@ enum CompanyIconOriginOverride {
         "8708": .imageURL("https://www.aizawa-group.jp/apple-touch-icon.png"),
         "8771": .imageURL("https://www.eguarantee.co.jp/wp-content/uploads/2023/03/cropped-favicon-180x180.png"),
         "8914": .imageURL("https://www.arealink.co.jp/apple-touch-icon.png"),
-        "9008": .imageURL("https://www.keio.co.jp/assets/img/apple-touch-icon.png"),
+        "9008": .imageURL("https://icons.sollahiro.com/company-icons/9008.png"), // R2 CDN KEIO wordmark 512 // pragma: allowlist secret
         "9036": .imageURL("https://www.tohbu.co.jp/wp-content/themes/tbn_corpolate/assets/img/common/icon-favicon-180x180.png"),
         "9107": .imageURL("https://www.kline.co.jp/resources/apple-touch-icon.png"),
         "9110": .imageURL("https://www.nsuship.co.jp/resources/apple-touch-icon.png"),

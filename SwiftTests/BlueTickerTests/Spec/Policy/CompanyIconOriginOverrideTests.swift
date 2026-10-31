@@ -589,6 +589,7 @@ import Testing
     /// 2026-10-28 weekly replacements. Visual GO on PR #573.
     /// 251 official apple-touch / square HTTPS URLs + 3600 mark-only 180 CDN
     /// + 4450/5031 origin-blocked CDN copies of the GO'd After.
+    /// 2026-10-31: 3723 / 9008 remapped to GO'd 512 CDN (origin GET failed ingest).
     @Test func pins20261028WeeklyReplacementGOManualImageURLs() {
         let expected: [(String, String)] = [
             ("135A", "https://vrain.co.jp/vrain/wp-content/uploads/2026/07/cropped-%E3%82%B9%E3%82%AF%E3%83%AA%E3%83%BC%E3%83%B3%E3%82%B7%E3%83%A7%E3%83%83%E3%83%88-2026-07-28-175624-180x180.png"),
@@ -656,7 +657,7 @@ import Testing
             ("3622", "https://www.netyear.net/common/img/favicon.png"),
             ("3698", "https://www.cri-mw.co.jp/wp/wp-content/themes/cri-mw/assets/images/common/app-icon.png"),
             ("369A", "https://a-tie.co.jp/wp/wp-content/uploads/2025/08/cropped-favicon-1-180x180.png"),
-            ("3723", "https://www.falcom.co.jp/page/wp-content/themes/falcom2022/assets/webclip_512.png"),
+            ("3723", "https://icons.sollahiro.com/company-icons/3723.png"), // pragma: allowlist secret
             ("3727", "https://www.aplix.co.jp/assets/images/favicon/apple-touch-icon.png"),
             ("3773", "https://www.advanced-media.co.jp/wp-content/themes/advanced-media-html/dist/assets/images/web-clipicon.png"),
             ("3775", "https://www.gaiax.co.jp/wp-content/uploads/2021/03/cropped-gaiax-favicon-1-180x180.png"),
@@ -819,7 +820,7 @@ import Testing
             ("8708", "https://www.aizawa-group.jp/apple-touch-icon.png"),
             ("8771", "https://www.eguarantee.co.jp/wp-content/uploads/2023/03/cropped-favicon-180x180.png"),
             ("8914", "https://www.arealink.co.jp/apple-touch-icon.png"),
-            ("9008", "https://www.keio.co.jp/assets/img/apple-touch-icon.png"),
+            ("9008", "https://icons.sollahiro.com/company-icons/9008.png"), // pragma: allowlist secret
             ("9036", "https://www.tohbu.co.jp/wp-content/themes/tbn_corpolate/assets/img/common/icon-favicon-180x180.png"),
             ("9107", "https://www.kline.co.jp/resources/apple-touch-icon.png"),
             ("9110", "https://www.nsuship.co.jp/resources/apple-touch-icon.png"),
@@ -857,6 +858,8 @@ import Testing
         #expect(expected.contains { $0.0 == "3600" && $0.1.hasSuffix("/company-icons/3600.png") })
         #expect(expected.contains { $0.0 == "4450" && $0.1.hasSuffix("/company-icons/4450.png") })
         #expect(expected.contains { $0.0 == "5031" && $0.1.hasSuffix("/company-icons/5031.png") })
+        #expect(expected.contains { $0.0 == "3723" && $0.1.hasSuffix("/company-icons/3723.png") })
+        #expect(expected.contains { $0.0 == "9008" && $0.1.hasSuffix("/company-icons/9008.png") })
     }
 
     /// 2026-10-20 weekly: listed × company_icons 欠行。公告 URL が origin パース不能／注記委譲。
