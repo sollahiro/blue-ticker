@@ -1042,142 +1042,37 @@ import Testing
 
     /// 603A: 欠行。先頭 rel=icon が 16.jpg のため公式 apple-touch 256.jpg。
 
-    /// 2026-10-31 weekly: listed × company_icons 欠行。公告自動 ingest 不能分の公式画像 / origin。
+    /// 2026-10-31 weekly: listed × company_icons 欠行。Sorahiro visual GO 24 社。
+    /// 実アルファは同サイズ白 flatten を R2 CDN。不透明は公式 URL。NG 106 は台帳 visual_ng_20261031。
     @Test func pins20261031WeeklyMissingListedManualImageURLs() {
         let expected: [(String, String)] = [
-            ("1429", "https://www.n-aqua.jp/assets/images/common/apple-icon-180x180.png"),
-            ("1447", "https://www.saaf-hd.co.jp/media/YkB4cb3kh0VFYh4dHFQ116tlABkyzbKW0bOe16Rp.png"),
-            ("1771", "https://www.kanryu.co.jp/assets/img/common/ogp.jpg"),
-            ("1897", "https://www.kaneshita.co.jp/file/2016/06/cropped-25231e1667d9ed76e1a19e6fcd321df6-1-e1467102917523.png"),
-            ("1898", "https://www.seikitokyu.co.jp/assets/images/common/logo_black.svg"),
-            ("1981", "https://www.kyowa-nissei.co.jp/images/logo.svg"),
-            ("2003", "https://www.nittofuji.co.jp/img/favicon/apple-touch-icon.png"),
-            ("2137", "https://www.varus.co.jp/common/images/flogo.png"),
-            ("2152", "https://www.youji.co.jp/images/logo.png"),
+            ("1429", "https://icons.sollahiro.com/company-icons/1429.png"), // pragma: allowlist secret
+            ("1897", "https://icons.sollahiro.com/company-icons/1897.png"), // pragma: allowlist secret
+            ("2003", "https://icons.sollahiro.com/company-icons/2003.png"), // pragma: allowlist secret
             ("2207", "https://www.meito-abc.co.jp/apple-touch-icon.png"),
-            ("2215", "https://www.daiichipan.co.jp/favicon.ico"),
-            ("2294", "https://www.kakiyasuhonten.co.jp/assets/images/favicon/apple-icon-144x144.png"),
-            ("2304", "https://www.css-holdings.jp/material/img/logo.png"),
-            ("2341", "https://www.atimes.co.jp/product/images/logo_job.png"),
-            ("2345", "https://hodl1.jp/wp-content/themes/hodl1/assets/img/apple-touch-icon.png"),
-            ("2388", "https://www.wedge-hd.com/image/top_logo_unicon_hobby_3l_u.jpg"),
-            ("2418", "https://www.tsukada-global.holdings/shared/common/ogp.jpg"),
-            ("2652", "https://www.mandarake.co.jp/img/icon/shortcut/144.png"),
-            ("2668", "https://tabio.com/cdn/shop/files/web_sns___750_750_logo.jpg?v=1791449389&width=750"),
-            ("2752", "https://fujiogroup.com/img/top/mv_logo_06.png"),
-            ("2795", "https://www.primex.co.jp/k_images/logo.png"),
-            ("2819", "https://www.ebarafoods.com/shared/img/desk_ico.png"),
-            ("2911", "https://www.asahimatsu.co.jp/img/FB-f-Logo__blue_512.png"),
-            ("2915", "https://www.kenkomayo.co.jp/cms/img/km_header/logo_km.png"),
-            ("2999", "https://www.homeposition.co.jp/assets/img/og-img.jpg"),
-            ("3030", "https://www.pub-hub.co.jp/images/index/logoAccess.png"),
-            ("3059", "https://company.hiraki.co.jp/wp-content/uploads/2026/02/cropped-favicon-180x180.webp"),
-            ("3143", "https://owill.co.jp/img/logo.png"),
-            ("3161", "https://www.azearth.co.jp/images/top/logo.png"),
-            ("3172", "https://www.tealifeir.com/_cmn/logo.png"),
-            ("3192", "https://www.shirohato.co.jp/common/img/logo_b.jpg"),
-            ("3422", "https://www.jp-jmax.co.jp/assets/images/common/logo.png"),
-            ("3556", "https://corp.renet.jp/business/img/recycling/logo.png"),
-            ("3652", "https://www.dmprof.com/wp-content/uploads/2022/11/ogp.jpg"),
-            ("3675", "https://www.cm-group.co.jp/assets/v2023/favicon/apple-touch-icon.png"),
-            ("3803", "https://image-inf.co.jp/wp-content/uploads/2026/03/cropped-logo-icon-w-180x180.png"),
-            ("3927", "https://www.fuva-brain.co.jp/wp-content/themes/fuva/images/ico/apple-touch-icon.webp"),
-            ("3988", "https://www.syshd.co.jp/data/img/common/apple-touch-icon-precomposed.png"),
+            ("2215", "https://icons.sollahiro.com/company-icons/2215.png"), // pragma: allowlist secret
+            ("2652", "https://icons.sollahiro.com/company-icons/2652.png"), // pragma: allowlist secret
+            ("3059", "https://icons.sollahiro.com/company-icons/3059.png"), // pragma: allowlist secret
+            ("3675", "https://icons.sollahiro.com/company-icons/3675.png"), // pragma: allowlist secret
+            ("3803", "https://icons.sollahiro.com/company-icons/3803.png"), // pragma: allowlist secret
+            ("3927", "https://icons.sollahiro.com/company-icons/3927.png"), // pragma: allowlist secret
             ("3989", "https://www.sharing-tech.co.jp/cms/wp-content/uploads/2023/08/cropped-favicon-180x180.png"),
-            ("4026", "https://www.konoshima.co.jp/common/globallogo.png"),
-            ("4113", "https://www.taoka-chem.co.jp/shared/images/logo.svg"),
-            ("4172", "https://hi-crates.co.jp/wp-content/plugins/hi-crates-top-g/assets/logo-hi-mark.png"),
-            ("4179", "https://www.gnext.co.jp/wp-content/uploads/2026/03/favicon.webp"),
-            ("4220", "https://www.rikentechnos.co.jp/img/common/image/img_logo.png"),
-            ("4234", "https://www.sun-a-kaken.co.jp/assets/img/logo.png"),
-            ("4299", "https://www.himacs.co.jp/Portals/0/images/logo.png"),
-            ("4344", "https://sourcenext.co.jp/~/media/Images/cojp/common/logo_w"),
-            ("4351", "https://www.yamada-servicer.co.jp/common/img/logo.jpg"),
-            ("4390", "https://ipsism.co.jp/wp-content/uploads/cropped-ips-favicon02-180x180.png"),
-            ("4421", "https://www.di-system.co.jp/wp-content/themes/di-system/assets/image/ogimage.jpg"),
-            ("4425", "https://www.kudan.io/wp-content/uploads/2020/05/cropped-NoImage-192x192.png"),
-            ("4478", "https://www.freee.co.jp/favicon.ico"),
-            ("4591", "https://www.ribomic.com/img/logo_fbogp.jpg"),
-            ("4597", "https://solasia.co.jp/common/img/apple-touch-icon.png"),
-            ("4616", "https://www.kawakami-paint.co.jp/images/logo.png"),
-            ("4662", "https://www.focus-s.com/media/SDO1b3MbQBU6vOTH5DVaz3gSC8LEX7D8uAy8dJP2.png"),
-            ("5074", "https://www.tess-hd.co.jp/media/t4rVBb5v5VGpc9NRddYQ8aYW18TnmDfTy5AaEH6H.png"),
-            ("5078", "https://www.cel-co.com/wp-content/themes/cel_co/assets/img/common/logo.png"),
+            ("4172", "https://icons.sollahiro.com/company-icons/4172.png"), // pragma: allowlist secret
+            ("4390", "https://icons.sollahiro.com/company-icons/4390.png"), // pragma: allowlist secret
+            ("4478", "https://icons.sollahiro.com/company-icons/4478.png"), // pragma: allowlist secret
+            ("4597", "https://icons.sollahiro.com/company-icons/4597.png"), // pragma: allowlist secret
             ("5204", "https://www.ishizuka.co.jp/public/wp-content/uploads/2018/12/cropped-favicon-180x180.png"),
-            ("5355", "https://www.rutsubo.com/images/group_logo.svg"),
-            ("5537", "https://albalink.co.jp/wp-content/uploads/2019/06/cropped-favicon-180x180.png"),
-            ("5576", "https://www.obs.co.jp/assets/images/common/logo.svg"),
-            ("5603", "https://www.kogi.co.jp/assets/img/common/icon_logo.svg"),
-            ("5609", "https://www.nipponchuzo.co.jp/img/logo.gif"),
-            ("5621", "https://www.h-t.co.jp/assets/humantechnology/img/common/isms_logo.jpg"),
-            ("5819", "https://www.canare.co.jp/image/logo.svg"),
-            ("5891", "https://www.sakigake-holdings.co.jp/media/uEytn9n5jSBBtnibkxNcwADqLfFsEgdaLgno6pgM.png"),
-            ("5905", "https://www.nihonseikan.co.jp/cmn/img/pluslogo3.jpg"),
-            ("5936", "https://www.toyo-shutter.co.jp/assets/img/common/logo.webp"),
+            ("5355", "https://icons.sollahiro.com/company-icons/5355.png"), // pragma: allowlist secret
+            ("5537", "https://icons.sollahiro.com/company-icons/5537.png"), // pragma: allowlist secret
             ("5985", "https://www.suncall.co.jp/wp/wp-content/uploads/2026/09/cropped-logo_suncall-180x180.png"),
-            ("6059", "https://www.uchiyama-gr.jp/image/header/logo.gif"),
-            ("6063", "https://emergency.co.jp/common/img/logo_footer_privacy01.gif"),
-            ("6158", "https://www.waida.co.jp/favicon.ico"),
-            ("6167", "https://www.fujidie.co.jp/assets/images/logo.png"),
-            ("6177", "https://www.appbank.co.jp/cms/wp-content/themes/appbank/_assets/img/ogp.png"),
-            ("6266", "https://tazmo.co.jp/wp/wp-content/themes/tazmo-new/common/img/common/img_logo.svg"),
             ("6279", "https://www.zuiko.co.jp/assets/image/favicon.ico"),
-            ("6316", "https://www.maruyama.co.jp/ogp.jpg"),
-            ("6337", "https://www.tesec.co.jp/wp-content/uploads/2023/03/cropped-favicon-180x180.png"),
-            ("6380", "https://www.ocm.co.jp/bdflashinfo/thumbnail.png"),
-            ("6518", "https://www.sanso-elec.co.jp/wordpress/wp-content/themes/sanso/images/header/logo_img_sp.gif"),
-            ("6571", "https://www.qbnet.jp"),
-            ("6623", "https://www.aichidenki.jp/images/common/adk_logo-bl.png"),
-            ("6658", "https://www.shiraidenshi.co.jp/homepage/common/images/60th_logo.png"),
-            ("6668", "https://www.adtec-rf.co.jp/wpcms/wp-content/themes/adtec-rf/img/logo.png"),
-            ("6721", "https://www.wintest.co.jp/cmn/img/header_logo.png"),
-            ("6800", "https://www.yokowo.co.jp/common/images/apple-touch-icon.png"),
-            ("6864", "https://nfhd.co.jp/jp/images/logo/logo_nfbt.png"),
-            ("6908", "https://www.irisoele.com/apple-touch-icon.png"),
-            ("6942", "https://www.sophia.com/img/logo_cvh.svg"),
-            ("6947", "https://www.zuken.co.jp/wp-content/uploads/sites/2/2019/04/cropped-ZUKEN_flag-512-180x180.png"),
-            ("7058", "https://www.kyoei-ss.co.jp/wp-content/themes/kyoei-parent/assets/images/favicon_io/apple-touch-icon.png"),
-            ("7244", "https://www.ichikoh.com/_img/common/logo_valeo.png"),
-            ("7273", "https://www.ikuyo194.co.jp/wp-content/themes/wp_theme/ogp_img.webp"),
-            ("7345", "https://www.aipf.co.jp/img/ogp.png"),
-            ("7442", "https://www.nakayamafuku.co.jp/common/img/nf_ogp.jpg"),
-            ("7472", "https://www.toba.co.jp/common/img/logo.png"),
-            ("7481", "https://www.oie.co.jp/img/logo.png"),
-            ("7531", "https://www.seiwa-chuo-holdings.co.jp/shared/img/logo.png"),
-            ("7554", "https://hd.kourakuen.co.jp/images/brand/logo.png"),
-            ("7590", "https://takasho.co.jp/cms/favicon.ico"),
-            ("7625", "https://www.global-dining.com/_next/static/media/logo.bc6f622a.png"),
-            ("7637", "https://www.hakudo.co.jp/Portals/0/images/common/Hakudo_Net_Service_logo_A_web_190614.png?302"),
-            ("7791", "https://www.dreambed.co.jp/themes/company/images/common/logo-serta.svg"),
-            ("8071", "https://www.tokai-ele.com/common/img/logo.svg"),
-            ("8093", "https://www.kbk.co.jp/application/themes/kbk/img/ogp.jpg"),
-            ("8147", "https://www.tomitaj.co.jp/common/img/ft_logo.gif"),
-            ("8336", "https://www.musashinobank.co.jp/assets/img/common/logo@2x.png"),
-            ("8364", "https://www.shimizubank.co.jp/assets/images/webclip.png"),
-            ("8739", "https://www.sparx.jp/icon/apple-touch-icon-144x144.png"),
+            ("6337", "https://icons.sollahiro.com/company-icons/6337.png"), // pragma: allowlist secret
+            ("8071", "https://icons.sollahiro.com/company-icons/8071.png"), // pragma: allowlist secret
             ("8747", "https://www.yutaka-trusty.co.jp/src/img/cropped-favicon-180x180.png"),
-            ("8783", "https://abc-chain.com/wp-content/uploads/2026/03/cropped-favicon-180x180.png"),
-            ("8841", "https://www.toc.co.jp/new1/assets/images/toc-logo.svg"),
-            ("8894", "https://revolution.co.jp/assets/img/ogp/ogp.png"),
-            ("8908", "https://www.maicom.co.jp/img/sp/common/logo_sp.png"),
-            ("8918", "https://www.land.jp/assets/img/component/logo_footer.svg"),
-            ("9060", "https://www.logitem.co.jp/common/images/headlogo.png"),
-            ("9218", "https://www.mh-tec.co.jp/media/jsOI9uSvRCI49U9CZFw9v52WRtq1H96yOjdUfW9N.png"),
-            ("9233", "https://www.ajiko.co.jp/assets/images/site-logo8.png"),
-            ("9319", "https://www.chuosoko.co.jp/common/img/logo.svg"),
-            ("9322", "https://www.kawanishi.co.jp/apple-touch-icon-180x180.png"),
-            ("9365", "https://tradia.co.jp/img/common/logo.png"),
-            ("9635", "https://www.musashino-k.co.jp/imgs/seff_logo_off.jpg"),
-            ("9644", "https://www.tanabeconsulting-group.com/assets/img/top/logo-human-capital.png"),
-            ("9701", "https://www.kaikan.co.jp/images/opening_logo_sp.png"),
-            ("9765", "https://www.k-ohba.co.jp/ohba/wp-content/themes/OHBA/img/common/sns.jpg"),
-            ("9845", "https://www.parkercorp.co.jp/common/img/logo_sp.png"),
-            ("9846", "https://www.tenmaya-store.co.jp/assets/img/common/logo_top_02.png"),
-            ("9857", "https://www.eiwa-net.co.jp/dcms_media/image/ogp.png"),
-            ("9986", "https://www.zaohnet.co.jp/wp-content/uploads/logo_mark.jpg"),
+            ("9322", "https://icons.sollahiro.com/company-icons/9322.png"), // pragma: allowlist secret
         ]
-        #expect(expected.count == 130)
-        #expect(Set(expected.map(\.0)).count == 130)
+        #expect(expected.count == 24)
+        #expect(Set(expected.map(\.0)).count == 24)
         #expect(
             Set(expected.map(\.0))
                 .isDisjoint(with: Set(CompanyIconOriginOverride.pronexusDisclosureHomepages.keys)))
@@ -1194,6 +1089,13 @@ import Testing
             case .none:
                 Issue.record("missing pin \(code)")
             }
+        }
+        for code in ["1429", "1897", "2003", "2215", "2652", "3059", "3675", "3803", "3927", "4172", "4390", "4478", "4597", "5355", "5537", "6337", "8071", "9322"] {
+            guard case .imageURL(let url) = CompanyIconOriginOverride.manualSources[code] else {
+                Issue.record("expected CDN imageURL \(code)")
+                continue
+            }
+            #expect(url.hasSuffix("/company-icons/\(code).png"), "code=\(code)")
         }
     }
 

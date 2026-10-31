@@ -147,7 +147,7 @@ CSV 列: `code`, name, source URL, `w`, `h`, 長辺 %, 短辺 %, flags。チャ�
 3. GO なし・却下・無回答はマップに入れない。台帳に `awaiting_go` / `rejected`
 4. 差し替えを未 GO のまま Ready PR に混ぜない。欠測だけ先に出すなら PR を分ける
 
-無理に引き伸ばさない。ユーザー添付の高解像ロゴやワンオフ白地パッドは **CDN マップ**（公式の低解像 URL を残すと次の ingest が戻る）。
+無理に引き伸ばさない。ユーザー添付の高解像ロゴやワンオフ白地パッドは **CDN マップ**（公式の低解像 URL を残すと次の ingest が戻る）。visual GO 済みピンに実アルファがあるときは同サイズのまま白 flatten して CDN マップする（不透明は公式 URL のまま。クロップや 85% パッドはしない）。
 
 visual GO でワードマーク／社名ロックアップが却下されマークのみを求められたら、公式の高解像ソース（SVG・大きい PNG・ブランドページ・OGP）からマークだけをワンオフ 512 白地にして `review/` に再仮置きし、その code だけ再 webhook する。次の visual GO までマップしない。
 
@@ -199,6 +199,7 @@ origin: (1) ユーザー指定のコンシューマサイト (2) 有報「公告
 | 公式 origin から favicon が取れる | `.homepageOrigin`（scheme+host） |
 | 公式画像の直 URL がこの CA から GET できる | `.imageURL`（その公式 URL） |
 | 外部のみ、ユーザー添付、ワンオフ整形、公式がこの CA から TLS/timeout | 実体を R2 へ → `.imageURL` は CDN のみ |
+| visual GO 済みで **実アルファ** がある（RGBA/LA、パレット tRNS、透明 SVG/ICO/WEBP） | 同サイズのまま白地へ flatten → R2 `company-icons/{code}.png` → `.imageURL` は CDN。不透明（alpha 全 255 / RGB / tRNS 無し）は公式 URL のまま。サイズ・クロップ・85% パッドは変えない |
 
 Wayback は **バイト取得の代用** であってマップ値ではない。同一公式パスのアーカイブから取れたら R2 → CDN。`web.archive.org` を `manualSources` に書かない。
 
@@ -211,6 +212,7 @@ Wayback は **バイト取得の代用** であってマップ値ではない。
 - バイトを先に持っている（添付・Wayback・ワンオフ PNG）ときは既存 R2 経路で PUT してよい。その後 **マップを CDN にして** `blt-ingest ingest --stages icons --codes` で DB 行を書く
 - SQL で `company_icons` を upsert しない（ingest の skip / source_url 照合から外れる）
 - 同一キー上書き時は CDN `max-age=14400` に注意
+- visual GO 済みの白 flatten PNG はマップ前に本番キー `company-icons/{code}.png` へ置く（未 GO の差し替え仮置きとは別）
 
 ## コード変更
 
@@ -271,7 +273,7 @@ DATABASE_URL="$BLT_NEON_WRITE_DATABASE_URL" ./.build/release/blt-ingest ingest -
 
 `docs/icons-manual-skips.md` が会社単位の正本。Cursor Memories だけに頼らない。
 
-各行: `code` / 理由 (`blocked` | `needs_link` | `tls` | `timeout` | `low_vis_no_source` | `low_res_no_source` | `awaiting_go` | `rejected` | …) / 日付 / メモ
+各行: `code` / 理由 (`blocked` | `needs_link` | `tls` | `timeout` | `low_vis_no_source` | `low_res_no_source` | `awaiting_go` | `rejected` | `visual_ng_YYYYMMDD` | …) / 日付 / メモ
 
 毎ラン開始時に読み、対象から除外。新規スキップはピン PR に含める。`code` は証券コード 4 文字（`288A` のような英字を含む）。数字 4 桁だけにアンカーすると英字コードが台帳から漏れて再候補化される。
 
@@ -322,6 +324,8 @@ DATABASE_URL="$BLT_NEON_WRITE_DATABASE_URL" ./.build/release/blt-ingest ingest -
 - **GO 条件付きクロップ。** 差し替え GO がマーク座標を条件にするときは再 webhook しない。指定矩形で切り、CDN マップして差し替え PR に入れる
 - **GO 後の公式 URL 再取得。** 非 ASCII パスは percent-encode してから GET。公式 HTML 上の Wix / GCS apple-touch は first-party。GO 済みで origin が 403 / TLS 不能なら After を CDN マップする
 - **Pronexus × imageURL。** `pronexusDisclosureHomepages` と `manualSources` の homepageOrigin は重ねない。GO 済み imageURL は Pronexus 16 社にも載せてよい（ingest は imageURL、origin リマップは Pronexus マップ）
+- **透明は黒地で消える。** アプリは黒地で描画する。visual GO 済みピンに実アルファがあれば同サイズのまま白 flatten して CDN マップ。不透明は公式 URL のまま。クロップや 85% パッドはしない
+- **visual NG。** 欠測ピンの visual NG はマップから外し台帳 `visual_ng_YYYYMMDD`。後ランでコーポレートマーク（85% After）を再ソースして visual GO。同じ公式 URL を再ピンしない
 
 ## 完了条件
 
