@@ -264,6 +264,10 @@ jobs:
         working-directory: Apps/BlueTicker/ScreenSnapshot
         run: swift test -Xswiftc -disable-upcoming-feature -Xswiftc MemberImportVisibility
 
+      - name: Test iOS chat facts
+        working-directory: Apps/BlueTicker/ChatFacts
+        run: swift test -Xswiftc -disable-upcoming-feature -Xswiftc MemberImportVisibility
+
   # ---- 必須チェック（scripts/ci/*.sh。ローカルでも同じコマンドで実行できる。docs/ci-checks.md）
   golden-suite:
     # ゴールデン（smoke/smoke_expected + .checksums.json、smoke/*_expected.json、
