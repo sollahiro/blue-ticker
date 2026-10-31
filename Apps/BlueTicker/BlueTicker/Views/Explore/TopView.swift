@@ -227,8 +227,10 @@ struct TopView: View {
 
 /// 左上の白抜きロゴ。アセット `YuhoLabLogo`（SVG。元ファイルの影フィルタは外してある）。読めないときは文字で出す。
 struct YuhoLabLogo: View {
-    /// ナビゲーションバー（44pt）に近い高さ。SVG の viewBox は字の外接矩形に詰めてある。
-    static let height: CGFloat = 34
+    /// ナビゲーションバー（44pt）いっぱいに近い高さ。SVG の viewBox は字の外接矩形に詰めてある。
+    static let height: CGFloat = 42
+    /// viewBox の縦横比（1382 × 389）。幅も固定し、ツールバーに縮められないようにする。
+    static let aspectRatio: CGFloat = 1382 / 389
 
     var body: some View {
         Group {
@@ -237,7 +239,8 @@ struct YuhoLabLogo: View {
                     .renderingMode(.template)
                     .resizable()
                     .scaledToFit()
-                    .frame(height: Self.height)
+                    .frame(width: Self.height * Self.aspectRatio, height: Self.height)
+                    .fixedSize()
             } else {
                 Text("有報LAB")
                     .font(.headline.weight(.heavy))
