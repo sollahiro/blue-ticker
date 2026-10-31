@@ -26,7 +26,7 @@ App Icon は対象外。1社1枚。
 
 最初に `.agents/skills/company-icons/SKILL.md` を全文読む。禁止事項・候補出し・GO・R2・ingest・自己修正はそこが正本。
 
-やる: 毎ランは listed×`company_icons` の格納済み全件をトンボ計測し、低視認・低解像・identifiable-but-low-res を機械的に列挙してから、公式 HTTPS を manualSources に足す（Git はテキストのみ）。公式が無く外部だけなら外部 URL は Git 禁止、実 GET → R2 → CDN URL のみ。テスト 1:1。Ready PR。マージ後この CA が WRITE icons ingest。スキップ台帳を更新。ランで見つかった手順の穴はこの skill を直して同じ PR（または直後の PR）に含める。
+やる: 毎ランは listed×`company_icons` の格納済み全件をトンボ計測し、low_vis / lockup / low_res（公式の大きいソースがあるもの。バッチ最大 20）を機械的に列挙してから、公式 HTTPS を manualSources に足す（Git はテキストのみ）。公式が無く外部だけなら外部 URL は Git 禁止、実 GET → R2 → CDN URL のみ。テスト 1:1。Ready PR。マージ後この CA が WRITE icons ingest。スキップ台帳を更新。ランで見つかった手順の穴はこの skill を直して同じ PR（または直後の PR）に含める。
 
 やらない: PR Times 等をマップ／テストに書く、画像バイナリを Git へ、Core への画像パイプライン、icons-vN バンプ、TLS 弱体化、無関係リファクタ、明示のない Linear コメント、明示のない既存 URL 変更、Icon Clerk へ渡す。
 
@@ -89,8 +89,8 @@ icons weekly 専用。次の **5 条件がすべて揃ったときだけ**、Aut
 ## データ源
 
 - Neon は本番（WRITE と同系統）を直接読む。RO ブランチは使わない
-- 候補: listed × `company_icons` 欠行、**格納済み全件のトンボ計測**（次節）、極小オブジェクト、低解像度、横長で正方形化すると中身が小さいもの、ingest 失敗ログ
-- 売上上位キャップや「1回20社」上限は設けない（PR が巨大なら分割してよい）
+- 候補: listed × `company_icons` 欠行、**格納済み全件のトンボ計測**（次節）、ingest 失敗ログ
+- 欠測ピンに件数上限は無い（PR が巨大なら分割してよい）。`low_res` 差し替えは毎ラン **最大 20**（後述）
 - main の `manualSources` キーとスキップ台帳を先に読み、重複させない
 
 ## 候補
@@ -100,22 +100,31 @@ icons weekly 専用。次の **5 条件がすべて揃ったときだけ**、Aut
 1. `company_icons` に行が無い
 2. 行はあるが iOS で使えない／差し替え候補（トンボ全件スキャンが機械的に列挙したもの含む）
 3. ブランドが違う（グローバル vs 日本向け、子会社 vs 上場会社本体）
-4. **identifiable but low-res**: 格納画像は識別できる（トンボ長辺 70% 以上）が、短辺 128px 未満で iOS 一覧がガビガビ（2802 / 2871 / 7963 型の 32–48px favicon）
+
+差し替え候補は **次のいずれか**（padding は (a) に含まれる。4075 は 500px でも長辺 60%）：
+
+| | 条件 | 直し方 |
+| --- | --- | --- |
+| **(a) `low_vis`** | トンボ **長辺 &lt; 70%** | 公式の大きいソースがあれば 512 白地で長辺 80–88%（目安 85%） |
+| **(b) `lockup`** | シンボルマーク＋ワードマーク／社名のロックアップで、フィット後の **短辺 &lt; 70%**（3539 型: 長辺 79%・高さ 34%） | シンボルだけを連結成分マスクで分離し 512 白地へ。**分離できるシンボルが無い純ワードマーク**（花王 4452、KEIO 9008）は長辺 80–88% なら短辺が小さくても候補にしない |
+| **(c) `low_res`** | 識別できるが格納 min 辺 **&lt; 128px**（2802 48px、2871/7963 32px ICO）**かつ** 公式に大きいマークがある（apple-touch 180+、header SVG/PNG、OGP のシンボル） | その公式ソースから 512。大きい公式ソースが無ければ引き伸ばさない。台帳 `low_res_no_source` |
+
+`(c)` は約 2000 件。毎ランは台帳・既存ピン・`awaiting_go` を飛ばし、**min 辺が小さい順 → 長辺 % が低い順**で最大 **20** 社。提案した code は台帳 `awaiting_go`、ソース無しは `low_res_no_source`。次ランが同じ 20 を繰り返さない。
 
 ### トンボ全件スキャン（毎ラン）
 
-欠測リストだけを見ない。listed JP で `company_icons` 行がある **全コード** の格納バイトを読み、`.agents/skills/company-icons/tombo.py` で測る。測る対象から台帳・既存ピンを外さない（フラグだけ付ける）。
+欠測リストだけを見ない。listed JP で `company_icons` 行がある **全コード** の格納バイトを読み、`.agents/skills/company-icons/tombo.py` で測る。測る対象から台帳・既存ピンを外さない（フラグだけ付ける）。SVG は Pillow が開けないので `rsvg-convert`。
 
-CSV 列: `code`, name, source URL, `w`, `h`, 長辺 %, flags。フラグ:
+CSV 列: `code`, name, source URL, `w`, `h`, 長辺 %, 短辺 %, flags。チャットに件数・最低 long%・最小 px を出す。ピン提案は上表の (a)(b)(c) と公式ソースがある行だけ。
 
-| flag | 機械的条件 | 扱い |
-| --- | --- | --- |
-| `low_res` | min(w,h) **128px 未満** | 差し替え候補 |
-| `low_vis` | トンボ長辺 **70% 未満** | 差し替え候補 |
-| `letterbox_short` | 長辺 ≥70% でもフィット後の **短辺 70% 未満** | 差し替え候補（3539 型: 横長 OGP ロックアップは長辺 79% でも高さ約 34%） |
-| `ident_low_res` | `low_res` かつ長辺 ≥70% | クラス 4。識別はできるが解像度不足 |
+作業例（2026-10-31 GO。1 行ずつ）:
 
-チャットに件数・最低 long%・最小 px を出す。ピン提案は公式のより大きいソース（apple-touch 180+ / SVG / 大きい PNG）が取れた行に限る。数千件を一度にマップしない。SVG は Pillow が開けないので `rsvg-convert` してから測る。
+- `4075` (a) padding: 500px 公式 PNG なのに長辺 60% → 同じ PNG のロックアップを 85%
+- `9240` (a) padding: apple-touch 180 が長辺 66% → header SVG の DC マークを 85%
+- `3539` (b) lockup: OGP 1000×600 長辺 79% / 高さ 34% → Jm シンボルだけ CC 分離して 85%
+- `2802` (c) low_res: 48px ICO、公式 OGP に Aj → Aj を CC 分離して 85%
+- `2871` (c) low_res: 32px ICO、公式 header SVG → N マークを CC 分離して 85%
+- `7963` (c) low_res: 32px ICO、公式 header PNG にマークあり → シアンマークを CC 分離して 85%（ソース約 90px。無いなら引き伸ばさない）
 
 失敗パターンの例: 紙面のみ / URL 無し → 公式 HP（6150, 7888）。frameset → 公式 HP（9267。TLS 不能な直 logo は `homepageOrigin`）。Pronexus → `pronexusDisclosureHomepages`（7893 除外）。英数字コードは有報120があれば `--codes` 可（581A）。持株 16×16 → グループ大きい apple-touch。極小 1bit → 同ページ 180–192px PNG。白地消滅 → コントラストのある大きい PNG。公式パス 404/410/403 → 別の公式パス。公式無し・外部のみ → R2 → CDN。安定取得不能 → 台帳。
 
@@ -123,11 +132,11 @@ CSV 列: `code`, name, source URL, `w`, `h`, 長辺 %, flags。フラグ:
 
 ## 差し替え — ユーザー visual GO 必須
 
-既存行があっても候補にする:
+既存行があっても候補にする（上表の (a)(b)(c)）:
 
-1. 解像度が低い（目安: 辺が **128px 未満**）。識別できても 32–48px favicon なら **identifiable but low-res**
-2. iOS で視認性が低い（白地消滅、1bit ICO、Pronexus / WP 既定、コントラスト不足）
-3. 横長／縦長を正方形に落とすとマークが小さい。測り方は次節の **トンボ（crop-mark）**。中央クロップで測らない。長辺が正方形の **70% 未満**なら低視認（花王 4452: 1200×630 OGP はフィット後に幅約47%・高さ約13%）。長辺が 70% 以上でも短辺が 70% 未満なら `letterbox_short`（3539 型）
+1. `low_vis`: トンボ長辺 70% 未満（padding 含む。4075 型）
+2. `lockup`: シンボル＋社名で短辺 70% 未満（3539 型）。純ワードマークは短辺が小さくても候補にしない
+3. `low_res`: min 辺 128px 未満かつ公式に大きいマークがある。無ければ台帳、引き伸ばさない
 
 **欠測の新規ピン**は GO なしで Ready PR まで進めてよい。
 
@@ -149,7 +158,7 @@ visual GO でワードマーク／社名ロックアップが却下されマー�
 | 判定 | 長辺 |
 | --- | --- |
 | 低視認（差し替え候補） | **70% 未満** |
-| letterbox_short（差し替え候補） | 長辺 ≥70% かつ **短辺 70% 未満** |
+| lockup（差し替え候補） | シンボル＋社名があり **短辺 70% 未満**（純ワードマークは除外） |
 | After（GO 済みワンオフ） | **80–88%（目安 85%）** の 512×512 白地 |
 
 縦長／細いマークは **高さ** を 85% に、横長ワードマークは **幅** を 85% に合わせる。引き伸ばさない。ワードマークからマークだけを切り出すときは矩形クロップせず、マークの連結成分をマスクする（隣の字形が混入しない）。計測とオーバーレイは `.agents/skills/company-icons/tombo.py`（入力パス → 長辺 % を印字。`--overlay` で一時 PNG。オーバーレイもアイコン本体も Git に載せない）。
@@ -262,7 +271,7 @@ DATABASE_URL="$BLT_NEON_WRITE_DATABASE_URL" ./.build/release/blt-ingest ingest -
 
 `docs/icons-manual-skips.md` が会社単位の正本。Cursor Memories だけに頼らない。
 
-各行: `code` / 理由 (`blocked` | `needs_link` | `tls` | `timeout` | `low_vis_no_source` | `awaiting_go` | `rejected` | …) / 日付 / メモ
+各行: `code` / 理由 (`blocked` | `needs_link` | `tls` | `timeout` | `low_vis_no_source` | `low_res_no_source` | `awaiting_go` | `rejected` | …) / 日付 / メモ
 
 毎ラン開始時に読み、対象から除外。新規スキップはピン PR に含める。`code` は証券コード 4 文字（`288A` のような英字を含む）。数字 4 桁だけにアンカーすると英字コードが台帳から漏れて再候補化される。
 
@@ -307,16 +316,16 @@ DATABASE_URL="$BLT_NEON_WRITE_DATABASE_URL" ./.build/release/blt-ingest ingest -
 - **壊れた公告ホスト。** セル内 URL が `.html` 連結・全角ハイフン・空白入りだと origin パース不能。自動 ingest 不能として公式 origin を別途探す
 - **差し替え仮置き。** Before/After は `company-icons/review/{date}/{code}-before|after.*`。未 GO の差し替えで本番 `company-icons/{code}.*` を上書きしない。CDN マップする GO 済み画像は ingest が同じキーを取りに行くので、マップ PR の前に本番キーへ置く
 - **却下後のマークのみ。** ワードマーク付き After が却下されたら公式高解像からマークだけを切り、`review/` に新しい After を置きその code だけ再 webhook。マップは次の GO まで入れない
-- **横長の測り方。** 低視認は中央クロップではなくトンボ（aspect-fit → 背景差 30 の外接長辺）。70% 未満が候補。長辺 ≥70% でも短辺 70% 未満は `letterbox_short`（3539 型）。After は 512 白地の長辺 80–88%（目安 85%）。花王 4452 の 1200×630 OGP はフィット後に高さ約13%
-- **トンボ全件スキャン。** 欠測リストだけ見ると identifiable-but-low-res（32–48px でも長辺 ≥70%）と 3539 型を落とす。毎ラン listed×`company_icons` の格納バイトを測る。Pillow は SVG を開けないので `rsvg-convert`
-- **identifiable but low-res。** 長辺 ≥70% でも短辺 128px 未満は差し替え候補。公式 apple-touch / SVG / 大きい PNG があれば 512 白地で提案（マップは visual GO 後）
+- **横長の測り方。** 低視認は中央クロップではなくトンボ（aspect-fit → 背景差 30 の外接長辺）。長辺 70% 未満が (a)。シンボル＋社名で短辺 70% 未満が (b) lockup（3539）。純ワードマーク（花王 4452、KEIO 9008）は長辺 80–88% なら短辺が小さくても候補にしない。After は 512 白地の長辺 80–88%（目安 85%）
+- **トンボ全件スキャン。** 欠測リストだけ見ると (a) padding（4075 60%）と (c) low_res を落とす。毎ラン listed×`company_icons` を測る。Pillow は SVG を開けないので `rsvg-convert`
+- **low_res バッチ。** min 辺 128px 未満は約 2000 件。公式の大きいソースがあるものだけ候補。無ければ台帳 `low_res_no_source`、引き伸ばさない。毎ラン 20 社（min 辺 → 長辺 %）。台帳・ピン・`awaiting_go` を飛ばし、処理済みを台帳に書いて繰り返さない
 - **GO 条件付きクロップ。** 差し替え GO がマーク座標を条件にするときは再 webhook しない。指定矩形で切り、CDN マップして差し替え PR に入れる
 - **GO 後の公式 URL 再取得。** 非 ASCII パスは percent-encode してから GET。公式 HTML 上の Wix / GCS apple-touch は first-party。GO 済みで origin が 403 / TLS 不能なら After を CDN マップする
 - **Pronexus × imageURL。** `pronexusDisclosureHomepages` と `manualSources` の homepageOrigin は重ねない。GO 済み imageURL は Pronexus 16 社にも載せてよい（ingest は imageURL、origin リマップは Pronexus マップ）
 
 ## 完了条件
 
-- [ ] 本番 DB から listed×`company_icons` を読み、格納済み全件をトンボ計測した（low_vis / low_res / ident_low_res / letterbox_short を機械的に列挙。台帳・ピンは除外せずフラグ）
+- [ ] 本番 DB から listed×`company_icons` を読み、格納済み全件をトンボ計測した（(a) low_vis / (b) lockup / (c) low_res を列挙。測るときは台帳・ピンを外さない。low_res 提案は最大 20）
 - [ ] 欠測・ピン提案は台帳と既存マップを除外済み
 - [ ] 新規ピンは実 GET + マジックバイト + 視認性ゲート合格（この CA から取れる URL、または CDN）
 - [ ] ピンした実画像を **全て** Before/After でチャットに見せている（製品ブランドに限らない。欠測の Before は未格納。GO は差し替えのみ）。PR にはロゴなしガイド + 数値のみ
