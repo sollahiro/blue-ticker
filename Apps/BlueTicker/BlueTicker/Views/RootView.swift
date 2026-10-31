@@ -8,6 +8,8 @@ struct RootView: View {
     @State private var searchQuery = ""
     @State private var screenSession = ScreenSession()
     @State private var feedSession = FeedSession()
+    /// 表示中の銘柄面の数。push の切り替わりで出入りが重なるので数で持つ。
+    @State private var visibleTickers = 0
     @Query(sort: \WatchedCompany.sortOrder) private var watched: [WatchedCompany]
 
     var body: some View {
@@ -31,6 +33,8 @@ struct RootView: View {
         .preferredColorScheme(.dark)
         .tint(Theme.accent)
         .toolbarBackground(.hidden, for: .tabBar)
+        // 銘柄面（分析結果）だけ、下へスクロールするとタブバーを丸く縮めて端へ寄せる。
+        .tabBarMinimizeBehavior(visibleTickers > 0 ? .onScrollDown : .automatic)
         .task(id: watched.map(\.code).joined(separator: ",")) {
             let codes = Array(Set(watched.map(\.code)))
             await APIClient.shared.setPinnedCodes(Set(codes))
@@ -54,5 +58,7 @@ struct RootView: View {
 
     private func ticker(_ company: CompanyRef) -> some View {
         TickerView(company: company)
+            .onAppear { visibleTickers += 1 }
+            .onDisappear { visibleTickers = max(visibleTickers - 1, 0) }
     }
 }
