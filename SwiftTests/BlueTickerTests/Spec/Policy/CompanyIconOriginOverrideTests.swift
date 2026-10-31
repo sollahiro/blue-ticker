@@ -122,7 +122,7 @@ import Testing
             ("9531", "https://www.tokyo-gas.co.jp/apple-touch-icon.png"),
             ("3402", "https://www.toray.com/apple-touch-icon.png"),
             ("9201", "https://www.jal.com/favicon.ico"),
-            ("4452", "https://www.kao.com/content/dam/sites/kao/www-kao-com/jp/ja/index/ogp_logo.png"),
+            ("4452", "https://icons.sollahiro.com/company-icons/4452.png"), // pragma: allowlist secret
             ("6724", "https://www.epson.jp/images/ogp_img.png"),
             ("4204", "https://www.sekisui.co.jp/resource/img/ogp.png"),
             ("5801", "https://www.furukawaelectric.com/common/images/ogimage.png"),
@@ -563,6 +563,17 @@ import Testing
             #expect(
                 CompanyIconOriginOverride.manualSources[code] == .imageURL(url), "code=\(code)")
         }
+    }
+
+    /// 2026-10-31: 4452 花王。横長 OGP は aspect-fit で低視認。Sorahiro visual GO のワンオフ 512 白地を R2 CDN へ。
+    @Test func pins20261031KaoWordmarkReplacementCDNImageURL() {
+        let url = "https://icons.sollahiro.com/company-icons/4452.png" // pragma: allowlist secret
+        #expect(CompanyIconOriginOverride.manualSources["4452"] == .imageURL(url))
+        #expect(!url.contains("prtimes.jp"))
+        #expect(!url.contains("i0.wp.com"))
+        #expect(!url.contains("kao.com"))
+        #expect(url.hasSuffix("/company-icons/4452.png"))
+        #expect(CompanyIconOriginOverride.pronexusDisclosureHomepages["4452"] == nil)
     }
 
     /// 2026-10-20 weekly: listed × company_icons 欠行。公告 URL が origin パース不能／注記委譲。

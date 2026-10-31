@@ -89,6 +89,8 @@ enum CompanyIconOriginOverride {
     /// 中央マークのある OGP。apple-touch の単色矩形は使わず OGP へ（2286）。
     /// 2026-10-20 weekly replacements: same-origin 16px→公式 apple-touch / 正方形。
     /// Visual GO は PR #534（99 公式 URL + 3 マークのみ 512 CDN）。
+    /// 2026-10-31: 4452 花王。横長 OGP はアプリの aspect-fit で低視認。Sorahiro visual GO
+    /// のワンオフ 512 白地を R2 CDN へ（公式の横長 OGP は残さない）。
     static let manualSources: [String: CompanyIconManualSource] = [
         "7203": .homepageOrigin("https://toyota.jp"),
         "9267": .homepageOrigin("https://www.genky.co.jp"),
@@ -109,7 +111,7 @@ enum CompanyIconOriginOverride {
         "9531": .imageURL("https://www.tokyo-gas.co.jp/apple-touch-icon.png"),
         "3402": .imageURL("https://www.toray.com/apple-touch-icon.png"),
         "9201": .imageURL("https://www.jal.com/favicon.ico"),
-        "4452": .imageURL("https://www.kao.com/content/dam/sites/kao/www-kao-com/jp/ja/index/ogp_logo.png"),
+        "4452": .imageURL("https://icons.sollahiro.com/company-icons/4452.png"), // R2 CDN Kao wordmark 512 // pragma: allowlist secret
         "6724": .imageURL("https://www.epson.jp/images/ogp_img.png"),
         "4204": .imageURL("https://www.sekisui.co.jp/resource/img/ogp.png"),
         "5801": .imageURL("https://www.furukawaelectric.com/common/images/ogimage.png"),
