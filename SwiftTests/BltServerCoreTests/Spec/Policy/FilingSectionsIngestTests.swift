@@ -289,6 +289,39 @@ private let keys = "business_risks,mda,segments"
         }
     }
 
+    /// 版だけ古く内容が同じ書類は、ペイロードを書かなくても版が現行に進み、次の回は skip される（BLT-200）。
+    @Test func ingestAdvancesVersionWhenPayloadUnchangedAndSkipsNextRun() async throws {
+        try await withMigratedApp { app in
+            try await seedDoc("S1", secCode: "72030", db: app.db)
+            let stale = CompanyFilingSections()
+            stale.id = "S1"
+            stale.code = "7203"
+            stale.submitDateTime = "2025-06-20 09:00"
+            stale.payload = fakePayload("same")
+            stale.cacheVersion = "old-version"
+            stale.sectionKeys = "business_risks,mda"
+            try await stale.create(on: app.db)
+
+            let first = try await runFilingSectionsIngest(
+                db: app.db, listedCodes: ["7203"], years: 3, sectionKeys: keys, limit: nil
+            ) { _ in fakePayload("same") }
+            #expect(first.stored == 1)
+            let row = try #require(try await CompanyFilingSections.find("S1", on: app.db))
+            #expect(row.cacheVersion == filingSectionsCacheVersion)
+            #expect(row.sectionKeys == keys)
+            #expect(row.payload == fakePayload("same"))
+
+            let second = try await runFilingSectionsIngest(
+                db: app.db, listedCodes: ["7203"], years: 3, sectionKeys: keys, limit: nil
+            ) { _ in
+                Issue.record("extractor must not run after the version was advanced")
+                return fakePayload("same")
+            }
+            #expect(second.skipped == 1)
+            #expect(second.attempted == 0)
+        }
+    }
+
     @Test func ingestReextractsWhenSectionKeysMismatch() async throws {
         try await withMigratedApp { app in
             try await seedDoc("S1", secCode: "72030", db: app.db)
