@@ -412,8 +412,8 @@ private struct CompanyGlassPresenter: UIViewRepresentable {
             }
             openTap?.isEnabled = !model.expanded
             host?.view.isUserInteractionEnabled = model.expanded
-            if let wrapper {
-                wrapper.window?.bringSubviewToFront(wrapper)
+            if let wrapper, let window = wrapper.window {
+                Self.place(wrapper, in: window)
             }
             model.onCoversScreen = { [weak self] covers in
                 self?.wrapper?.hitEverywhere = covers
@@ -440,6 +440,27 @@ private struct CompanyGlassPresenter: UIViewRepresentable {
             } else if host != nil, !morphing, expanded != model.expanded {
                 // タイトル位置の VoiceOver 操作は SwiftUI 側のフラグだけを変える。
                 model.setExpanded(expanded)
+            }
+        }
+
+        /// ナビより上、シートなどの表示より下に置く。前面へ出すと、チャットのシートの上にピルが乗る。
+        private static func place(_ wrapper: UIView, in window: UIWindow) {
+            var presentation: UIView?
+            if let container = window.rootViewController?.presentedViewController?
+                .presentationController?.containerView
+            {
+                var view: UIView? = container
+                while let current = view, current.superview != nil, current.superview !== window {
+                    view = current.superview
+                }
+                if view?.superview === window { presentation = view }
+            }
+            if let presentation, presentation !== wrapper {
+                window.insertSubview(wrapper, belowSubview: presentation)
+            } else if wrapper.superview !== window {
+                window.addSubview(wrapper)
+            } else {
+                window.bringSubviewToFront(wrapper)
             }
         }
 
@@ -540,7 +561,7 @@ private struct CompanyGlassPresenter: UIViewRepresentable {
             // 親 VC を付けずにウィンドウへ載せる。ナビの子にするとスタックと
             // ビュー階層が食い違う。バーより上に描くためのホストだけ。
             wrapper.alpha = 0
-            window.addSubview(wrapper)
+            Self.place(wrapper, in: window)
             self.wrapper = wrapper
             self.cardContainer = container
             self.host = host

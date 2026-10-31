@@ -139,6 +139,7 @@ struct CompanyChatSheet: View {
         }
     }
 
+    /// 入力欄。後ろの会話が透けて文字に重ならないよう、欄の背後はシートの地色で塗る。
     private var inputBar: some View {
         HStack(alignment: .bottom, spacing: 8) {
             TextField("質問を入力", text: $draft, axis: .vertical)
@@ -146,21 +147,26 @@ struct CompanyChatSheet: View {
                 .focused($inputFocused)
                 .submitLabel(.send)
                 .onSubmit { submit(draft) }
+                .foregroundStyle(Theme.text)
                 .padding(.horizontal, 16)
                 .padding(.vertical, 10)
-                .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-            Button("送信", systemImage: "arrow.up") {
+                .background(Theme.control, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+            Button {
                 submit(draft)
+            } label: {
+                Image(systemName: "arrow.up")
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(canSend ? Color.white : Theme.textMuted)
+                    .frame(width: 40, height: 40)
+                    .background(canSend ? Theme.accent : Theme.elevated, in: Circle())
             }
-            .labelStyle(.iconOnly)
-            .font(.body.weight(.semibold))
-            .frame(width: 40, height: 40)
-            .glassEffect(.regular.tint(Theme.accent).interactive(), in: Circle())
+            .buttonStyle(.plain)
             .disabled(!canSend)
-            .opacity(canSend ? 1 : 0.5)
+            .accessibilityLabel("送信")
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 8)
+        .background(Theme.shell.ignoresSafeArea(edges: .bottom))
     }
 
     private var canSend: Bool {
@@ -306,7 +312,7 @@ struct CompanyChatDigest {
 /// 決算期ごとの値を返すツール。取得済みの Waterfall から返すので通信しない。
 struct FinancialYearTool: Tool {
     let name = "getFinancialYear"
-    let description = "指定した決算期の売上高・営業利益・営業利益率・純利益・ROE・ROIC・従業員数を返す"
+    let description = "指定した決算期の売上高・営業利益・営業利益率・純利益・ROE・ROIC・従業員数と、前期からの変化の要因を返す"
     let facts: ChatFacts
 
     @Generable
@@ -356,7 +362,7 @@ final class CompanyChatModel {
     private var started = false
 
     /// 端末内モデルの文脈は約 4,000 トークン。会社説明はこの字数で切る。
-    private static let overviewCharacterLimit = 300
+    private static let overviewCharacterLimit = 200
 
     init(company: CompanyRef) {
         self.company = company
@@ -484,6 +490,10 @@ final class CompanyChatModel {
         }
         lines.append("数字（計算済み。表記を変えずに使う）:")
         lines.append(facts.promptLines)
+        if !facts.driverLines.isEmpty {
+            lines.append("変化の要因（計算済み。表記を変えずに使う）:")
+            lines.append(contentsOf: facts.driverLines)
+        }
         lines.append("取得できる決算期: " + facts.periodLabels.joined(separator: "、"))
         return lines.joined(separator: "\n")
     }
@@ -495,10 +505,12 @@ final class CompanyChatModel {
     """
 
     private static let chatRules = """
-    回答は3文程度にします。
-    表に無い決算期の値が必要なときは getFinancialYear を使います。
-    有価証券報告書の本文、株価、将来の業績予想は手元に無いので、答えられないと伝えます。
-    投資の勧誘や売買の判断はしません。
+    回答は3〜4文にします。
+    「なぜ」「要因」を聞かれたら、まず「変化の要因」の数字で説明します。例えば利益率なら、粗利率と販管費率のどちらが動いたか、事業利益の前期差のうち売上・粗利率・販管費の要因がそれぞれいくらかを答えます。
+    従業員数の影響は、従業員1人あたり売上高の変化で説明します。ROE の変化は、純利益率・総資産回転率・財務レバレッジのどれが動いたかで説明します。
+    数字で説明したうえで、事業上の具体的な理由（製品、価格、為替など）は手元の資料に無いと一言添えます。「データがありません」だけで終えません。
+    表に無い決算期の値や要因が必要なときは getFinancialYear を使います。
+    株価と将来の業績予想は扱いません。投資の勧誘や売買の判断はしません。
     """
 
     private static let fallbackSuggestions = [
@@ -539,7 +551,16 @@ final class CompanyChatModel {
                 netProfit: year.netProfit,
                 roe: year.roe,
                 roic: year.roic,
-                employees: year.employees
+                employees: year.employees,
+                grossProfitMargin: year.grossProfitMargin,
+                sga: year.sga,
+                businessProfitChange: year.businessProfitChange,
+                salesChangeImpact: year.salesChangeImpact,
+                grossMarginChangeImpact: year.grossMarginChangeImpact,
+                sgaChangeImpact: year.sgaChangeImpact,
+                netMargin: year.netMargin,
+                assetTurnover: year.assetTurnover,
+                financialLeverage: year.financialLeverage
             )
         }
         facts = ChatFacts(years: years) { amount in

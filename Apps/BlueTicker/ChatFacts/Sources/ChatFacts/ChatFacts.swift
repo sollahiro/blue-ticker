@@ -12,6 +12,18 @@ struct ChatFactYear: Sendable, Equatable {
     var roe: Double?
     var roic: Double?
     var employees: Int?
+    /// 要因の説明用。売上総利益率（%）と販管費（金額）。
+    var grossProfitMargin: Double?
+    var sga: Double?
+    /// 事業利益（売上総利益 − 販管費）の前期差と、その売上・利益率・販管費の要因（金額）。
+    var businessProfitChange: Double?
+    var salesChangeImpact: Double?
+    var grossMarginChangeImpact: Double?
+    var sgaChangeImpact: Double?
+    /// ROE のデュポン分解（純利益率は %、回転率とレバレッジは倍）。
+    var netMargin: Double?
+    var assetTurnover: Double?
+    var financialLeverage: Double?
 
     init(
         fyEnd: String,
@@ -21,7 +33,16 @@ struct ChatFactYear: Sendable, Equatable {
         netProfit: Double? = nil,
         roe: Double? = nil,
         roic: Double? = nil,
-        employees: Int? = nil
+        employees: Int? = nil,
+        grossProfitMargin: Double? = nil,
+        sga: Double? = nil,
+        businessProfitChange: Double? = nil,
+        salesChangeImpact: Double? = nil,
+        grossMarginChangeImpact: Double? = nil,
+        sgaChangeImpact: Double? = nil,
+        netMargin: Double? = nil,
+        assetTurnover: Double? = nil,
+        financialLeverage: Double? = nil
     ) {
         self.fyEnd = fyEnd
         self.sales = sales
@@ -31,6 +52,27 @@ struct ChatFactYear: Sendable, Equatable {
         self.roe = roe
         self.roic = roic
         self.employees = employees
+        self.grossProfitMargin = grossProfitMargin
+        self.sga = sga
+        self.businessProfitChange = businessProfitChange
+        self.salesChangeImpact = salesChangeImpact
+        self.grossMarginChangeImpact = grossMarginChangeImpact
+        self.sgaChangeImpact = sgaChangeImpact
+        self.netMargin = netMargin
+        self.assetTurnover = assetTurnover
+        self.financialLeverage = financialLeverage
+    }
+
+    /// 販管費率（%）。売上高に対する販管費。
+    var sgaRatio: Double? {
+        guard let sga, let sales, sales != 0 else { return nil }
+        return sga / sales * 100
+    }
+
+    /// 従業員 1 人あたり売上高（金額）。
+    var salesPerEmployee: Double? {
+        guard let sales, let employees, employees > 0 else { return nil }
+        return sales / Double(employees)
     }
 
     /// 期末の西暦年。`2026-03-31` なら 2026。
@@ -135,6 +177,8 @@ struct ChatFacts: Sendable {
     let latestPeriod: String
     let previousPeriod: String?
     let rows: [ChatFactRow]
+    /// 最新期の「なぜ」に答える材料（要因分解・原価率・販管費率・デュポン分解）。1 行 1 項目。
+    let driverLines: [String]
     private let amountText: @Sendable (Double) -> String
 
     /// `amountText` は金額（通貨の基本単位）を画面と同じ表記にする（例: `1,419億円`）。
@@ -168,6 +212,7 @@ struct ChatFacts: Sendable {
         }
         guard !rows.isEmpty else { return nil }
         self.rows = rows
+        driverLines = Self.drivers(latest: latest, previous: previous, amountText: amountText)
     }
 
     /// 生成モデルの指示に載せる数字の行。1 指標 1 行。
@@ -214,7 +259,94 @@ struct ChatFacts: Sendable {
         }
         let period = Self.periodLabel(year.fyEnd)
         guard !parts.isEmpty else { return "\(period): 値がありません。" }
-        return "\(period): " + parts.joined(separator: "、")
+        var detail = "\(period): " + parts.joined(separator: "、")
+        let index = years.lastIndex(of: year)
+        let prior = index.flatMap { $0 > 0 ? years[$0 - 1] : nil }
+        let drivers = Self.drivers(latest: year, previous: prior, amountText: amountText)
+        if !drivers.isEmpty {
+            detail += "\n" + drivers.joined(separator: "\n")
+        }
+        return detail
+    }
+
+    // MARK: - 要因
+
+    /// 「なぜ」に答える材料。値はすべてコードで計算し、モデルには言い換えだけをさせる。
+    static func drivers(
+        latest: ChatFactYear,
+        previous: ChatFactYear?,
+        amountText: (Double) -> String
+    ) -> [String] {
+        var lines: [String] = []
+        let period = periodLabel(latest.fyEnd)
+        func signedAmount(_ value: Double) -> String {
+            value > 0 ? "+" + amountText(value) : amountText(value)
+        }
+        if let change = latest.businessProfitChange {
+            var factors: [String] = []
+            if let value = latest.salesChangeImpact { factors.append("売上の増減による分 \(signedAmount(value))") }
+            if let value = latest.grossMarginChangeImpact { factors.append("粗利率（売上総利益率）の変化による分 \(signedAmount(value))") }
+            if let value = latest.sgaChangeImpact { factors.append("販管費の増減による分 \(signedAmount(value))") }
+            var line = "\(period)の事業利益（売上総利益−販管費）の前期差: \(signedAmount(change))"
+            if !factors.isEmpty {
+                line += "。内訳は " + factors.joined(separator: "、") + "（プラスは利益を押し上げ、マイナスは押し下げ）"
+            }
+            lines.append(line)
+        }
+        lines += ratioLine("粗利率（売上総利益率）", latest.grossProfitMargin, previous?.grossProfitMargin, period: period, previousPeriod: previous.map { periodLabel($0.fyEnd) }, unit: .percent)
+        lines += ratioLine("販管費率（売上高に対する販管費）", latest.sgaRatio, previous?.sgaRatio, period: period, previousPeriod: previous.map { periodLabel($0.fyEnd) }, unit: .percent)
+        let dupont = [
+            ("純利益率", latest.netMargin, previous?.netMargin, RatioUnit.percent),
+            ("総資産回転率", latest.assetTurnover, previous?.assetTurnover, RatioUnit.times),
+            ("財務レバレッジ", latest.financialLeverage, previous?.financialLeverage, RatioUnit.times),
+        ].compactMap { label, now, before, unit -> String? in
+            guard let now else { return nil }
+            if let before {
+                return "\(label) \(unit.text(before)) → \(unit.text(now))"
+            }
+            return "\(label) \(unit.text(now))"
+        }
+        if !dupont.isEmpty {
+            lines.append("ROEの分解（ROE = 純利益率 × 総資産回転率 × 財務レバレッジ）: " + dupont.joined(separator: "、"))
+        }
+        if let now = latest.salesPerEmployee {
+            var line = "従業員1人あたり売上高: "
+            if let before = previous?.salesPerEmployee {
+                line += "\(amountText(before)) → "
+            }
+            line += amountText(now)
+            lines.append(line)
+        }
+        return lines
+    }
+
+    enum RatioUnit {
+        case percent
+        case times
+
+        func text(_ value: Double) -> String {
+            switch self {
+            case .percent: String(format: "%.1f%%", value)
+            case .times: String(format: "%.2f倍", value)
+            }
+        }
+    }
+
+    private static func ratioLine(
+        _ label: String,
+        _ latest: Double?,
+        _ previous: Double?,
+        period: String,
+        previousPeriod: String?,
+        unit: RatioUnit
+    ) -> [String] {
+        guard let latest else { return [] }
+        guard let previous, let previousPeriod else {
+            return ["\(label): \(period) \(unit.text(latest))"]
+        }
+        let diff = latest - previous
+        let word = abs(diff) < 0.05 ? "横ばい" : (diff > 0 ? "上昇" : "低下")
+        return ["\(label): \(previousPeriod) \(unit.text(previous)) → \(period) \(unit.text(latest))（前期差 \(signed(diff, unit: "pt"))、\(word)）"]
     }
 
     // MARK: - 計算
