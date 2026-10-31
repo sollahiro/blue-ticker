@@ -1043,32 +1043,32 @@ import Testing
     /// 603A: 欠行。先頭 rel=icon が 16.jpg のため公式 apple-touch 256.jpg。
 
     /// 2026-10-31 weekly: listed × company_icons 欠行。Sorahiro visual GO 24 社。
-    /// 実アルファは同サイズ白 flatten を R2 CDN。不透明は公式 URL。NG 106 は台帳 visual_ng_20261031。
+    /// 全 24 を 512 白地・長辺 80% aspect-fit（フレーム端まで埋まるため）。NG 106 は台帳 visual_ng_20261031。
     @Test func pins20261031WeeklyMissingListedManualImageURLs() {
         let expected: [(String, String)] = [
             ("1429", "https://icons.sollahiro.com/company-icons/1429.png"), // pragma: allowlist secret
             ("1897", "https://icons.sollahiro.com/company-icons/1897.png"), // pragma: allowlist secret
             ("2003", "https://icons.sollahiro.com/company-icons/2003.png"), // pragma: allowlist secret
-            ("2207", "https://www.meito-abc.co.jp/apple-touch-icon.png"),
+            ("2207", "https://icons.sollahiro.com/company-icons/2207.png"), // pragma: allowlist secret
             ("2215", "https://icons.sollahiro.com/company-icons/2215.png"), // pragma: allowlist secret
             ("2652", "https://icons.sollahiro.com/company-icons/2652.png"), // pragma: allowlist secret
             ("3059", "https://icons.sollahiro.com/company-icons/3059.png"), // pragma: allowlist secret
             ("3675", "https://icons.sollahiro.com/company-icons/3675.png"), // pragma: allowlist secret
             ("3803", "https://icons.sollahiro.com/company-icons/3803.png"), // pragma: allowlist secret
             ("3927", "https://icons.sollahiro.com/company-icons/3927.png"), // pragma: allowlist secret
-            ("3989", "https://www.sharing-tech.co.jp/cms/wp-content/uploads/2023/08/cropped-favicon-180x180.png"),
+            ("3989", "https://icons.sollahiro.com/company-icons/3989.png"), // pragma: allowlist secret
             ("4172", "https://icons.sollahiro.com/company-icons/4172.png"), // pragma: allowlist secret
             ("4390", "https://icons.sollahiro.com/company-icons/4390.png"), // pragma: allowlist secret
             ("4478", "https://icons.sollahiro.com/company-icons/4478.png"), // pragma: allowlist secret
             ("4597", "https://icons.sollahiro.com/company-icons/4597.png"), // pragma: allowlist secret
-            ("5204", "https://www.ishizuka.co.jp/public/wp-content/uploads/2018/12/cropped-favicon-180x180.png"),
+            ("5204", "https://icons.sollahiro.com/company-icons/5204.png"), // pragma: allowlist secret
             ("5355", "https://icons.sollahiro.com/company-icons/5355.png"), // pragma: allowlist secret
             ("5537", "https://icons.sollahiro.com/company-icons/5537.png"), // pragma: allowlist secret
-            ("5985", "https://www.suncall.co.jp/wp/wp-content/uploads/2026/09/cropped-logo_suncall-180x180.png"),
-            ("6279", "https://www.zuiko.co.jp/assets/image/favicon.ico"),
+            ("5985", "https://icons.sollahiro.com/company-icons/5985.png"), // pragma: allowlist secret
+            ("6279", "https://icons.sollahiro.com/company-icons/6279.png"), // pragma: allowlist secret
             ("6337", "https://icons.sollahiro.com/company-icons/6337.png"), // pragma: allowlist secret
             ("8071", "https://icons.sollahiro.com/company-icons/8071.png"), // pragma: allowlist secret
-            ("8747", "https://www.yutaka-trusty.co.jp/src/img/cropped-favicon-180x180.png"),
+            ("8747", "https://icons.sollahiro.com/company-icons/8747.png"), // pragma: allowlist secret
             ("9322", "https://icons.sollahiro.com/company-icons/9322.png"), // pragma: allowlist secret
         ]
         #expect(expected.count == 24)
@@ -1079,23 +1079,9 @@ import Testing
         for (code, url) in expected {
             #expect(!url.contains("prtimes.jp"), "code=\(code)")
             #expect(!url.contains("i0.wp.com"), "code=\(code)")
-            let src = CompanyIconOriginOverride.manualSources[code]
-            #expect(src != nil, "code=\(code)")
-            switch src {
-            case .imageURL(let got):
-                #expect(got == url, "code=\(code)")
-            case .homepageOrigin(let got):
-                #expect(got == url, "code=\(code)")
-            case .none:
-                Issue.record("missing pin \(code)")
-            }
-        }
-        for code in ["1429", "1897", "2003", "2215", "2652", "3059", "3675", "3803", "3927", "4172", "4390", "4478", "4597", "5355", "5537", "6337", "8071", "9322"] {
-            guard case .imageURL(let url) = CompanyIconOriginOverride.manualSources[code] else {
-                Issue.record("expected CDN imageURL \(code)")
-                continue
-            }
             #expect(url.hasSuffix("/company-icons/\(code).png"), "code=\(code)")
+            let src = CompanyIconOriginOverride.manualSources[code]
+            #expect(src == .imageURL(url), "code=\(code)")
         }
     }
 
