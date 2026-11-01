@@ -1,4 +1,5 @@
 import FoundationModels
+import os
 import SwiftUI
 
 /// 結果画面のチャット。HIG のシートでハーフから開き、質問したら全高へ広げる。
@@ -451,6 +452,30 @@ final class CompanyChatModel {
     private var session: LanguageModelSession?
     private let toolLog = ToolCallLog()
     private var exchanges: [ChatContext.Exchange] = []
+    /// 計測用。今の回答で最初の文字が出た時刻。
+    private var firstTextAt: ContinuousClock.Instant?
+
+    private static let timingLog = Logger(subsystem: "com.sollahiro.BlueTicker", category: "chat")
+
+    /// 1 回答の所要時間を Xcode のコンソールへ出す（質問の本文は出さない）。
+    private static func logTiming(
+        destination: ChatRouting.Destination,
+        start: ContinuousClock.Instant,
+        routedAt: ContinuousClock.Instant,
+        firstTextAt: ContinuousClock.Instant?,
+        failed: Bool
+    ) {
+        func ms(_ duration: Duration) -> Int {
+            Int(duration.components.seconds * 1_000 + duration.components.attoseconds / 1_000_000_000_000_000)
+        }
+        let route = ms(routedAt - start)
+        let first = firstTextAt.map { ms($0 - start) } ?? -1
+        let total = ms(ContinuousClock.now - start)
+        let target = destination == .server ? "server" : "device"
+        timingLog.notice(
+            "chat_timing destination=\(target, privacy: .public) route_ms=\(route) first_text_ms=\(first) total_ms=\(total) failed=\(failed)"
+        )
+    }
     private var started = false
 
     /// 端末内モデルの文脈は約 4,000 トークン。会社説明はこの字数で切る。
@@ -494,18 +519,27 @@ final class CompanyChatModel {
             isResponding = false
             scrollToken += 1
         }
+        let turnStart = ContinuousClock.now
+        firstTextAt = nil
         // 売買の判断・個人情報は答えない。書式で分かる個人情報は端末の外へ出さない。
         if let reason = ChatGuard.check(question) {
             refuse(at: index, reason.message)
             return
         }
         let destination: ChatRouting.Destination
-        switch await route(question) {
+        let decision = await route(question)
+        let routedAt = ContinuousClock.now
+        switch decision {
         case .answer(let target):
             destination = target
         case .refuse(let message):
             refuse(at: index, message)
             return
+        }
+        defer {
+            Self.logTiming(
+                destination: destination, start: turnStart, routedAt: routedAt,
+                firstTextAt: firstTextAt, failed: messages[index].failed)
         }
         do {
             let answer: String
@@ -539,6 +573,7 @@ final class CompanyChatModel {
             var latest = ""
             for try await snapshot in session.streamResponse(to: question) {
                 latest = snapshot.content
+                if firstTextAt == nil, !latest.isEmpty { firstTextAt = .now }
                 messages[index].text = ChatContext.normalizedDigits(latest)
             }
             var seen = Set<String>()
@@ -609,6 +644,7 @@ final class CompanyChatModel {
                 switch event {
                 case .delta(let delta):
                     text += delta
+                    if firstTextAt == nil { firstTextAt = .now }
                     messages[index].text = ChatContext.normalizedDigits(text)
                 case .tool(let label):
                     if !messages[index].references.contains(label) {
