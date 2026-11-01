@@ -425,6 +425,87 @@ actor APIClient {
         return (data, http)
     }
 
+    // MARK: - チャット
+
+    /// `POST /v1/chat`（サーバーのチャット）。応答は SSE で、行ごとに `ServerChatEvent` を返す。
+    /// 回数上限の 429 はこの経路だけのもの。他の取得まで止めないよう `originGate` には知らせない。
+    func chat(body: Data) async throws -> AsyncThrowingStream<ServerChatEvent, Error> {
+        let bytes = try await openChatStream(path("v1/chat"), body: body, remintAttempted: false)
+        return AsyncThrowingStream { continuation in
+            let task = Task {
+                do {
+                    for try await line in bytes.lines {
+                        if let event = ServerChatEvent.parse(line: line) {
+                            continuation.yield(event)
+                        }
+                    }
+                    continuation.finish()
+                } catch let error as URLError where error.code == .cancelled {
+                    continuation.finish(throwing: CancellationError())
+                } catch {
+                    continuation.finish(throwing: APIClientError.transport(error))
+                }
+            }
+            continuation.onTermination = { _ in task.cancel() }
+        }
+    }
+
+    private func openChatStream(
+        _ url: URL, body: Data, remintAttempted: Bool
+    ) async throws -> URLSession.AsyncBytes {
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.httpBody = body
+        request.timeoutInterval = 90
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("text/event-stream", forHTTPHeaderField: "Accept")
+        let usesHAPIS = APIConfiguration.usesHAPISConsumer(url)
+        if usesHAPIS {
+            try Task.checkCancellation()
+            do {
+                request = try await hapis.authorize(request)
+            } catch is CancellationError {
+                throw CancellationError()
+            } catch {
+                throw APIClientError.hapisUnavailable
+            }
+        }
+        let bytes: URLSession.AsyncBytes
+        let response: URLResponse
+        do {
+            (bytes, response) = try await session.bytes(for: request)
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch let error as URLError where error.code == .cancelled {
+            throw CancellationError()
+        } catch {
+            throw APIClientError.transport(error)
+        }
+        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+        guard (200..<300).contains(status) else {
+            var data = Data()
+            for try await byte in bytes {
+                data.append(byte)
+                if data.count >= 16_384 { break }
+            }
+            if status == 401, usesHAPIS, !remintAttempted,
+               GatewayErrorBody.parse(data)?.isTokenExpired == true
+            {
+                do {
+                    _ = try await hapis.forceRemint()
+                } catch is CancellationError {
+                    throw CancellationError()
+                } catch {
+                    throw APIClientError.hapisUnavailable
+                }
+                return try await openChatStream(url, body: body, remintAttempted: true)
+            }
+            throw APIClientError.http(
+                status: status, message: httpErrorMessage(data, fallback: "HTTP \(status)"))
+        }
+        return bytes
+    }
+
     private func httpErrorMessage(_ data: Data, fallback: String) -> String {
         if let body = GatewayErrorBody.parse(data), let message = body.message, !message.isEmpty {
             return message

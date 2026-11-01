@@ -32,7 +32,7 @@ App Store / PrivacyInfo は公開ページと揃える（`PrivacyInfo.xcprivacy`
 | Search History | する | 検索語 `q` | 非リンク / 非追跡 |
 | Device ID | する | App Attest の鍵識別子 | 非リンク / 非追跡。機能 + 不正防止 |
 | IP Address | する | HTTP 通信と Cloudflare Workers Logs | 非リンク / 非追跡。機能 + 不正防止 |
-| Other User Content | する | リストに入れた銘柄（iCloud / CloudKit） | **リンク**（Apple ID）/ 非追跡。機能 |
+| Other User Content | する | リストに入れた銘柄（iCloud / CloudKit）。チャットでサーバーへ送る質問（`POST /v1/chat`、保存しない） | リストは**リンク**（Apple ID）、質問は非リンク / 非追跡。機能 |
 | Other Financial Info | する | 保有株数・単価・証券会社・口座（iCloud / CloudKit） | **リンク**（Apple ID）/ 非追跡。機能 |
 | Crash / Analytics SDK | **しない** | Crashlytics / Sentry / TelemetryDeck / Firebase なし | — |
 
@@ -44,4 +44,5 @@ App Store / PrivacyInfo は公開ページと揃える（`PrivacyInfo.xcprivacy`
 - App Attest: challenge は 5 分、消費後およそ 1 時間で削除。attestation / assertion 本体は保存しない。`attested_keys`（key_id・公開鍵・sign_count）は期限なし。key_id は広告識別子ではなく、不正防止の証明用識別子（App Store 申告は Device ID）
 - トークン TTL 約 1 時間。JWT は D1 に置かない
 - consumer JWT と App Attest 鍵レコードは端末の Keychain。アプリ削除後も OS / 利用者が消すまで残ることがある
+- チャット: 数字だけの質問は端末内（Foundation Models）で答え、送らない。有報の文章が要る質問（`ChatRouting`）は、質問・直前のやりとり（3 件まで）・銘柄コードを `POST /v1/chat` へ送る。blt-server は OpenRouter へ渡す（`provider.data_collection = deny`）。質問と回答の本文は DB にもログにも残さない（アクセスログはパスとステータスだけ）。回数は HAPIS が匿名トークンごとに数える
 - リストと保有情報は SwiftData + CloudKit（`iCloud.com.sollahiro.BlueTicker`）。有報LAB API（HAPIS / blt-server）には送らない
