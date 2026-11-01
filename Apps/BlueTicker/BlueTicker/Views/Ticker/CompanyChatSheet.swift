@@ -2,8 +2,9 @@ import FoundationModels
 import SwiftUI
 
 /// 結果画面のチャット。HIG のシートでハーフから開き、質問したら全高へ広げる。
-/// 文章は端末内の言語モデル（Foundation Models）だけで作り、会話はサーバーへ送らない。
-/// 数字は `ChatFacts` がコードで計算し、モデルには文章化だけをさせる。
+/// 概要と数字の表で足りる質問は端末内の言語モデル（Foundation Models）で答え、有報の文章が要る質問
+/// （理由・方針・リスク・内訳など。`ChatRouting`）はサーバーの `POST /v1/chat` へ送る。
+/// 数字は `ChatFacts`（端末）とサーバーがコードで計算し、モデルには文章化だけをさせる。
 struct CompanyChatSheet: View {
     var company: CompanyRef
     @Environment(\.dismiss) private var dismiss
@@ -69,18 +70,17 @@ struct CompanyChatSheet: View {
         } else if let facts = model.facts {
             digestSection
             ChatFactsTable(facts: facts)
-            if let unavailable = model.unavailableMessage {
-                ChatNote(text: unavailable, systemImage: "info.circle")
-            } else {
-                promptSection
-                ForEach(model.messages) { message in
-                    ChatBubble(message: message)
-                }
-                ChatNote(
-                    text: "文章は端末内で生成しています。数字は表の値をご確認ください。",
-                    systemImage: "iphone"
-                )
+            if let reason = model.deviceUnavailableReason {
+                ChatNote(text: reason + "質問はすべて有報LABのサーバーで答えます。", systemImage: "info.circle")
             }
+            promptSection
+            ForEach(model.messages) { message in
+                ChatBubble(message: message)
+            }
+            ChatNote(
+                text: "数字だけの質問は端末内で、有報の内容に関わる質問は有報LABのサーバーで答えます。サーバーへ送った質問は回答を作るために外部の AI サービスへ渡し、有報LABでは保存しません。数字は表の値をご確認ください。",
+                systemImage: "info.circle"
+            )
         } else {
             ChatNote(
                 text: model.loadError ?? "財務データが無いため、チャットは使えません。",
@@ -259,14 +259,27 @@ private struct ChatBubble: View {
     var body: some View {
         VStack(alignment: message.role == .user ? .trailing : .leading, spacing: 4) {
             bubble
-            if !message.references.isEmpty {
-                Label("参照: " + message.references.joined(separator: "、"), systemImage: "doc.text.magnifyingglass")
-                    .font(.caption)
-                    .foregroundStyle(Theme.textMuted)
-                    .padding(.horizontal, 6)
+            if let note = message.note {
+                caption(note, systemImage: "info.circle")
+            }
+            if message.role == .assistant, !message.text.isEmpty, message.source == .server {
+                caption(
+                    "有報LABのサーバーで回答"
+                        + (message.references.isEmpty ? "" : "（参照: " + message.references.joined(separator: "、") + "）"),
+                    systemImage: "doc.text.magnifyingglass"
+                )
+            } else if !message.references.isEmpty {
+                caption("参照: " + message.references.joined(separator: "、"), systemImage: "doc.text.magnifyingglass")
             }
         }
         .frame(maxWidth: .infinity, alignment: message.role == .user ? .trailing : .leading)
+    }
+
+    private func caption(_ text: String, systemImage: String) -> some View {
+        Label(text, systemImage: systemImage)
+            .font(.caption)
+            .foregroundStyle(Theme.textMuted)
+            .padding(.horizontal, 6)
     }
 
     private var bubble: some View {
@@ -274,9 +287,17 @@ private struct ChatBubble: View {
             if message.role == .user { Spacer(minLength: 48) }
             Group {
                 if message.text.isEmpty {
-                    ProgressView()
-                        .tint(Theme.textMuted)
-                        .accessibilityLabel("回答を生成中")
+                    HStack(spacing: 8) {
+                        ProgressView()
+                            .tint(Theme.textMuted)
+                        if let status = message.status {
+                            Text(status)
+                                .font(.subheadline)
+                                .foregroundStyle(Theme.textMuted)
+                        }
+                    }
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(message.status ?? "回答を生成中")
                 } else {
                     Text(message.text)
                         .textSelection(.enabled)
@@ -372,6 +393,11 @@ final class CompanyChatModel {
         case assistant
     }
 
+    enum Source {
+        case device
+        case server
+    }
+
     struct Message: Identifiable, Equatable {
         let id = UUID()
         var role: Role
@@ -379,14 +405,20 @@ final class CompanyChatModel {
         var failed = false
         /// この回答のためにツールで参照したもの。
         var references: [String] = []
+        /// どこで答えたか（端末内のモデルか、有報LABのサーバーか）。
+        var source: Source = .device
+        /// 回答を待つあいだの表示（「有報の「事業等のリスク」を読んでいます」など）。
+        var status: String?
+        /// 回答の下に添える注記（サーバーに届かず端末内で答えた、など）。
+        var note: String?
     }
 
     let company: CompanyRef
     private(set) var isLoading = true
     private(set) var facts: ChatFacts?
     private(set) var loadError: String?
-    /// 生成できない理由。nil なら端末内モデルが使える。
-    private(set) var unavailableMessage: String?
+    /// 端末内モデルが使えない理由。nil なら使える。使えないときは質問をすべてサーバーへ送る。
+    private(set) var deviceUnavailableReason: String?
     private(set) var overviewText: String?
     private(set) var highlightText: String?
     private(set) var isDigesting = false
@@ -409,18 +441,21 @@ final class CompanyChatModel {
         self.company = company
     }
 
-    var canChat: Bool { facts != nil && unavailableMessage == nil }
+    var canChat: Bool { facts != nil }
+
+    private var deviceAvailable: Bool { deviceUnavailableReason == nil }
 
     func start() async {
         guard !started else { return }
         started = true
-        unavailableMessage = Self.unavailableReason()
+        deviceUnavailableReason = Self.unavailableReason()
         await loadData()
         isLoading = false
         guard let facts else { return }
-        guard unavailableMessage == nil else {
-            // 生成できない端末は API の Overview をそのまま概要に出す。
+        guard deviceAvailable else {
+            // 端末内で生成できないときは API の Overview をそのまま概要に出し、質問はサーバーへ送る。
             overviewText = apiOverview.isEmpty ? nil : apiOverview
+            suggestions = Self.fallbackSuggestions
             return
         }
         let session = makeSession(facts: facts, carry: nil)
@@ -440,8 +475,16 @@ final class CompanyChatModel {
             isResponding = false
             scrollToken += 1
         }
+        let destination: ChatRouting.Destination =
+            deviceAvailable && !ChatRouting.needsReport(question) ? .device : .server
         do {
-            let answer = try await respond(to: question, at: index, facts: facts, retryOnOverflow: true)
+            let answer: String
+            switch destination {
+            case .device:
+                answer = try await respond(to: question, at: index, facts: facts, retryOnOverflow: true)
+            case .server:
+                answer = try await respondOnServer(to: question, at: index, facts: facts)
+            }
             exchanges.append(ChatContext.Exchange(question: question, answer: answer))
         } catch {
             messages[index].text = Self.message(for: error)
@@ -475,6 +518,40 @@ final class CompanyChatModel {
             self.session = makeSession(facts: facts, carry: ChatContext.carriedExchanges(exchanges))
             messages[index].text = ""
             return try await respond(to: question, at: index, facts: facts, retryOnOverflow: false)
+        }
+    }
+
+    /// 有報の文章が要る質問をサーバーで答える。届かないときは、端末内で答えられるならそちらへ回す。
+    private func respondOnServer(to question: String, at index: Int, facts: ChatFacts) async throws -> String {
+        messages[index].source = .server
+        messages[index].status = "有報LABのサーバーに問い合わせています"
+        let body = ServerChatRequest.body(code: company.code, exchanges: exchanges, question: question)
+        do {
+            var text = ""
+            for try await event in try await APIClient.shared.chat(body: body) {
+                switch event {
+                case .delta(let delta):
+                    text += delta
+                    messages[index].text = ChatContext.normalizedDigits(text)
+                case .tool(let label):
+                    if !messages[index].references.contains(label) {
+                        messages[index].references.append(label)
+                    }
+                    messages[index].status = "\(label)を読んでいます"
+                case .done:
+                    break
+                case .failure(let message):
+                    throw ServerChatFailure(message: message)
+                }
+            }
+            guard !text.isEmpty else { throw ServerChatFailure(message: "回答を取得できませんでした。") }
+            return messages[index].text
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            guard deviceAvailable else { throw error }
+            messages[index] = Message(role: .assistant, text: "", note: Self.serverFallbackNote(for: error))
+            return try await respond(to: question, at: index, facts: facts, retryOnOverflow: true)
         }
     }
 
@@ -615,27 +692,47 @@ final class CompanyChatModel {
         }
     }
 
-    /// 画面には「AFM」と出さない。
+    /// 画面には「AFM」と出さない。続けて「質問はすべて有報LABのサーバーで答えます。」を添える。
     private static func unavailableReason() -> String? {
         let model = SystemLanguageModel.default
         switch model.availability {
         case .available:
             guard model.supportsLocale(Locale(identifier: "ja_JP")) else {
-                return "この端末の言語モデルが日本語に対応していないため、文章の生成と質問は使えません。"
+                return "この端末の言語モデルは日本語に対応していません。"
             }
             return nil
         case .unavailable(.deviceNotEligible):
-            return "この端末は Apple Intelligence に対応していないため、文章の生成と質問は使えません。"
+            return "この端末は Apple Intelligence に対応していません。"
         case .unavailable(.appleIntelligenceNotEnabled):
-            return "設定アプリで Apple Intelligence をオンにすると、文章の生成と質問が使えます。"
+            return "Apple Intelligence がオフになっています。"
         case .unavailable(.modelNotReady):
-            return "端末内の言語モデルを準備しています。しばらくしてから開き直してください。"
+            return "端末内の言語モデルを準備しています。"
         case .unavailable:
-            return "いまは文章の生成と質問が使えません。"
+            return "いまは端末内の言語モデルを使えません。"
         }
     }
 
+    /// サーバーの上限（429）は HAPIS のエンドポイント上限（1 分 5 回・1 日 10 回）。
+    private static let serverLimitText = "有報LABのサーバーでの回答は、1分に5回・1日に10回までです。"
+
+    private static func serverFallbackNote(for error: Error) -> String {
+        if case APIClientError.http(let status, _) = error, status == 429 {
+            return serverLimitText + "上限に達したため端末内で答えました（有報の文章は読んでいません）。"
+        }
+        return "有報LABのサーバーにつながらないため、端末内で答えました（有報の文章は読んでいません）。"
+    }
+
     private static func message(for error: Error) -> String {
+        if let failure = error as? ServerChatFailure {
+            return failure.message
+        }
+        if case APIClientError.http(let status, _) = error {
+            if status == 429 { return serverLimitText + "時間をおいてお試しください。" }
+            return "いまは有報LABのサーバーで回答できません。時間をおいてお試しください。"
+        }
+        if error is APIClientError {
+            return "有報LABのサーバーにつながりませんでした。通信状況を確かめてお試しください。"
+        }
         guard let error = error as? LanguageModelSession.GenerationError else {
             return "回答を作れませんでした。もう一度お試しください。"
         }
@@ -652,4 +749,9 @@ final class CompanyChatModel {
             return "回答を作れませんでした。もう一度お試しください。"
         }
     }
+}
+
+/// サーバーが `error` イベントで返した失敗。
+struct ServerChatFailure: Error {
+    let message: String
 }

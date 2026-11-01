@@ -26,6 +26,7 @@
 		AA0000000000000000000017 /* OverviewText.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000017 /* OverviewText.swift */; };
 		AA0000000000000000000060 /* CompanyChatSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000060 /* CompanyChatSheet.swift */; };
 		AA0000000000000000000061 /* ChatFacts.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000061 /* ChatFacts.swift */; };
+		AA0000000000000000000062 /* ServerChat.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000062 /* ServerChat.swift */; };
 		AA0000000000000000000018 /* AnalysisView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000018 /* AnalysisView.swift */; };
 		AA0000000000000000000019 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000019 /* Assets.xcassets */; };
 		AA0000000000000000000050 /* AppIcon.icon in Resources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000050 /* AppIcon.icon */; };
@@ -66,6 +67,7 @@
 		BB0000000000000000000017 /* OverviewText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverviewText.swift; sourceTree = "<group>"; };
 		BB0000000000000000000060 /* CompanyChatSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompanyChatSheet.swift; sourceTree = "<group>"; };
 		BB0000000000000000000061 /* ChatFacts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatFacts.swift; sourceTree = "<group>"; };
+		BB0000000000000000000062 /* ServerChat.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerChat.swift; sourceTree = "<group>"; };
 		BB0000000000000000000018 /* AnalysisView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnalysisView.swift; sourceTree = "<group>"; };
 		BB0000000000000000000019 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		BB0000000000000000000050 /* AppIcon.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = AppIcon.icon; sourceTree = "<group>"; };
@@ -234,6 +236,7 @@
 			isa = PBXGroup;
 			children = (
 				BB0000000000000000000061 /* ChatFacts.swift */,
+				BB0000000000000000000062 /* ServerChat.swift */,
 			);
 			name = ChatFacts;
 			path = ChatFacts/Sources/ChatFacts;
@@ -348,6 +351,7 @@
 				AA0000000000000000000018 /* AnalysisView.swift in Sources */,
 				AA0000000000000000000060 /* CompanyChatSheet.swift in Sources */,
 				AA0000000000000000000061 /* ChatFacts.swift in Sources */,
+				AA0000000000000000000062 /* ServerChat.swift in Sources */,
 				AA0000000000000000000032 /* ZeroAxisFill.swift in Sources */,
 				AA0000000000000000000040 /* FeedRSS.swift in Sources */,
 				AA0000000000000000000041 /* FeedRSSStore.swift in Sources */,
