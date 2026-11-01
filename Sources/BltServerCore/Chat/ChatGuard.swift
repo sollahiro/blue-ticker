@@ -1,6 +1,7 @@
 // チャットの事前チェック。売買の判断・株価の予想を求める質問と、個人情報を含む質問は
 // 回答モデルへ渡す前に断る。個人情報は端末側でも送信前に止めるので、ここは取りこぼしの受け皿。
 // 判定は OpenRouter Decisions（Jev）の choice。確率が閾値に届かなければ通す（回答モデルの指示でも断る）。
+// 既定では無効（`OPENROUTER_CHAT_GUARD_MODEL` を入れたときだけ動く）。
 
 import AsyncHTTPClient
 import Foundation
@@ -43,7 +44,9 @@ struct JevChatGuard: ChatGuarding {
     let client: HTTPClient
     let logger: Logger
 
-    /// `OPENROUTER_CHAT_API_KEY` を使う。`OPENROUTER_CHAT_GUARD_MODEL=off` で無効。
+    /// `OPENROUTER_CHAT_GUARD_MODEL` にモデル名を入れたときだけ使う（既定は無効）。
+    /// Jev は 1 回あたり回答モデルの約 25 倍かかるため、端末側の確認と回答モデルへの指示に任せる。
+    /// 使うときは `OPENROUTER_CHAT_GUARD_MODEL=typesafe/jev-1.13` のように指定する。
     static func fromEnvironment(
         _ environment: [String: String] = ProcessInfo.processInfo.environment,
         client: HTTPClient = .shared, logger: Logger
@@ -53,8 +56,9 @@ struct JevChatGuard: ChatGuarding {
             return trimmed?.isEmpty == false ? trimmed : nil
         }
         guard let apiKey = value("OPENROUTER_CHAT_API_KEY") else { return nil }
-        let model = value("OPENROUTER_CHAT_GUARD_MODEL") ?? defaultModel
-        guard model.lowercased() != "off" else { return nil }
+        guard let model = value("OPENROUTER_CHAT_GUARD_MODEL"), model.lowercased() != "off" else {
+            return nil
+        }
         return JevChatGuard(
             apiKey: apiKey, model: model, url: defaultURL, threshold: defaultThreshold,
             client: client, logger: logger)
