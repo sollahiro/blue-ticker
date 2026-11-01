@@ -194,6 +194,67 @@ private func run(
                 """)
     }
 
+    @Test func breakdownReadsNamedCellsAndUnits() throws {
+        let capex: [String: Any] = [
+            "unit": "currency_amount",
+            "breakdown": [
+                "flow_metric": "capital_expenditures",
+                "flow": ["denominator": 6_059_779_000_000],
+                "rows": [
+                    ["label": "自動車", "flow": 2_453_641_000_000, "segment_assets": 33_182_372_000_000, "row_kind": "segment"],
+                    ["label": "消去又は全社", "flow": 29_452_000_000, "row_kind": "reconciling"],
+                    ["label": "連結合計又は会社合計", "flow": 6_059_779_000_000, "row_kind": "EntityTotal"],
+                ],
+            ],
+        ]
+        let capexText = try #require(ChatFormat.breakdownSummary(capex))
+        #expect(
+            capexText == """
+                自動車: 設備投資額 2.45兆円（構成比 40.5%）、セグメント資産 33.18兆円
+                ［合計］連結合計又は会社合計: 設備投資額 6.06兆円
+                """)
+
+        let debt: [String: Any] = [
+            "unit": "currency_amount",
+            "breakdown": [
+                "denominator": 43_205_469_000_000,
+                "rows": [
+                    ["label": "有利子負債", "closing": 17_581_104_000_000, "opening": 15_829_516_000_000,
+                     "maturity_class": "current", "in_total": true, "paired_row_index": NSNull(), "row_kind": "segment"],
+                    ["label": "短期借入債務", "closing": 5_699_083_000_000, "maturity_class": "current",
+                     "in_total": false, "paired_row_index": 0, "row_kind": "segment"],
+                ],
+            ],
+        ]
+        let debtText = try #require(ChatFormat.breakdownSummary(debt))
+        #expect(debtText.hasPrefix("有利子負債（流動）: 期首 15.83兆円、期末 17.58兆円（構成比 40.7%）"))
+        #expect(debtText.contains("短期借入債務（流動）〔明細〕: 期末 5.70兆円"))
+
+        let employees: [String: Any] = [
+            "unit": "persons",
+            "breakdown": ["denominator": 94_900, "rows": [["label": "音楽", "amount": 11_400, "row_kind": "segment"]]],
+        ]
+        #expect(ChatFormat.breakdownSummary(employees) == "音楽: 人数 11,400人（構成比 12.0%）")
+    }
+
+    @Test func excerptSplitsLongParagraphIntoSentences() {
+        let filler = (1...40).map { "業績についての一般的な説明\($0)です。" }.joined()
+        let text = filler + "研究開発では電動化と自動運転に注力しています。" + filler
+        let excerpt = ChatFormat.excerpt(text, keywords: ["研究開発"], maxCharacters: 300)
+        #expect(excerpt.count <= 300)
+        #expect(excerpt.contains("研究開発では電動化と自動運転に注力しています。"))
+        #expect(excerpt.hasPrefix("業績についての一般的な説明1です。"))
+    }
+
+    @Test func toolAxesCoverPublicBreakdownAxes() {
+        let keys = Set(ChatTools.axes.map(\.key))
+        #expect(keys.contains("research_and_development"))
+        #expect(keys.contains("capex"))
+        #expect(keys.contains("interest_bearing_debt"))
+        #expect(!keys.contains("goodwill_amortization"))
+        #expect(keys.count == 11)
+    }
+
     @Test func excerptPrefersKeywordParagraphsInOriginalOrder() {
         let text = (1...20).map { "段落\($0)は一般的な説明です。" + String(repeating: "あ", count: 40) }
             .joined(separator: "\n") + "\n為替の変動は大きなリスクです。"
@@ -271,6 +332,38 @@ private func run(
             return
         }
         #expect(text.contains("回答を作れませんでした"))
+    }
+
+    @Test func emptyFinalAnswerIsRetriedWithoutTools() async throws {
+        let call = ChatToolCall(id: "c1", name: ChatTools.breakdownName, arguments: #"{"axis":"segment"}"#)
+        let model = ScriptedChatModel([
+            [.toolCalls([call])],
+            [.toolCalls([ChatToolCall(id: "c2", name: ChatTools.breakdownName, arguments: #"{"axis":"geography"}"#)])],
+            [.text("セグメントは日本が中心です。")],
+        ])
+        var session = ChatSession(model: model, data: FakeChatData())
+        session.limits.maxToolCalls = 1
+        let events = try await run(session)
+        #expect(events.contains(.delta("セグメントは日本が中心です。")))
+        #expect(!events.contains { if case .delta(let text) = $0 { text.contains("回答を作れませんでした") } else { false } })
+        let retry = try #require(model.recorded.last)
+        #expect(retry.messages.last?.content == ChatSession.answerNowPrompt)
+        #expect(retry.toolChoiceNone)
+    }
+
+    @Test func repeatedToolResultIsReplacedWithNotice() async throws {
+        let call = { (id: String) in
+            ChatToolCall(id: id, name: ChatTools.filingSectionName, arguments: #"{"section":"business_risks"}"#)
+        }
+        let model = ScriptedChatModel([
+            [.toolCalls([call("c1")])],
+            [.toolCalls([call("c2")])],
+            [.text("回答")],
+        ])
+        _ = try await run(ChatSession(model: model, data: FakeChatData()))
+        let requests = model.recorded
+        #expect(requests[1].messages.last?.content.contains("為替の変動が業績に影響します。") == true)
+        #expect(requests[2].messages.last?.content.contains("前回と同じ内容でした") == true)
     }
 
     @Test func historyKeepsNewestWithinBudget() {

@@ -138,7 +138,7 @@ flowchart LR
 | `GET /v1/feed/trend` | Feed Trend（匿名の検索・ツールヒット件数。書類件数ではない。カウンター未設定は 503） |
 | `GET /v1/screen` | Screen（`screen_index` 横断検索。skills / MCP 未掲載。索引未生成は 404。`sales_cagr_3y` と screen-v3 指標、screen-v4 の配当性向 3 年平均は ingest 時の派生列） |
 | `GET /v1/screen/snapshot` | Screen スナップショット（`screen_index` 全行の列形式。iOS 条件検索が端末内で絞る。本文 SHA-256 の `ETag` / 304。本文は起動時と 3 日ごとに作り置き。skills / MCP 未掲載。索引未生成は 404。`docs/ios-client.md`） |
-| `POST /v1/chat` | 会社チャット（iOS 用）。本文 `{code, messages:[{role, content}]}`（古い順・最後は user、12 件・各 2,000 字まで）。有報の財務サマリーと Overview をプロンプトに入れ、OpenRouter のモデルが有報の節（`get_filing_section`）と売上内訳（`get_breakdown`）をツールで読む（格納済みのみ、1 回答 3 回まで）。売買の判断を求める質問は端末側の確認と回答モデルへの指示で断る。任意で、回答モデルの前に Jev（OpenRouter Decisions）で判定し、確率 0.6 以上なら `refused` で断れる（`OPENROUTER_CHAT_GUARD_MODEL` を入れたときだけ。費用が回答モデルの約 25 倍のため既定は無効）。応答は SSE（`delta` / `tool` / `refused` / `done` / `error`）。金額の単位換算と前期比はコードで計算して渡す。`OPENROUTER_CHAT_API_KEY` 未設定は 503。回数上限は HAPIS（1 分 5 回・1 日 10 回）。skills / MCP 未掲載 |
+| `POST /v1/chat` | 会社チャット（iOS 用）。本文 `{code, messages:[{role, content}]}`（古い順・最後は user、12 件・各 2,000 字まで）。有報の財務サマリーと Overview をプロンプトに入れ、OpenRouter のモデルが有報の節（`get_filing_section`）と内訳（`get_breakdown`、公開中の全軸）をツールで読む（格納済みのみ、1 回答 3 回まで）。長い本文は文単位で抜粋し、同じ結果の再取得は短い知らせに置き換える。最後の回答が空なら、ツールなしで一度だけ答え直させる。売買の判断を求める質問は端末側の確認と回答モデルへの指示で断る。任意で、回答モデルの前に Jev（OpenRouter Decisions）で判定し、確率 0.6 以上なら `refused` で断れる（`OPENROUTER_CHAT_GUARD_MODEL` を入れたときだけ。費用が回答モデルの約 25 倍のため既定は無効）。応答は SSE（`delta` / `tool` / `refused` / `done` / `error`）。金額の単位換算と前期比はコードで計算して渡す。`OPENROUTER_CHAT_API_KEY` 未設定は 503。回数上限は HAPIS（1 分 5 回・1 日 10 回）。skills / MCP 未掲載 |
 
 エラー封筒: `{"error":...,"status":N}`。
 
