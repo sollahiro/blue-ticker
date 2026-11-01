@@ -139,6 +139,7 @@ struct CompanyChatSheet: View {
         }
     }
 
+    /// 入力欄。後ろの会話が透けて文字に重ならないよう、欄の背後はシートの地色で塗る。
     private var inputBar: some View {
         HStack(alignment: .bottom, spacing: 8) {
             TextField("質問を入力", text: $draft, axis: .vertical)
@@ -146,21 +147,26 @@ struct CompanyChatSheet: View {
                 .focused($inputFocused)
                 .submitLabel(.send)
                 .onSubmit { submit(draft) }
+                .foregroundStyle(Theme.text)
                 .padding(.horizontal, 16)
                 .padding(.vertical, 10)
-                .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-            Button("送信", systemImage: "arrow.up") {
+                .background(Theme.control, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+            Button {
                 submit(draft)
+            } label: {
+                Image(systemName: "arrow.up")
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(canSend ? Color.white : Theme.textMuted)
+                    .frame(width: 40, height: 40)
+                    .background(canSend ? Theme.accent : Theme.elevated, in: Circle())
             }
-            .labelStyle(.iconOnly)
-            .font(.body.weight(.semibold))
-            .frame(width: 40, height: 40)
-            .glassEffect(.regular.tint(Theme.accent).interactive(), in: Circle())
+            .buttonStyle(.plain)
             .disabled(!canSend)
-            .opacity(canSend ? 1 : 0.5)
+            .accessibilityLabel("送信")
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 8)
+        .background(Theme.shell.ignoresSafeArea(edges: .bottom))
     }
 
     private var canSend: Bool {
@@ -251,6 +257,19 @@ private struct ChatBubble: View {
     var message: CompanyChatModel.Message
 
     var body: some View {
+        VStack(alignment: message.role == .user ? .trailing : .leading, spacing: 4) {
+            bubble
+            if !message.references.isEmpty {
+                Label("参照: " + message.references.joined(separator: "、"), systemImage: "doc.text.magnifyingglass")
+                    .font(.caption)
+                    .foregroundStyle(Theme.textMuted)
+                    .padding(.horizontal, 6)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: message.role == .user ? .trailing : .leading)
+    }
+
+    private var bubble: some View {
         HStack {
             if message.role == .user { Spacer(minLength: 48) }
             Group {
@@ -306,8 +325,9 @@ struct CompanyChatDigest {
 /// 決算期ごとの値を返すツール。取得済みの Waterfall から返すので通信しない。
 struct FinancialYearTool: Tool {
     let name = "getFinancialYear"
-    let description = "指定した決算期の売上高・営業利益・営業利益率・純利益・ROE・ROIC・従業員数を返す"
+    let description = "指定した決算期の売上高・営業利益・営業利益率・純利益・ROE・ROIC・従業員数と、前期からの変化の要因を返す"
     let facts: ChatFacts
+    let log: ToolCallLog
 
     @Generable
     struct Arguments {
@@ -316,7 +336,31 @@ struct FinancialYearTool: Tool {
     }
 
     func call(arguments: Arguments) async throws -> String {
-        facts.yearDetail(fiscalYear: arguments.fiscalYear)
+        let year = arguments.fiscalYear
+        let period = facts.years.last { $0.fiscalYear == year }.map { ChatFacts.periodLabel($0.fyEnd) }
+        log.append(period.map { "\($0)の財務データ" } ?? "\(year)年の財務データ（該当なし）")
+        return facts.yearDetail(fiscalYear: year)
+    }
+}
+
+/// ツールが呼ばれた記録。回答の下に「参照」として出し、端末内で答えたのかを確かめられるようにする。
+final class ToolCallLog: @unchecked Sendable {
+    private let lock = NSLock()
+    private var entries: [String] = []
+
+    func append(_ entry: String) {
+        lock.lock()
+        defer { lock.unlock() }
+        entries.append(entry)
+    }
+
+    /// 溜まった記録を取り出して空にする。
+    func drain() -> [String] {
+        lock.lock()
+        defer { lock.unlock() }
+        let drained = entries
+        entries.removeAll()
+        return drained
     }
 }
 
@@ -333,6 +377,8 @@ final class CompanyChatModel {
         var role: Role
         var text: String
         var failed = false
+        /// この回答のためにツールで参照したもの。
+        var references: [String] = []
     }
 
     let company: CompanyRef
@@ -352,11 +398,12 @@ final class CompanyChatModel {
 
     private var apiOverview = ""
     private var session: LanguageModelSession?
+    private let toolLog = ToolCallLog()
     private var exchanges: [ChatContext.Exchange] = []
     private var started = false
 
     /// 端末内モデルの文脈は約 4,000 トークン。会社説明はこの字数で切る。
-    private static let overviewCharacterLimit = 300
+    private static let overviewCharacterLimit = 200
 
     init(company: CompanyRef) {
         self.company = company
@@ -412,12 +459,15 @@ final class CompanyChatModel {
     ) async throws -> String {
         let session = self.session ?? makeSession(facts: facts, carry: nil)
         self.session = session
+        _ = toolLog.drain()
         do {
             var latest = ""
             for try await snapshot in session.streamResponse(to: question) {
                 latest = snapshot.content
                 messages[index].text = latest
             }
+            var seen = Set<String>()
+            messages[index].references = toolLog.drain().filter { seen.insert($0).inserted }
             return latest
         } catch let error as LanguageModelSession.GenerationError {
             guard retryOnOverflow, case .exceededContextWindowSize = error else { throw error }
@@ -469,7 +519,7 @@ final class CompanyChatModel {
             text += "\n\nこれまでのやりとり（抜粋）:\n" + carry
         }
         let instructions = text
-        return LanguageModelSession(tools: [FinancialYearTool(facts: facts)]) {
+        return LanguageModelSession(tools: [FinancialYearTool(facts: facts, log: toolLog)]) {
             instructions
         }
     }
@@ -484,6 +534,10 @@ final class CompanyChatModel {
         }
         lines.append("数字（計算済み。表記を変えずに使う）:")
         lines.append(facts.promptLines)
+        if !facts.driverLines.isEmpty {
+            lines.append("変化の要因（計算済み。表記を変えずに使う）:")
+            lines.append(contentsOf: facts.driverLines)
+        }
         lines.append("取得できる決算期: " + facts.periodLabels.joined(separator: "、"))
         return lines.joined(separator: "\n")
     }
@@ -495,10 +549,12 @@ final class CompanyChatModel {
     """
 
     private static let chatRules = """
-    回答は3文程度にします。
-    表に無い決算期の値が必要なときは getFinancialYear を使います。
-    有価証券報告書の本文、株価、将来の業績予想は手元に無いので、答えられないと伝えます。
-    投資の勧誘や売買の判断はしません。
+    回答は3〜4文にします。
+    「なぜ」「要因」を聞かれたら、まず「変化の要因」の数字で説明します。例えば利益率なら、粗利率と販管費率のどちらが動いたか、事業利益の前期差のうち売上・粗利率・販管費の要因がそれぞれいくらかを答えます。
+    従業員数の影響は、従業員1人あたり売上高の変化で説明します。ROE の変化は、純利益率・総資産回転率・財務レバレッジのどれが動いたかで説明します。
+    数字で説明したうえで、事業上の具体的な理由（製品、価格、為替など）は手元の資料に無いと一言添えます。「データがありません」だけで終えません。
+    表に無い決算期の値や要因が必要なときは getFinancialYear を使います。
+    株価と将来の業績予想は扱いません。投資の勧誘や売買の判断はしません。
     """
 
     private static let fallbackSuggestions = [
@@ -539,7 +595,16 @@ final class CompanyChatModel {
                 netProfit: year.netProfit,
                 roe: year.roe,
                 roic: year.roic,
-                employees: year.employees
+                employees: year.employees,
+                grossProfitMargin: year.grossProfitMargin,
+                sga: year.sga,
+                businessProfitChange: year.businessProfitChange,
+                salesChangeImpact: year.salesChangeImpact,
+                grossMarginChangeImpact: year.grossMarginChangeImpact,
+                sgaChangeImpact: year.sgaChangeImpact,
+                netMargin: year.netMargin,
+                assetTurnover: year.assetTurnover,
+                financialLeverage: year.financialLeverage
             )
         }
         facts = ChatFacts(years: years) { amount in

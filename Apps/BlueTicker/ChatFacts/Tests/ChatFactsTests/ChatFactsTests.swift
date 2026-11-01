@@ -120,7 +120,7 @@ import Testing
             ],
             amountText: Self.oku
         ))
-        #expect(facts.yearDetail(fiscalYear: 2025) == "25年3月期: 売上高 1000億円、ROE 8.3%、従業員数 12,345人")
+        #expect(facts.yearDetail(fiscalYear: 2025).split(separator: "\n").first == "25年3月期: 売上高 1000億円、ROE 8.3%、従業員数 12,345人")
         #expect(facts.yearDetail(fiscalYear: 2019) == "その決算期のデータはありません。取得できる決算期: 25年3月期、26年3月期")
     }
 
@@ -144,5 +144,40 @@ import Testing
         let carried = ChatContext.carriedExchanges(exchanges, maxCharacters: 40)
         #expect(carried == "利用者: 新しい質問\n回答: 新しい回答")
         #expect(ChatContext.carriedExchanges([], maxCharacters: 40) == nil)
+    }
+
+    @Test func driversExplainMarginChange() throws {
+        let facts = try #require(ChatFacts(
+            years: [
+                ChatFactYear(
+                    fyEnd: "2025-03-31", sales: 100_000_000_000, employees: 1000,
+                    grossProfitMargin: 35.0, sga: 25_000_000_000,
+                    netMargin: 5.0, assetTurnover: 0.8, financialLeverage: 2.0
+                ),
+                ChatFactYear(
+                    fyEnd: "2026-03-31", sales: 110_000_000_000, employees: 1000,
+                    grossProfitMargin: 36.0, sga: 26_400_000_000,
+                    businessProfitChange: 1_200_000_000,
+                    salesChangeImpact: 3_500_000_000,
+                    grossMarginChangeImpact: 1_100_000_000,
+                    sgaChangeImpact: -1_400_000_000,
+                    netMargin: 5.5, assetTurnover: 0.85, financialLeverage: 2.0
+                ),
+            ],
+            amountText: Self.oku
+        ))
+        #expect(facts.driverLines == [
+            "26年3月期の事業利益（売上総利益−販管費）の前期差: +12億円。内訳は 売上の増減による分 +35億円、粗利率（売上総利益率）の変化による分 +11億円、販管費の増減による分 -14億円（プラスは利益を押し上げ、マイナスは押し下げ）",
+            "粗利率（売上総利益率）: 25年3月期 35.0% → 26年3月期 36.0%（前期差 +1.0pt、上昇）",
+            "販管費率（売上高に対する販管費）: 25年3月期 25.0% → 26年3月期 24.0%（前期差 −1.0pt、低下）",
+            "ROEの分解（ROE = 純利益率 × 総資産回転率 × 財務レバレッジ）: 純利益率 5.0% → 5.5%、総資産回転率 0.80倍 → 0.85倍、財務レバレッジ 2.00倍 → 2.00倍",
+            "従業員1人あたり売上高: 1億円 → 1億円",
+        ])
+        #expect(facts.yearDetail(fiscalYear: 2026).contains("販管費の増減による分 -14億円"))
+    }
+
+    @Test func driversEmptyWithoutInputs() {
+        let lines = ChatFacts.drivers(latest: ChatFactYear(fyEnd: "2026-03-31", sales: 1), previous: nil, amountText: Self.oku)
+        #expect(lines.isEmpty)
     }
 }
