@@ -155,6 +155,7 @@ func registerChatRoute(_ v1: RoutesBuilder, dbAvailable: Bool) {
         }
         recordFeedTrend(req.application, surface: "rest", tool: "chat", code: input.code)
 
+        let timing = ChatTiming(code: input.code)
         // 売買の判断・個人情報を含む質問は、回答モデルへ渡す前に断る。
         let refusal: String?
         if let guarding = services.guarding, let question = input.messages.last?.content {
@@ -162,6 +163,7 @@ func registerChatRoute(_ v1: RoutesBuilder, dbAvailable: Bool) {
         } else {
             refusal = nil
         }
+        timing.markGuard()
 
         let session = ChatSession(
             model: model,
@@ -176,6 +178,8 @@ func registerChatRoute(_ v1: RoutesBuilder, dbAvailable: Bool) {
         response.headers.responseCompression = .disable
         response.body = .init(asyncStream: { writer in
             if let refusal {
+                timing.observe(.refused(refusal))
+                timing.log(logger, outcome: "refused")
                 try await writer.write(.buffer(ByteBuffer(string: chatSSEFrame(.refused(refusal)))))
                 try await writer.write(
                     .buffer(ByteBuffer(string: chatSSEFrame(.done(ChatUsage(promptTokens: 0, completionTokens: 0))))))
@@ -184,9 +188,12 @@ func registerChatRoute(_ v1: RoutesBuilder, dbAvailable: Bool) {
             }
             do {
                 try await session.run(input) { event in
+                    timing.observe(event)
                     try await writer.write(.buffer(ByteBuffer(string: chatSSEFrame(event))))
                 }
+                timing.log(logger, outcome: "answered")
             } catch {
+                timing.log(logger, outcome: "failed")
                 logger.warning("chat failed", metadata: ["error": "\(error)"])
                 try? await writer.write(
                     .buffer(ByteBuffer(string: chatSSEFrame(.error("回答を取得できませんでした。時間をおいてお試しください。")))))
@@ -194,5 +201,61 @@ func registerChatRoute(_ v1: RoutesBuilder, dbAvailable: Bool) {
             try await writer.write(.end)
         })
         return response
+    }
+}
+
+// MARK: - 計測
+
+/// 1 回答の所要時間を 1 行ログ（`chat_timing`）に出す。質問・回答の本文は出さない。
+/// HTTP のアクセスログはヘッダを返した時点で止まるため、ストリームの最後までをここで測る。
+final class ChatTiming: @unchecked Sendable {
+    private let lock = NSLock()
+    private let start = DispatchTime.now()
+    private let code: String
+    private var guardMs: UInt64?
+    private var firstTextMs: UInt64?
+    private var toolCalls = 0
+    private var usage = ChatUsage(promptTokens: 0, completionTokens: 0)
+
+    init(code: String) { self.code = code }
+
+    private func elapsedMs() -> UInt64 {
+        (DispatchTime.now().uptimeNanoseconds - start.uptimeNanoseconds) / 1_000_000
+    }
+
+    func markGuard() {
+        lock.withLock { guardMs = elapsedMs() }
+    }
+
+    func observe(_ event: ChatStreamEvent) {
+        lock.withLock {
+            switch event {
+            case .delta, .refused:
+                if firstTextMs == nil { firstTextMs = elapsedMs() }
+            case .tool:
+                toolCalls += 1
+            case .done(let received):
+                usage = received
+            case .error:
+                break
+            }
+        }
+    }
+
+    func log(_ logger: Logger, outcome: String) {
+        let metadata: Logger.Metadata = lock.withLock {
+            [
+                "event": "chat_timing",
+                "outcome": .string(outcome),
+                "code": .string(code),
+                "guard_ms": .stringConvertible(guardMs ?? 0),
+                "first_text_ms": .stringConvertible(firstTextMs ?? 0),
+                "total_ms": .stringConvertible(elapsedMs()),
+                "tool_calls": .stringConvertible(toolCalls),
+                "prompt_tokens": .stringConvertible(usage.promptTokens),
+                "completion_tokens": .stringConvertible(usage.completionTokens),
+            ]
+        }
+        logger.notice("chat_timing", metadata: metadata)
     }
 }
