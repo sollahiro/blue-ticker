@@ -40,6 +40,8 @@ let package = Package(
         .package(url: "https://github.com/scinfu/SwiftSoup.git", from: "2.7.0"),
         .package(url: "https://github.com/weichsel/ZIPFoundation.git", from: "0.9.19"),
         .package(url: "https://github.com/vapor/vapor.git", from: "4.92.0"),
+        // チャット（/v1/chat）の OpenRouter ストリーミング取得。Vapor の推移依存を明示宣言する。
+        .package(url: "https://github.com/swift-server/async-http-client.git", from: "1.34.0"),
         .package(url: "https://github.com/vapor/fluent.git", from: "4.9.0"),
         .package(url: "https://github.com/vapor/fluent-kit.git", from: "1.52.2"),
         .package(url: "https://github.com/vapor/sql-kit.git", from: "3.33.0"),
@@ -124,6 +126,7 @@ let package = Package(
                 .product(name: "Vapor", package: "vapor"),
                 .product(name: "Fluent", package: "fluent"),
                 .product(name: "FluentPostgresDriver", package: "fluent-postgres-driver"),
+                .product(name: "AsyncHTTPClient", package: "async-http-client"),
             ],
             path: "Sources/BltServerCore",
             swiftSettings: [
