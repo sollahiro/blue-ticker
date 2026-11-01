@@ -286,12 +286,18 @@ private func run(
 
 // MARK: - HTTP の入口
 
+private struct FixedGuard: ChatGuarding {
+    let verdict: ChatGuardVerdict
+    func check(_ question: String) async -> ChatGuardVerdict { verdict }
+}
+
 private func withChatApp(
-    model: (any ChatModelStreaming)?, _ body: (Application) async throws -> Void
+    model: (any ChatModelStreaming)?, guarding: (any ChatGuarding)? = nil,
+    _ body: (Application) async throws -> Void
 ) async throws {
     let app = try await Application.make(.testing)
     do {
-        setChatModel(app, model)
+        setChatModel(app, model, guarding: guarding)
         let dir = FileManager.default.temporaryDirectory
             .appendingPathComponent("blt-chat-tests-\(UUID().uuidString)", isDirectory: true)
         try await registerRoutes(app, context: BltServerContext(apiKey: "test-key", cacheDir: dir))
@@ -352,5 +358,54 @@ private func postChat(_ app: Application, _ json: String) async throws -> (HTTPR
         }
         // DB 未接続でも会社データなしで回答は進む（システムプロンプトは銘柄コードのみ）。
         #expect(model.recorded.first?.messages.first?.content.contains("証券コード 6103") == true)
+    }
+
+    @Test func guardRefusesBeforeCallingTheModel() async throws {
+        let model = ScriptedChatModel([[.text("買いです")]])
+        try await withChatApp(model: model, guarding: FixedGuard(verdict: .investmentAdvice)) { app in
+            let (status, _, body) = try await postChat(
+                app, #"{"code":"6103","messages":[{"role":"user","content":"今買うべき？"}]}"#)
+            #expect(status == .ok)
+            let frames = body.components(separatedBy: "\n\n").filter { !$0.isEmpty }
+            #expect(frames.first?.contains(#""type":"refused""#) == true)
+            #expect(frames.first?.contains("売買の判断") == true)
+            #expect(frames.last?.contains(#""type":"done""#) == true)
+        }
+        #expect(model.recorded.isEmpty)
+    }
+}
+
+@Suite struct JevChatGuardTests {
+    @Test func verdictNeedsProbabilityOverThreshold() {
+        func answer(_ choice: String, _ probability: Double) -> Data {
+            Data(#"{"answers":{"category":{"type":"choice","choice":"\#(choice)","probabilities":{"\#(choice)":\#(probability)}}}}"#.utf8)
+        }
+        #expect(JevChatGuard.verdict(from: answer("investment_advice", 0.9), threshold: 0.6) == .investmentAdvice)
+        #expect(JevChatGuard.verdict(from: answer("personal_information", 0.7), threshold: 0.6) == .personalInformation)
+        #expect(JevChatGuard.verdict(from: answer("investment_advice", 0.4), threshold: 0.6) == .allowed)
+        #expect(JevChatGuard.verdict(from: answer("allowed", 0.99), threshold: 0.6) == .allowed)
+        #expect(JevChatGuard.verdict(from: Data("broken".utf8), threshold: 0.6) == .allowed)
+    }
+
+    @Test func requestBodyIsAChoiceQuestion() throws {
+        let guarding = JevChatGuard(
+            apiKey: "k", model: JevChatGuard.defaultModel, url: JevChatGuard.defaultURL,
+            threshold: 0.6, client: .shared, logger: Logger(label: "test"))
+        let body = try #require(
+            try JSONSerialization.jsonObject(with: guarding.requestBody("買い時は？")) as? [String: Any])
+        #expect(body["model"] as? String == "typesafe/jev-1.13")
+        #expect((body["state"] as? [String: Any])?["question"] as? String == "買い時は？")
+        let category = try #require((body["questions"] as? [String: Any])?["category"] as? [String: Any])
+        #expect(category["type"] as? String == "choice")
+        #expect((category["criteria"] as? [String: Any])?.keys.sorted()
+            == ["allowed", "investment_advice", "personal_information"])
+    }
+
+    @Test func environmentCanTurnTheGuardOff() {
+        let logger = Logger(label: "test")
+        #expect(JevChatGuard.fromEnvironment([:], logger: logger) == nil)
+        #expect(JevChatGuard.fromEnvironment(["OPENROUTER_CHAT_API_KEY": "k"], logger: logger)?.model == "typesafe/jev-1.13")
+        #expect(JevChatGuard.fromEnvironment(
+            ["OPENROUTER_CHAT_API_KEY": "k", "OPENROUTER_CHAT_GUARD_MODEL": "off"], logger: logger) == nil)
     }
 }

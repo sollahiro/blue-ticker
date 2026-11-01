@@ -41,6 +41,8 @@ enum ChatStreamEvent: Sendable, Equatable {
     case tool(name: String, label: String)
     case done(ChatUsage)
     case error(String)
+    /// 事前チェック（`ChatGuarding`）で断った。回答モデルは呼んでいない。
+    case refused(String)
 
     var jsonObject: [String: Any] {
         switch self {
@@ -58,6 +60,8 @@ enum ChatStreamEvent: Sendable, Equatable {
             ]
         case .error(let message):
             return ["type": "error", "message": message]
+        case .refused(let message):
+            return ["type": "refused", "message": message]
         }
     }
 }

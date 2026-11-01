@@ -20,21 +20,30 @@ private struct ChatModelKey: StorageKey {
 
 final class ChatModelBox: Sendable {
     let model: (any ChatModelStreaming)?
-    init(model: (any ChatModelStreaming)?) { self.model = model }
+    let guarding: (any ChatGuarding)?
+    init(model: (any ChatModelStreaming)?, guarding: (any ChatGuarding)? = nil) {
+        self.model = model
+        self.guarding = guarding
+    }
 }
 
-/// テストから偽モデルを差し込む。nil を渡すと「未設定（503）」になる。
-func setChatModel(_ app: Application, _ model: (any ChatModelStreaming)?) {
-    app.storage[ChatModelKey.self] = ChatModelBox(model: model)
+/// テストから偽モデル・偽の事前チェックを差し込む。model に nil を渡すと「未設定（503）」になる。
+func setChatModel(
+    _ app: Application, _ model: (any ChatModelStreaming)?, guarding: (any ChatGuarding)? = nil
+) {
+    app.storage[ChatModelKey.self] = ChatModelBox(model: model, guarding: guarding)
 }
 
-private func chatModel(for app: Application) -> (any ChatModelStreaming)? {
-    if let box = app.storage[ChatModelKey.self] { return box.model }
-    let model: (any ChatModelStreaming)? =
+private func chatServices(for app: Application) -> ChatModelBox {
+    if let box = app.storage[ChatModelKey.self] { return box }
+    let box =
         app.environment.name == "testing"
-        ? nil : OpenRouterChatModel.fromEnvironment(logger: app.logger)
-    app.storage[ChatModelKey.self] = ChatModelBox(model: model)
-    return model
+        ? ChatModelBox(model: nil)
+        : ChatModelBox(
+            model: OpenRouterChatModel.fromEnvironment(logger: app.logger),
+            guarding: JevChatGuard.fromEnvironment(logger: app.logger))
+    app.storage[ChatModelKey.self] = box
+    return box
 }
 
 // MARK: - リクエスト
@@ -134,7 +143,8 @@ func chatSSEFrame(_ event: ChatStreamEvent) -> String {
 func registerChatRoute(_ v1: RoutesBuilder, dbAvailable: Bool) {
     v1.on(.POST, "chat", body: .collect(maxSize: ChatRequestLimits.maxBodyBytes)) {
         req async -> Response in
-        guard let model = chatModel(for: req.application) else {
+        let services = chatServices(for: req.application)
+        guard let model = services.model else {
             return errorResponse(.serviceUnavailable, message: "チャットは現在利用できません")
         }
         let body = req.body.data.map { Data($0.readableBytesView) }
@@ -144,6 +154,14 @@ func registerChatRoute(_ v1: RoutesBuilder, dbAvailable: Bool) {
         case .failure(let error): return errorResponse(.badRequest, message: error.message)
         }
         recordFeedTrend(req.application, surface: "rest", tool: "chat", code: input.code)
+
+        // 売買の判断・個人情報を含む質問は、回答モデルへ渡す前に断る。
+        let refusal: String?
+        if let guarding = services.guarding, let question = input.messages.last?.content {
+            refusal = await guarding.check(question).refusal
+        } else {
+            refusal = nil
+        }
 
         let session = ChatSession(
             model: model,
@@ -157,6 +175,13 @@ func registerChatRoute(_ v1: RoutesBuilder, dbAvailable: Bool) {
         // 圧縮するとプロキシ側でまとめて届くことがあるため、SSE は圧縮しない。
         response.headers.responseCompression = .disable
         response.body = .init(asyncStream: { writer in
+            if let refusal {
+                try await writer.write(.buffer(ByteBuffer(string: chatSSEFrame(.refused(refusal)))))
+                try await writer.write(
+                    .buffer(ByteBuffer(string: chatSSEFrame(.done(ChatUsage(promptTokens: 0, completionTokens: 0))))))
+                try await writer.write(.end)
+                return
+            }
             do {
                 try await session.run(input) { event in
                     try await writer.write(.buffer(ByteBuffer(string: chatSSEFrame(event))))

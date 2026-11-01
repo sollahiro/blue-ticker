@@ -185,7 +185,7 @@ Neon / Fly Volume の内容は EDINET から `sync`→`ingest` で再導出可�
 
 ### チャット（OpenRouter Chat Completions）
 
-`POST /v1/chat`（iOS の会社チャット）は Fly secret `OPENROUTER_CHAT_API_KEY` で OpenRouter を呼び、SSE で中継する。未設定なら 503。モデルは `OPENROUTER_CHAT_MODEL`（既定 `anthropic/claude-haiku-5.5`）、任意で `OPENROUTER_CHAT_FALLBACK_MODELS`（カンマ区切り）。費用の上限は OpenRouter 側のキーの月額上限で持つ。呼び出し回数（1分5回・1日10回）は HAPIS のエンドポイント上限（`rate_per_minute` / `rate_per_day`）で持ち、サーバーは 1 回答あたりのツール3回・入力約1万字だけを抑える。
+`POST /v1/chat`（iOS の会社チャット）は Fly secret `OPENROUTER_CHAT_API_KEY` で OpenRouter を呼び、SSE で中継する。未設定なら 503。モデルは `OPENROUTER_CHAT_MODEL`（既定 `anthropic/claude-haiku-5.5`）、任意で `OPENROUTER_CHAT_FALLBACK_MODELS`（カンマ区切り）。事前チェックは同じキーで Jev（`OPENROUTER_CHAT_GUARD_MODEL`、既定 `typesafe/jev-1.13`、`off` で無効）。費用の上限は OpenRouter 側のキーの月額上限で持つ。呼び出し回数（1分5回・1日10回）は HAPIS のエンドポイント上限（`rate_per_minute` / `rate_per_day`）で持ち、サーバーは 1 回答あたりのツール3回・入力約1万字だけを抑える。
 
 ### Fly.io（代替容易）
 
