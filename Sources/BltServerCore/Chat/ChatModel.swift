@@ -215,6 +215,8 @@ struct OpenRouterChatModel: ChatModelStreaming {
             "max_tokens": request.maxOutputTokens,
             "temperature": 0.2,
             "usage": ["include": true],
+            // 質問を学習・保持する提供元へは回さない（プライバシーポリシーの記載と揃える）。
+            "provider": ["data_collection": "deny"],
         ]
         if models.count > 1 {
             body["models"] = models

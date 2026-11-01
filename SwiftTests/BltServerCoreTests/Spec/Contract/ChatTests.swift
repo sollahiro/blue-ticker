@@ -121,6 +121,7 @@ private func run(
         #expect(body["model"] == nil)
         #expect(body["stream"] as? Bool == true)
         #expect(body["tool_choice"] as? String == "none")
+        #expect((body["provider"] as? [String: Any])?["data_collection"] as? String == "deny")
         let tools = try #require(body["tools"] as? [[String: Any]])
         let function = try #require(tools.first?["function"] as? [String: Any])
         #expect(function["name"] as? String == "get_filing_section")
