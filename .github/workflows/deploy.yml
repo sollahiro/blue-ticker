@@ -3,11 +3,17 @@ name: Deploy
 # blt-server の唯一の出荷経路（配布 ticker / Homebrew の tag release は廃止済み）。
 # CI（テスト）成功後にのみデプロイする。push 直結だとテストが落ちるコミットでも
 # Docker ビルドさえ通れば本番へ出てしまうため、workflow_run で CI をゲートにする。
-# workflow_run はパスフィルタ非対応のため、「前回成功した Deploy run の head_sha からの
+# workflow_run はパスフィルタ非対応のため、「前回成功した Deploy run が判定した commit からの
 # 差分にデプロイ関連パスが含まれるか」をジョブ内で判定する（スキップで終わった成功 run も
 # 基準にしてよい: その run 自身が「基準〜その時点に関連差分なし」を検証済みのため）。
+# 判定した commit は run-name に載せて読む。workflow_run で起動した run の head_sha は
+# 起動時点の main の先頭で、CI が検証した commit とずれる（後続の push があると、
+# まだ出していない commit を「デプロイ済み」と誤認してスキップしてしまう）。
 # 差分にマイグレーションが含まれる run は失敗で止める（Mac で migrate してから手動デプロイ）。
 # `v*` タグ push では起動しない（旧 release.yml 相当の Homebrew 成果物は作らない）。
+# 末尾の sha をパス判定が基準として読む（workflow_dispatch は起動した ref の先頭）。
+run-name: Deploy ${{ github.event.workflow_run.head_sha || github.sha }}
+
 on:
   workflow_run:
     workflows: [CI]
@@ -51,8 +57,10 @@ jobs:
             exit 0
           fi
           # gh api の一時障害では「デプロイする」側に倒す（デプロイは冪等・空 base 分岐へ）
+          # run-name（"Deploy <sha>"）から読む。sha が載っていない古い run は基準にせずデプロイする。
           base=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/deploy.yml/runs?status=success&branch=main&per_page=1" \
-            --jq '.workflow_runs[0].head_sha // empty' 2>/dev/null || true)
+            --jq '.workflow_runs[0].display_title // empty' 2>/dev/null \
+            | grep -oE '^Deploy [0-9a-f]{40}$' | cut -d' ' -f2 || true)
           if [ -z "$base" ] || ! git cat-file -e "$base" 2>/dev/null; then
             echo "changed=true" >> "$GITHUB_OUTPUT"
             echo "基準となる成功 run が見つからないためデプロイします"
