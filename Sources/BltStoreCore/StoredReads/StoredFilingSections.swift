@@ -25,17 +25,34 @@ package func loadStoredFilingSections(
         row = found
     } else {
         // 最新会社有報（提出日時降順のうち、read 床以上・会社開示府令の先頭）。
-        // 床判定は SQL では表現しにくいため code 単位で取得してから選ぶ（社あたり直近数件）。
-        let candidates = try await CompanyFilingSections.query(on: db)
+        // 床判定は SQL では表現しにくいため code 単位で候補を取ってから選ぶ（社あたり直近数件）。
+        // 候補はペイロード無しの軽量射影で取り、ペイロードは選んだ 1 行だけ読む。
+        // 同時刻の並びを決めるため doc_id 降順を第 2 キーにする。
+        let candidates = try await CompanyFilingSectionsSelectionOnly.query(on: db)
             .filter(\.$code == code4)
             .sort(\.$submitDateTime, .descending)
+            .sort(\.$id, .descending)
             .all()
         let companyDocIDs = try await companyDisclosureDocIDs(
             among: candidates.compactMap(\.id), db: db)
-        row = candidates.first {
-            isServableFilingSectionsCacheVersion($0.cacheVersion)
-                && ($0.id.map { companyDocIDs.contains($0) } ?? false)
+        let eligibleIDs = candidates.compactMap { candidate -> String? in
+            guard let id = candidate.id, isServableFilingSectionsCacheVersion(candidate.cacheVersion),
+                companyDocIDs.contains(id)
+            else { return nil }
+            return id
         }
+        // 候補選択と本読み込みの間に ingest の purge・再抽出で行が消える／床未満になることがある。
+        // そのときは次の候補へ進む（旧実装の 1 回読みで選ばれ得た書類だけを返す）。
+        var selected: CompanyFilingSections?
+        for id in eligibleIDs {
+            if let found = try await CompanyFilingSections.find(id, on: db), found.code == code4,
+                isServableFilingSectionsCacheVersion(found.cacheVersion)
+            {
+                selected = found
+                break
+            }
+        }
+        row = selected
     }
 
     guard let row, isServableFilingSectionsCacheVersion(row.cacheVersion), let docID = row.id else {

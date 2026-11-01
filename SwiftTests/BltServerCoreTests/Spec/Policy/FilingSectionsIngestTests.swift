@@ -289,6 +289,39 @@ private let keys = "business_risks,mda,segments"
         }
     }
 
+    /// 版だけ古く内容が同じ書類は、ペイロードを書かなくても版が現行に進み、次の回は skip される。
+    @Test func ingestAdvancesVersionWhenPayloadUnchangedAndSkipsNextRun() async throws {
+        try await withMigratedApp { app in
+            try await seedDoc("S1", secCode: "72030", db: app.db)
+            let stale = CompanyFilingSections()
+            stale.id = "S1"
+            stale.code = "7203"
+            stale.submitDateTime = "2025-06-20 09:00"
+            stale.payload = fakePayload("same")
+            stale.cacheVersion = "old-version"
+            stale.sectionKeys = "business_risks,mda"
+            try await stale.create(on: app.db)
+
+            let first = try await runFilingSectionsIngest(
+                db: app.db, listedCodes: ["7203"], years: 3, sectionKeys: keys, limit: nil
+            ) { _ in fakePayload("same") }
+            #expect(first.stored == 1)
+            let row = try #require(try await CompanyFilingSections.find("S1", on: app.db))
+            #expect(row.cacheVersion == filingSectionsCacheVersion)
+            #expect(row.sectionKeys == keys)
+            #expect(row.payload == fakePayload("same"))
+
+            let second = try await runFilingSectionsIngest(
+                db: app.db, listedCodes: ["7203"], years: 3, sectionKeys: keys, limit: nil
+            ) { _ in
+                Issue.record("extractor must not run after the version was advanced")
+                return fakePayload("same")
+            }
+            #expect(second.skipped == 1)
+            #expect(second.attempted == 0)
+        }
+    }
+
     @Test func ingestReextractsWhenSectionKeysMismatch() async throws {
         try await withMigratedApp { app in
             try await seedDoc("S1", secCode: "72030", db: app.db)
@@ -451,6 +484,21 @@ private let keys = "business_risks,mda,segments"
             #expect(json["code"] as? String == "7203")
             let sections = try #require(json["sections"] as? [String: Any])
             #expect(sections["business_risks"] as? String == "risk")
+        }
+    }
+
+    /// 提出日時が同じ書類が複数あるときは doc_id 降順の先頭を選ぶ。
+    @Test func loadByCodeBreaksSubmitTimeTieByDocIdDescending() async throws {
+        try await withMigratedApp { app in
+            try await seedStored(
+                "S-a", code: "7203", submit: "2025-06-20 09:00", db: app.db, payload: fakePayload("a"))
+            try await seedStored(
+                "S-b", code: "7203", submit: "2025-06-20 09:00", db: app.db, payload: fakePayload("b"))
+
+            let json = try #require(
+                try await loadStoredFilingSections(
+                    code: "7203", docId: nil, sections: nil, db: app.db))
+            #expect(json["doc_id"] as? String == "S-b")
         }
     }
 

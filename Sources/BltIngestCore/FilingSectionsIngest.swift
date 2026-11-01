@@ -17,6 +17,7 @@ import BlueTickerCore
 import FluentKit
 import Foundation
 import Logging
+import SQLKit
 
 /// 有報セクション取り込みで保持する有報の件数（1社あたり直近 N 件。有報は通常年1件のため ≈ N 年）。
 /// 財務取り込みの financials 計算年数（6年）と揃える。
@@ -114,10 +115,11 @@ func runFilingSectionsIngest(
             )
             break
         }
+        // 存在確認と skip 判定は軽量射影で行い、ペイロードは読まない。
         let existing = try await withDbRetry(
             logger: logger, context: "docID=\(cand.docID)", onRetry: { unhealthyRetries += 1 }
         ) {
-            try await CompanyFilingSections.find(cand.docID, on: db)
+            try await CompanyFilingSectionsCacheVersionOnly.find(cand.docID, on: db)
         }
         if !forceDocIDs.contains(cand.docID), let row = existing,
             row.cacheVersion == filingSectionsCacheVersion, row.sectionKeys == sectionKeys
@@ -136,7 +138,7 @@ func runFilingSectionsIngest(
             logger: logger, context: "docID=\(cand.docID)", onRetry: { unhealthyRetries += 1 }
         ) {
             try await storeCompanyFilingSections(
-                existing: try await CompanyFilingSections.find(cand.docID, on: db),
+                exists: try await CompanyFilingSectionsCacheVersionOnly.find(cand.docID, on: db) != nil,
                 docID: cand.docID, code: cand.code,
                 submitDateTime: cand.submitDateTime, payload: payload,
                 sectionKeys: sectionKeys, db: db)
@@ -281,34 +283,63 @@ func filingSectionCandidates(
 }
 
 /// 抽出済みセクションを company_filing_sections へ書き込む（既存行があれば更新、無ければ作成）。
+///
+/// 既存行の更新ではペイロードを読まない。ペイロードは DB 側で比較し（Postgres の jsonb は
+/// キー順に依らない等値）、内容が変わったときだけ書く。同じなら TOAST を書き直さない。
+/// 版（cache_version / section_keys）と updated_at は内容が同じでも必ず進める
+/// （進めないと毎回 stale と判定されて再抽出が続く）。updated_at は「最後に確認した時刻」になる。
 func storeCompanyFilingSections(
-    existing: CompanyFilingSections?, docID: String, code: String, submitDateTime: String,
+    exists: Bool, docID: String, code: String, submitDateTime: String,
     payload: FilingSectionsPayload, sectionKeys: String, db: Database
 ) async throws {
-    let applyFields: (CompanyFilingSections) -> Void = { row in
-        row.code = code
-        row.submitDateTime = submitDateTime
-        row.payload = payload
-        row.cacheVersion = filingSectionsCacheVersion
-        row.sectionKeys = sectionKeys
+    if exists {
+        try await updateCompanyFilingSectionsInPlace(
+            docID: docID, code: code, submitDateTime: submitDateTime,
+            payload: payload, sectionKeys: sectionKeys, db: db)
+        return
     }
-    if let row = existing {
-        applyFields(row)
-        try await row.update(on: db)
-    } else {
-        let model = CompanyFilingSections()
-        model.id = docID
-        applyFields(model)
-        try await createIdempotently(
-            create: { try await model.create(on: db) },
-            recover: {
-                guard let recovered = try await CompanyFilingSections.find(docID, on: db) else { return false }
-                applyFields(recovered)
-                try await recovered.update(on: db)
-                return true
+    let model = CompanyFilingSections()
+    model.id = docID
+    model.code = code
+    model.submitDateTime = submitDateTime
+    model.payload = payload
+    model.cacheVersion = filingSectionsCacheVersion
+    model.sectionKeys = sectionKeys
+    try await createIdempotently(
+        create: { try await model.create(on: db) },
+        recover: {
+            guard try await CompanyFilingSectionsCacheVersionOnly.find(docID, on: db) != nil else {
+                return false
             }
-        )
-    }
+            try await updateCompanyFilingSectionsInPlace(
+                docID: docID, code: code, submitDateTime: submitDateTime,
+                payload: payload, sectionKeys: sectionKeys, db: db)
+            return true
+        }
+    )
+}
+
+/// 既存行をペイロードを読まずに更新する。ペイロードは内容が違うときだけ書き、その後で版を進める。
+/// 途中で失敗しても「新しい版 + 古いペイロード」にならないよう、ペイロードを先に書く。
+/// どちらの文も冪等なので withDbRetry での再実行に耐える。
+func updateCompanyFilingSectionsInPlace(
+    docID: String, code: String, submitDateTime: String,
+    payload: FilingSectionsPayload, sectionKeys: String, db: Database
+) async throws {
+    let sql = try requireSQLDatabase(db)
+    let payloadChanged: SQLQueryString = "\(ident: "payload") IS DISTINCT FROM \(bind: payload)"
+    try await sql.update(CompanyFilingSections.schema)
+        .set("payload", to: payload)
+        .where("doc_id", .equal, docID)
+        .where(payloadChanged)
+        .run()
+    try await CompanyFilingSections.query(on: db)
+        .filter(\.$id == docID)
+        .set(\.$code, to: code)
+        .set(\.$submitDateTime, to: submitDateTime)
+        .set(\.$cacheVersion, to: filingSectionsCacheVersion)
+        .set(\.$sectionKeys, to: sectionKeys)
+        .update()  // updated_at は Fluent が付ける
 }
 
 // MARK: - servable/unservable 集計
