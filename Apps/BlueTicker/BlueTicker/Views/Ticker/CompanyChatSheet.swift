@@ -315,7 +315,7 @@ struct CompanyChatDigest {
     @Guide(description: "何を手がける会社かと、業績の向きを2文以内で。金額や比率の数字は書かない")
     var overview: String
 
-    @Guide(description: "最も目立つ変化を1〜2文で。数字を書くときは与えられた表記をそのまま使う")
+    @Guide(description: "最も目立つ変化を1〜2文で。数字は下の表に出すので書かず、どの指標がどちらへ動いたかを言葉で書く")
     var highlight: String
 
     @Guide(description: "利用者が次に深掘りしたくなる短い質問。それぞれ20字以内", .count(3))
@@ -336,7 +336,7 @@ struct FinancialYearTool: Tool {
     }
 
     func call(arguments: Arguments) async throws -> String {
-        let year = arguments.fiscalYear
+        let year = ChatFacts.normalizedFiscalYear(arguments.fiscalYear)
         let period = facts.years.last { $0.fiscalYear == year }.map { ChatFacts.periodLabel($0.fyEnd) }
         log.append(period.map { "\($0)の財務データ" } ?? "\(year)年の財務データ（該当なし）")
         return facts.yearDetail(fiscalYear: year)
@@ -464,11 +464,11 @@ final class CompanyChatModel {
             var latest = ""
             for try await snapshot in session.streamResponse(to: question) {
                 latest = snapshot.content
-                messages[index].text = latest
+                messages[index].text = ChatContext.normalizedDigits(latest)
             }
             var seen = Set<String>()
             messages[index].references = toolLog.drain().filter { seen.insert($0).inserted }
-            return latest
+            return ChatContext.normalizedDigits(latest)
         } catch let error as LanguageModelSession.GenerationError {
             guard retryOnOverflow, case .exceededContextWindowSize = error else { throw error }
             // 文脈があふれたら、直近のやりとりだけを持ち越して作り直す。
@@ -493,8 +493,8 @@ final class CompanyChatModel {
             var lastSuggestions: [String] = []
             for try await snapshot in session.streamResponse(to: prompt, generating: CompanyChatDigest.self) {
                 let partial = snapshot.content
-                overviewText = partial.overview
-                highlightText = partial.highlight
+                overviewText = partial.overview.map(ChatContext.normalizedDigits)
+                highlightText = partial.highlight.map(ChatContext.normalizedDigits)
                 if let suggestions = partial.followUpSuggestions {
                     lastSuggestions = suggestions
                 }
@@ -552,7 +552,8 @@ final class CompanyChatModel {
     回答は3〜4文にします。
     「なぜ」「要因」を聞かれたら、まず「変化の要因」の数字で説明します。例えば利益率なら、粗利率と販管費率のどちらが動いたか、事業利益の前期差のうち売上・粗利率・販管費の要因がそれぞれいくらかを答えます。
     従業員数の影響は、従業員1人あたり売上高の変化で説明します。ROE の変化は、純利益率・総資産回転率・財務レバレッジのどれが動いたかで説明します。
-    数字で説明したうえで、事業上の具体的な理由（製品、価格、為替など）は手元の資料に無いと一言添えます。「データがありません」だけで終えません。
+    数字で説明したうえで、事業上の具体的な理由（製品、価格、為替など）は手元の資料に無いと一言添えます。
+    数字は半角の算用数字で、与えられた表記のまま書きます。同じ内容を繰り返しません。
     表に無い決算期の値や要因が必要なときは getFinancialYear を使います。
     株価と将来の業績予想は扱いません。投資の勧誘や売買の判断はしません。
     """
@@ -608,7 +609,9 @@ final class CompanyChatModel {
             )
         }
         facts = ChatFacts(years: years) { amount in
-            Format.autoYen(amount, currency: currency)
+            (currency ?? "JPY") == "JPY"
+                ? ChatFacts.yenText(amount)
+                : Format.autoYen(amount, currency: currency)
         }
     }
 
