@@ -46,4 +46,41 @@ import Testing
         #expect(!ChatRouting.needsReport("ROEは？"))
         #expect(!ChatRouting.needsReport("従業員数は増えた？"))
     }
+
+    @Test func refusedEventIsParsed() {
+        #expect(ServerChatEvent.parse(line: #"data: {"message":"お答えできません","type":"refused"}"#) == .refused("お答えできません"))
+    }
+
+    @Test func guardCatchesPersonalInformation() {
+        for question in [
+            "連絡は taro@example.com までお願いします",
+            "電話は 090-1234-5678 です",
+            "０９０１２３４５６７８に電話して",
+            "03-1234-5678",
+            "カードは 4111 1111 1111 1111",
+            "マイナンバーは123456789012です",
+            "口座番号 1234567 の残高で買える？",
+            "〒100-0001 に住んでいます",
+        ] {
+            #expect(ChatGuard.check(question) == .personalInformation, "\(question)")
+        }
+    }
+
+    @Test func guardCatchesInvestmentAdvice() {
+        #expect(ChatGuard.check("この会社の株は今買うべき？") == .investmentAdvice)
+        #expect(ChatGuard.check("目標株価を教えて") == .investmentAdvice)
+        #expect(ChatGuard.check("売り時はいつ？") == .investmentAdvice)
+    }
+
+    @Test func guardLetsOrdinaryQuestionsThrough() {
+        for question in [
+            "26年3月期の売上高は？",
+            "2025-2026 の営業利益の変化は？",
+            "売上高 1,234億円 の内訳は？",
+            "ROEは8.3%から上がった？",
+            "主なリスクは？",
+        ] {
+            #expect(ChatGuard.check(question) == nil, "\(question)")
+        }
+    }
 }

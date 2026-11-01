@@ -350,11 +350,15 @@ enum ChatQuestionKind {
     case figures
     /// 有報の文章や表に無い情報が要る。
     case report
+    /// 売買の判断や株価の見通しを求めている（答えない）。
+    case investmentAdvice
+    /// 個人を特定できる情報が書かれている（送らない）。
+    case personalInformation
 }
 
 @Generable
 struct ChatQuestionRoute {
-    @Guide(description: "表の数字だけで答えられるなら figures、有報の文章や表に無い情報が要るなら report。迷ったら report")
+    @Guide(description: "売買の判断・株価の予想なら investmentAdvice、個人情報が書かれていれば personalInformation。それ以外は、表の数字だけで答えられるなら figures、有報の文章や表に無い情報が要るなら report。figures と report で迷ったら report")
     var kind: ChatQuestionKind
 }
 
@@ -490,7 +494,19 @@ final class CompanyChatModel {
             isResponding = false
             scrollToken += 1
         }
-        let destination = await route(question)
+        // 売買の判断・個人情報は答えない。書式で分かる個人情報は端末の外へ出さない。
+        if let reason = ChatGuard.check(question) {
+            refuse(at: index, reason.message)
+            return
+        }
+        let destination: ChatRouting.Destination
+        switch await route(question) {
+        case .answer(let target):
+            destination = target
+        case .refuse(let message):
+            refuse(at: index, message)
+            return
+        }
         do {
             let answer: String
             switch destination {
@@ -500,6 +516,8 @@ final class CompanyChatModel {
                 answer = try await respondOnServer(to: question, at: index, facts: facts)
             }
             exchanges.append(ChatContext.Exchange(question: question, answer: answer))
+        } catch let refusal as ServerChatRefusal {
+            refuse(at: index, refusal.message)
         } catch {
             messages[index].text = Self.message(for: error)
             messages[index].failed = true
@@ -535,18 +553,39 @@ final class CompanyChatModel {
         }
     }
 
-    /// どちらで答えるか。理由・リスクなどの語があればすぐサーバーへ。語で決まらない質問は端末内のモデルに
-    /// 「表の数字で足りるか」を判定させる。判定できなければサーバーへ（端末内では浅い回答になりやすい）。
-    private func route(_ question: String) async -> ChatRouting.Destination {
-        guard deviceAvailable else { return .server }
-        if ChatRouting.needsReport(question) { return .server }
+    enum RouteDecision {
+        case answer(ChatRouting.Destination)
+        case refuse(String)
+    }
+
+    /// どちらで答えるか。端末内のモデルが使えるときは、まずモデルに質問を分類させる
+    /// （売買の判断・個人情報なら断る。表の数字で足りるなら端末内）。理由・リスクなどの語があれば、
+    /// 分類にかかわらずサーバーへ送る。分類できなければサーバーへ（サーバー側でも事前チェックする）。
+    private func route(_ question: String) async -> RouteDecision {
+        guard deviceAvailable else { return .answer(.server) }
         let session = LanguageModelSession { Self.routingInstructions }
+        let kind: ChatQuestionKind
         do {
-            let response = try await session.respond(to: question, generating: ChatQuestionRoute.self)
-            return response.content.kind == .figures ? .device : .server
+            kind = try await session.respond(to: question, generating: ChatQuestionRoute.self).content.kind
         } catch {
-            return .server
+            return .answer(.server)
         }
+        switch kind {
+        case .investmentAdvice:
+            return .refuse(ChatGuard.Reason.investmentAdvice.message)
+        case .personalInformation:
+            return .refuse(ChatGuard.Reason.personalInformation.message)
+        case .figures:
+            return .answer(ChatRouting.needsReport(question) ? .server : .device)
+        case .report:
+            return .answer(.server)
+        }
+    }
+
+    private func refuse(at index: Int, _ message: String) {
+        messages[index].text = message
+        messages[index].failed = true
+        messages[index].status = nil
     }
 
     private static let routingInstructions = """
@@ -554,7 +593,9 @@ final class CompanyChatModel {
     表にあるのは、売上高・営業利益・営業利益率・純利益・ROE・ROIC・従業員数の各決算期の値と前期比、事業利益の前期差の要因分解（売上・粗利率・販管費）、粗利率、販管費率、ROE の分解、従業員1人あたり売上高です。
     これらの値や増減、どれが大きく動いたかを聞く質問は figures です。
     事業の中身、戦略、競合との比較、具体的な理由、今後の見通し、内訳など、表に無い情報や有価証券報告書の文章が要る質問は report です。
-    迷ったら report にします。
+    買うべきか売るべきか、買い時・売り時、株価や目標株価の予想など、売買の判断や株価の見通しを求める質問は investmentAdvice です。
+    質問の中に氏名・住所・電話番号・メールアドレス・口座番号など個人を特定できる情報が書かれていれば personalInformation です。
+    figures と report で迷ったら report にします。
     """
 
     /// 有報の文章が要る質問をサーバーで答える。届かないときは、端末内で答えられるならそちらへ回す。
@@ -578,12 +619,17 @@ final class CompanyChatModel {
                     break
                 case .failure(let message):
                     throw ServerChatFailure(message: message)
+                case .refused(let message):
+                    throw ServerChatRefusal(message: message)
                 }
             }
             guard !text.isEmpty else { throw ServerChatFailure(message: "回答を取得できませんでした。") }
             return messages[index].text
         } catch is CancellationError {
             throw CancellationError()
+        } catch let refusal as ServerChatRefusal {
+            // 断られた質問は端末内でも答えない。
+            throw refusal
         } catch {
             guard deviceAvailable else { throw error }
             messages[index] = Message(role: .assistant, text: "", note: Self.serverFallbackNote(for: error))
@@ -789,5 +835,10 @@ final class CompanyChatModel {
 
 /// サーバーが `error` イベントで返した失敗。
 struct ServerChatFailure: Error {
+    let message: String
+}
+
+/// サーバーの事前チェックで断られた（売買の判断・個人情報）。端末内へ回さない。
+struct ServerChatRefusal: Error {
     let message: String
 }
