@@ -83,10 +83,19 @@ enum ChatTools {
         ("major_facilities", "主要な設備の状況"),
     ]
 
+    /// 公開している内訳軸すべて（REST の breakdown と同じ。廃止軸は含めない）。
     static let axes: [(key: String, label: String)] = [
-        ("segment", "報告セグメント別"),
-        ("product_service", "製品・サービス別"),
-        ("geography", "地域別"),
+        ("segment", "報告セグメント別の売上・利益"),
+        ("product_service", "製品・サービス別の売上"),
+        ("geography", "地域別の売上"),
+        ("employees", "セグメント別の従業員数"),
+        ("research_and_development", "セグメント別の研究開発費"),
+        ("capex", "セグメント別の設備投資・セグメント資産"),
+        ("goodwill", "セグメント別ののれん（期首・期末・償却・減損）"),
+        ("equity_method_investments", "セグメント別の持分法投資"),
+        ("interest_bearing_debt", "有利子負債の内訳（借入金・社債・リース負債）"),
+        ("property_plant_equipment", "有形固定資産の種類別内訳"),
+        ("goodwill_and_intangibles", "のれん及び無形資産の種類別内訳"),
     ]
 
     static func sectionLabel(_ key: String) -> String? {
@@ -118,7 +127,7 @@ enum ChatTools {
             ChatToolDefinition(
                 name: breakdownName,
                 description: """
-                    最新の有価証券報告書の売上内訳（金額・構成比・利益）を取得する。軸: \(axisGuide)
+                    最新の有価証券報告書の内訳表（金額・構成比など）を取得する。軸: \(axisGuide)
                     """,
                 parametersJSON: """
                     {"type":"object","properties":{"axis":{"type":"string","enum":[\(axisKeys)]}},\
@@ -157,6 +166,7 @@ struct ChatSession: Sendable {
 
         var toolCallsUsed = 0
         var answered = false
+        var seenResults = Set<String>()
         var usage = ChatUsage(promptTokens: 0, completionTokens: 0)
         // ツール上限ぶんの往復 + 最後の回答 1 回。
         for _ in 0...limits.maxToolCalls {
@@ -199,9 +209,37 @@ struct ChatSession: Sendable {
                         max(0, limits.maxInputCharacters - Self.characterCount(messages)))
                     let execution = await execute(call, code: input.code, budget: budget)
                     try await emit(.tool(name: call.name, label: execution.label))
-                    result = execution.text
+                    // 同じ本文をもう一度渡しても入力が増えるだけなので、短い知らせに置き換える。
+                    if seenResults.insert(execution.text).inserted {
+                        result = execution.text
+                    } else {
+                        result = "前回と同じ内容でした。この資料には求める記述が見当たりません。ここまでの情報で、わかる範囲を答えてください。"
+                    }
                 }
                 messages.append(ChatModelMessage(role: .tool, content: result, toolCallId: call.id))
+            }
+        }
+        // 最後の回答が空（ツールを呼ぼうとして終わった等）なら、ツールなしで一度だけ答え直させる。
+        if !answered {
+            let hasToolHistory = messages.contains { $0.role == .tool }
+            var retry = messages
+            retry.append(ChatModelMessage(role: .user, content: Self.answerNowPrompt))
+            let request = ChatModelRequest(
+                messages: retry,
+                tools: hasToolHistory ? ChatTools.definitions : [],
+                maxOutputTokens: limits.maxOutputTokens,
+                toolChoiceNone: hasToolHistory)
+            for try await event in model.stream(request) {
+                switch event {
+                case .text(let delta):
+                    answered = true
+                    try await emit(.delta(delta))
+                case .usage(let received):
+                    usage.promptTokens += received.promptTokens
+                    usage.completionTokens += received.completionTokens
+                case .toolCalls:
+                    break
+                }
             }
         }
         if !answered {
@@ -209,6 +247,9 @@ struct ChatSession: Sendable {
         }
         try await emit(.done(usage))
     }
+
+    static let answerNowPrompt =
+        "ツールはもう使えません。ここまでに得た情報だけで、わかる範囲を答えてください。資料に記述がなければ、そう伝えてください。"
 
     struct ToolExecution: Equatable {
         var label: String
@@ -239,14 +280,14 @@ struct ChatSession: Sendable {
         case ChatTools.breakdownName:
             let axis = arguments["axis"] as? String ?? ""
             guard let label = ChatTools.axisLabel(axis) else {
-                return ToolExecution(label: "売上内訳", text: "その軸は使えません。使える軸: " + ChatTools.axes.map(\.key).joined(separator: ", "))
+                return ToolExecution(label: "内訳", text: "その軸は使えません。使える軸: " + ChatTools.axes.map(\.key).joined(separator: ", "))
             }
             guard let text = await data.breakdown(code: code, axis: axis) else {
-                return ToolExecution(label: "\(label)の売上内訳", text: "この会社の有報からは\(label)の売上内訳を取得できませんでした。")
+                return ToolExecution(label: "\(label)", text: "この会社の有報からは「\(label)」の内訳を取得できませんでした。")
             }
             return ToolExecution(
-                label: "\(label)の売上内訳",
-                text: "\(label)の売上内訳（最新の有報）:\n" + String(text.prefix(budget)))
+                label: "\(label)",
+                text: "\(label)（最新の有報）:\n" + String(text.prefix(budget)))
 
         default:
             return ToolExecution(label: call.name, text: "不明なツールです: \(call.name)")
@@ -264,7 +305,7 @@ struct ChatSession: Sendable {
             "・数値は下の財務データとツールの結果に書かれた表記をそのまま使う。単位換算や割り算などの計算を自分でしない。",
             "・データにないことは推測せず、わからないと答える。株価の予想や売買の推奨はしない。",
             "・経営方針、リスク、業績の要因、研究開発、設備投資など文章で書かれた内容は get_filing_section で有報を読んでから答える。",
-            "・セグメント別・製品別・地域別の売上は get_breakdown を使う。",
+            "・セグメント別・製品別・地域別の売上、セグメント別の研究開発費・設備投資・従業員数、有利子負債などの内訳は get_breakdown を使う。",
             "・ツールを呼ぶ前に前置きを書かない。",
             "・結論から書き、300字程度に収める。見出しや表は使わず、必要なら「・」の箇条書きにする。",
             "・有報の記述に基づくときは「有報の『事業等のリスク』によると」のように節の名前を添える。",

@@ -147,22 +147,57 @@ enum ChatFormat {
     // MARK: - 内訳
 
     /// breakdown 応答の行を「名前: 売上 …（構成比 …）、利益 …（利益率 …）」に整形する。
+    /// 内訳表の行で読む値（セル）と表示名。軸ごとにセル名が違う（金額・期末残高・設備投資額など）。
+    private static let breakdownCells: [(key: String, label: String)] = [
+        ("amount", "金額"),
+        ("flow", "設備投資額"),
+        ("capital_expenditures_overview", "設備投資（設備の状況）"),
+        ("segment_assets", "セグメント資産"),
+        ("opening", "期首"),
+        ("closing", "期末"),
+        ("amortization", "償却額"),
+        ("impairment", "減損損失"),
+    ]
+
     static func breakdownSummary(_ json: [String: Any]) -> String? {
         guard let breakdown = json["breakdown"] as? [String: Any],
             let rows = breakdown["rows"] as? [[String: Any]], !rows.isEmpty
         else { return nil }
-        let isCurrency = (json["unit"] as? String ?? "currency_amount") == "currency_amount"
-        let denominator = number(breakdown["denominator"])
+        let unit = json["unit"] as? String ?? "currency_amount"
+        func value(_ number: Double) -> String {
+            switch unit {
+            case "currency_amount": return yen(number)
+            case "persons": return grouped(number) + "人"
+            default: return grouped(number)
+            }
+        }
+        /// セルの分母。金額は表の分母、ほかのセルは同名の分母（capex）か、期末なら表の分母。
+        func denominator(for cell: String) -> Double? {
+            if let nested = breakdown[cell] as? [String: Any] { return number(nested["denominator"]) }
+            return cell == "amount" || cell == "closing" ? number(breakdown["denominator"]) : nil
+        }
+        let flowLabel = (breakdown["flow_metric"] as? String) == "noncurrent_asset_additions"
+            ? "非流動資産の増加額" : "設備投資額"
+
         var lines: [String] = []
         for row in rows {
             let kind = row["row_kind"] as? String
             // 調整額・内部消去は利用者の問いにほぼ関係しないため除く。
             guard kind != "reconciling", let label = row["label"] as? String else { continue }
+            let isTotal = kind == "subtotal" || kind == "EntityTotal"
             var parts: [String] = []
-            if let amount = number(row["amount"]) {
-                var text = isCurrency ? "金額 \(yen(amount))" : "値 \(grouped(amount))"
-                if kind != "subtotal", let denominator, denominator > 0 {
-                    text += "（構成比 \(percent(amount / denominator * 100))）"
+            for cell in breakdownCells {
+                guard let amount = number(row[cell.key]) else { continue }
+                let name: String
+                switch cell.key {
+                case "flow": name = flowLabel
+                case "amount" where unit == "persons": name = "人数"
+                case "amount" where unit != "currency_amount": name = "値"
+                default: name = cell.label
+                }
+                var text = "\(name) \(value(amount))"
+                if !isTotal, let total = denominator(for: cell.key), total > 0 {
+                    text += "（構成比 \(percent(amount / total * 100))）"
                 }
                 parts.append(text)
             }
@@ -174,7 +209,15 @@ enum ChatFormat {
                 parts.append(text)
             }
             guard !parts.isEmpty else { continue }
-            lines.append((kind == "subtotal" ? "［合計］" : "") + "\(label): " + parts.joined(separator: "、"))
+            var rowName = label
+            switch row["maturity_class"] as? String {
+            case "current": rowName += "（流動）"
+            case "non_current": rowName += "（非流動）"
+            default: break
+            }
+            // 有利子負債の明細行は貸借対照表の行と重複する（合計には含めない）。
+            if row["in_total"] as? Bool == false { rowName += "〔明細〕" }
+            lines.append((isTotal ? "［合計］" : "") + "\(rowName): " + parts.joined(separator: "、"))
         }
         return lines.isEmpty ? nil : lines.joined(separator: "\n")
     }
@@ -183,13 +226,35 @@ enum ChatFormat {
 
     /// 段落単位で、先頭の段落とキーワードを含む段落を優先して `maxCharacters` 以内に収める。
     /// 元の並び順は保つ。切り詰めたときは末尾に印を付ける。
+    /// これより長い段落は文に分ける。
+    static let maxParagraphCharacters = 400
+
+    /// 「。」で文に分ける（句点は文に残す）。
+    static func sentences(_ text: String) -> [String] {
+        var result: [String] = []
+        var current = ""
+        for character in text {
+            current.append(character)
+            if character == "。" {
+                let sentence = current.trimmingCharacters(in: .whitespaces)
+                if !sentence.isEmpty { result.append(sentence) }
+                current = ""
+            }
+        }
+        let rest = current.trimmingCharacters(in: .whitespaces)
+        if !rest.isEmpty { result.append(rest) }
+        return result
+    }
+
     static func excerpt(_ text: String, keywords: [String], maxCharacters: Int) -> String {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard trimmed.count > maxCharacters else { return trimmed }
 
+        // 改行のない長い本文もあるため、長すぎる段落は文（。）で区切ってから選ぶ。
         let paragraphs = trimmed.split(separator: "\n", omittingEmptySubsequences: true)
             .map { $0.trimmingCharacters(in: .whitespaces) }
             .filter { !$0.isEmpty }
+            .flatMap { $0.count > maxParagraphCharacters ? sentences($0) : [$0] }
         let terms = keywords.map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
         let marker = "\n（以下略。必要なら別のキーワードで再取得できます）"
         let budget = max(0, maxCharacters - marker.count)
