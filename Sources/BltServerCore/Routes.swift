@@ -325,6 +325,9 @@ func registerRoutes(
             db: dbAvailable ? req.db : nil)
     }
 
+    // POST /v1/chat（有報データを読みながら LLM が答える。SSE。ChatRoute.swift 参照）
+    registerChatRoute(v1, dbAvailable: dbAvailable)
+
     // POST /（MCP プロトコル。/v1 と同じ認証グループ配下。ルートパスの理由は MCPRoute.swift 参照）
     try await registerMcpRoute(
         authenticated, app: app, context: context, dbAvailable: dbAvailable)
@@ -795,7 +798,7 @@ func entityTagMatches(_ header: String, etag: String) -> Bool {
 
 /// `{"error": "...", "status": N}` 形式のエラーレスポンス。`reason` を渡すと同じボディに
 /// `"reason"` キーを追加する（breakdown の notApplicable 応答用。issue #132）。
-private func errorResponse(_ status: HTTPResponseStatus, message: String, reason: String? = nil) -> Response {
+func errorResponse(_ status: HTTPResponseStatus, message: String, reason: String? = nil) -> Response {
     var body: [String: Any] = ["error": message, "status": Int(status.code)]
     if let reason { body["reason"] = reason }
     let data =
