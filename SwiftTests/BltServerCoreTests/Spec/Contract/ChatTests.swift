@@ -404,7 +404,11 @@ private func postChat(_ app: Application, _ json: String) async throws -> (HTTPR
     @Test func environmentCanTurnTheGuardOff() {
         let logger = Logger(label: "test")
         #expect(JevChatGuard.fromEnvironment([:], logger: logger) == nil)
-        #expect(JevChatGuard.fromEnvironment(["OPENROUTER_CHAT_API_KEY": "k"], logger: logger)?.model == "typesafe/jev-1.13")
+        // 既定では使わない（費用が回答モデルの約 25 倍のため）。モデル名を入れたときだけ有効。
+        #expect(JevChatGuard.fromEnvironment(["OPENROUTER_CHAT_API_KEY": "k"], logger: logger) == nil)
+        #expect(JevChatGuard.fromEnvironment(
+            ["OPENROUTER_CHAT_API_KEY": "k", "OPENROUTER_CHAT_GUARD_MODEL": JevChatGuard.defaultModel],
+            logger: logger)?.model == "typesafe/jev-1.13")
         #expect(JevChatGuard.fromEnvironment(
             ["OPENROUTER_CHAT_API_KEY": "k", "OPENROUTER_CHAT_GUARD_MODEL": "off"], logger: logger) == nil)
     }
