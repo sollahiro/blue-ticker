@@ -8,6 +8,10 @@ name: Deploy
 # 基準にしてよい: その run 自身が「基準〜その時点に関連差分なし」を検証済みのため）。
 # 差分にマイグレーションが含まれる run は失敗で止める（Mac で migrate してから手動デプロイ）。
 # `v*` タグ push では起動しない（旧 release.yml 相当の Homebrew 成果物は作らない）。
+# run 名を「判定・デプロイした commit の sha」にする。workflow_run 起動の run は head_sha が
+# 起動時点の main の HEAD になり、実際に checkout した commit と一致しない。次回の判定基準は
+# head_sha ではなく、この run 名（display_title）から取る。
+run-name: ${{ github.event.workflow_run.head_sha || github.sha }}
 on:
   workflow_run:
     workflows: [CI]
@@ -51,8 +55,15 @@ jobs:
             exit 0
           fi
           # gh api の一時障害では「デプロイする」側に倒す（デプロイは冪等・空 base 分岐へ）
+          # 基準は run の head_sha ではなく run 名（= その run が checkout した commit の sha）。
+          # workflow_run 起動の head_sha は起動時点の main の HEAD で、CI 中に次のマージがあると
+          # 未デプロイの commit を「デプロイ済み」と誤判定する。run 名が sha でない旧 run は
+          # 下の cat-file で弾かれ、デプロイする側に倒れる。
           base=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/deploy.yml/runs?status=success&branch=main&per_page=1" \
-            --jq '.workflow_runs[0].head_sha // empty' 2>/dev/null || true)
+            --jq '.workflow_runs[0].display_title // empty' 2>/dev/null || true)
+          if ! printf '%s' "$base" | grep -qE '^[0-9a-f]{40}$'; then
+            base=""
+          fi
           if [ -z "$base" ] || ! git cat-file -e "$base" 2>/dev/null; then
             echo "changed=true" >> "$GITHUB_OUTPUT"
             echo "基準となる成功 run が見つからないためデプロイします"
