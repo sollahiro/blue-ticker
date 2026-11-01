@@ -343,6 +343,21 @@ struct CompanyChatDigest {
     var followUpSuggestions: [String]
 }
 
+/// 質問の振り分けの判定結果。
+@Generable
+enum ChatQuestionKind {
+    /// 手元の数字の表だけで答えられる。
+    case figures
+    /// 有報の文章や表に無い情報が要る。
+    case report
+}
+
+@Generable
+struct ChatQuestionRoute {
+    @Guide(description: "表の数字だけで答えられるなら figures、有報の文章や表に無い情報が要るなら report。迷ったら report")
+    var kind: ChatQuestionKind
+}
+
 /// 決算期ごとの値を返すツール。取得済みの Waterfall から返すので通信しない。
 struct FinancialYearTool: Tool {
     let name = "getFinancialYear"
@@ -475,8 +490,7 @@ final class CompanyChatModel {
             isResponding = false
             scrollToken += 1
         }
-        let destination: ChatRouting.Destination =
-            deviceAvailable && !ChatRouting.needsReport(question) ? .device : .server
+        let destination = await route(question)
         do {
             let answer: String
             switch destination {
@@ -520,6 +534,28 @@ final class CompanyChatModel {
             return try await respond(to: question, at: index, facts: facts, retryOnOverflow: false)
         }
     }
+
+    /// どちらで答えるか。理由・リスクなどの語があればすぐサーバーへ。語で決まらない質問は端末内のモデルに
+    /// 「表の数字で足りるか」を判定させる。判定できなければサーバーへ（端末内では浅い回答になりやすい）。
+    private func route(_ question: String) async -> ChatRouting.Destination {
+        guard deviceAvailable else { return .server }
+        if ChatRouting.needsReport(question) { return .server }
+        let session = LanguageModelSession { Self.routingInstructions }
+        do {
+            let response = try await session.respond(to: question, generating: ChatQuestionRoute.self)
+            return response.content.kind == .figures ? .device : .server
+        } catch {
+            return .server
+        }
+    }
+
+    private static let routingInstructions = """
+    利用者が日本の上場企業について質問します。その質問が、手元の数字の表だけで答えられるかを判定します。
+    表にあるのは、売上高・営業利益・営業利益率・純利益・ROE・ROIC・従業員数の各決算期の値と前期比、事業利益の前期差の要因分解（売上・粗利率・販管費）、粗利率、販管費率、ROE の分解、従業員1人あたり売上高です。
+    これらの値や増減、どれが大きく動いたかを聞く質問は figures です。
+    事業の中身、戦略、競合との比較、具体的な理由、今後の見通し、内訳など、表に無い情報や有価証券報告書の文章が要る質問は report です。
+    迷ったら report にします。
+    """
 
     /// 有報の文章が要る質問をサーバーで答える。届かないときは、端末内で答えられるならそちらへ回す。
     private func respondOnServer(to question: String, at index: Int, facts: ChatFacts) async throws -> String {

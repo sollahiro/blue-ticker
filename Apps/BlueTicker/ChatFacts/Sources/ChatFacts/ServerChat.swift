@@ -57,7 +57,8 @@ enum ServerChatRequest {
 }
 
 /// 質問をどちらで答えるか。端末内のモデルは手元の数字の表で足りる質問だけを受け持ち、
-/// 有報の文章が要る質問はサーバーへ送る。
+/// 有報の文章が要る質問はサーバーへ送る。ここは語での一次判定。語で決まらない質問は
+/// アプリ側で端末内のモデルに判定させる（`ChatQuestionRoute`）。
 enum ChatRouting {
     enum Destination: Equatable, Sendable {
         case device
