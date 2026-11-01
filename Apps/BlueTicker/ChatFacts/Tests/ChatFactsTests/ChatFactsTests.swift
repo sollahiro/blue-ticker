@@ -180,4 +180,23 @@ import Testing
         let lines = ChatFacts.drivers(latest: ChatFactYear(fyEnd: "2026-03-31", sales: 1), previous: nil, amountText: Self.oku)
         #expect(lines.isEmpty)
     }
+
+    @Test func twoDigitFiscalYearIsTwentyFirstCentury() throws {
+        let facts = try #require(ChatFacts(
+            years: [ChatFactYear(fyEnd: "2026-03-31", sales: 100_000_000_000)],
+            amountText: Self.oku
+        ))
+        #expect(facts.yearDetail(fiscalYear: 26).hasPrefix("26年3月期: 売上高 1000億円"))
+        #expect(ChatFacts.normalizedFiscalYear(2025) == 2025)
+    }
+
+    @Test func yenTextUsesOkuNotJuuoku() {
+        #expect(ChatFacts.yenText(1_584_000_000_000) == "15,840億円")
+        #expect(ChatFacts.yenText(-25_100_000_000) == "-251億円")
+        #expect(ChatFacts.yenText(42_000_000) == "42百万円")
+    }
+
+    @Test func fullWidthDigitsBecomeAscii() {
+        #expect(ChatContext.normalizedDigits("前期差で－２５１億円、＋５．１pt") == "前期差で-251億円、+5.1pt")
+    }
 }

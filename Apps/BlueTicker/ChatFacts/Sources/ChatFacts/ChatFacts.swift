@@ -248,7 +248,8 @@ struct ChatFacts: Sendable {
 
     /// ツールの応答。指定した決算期（期末の西暦年）の値を 1 行で返す。
     /// 同じ年に期末が 2 つある（決算期変更）ときは後の期。
-    func yearDetail(fiscalYear: Int) -> String {
+    func yearDetail(fiscalYear raw: Int) -> String {
+        let fiscalYear = Self.normalizedFiscalYear(raw)
         guard let year = years.last(where: { $0.fiscalYear == fiscalYear }) else {
             let available = periodLabels.joined(separator: "、")
             return "その決算期のデータはありません。取得できる決算期: \(available)"
@@ -267,6 +268,21 @@ struct ChatFacts: Sendable {
             detail += "\n" + drivers.joined(separator: "\n")
         }
         return detail
+    }
+
+    /// モデルが「26年3月期」の 26 だけを渡すことがあるので、2 桁は 2000 年代とみなす。
+    static func normalizedFiscalYear(_ year: Int) -> Int {
+        (0..<100).contains(year) ? 2000 + year : year
+    }
+
+    /// 円の金額を、桁を読み違えにくい億円・百万円で書く（`15,840億円`）。十億円は使わない。
+    static func yenText(_ yen: Double) -> String {
+        let absolute = abs(yen)
+        let sign = yen < 0 ? "-" : ""
+        if absolute >= 100_000_000 {
+            return sign + grouped(Int((absolute / 100_000_000).rounded())) + "億円"
+        }
+        return sign + grouped(Int((absolute / 1_000_000).rounded())) + "百万円"
     }
 
     // MARK: - 要因
@@ -429,7 +445,7 @@ struct ChatFacts: Sendable {
         return "±0.0" + unit
     }
 
-    private static func grouped(_ value: Int) -> String {
+    static func grouped(_ value: Int) -> String {
         let digits = String(abs(value))
         var out = ""
         for (index, char) in digits.enumerated() {
@@ -442,6 +458,25 @@ struct ChatFacts: Sendable {
 
 /// 生成モデルに渡す文字列の切り詰め。端末内モデルは文脈が約 4,000 トークンしかない。
 enum ChatContext {
+    /// 全角の数字・記号を半角へ。端末内モデルは数字を全角で書くことがある。
+    static func normalizedDigits(_ text: String) -> String {
+        var out = ""
+        out.reserveCapacity(text.count)
+        for scalar in text.unicodeScalars {
+            switch scalar.value {
+            case 0xFF10...0xFF19:
+                out.unicodeScalars.append(Unicode.Scalar(scalar.value - 0xFF10 + 0x30)!)
+            case 0xFF0B: out.append("+")
+            case 0xFF0D: out.append("-")
+            case 0xFF0E: out.append(".")
+            case 0xFF05: out.append("%")
+            case 0xFF0C: out.append(",")
+            default: out.unicodeScalars.append(scalar)
+            }
+        }
+        return out
+    }
+
     /// `maxCharacters` 以内に収める。収まらないときは上限より前の最後の「。」で切る（無ければ字数で切って…）。
     static func clipped(_ text: String, maxCharacters: Int) -> String {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
