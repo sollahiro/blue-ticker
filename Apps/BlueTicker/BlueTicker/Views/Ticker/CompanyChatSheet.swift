@@ -2,6 +2,12 @@ import FoundationModels
 import os
 import SwiftUI
 
+/// チャットの入口を出すか。保留中（2026-11）は false。シートとサーバー連携のコードは残してあり、
+/// true に戻せば結果画面の右上にチャットのボタンが戻る。
+enum CompanyChatFeature {
+    static let isEnabled = false
+}
+
 /// 結果画面のチャット。HIG のシートでハーフから開き、質問したら全高へ広げる。
 /// 概要と数字の表で足りる質問は端末内の言語モデル（Foundation Models）で答え、有報の文章が要る質問
 /// （理由・方針・リスク・内訳など。`ChatRouting`）はサーバーの `POST /v1/chat` へ送る。

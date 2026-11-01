@@ -96,8 +96,10 @@ struct TickerView: View {
                         action: toggleWatch
                     )
                     .accessibilityAddTraits(isWatched ? .isSelected : [])
-                    Button("チャット", systemImage: "text.bubble") {
-                        showsChat = true
+                    if CompanyChatFeature.isEnabled {
+                        Button("チャット", systemImage: "text.bubble") {
+                            showsChat = true
+                        }
                     }
                 }
             }
