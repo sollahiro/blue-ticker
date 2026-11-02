@@ -1097,7 +1097,7 @@ private struct CashAllocationSection: View {
 
     private func waterfall(_ year: FinancialsYear) -> some View {
         let steps = Self.steps(year)
-        let bounds = steps.flatMap { [$0.start, $0.end] } + [0]
+        let bounds: [Double] = steps.flatMap { step -> [Double] in [step.start, step.end] } + [0.0]
         let lower = bounds.min() ?? 0
         let upper = bounds.max() ?? 0
         return VStack(alignment: .leading, spacing: 8) {
