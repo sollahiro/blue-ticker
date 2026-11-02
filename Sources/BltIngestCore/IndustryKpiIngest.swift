@@ -3,15 +3,17 @@
 // 候補選定は filingSectionCandidates を再利用する。
 //
 // `--stages` の既定からは外す（relations と同じ。本番 drain に乗せない。Mac で明示指定）。
-// 非銀行は statement-notes / breakdowns と同じく not_applicable プレースホルダを残し、
-// 現行 cache_version なら skip する（--limit が非銀行で埋まって銀行に届かないのを防ぐ）。
-// 業種はファサードが EDINET 提出者業種で先に落とし、XBRL を取らない。
+// 対象会社は「提出者業種が銀行業」または「statements BS に預金マーカーあり」に先に絞る
+// （`industryKpiBankCandidateCodes`）。上場全体 ~2 万件に空行を書かない。
+// 絞った後でも XBRL 判定で非銀行だった書類は not_applicable プレースホルダを残し、
+// 現行 cache_version なら skip する。
 
 import BltStoreCore
 import BlueTickerCore
 import FluentKit
 import Foundation
 import Logging
+import SQLKit
 
 public struct IndustryKpiIngestSummary: Sendable, Equatable {
     public let attempted: Int
@@ -227,4 +229,40 @@ func industryKpiClassifyRows(
         .filter(\.$industryGroup == industryGroup)
         .filter(\.$docID ~~ Array(docIDs))
         .all()
+}
+
+/// 業種 KPI（銀行）の対象会社: `listedCodes` のうち、提出者業種が銀行業（`bankIndustryCodes`）か、
+/// company_statements の BS に預金マーカー（`industryKpiBankDepositMarkerTag`）がある会社。
+/// 業種が銀行業以外でも銀行様式で開示する持株会社（預金マーカーあり）を拾う。
+/// statements 未取り込みの書類しか無い会社は、業種が銀行業でない限り次の statements 取り込み後に拾われる。
+func industryKpiBankCandidateCodes(
+    db: Database, listedCodes: Set<String>, bankIndustryCodes: Set<String>
+) async throws -> Set<String> {
+    let depositCodes = try await industryKpiDepositMarkerCodes(db: db)
+    return listedCodes.intersection(bankIndustryCodes.union(depositCodes))
+}
+
+/// company_statements の BS に預金マーカーがある会社コード。payload は転送しない。
+/// Postgres は jsonb 包含で balance_sheet だけを見る。SQLite（テスト）は TEXT の部分一致。
+func industryKpiDepositMarkerCodes(db: Database) async throws -> Set<String> {
+    let sql = try requireSQLDatabase(db)
+    let tag = industryKpiBankDepositMarkerTag
+    let query: SQLQueryString
+    if sql.dialect.name == "postgresql" {
+        let containment = #"[{"tag":"\#(tag)"}]"#
+        query = """
+            SELECT DISTINCT \(ident: "code") AS code
+            FROM \(ident: CompanyStatement.schema)
+            WHERE \(ident: "payload") -> 'balance_sheet' @> CAST(\(bind: containment) AS jsonb)
+            """
+    } else {
+        let pattern = "%\"\(tag)\"%"
+        query = """
+            SELECT DISTINCT \(ident: "code") AS code
+            FROM \(ident: CompanyStatement.schema)
+            WHERE \(ident: "payload") LIKE \(bind: pattern)
+            """
+    }
+    let rows = try await sql.raw(query).all()
+    return Set(try rows.map { try $0.decode(column: "code", as: String.self) })
 }

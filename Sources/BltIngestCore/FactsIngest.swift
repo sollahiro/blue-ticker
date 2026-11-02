@@ -541,8 +541,22 @@ public func runFactsIngestCommand(
         }
         if targets.contains(.industryKpis) {
             // 業種 KPI: 既定 drain には載せない。`--stages industry-kpis` の明示指定。
-            // 対象は上場全体（`--codes` で絞る）。日経225は処理順の先頭寄せのみ。
-            let kpiListed = codes ?? listed
+            // 対象は「提出者業種が銀行業」または「statements BS に預金マーカーあり」の会社
+            // （`--codes` でさらに絞る）。日経225は処理順の先頭寄せのみ。
+            let bankIndustryCodes = await context.bankIndustryListedCodes()
+            let kpiListed = try await withDbRetry(
+                logger: app.logger, context: "業種KPI取り込み 対象会社"
+            ) {
+                try await industryKpiBankCandidateCodes(
+                    db: app.db, listedCodes: codes ?? listed,
+                    bankIndustryCodes: bankIndustryCodes)
+            }
+            app.logger.notice(
+                "業種KPI取り込み 対象会社",
+                metadata: [
+                    "event": "industry_kpi_candidates", "count": "\(kpiListed.count)",
+                    "bank_industry": "\(bankIndustryCodes.count)",
+                ])
             if kpiListed.isEmpty {
                 app.logger.warning(
                     "業種KPI取り込み listed codes empty; skipping",
@@ -551,9 +565,15 @@ public func runFactsIngestCommand(
                         "reason": "empty_listed_codes",
                     ])
             } else {
-                let kpiSets =
+                let baseSets =
                     listedFilingSets.keep.isEmpty && listedFilingSets.purge.isEmpty
                     ? try await loadCandidateSets(kpiListed) : listedFilingSets
+                // `--doc-ids` 指定の書類は対象会社の外でも残す（明示指定を優先）。
+                let kpiSets = FilingSectionCandidateSets(
+                    keep: baseSets.keep.filter {
+                        kpiListed.contains($0.code) || forceDocIDs.contains($0.docID)
+                    },
+                    purge: baseSets.purge)
                 let s12 = try await runIndustryKpiIngest(
                     db: app.db, listedCodes: kpiListed, years: filingSectionsIngestYears,
                     limit: stageLimit, explicitCodes: codes, priorityCodes: priority,

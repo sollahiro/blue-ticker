@@ -17,6 +17,9 @@ public let industryKpiSourceNotApplicable = "not_applicable"
 
 public let industryKpiNotApplicableNotBank = "not_bank"
 
+/// 業種 KPI（銀行）の対象選定に使う statements BS の預金マーカー（`Xbrl.bankMarkerTag`）。
+public let industryKpiBankDepositMarkerTag = Xbrl.bankMarkerTag
+
 public let industryKpiWarningNcdAbsentAssumedZero = "ncd_absent_assumed_zero"
 public let industryKpiWarningLDRUncomputed = "ldr_uncomputed"
 public let industryKpiWarningOHRUncomputed = "ohr_uncomputed"
