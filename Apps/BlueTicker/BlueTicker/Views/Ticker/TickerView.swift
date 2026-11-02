@@ -48,7 +48,8 @@ struct TickerView: View {
                     pillRect: pillRect,
                     company: displayCompany,
                     onExpanded: { showsCompanyCard = $0 },
-                    onFittedPill: { pillRect = $0 }
+                    onFittedPill: { pillRect = $0 },
+                    trailingButtonCount: CompanyChatFeature.isEnabled ? 2 : 1
                 )
             }
             .navigationTitle("")
@@ -293,6 +294,8 @@ private struct CompanyGlassPresenter: UIViewRepresentable {
     var company: CompanyRef
     var onExpanded: (Bool) -> Void
     var onFittedPill: (CGRect) -> Void
+    /// 銘柄面の右上のボタン数。1つのときは、遷移元の画面に残る2ボタンの組を測らない。
+    var trailingButtonCount: Int
 
     func makeUIView(context: Context) -> UIView {
         let view = UIView()
@@ -310,6 +313,7 @@ private struct CompanyGlassPresenter: UIViewRepresentable {
             company: company,
             onExpanded: onExpanded,
             onFittedPill: onFittedPill,
+            trailingButtonCount: trailingButtonCount,
             anchor: uiView
         )
     }
@@ -361,6 +365,8 @@ private struct CompanyGlassPresenter: UIViewRepresentable {
         private var chromeSettled = false
         /// 直前の測りが、星の幅と余白から置けている。
         private var chromeStable = false
+        /// 銘柄面の右上のボタン数。1つのときはカプセル（2ボタンの組）を測らない。
+        private var trailingButtonCount = 2
 
         func update(
             handedOff: Bool,
@@ -370,8 +376,10 @@ private struct CompanyGlassPresenter: UIViewRepresentable {
             company: CompanyRef,
             onExpanded: @escaping (Bool) -> Void,
             onFittedPill: @escaping (CGRect) -> Void,
+            trailingButtonCount: Int,
             anchor: UIView
         ) {
+            self.trailingButtonCount = trailingButtonCount
             model.company = company
             model.onExpanded = onExpanded
             guard let nav = anchor.nearestNavigationController(),
@@ -729,7 +737,8 @@ private struct CompanyGlassPresenter: UIViewRepresentable {
                     if onRight, bounds.height >= 36, bounds.height <= 72 {
                         let ratio = bounds.height > 1 ? bounds.width / bounds.height : 0
                         // 右上の星は円1つ。複数ボタンの組（カプセル）が来たときも測れるように残す。
-                        if ratio >= 2.0 && ratio <= 2.7 {
+                        // 円1つの画面では、push 中に残る遷移元の2ボタンの組を拾わない。
+                        if ratio >= 2.0 && ratio <= 2.7, trailingButtonCount >= 2 {
                             capsuleWidths.append(bounds.width)
                             capsuleHeights.append(bounds.height)
                         } else if abs(bounds.width - bounds.height) <= 4 {
@@ -752,7 +761,7 @@ private struct CompanyGlassPresenter: UIViewRepresentable {
                     left.append(frame)
                 } else if inBar, onScreen, button, frame.midX > rightCut {
                     right.append(frame)
-                } else if inBar, onScreen, cluster {
+                } else if inBar, onScreen, cluster, trailingButtonCount >= 2 {
                     trailingClusters.append(frame)
                 }
             }
