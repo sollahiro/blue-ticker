@@ -47,8 +47,14 @@ enum BankIndustryKpiExtractor {
             facts.append(contentsOf: factsForScope(
                 instant: filerInstant, duration: filerDuration, scope: industryKpiScopeFiler))
         } else {
-            facts.append(contentsOf: factsForScope(
-                instant: consInstant, duration: consDuration, scope: industryKpiScopeFiler))
+            // 連結を作らない会社の単体は通常メンバー無しの文脈。NonConsolidatedMember で付ける会社もある
+            // （豊和銀行 8559）ので、メンバー無しで拾えなければそちらを単体として読む。
+            let plain = factsForScope(
+                instant: consInstant, duration: consDuration, scope: industryKpiScopeFiler)
+            facts.append(contentsOf: plain.isEmpty
+                ? factsForScope(
+                    instant: filerInstant, duration: filerDuration, scope: industryKpiScopeFiler)
+                : plain)
         }
         guard !facts.isEmpty else { return .failed }
 
