@@ -35,6 +35,7 @@ enum XBRLTestSupport {
     static let nsJppfs = "http://disclosure.edinet-fsa.go.jp/taxonomy/jppfs/2022-11-01/jppfs_cor"
     static let nsJpifrs = "http://disclosure.edinet-fsa.go.jp/taxonomy/jpifrs/2022-11-01/jpifrs_cor"
     static let nsJpcrp = "http://disclosure.edinet-fsa.go.jp/taxonomy/jpcrp/2022-11-01/jpcrp_cor"
+    static let nsJpdei = "http://disclosure.edinet-fsa.go.jp/taxonomy/jpdei/2013-08-31/jpdei_cor"
 
     private static func contextXml(id: String, period: String) -> String {
         """
@@ -59,7 +60,8 @@ enum XBRLTestSupport {
             xmlns:xbrli="\(nsXbrli)"
             xmlns:jppfs_cor="\(nsJppfs)"
             xmlns:jpifrs_cor="\(nsJpifrs)"
-            xmlns:jpcrp_cor="\(nsJpcrp)">
+            xmlns:jpcrp_cor="\(nsJpcrp)"
+            xmlns:jpdei_cor="\(nsJpdei)">
         \(contexts.joined(separator: "\n"))
           <xbrli:unit id="JPY"><xbrli:measure>iso4217:JPY</xbrli:measure></xbrli:unit>
           \(elementsXml)
@@ -80,6 +82,20 @@ enum XBRLTestSupport {
     /// Instant コンテキスト（当期/前期 × 連結/個別）を持つ最小 XBRL インスタンスを生成する。
     static func makeXbrlInstant(_ elementsXml: String) -> String {
         wrap(elementsXml, contexts: [
+            contextXml(id: "CurrentYearInstant", period: instantCurrent),
+            contextXml(id: "Prior1YearInstant", period: instantPrior),
+            contextXml(id: "CurrentYearInstant_NonConsolidatedMember", period: instantCurrent),
+            contextXml(id: "Prior1YearInstant_NonConsolidatedMember", period: instantPrior),
+        ])
+    }
+
+    /// Duration と Instant の両方（当期/前期 × 連結/個別）。銀行 KPI のように BS+PL を同時に置くとき。
+    static func makeXbrlDurationAndInstant(_ elementsXml: String) -> String {
+        wrap(elementsXml, contexts: [
+            contextXml(id: "CurrentYearDuration", period: durationCurrent),
+            contextXml(id: "Prior1YearDuration", period: durationPrior),
+            contextXml(id: "CurrentYearDuration_NonConsolidatedMember", period: durationCurrent),
+            contextXml(id: "Prior1YearDuration_NonConsolidatedMember", period: durationPrior),
             contextXml(id: "CurrentYearInstant", period: instantCurrent),
             contextXml(id: "Prior1YearInstant", period: instantPrior),
             contextXml(id: "CurrentYearInstant_NonConsolidatedMember", period: instantCurrent),

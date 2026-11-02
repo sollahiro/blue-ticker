@@ -815,7 +815,6 @@ private struct CapitalEfficiencySection: View {
             duPontRow("ROE", years: years, latest: latest, value: \.roe, emphasized: true) {
                 Format.percent($0, digits: 2, includeUnit: true)
             }
-            AnalysisNote(text: "純利益率 × 総資産回転率 × 財務レバレッジ = ROE。数値は最新年度、線は直近\(years.count)年の推移（古い順に左から右）です。純利益率は純利益 ÷ 売上、総資産回転率は売上 ÷ 総資産、財務レバレッジは総資産 ÷ 自己資本（いずれも期末）。")
         }
         .padding(.top, 8)
     }

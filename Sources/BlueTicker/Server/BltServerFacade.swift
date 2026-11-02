@@ -384,6 +384,26 @@ public extension BltServerContext {
         await masterDataManager.edinetCode(forListedCode: code)
     }
 
+    /// 上場ユニバースのうち提出者業種が銀行業の 4 桁コード。業種 KPI（銀行）の対象選定に使う。
+    /// 業種が銀行業でなくても statements に預金マーカーがある会社は ingest 側で足す。
+    func bankIndustryListedCodes() async -> Set<String> {
+        await masterDataManager.listedCodes(inIndustry: Xbrl.bankEdinetIndustry)
+    }
+
+    /// 業種 KPI ステップ 1: 銀行の jppfs BNK 数値と預貸率・OHR。決定論のみ。
+    /// 対象は ingest が「業種が銀行業」または「statements BS に預金マーカーあり」で先に絞る。
+    /// ここでは業種で足切りせず XBRL の預金マーカー（または業種＝銀行業）で判定する
+    /// （業種が銀行業以外でも銀行様式で開示する持株会社を落とさないため）。
+    func extractIndustryKpis(
+        docID: String, code: String, correctionDocIDs: [String] = []
+    ) async -> IndustryKpiResolveResult {
+        let industry = await masterDataManager.getByCode(code)?.s33nm
+        guard let xbrlDir = await downloadAnnualFilingXbrl(
+            docID: docID, correctionDocIDs: correctionDocIDs
+        ) else { return .failed }
+        return BankIndustryKpiExtractor.resolve(xbrlDir: xbrlDir, edinetIndustry: industry)
+    }
+
     /// Statement 取り込み（Statement 本体）: 単一書類の XBRL から BS/PL/CF/SS を抽出する。決定論のみ（LLM不要）。
     /// `extractFilingSections`（有報セクション取り込み）と同型: 1書類分のみを扱い、複数年度の履歴集約は
     /// 行わない。US-GAAP は `.notApplicable`（連結に数値 fact が無く正規化不可。notes と同方針）。
