@@ -11,16 +11,28 @@ import Foundation
 import Logging
 
 /// 1 イベントを 1 行の JSON として書き出す `LogHandler`。
-/// DateFormatter と書き出しを共有するため class + lock（StreamLogHandler と同型の妥協）。
-package final class JsonLogHandler: LogHandler, @unchecked Sendable {
-    private let label: String
-    private let handle: FileHandle
-    private let lock = NSLock()
-    private let isoFormatter: ISO8601DateFormatter = {
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return f
-    }()
+/// swift-log の約束どおり値型にする。`Logger` をコピーして metadata を足す呼び出し
+///（PostgresNIO の `var logger = logger; logger[...] = ...` など）が別スレッドから同時に来るため、
+/// class だと共有の `metadata` 辞書を同時に書き換えて落ちる（2026-11-02、SIGSEGV）。
+/// DateFormatter と書き出しだけを `Sink` で共有し、lock で守る。
+package struct JsonLogHandler: LogHandler {
+    private final class Sink: @unchecked Sendable {
+        let label: String
+        let handle: FileHandle
+        let lock = NSLock()
+        let isoFormatter: ISO8601DateFormatter = {
+            let f = ISO8601DateFormatter()
+            f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            return f
+        }()
+
+        init(label: String, handle: FileHandle) {
+            self.label = label
+            self.handle = handle
+        }
+    }
+
+    private let sink: Sink
 
     package var logLevel: Logger.Level = .info
     package var metadata: Logger.Metadata = [:]
@@ -35,8 +47,7 @@ package final class JsonLogHandler: LogHandler, @unchecked Sendable {
     }
 
     package init(label: String, handle: FileHandle) {
-        self.label = label
-        self.handle = handle
+        self.sink = Sink(label: label, handle: handle)
     }
 
     package subscript(metadataKey metadataKey: String) -> Logger.Metadata.Value? {
@@ -53,13 +64,13 @@ package final class JsonLogHandler: LogHandler, @unchecked Sendable {
             merged.merge(explicit, uniquingKeysWith: { _, new in new })
         }
 
-        lock.lock()
-        defer { lock.unlock() }
+        sink.lock.lock()
+        defer { sink.lock.unlock() }
 
         var object: [String: Any] = [
-            "timestamp": isoFormatter.string(from: Date()),
+            "timestamp": sink.isoFormatter.string(from: Date()),
             "level": event.level.rawValue,
-            "logger": label,
+            "logger": sink.label,
             "message": redactSecrets(event.message.description),
         ]
         if !merged.isEmpty {
@@ -71,7 +82,7 @@ package final class JsonLogHandler: LogHandler, @unchecked Sendable {
         else { return }
         var line = data
         line.append(0x0A)  // '\n'
-        handle.write(line)
+        sink.handle.write(line)
     }
 
     private static func jsonObject(from metadata: Logger.Metadata) -> [String: Any] {
