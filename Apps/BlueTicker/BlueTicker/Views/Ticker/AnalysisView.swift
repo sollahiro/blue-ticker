@@ -401,40 +401,15 @@ private struct BusinessProfitSection: View {
 
     private func factorChart(_ year: FinancialsYear, years: [FinancialsYear]) -> some View {
         let spec = factorSpec(year)
-        let peak = (spec.factors.map { abs($0.value ?? 0) } + [abs(spec.totalValue ?? 0)]).max() ?? 0
         let prior = priorYear(of: year, in: years)
         return VStack(alignment: .leading, spacing: 8) {
             Text(yearOutcomeTitle(year, total: spec.totalValue))
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(Theme.text)
-            ForEach(spec.factors) { factor in
-                let selected = selectedFactor == factor.kind
-                factorRow(
-                    title: factor.kind.title,
-                    value: factor.value,
-                    peak: peak,
-                    format: spec.format,
-                    selected: selected,
-                    emphasized: false
-                )
-                .contentShape(Rectangle())
-                .onTapGesture {
-                    selectedFactor = (selectedFactor == factor.kind ? nil : factor.kind)
-                }
+            WaterfallChart(steps: factorSteps(spec), selectedID: selectedFactor?.rawValue) { id in
+                guard let kind = FactorKind(rawValue: id) else { return }
+                selectedFactor = (selectedFactor == kind ? nil : kind)
             }
-            Rectangle()
-                .fill(Theme.textMuted.opacity(0.45))
-                .frame(height: 1)
-                .padding(.vertical, 2)
-            factorRow(
-                title: spec.totalTitle,
-                value: spec.totalValue,
-                peak: peak,
-                format: spec.format,
-                selected: false,
-                emphasized: true
-            )
-            .accessibilityLabel("\(spec.totalTitle) \(spec.format(spec.totalValue))")
             if let selectedFactor, let factor = spec.factors.first(where: { $0.kind == selectedFactor }) {
                 let detail = selectedFactor.detail(year: year, prior: prior, contribution: factor.value)
                 VStack(alignment: .leading, spacing: 4) {
@@ -465,30 +440,33 @@ private struct BusinessProfitSection: View {
         .padding(.top, 8)
     }
 
-    private func factorRow(
-        title: String,
-        value: Double?,
-        peak: Double,
-        format: (Double?) -> String,
-        selected: Bool,
-        emphasized: Bool
-    ) -> some View {
-        HStack(spacing: 8) {
-            Text(title)
-                .font(.caption.weight(selected || emphasized ? .bold : .regular))
-                .foregroundStyle(selected ? Theme.accent : Theme.text)
-                .frame(width: 88, alignment: .leading)
-            MagnitudeBar(value: value ?? 0, peak: peak)
-                .frame(height: 16)
-            Text(format(value))
-                .font(.caption.monospacedDigit().weight(emphasized ? .semibold : .regular))
-                .foregroundStyle(factorColor(value))
-                .frame(width: 88, alignment: .trailing)
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
+    /// 売上・利益率・販管費の要因を順に積み、前年差は 0 から伸ばす。
+    private func factorSteps(_ spec: FactorSpec) -> [WaterfallStep] {
+        var running = 0.0
+        var steps: [WaterfallStep] = spec.factors.map { factor in
+            let value = factor.value ?? 0
+            defer { running += value }
+            return WaterfallStep(
+                id: factor.kind.rawValue,
+                title: factor.kind.title,
+                start: running,
+                end: running + value,
+                valueText: spec.format(factor.value),
+                valueColor: factorColor(factor.value),
+                isTotal: false
+            )
         }
-        .padding(.vertical, 2)
-        .background(selected ? Theme.accent.opacity(0.12) : Color.clear)
+        steps.append(
+            WaterfallStep(
+                id: "total",
+                title: spec.totalTitle,
+                start: 0,
+                end: spec.totalValue ?? running,
+                valueText: spec.format(spec.totalValue),
+                valueColor: factorColor(spec.totalValue),
+                isTotal: true
+            ))
+        return steps
     }
 
     /// 「26年2月期の事業利益は、前年より増えました」のように前年差の結論だけを見出しにする。
@@ -1000,7 +978,7 @@ private struct ProductivitySection: View {
 
 // MARK: - 資金配分
 
-/// フリーCF から現金増減までのウォーターフォールと、期末現金の有利子負債・正味現金の積み上げ。
+/// フリーCF から現金増減までのウォーターフォールと、期末の現金（棒）・正味現金（折れ線）。
 /// 値は CF の符号（収入が正、支出が負）。換算差額とその他の現金増減は「その他」にまとめる。
 private struct CashAllocationSection: View {
     var years: [FinancialsYear]
@@ -1023,22 +1001,13 @@ private struct CashAllocationSection: View {
                 balanceChart
                 ChartLegend(items: [
                     LegendItem(title: "現金", color: ChartStyle.primaryBar, shape: .bar),
-                    LegendItem(title: "有利子負債", color: ChartStyle.secondaryBar, shape: .bar),
+                    LegendItem(title: "正味現金", color: ChartStyle.line, shape: .line),
                 ])
-                if let netCash = latestNetCash {
-                    AnalysisNote(text: "直近の正味現金（現金 − 有利子負債）は \(Format.autoYen(netCash, currency: currency)) です。")
-                }
+                AnalysisNote(text: "現金は現金及び現金同等物です。正味現金は現金 − 有利子負債で、マイナスは有利子負債が現金を上回ることを示します。")
             } else {
                 AnalysisNote(text: "現金及び現金同等物は未集計です。")
             }
         }
-    }
-
-    private var latestNetCash: Double? {
-        guard let year = years.last(where: { $0.cashEquivalents != nil && $0.interestBearingDebt != nil }),
-              let cash = year.cashEquivalents, let debt = year.interestBearingDebt
-        else { return nil }
-        return cash - debt
     }
 
     private var selectableYears: [FinancialsYear] {
@@ -1106,9 +1075,6 @@ private struct CashAllocationSection: View {
 
     private func waterfall(_ year: FinancialsYear) -> some View {
         let steps = Self.steps(year)
-        let bounds: [Double] = steps.flatMap { step -> [Double] in [step.start, step.end] } + [0.0]
-        let lower = bounds.min() ?? 0
-        let upper = bounds.max() ?? 0
         // 行ごとに単位が変わると桁を比べにくいので、カード内は共通の単位にそろえる。
         let yearCurrency = year.currency ?? currency
         let scale = Format.commonScale(for: steps.map(\.value), currency: yearCurrency)
@@ -1119,68 +1085,57 @@ private struct CashAllocationSection: View {
             Text("\(Format.fyJapanese(year.fyEnd))の現金の動き")
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(Theme.text)
-            ForEach(steps) { step in
-                if step.isTotal {
-                    Rectangle()
-                        .fill(Theme.textMuted.opacity(0.45))
-                        .frame(height: 1)
-                        .padding(.vertical, 2)
-                }
-                HStack(spacing: 8) {
-                    Text(step.title)
-                        .font(.caption.weight(step.isTotal ? .bold : .regular))
-                        .foregroundStyle(Theme.text)
-                        .frame(width: 88, alignment: .leading)
-                    FloatingBar(start: step.start, end: step.end, lower: lower, upper: upper)
-                        .frame(height: 16)
-                    Text(format(step.value))
-                        .font(.caption.monospacedDigit().weight(step.isTotal ? .semibold : .regular))
-                        .foregroundStyle(step.value > 0 ? Theme.positive : step.value < 0 ? Theme.negative : Theme.text)
-                        .frame(width: 88, alignment: .trailing)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.7)
-                }
-                .padding(.vertical, 2)
-                .accessibilityElement(children: .combine)
-            }
+            WaterfallChart(
+                steps: steps.map { step in
+                    WaterfallStep(
+                        id: step.id,
+                        title: step.title,
+                        start: step.start,
+                        end: step.end,
+                        valueText: format(step.value),
+                        valueColor: step.value > 0 ? Theme.positive : step.value < 0 ? Theme.negative : Theme.text,
+                        isTotal: step.isTotal
+                    )
+                })
             AnalysisNote(text: "フリーCFは営業CF＋投資CFです。配当は親会社株主への支払いのみで、非支配株主への配当はその他財務CFに含みます。その他は為替換算差額と、連結範囲の変動など CF の 3 区分以外の現金の増減です。")
         }
         .padding(.top, 4)
     }
 
-    private struct BalanceBar: Identifiable {
-        var label: String
-        var series: String
-        var value: Double
-        var id: String { "\(label)-\(series)" }
-    }
-
-    /// 年ごとに現金と有利子負債を横に並べる。有利子負債が現金を上回る会社でも両方の大きさが見える。
-    private var balanceBars: [BalanceBar] {
-        years.flatMap { year -> [BalanceBar] in
-            guard let cash = year.cashEquivalents else { return [] }
-            let label = Format.fy(year.fyEnd)
-            var bars = [BalanceBar(label: label, series: "現金", value: cash)]
-            if let debt = year.interestBearingDebt {
-                bars.append(BalanceBar(label: label, series: "有利子負債", value: debt))
-            }
-            return bars
-        }
-    }
-
+    /// 現金の棒と正味現金の折れ線。正味現金はマイナスになり得るので 0 の線を引く。
     private var balanceChart: some View {
         let labels = years.map { Format.fy($0.fyEnd) }
         let scale = Format.commonScale(
-            for: years.map(\.cashEquivalents) + years.map(\.interestBearingDebt), currency: currency)
+            for: years.map(\.cashEquivalents) + years.map(\.netCash), currency: currency)
+        let netCash = ChartMath.linePoints(years) { $0.netCash }
         return Chart {
-            ForEach(balanceBars) { bar in
-                BarMark(x: .value("年度", bar.label), y: .value("金額", bar.value), width: .fixed(12))
-                    .position(by: .value("系列", bar.series))
-                    .foregroundStyle(bar.series == "有利子負債" ? ChartStyle.secondaryBar : ChartStyle.primaryBar)
-                    .cornerRadius(3)
-                    .accessibilityLabel("\(bar.label) \(bar.series)")
-                    .accessibilityValue(Format.autoYen(bar.value, currency: currency))
+            ForEach(years) { year in
+                if let cash = year.cashEquivalents {
+                    let label = Format.fy(year.fyEnd)
+                    BarMark(x: .value("年度", label), y: .value("金額", cash), width: .fixed(16))
+                        .foregroundStyle(ChartStyle.primaryBar)
+                        .cornerRadius(3)
+                        .accessibilityLabel("\(label) 現金")
+                        .accessibilityValue(Format.autoYen(cash, currency: currency))
+                }
             }
+            ForEach(netCash) { point in
+                LineMark(
+                    x: .value("年度", point.label),
+                    y: .value("金額", point.value),
+                    series: .value("線", "net-cash-\(point.run)")
+                )
+                .foregroundStyle(ChartStyle.line)
+                .lineStyle(StrokeStyle(lineWidth: 2.5))
+                PointMark(x: .value("年度", point.label), y: .value("金額", point.value))
+                    .foregroundStyle(ChartStyle.line)
+                    .symbolSize(40)
+                    .accessibilityLabel("\(point.label) 正味現金")
+                    .accessibilityValue(Format.autoYen(point.value, currency: currency))
+            }
+            RuleMark(y: .value("zero", 0))
+                .foregroundStyle(Theme.textMuted.opacity(0.6))
+                .lineStyle(StrokeStyle(lineWidth: 0.5))
         }
         .chartXScale(domain: labels)
         .chartXAxis {
@@ -1208,33 +1163,129 @@ private struct CashAllocationSection: View {
     }
 }
 
-/// ウォーターフォールの 1 段。`start` から `end` までを、全段共通の `lower`〜`upper` の幅に置く。
-private struct FloatingBar: View {
+/// ウォーターフォールの 1 段。合計の段は `start` を 0 にして 0 から伸ばす。
+private struct WaterfallStep: Identifiable {
+    var id: String
+    var title: String
     var start: Double
     var end: Double
-    var lower: Double
-    var upper: Double
+    var valueText: String
+    var valueColor: Color
+    var isTotal: Bool
+}
+
+/// 浮き棒のウォーターフォール（資金配分・収益構造で共通）。
+/// 各段の終点から次の段へ点線を引き、0 の実線を最上段から最下段まで通す。
+/// 段をまたぐ線をつなげるため、棒は行ごとでなく全段まとめて 1 枚の背景に描く。
+private struct WaterfallChart: View {
+    var steps: [WaterfallStep]
+    var selectedID: String?
+    /// 渡すと合計以外の段をタップで選べる。
+    var onSelect: ((String) -> Void)?
+
+    private static let sideWidth: CGFloat = 88
+    private static let columnSpacing: CGFloat = 8
+    private static let barHeight: CGFloat = 16
+    private static let rowPadding: CGFloat = 2
+    private static let rowSpacing: CGFloat = 8
+    /// 合計の前の区切り線（1pt と上下 2pt）。
+    private static let dividerHeight: CGFloat = 5
 
     var body: some View {
-        GeometryReader { geo in
-            let span = upper - lower
-            let x: (Double) -> CGFloat = { span > 0 ? CGFloat(($0 - lower) / span) * geo.size.width : 0 }
-            let left = x(min(start, end))
-            let width = end == start ? 0 : max(x(max(start, end)) - left, 4)
-            ZStack(alignment: .leading) {
-                RoundedRectangle(cornerRadius: 2)
-                    .fill(Theme.idleTab.opacity(0.55))
-                    .frame(width: geo.size.width, height: geo.size.height)
-                Rectangle()
-                    .fill(Theme.text)
-                    .frame(width: 1, height: geo.size.height)
-                    .offset(x: x(0))
-                RoundedRectangle(cornerRadius: 2)
-                    .fill(end >= start ? Theme.positive : Theme.negative)
-                    .frame(width: width, height: geo.size.height)
-                    .offset(x: left)
+        VStack(alignment: .leading, spacing: Self.rowSpacing) {
+            ForEach(steps) { step in
+                if step.isTotal {
+                    Rectangle()
+                        .fill(Theme.textMuted.opacity(0.45))
+                        .frame(height: 1)
+                        .padding(.vertical, 2)
+                }
+                row(step)
             }
         }
+        .background(alignment: .topLeading) {
+            GeometryReader { geo in
+                bars(width: geo.size.width)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func row(_ step: WaterfallStep) -> some View {
+        let selected = step.id == selectedID
+        let content = HStack(spacing: Self.columnSpacing) {
+            Text(step.title)
+                .font(.caption.weight(selected || step.isTotal ? .bold : .regular))
+                .foregroundStyle(selected ? Theme.accent : Theme.text)
+                .frame(width: Self.sideWidth, alignment: .leading)
+            Spacer(minLength: 0)
+            Text(step.valueText)
+                .font(.caption.monospacedDigit().weight(step.isTotal ? .semibold : .regular))
+                .foregroundStyle(step.valueColor)
+                .frame(width: Self.sideWidth, alignment: .trailing)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+        }
+        .frame(height: Self.barHeight + Self.rowPadding * 2)
+        .background(selected ? Theme.accent.opacity(0.12) : Color.clear)
+        .accessibilityElement(children: .combine)
+        if let onSelect, !step.isTotal {
+            content
+                .contentShape(Rectangle())
+                .onTapGesture { onSelect(step.id) }
+                .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
+        } else {
+            content
+        }
+    }
+
+    /// 各段の棒の上端。合計の段は区切り線の分だけ下がる。
+    private var barTops: [CGFloat] {
+        var y: CGFloat = 0
+        return steps.map { step in
+            if step.isTotal { y += Self.dividerHeight + Self.rowSpacing }
+            defer { y += Self.barHeight + Self.rowPadding * 2 + Self.rowSpacing }
+            return y + Self.rowPadding
+        }
+    }
+
+    private func bars(width: CGFloat) -> some View {
+        let bounds: [Double] = steps.flatMap { step -> [Double] in [step.start, step.end] } + [0.0]
+        let lower = bounds.min() ?? 0
+        let upper = bounds.max() ?? 0
+        let left = Self.sideWidth + Self.columnSpacing
+        let span = max(width - left * 2, 0)
+        let x: (Double) -> CGFloat = { upper > lower ? left + CGFloat(($0 - lower) / (upper - lower)) * span : left }
+        let tops = barTops
+        return ZStack(alignment: .topLeading) {
+            ForEach(Array(steps.enumerated()), id: \.element.id) { index, step in
+                let barLeft = x(min(step.start, step.end))
+                let barWidth = step.end == step.start ? 0 : max(x(max(step.start, step.end)) - barLeft, 4)
+                RoundedRectangle(cornerRadius: 2)
+                    .fill(Theme.idleTab.opacity(0.55))
+                    .frame(width: span, height: Self.barHeight)
+                    .offset(x: left, y: tops[index])
+                RoundedRectangle(cornerRadius: 2)
+                    .fill(step.end >= step.start ? Theme.positive : Theme.negative)
+                    .frame(width: barWidth, height: Self.barHeight)
+                    .offset(x: barLeft, y: tops[index])
+            }
+            Path { path in
+                for index in steps.indices.dropLast() {
+                    let connectorX = x(steps[index].end)
+                    path.move(to: CGPoint(x: connectorX, y: tops[index] + Self.barHeight))
+                    path.addLine(to: CGPoint(x: connectorX, y: tops[index + 1]))
+                }
+            }
+            .stroke(Theme.textMuted, style: StrokeStyle(lineWidth: 1, dash: [2, 2]))
+            if let first = tops.first, let last = tops.last {
+                Rectangle()
+                    .fill(Theme.text)
+                    .frame(width: 1, height: last + Self.barHeight - first)
+                    .offset(x: x(0), y: first)
+            }
+        }
+        .accessibilityHidden(true)
     }
 }
 
@@ -1267,26 +1318,6 @@ private struct SignedBar: View {
                         .frame(width: barWidth, height: geo.size.height)
                         .offset(x: mid - barWidth)
                 }
-            }
-        }
-    }
-}
-
-/// 要因分解。符号に関わらず右へ伸ばし、色でプラス／マイナスを示す。
-private struct MagnitudeBar: View {
-    var value: Double
-    var peak: Double
-
-    var body: some View {
-        GeometryReader { geo in
-            let width = peak > 0 ? max(CGFloat(abs(value) / peak) * geo.size.width, value == 0 ? 0 : 4) : 0
-            ZStack(alignment: .leading) {
-                RoundedRectangle(cornerRadius: 2)
-                    .fill(Theme.idleTab.opacity(0.55))
-                    .frame(width: geo.size.width, height: geo.size.height)
-                RoundedRectangle(cornerRadius: 2)
-                    .fill(value >= 0 ? Theme.positive : Theme.negative)
-                    .frame(width: width, height: geo.size.height)
             }
         }
     }
