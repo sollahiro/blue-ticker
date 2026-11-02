@@ -1,4 +1,4 @@
-// `--stages` CSV のパース仕様を検証する。未指定＝全対象、部分選択、不正入力＝nil。
+// `--stages` CSV のパース仕様を検証する。未指定＝relations と industry-kpis 以外、部分選択、不正入力＝nil。
 
 import Testing
 
@@ -10,8 +10,11 @@ import Testing
 struct IngestTargetTests {
     @Test("未指定は全対象")
     func nilSelectsAll() {
-        #expect(parseIngestTargets(nil) == Set(IngestTarget.allCases).subtracting([.relations]))
+        #expect(
+            parseIngestTargets(nil)
+                == Set(IngestTarget.allCases).subtracting([.relations, .industryKpis]))
         #expect(parseIngestTargets(nil)?.contains(.relations) == false)
+        #expect(parseIngestTargets(nil)?.contains(.industryKpis) == false)
     }
 
     @Test("単一対象を選択")
@@ -24,6 +27,7 @@ struct IngestTargetTests {
         #expect(parseIngestTargets("icons") == [.icons])
         #expect(parseIngestTargets("overviews") == [.overviews])
         #expect(parseIngestTargets("relations") == [.relations])
+        #expect(parseIngestTargets("industry-kpis") == [.industryKpis])
     }
 
     @Test("複数対象をカンマ区切りで選択")
@@ -31,7 +35,7 @@ struct IngestTargetTests {
         #expect(parseIngestTargets("financials,filing-sections") == [.financials, .filingSections])
         #expect(
             parseIngestTargets(
-                "financials,filing-sections,breakdowns,statements,statement-notes,icons,overviews,relations")
+                "financials,filing-sections,breakdowns,statements,statement-notes,icons,overviews,relations,industry-kpis")
                 == Set(IngestTarget.allCases))
     }
 

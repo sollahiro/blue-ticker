@@ -375,6 +375,22 @@ public extension BltServerContext {
         await masterDataManager.edinetCode(forListedCode: code)
     }
 
+    /// 業種 KPI ステップ 1: 銀行の jppfs BNK 数値と預貸率・OHR。決定論のみ。
+    /// EDINET 提出者業種が銀行業以外と分かっている会社は XBRL を取らず not_bank。
+    /// 業種不明は XBRL の預金マーカーで判定する。非銀行は行を作らない。
+    func extractIndustryKpis(
+        docID: String, code: String, correctionDocIDs: [String] = []
+    ) async -> IndustryKpiResolveResult {
+        let industry = await masterDataManager.getByCode(code)?.s33nm
+        if let industry, !industry.isEmpty, industry != Xbrl.bankEdinetIndustry {
+            return .notApplicable(reason: industryKpiNotApplicableNotBank)
+        }
+        guard let xbrlDir = await downloadAnnualFilingXbrl(
+            docID: docID, correctionDocIDs: correctionDocIDs
+        ) else { return .failed }
+        return BankIndustryKpiExtractor.resolve(xbrlDir: xbrlDir, edinetIndustry: industry)
+    }
+
     /// Statement 取り込み（Statement 本体）: 単一書類の XBRL から BS/PL/CF/SS を抽出する。決定論のみ（LLM不要）。
     /// `extractFilingSections`（有報セクション取り込み）と同型: 1書類分のみを扱い、複数年度の履歴集約は
     /// 行わない。US-GAAP は `.notApplicable`（連結に数値 fact が無く正規化不可。notes と同方針）。

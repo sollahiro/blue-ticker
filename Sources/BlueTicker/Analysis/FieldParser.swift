@@ -89,10 +89,25 @@ func fieldSetFromInstant(
     return fieldSet
 }
 
+/// 連結 Instant だけ。非連結フォールバックはしない（業種 KPI の entity scope 用）。
+func fieldSetFromConsolidatedInstant(_ tagElements: XbrlTagElements) -> FieldSet {
+    normalizeConsolidatedInstant(tagElements)
+}
+
+/// 連結 Duration だけ。非連結フォールバックはしない（業種 KPI の entity scope 用）。
+func fieldSetFromConsolidatedDuration(_ tagElements: XbrlTagElements) -> FieldSet {
+    normalizeConsolidatedDuration(tagElements)
+}
+
 /// XbrlTagElements から非連結 Duration コンテキストのみを正規化して FieldSet を返す。
 /// 自己株式取得の非連結フォールバック解決に使用する。
 func fieldSetFromNonConsolidatedDuration(_ tagElements: XbrlTagElements) -> FieldSet {
     normalizeNonConsolidatedDuration(tagElements)
+}
+
+/// 非連結 Instant だけ（提出会社 / 個別）。業種 KPI の filer scope 用。
+func fieldSetFromNonConsolidatedInstant(_ tagElements: XbrlTagElements) -> FieldSet {
+    normalizeNonConsolidatedInstant(tagElements)
 }
 
 /// IFRS株主資本等変動計算書の親会社帰属持分コンテキストから FieldSet を返す。

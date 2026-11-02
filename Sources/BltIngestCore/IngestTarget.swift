@@ -28,6 +28,9 @@ public enum IngestTarget: String, CaseIterable, Sendable {
     /// 区分の目印が無い関係会社表だけ Jev（`OPENROUTER_DECISION_API_KEY` 未設定時は区分保留のまま格納）。
     /// 名前解決（銘柄コード）は決定論。
     case relations
+    /// 業種 KPI（industry_kpi_facts。ステップ 1 は銀行の XBRL 数値と預貸率・OHR）。
+    /// 既定 drain には載せない。`--stages industry-kpis` の明示指定だけ（本番 write は Mac で OK 後）。
+    case industryKpis = "industry-kpis"
 }
 
 /// `--note-types` の CSV 値を note_type の集合へ変換する（`statement-notes` ステージ専用）。
@@ -47,10 +50,11 @@ public func parseStatementNoteTypes(_ csv: String?) -> Set<String>? {
 }
 
 /// `--stages` 省略時の対象。`relations` は関係会社表の Jev を伴うため `--stages relations` の明示指定だけ。
-public let defaultIngestTargets = Set(IngestTarget.allCases).subtracting([.relations])
+/// `industry-kpis` も本番 drain に乗せない（BLT-217。Mac で明示指定）。
+public let defaultIngestTargets = Set(IngestTarget.allCases).subtracting([.relations, .industryKpis])
 
 /// `--stages` の CSV 値を取り込み対象の集合へ変換する。
-/// - `nil`（フラグ未指定）: `relations` を除く全対象（`relations` は Jev を伴うため明示指定だけ）。
+/// - `nil`（フラグ未指定）: `relations` と `industry-kpis` を除く全対象（どちらも明示指定だけ）。
 /// - 有効なトークンのみ（例 `"financials"`, `"financials,statements"`, 空白許容）: その集合。
 /// - 未知トークンを含む・有効なトークンが 0 個（`""` や `","`）: `nil`（呼び出し側で usage エラー）。
 public func parseIngestTargets(_ csv: String?) -> Set<IngestTarget>? {

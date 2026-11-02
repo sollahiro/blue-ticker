@@ -186,28 +186,12 @@ enum GrossProfitExtractor {
     }
 
     private static func extractBankBusinessGrossProfit(fieldSet: FieldSet, accountingStandard: String) -> GrossProfitResult? {
-        var currentTotal = 0.0
-        var priorTotal = 0.0
-        var hasCurrentAny = false
-        var hasPriorAny = false
-
-        for comp in Xbrl.businessGrossProfitComponents {
-            let item = resolveItem(fieldSet, tags: comp.tags)
-            if let c = item.current {
-                currentTotal += Double(comp.sign) * c
-                hasCurrentAny = true
-            }
-            if let p = item.prior {
-                priorTotal += Double(comp.sign) * p
-                hasPriorAny = true
-            }
-        }
-
-        guard hasCurrentAny || hasPriorAny else { return nil }
+        let totals = BankBusinessGrossProfit.signedTotal(from: fieldSet)
+        guard totals.current != nil || totals.prior != nil else { return nil }
 
         return GrossProfitResult(
-            grossProfit: hasCurrentAny ? currentTotal : nil,
-            grossProfitPrior: hasPriorAny ? priorTotal : nil,
+            grossProfit: totals.current,
+            grossProfitPrior: totals.prior,
             grossProfitLabel: "連結業務粗利益",
             method: "business_gross_profit",
             accountingStandard: accountingStandard

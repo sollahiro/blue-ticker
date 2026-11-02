@@ -21,7 +21,7 @@ import Vapor
             try await app.migrator.setupIfNeeded().get()
             let pending = try await app.migrator.previewPrepareBatch().get().map(\.0)
 
-            #expect(pending.count == 32)
+            #expect(pending.count == 33)
             for migration in pending {
                 #expect(migration.name == "BltServerCore.\(String(describing: type(of: migration)))")
             }

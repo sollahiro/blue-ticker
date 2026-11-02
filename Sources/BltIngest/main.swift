@@ -7,10 +7,10 @@
 //   blt-ingest sync [--from YYYY-MM-DD] [--to YYYY-MM-DD]    EDINET 書類一覧を DB へ同期
 //   blt-ingest ingest [--limit N] [--stages financials,
 //                     filing-sections,breakdowns,statements,statement-notes,icons,overviews,
-//                     relations]
+//                     relations,industry-kpis]
 //                     [--codes 7203,6758] [--doc-ids S100W0S7]
 //                     [--note-types per_share_information,property_plant_equipment_schedule,...]
-//                                                            対象を DB へ取り込み（--stages で選択、既定は relations 以外の全て）。
+//                                                            対象を DB へ取り込み（--stages で選択、既定は relations と industry-kpis 以外の全て）。
 //                                                            breakdowns: product_service/geography は上場全体（--limit 適用）、
 //                                                            employees/rd/goodwill 等の決定論指標軸も上場全体
 //                                                            （1ジョブ 30。日経225は処理順の優先のみ）。
@@ -81,7 +81,7 @@ do {
         )
     } else if argv.count > 1, argv[1] == "ingest" {
         guard let targets = parseIngestTargets(optionValue("--stages", in: argv)) else {
-            printError("blt-ingest error: --stages は financials,filing-sections,breakdowns,statements,statement-notes,icons,overviews,relations のカンマ区切りで指定してください\n")
+            printError("blt-ingest error: --stages は financials,filing-sections,breakdowns,statements,statement-notes,icons,overviews,relations,industry-kpis のカンマ区切りで指定してください\n")
             exit(1)
         }
         // `optionValue` はフラグが argv 末尾（値なし）のとき nil を返し、フラグ未指定と区別できない。

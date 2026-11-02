@@ -87,6 +87,20 @@ enum XBRLTestSupport {
         ])
     }
 
+    /// Duration と Instant の両方（当期/前期 × 連結/個別）。銀行 KPI のように BS+PL を同時に置くとき。
+    static func makeXbrlDurationAndInstant(_ elementsXml: String) -> String {
+        wrap(elementsXml, contexts: [
+            contextXml(id: "CurrentYearDuration", period: durationCurrent),
+            contextXml(id: "Prior1YearDuration", period: durationPrior),
+            contextXml(id: "CurrentYearDuration_NonConsolidatedMember", period: durationCurrent),
+            contextXml(id: "Prior1YearDuration_NonConsolidatedMember", period: durationPrior),
+            contextXml(id: "CurrentYearInstant", period: instantCurrent),
+            contextXml(id: "Prior1YearInstant", period: instantPrior),
+            contextXml(id: "CurrentYearInstant_NonConsolidatedMember", period: instantCurrent),
+            contextXml(id: "Prior1YearInstant_NonConsolidatedMember", period: instantPrior),
+        ])
+    }
+
     /// 一時ディレクトリに XBRL を書き込み、body を実行後に削除する。
     static func withXbrlDir(
         _ xml: String? = nil,

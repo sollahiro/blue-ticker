@@ -21,8 +21,8 @@ let unpublishedBreakdownIngestLimit = 30
 /// 財務取り込み（計算済み財務サマリ）→ 有報セクション取り込み（有報セクション）→
 /// 内訳取り込み（product_service/geography・決定論指標軸ともに上場全体。日経225は処理順の先頭寄せ）を取り込む。
 ///
-/// `targets` は実行する financials/filing-sections/breakdowns/statements/statement-notes/icons/overviews の集合
-/// （CLI: `--stages filing-sections` 等）。既定は全対象。icons は `BLT_R2_*` 環境変数未設定時は
+/// `targets` は実行する financials/filing-sections/breakdowns/statements/statement-notes/icons/overviews/industry-kpis の集合
+/// （CLI: `--stages filing-sections` 等）。既定は relations と industry-kpis 以外。icons は `BLT_R2_*` 環境変数未設定時は
 /// スキップされる。overviews は `OPENROUTER_OVERVIEW_API_KEY` 未設定時はスキップされる。
 /// 例えば有報セクション取り込みだけを先に流したいとき、重い financials の全件 drain を挟まずに済む。
 /// `codes` は financials/filing-sections/breakdowns の対象を明示的な証券コード集合に絞る（CLI: `--codes 7203,6758`）。
@@ -85,7 +85,7 @@ public func runFactsIngestCommand(
         let deterministicMetricsListed = codes ?? listed
         let needsListedFilings =
             targets.contains(.filingSections) || targets.contains(.breakdowns)
-            || targets.contains(.statements)
+            || targets.contains(.statements) || targets.contains(.industryKpis)
         let needsDeterministicMetricsFilings =
             targets.contains(.notes) || targets.contains(.breakdowns)
 
@@ -143,6 +143,7 @@ public func runFactsIngestCommand(
             let companyWide =
                 targets.contains(.financials) || targets.contains(.icons)
                 || targets.contains(.overviews) || targets.contains(.relations)
+                || targets.contains(.industryKpis)
             inFlightListedCodes = codes ?? (companyWide ? listed : [])
         } else {
             inFlightListedCodes = []
@@ -537,6 +538,37 @@ public func runFactsIngestCommand(
                 metadata: [
                     "event": "relations_reresolved", "changed": .stringConvertible(s11.reresolved),
                 ])
+        }
+        if targets.contains(.industryKpis) {
+            // 業種 KPI: 既定 drain には載せない。`--stages industry-kpis` の明示指定。
+            // 対象は上場全体（`--codes` で絞る）。日経225は処理順の先頭寄せのみ。
+            let kpiListed = codes ?? listed
+            if kpiListed.isEmpty {
+                app.logger.warning(
+                    "業種KPI取り込み listed codes empty; skipping",
+                    metadata: [
+                        "event": "ingest_skipped", "target": "industry-kpis",
+                        "reason": "empty_listed_codes",
+                    ])
+            } else {
+                let kpiSets =
+                    listedFilingSets.keep.isEmpty && listedFilingSets.purge.isEmpty
+                    ? try await loadCandidateSets(kpiListed) : listedFilingSets
+                let s12 = try await runIndustryKpiIngest(
+                    db: app.db, listedCodes: kpiListed, years: filingSectionsIngestYears,
+                    limit: stageLimit, explicitCodes: codes, priorityCodes: priority,
+                    cachedDocIDs: cachedDocIDs, candidateSets: kpiSets,
+                    forceDocIDs: forceDocIDs, logger: app.logger
+                ) { docID, code in
+                    await context.extractIndustryKpis(
+                        docID: docID, code: code,
+                        correctionDocIDs: correctionIDsByOriginal[docID] ?? [])
+                }
+                logIngestSummary(
+                    app.logger, target: "industry-kpis", attempted: s12.attempted,
+                    stored: s12.stored, failed: s12.failed, skipped: s12.skipped,
+                    notApplicable: s12.notApplicable, purged: s12.purged)
+            }
         }
     } catch {
         await app.asyncShutdown()

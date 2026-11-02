@@ -492,6 +492,15 @@ enum Xbrl {
     /// 銀行業判定マーカー（BS の預金）。有利子負債には含めない。
     static let bankMarkerTag = "DepositsLiabilitiesBNK"
 
+    /// 銀行 BS の期末預金（連結負債）。業種 KPI の預貸率分母。
+    static let bankDepositsTags: [String] = [bankMarkerTag]
+
+    /// 銀行 BS の期末譲渡性預金。無い書類は 0 として預貸率分母に足す（開示欠測を発明しない。タグ無し＝残高 0）。
+    static let bankNegotiableCDTags: [String] = ["NegotiableCertificatesOfDepositLiabilitiesBNK"]
+
+    /// 銀行 BS の期末貸出金。業種 KPI の預貸率分子。
+    static let bankLoansTags: [String] = ["LoansAndBillsDiscountedAssetsBNK"]
+
     /// EDINET コードリスト「提出者業種」の銀行業。
     static let bankEdinetIndustry = "銀行業"
 
