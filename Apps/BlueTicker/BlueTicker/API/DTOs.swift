@@ -86,6 +86,8 @@ struct FinancialsYear: Codable, Hashable, Identifiable {
     var financialLeverage: Double?
     var netDe: Double?
     var netCash: Double?
+    var cashEquivalents: Double?
+    var interestBearingDebt: Double?
     var cfo: Double?
     var cfi: Double?
     var capex: Double?
@@ -106,6 +108,17 @@ struct FinancialsYear: Codable, Hashable, Identifiable {
     var salesChangeImpact: Double?
     var grossMarginChangeImpact: Double?
     var sgaChangeImpact: Double?
+
+    /// 資金配分（Waterfall のみ）。CF の符号（収入が正、支出が負）。
+    /// cfc（フリーCF）+ cff + cfFxEffect + cfOtherCashChange = cfCashChange。
+    var cfc: Double?
+    var cff: Double?
+    var cfDebtChange: Double?
+    var cfDividendsParent: Double?
+    var cfOtherFinancing: Double?
+    var cfFxEffect: Double?
+    var cfCashChange: Double?
+    var cfOtherCashChange: Double?
 
     var id: String { fyEnd ?? docId ?? financialPeriod ?? "" }
 
@@ -129,6 +142,8 @@ struct FinancialsYear: Codable, Hashable, Identifiable {
         case financialLeverage = "financial_leverage"
         case netDe = "net_de"
         case netCash = "net_cash"
+        case cashEquivalents = "cash_equivalents"
+        case interestBearingDebt = "interest_bearing_debt"
         case cfo
         case cfi
         case capex
@@ -146,6 +161,13 @@ struct FinancialsYear: Codable, Hashable, Identifiable {
         case salesChangeImpact = "sales_change_impact"
         case grossMarginChangeImpact = "gross_margin_change_impact"
         case sgaChangeImpact = "sga_change_impact"
+        case cfc, cff
+        case cfDebtChange = "cf_debt_change"
+        case cfDividendsParent = "cf_dividends_parent"
+        case cfOtherFinancing = "cf_other_financing"
+        case cfFxEffect = "cf_fx_effect"
+        case cfCashChange = "cf_cash_change"
+        case cfOtherCashChange = "cf_other_cash_change"
     }
 }
 

@@ -31,9 +31,7 @@ struct AnalysisView: View {
                 PerformanceSection(years: years, currency: currency)
                 BusinessProfitSection(years: years)
                 CapitalEfficiencySection(years: years)
-                AnalysisCard(title: "資金配分") {
-                    AnalysisNote(text: "準備中です。")
-                }
+                CashAllocationSection(years: years, currency: currency)
                 ProductivitySection(years: years, currency: currency)
             }
             .padding(Theme.cardContentInset)
@@ -997,6 +995,224 @@ private struct ProductivitySection: View {
             }
         }
         .frame(height: 180)
+    }
+}
+
+// MARK: - 資金配分
+
+/// フリーCF から現金増減までのウォーターフォールと、期末現金の有利子負債・正味現金の積み上げ。
+/// 値は CF の符号（収入が正、支出が負）。換算差額とその他の現金増減は「その他」にまとめる。
+private struct CashAllocationSection: View {
+    var years: [FinancialsYear]
+    var currency: String?
+    @State private var selectedYearID: String?
+
+    var body: some View {
+        AnalysisCard(title: "資金配分") {
+            AnalysisSubheading(text: "フリーCFの使い道")
+            if selectableYears.isEmpty {
+                AnalysisNote(text: "キャッシュ・フロー計算書の内訳は未集計です。")
+            } else {
+                yearPicker
+                if let year = selectableYears.first(where: { $0.id == currentYearID }) {
+                    waterfall(year)
+                }
+            }
+            AnalysisSubheading(text: "期末の現金")
+            if years.contains(where: { $0.cashEquivalents != nil }) {
+                balanceChart
+                ChartLegend(items: [
+                    LegendItem(title: "有利子負債", color: ChartStyle.secondaryBar, shape: .bar),
+                    LegendItem(title: "正味現金", color: ChartStyle.primaryBar, shape: .bar),
+                ])
+                AnalysisNote(text: "現金のうち有利子負債を返しきれる分と、残る正味現金です。有利子負債が現金を上回る年は、棒の全体が有利子負債の一部です。")
+            } else {
+                AnalysisNote(text: "現金及び現金同等物は未集計です。")
+            }
+        }
+    }
+
+    private var selectableYears: [FinancialsYear] {
+        years.filter { $0.cfCashChange != nil && $0.cfc != nil && $0.cff != nil }
+    }
+
+    private var currentYearID: String? {
+        selectedYearID ?? selectableYears.last?.id
+    }
+
+    private var yearPicker: some View {
+        ScrollView(.horizontal) {
+            HStack(spacing: 6) {
+                ForEach(selectableYears) { year in
+                    let selected = year.id == currentYearID
+                    Button {
+                        selectedYearID = year.id
+                    } label: {
+                        Text(Format.fy(year.fyEnd))
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(selected ? Theme.text : Theme.textMuted)
+                            .padding(.vertical, 6)
+                            .padding(.horizontal, 10)
+                            .background(selected ? Theme.accent.opacity(0.18) : Theme.idleTab.opacity(0.25))
+                            .clipShape(RoundedRectangle(cornerRadius: 6))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityAddTraits(selected ? .isSelected : [])
+                }
+            }
+        }
+        .scrollIndicators(.hidden)
+    }
+
+    private struct Step: Identifiable {
+        var title: String
+        var value: Double
+        var start: Double
+        var end: Double
+        var isTotal: Bool
+        var id: String { title }
+    }
+
+    /// 銀行など借入・配当の内訳が無い年は、財務CF を 1 行で出す。
+    private static func steps(_ year: FinancialsYear) -> [Step] {
+        var items: [(String, Double)] = [("フリーCF", year.cfc ?? 0)]
+        if let debt = year.cfDebtChange, let dividends = year.cfDividendsParent, let other = year.cfOtherFinancing {
+            items += [("借入の増減", debt), ("配当", dividends), ("その他財務CF", other)]
+        } else {
+            items.append(("財務CF", year.cff ?? 0))
+        }
+        items.append(("その他", (year.cfFxEffect ?? 0) + (year.cfOtherCashChange ?? 0)))
+        var running = 0.0
+        var steps: [Step] = items.map { title, value in
+            defer { running += value }
+            return Step(title: title, value: value, start: running, end: running + value, isTotal: false)
+        }
+        let total = year.cfCashChange ?? running
+        steps.append(Step(title: "現金の増減", value: total, start: 0, end: total, isTotal: true))
+        return steps
+    }
+
+    private func waterfall(_ year: FinancialsYear) -> some View {
+        let steps = Self.steps(year)
+        let bounds = steps.flatMap { [$0.start, $0.end] } + [0]
+        let lower = bounds.min() ?? 0
+        let upper = bounds.max() ?? 0
+        return VStack(alignment: .leading, spacing: 8) {
+            Text("\(Format.fyJapanese(year.fyEnd))の現金の動き")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(Theme.text)
+            ForEach(steps) { step in
+                if step.isTotal {
+                    Rectangle()
+                        .fill(Theme.textMuted.opacity(0.45))
+                        .frame(height: 1)
+                        .padding(.vertical, 2)
+                }
+                HStack(spacing: 8) {
+                    Text(step.title)
+                        .font(.caption.weight(step.isTotal ? .bold : .regular))
+                        .foregroundStyle(Theme.text)
+                        .frame(width: 88, alignment: .leading)
+                    FloatingBar(start: step.start, end: step.end, lower: lower, upper: upper)
+                        .frame(height: 16)
+                    Text(Format.autoYen(step.value, currency: year.currency ?? currency))
+                        .font(.caption.monospacedDigit().weight(step.isTotal ? .semibold : .regular))
+                        .foregroundStyle(step.value > 0 ? Theme.positive : step.value < 0 ? Theme.negative : Theme.text)
+                        .frame(width: 88, alignment: .trailing)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                }
+                .padding(.vertical, 2)
+                .accessibilityElement(children: .combine)
+            }
+            AnalysisNote(text: "フリーCFは営業CF＋投資CFです。配当は親会社株主への支払いのみで、非支配株主への配当はその他財務CFに含みます。その他は為替換算差額と、連結範囲の変動など CF の 3 区分以外の現金の増減です。")
+        }
+        .padding(.top, 4)
+    }
+
+    private struct BalanceSegment: Identifiable {
+        var label: String
+        var series: String
+        var value: Double
+        var id: String { "\(label)-\(series)" }
+    }
+
+    private var balanceSegments: [BalanceSegment] {
+        years.flatMap { year -> [BalanceSegment] in
+            guard let cash = year.cashEquivalents else { return [] }
+            let label = Format.fy(year.fyEnd)
+            let debt = min(max(year.interestBearingDebt ?? 0, 0), cash)
+            return [
+                BalanceSegment(label: label, series: "有利子負債", value: debt),
+                BalanceSegment(label: label, series: "正味現金", value: cash - debt),
+            ]
+        }
+    }
+
+    private var balanceChart: some View {
+        let labels = years.map { Format.fy($0.fyEnd) }
+        let scale = Format.commonScale(for: years.map(\.cashEquivalents), currency: currency)
+        return Chart {
+            ForEach(balanceSegments) { segment in
+                BarMark(x: .value("年度", segment.label), y: .value("金額", segment.value), width: .fixed(16))
+                    .foregroundStyle(segment.series == "有利子負債" ? ChartStyle.secondaryBar : ChartStyle.primaryBar)
+                    .accessibilityLabel("\(segment.label) \(segment.series)")
+                    .accessibilityValue(Format.autoYen(segment.value, currency: currency))
+            }
+        }
+        .chartXScale(domain: labels)
+        .chartXAxis {
+            AxisMarks { _ in
+                AxisValueLabel()
+                    .font(.caption2)
+                    .foregroundStyle(Theme.textMuted)
+            }
+        }
+        .chartYAxis {
+            AxisMarks(position: .leading, values: .automatic(desiredCount: 4)) { value in
+                AxisGridLine(stroke: ChartStyle.grid)
+                    .foregroundStyle(ChartStyle.gridColor)
+                AxisValueLabel {
+                    if let number = value.as(Double.self) {
+                        Text(scale.map { Format.scaledYen(number, scale: $0) } ?? Format.autoYen(number))
+                            .font(.caption2)
+                            .foregroundStyle(Theme.textMuted)
+                    }
+                }
+            }
+        }
+        .chartLegend(.hidden)
+        .frame(height: ChartStyle.height)
+    }
+}
+
+/// ウォーターフォールの 1 段。`start` から `end` までを、全段共通の `lower`〜`upper` の幅に置く。
+private struct FloatingBar: View {
+    var start: Double
+    var end: Double
+    var lower: Double
+    var upper: Double
+
+    var body: some View {
+        GeometryReader { geo in
+            let span = upper - lower
+            let x: (Double) -> CGFloat = { span > 0 ? CGFloat(($0 - lower) / span) * geo.size.width : 0 }
+            let left = x(min(start, end))
+            let width = end == start ? 0 : max(x(max(start, end)) - left, 4)
+            ZStack(alignment: .leading) {
+                RoundedRectangle(cornerRadius: 2)
+                    .fill(Theme.idleTab.opacity(0.55))
+                    .frame(width: geo.size.width, height: geo.size.height)
+                Rectangle()
+                    .fill(Theme.text)
+                    .frame(width: 1, height: geo.size.height)
+                    .offset(x: x(0))
+                RoundedRectangle(cornerRadius: 2)
+                    .fill(end >= start ? Theme.positive : Theme.negative)
+                    .frame(width: width, height: geo.size.height)
+                    .offset(x: left)
+            }
+        }
     }
 }
 
