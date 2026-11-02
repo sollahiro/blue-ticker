@@ -29,6 +29,8 @@ struct IndividualAnalyzer {
     var edinetIndustry: String? = nil
     /// Summary `sga` の Jev フォールバック。キー未設定なら nil（タグ経路が空のまま）。
     var sgaLineDecider: (any SgaLineDeciding)? = nil
+    /// 資金配分の財務CF行の Jev 区分。キー未設定なら nil（決定論で区分できない行があれば内訳は null）。
+    var cashFlowFinancingDecider: (any CashFlowFinancingRowDeciding)? = nil
 
     // MARK: - Public Entry Point
 
@@ -139,7 +141,8 @@ struct IndividualAnalyzer {
         // フィールド単位フォールバックはしない。US-GAAP は USGAAPStatementHtml。
         let statementMain = await StatementFinancialsResolver.resolve(
             xbrlDir: xbrlDir, edinetIndustry: edinetIndustry,
-            sgaLineDecider: sgaLineDecider)
+            sgaLineDecider: sgaLineDecider,
+            cashFlowFinancingDecider: cashFlowFinancingDecider)
         let ibd = await BreakdownFinancialsResolver.financialsCanonicalInterestBearingDebt(
             xbrlDir: xbrlDir, edinetIndustry: edinetIndustry)
         let interestExpense = statementMain?.interestExpense
@@ -215,6 +218,16 @@ struct IndividualAnalyzer {
         calc.cfTreasuryStock = statementMain?.cfTreasuryStock.map { $0 / millionYen }
         calc.dividendSS = statementMain?.dividendSS.map { $0 / millionYen }
         calc.dividendPaidCF = statementMain?.dividendPaidCF.map { $0 / millionYen }
+        if let allocation = statementMain?.cashAllocation {
+            calc.cff = allocation.cff.map { $0 / millionYen }
+            calc.cfDebtChange = allocation.debtChange.map { $0 / millionYen }
+            calc.cfDividendsParent = allocation.dividendsParent.map { $0 / millionYen }
+            calc.cfOtherFinancing = allocation.otherFinancing.map { $0 / millionYen }
+            calc.cfFxEffect = allocation.fxEffect.map { $0 / millionYen }
+            calc.cfCashChange = allocation.cashChange.map { $0 / millionYen }
+            calc.cfOtherCashChange = allocation.otherCashChange.map { $0 / millionYen }
+            calc.cashAllocationJevAudit = allocation.jevAudit
+        }
         calc.accountsReceivable = statementMain?.accountsReceivable.map { $0 / millionYen }
         calc.inventory = statementMain?.inventory.map { $0 / millionYen }
         calc.accountsPayable = statementMain?.accountsPayable.map { $0 / millionYen }

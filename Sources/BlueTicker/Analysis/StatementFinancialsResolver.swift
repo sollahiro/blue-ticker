@@ -36,6 +36,8 @@ struct StatementFinancialsValues {
     var sgaJevAudit: SegmentNoteJevAuditPayload? = nil
     var cfo: Double?
     var cfi: Double?
+    /// 資金配分（waterfall の現金増減ブリッジ）の材料。US-GAAP は nil（HTML 本表の区分が揃わないため）。
+    var cashAllocation: CashAllocationValues? = nil
     var pretaxIncome: Double?
     var incomeTax: Double?
     var dividendSS: Double?
@@ -74,20 +76,28 @@ enum StatementFinancialsResolver {
     }
 
     /// タグ経路が nil のときだけ Jev に既存 PL 行を選ばせる。銀行・保険・US-GAAP は呼ばない。
+    /// 資金配分の財務CF行も、決定論で区分できない行だけ Jev に区分を選ばせる（銀行・US-GAAP は呼ばない）。
     static func resolve(
         xbrlDir: URL, edinetIndustry: String? = nil,
         sgaTagPolicy: SgaTagPolicy = .all,
-        sgaLineDecider: (any SgaLineDeciding)?
+        sgaLineDecider: (any SgaLineDeciding)?,
+        cashFlowFinancingDecider: (any CashFlowFinancingRowDeciding)? = nil
     ) async -> StatementFinancialsValues? {
         guard var bundle = resolveBundle(
             xbrlDir: xbrlDir, edinetIndustry: edinetIndustry, sgaTagPolicy: sgaTagPolicy)
         else { return nil }
+        let docID = docIDFromXbrlDir(xbrlDir)
         await SgaLineJevPicker.applyIfNeeded(
             to: &bundle.values,
             incomeStatement: bundle.incomeStatement,
             skip: bundle.skipSgaJev,
             decider: sgaLineDecider,
-            docID: docIDFromXbrlDir(xbrlDir))
+            docID: docID)
+        if bundle.values.cashAllocation != nil, let cashFlow = bundle.cashFlow {
+            bundle.values.cashAllocation = await CashAllocationResolver.resolve(
+                cashFlow: cashFlow, cfo: bundle.values.cfo, cfi: bundle.values.cfi,
+                isBank: bundle.isBank, decider: cashFlowFinancingDecider, docID: docID)
+        }
         return bundle.values
     }
 
@@ -95,6 +105,9 @@ enum StatementFinancialsResolver {
         var values: StatementFinancialsValues
         var incomeStatement: [StatementLineItem]
         var skipSgaJev: Bool
+        /// 資金配分の CF 本表行。US-GAAP は nil。
+        var cashFlow: [StatementLineItem]? = nil
+        var isBank: Bool = false
     }
 
     private static func docIDFromXbrlDir(_ xbrlDir: URL) -> String {
@@ -274,10 +287,14 @@ enum StatementFinancialsResolver {
             values.geographyCoverageSales = topLine
             values.geographyCoverageSalesLabel = salesLabel
         }
+        values.cashAllocation = CashAllocationResolver.resolve(
+            cashFlow: year.cashFlow, cfo: values.cfo, cfi: values.cfi, isBank: isBank)
         return ResolveBundle(
             values: values,
             incomeStatement: year.incomeStatement,
-            skipSgaJev: isBank || isInsurance)
+            skipSgaJev: isBank || isInsurance,
+            cashFlow: year.cashFlow,
+            isBank: isBank)
     }
 
     /// 期末の親会社持分。本表に親会社持分の行（IFRS / US-GAAP）があればそれ、無ければ

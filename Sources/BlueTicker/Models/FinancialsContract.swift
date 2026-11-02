@@ -18,7 +18,7 @@ public enum FinancialsComputeResult: Sendable {
 
 /// Neon `company_financials.cache_version`。財務計算ロジックまたは本契約の意味変更時のみバンプ。
 /// `blueTickerVersion` とは独立。経緯は Git。
-public let companyFinancialsCacheVersion = "fin-v23"
+public let companyFinancialsCacheVersion = "fin-v24"
 
 /// financials read（REST）が 200 を返す最低計算バージョン番号（`fin-vN` の N）。
 /// **明示指定**であり、「現行から 2 つ前」のような機械オフセットではない。人手で上げる。
@@ -94,6 +94,7 @@ public func isCurrentFinancialsAssemblyFingerprint(_ stored: String?) -> Bool {
 // | cash_equivalents | statement | StatementFinancialsResolver（#5b-1） | done |
 // | cfo, cfi | statement（cash_flow 合計行。IFRS は `NetCashProvidedByUsedIn*ActivitiesIFRS`。Summary は使わない） | StatementFinancialsResolver（#5c） | done |
 // | dividend_paid_cf | statement | StatementFinancialsResolver（#5b-1） | done |
+// | cff, cf_debt_change, cf_dividends_parent, cf_other_financing, cf_fx_effect, cf_cash_change, cf_other_cash_change | statement CF 本表行（Waterfall 専用。区分は標準タグ → ラベル規則 → Jev。`docs/financials-summary-separation.md`「資金配分」） | CashAllocationResolver | done |
 // | eps | notes `per_share_information`（tag=eps） | StatementNotesResolver.financialsCanonicalEps | done |
 // | bps | notes `per_share_information`（tag=bps） | StatementNotesResolver.financialsCanonicalBps | done |
 // | issued_shares | notes `issued_shares_and_capital`（as_of_period_end） | StatementNotesResolver.financialsCanonicalIssuedShares | done |
@@ -167,6 +168,15 @@ struct FinancialsYear: Codable, Sendable {
     var dividendSs: Double?
     var dividendPaidCf: Double?
 
+    // 資金配分（現金増減ブリッジ）。CF の符号（収入が正、支出が負）。Waterfall 専用。
+    var cff: Double?
+    var cfDebtChange: Double?
+    var cfDividendsParent: Double?
+    var cfOtherFinancing: Double?
+    var cfFxEffect: Double?
+    var cfCashChange: Double?
+    var cfOtherCashChange: Double?
+
     var eps: Double?
     var bps: Double?
     var issuedShares: Double?
@@ -237,6 +247,13 @@ struct FinancialsYear: Codable, Sendable {
         case cfTreasuryStock = "cf_treasury_stock"
         case dividendSs = "dividend_ss"
         case dividendPaidCf = "dividend_paid_cf"
+        case cff
+        case cfDebtChange = "cf_debt_change"
+        case cfDividendsParent = "cf_dividends_parent"
+        case cfOtherFinancing = "cf_other_financing"
+        case cfFxEffect = "cf_fx_effect"
+        case cfCashChange = "cf_cash_change"
+        case cfOtherCashChange = "cf_other_cash_change"
         case eps
         case bps
         case issuedShares = "issued_shares"
@@ -308,6 +325,13 @@ struct FinancialsYear: Codable, Sendable {
             case .cfTreasuryStock: try container.encode(cfTreasuryStock, forKey: key)
             case .dividendSs: try container.encode(dividendSs, forKey: key)
             case .dividendPaidCf: try container.encode(dividendPaidCf, forKey: key)
+            case .cff: try container.encode(cff, forKey: key)
+            case .cfDebtChange: try container.encode(cfDebtChange, forKey: key)
+            case .cfDividendsParent: try container.encode(cfDividendsParent, forKey: key)
+            case .cfOtherFinancing: try container.encode(cfOtherFinancing, forKey: key)
+            case .cfFxEffect: try container.encode(cfFxEffect, forKey: key)
+            case .cfCashChange: try container.encode(cfCashChange, forKey: key)
+            case .cfOtherCashChange: try container.encode(cfOtherCashChange, forKey: key)
             case .eps: try container.encode(eps, forKey: key)
             case .bps: try container.encode(bps, forKey: key)
             case .issuedShares: try container.encode(issuedShares, forKey: key)
@@ -386,6 +410,13 @@ extension FinancialsYear {
         cfTreasuryStock = calc.cfTreasuryStock
         dividendSs = calc.dividendSS
         dividendPaidCf = calc.dividendPaidCF
+        cff = calc.cff
+        cfDebtChange = calc.cfDebtChange
+        cfDividendsParent = calc.cfDividendsParent
+        cfOtherFinancing = calc.cfOtherFinancing
+        cfFxEffect = calc.cfFxEffect
+        cfCashChange = calc.cfCashChange
+        cfOtherCashChange = calc.cfOtherCashChange
 
         eps = raw.eps
         bps = raw.bps
@@ -462,6 +493,13 @@ extension FinancialsYear {
         calc.cfTreasuryStock = cfTreasuryStock
         calc.dividendSS = dividendSs
         calc.dividendPaidCF = dividendPaidCf
+        calc.cff = cff
+        calc.cfDebtChange = cfDebtChange
+        calc.cfDividendsParent = cfDividendsParent
+        calc.cfOtherFinancing = cfOtherFinancing
+        calc.cfFxEffect = cfFxEffect
+        calc.cfCashChange = cfCashChange
+        calc.cfOtherCashChange = cfOtherCashChange
         calc.employees = employees
         calc.businessProfit = businessProfit
         calc.businessProfitMargin = businessProfitMargin
@@ -501,6 +539,8 @@ extension FinancialsYear {
         "gross_margin_change_impact", "sga_change_impact",
         "net_margin", "asset_turnover", "financial_leverage",
         "working_capital", "dso", "dio", "dpo", "ccc",
+        "cff", "cf_debt_change", "cf_dividends_parent", "cf_other_financing",
+        "cf_fx_effect", "cf_cash_change", "cf_other_cash_change",
     ]
 
     /// Summary（financials）応答用 JSON。`analysisOnlyKeys` を除いた水準値のみを返す。
@@ -570,6 +610,8 @@ let financialsUnits: [String: AmountUnit.Code] = {
         "net_assets", "accounts_receivable", "inventory", "accounts_payable", "working_capital",
         "cash_equivalents", "net_cash", "cfo", "cfi", "cfc", "capex", "buyback", "rd",
         "cf_treasury_stock", "dividend_ss", "dividend_paid_cf",
+        "cff", "cf_debt_change", "cf_dividends_parent", "cf_other_financing",
+        "cf_fx_effect", "cf_cash_change", "cf_other_cash_change",
         "business_profit", "business_profit_change", "sales_change_impact",
         "gross_margin_change_impact", "sga_change_impact",
         "net_cash_change", "cash_change_impact", "debt_change_impact", "working_capital_change",
@@ -640,6 +682,8 @@ public struct FinancialsResponse: Codable, Sendable {
     var years: [FinancialsYear]
     /// 非公開。Codable / `/financials` には出さない。ingest が `company_financials.llm_audit` へ書く。
     var sgaJevAudits: [SegmentNoteJevAuditPayload] = []
+    /// 非公開。資金配分の財務CF行を Jev で区分した監査。`company_financials.llm_audit` へ書く。
+    var cashAllocationJevAudits: [SegmentNoteJevAuditPayload] = []
 
     enum CodingKeys: String, CodingKey {
         case schemaVersion = "schema_version"
@@ -650,9 +694,15 @@ public struct FinancialsResponse: Codable, Sendable {
 /// `company_financials.llm_audit`。公開契約ではない。
 public struct FinancialsLlmAuditPayload: Codable, Sendable, Equatable {
     public var sgaJev: [SegmentNoteJevAuditPayload]
+    /// 資金配分の財務CF行の区分。列導入前の行には無い（nil）。
+    public var cashAllocationJev: [SegmentNoteJevAuditPayload]?
 
-    public init(sgaJev: [SegmentNoteJevAuditPayload]) {
+    public init(
+        sgaJev: [SegmentNoteJevAuditPayload],
+        cashAllocationJev: [SegmentNoteJevAuditPayload]? = nil
+    ) {
         self.sgaJev = sgaJev
+        self.cashAllocationJev = cashAllocationJev
     }
 }
 
@@ -669,6 +719,11 @@ extension FinancialsResponse {
         years = uniquedYearsByFyEnd((result.years ?? []).map { FinancialsYear($0) })
         sgaJevAudits = (result.years ?? []).compactMap { year in
             guard var audit = year.calculatedData.sgaJevAudit else { return nil }
+            if audit.code.isEmpty { audit.code = code }
+            return audit
+        }
+        cashAllocationJevAudits = (result.years ?? []).compactMap { year in
+            guard var audit = year.calculatedData.cashAllocationJevAudit else { return nil }
             if audit.code.isEmpty { audit.code = code }
             return audit
         }
@@ -719,7 +774,10 @@ extension FinancialsResponse {
 
     /// Jev 販管費監査。空なら nil。public: 財務取り込みが `company_financials.llm_audit` へ書く。
     public var sgaJevLlmAudit: FinancialsLlmAuditPayload? {
-        sgaJevAudits.isEmpty ? nil : FinancialsLlmAuditPayload(sgaJev: sgaJevAudits)
+        if sgaJevAudits.isEmpty, cashAllocationJevAudits.isEmpty { return nil }
+        return FinancialsLlmAuditPayload(
+            sgaJev: sgaJevAudits,
+            cashAllocationJev: cashAllocationJevAudits.isEmpty ? nil : cashAllocationJevAudits)
     }
 
     /// 格納 `years` のうち最新の fy_end（先頭 10 文字 YYYY-MM-DD）とその年の doc_id。years 空なら nil。
