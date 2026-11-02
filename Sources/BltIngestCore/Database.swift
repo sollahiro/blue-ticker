@@ -101,6 +101,8 @@ package func registerBltMigrations(_ migrations: Migrations) {
     migrations.add(AddVotingRatioDetailToCompanyRelations())
     // 閉じた数値 fact 投影テーブル edinet_xbrl_facts を削除（不可逆。IF EXISTS）。
     migrations.add(DropEdinetXbrlFacts())
+    // 業種 KPI（銀行 XBRL 数値。stage は `industry-kpis`。既定 drain には載せない）。
+    migrations.add(CreateIndustryKpiFacts())
 }
 
 /// `blt-ingest migrate` エントリ。DATABASE_URL のスキーマへ未適用のマイグレーションだけを適用する。
