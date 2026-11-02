@@ -1077,7 +1077,10 @@ private struct CashAllocationSection: View {
     private static func steps(_ year: FinancialsYear) -> [Step] {
         var items: [(String, Double)] = [("フリーCF", year.cfc ?? 0)]
         if let debt = year.cfDebtChange, let dividends = year.cfDividendsParent, let other = year.cfOtherFinancing {
-            items += [("借入の増減", debt), ("配当", dividends), ("その他財務CF", other)]
+            items.append(("借入の増減", debt))
+            // 無配の年は配当の段を出さない。
+            if dividends != 0 { items.append(("配当", dividends)) }
+            items.append(("その他財務CF", other))
         } else {
             items.append(("財務CF", year.cff ?? 0))
         }
