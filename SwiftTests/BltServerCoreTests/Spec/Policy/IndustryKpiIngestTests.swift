@@ -18,6 +18,7 @@ private func withMigratedApp(_ body: (Application) async throws -> Void) async t
         app.migrations.add(CreateEdinetDocument())
         app.migrations.add(AddParentDocIDToEdinetDocuments())
         app.migrations.add(CreateIndustryKpiFacts())
+        app.migrations.add(CreateCompanyStatements())
         try await app.autoMigrate()
         try await body(app)
     } catch {
@@ -42,6 +43,23 @@ private func seedDoc(
     model.formCode = form
     model.submitDateTime = submit
     try await model.create(on: db)
+}
+
+private func seedStatement(
+    _ docID: String, code: String, balanceSheetTags: [String], db: Database
+) async throws {
+    let row = CompanyStatement()
+    row.id = docID
+    row.code = code
+    row.submitDateTime = "2026-06-20 09:00"
+    row.payload = StatementYear(
+        fyEnd: "2026-03-31", financialPeriod: "2026/3", docId: docID,
+        balanceSheet: balanceSheetTags.map {
+            StatementLineItem(tag: $0, label: nil, value: 1, unit: "JPY", order: nil)
+        },
+        incomeStatement: [], cashFlow: [])
+    row.cacheVersion = statementCacheVersion
+    try await row.create(on: db)
 }
 
 private func samplePayload() -> IndustryKpiSnapshotPayload {
@@ -160,6 +178,30 @@ private func samplePayload() -> IndustryKpiSnapshotPayload {
             }
             #expect(summary.skipped == 1)
             #expect(summary.attempted == 0)
+        }
+    }
+
+    @Test func candidateCodesAreBankIndustryOrDepositMarker() async throws {
+        try await withMigratedApp { app in
+            // 8570: 業種は銀行業以外だが BS に預金マーカーあり → 対象。
+            try await seedStatement(
+                "S1", code: "8570",
+                balanceSheetTags: ["CashAndDueFromBanksAssetsBNK", industryKpiBankDepositMarkerTag],
+                db: app.db)
+            // 7203: 預金マーカーなし・業種も銀行業以外 → 対象外。
+            try await seedStatement(
+                "S2", code: "7203", balanceSheetTags: ["TotalAssets"], db: app.db)
+            // 9999: 預金マーカーはあるが上場ユニバース外 → 対象外。
+            try await seedStatement(
+                "S3", code: "9999", balanceSheetTags: [industryKpiBankDepositMarkerTag],
+                db: app.db)
+
+            let codes = try await industryKpiBankCandidateCodes(
+                db: app.db, listedCodes: ["8570", "7203", "8331", "7182"],
+                bankIndustryCodes: ["8331", "7182"])
+
+            // 8331 / 7182 は statements が無くても業種＝銀行業で対象（ゆうちょは預金マーカーを持たない）。
+            #expect(codes == ["8570", "8331", "7182"])
         }
     }
 }
