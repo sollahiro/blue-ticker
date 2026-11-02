@@ -46,26 +46,31 @@ import Testing
     }
 
     static let cases: [BankCase] = [
+        // source: code=8331 fy_end=2026-03-31 doc_id=S100YDSE page=0 field=industry_kpi.ldr_ohr
         .init(
             name: "千葉銀行", docID: "S100YDSE",
             loans: 14_082_336, deposits: 16_830_424, ncd: 180_766,
             opex: 104_888, researchGP: 223_274,
             researchLDR: 82.78, researchOHR: 46.98),
+        // source: code=8306 fy_end=2026-03-31 doc_id=S100YJQO page=0 field=industry_kpi.ldr_ohr
         .init(
             name: "三菱UFJ", docID: "S100YJQO",
             loans: 133_799_490, deposits: 239_439_246, ncd: 17_601_483,
             opex: 3_489_570, researchGP: 5_944_462,
             researchLDR: 52.05, researchOHR: 58.70),
+        // source: code=8316 fy_end=2026-03-31 doc_id=S100YERK page=0 field=industry_kpi.ldr_ohr
         .init(
             name: "三井住友FG", docID: "S100YERK",
             loans: 117_629_215, deposits: 185_674_241, ncd: 15_667_132,
             opex: 2_651_514, researchGP: 4_844_692,
             researchLDR: 58.42, researchOHR: 54.73),
+        // source: code=7167 fy_end=2026-03-31 doc_id=S100YAVM page=0 field=industry_kpi.ldr_ohr
         .init(
             name: "めぶきFG", docID: "S100YAVM",
             loans: 13_997_655, deposits: 17_831_757, ncd: 276_180,
             opex: 116_766, researchGP: 214_151,
             researchLDR: 77.30, researchOHR: 54.53),
+        // source: code=5838 fy_end=2026-03-31 doc_id=S100YGME page=0 field=industry_kpi.ldr_ohr
         .init(
             name: "楽天銀行", docID: "S100YGME",
             loans: 5_943_070, deposits: 13_046_850, ncd: 7_428,

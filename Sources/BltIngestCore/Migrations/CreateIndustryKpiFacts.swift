@@ -1,4 +1,4 @@
-// industry_kpi_facts テーブルの作成（業種 KPI 取り込み、BLT-217）。
+// industry_kpi_facts テーブルの作成（業種 KPI 取り込み）。
 // 書類 1 件・業種グループ 1 つ分の KPI スナップショットを JSONB 1 セルに持つ。
 // 本番にはこの PR では適用しない（blt-ingest migrate は Mac で Sorahiro の OK 後）。
 

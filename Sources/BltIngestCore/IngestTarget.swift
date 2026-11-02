@@ -50,7 +50,7 @@ public func parseStatementNoteTypes(_ csv: String?) -> Set<String>? {
 }
 
 /// `--stages` 省略時の対象。`relations` は関係会社表の Jev を伴うため `--stages relations` の明示指定だけ。
-/// `industry-kpis` も本番 drain に乗せない（BLT-217。Mac で明示指定）。
+/// `industry-kpis` も本番 drain に乗せない（Mac で明示指定）。
 public let defaultIngestTargets = Set(IngestTarget.allCases).subtracting([.relations, .industryKpis])
 
 /// `--stages` の CSV 値を取り込み対象の集合へ変換する。
