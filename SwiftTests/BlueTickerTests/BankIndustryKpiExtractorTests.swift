@@ -119,6 +119,35 @@ import Testing
         #expect(filerLDR.value == 80)
     }
 
+    /// 豊和銀行 8559: 連結を作らないのに NonConsolidatedMember 付きで単体の値を付ける。
+    @Test func standaloneBankWithNonConsolidatedMemberContextsIsFiler() throws {
+        let tags: XbrlTagElements = [
+            "DepositsLiabilitiesBNK": ["CurrentYearInstant_NonConsolidatedMember": 100 * million],
+            "LoansAndBillsDiscountedAssetsBNK": [
+                "CurrentYearInstant_NonConsolidatedMember": 70 * million
+            ],
+            "InterestIncomeOIBNK": ["CurrentYearDuration_NonConsolidatedMember": 20 * million],
+            "GeneralAndAdministrativeExpensesOEBNK": [
+                "CurrentYearDuration_NonConsolidatedMember": 10 * million
+            ],
+        ]
+        guard case .resolved(let payload, _, _) =
+            BankIndustryKpiExtractor.resolve(
+                tagElements: tags, edinetIndustry: Xbrl.bankEdinetIndustry,
+                hasConsolidatedStatements: false)
+        else {
+            Issue.record("expected resolved filer-only bank with NonConsolidatedMember contexts")
+            return
+        }
+        #expect(payload.fact(key: industryKpiKeyLDR, scope: industryKpiScopeConsolidated) == nil)
+        let filerLDR = try #require(
+            payload.fact(key: industryKpiKeyLDR, scope: industryKpiScopeFiler))
+        #expect(filerLDR.value == 70)
+        let filerOHR = try #require(
+            payload.fact(key: industryKpiKeyOHR, scope: industryKpiScopeFiler))
+        #expect(filerOHR.value == 50)
+    }
+
     @Test func bankIndustryWithNoExtractableFactsIsFailed() {
         let tags: XbrlTagElements = [
             "NetSales": ["CurrentYearDuration": 1_000 * million]

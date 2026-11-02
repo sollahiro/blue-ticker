@@ -47,8 +47,15 @@ enum BankIndustryKpiExtractor {
             facts.append(contentsOf: factsForScope(
                 instant: filerInstant, duration: filerDuration, scope: industryKpiScopeFiler))
         } else {
-            facts.append(contentsOf: factsForScope(
-                instant: consInstant, duration: consDuration, scope: industryKpiScopeFiler))
+            // 連結を作らない銀行は、ふつうメンバー無しのコンテキストに単体の値を付ける。
+            // ただし NonConsolidatedMember 付きで付ける書類もある（豊和銀行 8559）。
+            // メンバー無しで何も取れなければ NonConsolidatedMember へ切り替える。
+            let unmarked = factsForScope(
+                instant: consInstant, duration: consDuration, scope: industryKpiScopeFiler)
+            facts.append(contentsOf: unmarked.isEmpty
+                ? factsForScope(
+                    instant: filerInstant, duration: filerDuration, scope: industryKpiScopeFiler)
+                : unmarked)
         }
         guard !facts.isEmpty else { return .failed }
 
