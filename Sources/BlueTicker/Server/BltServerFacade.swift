@@ -51,6 +51,8 @@ public struct BltServerContext: Sendable {
     let interestBearingDebtDecider: (any InterestBearingDebtDeciding)?
     /// Summary `sga` の Jev 行選択。同じキーが無いときは nil（タグ経路が空のまま）。
     let sgaLineDecider: (any SgaLineDeciding)?
+    /// 資金配分の財務CF行の区分。同じキーが無いときは nil（決定論で区分できない行があれば内訳は null）。
+    let cashFlowFinancingDecider: (any CashFlowFinancingRowDeciding)?
     /// 会社拡張 member のうち調整・消去・全社の列の判定。同じキーが無いときは nil（標準一覧だけ）。
     let segmentMemberRoleDecider: (any SegmentMemberRoleDeciding)?
     /// 事業別内訳 profit の行選択。決定論で利益タグが決まらないときだけ。キーが無いときは nil（profit は null）。
@@ -78,6 +80,7 @@ public struct BltServerContext: Sendable {
         capexProseDecider: (any CapexProseDeciding)? = nil,
         interestBearingDebtDecider: (any InterestBearingDebtDeciding)? = nil,
         sgaLineDecider: (any SgaLineDeciding)? = nil,
+        cashFlowFinancingDecider: (any CashFlowFinancingRowDeciding)? = nil,
         segmentMemberRoleDecider: (any SegmentMemberRoleDeciding)? = nil,
         segmentProfitDecider: (any SegmentProfitDeciding)? = nil,
         revenueRecognitionRowRoleDecider: (any RevenueRecognitionRowRoleDeciding)? = nil,
@@ -102,6 +105,7 @@ public struct BltServerContext: Sendable {
         self.capexProseDecider = capexProseDecider
         self.interestBearingDebtDecider = interestBearingDebtDecider
         self.sgaLineDecider = sgaLineDecider
+        self.cashFlowFinancingDecider = cashFlowFinancingDecider
         self.segmentMemberRoleDecider = segmentMemberRoleDecider
         self.segmentProfitDecider = segmentProfitDecider
         self.revenueRecognitionRowRoleDecider = revenueRecognitionRowRoleDecider
@@ -225,6 +229,9 @@ public func makeBltServerContext() async -> BltServerContext? {
     let sgaLineDecider: (any SgaLineDeciding)? = decisionsClient.map {
         OpenRouterSgaLineDecider(client: $0)
     }
+    let cashFlowFinancingDecider: (any CashFlowFinancingRowDeciding)? = decisionsClient.map {
+        OpenRouterCashFlowFinancingRowDecider(client: $0)
+    }
     let segmentMemberRoleDecider: (any SegmentMemberRoleDeciding)? = decisionsClient.map {
         OpenRouterSegmentMemberRoleDecider(client: $0)
     }
@@ -254,6 +261,7 @@ public func makeBltServerContext() async -> BltServerContext? {
         capexProseDecider: capexProseDecider,
         interestBearingDebtDecider: interestBearingDebtDecider,
         sgaLineDecider: sgaLineDecider,
+        cashFlowFinancingDecider: cashFlowFinancingDecider,
         segmentMemberRoleDecider: segmentMemberRoleDecider,
         segmentProfitDecider: segmentProfitDecider,
         revenueRecognitionRowRoleDecider: revenueRecognitionRowRoleDecider,
@@ -307,7 +315,8 @@ public extension BltServerContext {
         let stock = await masterDataManager.getByCode(code)
         let analyzer = IndividualAnalyzer(
             edinetClient: edinetClient, cacheManager: cacheManager,
-            edinetIndustry: stock?.s33nm, sgaLineDecider: sgaLineDecider)
+            edinetIndustry: stock?.s33nm, sgaLineDecider: sgaLineDecider,
+            cashFlowFinancingDecider: cashFlowFinancingDecider)
         // Ingest は derived `individual_analysis_*` を使わない。そのキーは
         // `blueTickerVersion` であり `companyFinancialsCacheVersion`（fin-vN）ではない。
         // 既定 `useCache: true` のままだと fin-vN ingest が古 IBD/ROIC を現行として書く。

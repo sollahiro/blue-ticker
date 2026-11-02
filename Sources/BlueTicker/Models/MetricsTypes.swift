@@ -119,6 +119,16 @@ struct CalculatedData: Codable {
     var cfTreasuryStock: Double?
     var dividendSS: Double?
     var dividendPaidCF: Double?
+    // 資金配分（現金増減ブリッジ）。CF の符号（収入が正、支出が負）、百万円。
+    var cff: Double?
+    var cfDebtChange: Double?
+    var cfDividendsParent: Double?
+    var cfOtherFinancing: Double?
+    var cfFxEffect: Double?
+    var cfCashChange: Double?
+    var cfOtherCashChange: Double?
+    /// 資金配分の財務CF行を Jev で区分した非公開監査。CodingKeys に出さない。
+    var cashAllocationJevAudit: SegmentNoteJevAuditPayload? = nil
     // BS運転資本
     var accountsReceivable: Double?
     var inventory: Double?
@@ -161,6 +171,10 @@ struct CalculatedData: Codable {
         case financialLeverage = "FinancialLeverage"
         case cfTreasuryStock = "CFTreasuryStock"
         case dividendSS = "DividendSS"; case dividendPaidCF = "DividendPaidCF"
+        case cff = "CFF"; case cfDebtChange = "CFDebtChange"
+        case cfDividendsParent = "CFDividendsParent"; case cfOtherFinancing = "CFOtherFinancing"
+        case cfFxEffect = "CFFxEffect"; case cfCashChange = "CFCashChange"
+        case cfOtherCashChange = "CFOtherCashChange"
         case accountsReceivable = "AccountsReceivable"
         case inventory = "Inventory"; case accountsPayable = "AccountsPayable"
         case workingCapital = "WorkingCapital"
