@@ -1022,14 +1022,23 @@ private struct CashAllocationSection: View {
             if years.contains(where: { $0.cashEquivalents != nil }) {
                 balanceChart
                 ChartLegend(items: [
+                    LegendItem(title: "現金", color: ChartStyle.primaryBar, shape: .bar),
                     LegendItem(title: "有利子負債", color: ChartStyle.secondaryBar, shape: .bar),
-                    LegendItem(title: "正味現金", color: ChartStyle.primaryBar, shape: .bar),
                 ])
-                AnalysisNote(text: "現金のうち有利子負債を返しきれる分と、残る正味現金です。有利子負債が現金を上回る年は、棒の全体が有利子負債の一部です。")
+                if let netCash = latestNetCash {
+                    AnalysisNote(text: "直近の正味現金（現金 − 有利子負債）は \(Format.autoYen(netCash, currency: currency)) です。")
+                }
             } else {
                 AnalysisNote(text: "現金及び現金同等物は未集計です。")
             }
         }
+    }
+
+    private var latestNetCash: Double? {
+        guard let year = years.last(where: { $0.cashEquivalents != nil && $0.interestBearingDebt != nil }),
+              let cash = year.cashEquivalents, let debt = year.interestBearingDebt
+        else { return nil }
+        return cash - debt
     }
 
     private var selectableYears: [FinancialsYear] {
@@ -1139,34 +1148,38 @@ private struct CashAllocationSection: View {
         .padding(.top, 4)
     }
 
-    private struct BalanceSegment: Identifiable {
+    private struct BalanceBar: Identifiable {
         var label: String
         var series: String
         var value: Double
         var id: String { "\(label)-\(series)" }
     }
 
-    private var balanceSegments: [BalanceSegment] {
-        years.flatMap { year -> [BalanceSegment] in
+    /// 年ごとに現金と有利子負債を横に並べる。有利子負債が現金を上回る会社でも両方の大きさが見える。
+    private var balanceBars: [BalanceBar] {
+        years.flatMap { year -> [BalanceBar] in
             guard let cash = year.cashEquivalents else { return [] }
             let label = Format.fy(year.fyEnd)
-            let debt = min(max(year.interestBearingDebt ?? 0, 0), cash)
-            return [
-                BalanceSegment(label: label, series: "有利子負債", value: debt),
-                BalanceSegment(label: label, series: "正味現金", value: cash - debt),
-            ]
+            var bars = [BalanceBar(label: label, series: "現金", value: cash)]
+            if let debt = year.interestBearingDebt {
+                bars.append(BalanceBar(label: label, series: "有利子負債", value: debt))
+            }
+            return bars
         }
     }
 
     private var balanceChart: some View {
         let labels = years.map { Format.fy($0.fyEnd) }
-        let scale = Format.commonScale(for: years.map(\.cashEquivalents), currency: currency)
+        let scale = Format.commonScale(
+            for: years.map(\.cashEquivalents) + years.map(\.interestBearingDebt), currency: currency)
         return Chart {
-            ForEach(balanceSegments) { segment in
-                BarMark(x: .value("年度", segment.label), y: .value("金額", segment.value), width: .fixed(16))
-                    .foregroundStyle(segment.series == "有利子負債" ? ChartStyle.secondaryBar : ChartStyle.primaryBar)
-                    .accessibilityLabel("\(segment.label) \(segment.series)")
-                    .accessibilityValue(Format.autoYen(segment.value, currency: currency))
+            ForEach(balanceBars) { bar in
+                BarMark(x: .value("年度", bar.label), y: .value("金額", bar.value), width: .fixed(12))
+                    .position(by: .value("系列", bar.series))
+                    .foregroundStyle(bar.series == "有利子負債" ? ChartStyle.secondaryBar : ChartStyle.primaryBar)
+                    .cornerRadius(3)
+                    .accessibilityLabel("\(bar.label) \(bar.series)")
+                    .accessibilityValue(Format.autoYen(bar.value, currency: currency))
             }
         }
         .chartXScale(domain: labels)
