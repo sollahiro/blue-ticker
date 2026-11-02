@@ -762,8 +762,9 @@ private struct CompanyGlassPresenter: UIViewRepresentable {
             let settledDiameter = (leftButtons + rightSettled).map(\.height).min()
             let trailing = Self.trailingPair(right)
             // 右上のガラスの高さ。内側の 36pt 枠の最小値にはしない。
+            // 円1つのときは内枠（36pt）の数がガラスの円より多いので、いちばん大きい円を使う。
             let diameter = Self.dominantHeight(capsuleHeights)
-                ?? Self.dominantHeight(trailingDiscHeights)
+                ?? trailingDiscHeights.max()
                 ?? Self.dominantHeight(circleHeights)
                 ?? settledDiameter
                 ?? trailing.map(\.height).min()
