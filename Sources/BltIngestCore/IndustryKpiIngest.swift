@@ -3,7 +3,9 @@
 // 候補選定は filingSectionCandidates を再利用する。
 //
 // `--stages` の既定からは外す（relations と同じ。本番 drain に乗せない。Mac で明示指定）。
-// 非銀行は行を作らない（notApplicable。業種はファサードが EDINET 提出者業種で先に落とす）。
+// 非銀行は statement-notes / breakdowns と同じく not_applicable プレースホルダを残し、
+// 現行 cache_version なら skip する（--limit が非銀行で埋まって銀行に届かないのを防ぐ）。
+// 業種はファサードが EDINET 提出者業種で先に落とし、XBRL を取らない。
 
 import BltStoreCore
 import BlueTickerCore
@@ -89,17 +91,6 @@ func runIndustryKpiIngest(
             break
         }
         let key = IndustryKpiFact.compositeID(docID: cand.docID, industryGroup: industryGroup)
-        let existing = try await withDbRetry(
-            logger: logger, context: "docID=\(cand.docID)", onRetry: { unhealthyRetries += 1 }
-        ) {
-            try await IndustryKpiFact.find(key, on: db)
-        }
-        if !forceDocIDs.contains(cand.docID), let row = existing,
-            row.cacheVersion == industryKpiCacheVersion
-        {
-            skipped += 1
-            continue
-        }
         if let lim = limit, attempted >= lim { break }
         attempted += 1
 
@@ -116,8 +107,28 @@ func runIndustryKpiIngest(
                     db: db)
             }
             stored += 1
-        case .notApplicable:
+        case .notApplicable(let reason):
             notApplicable += 1
+            let classifiedSource = classifyIndex[key]?.source
+            if let classifiedSource, classifiedSource != industryKpiSourceNotApplicable {
+                logger?.warning(
+                    "業種KPI取り込み(\(industryGroup)): 既存の実データ行を notApplicable(\(reason)) で上書きしません(次回再試行): docID=\(cand.docID) code=\(cand.code)"
+                )
+            } else {
+                let placeholder = IndustryKpiSnapshotPayload(
+                    industryGroup: industryGroup, facts: [])
+                try await withDbRetry(
+                    logger: logger, context: "docID=\(cand.docID)", onRetry: { unhealthyRetries += 1 }
+                ) {
+                    try await storeIndustryKpiFact(
+                        existing: try await IndustryKpiFact.find(key, on: db),
+                        docID: cand.docID, industryGroup: industryGroup,
+                        code: cand.code, submitDateTime: cand.submitDateTime,
+                        payload: placeholder, source: industryKpiSourceNotApplicable,
+                        contentHash: "", cacheVersion: industryKpiCacheVersion,
+                        notApplicableReason: reason, db: db)
+                }
+            }
         case .failed:
             failed += 1
             logger?.warning("業種KPI取り込み(\(industryGroup)) 取り込み失敗: docID=\(cand.docID) code=\(cand.code)")

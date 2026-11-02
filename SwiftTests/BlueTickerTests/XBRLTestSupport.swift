@@ -35,6 +35,7 @@ enum XBRLTestSupport {
     static let nsJppfs = "http://disclosure.edinet-fsa.go.jp/taxonomy/jppfs/2022-11-01/jppfs_cor"
     static let nsJpifrs = "http://disclosure.edinet-fsa.go.jp/taxonomy/jpifrs/2022-11-01/jpifrs_cor"
     static let nsJpcrp = "http://disclosure.edinet-fsa.go.jp/taxonomy/jpcrp/2022-11-01/jpcrp_cor"
+    static let nsJpdei = "http://disclosure.edinet-fsa.go.jp/taxonomy/jpdei/2013-08-31/jpdei_cor"
 
     private static func contextXml(id: String, period: String) -> String {
         """
@@ -59,7 +60,8 @@ enum XBRLTestSupport {
             xmlns:xbrli="\(nsXbrli)"
             xmlns:jppfs_cor="\(nsJppfs)"
             xmlns:jpifrs_cor="\(nsJpifrs)"
-            xmlns:jpcrp_cor="\(nsJpcrp)">
+            xmlns:jpcrp_cor="\(nsJpcrp)"
+            xmlns:jpdei_cor="\(nsJpdei)">
         \(contexts.joined(separator: "\n"))
           <xbrli:unit id="JPY"><xbrli:measure>iso4217:JPY</xbrli:measure></xbrli:unit>
           \(elementsXml)

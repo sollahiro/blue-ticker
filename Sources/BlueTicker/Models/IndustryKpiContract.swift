@@ -13,8 +13,13 @@ public let industryKpiCacheVersion = "industry-kpi-bank-v1"
 public let industryKpiGroupBank = "bank"
 
 public let industryKpiSourceXbrlFacts = "xbrl_facts"
+public let industryKpiSourceNotApplicable = "not_applicable"
 
 public let industryKpiNotApplicableNotBank = "not_bank"
+
+public let industryKpiWarningNcdAbsentAssumedZero = "ncd_absent_assumed_zero"
+public let industryKpiWarningLDRUncomputed = "ldr_uncomputed"
+public let industryKpiWarningOHRUncomputed = "ohr_uncomputed"
 
 public let industryKpiKeyDeposits = "deposits"
 public let industryKpiKeyNegotiableCDs = "negotiable_cds"

@@ -377,7 +377,7 @@ public extension BltServerContext {
 
     /// 業種 KPI ステップ 1: 銀行の jppfs BNK 数値と預貸率・OHR。決定論のみ。
     /// EDINET 提出者業種が銀行業以外と分かっている会社は XBRL を取らず not_bank。
-    /// 業種不明は XBRL の預金マーカーで判定する。非銀行は行を作らない。
+    /// 業種不明は XBRL の預金マーカーで判定する。非銀行は ingest が not_applicable 行を残す。
     func extractIndustryKpis(
         docID: String, code: String, correctionDocIDs: [String] = []
     ) async -> IndustryKpiResolveResult {

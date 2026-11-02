@@ -69,6 +69,9 @@ import Testing
         #expect(payload.fact(key: industryKpiKeyNegotiableCDs, scope: industryKpiScopeConsolidated) == nil)
         let ldr = try #require(payload.fact(key: industryKpiKeyLDR, scope: industryKpiScopeConsolidated))
         #expect(ldr.value == 80)
+        #expect(!ldr.sourceRef.contains(Xbrl.bankNegotiableCDTags[0]))
+        #expect(payload.warnings.contains(industryKpiWarningNcdAbsentAssumedZero))
+        #expect(payload.needsReview == false)
     }
 
     @Test func filerAndConsolidatedAreBothEmittedWhenDualContextsExist() throws {
@@ -94,6 +97,55 @@ import Testing
             payload.fact(key: industryKpiKeyLDR, scope: industryKpiScopeFiler))
         #expect(consLDR.value == 50)
         #expect(filerLDR.value == 60)
+        #expect(payload.needsReview == true)
+        #expect(payload.warnings.contains(industryKpiWarningOHRUncomputed))
+    }
+
+    @Test func standaloneBankFactsAreFilerNotConsolidated() throws {
+        let tags: XbrlTagElements = [
+            "DepositsLiabilitiesBNK": ["CurrentYearInstant": 100 * million],
+            "LoansAndBillsDiscountedAssetsBNK": ["CurrentYearInstant": 80 * million],
+        ]
+        guard case .resolved(let payload, _, _) =
+            BankIndustryKpiExtractor.resolve(
+                tagElements: tags, hasConsolidatedStatements: false)
+        else {
+            Issue.record("expected resolved filer-only bank")
+            return
+        }
+        #expect(payload.fact(key: industryKpiKeyLDR, scope: industryKpiScopeConsolidated) == nil)
+        let filerLDR = try #require(
+            payload.fact(key: industryKpiKeyLDR, scope: industryKpiScopeFiler))
+        #expect(filerLDR.value == 80)
+    }
+
+    @Test func bankIndustryWithNoExtractableFactsIsFailed() {
+        let tags: XbrlTagElements = [
+            "NetSales": ["CurrentYearDuration": 1_000 * million]
+        ]
+        guard case .failed =
+            BankIndustryKpiExtractor.resolve(
+                tagElements: tags, edinetIndustry: Xbrl.bankEdinetIndustry)
+        else {
+            Issue.record("expected failed when bank industry has no KPI facts")
+            return
+        }
+    }
+
+    @Test func consolidatedFactsWithoutLDROHRSetNeedsReview() throws {
+        let tags: XbrlTagElements = [
+            "DepositsLiabilitiesBNK": ["CurrentYearInstant": 100 * million],
+        ]
+        guard case .resolved(let payload, _, _) =
+            BankIndustryKpiExtractor.resolve(tagElements: tags)
+        else {
+            Issue.record("expected resolved with deposits only")
+            return
+        }
+        #expect(payload.needsReview == true)
+        #expect(payload.warnings.contains(industryKpiWarningLDRUncomputed))
+        #expect(payload.warnings.contains(industryKpiWarningOHRUncomputed))
+        #expect(payload.fact(key: industryKpiKeyLDR, scope: industryKpiScopeConsolidated) == nil)
     }
 
     @Test func nonBankTagSetIsNotApplicable() {
@@ -111,6 +163,8 @@ import Testing
 
     @Test func xmlInstanceExtractsDepositsLoansAndOHR() {
         let xml = XBRLTestSupport.makeXbrlDurationAndInstant("""
+            <jpdei_cor:WhetherConsolidatedFinancialStatementsArePreparedDEI
+                contextRef="CurrentYearInstant">true</jpdei_cor:WhetherConsolidatedFinancialStatementsArePreparedDEI>
             <jppfs_cor:DepositsLiabilitiesBNK contextRef="CurrentYearInstant"
                 unitRef="JPY" decimals="-6">16830424000000</jppfs_cor:DepositsLiabilitiesBNK>
             <jppfs_cor:NegotiableCertificatesOfDepositLiabilitiesBNK contextRef="CurrentYearInstant"

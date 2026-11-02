@@ -83,20 +83,61 @@ private func samplePayload() -> IndustryKpiSnapshotPayload {
         }
     }
 
-    @Test func ingestDoesNotStoreNotApplicableNonBank() async throws {
+    @Test func ingestPersistsNotApplicableNonBankAndSkipsOnSecondRun() async throws {
         try await withMigratedApp { app in
             try await seedDoc("S1", secCode: "72030", db: app.db)
 
-            let summary = try await runIndustryKpiIngest(
+            let first = try await runIndustryKpiIngest(
                 db: app.db, listedCodes: ["7203"], years: 3, limit: nil
             ) { _, _ in .notApplicable(reason: industryKpiNotApplicableNotBank) }
 
-            #expect(summary.attempted == 1)
-            #expect(summary.notApplicable == 1)
-            #expect(summary.stored == 0)
+            #expect(first.attempted == 1)
+            #expect(first.notApplicable == 1)
+            #expect(first.stored == 0)
             let key = IndustryKpiFact.compositeID(
                 docID: "S1", industryGroup: industryKpiGroupBank)
-            #expect(try await IndustryKpiFact.find(key, on: app.db) == nil)
+            let row = try #require(try await IndustryKpiFact.find(key, on: app.db))
+            #expect(row.source == industryKpiSourceNotApplicable)
+            #expect(row.notApplicableReason == industryKpiNotApplicableNotBank)
+            #expect(row.cacheVersion == industryKpiCacheVersion)
+            #expect(row.payload.facts.isEmpty)
+
+            let second = try await runIndustryKpiIngest(
+                db: app.db, listedCodes: ["7203"], years: 3, limit: nil
+            ) { _, _ in
+                Issue.record("resolver should not run for persisted not_applicable")
+                return .failed
+            }
+            #expect(second.skipped == 1)
+            #expect(second.attempted == 0)
+        }
+    }
+
+    @Test func ingestLimitProgressesPastPersistedNonBanks() async throws {
+        try await withMigratedApp { app in
+            try await seedDoc("S1", secCode: "72030", db: app.db)
+            try await seedDoc("S2", secCode: "67580", db: app.db)
+
+            let first = try await runIndustryKpiIngest(
+                db: app.db, listedCodes: ["7203", "6758"], years: 3, limit: 1
+            ) { _, _ in .notApplicable(reason: industryKpiNotApplicableNotBank) }
+            #expect(first.attempted == 1)
+            #expect(first.notApplicable == 1)
+            let afterFirst = try await IndustryKpiFact.query(on: app.db)
+                .filter(\.$industryGroup == industryKpiGroupBank)
+                .all()
+            #expect(afterFirst.count == 1)
+
+            let second = try await runIndustryKpiIngest(
+                db: app.db, listedCodes: ["7203", "6758"], years: 3, limit: 1
+            ) { _, _ in .notApplicable(reason: industryKpiNotApplicableNotBank) }
+            #expect(second.skipped == 1)
+            #expect(second.attempted == 1)
+            #expect(second.notApplicable == 1)
+            let afterSecond = try await IndustryKpiFact.query(on: app.db)
+                .filter(\.$industryGroup == industryKpiGroupBank)
+                .all()
+            #expect(Set(afterSecond.compactMap(\.docID)) == ["S1", "S2"])
         }
     }
 

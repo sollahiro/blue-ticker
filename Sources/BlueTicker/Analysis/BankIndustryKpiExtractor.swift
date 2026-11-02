@@ -14,33 +14,20 @@ enum BankIndustryKpiExtractor {
         let expenseTags: [String]
     }
 
-    private static let netComponents: [NetComponent] = [
-        .init(
-            kpiKey: industryKpiKeyNetInterestIncome,
-            incomeTags: ["InterestIncomeOIBNK"],
-            expenseTags: ["InterestExpensesOEBNK"]),
-        .init(
-            kpiKey: industryKpiKeyNetFeesAndCommissions,
-            incomeTags: ["FeesAndCommissionsOIBNK"],
-            expenseTags: ["FeesAndCommissionsPaymentsOEBNK"]),
-        .init(
-            kpiKey: industryKpiKeyNetTradingIncome,
-            incomeTags: ["TradingIncomeOIBNK"],
-            expenseTags: ["TradingExpensesOEBNK"]),
-        .init(
-            kpiKey: industryKpiKeyNetOtherBusinessIncome,
-            incomeTags: ["OtherOrdinaryIncomeOIBNK"],
-            expenseTags: ["OtherOrdinaryExpensesOEBNK"]),
-    ]
-
     static func resolve(xbrlDir: URL, edinetIndustry: String? = nil) -> IndustryKpiResolveResult {
         let tagElements = XBRLUtils.collectAllNumericElements(in: xbrlDir, nilAsZero: false)
         guard !tagElements.isEmpty else { return .failed }
-        return resolve(tagElements: tagElements, edinetIndustry: edinetIndustry)
+        return resolve(
+            tagElements: tagElements, edinetIndustry: edinetIndustry,
+            hasConsolidatedStatements: BorrowingsSchedule.filerHasConsolidatedStatements(
+                xbrlDir: xbrlDir))
     }
 
+    /// `hasConsolidatedStatements` は DEI（`BorrowingsSchedule.filerHasConsolidatedStatements`）。
+    /// `nil` は tagElements 単体テスト用で、未指定コンテキストを連結として扱う。
     static func resolve(
-        tagElements: XbrlTagElements, edinetIndustry: String? = nil
+        tagElements: XbrlTagElements, edinetIndustry: String? = nil,
+        hasConsolidatedStatements: Bool? = nil
     ) -> IndustryKpiResolveResult {
         let consInstant = fieldSetFromConsolidatedInstant(tagElements)
         let consDuration = fieldSetFromConsolidatedDuration(tagElements)
@@ -52,17 +39,23 @@ enum BankIndustryKpiExtractor {
             return .notApplicable(reason: industryKpiNotApplicableNotBank)
         }
 
+        let hasConsolidated = hasConsolidatedStatements ?? true
         var facts: [IndustryKpiFactValue] = []
-        facts.append(contentsOf: factsForScope(
-            instant: consInstant, duration: consDuration, scope: industryKpiScopeConsolidated))
-        facts.append(contentsOf: factsForScope(
-            instant: filerInstant, duration: filerDuration, scope: industryKpiScopeFiler))
-        guard !facts.isEmpty else {
-            return .notApplicable(reason: industryKpiNotApplicableNotBank)
+        if hasConsolidated {
+            facts.append(contentsOf: factsForScope(
+                instant: consInstant, duration: consDuration, scope: industryKpiScopeConsolidated))
+            facts.append(contentsOf: factsForScope(
+                instant: filerInstant, duration: filerDuration, scope: industryKpiScopeFiler))
+        } else {
+            facts.append(contentsOf: factsForScope(
+                instant: consInstant, duration: consDuration, scope: industryKpiScopeFiler))
         }
+        guard !facts.isEmpty else { return .failed }
 
+        let (needsReview, warnings) = payloadFlags(facts)
         let payload = IndustryKpiSnapshotPayload(
-            industryGroup: industryKpiGroupBank, facts: facts)
+            industryGroup: industryKpiGroupBank, facts: facts,
+            needsReview: needsReview, warnings: warnings)
         return .resolved(
             payload: payload, source: industryKpiSourceXbrlFacts,
             contentHash: contentHash(facts))
@@ -82,12 +75,7 @@ enum BankIndustryKpiExtractor {
             &facts, fieldSet: instant, tags: Xbrl.bankLoansTags,
             kpiKey: industryKpiKeyLoans, scope: scope)
 
-        for net in netComponents {
-            appendNet(&facts, fieldSet: duration, component: net, scope: scope)
-        }
-        appendSigned(
-            &facts, fieldSet: duration, tags: ["TrustFeesBNK"],
-            kpiKey: industryKpiKeyTrustFees, scope: scope, sign: 1)
+        appendGrossProfitComponents(&facts, fieldSet: duration, scope: scope)
         appendSigned(
             &facts, fieldSet: duration, tags: Xbrl.bankOperatingExpensesTags,
             kpiKey: industryKpiKeyOperatingExpenses, scope: scope, sign: 1)
@@ -107,6 +95,49 @@ enum BankIndustryKpiExtractor {
         appendLDR(&facts, scope: scope)
         appendOHR(&facts, scope: scope)
         return facts
+    }
+
+    /// `Xbrl.businessGrossProfitComponents` を +1/−1 の対は純額、単独は符号付きで出す。
+    private static func appendGrossProfitComponents(
+        _ facts: inout [IndustryKpiFactValue], fieldSet: FieldSet, scope: String
+    ) {
+        let comps = Xbrl.businessGrossProfitComponents
+        var i = 0
+        while i < comps.count {
+            let current = comps[i]
+            if current.sign > 0, i + 1 < comps.count, comps[i + 1].sign < 0 {
+                if let kpiKey = netKpiKey(forIncomeTags: current.tags) {
+                    appendNet(
+                        &facts, fieldSet: fieldSet,
+                        component: NetComponent(
+                            kpiKey: kpiKey, incomeTags: current.tags,
+                            expenseTags: comps[i + 1].tags),
+                        scope: scope)
+                }
+                i += 2
+            } else {
+                if let kpiKey = singletonKpiKey(forTags: current.tags) {
+                    appendSigned(
+                        &facts, fieldSet: fieldSet, tags: current.tags,
+                        kpiKey: kpiKey, scope: scope, sign: current.sign)
+                }
+                i += 1
+            }
+        }
+    }
+
+    private static func netKpiKey(forIncomeTags tags: [String]) -> String? {
+        switch tags.first {
+        case "InterestIncomeOIBNK": return industryKpiKeyNetInterestIncome
+        case "FeesAndCommissionsOIBNK": return industryKpiKeyNetFeesAndCommissions
+        case "TradingIncomeOIBNK": return industryKpiKeyNetTradingIncome
+        case "OtherOrdinaryIncomeOIBNK": return industryKpiKeyNetOtherBusinessIncome
+        default: return nil
+        }
+    }
+
+    private static func singletonKpiKey(forTags tags: [String]) -> String? {
+        tags.first == "TrustFeesBNK" ? industryKpiKeyTrustFees : nil
     }
 
     private static func appendBalance(
@@ -158,27 +189,33 @@ enum BankIndustryKpiExtractor {
 
     /// 預貸率 = 貸出金 ÷ (預金 + 譲渡性預金) × 100。
     /// 譲渡性預金タグが無いときは分母に 0 を足す（残高 0。預金・貸出金が無いときは作らない）。
+    /// 欠測の NCD タグは sourceRef に載せない。
     private static func appendLDR(_ facts: inout [IndustryKpiFactValue], scope: String) {
         guard let loans = factValue(facts, industryKpiKeyLoans, scope),
             let deposits = factValue(facts, industryKpiKeyDeposits, scope)
         else { return }
-        let ncd = factValue(facts, industryKpiKeyNegotiableCDs, scope) ?? 0
+        let ncdFact = facts.first {
+            $0.kpiKey == industryKpiKeyNegotiableCDs && $0.scope == scope
+        }
+        let ncd = ncdFact?.value ?? 0
         let denominator = deposits + ncd
         guard denominator != 0 else { return }
-        let ncdRef = facts.first {
-            $0.kpiKey == industryKpiKeyNegotiableCDs && $0.scope == scope
-        }?.sourceRef ?? Xbrl.bankNegotiableCDTags[0]
         let loansRef = facts.first { $0.kpiKey == industryKpiKeyLoans && $0.scope == scope }?.sourceRef
             ?? Xbrl.bankLoansTags[0]
         let depositsRef = facts.first { $0.kpiKey == industryKpiKeyDeposits && $0.scope == scope }?
             .sourceRef ?? Xbrl.bankDepositsTags[0]
+        let sourceRef: String
+        if let ncdRef = ncdFact?.sourceRef {
+            sourceRef = "\(loansRef)/(\(depositsRef)+\(ncdRef))"
+        } else {
+            sourceRef = "\(loansRef)/(\(depositsRef))"
+        }
         facts.append(
             IndustryKpiFactValue(
                 kpiKey: industryKpiKeyLDR, value: loans / denominator * Financial.percent,
                 unit: AmountUnit.Code.percent.rawValue,
                 periodBasis: industryKpiPeriodBasisPeriodEnd, scope: scope,
-                sourceKind: industryKpiSourceKindDerived,
-                sourceRef: "\(loansRef)/(\(depositsRef)+\(ncdRef))"))
+                sourceKind: industryKpiSourceKindDerived, sourceRef: sourceRef))
     }
 
     /// OHR = 営業経費 ÷ 連結粗利益 × 100。どちらか欠ければ作らない。
@@ -196,6 +233,39 @@ enum BankIndustryKpiExtractor {
                 periodBasis: industryKpiPeriodBasisDuration, scope: scope,
                 sourceKind: industryKpiSourceKindDerived,
                 sourceRef: "\(opexRef)/\(industryKpiKeyGrossBusinessProfit)"))
+    }
+
+    private static func payloadFlags(
+        _ facts: [IndustryKpiFactValue]
+    ) -> (needsReview: Bool, warnings: [String]) {
+        var warnings: [String] = []
+        let reviewScope: String?
+        if facts.contains(where: { $0.scope == industryKpiScopeConsolidated }) {
+            reviewScope = industryKpiScopeConsolidated
+        } else if facts.contains(where: { $0.scope == industryKpiScopeFiler }) {
+            reviewScope = industryKpiScopeFiler
+        } else {
+            reviewScope = nil
+        }
+        if let scope = reviewScope {
+            if factValue(facts, industryKpiKeyLDR, scope) == nil {
+                warnings.append(industryKpiWarningLDRUncomputed)
+            }
+            if factValue(facts, industryKpiKeyOHR, scope) == nil {
+                warnings.append(industryKpiWarningOHRUncomputed)
+            }
+        }
+        let ldrScopes = Set(
+            facts.filter { $0.kpiKey == industryKpiKeyLDR }.map(\.scope))
+        let ncdScopes = Set(
+            facts.filter { $0.kpiKey == industryKpiKeyNegotiableCDs }.map(\.scope))
+        if ldrScopes.contains(where: { !ncdScopes.contains($0) }) {
+            warnings.append(industryKpiWarningNcdAbsentAssumedZero)
+        }
+        let needsReview =
+            warnings.contains(industryKpiWarningLDRUncomputed)
+            || warnings.contains(industryKpiWarningOHRUncomputed)
+        return (needsReview, warnings)
     }
 
     private static func factValue(
