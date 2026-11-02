@@ -1100,6 +1100,12 @@ private struct CashAllocationSection: View {
         let bounds: [Double] = steps.flatMap { step -> [Double] in [step.start, step.end] } + [0.0]
         let lower = bounds.min() ?? 0
         let upper = bounds.max() ?? 0
+        // 行ごとに単位が変わると桁を比べにくいので、カード内は共通の単位にそろえる。
+        let yearCurrency = year.currency ?? currency
+        let scale = Format.commonScale(for: steps.map(\.value), currency: yearCurrency)
+        let format: (Double) -> String = { value in
+            scale.map { Format.scaledYen(value, scale: $0) + $0.unit } ?? Format.autoYen(value, currency: yearCurrency)
+        }
         return VStack(alignment: .leading, spacing: 8) {
             Text("\(Format.fyJapanese(year.fyEnd))の現金の動き")
                 .font(.subheadline.weight(.semibold))
@@ -1118,7 +1124,7 @@ private struct CashAllocationSection: View {
                         .frame(width: 88, alignment: .leading)
                     FloatingBar(start: step.start, end: step.end, lower: lower, upper: upper)
                         .frame(height: 16)
-                    Text(Format.autoYen(step.value, currency: year.currency ?? currency))
+                    Text(format(step.value))
                         .font(.caption.monospacedDigit().weight(step.isTotal ? .semibold : .regular))
                         .foregroundStyle(step.value > 0 ? Theme.positive : step.value < 0 ? Theme.negative : Theme.text)
                         .frame(width: 88, alignment: .trailing)
