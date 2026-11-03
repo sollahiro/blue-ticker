@@ -262,7 +262,23 @@ printf 'struct LiveTests { func t() { SmokeCacheSupport.ensureCached("x") } }\n'
 git add -A && git commit -qm xbrl && CX=$(git rev-parse HEAD)
 git checkout -q -B c-xbrl-edit "$CX"; echo "// edit" >> Sources/BltServerCore/Seed.swift && git commit -qam edit
 expect_out "^golden=true" "changes: real-XBRL suite outside BlueTickerTests -> golden" python3 scripts/ci/cichecks.py changes --event pull_request --base "$CX" --head HEAD
-expect_out "^golden=true" "changes: push event runs every job" python3 scripts/ci/cichecks.py changes --event push
+# push to main: diff since the last green commit, not just the pushed commit
+git checkout -q -B c-push-base "$CB"
+echo "// green" >> Sources/BltServerCore/Seed.swift && git commit -qam "green" && PG=$(git rev-parse HEAD)
+echo "// failed ci" >> Sources/BlueTicker/Seed.swift && git commit -qam "failed" && PF=$(git rev-parse HEAD)
+echo "// docs" >> docs/Seed.swift && git commit -qam "docs only"
+P="env BLT_CI_LAST_GREEN_SHA=$PG python3 scripts/ci/cichecks.py changes --event push"
+expect_out "^golden=true" "changes: push after a red commit still covers the red commit's paths" $P
+expect_out "^macos=true" "changes: push plan includes dependents of the unverified commit" $P
+git checkout -q -B c-push-docs "$PG"
+echo "// docs" >> docs/Seed.swift && git commit -qam "docs only"
+expect_out "^unit_tests=false" "changes: push of a docs-only commit on a green base runs nothing heavy" env BLT_CI_LAST_GREEN_SHA="$PG" python3 scripts/ci/cichecks.py changes --event push
+expect_out "cannot plan" "changes: push without a green base runs every job" env BLT_CI_LAST_GREEN_SHA= python3 scripts/ci/cichecks.py changes --event push
+expect_out "^unit_tests=true" "changes: push without a green base -> unit_tests" env BLT_CI_LAST_GREEN_SHA= python3 scripts/ci/cichecks.py changes --event push
+expect_out "re-run" "changes: push of the green commit itself runs every job" env BLT_CI_LAST_GREEN_SHA="$(git rev-parse HEAD)" python3 scripts/ci/cichecks.py changes --event push
+expect_out "not an ancestor" "changes: push with a green base that is not an ancestor runs every job" env BLT_CI_LAST_GREEN_SHA="$PF" python3 scripts/ci/cichecks.py changes --event push
+expect_out "not in the checkout" "changes: push with an unknown green base runs every job" env BLT_CI_LAST_GREEN_SHA=1111111111111111111111111111111111111111 python3 scripts/ci/cichecks.py changes --event push
+expect_out "^golden=true" "changes: manual run runs every job" python3 scripts/ci/cichecks.py changes --event workflow_dispatch
 expect_out "cannot plan" "changes: unknown base runs every job" python3 scripts/ci/cichecks.py changes --event pull_request --base 0000000000000000000000000000000000000000 --head HEAD
 git checkout -q -B c-badpkg "$CB"; echo "garbage" > Package.swift && git commit -qam badpkg
 expect_out "^macos=true" "changes: unparsable Package.swift runs every job" $C

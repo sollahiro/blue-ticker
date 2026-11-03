@@ -681,16 +681,56 @@ def write_plan(jobs: set[str], note: str, why: list[tuple[str, str]], github_out
                 fh.write(f"| {j} | {'yes' if j in jobs else 'skip'} |\n")
 
 
+def last_green_main() -> str:
+    """Head commit of the most recent successful CI run on main (BLT_CI_LAST_GREEN_SHA
+    overrides, for tests and local runs). Empty when it cannot be determined."""
+    sha = os.environ.get("BLT_CI_LAST_GREEN_SHA")
+    if sha is not None:
+        return sha.strip()
+    repo = os.environ.get("GITHUB_REPOSITORY")
+    if not repo:
+        return ""
+    r = subprocess.run(
+        ["gh", "api", f"repos/{repo}/actions/workflows/ci.yml/runs?branch=main&event=push&status=success&per_page=1",
+         "--jq", ".workflow_runs[0].head_sha // empty"],
+        cwd=ROOT, text=True, capture_output=True)
+    return r.stdout.strip() if r.returncode == 0 else ""
+
+
+def push_range(head: str) -> tuple[str, str]:
+    """base..head for a push to main: from the last commit whose CI was green. Every
+    commit after it is checked, including ones whose own CI failed (a later push cannot
+    hide them), which is the same guarantee as running everything but only for what
+    changed. Raises ValueError when no such base exists, and the caller runs everything."""
+    head = git("rev-parse", head).strip()
+    base = last_green_main()
+    if not base:
+        raise ValueError("no successful CI run on main to compare with")
+    if subprocess.run(["git", "cat-file", "-e", f"{base}^{{commit}}"], cwd=ROOT, capture_output=True).returncode != 0:
+        raise ValueError(f"last green commit {base[:12]} is not in the checkout")
+    if base == head:
+        raise ValueError("head is the last green commit (re-run)")
+    if subprocess.run(["git", "merge-base", "--is-ancestor", base, head], cwd=ROOT, capture_output=True).returncode != 0:
+        raise ValueError(f"last green commit {base[:12]} is not an ancestor of head")
+    return base, head
+
+
 def cmd_changes(ns) -> int:
-    """Pull requests get a plan from merge-base..head. Anything else (push to main,
-    manual runs) runs everything: Deploy ships the diff since the last deploy, which can
-    span commits whose own CI failed, so main must be verified in full."""
+    """A plan from the diff, or every job when no safe base exists.
+    - pull_request: merge-base(base, head)..head.
+    - push to main: last-green-main..head. The verified base moves only on green runs, so
+      a commit whose CI failed stays in the next run's diff and cannot slip into a deploy
+      behind a later docs- or iOS-only commit.
+    - anything else (manual runs): every job."""
     gh = ns.github_output
     event = ns.event if ns.event is not None else os.environ.get("GITHUB_EVENT_NAME", "pull_request")
-    if event != "pull_request":
+    if event not in ("pull_request", "push"):
         write_plan(set(ALL_JOBS), f"event {event}: running every job", [], gh); return 0
     try:
-        base, head = resolve_range(ns)
+        if event == "push":
+            base, head = push_range(ns.head or os.environ.get("CI_HEAD_SHA") or "HEAD")
+        else:
+            base, head = resolve_range(ns)
         paths = [p for p in git("diff", "--name-only", "--no-renames", "-z", base, head).split("\0") if p]
         targets = package_targets(show(head, "Package.swift") or "")
         golden_targets = golden_test_targets(targets, tracked_files(head))

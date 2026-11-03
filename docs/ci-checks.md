@@ -28,12 +28,24 @@ cache entry has failed with a missing `_NumericsShims`.
 
 ## Change-based job plan (`changes`)
 
-On a pull request, `cichecks.py changes` diffs `merge-base(base, head)..head` and decides
-which of `unit_tests`, `golden`, `macos` and `ios` to run. `static-checks`, `structure` and
-`ci-ok` always run. A push to `main` (or any other event) runs every job: Deploy ships the
-diff since the last successful deploy, which can include commits whose own CI failed, so
-`main` must always be verified in full. Print the plan locally with
-`python3 scripts/ci/cichecks.py changes`.
+`cichecks.py changes` diffs a range and decides which of `unit_tests`, `golden`, `macos`
+and `ios` to run. `static-checks`, `structure` and `ci-ok` always run.
+
+| Event | Range |
+|---|---|
+| pull request | `merge-base(base, head)..head` |
+| push to `main` | **last commit whose CI run on `main` was green**`..head` |
+| anything else (manual) | no range: every job |
+
+The `main` base moves only when a run is green. A commit whose CI failed therefore stays in
+the next run's diff, so it cannot reach Deploy behind a later docs-only or iOS-only commit
+(Deploy ships the diff since the last deploy, which would include it). Merging a docs-only
+change on a green `main` runs no heavy job, and two PRs that are green alone but break
+`main` together are still caught, because `main` is verified against its own history. If
+there is no green base, it is not in the checkout, it is the head itself (a re-run) or it
+is not an ancestor of the head, every job runs. Print the plan locally with
+`python3 scripts/ci/cichecks.py changes` (`--event push` and `BLT_CI_LAST_GREEN_SHA=<sha>` to
+try the `main` case).
 
 Swift paths map through the target graph read from `Package.swift`. A change to a target
 reaches every target that depends on it, directly or not:
