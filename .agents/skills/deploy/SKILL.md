@@ -198,7 +198,7 @@ Tunnel + Access（SSO / Service Token / MCP OAuth。MCP は開発用）。Bearer
 ## 定常運用
 
 - ログは JSON 1行（`ingest_summary` / `db_retry` / `http_access`）。レイテンシ切り分けは `duration_ms`（サーバー内）とクライアント往復を比較。乖離が大きいときは Tunnel/Access 側を疑う。
-- 重い ingest はローカル。鮮度監視: `scripts/check-ingest-freshness.sh`。
+- 重い ingest はローカル。取り込み状況と遅延の監視は `workers/status-rss` の RSS（`feed.sollahiro.com/blue-ticker/ingest-status.xml`）。
 - デプロイ: CI 成功後 `deploy.yml` が自動（手動は `workflow_dispatch`）。`/healthz` の `cache_versions` で版確認。
 - cloudflared は Dockerfile で版固定。数ヶ月に一度更新。
 - Fly serviceless 後は stopped になり得る → deploy ワークフローが `machine start`。

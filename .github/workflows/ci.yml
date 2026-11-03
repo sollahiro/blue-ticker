@@ -404,6 +404,10 @@ jobs:
         if: ${{ !cancelled() }}
         run: scripts/ci/worker-tests.sh feed-rss
 
+      - name: Status RSS Worker の集計と fail closed
+        if: ${{ !cancelled() }}
+        run: scripts/ci/worker-tests.sh status-rss
+
       - name: Legal Worker の経路
         if: ${{ !cancelled() }}
         run: scripts/ci/worker-tests.sh legal

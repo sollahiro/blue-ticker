@@ -95,16 +95,8 @@ ingest_build_if_needed() {
   printf '%s\n' "$head" > "$stamp"
 }
 
+# 事後処理は今は無い（ステータスページ生成は廃止。取り込み状況は workers/status-rss が RSS で配信する）。
+# 手元のラッパー（ingest-run-cycle.local.sh）と各 job が呼ぶので、関数は残す。
 ingest_post_hooks() {
-  if [[ "${BLT_INGEST_SKIP_POST:-}" == "1" ]]; then
-    echo "ingest: post hooks skipped (BLT_INGEST_SKIP_POST=1)"
-    return 0
-  fi
-
-  if [[ -x "$REPO/scripts/generate-status-page.sh" ]]; then
-    echo "=== post: generate-status-page ==="
-    if ! "$REPO/scripts/generate-status-page.sh"; then
-      echo "WARN: generate-status-page.sh failed (ingest 成否には影響させない)" >&2
-    fi
-  fi
+  return 0
 }

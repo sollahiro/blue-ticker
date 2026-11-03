@@ -561,8 +561,8 @@ SKIP_FILES = frozenset({
     ".github/CODEOWNERS", ".github/FUNDING.yml",
     ".github/workflows/deploy.yml", ".github/workflows/edge-security-smoke.yml",
     ".github/workflows/feed-trend-worker.yml", ".github/workflows/legal-worker.yml",
-    "scripts/entrypoint.sh", "scripts/check-ingest-freshness.sh", "scripts/check-yuholab.sh",
-    "scripts/feed-trend-ship.sh", "scripts/generate-status-page.sh",
+    "scripts/entrypoint.sh", "scripts/check-yuholab.sh",
+    "scripts/feed-trend-ship.sh",
     "scripts/ingest-bookkeeping-read-equivalence.py", "scripts/scan-breakdown-header-unit.py",
 })
 # Paths that change what every job builds or how it runs.

@@ -18,5 +18,5 @@ Linear の依存関係を取得し、親 Feature や後続領域ではなく `Bl
 ## 更新
 
 - 仕様・Contract・ジョブ編成は Git、変動する進捗・件数・ゲートは Linear に置く。
-- 本番 ingest の件数は `status-report` で都度見る。Issue コメントや日付付き snapshot を増やさない。
+- 本番 ingest の件数は `workers/status-rss` の RSS（`feed.sollahiro.com/blue-ticker/ingest-status.xml`）か、各テーブルの `cache_version` 別の件数で都度見る。Issue コメントや日付付き snapshot を増やさない。
 - コード欠陥と運用進捗を同じ tracker に重複登録しない。

@@ -2,7 +2,7 @@
 // 使い方:
 //   blt-server [--host HOST] [--port PORT]                   REST / MCP サーバーを起動（DB は読み取りのみ。migrate しない）
 //
-// 取り込み・書き込み・マイグレーション・status-report・overrides は blt-ingest（Mac 専用）へ移した。
+// 取り込み・書き込み・マイグレーション・overrides は blt-ingest（Mac 専用）へ移した。
 //
 // bind アドレスの解決順位: CLI 引数 > 環境変数（BLT_HOST / BLT_PORT）> デフォルト。
 // クラウド（Fly.io 等）では env で 0.0.0.0 / 注入ポートをバインドできるようにする。
@@ -43,7 +43,7 @@ let argv = CommandLine.arguments
 
 /// blt-ingest へ移したサブコマンド。誤って blt-server で呼んだときはサーバーを起動せずに止める。
 private let ingestSubcommands: Set<String> = [
-    "migrate", "sync", "ingest", "master-data-upload", "screen-rebuild", "status-report", "overrides",
+    "migrate", "sync", "ingest", "master-data-upload", "screen-rebuild", "overrides",
 ]
 
 do {

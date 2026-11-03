@@ -33,14 +33,6 @@
 //   blt-ingest screen-rebuild [--limit N]                   company_financials から screen_index
 //                                                            （Screen 検索用 Read Model）を再生成。
 //                                                            --limit は走査件数上限（部分実行では孤児削除なし）
-//   blt-ingest status-report                                5 ステージ（financials/statements/
-//                                                            filing_sections/breakdown_product_service/
-//                                                            breakdown_geography）のカバレッジ・鮮度・
-//                                                            最新有報スライスを JSON で stdout へ出力
-//                                                            （DB read-only。読み取りロールでも動く。notes 等は含めない）。
-//                                                            status.html 生成用
-//                                                            （scripts/generate-status-page.sh が呼ぶ。
-//                                                            パスは BLT_STATUS_HTML）。
 //   blt-ingest overrides add --file <path.json> [--created-by NAME] [--dry-run]
 //                                                            手動 XBRL 上書きを追加する。書き込みは
 //                                                            BLT_NEON_WRITE_DATABASE_URL 必須。
@@ -127,8 +119,6 @@ do {
             exit(1)
         }
         try await runScreenRebuildCommand(limit: limit)
-    } else if argv.count > 1, argv[1] == "status-report" {
-        try await runStatusReportCommand()
     } else if argv.count > 1, argv[1] == "overrides" {
         guard argv.count > 2 else {
             printError("blt-ingest error: overrides のサブコマンドは add / list / revoke です\n")
@@ -148,7 +138,7 @@ do {
             )
         )
     } else {
-        printError("blt-ingest error: サブコマンドを指定してください（migrate / sync / ingest / master-data-upload / screen-rebuild / status-report / overrides）。配信サーバーは blt-server です\n")
+        printError("blt-ingest error: サブコマンドを指定してください（migrate / sync / ingest / master-data-upload / screen-rebuild / overrides）。配信サーバーは blt-server です\n")
         exit(1)
     }
 } catch {
