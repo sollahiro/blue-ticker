@@ -108,6 +108,8 @@ private enum ChartStyle {
     static let primaryBar = Color(white: 0.88)
     static let secondaryBar = Color(white: 0.45)
     static let line = Color(red: 0.30, green: 0.52, blue: 0.95)
+    /// 0 の線。Swift Charts の `RuleMark` と横棒で同じ色にする。
+    static let zeroLine = Theme.textMuted.opacity(0.6)
 }
 
 /// 凡例の印。棒は角丸の四角、線は丸。
@@ -1256,8 +1258,11 @@ private struct WaterfallChart: View {
             ForEach(Array(steps.enumerated()), id: \.element.id) { index, step in
                 let barLeft = x(min(step.start, step.end))
                 let barWidth = step.end == step.start ? 0 : max(x(max(step.start, step.end)) - barLeft, 4)
-                UnevenRoundedRectangle.horizontalBar(growsRight: step.end >= step.start)
-                    .fill(step.end >= step.start ? Theme.positive : Theme.negative)
+                // 0 から伸ばす最初と合計の段は 0 軸側を直角に、間の段は両端を控えめに丸める。
+                UnevenRoundedRectangle.horizontalBar(
+                    growsRight: step.end >= step.start, fromZero: index == 0 || step.isTotal
+                )
+                .fill(step.end >= step.start ? Theme.positive : Theme.negative)
                     .frame(width: barWidth, height: Self.barHeight)
                     .offset(x: barLeft, y: tops[index])
             }
@@ -1269,18 +1274,30 @@ private struct WaterfallChart: View {
                 }
             }
             .stroke(Theme.textMuted, style: StrokeStyle(lineWidth: 1, dash: [2, 2]))
+            if let first = tops.first, let last = tops.last {
+                Rectangle()
+                    .fill(ChartStyle.zeroLine)
+                    .frame(width: 0.5, height: last + Self.barHeight - first)
+                    .offset(x: x(0), y: first)
+            }
         }
         .accessibilityHidden(true)
     }
 }
 
 private extension UnevenRoundedRectangle {
-    /// 横棒。伸び始めの側（0 軸や前の段とつながる側）は直角、伸びた先の端だけ控えめに丸める。
-    static func horizontalBar(growsRight: Bool) -> UnevenRoundedRectangle {
+    /// 横棒。0 から伸ばす棒は 0 軸側を直角にし、伸びた先の端だけ控えめに丸める。
+    /// 0 に接しない棒（ウォーターフォールの間の段）は両端とも丸める。
+    static func horizontalBar(growsRight: Bool, fromZero: Bool = true) -> UnevenRoundedRectangle {
         let radius: CGFloat = 3
+        let start: CGFloat = fromZero ? 0 : radius
         return growsRight
-            ? UnevenRoundedRectangle(bottomTrailingRadius: radius, topTrailingRadius: radius)
-            : UnevenRoundedRectangle(topLeadingRadius: radius, bottomLeadingRadius: radius)
+            ? UnevenRoundedRectangle(
+                topLeadingRadius: start, bottomLeadingRadius: start,
+                bottomTrailingRadius: radius, topTrailingRadius: radius)
+            : UnevenRoundedRectangle(
+                topLeadingRadius: radius, bottomLeadingRadius: radius,
+                bottomTrailingRadius: start, topTrailingRadius: start)
     }
 }
 
@@ -1295,6 +1312,10 @@ private struct SignedBar: View {
             let magnitude = peak > 0 ? CGFloat(abs(value) / peak) * mid : 0
             let barWidth = value == 0 ? 0 : max(magnitude, 4)
             ZStack(alignment: .leading) {
+                Rectangle()
+                    .fill(ChartStyle.zeroLine)
+                    .frame(width: 0.5, height: geo.size.height)
+                    .offset(x: mid)
                 if value > 0 {
                     UnevenRoundedRectangle.horizontalBar(growsRight: true)
                         .fill(Theme.positive)
