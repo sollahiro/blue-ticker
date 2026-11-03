@@ -25,7 +25,7 @@ Region `JP` · Source `EDINET`。命名規約は `.agents/rules/regions.md`。
 | `ingest-job-00` … `07` | stage 別ジョブ |
 | `ingest-run-cycle.sh` | 0–7 を順実行 |
 
-サイクル末尾の `ingest_post_hooks`（status ページ）は各 job でも呼ぶ。手元ラッパーは job 中 `BLT_INGEST_SKIP_POST=1`、末尾で 1 回だけ実行する。
+サイクル末尾の `ingest_post_hooks` は各 job でも呼ぶが、今は何もしない（手元ラッパーが呼ぶので関数だけ残している）。取り込み状況は `workers/status-rss` の RSS で見る。
 
 ### 手元専用（`.gitignore`・**PR 不要**）
 

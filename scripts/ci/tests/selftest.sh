@@ -50,7 +50,6 @@ expect_out() { # expect_out <regex> <name> <cmd...>
 branch() { git checkout -q -B "$1" "$BASE"; }
 F="scripts/ci/flags.sh --base $BASE --head HEAD"
 G="scripts/ci/golden-rules.sh --base $BASE --head HEAD"
-S="scripts/ci/structure.sh --base $BASE --head HEAD"
 
 # ---- baseline bootstrap
 branch bootstrap
@@ -153,73 +152,6 @@ expect 1 "checksums: tampered fixture fails" scripts/ci/golden-suite.sh --checks
 branch c-ok
 expect 0 "checksums: intact fixtures pass" scripts/ci/golden-suite.sh --checksums-only
 
-# ---- structure
-for case in \
-  'toplevel|mkdir -p newtop && echo x > newtop/a.txt' \
-  'module|mkdir -p Sources/NewModule && echo x > Sources/NewModule/a.swift' \
-  'package|echo ".target(name: \"X\")," > Package.swift' \
-  'route|echo "    v1.get(\"companies\", \":code\", \"new\") { req in }" >> Sources/App/Routes.swift' \
-  'migration|mkdir -p Sources/App/Migrations && echo "struct M: AsyncMigration {}" > Sources/App/Migrations/M.swift'; do
-  name=${case%%|*}; cmdline=${case#*|}
-  branch "s-$name"; eval "$cmdline"; git add -A && git commit -qm "$name"
-  expect_out "^STRUCTURAL" "structure: $name triggers" $S
-done
-branch s-move
-mkdir -p Sources/Many && for i in $(seq 1 16); do echo "let v$i = $i // unique $i" > Sources/Many/f$i.swift; done
-git add -A && git commit -qm many && BM=$(git rev-parse HEAD)
-git mv Sources/Many Sources/Moved && git commit -qm move
-expect_out "large file move" "structure: large move triggers" scripts/ci/structure.sh --base "$BM" --head HEAD
-branch s-clean
-echo "let app = 2" > Sources/App/Routes.swift && git commit -qam tweak
-expect_out "^not structural" "structure: small edit is not structural" $S
-expect_out "not labelling" "structure: structural without PR env does not call GitHub" bash -c "git checkout -q s-module && $S"
-
-# ---- structure: webhook (fake gh on PATH + local capture server)
-mkdir -p "$T/bin" "$T/hook"
-cat > "$T/bin/gh" <<'GH'
-#!/usr/bin/env bash
-# fake gh: label list comes from $FAKE_LABEL_PRESENT
-if [[ "$*" == *"--jq"* ]]; then echo "${FAKE_LABEL_PRESENT:-false}"; fi
-exit 0
-GH
-chmod +x "$T/bin/gh"
-cat > "$T/hook/server.py" <<'PY'
-import http.server, json, sys
-class H(http.server.BaseHTTPRequestHandler):
-    def do_POST(self):
-        body = self.rfile.read(int(self.headers.get("Content-Length", 0))).decode()
-        with open(sys.argv[2], "a") as f:
-            f.write(json.dumps({"auth": self.headers.get("Authorization"), "ctype": self.headers.get("Content-Type"), "body": body}) + "\n")
-        self.send_response(204); self.end_headers()
-    def log_message(self, *a): pass
-s = http.server.HTTPServer(("127.0.0.1", 0), H)
-open(sys.argv[1], "w").write(str(s.server_port))
-s.serve_forever()
-PY
-python3 "$T/hook/server.py" "$T/hook/port" "$T/hook/req.log" & SRV=$!
-for _ in $(seq 50); do [[ -s "$T/hook/port" ]] && break; sleep 0.1; done
-HOOK="http://127.0.0.1:$(cat "$T/hook/port")/hook"; AUTH="Token s3cr3t-value"
-git checkout -q s-module
-run_hook() { env PATH="$T/bin:$PATH" PR_NUMBER=7 GH_TOKEN=x GITHUB_REPOSITORY=o/r "$@" scripts/ci/structure.sh --base "$BASE" --head HEAD; }
-: > "$T/hook/req.log"
-out="$(run_hook FAKE_LABEL_PRESENT=false ARCHITECT_WEBHOOK_URL="$HOOK" ARCHITECT_WEBHOOK_AUTH="$AUTH" 2>&1)"; rc=$?
-req="$(cat "$T/hook/req.log")"
-if [[ $rc == 0 ]] && python3 -c 'import json,sys; r=[json.loads(l) for l in sys.argv[1].splitlines()]; assert len(r)==1 and r[0]["auth"]=="Token s3cr3t-value" and r[0]["ctype"]=="application/json" and json.loads(r[0]["body"])=={"pr":7}' "$req" 2>/dev/null; then
-  pass=$((pass+1)); echo "ok   structure: new label -> one POST {\"pr\":7} with Authorization sent as-is"
-else fail=$((fail+1)); echo "FAIL structure: webhook POST"; echo "$out $req" | sed 's/^/     /'; fi
-if grep -qE "s3cr3t|127\.0\.0\.1" <<<"$out"; then fail=$((fail+1)); echo "FAIL structure: secret printed"; else pass=$((pass+1)); echo "ok   structure: secrets never printed"; fi
-: > "$T/hook/req.log"
-out="$(run_hook FAKE_LABEL_PRESENT=true ARCHITECT_WEBHOOK_URL="$HOOK" ARCHITECT_WEBHOOK_AUTH="$AUTH" 2>&1)"; rc=$?
-if [[ $rc == 0 && ! -s "$T/hook/req.log" ]]; then pass=$((pass+1)); echo "ok   structure: label already present -> no POST"
-else fail=$((fail+1)); echo "FAIL structure: label present still posted"; fi
-out="$(run_hook FAKE_LABEL_PRESENT=false ARCHITECT_WEBHOOK_URL= ARCHITECT_WEBHOOK_AUTH= 2>&1)"; rc=$?
-if [[ $rc == 0 ]] && grep -q "::warning::ARCHITECT_WEBHOOK_URL / ARCHITECT_WEBHOOK_AUTH not set" <<<"$out"; then pass=$((pass+1)); echo "ok   structure: missing secrets -> warning, exit 0"
-else fail=$((fail+1)); echo "FAIL structure: missing secrets"; echo "$out" | sed 's/^/     /'; fi
-out="$(run_hook FAKE_LABEL_PRESENT=false ARCHITECT_WEBHOOK_URL="http://127.0.0.1:1/x" ARCHITECT_WEBHOOK_AUTH="$AUTH" 2>&1)"; rc=$?
-if [[ $rc == 0 ]] && grep -q "webhook POST failed" <<<"$out"; then pass=$((pass+1)); echo "ok   structure: unreachable webhook -> warning, exit 0"
-else fail=$((fail+1)); echo "FAIL structure: unreachable webhook"; echo "$out" | sed 's/^/     /'; fi
-kill $SRV 2>/dev/null
-
 # ---- changes: job plan from the real Package.swift target graph
 git checkout -q -B c-base "$BASE"
 cp "$SRC/../../Package.swift" Package.swift
@@ -287,10 +219,10 @@ expect_out "^macos=true" "changes: unparsable Package.swift runs every job" $C
 gate() { # gate <0|1> <name> <event> <json>
   expect "$1" "ci-gate: $2" env GITHUB_EVENT_NAME="$3" NEEDS_JSON="$4" python3 scripts/ci/cichecks.py ci-gate
 }
-needs() { # needs <plan t/f x4> <unit> <golden> <macos> <ios> [changes] [static] [structure]
+needs() { # needs <plan t/f x4> <unit> <golden> <macos> <ios> [changes] [static]
   local p=$1; tf() { [[ $1 == t ]] && echo true || echo false; }
-  printf '{"changes":{"result":"%s","outputs":{"unit_tests":"%s","golden":"%s","macos":"%s","ios":"%s"}},"static-checks":{"result":"%s"},"structure":{"result":"%s"},"unit-tests":{"result":"%s"},"golden-suite":{"result":"%s"},"build-macos":{"result":"%s"},"ios":{"result":"%s"},"ios-packages":{"result":"%s"}}' \
-    "${6:-success}" "$(tf ${p:0:1})" "$(tf ${p:1:1})" "$(tf ${p:2:1})" "$(tf ${p:3:1})" "${7:-success}" "${8:-success}" "$2" "$3" "$4" "$5" "$5"
+  printf '{"changes":{"result":"%s","outputs":{"unit_tests":"%s","golden":"%s","macos":"%s","ios":"%s"}},"static-checks":{"result":"%s"},"unit-tests":{"result":"%s"},"golden-suite":{"result":"%s"},"build-macos":{"result":"%s"},"ios":{"result":"%s"},"ios-packages":{"result":"%s"}}' \
+    "${6:-success}" "$(tf ${p:0:1})" "$(tf ${p:1:1})" "$(tf ${p:2:1})" "$(tf ${p:3:1})" "${7:-success}" "$2" "$3" "$4" "$5" "$5"
 }
 gate 0 "all planned jobs pass"            pull_request "$(needs tttt success success success success)"
 gate 0 "planned skips pass"               pull_request "$(needs ffft skipped skipped skipped success)"
@@ -299,9 +231,7 @@ gate 1 "a planned job skipped fails"      pull_request "$(needs tftf skipped ski
 gate 1 "a cancelled job fails"            pull_request "$(needs tftf success skipped cancelled skipped)"
 gate 1 "changes failing fails"            pull_request "$(needs ffff skipped skipped skipped skipped failure)"
 gate 1 "static-checks failing fails"      pull_request "$(needs ffff skipped skipped skipped skipped success failure)"
-gate 0 "structure skipped on push passes" push         "$(needs tttt success success success success success success skipped)"
-gate 1 "structure skipped on a PR fails"  pull_request "$(needs tttt success success success success success success skipped)"
-gate 1 "missing plan output fails"        pull_request '{"changes":{"result":"success","outputs":{}},"static-checks":{"result":"success"},"structure":{"result":"success"},"unit-tests":{"result":"skipped"},"golden-suite":{"result":"skipped"},"build-macos":{"result":"skipped"},"ios":{"result":"skipped"},"ios-packages":{"result":"skipped"}}'
+gate 1 "missing plan output fails"        pull_request '{"changes":{"result":"success","outputs":{}},"static-checks":{"result":"success"},"unit-tests":{"result":"skipped"},"golden-suite":{"result":"skipped"},"build-macos":{"result":"skipped"},"ios":{"result":"skipped"},"ios-packages":{"result":"skipped"}}'
 gate 1 "missing job fails"                pull_request '{"changes":{"result":"success","outputs":{}}}'
 
 echo; echo "selftest: $pass passed, $fail failed"

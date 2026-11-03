@@ -61,7 +61,7 @@ set -a; . ./.env; set +a
 
 スキーマ（DDL）を変えるのは Mac の書き込み側だけ。Fly の `blt-server`（配信）は起動時に migrate せず、読み取りロール `blt_reader` で動く。
 
-- `blt-ingest migrate` は未適用のマイグレーションだけを `DATABASE_URL` へ適用する。`sync` / `ingest` / `master-data-upload` / `screen-rebuild` / `overrides add|revoke` も冒頭で同じ適用を行う。`status-report` / `overrides list` / サーバー起動は適用しない。
+- `blt-ingest migrate` は未適用のマイグレーションだけを `DATABASE_URL` へ適用する。`sync` / `ingest` / `master-data-upload` / `screen-rebuild` / `overrides add|revoke` も冒頭で同じ適用を行う。`overrides list` / サーバー起動は適用しない。
 - マイグレーションを含む PR を main に入れたら、次の順で出す。
   1. Mac で `DATABASE_URL="$BLT_NEON_WRITE_DATABASE_URL" ./.build/release/blt-ingest migrate`
   2. GitHub Actions の Deploy を workflow_dispatch で実行する。差分に `Sources/*/Migrations/` を含む自動デプロイは、Deploy ワークフローが失敗で止める（成功扱いにすると次の push で判定から外れるため）。
@@ -74,7 +74,6 @@ set -a; . ./.env; set +a
 | 変数 | 意味 |
 |---|---|
 | `BLT_INGEST_WRITE` | `1` で本番 WRITE に接続 |
-| `BLT_INGEST_SKIP_POST` | `1` で status ページ更新をスキップ |
 | `BLT_INGEST_SKIP_00` … `07` | `ingest-run-cycle` で該当 job を飛ばす |
 | `BLT_INGEST_CYCLE_PAUSE_SEC` | cycle 内 job 間 sleep（既定 5） |
 | `BLT_INGEST_FILING_LIMIT` | job-00 の `--limit`（既定 80） |
@@ -103,7 +102,7 @@ overviews                … 銘柄の短い会社説明（LLM。最新有報1�
         ↓
 relations                … 取引先・関係会社（最新有報1件。区分の決まらない関係会社表だけ Jev。名前解決は決定論）
         ↓
-（任意）status ページ / Linear 投稿
+（任意）Linear 投稿
 ```
 
 `breakdowns` は依存が無ければ cron 上は別スロットでもよい。`financials` だけは **notes-core 以降**に置く。`overviews` は他 stage に依存しない（XBRL ダウンロードは自前）。`relations` も他 stage に依存しない。名前解決（上場企業への名寄せ）は書き込み時に決定論で行い、各回の最後に、解いたときの名簿（EDINET コードリスト）が今と違う行と、この回で子会社索引の親が変わった名前の行だけを解き直す（最終状態は処理順に依らない）。`--stages` 省略時の `ingest` には入らない（`--stages relations` の明示指定だけ）。Jev 保留の書類の再試行はキーがあるときだけ、新しい書類の後に回す。
@@ -116,11 +115,9 @@ relations                … 取引先・関係会社（最新有報1件。区�
 
 ## 事後処理
 
-ジョブ末尾（`ingest-common.sh`、skip 可）:
+ジョブ末尾の事後処理（`ingest_post_hooks`）は今は何もしない。手元のラッパーが呼ぶので関数だけ残している。
 
-1. `scripts/generate-status-page.sh` — `BLT_STATUS_HTML` が指すファイルがあればマーカー置換（無ければ skip。git は触らない）。失敗しても ingest 成否に影響させない
-
-鮮度監視: `scripts/check-ingest-freshness.sh`。
+取り込み状況は `workers/status-rss`（Cron Worker）が毎日 19:30 JST に DB を読み取り専用で集計し、RSS を R2 へ置く（`https://feed.sollahiro.com/blue-ticker/ingest-status.xml`）。ステージごとの件数・最新の版の割合・直近 24 時間に更新された行数・最終更新を載せ、最終更新が 36 時間より古いステージは題に「遅延」と出す。
 
 ## 手動・単発
 

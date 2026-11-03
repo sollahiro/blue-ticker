@@ -520,7 +520,7 @@ public func isPubliclyInsufficientRevenueRecognition(
 /// その 404 は未算出ではなく公開 reason `unknown`。内部の保留理由 `breakdownWithheldNeedsReview` は公開しない。
 /// `revenue_recognition_llm` は単一行または明細合計 0 も出さない（`rows` を渡したとき。
 /// 既に格納された 6620 を ingest 前に隠す）。
-/// ingest / status-report の `isServableBreakdown` とは独立（格納行は消さない・書き換えない。
+/// ingest の `isServableBreakdown` とは独立（格納行は消さない・書き換えない。
 /// `cache_version` も上げない）。
 public func isPubliclyServableBreakdown(
     source: String, needsReview: Bool, warnings: [String],

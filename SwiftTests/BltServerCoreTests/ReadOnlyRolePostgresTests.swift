@@ -150,9 +150,8 @@ import Vapor
                 #expect(status.code < 500, "\(path) -> \(status.code)")
             }
 
-            // 常駐ループの読み取り（マスターデータのポーリング・status-report）も reader で通る。
+            // 常駐ループの読み取り（マスターデータのポーリング）も reader で通る。
             await MasterDataRefresher().pollOnce(db: reader.db, logger: reader.logger)
-            _ = try await buildIngestStatusReport(db: reader.db, listedCodes: ["7203"], priorityCodes: [])
             _ = try await loadActiveManualXbrlOverrides(on: reader.db)
         }
     }
