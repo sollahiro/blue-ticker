@@ -7,8 +7,10 @@ name: CI
 #
 # 変更範囲で重いジョブを絞る（docs/ci-checks.md「変更範囲による実行判定」）:
 #   changes        scripts/ci/cichecks.py changes が Package.swift のターゲット依存から
-#                  必要なジョブを決める。PR だけ絞り、main への push は全ジョブを回す
-#                  （Deploy は前回デプロイからの差分を出すため、main は毎回フル検証する）。
+#                  必要なジョブを決める。PR は merge-base..head、main への push は
+#                  「直近で CI が緑だった main の commit」..head の差分で判定する
+#                  （基点は緑の run でしか進まないので、赤だった commit は次の run の差分に残り、
+#                  後続の docs / iOS だけの commit の陰で未検証のまま Deploy に出ない）。
 #   ci-ok          集約チェック（ブランチ保護の必須チェックはこれだけ）。計画どおりに
 #                  走ったか・skip されたかを見て、failure / cancelled / 想定外の skip で落ちる。
 #
@@ -32,6 +34,9 @@ jobs:
     # どのジョブが必要かを決める（ローカルでも scripts/ci/cichecks.py changes で同じ結果）。
     # 判定に失敗したときと、未分類のパスを含むときは全ジョブを実行する側に倒す。
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read  # main の push で「直近で CI が緑だった commit」を gh api で読む
     outputs:
       unit_tests: ${{ steps.plan.outputs.unit_tests }}
       golden: ${{ steps.plan.outputs.golden }}
@@ -44,6 +49,7 @@ jobs:
 
       - id: plan
         env:
+          GH_TOKEN: ${{ github.token }}
           CI_BASE_SHA: ${{ github.event.pull_request.base.sha }}
           CI_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: python3 scripts/ci/cichecks.py changes --github-output
