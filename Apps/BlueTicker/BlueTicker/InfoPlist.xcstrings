@@ -18,6 +18,18 @@
           }
         }
       }
+    },
+    "CFBundleName" : {
+      "comment" : "Bundle name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "BlueTicker"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"
