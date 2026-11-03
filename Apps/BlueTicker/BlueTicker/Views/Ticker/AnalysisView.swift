@@ -29,7 +29,7 @@ struct AnalysisView: View {
         return ScrollView {
             VStack(spacing: Theme.cardContentInset) {
                 PerformanceSection(years: years, currency: currency)
-                BusinessProfitSection(years: years)
+                BusinessProfitSection(years: years, currency: currency)
                 CapitalEfficiencySection(years: years)
                 CashAllocationSection(years: years, currency: currency)
                 ProductivitySection(years: years, currency: currency)
@@ -333,17 +333,26 @@ private struct PerformanceSection: View {
 
 // MARK: - 収益構造
 
-/// 事業利益の分解。年次バーで年を選び、売上・利益率・販管費の要因を出す。
+/// 事業利益の推移。売上総利益と事業利益の棒を年ごとに並べ、年を選ぶと売上・利益率・販管費の要因を出す。
 private struct BusinessProfitSection: View {
     var years: [FinancialsYear]
+    var currency: String?
     @State private var selectedYearID: String?
     @State private var selectedFactor: FactorKind?
 
     var body: some View {
         AnalysisCard(title: "収益構造") {
-            AnalysisSubheading(text: "事業利益の分解")
+            AnalysisSubheading(text: "事業利益の推移")
             if years.contains(where: { $0.businessProfit != nil }) {
-                yearBars
+                profitChart
+                ChartLegend(items: [
+                    LegendItem(title: "売上総利益", color: ChartStyle.primaryBar, shape: .bar),
+                    LegendItem(title: "事業利益", color: ChartStyle.secondaryBar, shape: .bar),
+                ])
+                YearPicker(years: years.filter(isYearSelectable), selectedID: currentYearID) { id in
+                    selectedYearID = id
+                    selectedFactor = nil
+                }
             } else {
                 AnalysisNote(text: "事業利益は未算出です。")
             }
@@ -361,44 +370,64 @@ private struct BusinessProfitSection: View {
         selectedYearID ?? years.last { isYearSelectable($0) }?.id
     }
 
-    private var yearBars: some View {
-        let peak = years.compactMap(\.businessProfit).map(abs).max() ?? 0
-        return VStack(alignment: .leading, spacing: 6) {
+    /// 業績カードと同じ形の縦棒。要因分解で選んでいる年は年ボタンと同じ色の帯で示す。
+    /// 選んでいない年を薄くすると売上総利益と事業利益の色が近づくので、棒の色は変えない。
+    private var profitChart: some View {
+        let labels = years.map { Format.fy($0.fyEnd) }
+        let scale = Format.commonScale(for: years.flatMap { [$0.grossProfit, $0.businessProfit] }, currency: currency)
+        let selectedLabel = years.first { $0.id == currentYearID }.map { Format.fy($0.fyEnd) }
+        return Chart {
+            if let selectedLabel {
+                RectangleMark(x: .value("年度", selectedLabel), width: .ratio(0.9))
+                    .foregroundStyle(Theme.accent.opacity(0.18))
+                    .cornerRadius(6)
+            }
             ForEach(years) { year in
-                let selectable = isYearSelectable(year)
-                let selected = selectable && year.id == currentYearID
-                let row = HStack(spacing: 8) {
-                    Text(Format.fy(year.fyEnd))
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(Theme.text)
-                        .frame(width: 48, alignment: .leading)
-                    SignedBar(value: year.businessProfit ?? 0, peak: peak)
-                        .frame(height: 18)
-                    Text(Format.autoYen(year.businessProfit, currency: year.currency))
-                        .font(.caption.monospacedDigit())
-                        .foregroundStyle(Theme.text)
-                        .frame(width: 88, alignment: .trailing)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.7)
+                let label = Format.fy(year.fyEnd)
+                if let gross = year.grossProfit {
+                    BarMark(x: .value("年度", label), y: .value("金額", gross), width: .fixed(12))
+                        .position(by: .value("系列", "売上総利益"))
+                        .foregroundStyle(ChartStyle.primaryBar)
+                        .cornerRadius(3)
+                        .accessibilityLabel("\(label) 売上総利益")
+                        .accessibilityValue(Format.autoYen(gross, currency: currency))
                 }
-                .padding(.vertical, 6)
-                .padding(.horizontal, 8)
-                .background(selected ? Theme.accent.opacity(0.18) : Color.clear)
-                .clipShape(RoundedRectangle(cornerRadius: 6))
-                if selectable {
-                    Button {
-                        selectedYearID = year.id
-                        selectedFactor = nil
-                    } label: {
-                        row
+                if let profit = year.businessProfit {
+                    BarMark(x: .value("年度", label), y: .value("金額", profit), width: .fixed(12))
+                        .position(by: .value("系列", "事業利益"))
+                        .foregroundStyle(profit < 0 ? Theme.negative : ChartStyle.secondaryBar)
+                        .cornerRadius(3)
+                        .accessibilityLabel("\(label) 事業利益")
+                        .accessibilityValue(Format.autoYen(profit, currency: currency))
+                }
+            }
+            RuleMark(y: .value("zero", 0))
+                .foregroundStyle(ChartStyle.zeroLine)
+                .lineStyle(StrokeStyle(lineWidth: 0.5))
+        }
+        .chartXScale(domain: labels)
+        .chartXAxis {
+            AxisMarks { _ in
+                AxisValueLabel()
+                    .font(.caption2)
+                    .foregroundStyle(Theme.textMuted)
+            }
+        }
+        .chartYAxis {
+            AxisMarks(position: .leading, values: .automatic(desiredCount: 4)) { value in
+                AxisGridLine(stroke: ChartStyle.grid)
+                    .foregroundStyle(ChartStyle.gridColor)
+                AxisValueLabel {
+                    if let number = value.as(Double.self) {
+                        Text(scale.map { Format.scaledYen(number, scale: $0) } ?? Format.autoYen(number))
+                            .font(.caption2)
+                            .foregroundStyle(Theme.textMuted)
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityAddTraits(selected ? .isSelected : [])
-                } else {
-                    row
                 }
             }
         }
+        .chartLegend(.hidden)
+        .frame(height: ChartStyle.height)
     }
 
     private func factorChart(_ year: FinancialsYear, years: [FinancialsYear]) -> some View {
@@ -643,8 +672,10 @@ private struct BusinessProfitSection: View {
     }
 
     private func factorColor(_ value: Double?) -> Color {
-        guard let value, value < 0 else { return Theme.text }
-        return Theme.negative
+        guard let value else { return Theme.text }
+        if value < 0 { return Theme.negative }
+        if value > 0 { return Theme.positive }
+        return Theme.text
     }
 
     /// 事業利益は前年差（要因分解の合計）がある年度だけ選べる。資本効率は年度を選ばない。
@@ -1002,7 +1033,7 @@ private struct CashAllocationSection: View {
             if years.contains(where: { $0.cashEquivalents != nil }) {
                 balanceChart
                 ChartLegend(items: [
-                    LegendItem(title: "現金", color: ChartStyle.primaryBar, shape: .bar),
+                    LegendItem(title: "現金及び現金同等物", color: ChartStyle.primaryBar, shape: .bar),
                     LegendItem(title: "正味現金", color: ChartStyle.line, shape: .line),
                 ])
             } else {
@@ -1020,27 +1051,7 @@ private struct CashAllocationSection: View {
     }
 
     private var yearPicker: some View {
-        ScrollView(.horizontal) {
-            HStack(spacing: 6) {
-                ForEach(selectableYears) { year in
-                    let selected = year.id == currentYearID
-                    Button {
-                        selectedYearID = year.id
-                    } label: {
-                        Text(Format.fy(year.fyEnd))
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(selected ? Theme.text : Theme.textMuted)
-                            .padding(.vertical, 6)
-                            .padding(.horizontal, 10)
-                            .background(selected ? Theme.accent.opacity(0.18) : Theme.idleTab.opacity(0.25))
-                            .clipShape(RoundedRectangle(cornerRadius: 6))
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityAddTraits(selected ? .isSelected : [])
-                }
-            }
-        }
-        .scrollIndicators(.hidden)
+        YearPicker(years: selectableYears, selectedID: currentYearID) { selectedYearID = $0 }
     }
 
     private struct Step: Identifiable {
@@ -1112,7 +1123,7 @@ private struct CashAllocationSection: View {
                     BarMark(x: .value("年度", label), y: .value("金額", cash), width: .fixed(16))
                         .foregroundStyle(ChartStyle.primaryBar)
                         .cornerRadius(3)
-                        .accessibilityLabel("\(label) 現金")
+                        .accessibilityLabel("\(label) 現金及び現金同等物")
                         .accessibilityValue(Format.autoYen(cash, currency: currency))
                 }
             }
@@ -1301,33 +1312,33 @@ private extension UnevenRoundedRectangle {
     }
 }
 
-/// 年次バー。0 を中央に置き、マイナスは左、プラスは右へ伸ばす。
-private struct SignedBar: View {
-    var value: Double
-    var peak: Double
+/// 年を選ぶボタンの行（収益構造の要因分解・資金配分のウォーターフォールで共通）。
+private struct YearPicker: View {
+    var years: [FinancialsYear]
+    var selectedID: String?
+    var onSelect: (String) -> Void
 
     var body: some View {
-        GeometryReader { geo in
-            let mid = geo.size.width / 2
-            let magnitude = peak > 0 ? CGFloat(abs(value) / peak) * mid : 0
-            let barWidth = value == 0 ? 0 : max(magnitude, 4)
-            ZStack(alignment: .leading) {
-                Rectangle()
-                    .fill(ChartStyle.zeroLine)
-                    .frame(width: 0.5, height: geo.size.height)
-                    .offset(x: mid)
-                if value > 0 {
-                    UnevenRoundedRectangle.horizontalBar(growsRight: true)
-                        .fill(Theme.positive)
-                        .frame(width: barWidth, height: geo.size.height)
-                        .offset(x: mid)
-                } else if value < 0 {
-                    UnevenRoundedRectangle.horizontalBar(growsRight: false)
-                        .fill(Theme.negative)
-                        .frame(width: barWidth, height: geo.size.height)
-                        .offset(x: mid - barWidth)
+        ScrollView(.horizontal) {
+            HStack(spacing: 6) {
+                ForEach(years) { year in
+                    let selected = year.id == selectedID
+                    Button {
+                        onSelect(year.id)
+                    } label: {
+                        Text(Format.fy(year.fyEnd))
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(selected ? Theme.text : Theme.textMuted)
+                            .padding(.vertical, 6)
+                            .padding(.horizontal, 10)
+                            .background(selected ? Theme.accent.opacity(0.18) : Theme.idleTab.opacity(0.25))
+                            .clipShape(RoundedRectangle(cornerRadius: 6))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityAddTraits(selected ? .isSelected : [])
                 }
             }
         }
+        .scrollIndicators(.hidden)
     }
 }
