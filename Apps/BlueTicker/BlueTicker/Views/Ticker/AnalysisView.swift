@@ -103,6 +103,7 @@ private struct AnalysisNote: View {
 
 private enum ChartStyle {
     static let height: CGFloat = 220
+    /// 目盛り線と、ウォーターフォールの段をつなぐ点線。0 の線より薄くする。
     static let grid = StrokeStyle(lineWidth: 0.5, dash: [3, 3])
     static let gridColor = Theme.textMuted.opacity(0.35)
     static let primaryBar = Color(white: 0.88)
@@ -427,11 +428,11 @@ private struct BusinessProfitSection: View {
                 // 前年の棒の上端 → 前年差 → 当年の棒の上端を点線でつなぐ。
                 ForEach([(delta.priorLabel, delta.start, "a"), (delta.label, delta.end, "b")], id: \.2) { label, value, side in
                     LineMark(x: .value("年度", label), y: .value("金額", value), series: .value("線", "\(delta.id)-\(side)"))
-                        .foregroundStyle(Theme.textMuted)
-                        .lineStyle(StrokeStyle(lineWidth: 1, dash: [2, 2]))
+                        .foregroundStyle(ChartStyle.gridColor)
+                        .lineStyle(ChartStyle.grid)
                     LineMark(x: .value("年度", delta.slot), y: .value("金額", value), series: .value("線", "\(delta.id)-\(side)"))
-                        .foregroundStyle(Theme.textMuted)
-                        .lineStyle(StrokeStyle(lineWidth: 1, dash: [2, 2]))
+                        .foregroundStyle(ChartStyle.gridColor)
+                        .lineStyle(ChartStyle.grid)
                 }
             }
             RuleMark(y: .value("zero", 0))
@@ -1333,7 +1334,7 @@ private struct WaterfallChart: View {
                     path.addLine(to: CGPoint(x: connectorX, y: tops[index + 1]))
                 }
             }
-            .stroke(Theme.textMuted, style: StrokeStyle(lineWidth: 1, dash: [2, 2]))
+            .stroke(ChartStyle.gridColor, style: ChartStyle.grid)
             if let first = tops.first, let last = tops.last {
                 Rectangle()
                     .fill(ChartStyle.zeroLine)
