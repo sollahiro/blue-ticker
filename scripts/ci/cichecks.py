@@ -9,6 +9,8 @@ Subcommands (wrapped by scripts/ci/*.sh):
   baseline                regenerate scripts/ci/flags-baseline.tsv from the tree
   golden-rules            golden-change rule check for base..head
   structure               structural-change heuristic (never fails the build)
+  changes                 which CI jobs base..head needs (Package.swift target graph)
+  ci-gate                 aggregate job results against the changes plan (ci-ok)
 
 Base/head come from --base/--head, else $CI_BASE_SHA/$CI_HEAD_SHA, else
 merge-base(origin/main, HEAD)..HEAD. Docs: docs/ci-checks.md.
@@ -542,6 +544,209 @@ def cmd_structure(ns) -> int:
     return 0
 
 
+# ---------------------------------------------------------------- change-based job plan
+# Which heavy CI jobs a diff needs. Swift sources map to jobs through the target graph in
+# Package.swift (a change reaches every target that depends on it), so a shared module
+# also runs the jobs of its dependents. Any path not listed below runs every job: a new
+# directory errs toward running too much, never toward skipping a check.
+JOBS = ("unit_tests", "golden", "macos", "ios")
+ALL_JOBS = frozenset(JOBS)
+# The ingest executable is the one thing only macOS builds (it runs from launchd on a Mac).
+MACOS_TARGETS = frozenset({"BltIngest"})
+# Paths no Swift or iOS job reads. static-checks (always on) covers workers/ and fly.toml.
+SKIP_PREFIXES = ("docs/", ".agents/", "workers/", "scripts/jp/", "scripts/taxonomy/")
+SKIP_FILES = frozenset({
+    "README.md", "AGENTS.md", "LICENSE", ".gitignore", ".env.example",
+    "Dockerfile", ".dockerignore", "fly.toml",
+    ".github/CODEOWNERS", ".github/FUNDING.yml",
+    ".github/workflows/deploy.yml", ".github/workflows/edge-security-smoke.yml",
+    ".github/workflows/feed-trend-worker.yml", ".github/workflows/legal-worker.yml",
+    "scripts/entrypoint.sh", "scripts/check-ingest-freshness.sh", "scripts/check-yuholab.sh",
+    "scripts/feed-trend-ship.sh", "scripts/generate-status-page.sh",
+    "scripts/ingest-bookkeeping-read-equivalence.py", "scripts/scan-breakdown-header-unit.py",
+})
+# Paths that change what every job builds or how it runs.
+ALL_FILES = frozenset({"Package.swift", "Package.resolved", ".github/workflows/ci.yml"})
+# Test inputs and the golden/test runner scripts: the Linux test jobs only.
+TEST_PREFIXES = ("smoke/", "assets/", "scripts/ci/")
+IOS_PREFIX = "Apps/BlueTicker/"
+
+TARGET_DECL = re.compile(r"\.(target|executableTarget|testTarget)\(")
+
+
+def bracket_body(text: str, start: int) -> str:
+    """Text inside the [ ... ] or ( ... ) opening just before `start`."""
+    depth, i = 1, start
+    while i < len(text) and depth:
+        if text[i] in "[(":
+            depth += 1
+        elif text[i] in "])":
+            depth -= 1
+        i += 1
+    if depth:
+        raise ValueError("unbalanced brackets in Package.swift")
+    return text[start:i - 1]
+
+
+def package_targets(text: str) -> dict[str, dict]:
+    """{name: {"kind", "path", "deps"}} from Package.swift (local target deps only)."""
+    text = re.sub(r"//[^\n]*", "", text)
+    raw = {}
+    for m in TARGET_DECL.finditer(text):
+        body = bracket_body(text, m.end())
+        name = re.search(r'name:\s*"([^"]+)"', body)
+        path = re.search(r'path:\s*"([^"]+)"', body)
+        if not name:
+            raise ValueError("target without name in Package.swift")
+        deps_m = re.search(r"dependencies:\s*\[", body)
+        deps_body = bracket_body(body, deps_m.end()) if deps_m else ""
+        # Drop .product(...) entries; the bare string literals left are target or package names.
+        deps_body = re.sub(r"\.product\([^)]*\)", "", deps_body)
+        default = ("Tests/" if m.group(1) == "testTarget" else "Sources/") + name.group(1)
+        raw[name.group(1)] = {
+            "kind": m.group(1),
+            "path": (path.group(1) if path else default).rstrip("/") + "/",
+            "deps": re.findall(r'"([^"]+)"', deps_body),
+        }
+    if not raw:
+        raise ValueError("no targets found in Package.swift")
+    for t in raw.values():
+        t["deps"] = [d for d in t["deps"] if d in raw]
+    return raw
+
+
+def dependents(targets: dict[str, dict], name: str) -> set[str]:
+    """`name` and every target that depends on it, directly or not."""
+    seen, todo = {name}, [name]
+    while todo:
+        cur = todo.pop()
+        for n, t in targets.items():
+            if cur in t["deps"] and n not in seen:
+                seen.add(n); todo.append(n)
+    return seen
+
+
+def golden_test_targets(targets: dict[str, dict], files: list[str]) -> set[str]:
+    """Test targets holding a golden or real-XBRL suite (the suites golden-suite runs)."""
+    res = set()
+    for n, t in targets.items():
+        if t["kind"] == "testTarget" and any(
+                p.startswith(t["path"]) and p.endswith(".swift") and (is_golden(p) or fetches_real_xbrl(p))
+                for p in files):
+            res.add(n)
+    return res
+
+
+def plan_for_paths(paths: list[str], targets: dict[str, dict], golden_targets: set[str]) -> tuple[set[str], list[tuple[str, str]]]:
+    """(jobs to run, [(path, reason)]) for the changed paths."""
+    jobs, why = set(), []
+    for p in paths:
+        if p in ALL_FILES:
+            jobs |= ALL_JOBS; why.append((p, "all (package / workflow)")); continue
+        if p.startswith(IOS_PREFIX):
+            jobs.add("ios"); why.append((p, "ios")); continue
+        if p in SKIP_FILES or p.startswith(SKIP_PREFIXES) or (p.endswith(".md") and "/" not in p):
+            why.append((p, "none")); continue
+        if p.startswith(TEST_PREFIXES):
+            jobs |= {"unit_tests", "golden"}; why.append((p, "unit_tests, golden (test inputs)")); continue
+        owner = next((n for n, t in sorted(targets.items(), key=lambda kv: -len(kv[1]["path"]))
+                      if p.startswith(t["path"])), None)
+        if owner is None:
+            jobs |= ALL_JOBS; why.append((p, "all (unclassified path)")); continue
+        reach = dependents(targets, owner)
+        got = {"unit_tests"}  # unit-tests compiles every target and test target
+        if reach & golden_targets:
+            got.add("golden")
+        if reach & MACOS_TARGETS:
+            got.add("macos")
+        jobs |= got
+        why.append((p, f"{', '.join(sorted(got))} (target {owner})"))
+    return jobs, why
+
+
+def write_plan(jobs: set[str], note: str, why: list[tuple[str, str]], github_output: bool) -> None:
+    for p, r in why:
+        print(f"  {p}: {r}")
+    print(note)
+    for j in JOBS:
+        print(f"{j}={'true' if j in jobs else 'false'}")
+    if github_output and os.environ.get("GITHUB_OUTPUT"):
+        with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as fh:
+            for j in JOBS:
+                fh.write(f"{j}={'true' if j in jobs else 'false'}\n")
+    if github_output and os.environ.get("GITHUB_STEP_SUMMARY"):
+        with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as fh:
+            fh.write(f"### CI plan\n\n{note}\n\n| job | run |\n|---|---|\n")
+            for j in JOBS:
+                fh.write(f"| {j} | {'yes' if j in jobs else 'skip'} |\n")
+
+
+def cmd_changes(ns) -> int:
+    """Pull requests get a plan from merge-base..head. Anything else (push to main,
+    manual runs) runs everything: Deploy ships the diff since the last deploy, which can
+    span commits whose own CI failed, so main must be verified in full."""
+    gh = ns.github_output
+    event = ns.event if ns.event is not None else os.environ.get("GITHUB_EVENT_NAME", "pull_request")
+    if event != "pull_request":
+        write_plan(set(ALL_JOBS), f"event {event}: running every job", [], gh); return 0
+    try:
+        base, head = resolve_range(ns)
+        paths = [p for p in git("diff", "--name-only", "--no-renames", "-z", base, head).split("\0") if p]
+        targets = package_targets(show(head, "Package.swift") or "")
+        golden_targets = golden_test_targets(targets, tracked_files(head))
+    except (SystemExit, ValueError, OSError) as e:
+        write_plan(set(ALL_JOBS), f"cannot plan ({e}): running every job", [], gh); return 0
+    jobs, why = plan_for_paths(paths, targets, golden_targets)
+    write_plan(jobs, f"{len(paths)} changed path(s) in {base[:12]}..{head[:12]}", why, gh)
+    return 0
+
+
+# Job id in ci.yml -> plan key that decides whether it runs (None: always runs).
+GATE_JOBS = {
+    "changes": None, "static-checks": None, "structure": None,
+    "unit-tests": "unit_tests", "golden-suite": "golden", "build-macos": "macos",
+    "ios": "ios", "ios-packages": "ios",
+}
+
+
+def gate_errors(needs: dict, event: str) -> list[str]:
+    errs = []
+    plan = (needs.get("changes") or {}).get("outputs") or {}
+    for job, key in GATE_JOBS.items():
+        if job not in needs:
+            errs.append(f"{job}: missing from needs"); continue
+        result = needs[job].get("result")
+        if job == "structure":
+            # never fails by design; only runs on pull requests
+            ok = result == "success" or (result == "skipped" and event != "pull_request")
+        elif key is None:
+            ok = result == "success"
+        elif plan.get(key) == "true":
+            ok = result == "success"
+        elif plan.get(key) == "false":
+            ok = result in ("skipped", "success")
+        else:
+            ok = False
+            result = f"{result} (no plan for {key})"
+        if not ok:
+            errs.append(f"{job}: {result}")
+    return errs
+
+
+def cmd_ci_gate(ns) -> int:
+    needs = json.loads(os.environ.get("NEEDS_JSON") or "{}")
+    event = os.environ.get("GITHUB_EVENT_NAME", "pull_request")
+    errs = gate_errors(needs, event)
+    for job in GATE_JOBS:
+        print(f"  {job}: {(needs.get(job) or {}).get('result')}")
+    if errs:
+        for e in errs:
+            print(f"::error::ci-ok: {e}")
+        return 1
+    print("OK: every planned job passed")
+    return 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -550,8 +755,12 @@ def main() -> int:
         p.add_argument("--base"); p.add_argument("--head")
         if name == "structure":
             p.add_argument("--json", action="store_true")
-    for name in ("golden-files", "golden-filter", "verify-checksums"):
+    for name in ("golden-files", "golden-filter", "verify-checksums", "ci-gate"):
         sub.add_parser(name)
+    p = sub.add_parser("changes")
+    p.add_argument("--base"); p.add_argument("--head")
+    p.add_argument("--event", help="override $GITHUB_EVENT_NAME (default pull_request)")
+    p.add_argument("--github-output", action="store_true", help="also write $GITHUB_OUTPUT / step summary")
     p = sub.add_parser("baseline")
     p.add_argument("--rev", default="HEAD"); p.add_argument("--stdout", action="store_true")
     ns = ap.parse_args()
@@ -559,6 +768,7 @@ def main() -> int:
         "flags": cmd_flags, "golden-rules": cmd_golden_rules, "structure": cmd_structure,
         "golden-files": cmd_golden_files, "golden-filter": cmd_golden_filter,
         "verify-checksums": cmd_verify_checksums, "baseline": cmd_baseline,
+        "changes": cmd_changes, "ci-gate": cmd_ci_gate,
     }[ns.cmd](ns)
 
 

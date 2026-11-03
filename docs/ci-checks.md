@@ -1,24 +1,64 @@
-# CI required checks (`scripts/ci/`)
+# CI checks (`scripts/ci/`)
 
 Plain scripts, runnable locally from any checkout (`python3`, `git`, `bash`; the golden
 suite also needs `swift`). CI only calls them (`.github/workflows/ci.yml`). Base/head
 default to `merge-base(origin/main, HEAD)..HEAD`; override with `--base/--head` or
 `CI_BASE_SHA` / `CI_HEAD_SHA`.
 
-| Job (branch protection name) | Script | Fails on |
+Branch protection requires one check, `ci-ok`. It aggregates every other job against the
+plan from `changes` (see "Change-based job plan" below).
+
+| Job | Script | Fails on |
 |---|---|---|
+| `ci-ok` | `scripts/ci/cichecks.py ci-gate` | a planned job not `success`; a job planned as skip that ended anything but `skipped`/`success`; `changes` or `static-checks` not `success`; any `cancelled` |
+| `changes` | `scripts/ci/cichecks.py changes` | never on its own (an error plans every job) |
 | `golden-suite` | `scripts/ci/golden-suite.sh` | checksum mismatch or any failing golden test |
 | `static-checks` | `scripts/ci/tests/selftest.sh`, then on PRs `scripts/ci/flags.sh`, `scripts/ci/golden-suite.sh --checksums-only` + `scripts/ci/golden-rules.sh`, then the repo invariants (Package products, serviceless `fly.toml`, Worker unit tests) | any check misbehaving on crafted bad/clean diffs; new flagged occurrence or baseline growth; golden change rules below; a broken invariant |
-| `build-linux` / `build-macos` | `swift build --build-tests` | the package or its tests do not compile |
-| `unit-tests` | `swift test` (golden filter skipped) with a Postgres 16 service | any non-golden test, including `PostgresIntegrationTests` and `ReadOnlyRolePostgresTests` |
+| `unit-tests` | `swift build --build-tests` (Build step), then `swift test` (golden filter skipped) with a Postgres 16 service | the package or its tests do not compile on Linux; any non-golden test, including `PostgresIntegrationTests` and `ReadOnlyRolePostgresTests` |
+| `build-macos` | `swift build --product blt-ingest` | `blt-ingest` does not compile on macOS, or its build contains Vapor / MCP modules |
 | `structure` | `scripts/ci/structure.sh` | never (labels + notifies only) |
 
-Each job has one responsibility, so a red check names what broke. `build-*` only compiles,
-`unit-tests` and `golden-suite` only test, and the short script checks share one runner in
-`static-checks` (each step still runs when an earlier one fails). `build-macos` has no SwiftPM
-`.build` cache, because a frozen cache entry has failed with a missing `_NumericsShims`.
-`ios-paths`, `ios` and `ios-packages` run only when `Apps/BlueTicker/` or `ci.yml` changes, so
-they are not required checks.
+Each job has one responsibility, so a red check (or step) names what broke. `unit-tests`
+compiles everything in its Build step before testing, which replaces a separate Linux build job
+that compiled the same thing a second time. `golden-suite` only tests, and the short script
+checks share one runner in `static-checks` (each step still runs when an earlier one fails).
+`build-macos` builds only `blt-ingest`, the one product that runs on a Mac; the server and the
+tests compile on Linux in `unit-tests`. It has no SwiftPM `.build` cache, because a frozen
+cache entry has failed with a missing `_NumericsShims`.
+
+## Change-based job plan (`changes`)
+
+On a pull request, `cichecks.py changes` diffs `merge-base(base, head)..head` and decides
+which of `unit_tests`, `golden`, `macos` and `ios` to run. `static-checks`, `structure` and
+`ci-ok` always run. A push to `main` (or any other event) runs every job: Deploy ships the
+diff since the last successful deploy, which can include commits whose own CI failed, so
+`main` must always be verified in full. Print the plan locally with
+`python3 scripts/ci/cichecks.py changes`.
+
+Swift paths map through the target graph read from `Package.swift`. A change to a target
+reaches every target that depends on it, directly or not:
+
+| Change reaches | Runs |
+|---|---|
+| any Swift target or test target | `unit_tests` |
+| a test target holding a golden or real-XBRL suite (today `BlueTickerTests`) | `golden` |
+| `BltIngest` (so `BlueTickerCore`, `BltStoreCore`, `BltIngestCore`, `BltIngest`) | `macos` |
+
+Other paths:
+
+| Path | Runs |
+|---|---|
+| `Package.swift`, `Package.resolved`, `.github/workflows/ci.yml` | everything |
+| `Apps/BlueTicker/` | `ios` |
+| `smoke/`, `assets/`, `scripts/ci/` | `unit_tests`, `golden` |
+| `docs/`, `.agents/`, `workers/`, top-level `*.md`, other workflows, deploy files (`Dockerfile`, `fly.toml` …), ops scripts | nothing beyond the always-on jobs |
+| anything else | everything |
+
+The last row is deliberate: the code lists the paths that are safe to skip, so a new
+directory runs too much rather than too little. If the base cannot be read or `Package.swift`
+cannot be parsed, every job runs. `scripts/ci/tests/selftest.sh` pins the plan for the
+representative cases (iOS only, server only, `BltStoreCore`, `BltIngestCore`, Core, golden
+fixtures, package files, unknown paths) and every `ci-gate` outcome.
 
 `ReadOnlyRolePostgresTests` applies every migration as the owner, then serves the DB-backed
 `/v1` routes with a role that only has `SELECT` and `default_transaction_read_only = on`
