@@ -333,7 +333,8 @@ private struct PerformanceSection: View {
 
 // MARK: - 収益構造
 
-/// 事業利益の推移。売上総利益と事業利益の棒を年ごとに並べ、年を選ぶと売上・利益率・販管費の要因を出す。
+/// 事業利益の推移。年ごとの事業利益の棒の間に前年差の浮き棒を置き、前年差をタップすると
+/// 売上・利益率・販管費の要因を出す。
 private struct BusinessProfitSection: View {
     var years: [FinancialsYear]
     var currency: String?
@@ -346,20 +347,17 @@ private struct BusinessProfitSection: View {
             if years.contains(where: { $0.businessProfit != nil }) {
                 profitChart
                 ChartLegend(items: [
-                    LegendItem(title: "売上総利益", color: ChartStyle.primaryBar, shape: .bar),
-                    LegendItem(title: "事業利益", color: ChartStyle.secondaryBar, shape: .bar),
+                    LegendItem(title: "事業利益", color: ChartStyle.primaryBar, shape: .bar),
+                    LegendItem(title: "増益", color: Theme.positive, shape: .bar),
+                    LegendItem(title: "減益", color: Theme.negative, shape: .bar),
                 ])
-                YearPicker(years: years.filter(isYearSelectable), selectedID: currentYearID) { id in
-                    selectedYearID = id
-                    selectedFactor = nil
-                }
             } else {
                 AnalysisNote(text: "事業利益は未算出です。")
             }
             if let selectedYear = years.first(where: { $0.id == currentYearID && isYearSelectable($0) }) {
                 factorChart(selectedYear, years: years)
             } else {
-                AnalysisNote(text: "年を選ぶと売上要因・利益率要因・販管費要因を表示します。")
+                AnalysisNote(text: "前年差をタップすると売上要因・利益率要因・販管費要因を表示します。")
             }
             AnalysisNote(text: "事業利益は売上総利益 − 販管費です。開示されている営業利益と一致しない場合がございます。")
         }
@@ -370,48 +368,99 @@ private struct BusinessProfitSection: View {
         selectedYearID ?? years.last { isYearSelectable($0) }?.id
     }
 
-    /// 業績カードと同じ形の縦棒。要因分解で選んでいる年は年ボタンと同じ色の帯で示す。
-    /// 選んでいない年を薄くすると売上総利益と事業利益の色が近づくので、棒の色は変えない。
+    /// 年をまたぐ前年差の段。`start` は前年、`end` は当年の事業利益。
+    private struct ProfitDelta: Identifiable {
+        var year: FinancialsYear
+        var priorLabel: String
+        var label: String
+        var start: Double
+        var end: Double
+        var id: String { year.id }
+        /// x 軸のカテゴリ。年のラベルと重ならないようにし、軸には出さない。
+        var slot: String { "差\(label)" }
+    }
+
+    /// 前年差の要因がある年だけ、前年と当年の事業利益の間に段を置く。
+    private var deltas: [ProfitDelta] {
+        years.compactMap { year in
+            guard isYearSelectable(year), let end = year.businessProfit,
+                  let prior = priorYear(of: year, in: years), let start = prior.businessProfit
+            else { return nil }
+            return ProfitDelta(
+                year: year, priorLabel: Format.fy(prior.fyEnd), label: Format.fy(year.fyEnd), start: start, end: end)
+        }
+    }
+
+    /// 業績カードと同じ形の縦棒。事業利益の棒の間に前年差の浮き棒を置き、点線で段をつなぐ。
+    /// 前年差をタップすると下の要因分解がその年に切り替わる。選んでいない前年差は薄くする。
     private var profitChart: some View {
-        let labels = years.map { Format.fy($0.fyEnd) }
-        let scale = Format.commonScale(for: years.flatMap { [$0.grossProfit, $0.businessProfit] }, currency: currency)
-        let selectedLabel = years.first { $0.id == currentYearID }.map { Format.fy($0.fyEnd) }
+        let deltas = deltas
+        let yearLabels = years.map { Format.fy($0.fyEnd) }
+        let slots: [String] = years.flatMap { year -> [String] in
+            let label = Format.fy(year.fyEnd)
+            guard let delta = deltas.first(where: { $0.id == year.id }) else { return [label] }
+            return [delta.slot, label]
+        }
+        let scale = Format.commonScale(for: years.map(\.businessProfit), currency: currency)
+        let selectedID = currentYearID
         return Chart {
-            if let selectedLabel {
-                RectangleMark(x: .value("年度", selectedLabel), width: .ratio(0.9))
-                    .foregroundStyle(Theme.accent.opacity(0.18))
-                    .cornerRadius(6)
-            }
             ForEach(years) { year in
-                let label = Format.fy(year.fyEnd)
-                if let gross = year.grossProfit {
-                    BarMark(x: .value("年度", label), y: .value("金額", gross), width: .fixed(12))
-                        .position(by: .value("系列", "売上総利益"))
-                        .foregroundStyle(ChartStyle.primaryBar)
-                        .cornerRadius(3)
-                        .accessibilityLabel("\(label) 売上総利益")
-                        .accessibilityValue(Format.autoYen(gross, currency: currency))
-                }
                 if let profit = year.businessProfit {
-                    BarMark(x: .value("年度", label), y: .value("金額", profit), width: .fixed(12))
-                        .position(by: .value("系列", "事業利益"))
-                        .foregroundStyle(profit < 0 ? Theme.negative : ChartStyle.secondaryBar)
+                    let label = Format.fy(year.fyEnd)
+                    BarMark(x: .value("年度", label), y: .value("金額", profit), width: .fixed(16))
+                        .foregroundStyle(profit < 0 ? Theme.negative : ChartStyle.primaryBar)
                         .cornerRadius(3)
                         .accessibilityLabel("\(label) 事業利益")
                         .accessibilityValue(Format.autoYen(profit, currency: currency))
+                }
+            }
+            ForEach(deltas) { delta in
+                let selected = delta.id == selectedID
+                BarMark(
+                    x: .value("年度", delta.slot), yStart: .value("金額", delta.start), yEnd: .value("金額", delta.end),
+                    width: .fixed(12)
+                )
+                .foregroundStyle((delta.end >= delta.start ? Theme.positive : Theme.negative).opacity(selected ? 1 : 0.4))
+                .cornerRadius(3)
+                .accessibilityLabel("\(delta.label) 前年差")
+                .accessibilityValue(Format.autoYen(delta.end - delta.start, currency: currency))
+                // 前年の棒の上端 → 前年差 → 当年の棒の上端を点線でつなぐ。
+                ForEach([(delta.priorLabel, delta.start, "a"), (delta.label, delta.end, "b")], id: \.2) { label, value, side in
+                    LineMark(x: .value("年度", label), y: .value("金額", value), series: .value("線", "\(delta.id)-\(side)"))
+                        .foregroundStyle(Theme.textMuted)
+                        .lineStyle(StrokeStyle(lineWidth: 1, dash: [2, 2]))
+                    LineMark(x: .value("年度", delta.slot), y: .value("金額", value), series: .value("線", "\(delta.id)-\(side)"))
+                        .foregroundStyle(Theme.textMuted)
+                        .lineStyle(StrokeStyle(lineWidth: 1, dash: [2, 2]))
                 }
             }
             RuleMark(y: .value("zero", 0))
                 .foregroundStyle(ChartStyle.zeroLine)
                 .lineStyle(StrokeStyle(lineWidth: 0.5))
         }
-        .chartXScale(domain: labels)
+        .chartXScale(domain: slots)
         .chartXAxis {
-            AxisMarks { _ in
-                AxisValueLabel()
-                    .font(.caption2)
-                    .foregroundStyle(Theme.textMuted)
+            AxisMarks { value in
+                // 前年差の枠にはラベルを出さない。
+                if let slot = value.as(String.self), yearLabels.contains(slot) {
+                    AxisValueLabel()
+                        .font(.caption2)
+                        .foregroundStyle(Theme.textMuted)
+                }
             }
+        }
+        // タップした枠が前年差なら、その年の要因分解に切り替える。スクロールを奪わないようタップだけ拾う。
+        .chartXSelection(
+            value: Binding<String?>(
+                get: { nil },
+                set: { slot in
+                    guard let slot, let delta = deltas.first(where: { $0.slot == slot }) else { return }
+                    selectedYearID = delta.id
+                    selectedFactor = nil
+                })
+        )
+        .chartGesture { proxy in
+            SpatialTapGesture().onEnded { proxy.selectXValue(at: $0.location.x) }
         }
         .chartYAxis {
             AxisMarks(position: .leading, values: .automatic(desiredCount: 4)) { value in
