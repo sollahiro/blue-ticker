@@ -220,5 +220,73 @@ if [[ $rc == 0 ]] && grep -q "webhook POST failed" <<<"$out"; then pass=$((pass+
 else fail=$((fail+1)); echo "FAIL structure: unreachable webhook"; echo "$out" | sed 's/^/     /'; fi
 kill $SRV 2>/dev/null
 
+# ---- changes: job plan from the real Package.swift target graph
+git checkout -q -B c-base "$BASE"
+cp "$SRC/../../Package.swift" Package.swift
+for d in Sources/BlueTicker Sources/BltStoreCore Sources/BltIngestCore Sources/BltIngest Sources/BltServerCore \
+         Sources/BltMcpServerCore SwiftTests/BltServerCoreTests Apps/BlueTicker docs workers/x; do
+  mkdir -p "$d" && echo "// seed" > "$d/Seed.swift"
+done
+git add -A && git commit -qm "changes base" && CB=$(git rev-parse HEAD)
+C="python3 scripts/ci/cichecks.py changes --base $CB --head HEAD"
+plan() { # plan <name> <expected "unit_tests golden macos ios" as t/f> <file>...
+  local name=$1 want=$2; shift 2
+  git checkout -q -B "c-$name" "$CB"
+  for f in "$@"; do mkdir -p "$(dirname "$f")"; echo "// $name" >> "$f"; done
+  git add -A && git commit -qm "$name"
+  got="$($C 2>&1 | awk -F= '/^(unit_tests|golden|macos|ios)=/ { printf "%s", substr($2,1,1) }')"
+  if [[ "$got" == "$want" ]]; then pass=$((pass+1)); echo "ok   changes: $name -> $want"
+  else fail=$((fail+1)); echo "FAIL changes: $name (got $got want $want)"; $C 2>&1 | sed 's/^/     /'; fi
+}
+#        name            unit golden macos ios
+plan ios-only         ffft Apps/BlueTicker/Seed.swift
+plan docs-only        ffff docs/Seed.swift README.md
+plan worker-only      ffff workers/x/Seed.swift
+plan server-only      tfff Sources/BltServerCore/Seed.swift
+plan mcp-only         tfff Sources/BltMcpServerCore/Seed.swift
+plan server-tests     tfff SwiftTests/BltServerCoreTests/Seed.swift
+plan store-core       tftf Sources/BltStoreCore/Seed.swift
+plan ingest-core      tftf Sources/BltIngestCore/Seed.swift
+plan core             tttf Sources/BlueTicker/Seed.swift
+plan golden-test      ttff SwiftTests/BlueTickerTests/XGoldenTests.swift
+plan smoke-fixture    ttff smoke/breakdown_geography_expected.json
+plan ci-scripts       ttff scripts/ci/golden-suite.sh
+plan package          tttt Package.resolved
+plan workflow         tttt .github/workflows/ci.yml
+plan deploy-workflow  ffff .github/workflows/deploy.yml
+plan unknown-path     tttt newdir/thing.txt
+plan ios-and-store    tftt Apps/BlueTicker/Seed.swift Sources/BltStoreCore/Seed.swift
+# a real-XBRL suite in another test target pulls golden-suite in for that target
+git checkout -q -B c-xbrl "$CB"
+printf 'struct LiveTests { func t() { SmokeCacheSupport.ensureCached("x") } }\n' > SwiftTests/BltServerCoreTests/LiveTests.swift
+git add -A && git commit -qm xbrl && CX=$(git rev-parse HEAD)
+git checkout -q -B c-xbrl-edit "$CX"; echo "// edit" >> Sources/BltServerCore/Seed.swift && git commit -qam edit
+expect_out "^golden=true" "changes: real-XBRL suite outside BlueTickerTests -> golden" python3 scripts/ci/cichecks.py changes --base "$CX" --head HEAD
+expect_out "^golden=true" "changes: push event runs every job" python3 scripts/ci/cichecks.py changes --event push
+expect_out "cannot plan" "changes: unknown base runs every job" python3 scripts/ci/cichecks.py changes --base 0000000000000000000000000000000000000000 --head HEAD
+git checkout -q -B c-badpkg "$CB"; echo "garbage" > Package.swift && git commit -qam badpkg
+expect_out "^macos=true" "changes: unparsable Package.swift runs every job" $C
+
+# ---- ci-gate: aggregate check
+gate() { # gate <0|1> <name> <event> <json>
+  expect "$1" "ci-gate: $2" env GITHUB_EVENT_NAME="$3" NEEDS_JSON="$4" python3 scripts/ci/cichecks.py ci-gate
+}
+needs() { # needs <plan t/f x4> <unit> <golden> <macos> <ios> [changes] [static] [structure]
+  local p=$1; tf() { [[ $1 == t ]] && echo true || echo false; }
+  printf '{"changes":{"result":"%s","outputs":{"unit_tests":"%s","golden":"%s","macos":"%s","ios":"%s"}},"static-checks":{"result":"%s"},"structure":{"result":"%s"},"unit-tests":{"result":"%s"},"golden-suite":{"result":"%s"},"build-macos":{"result":"%s"},"ios":{"result":"%s"},"ios-packages":{"result":"%s"}}' \
+    "${6:-success}" "$(tf ${p:0:1})" "$(tf ${p:1:1})" "$(tf ${p:2:1})" "$(tf ${p:3:1})" "${7:-success}" "${8:-success}" "$2" "$3" "$4" "$5" "$5"
+}
+gate 0 "all planned jobs pass"            pull_request "$(needs tttt success success success success)"
+gate 0 "planned skips pass"               pull_request "$(needs ffft skipped skipped skipped success)"
+gate 1 "a planned job failing fails"      pull_request "$(needs tttt success failure success success)"
+gate 1 "a planned job skipped fails"      pull_request "$(needs tftf skipped skipped success skipped)"
+gate 1 "a cancelled job fails"            pull_request "$(needs tftf success skipped cancelled skipped)"
+gate 1 "changes failing fails"            pull_request "$(needs ffff skipped skipped skipped skipped failure)"
+gate 1 "static-checks failing fails"      pull_request "$(needs ffff skipped skipped skipped skipped success failure)"
+gate 0 "structure skipped on push passes" push         "$(needs tttt success success success success success success skipped)"
+gate 1 "structure skipped on a PR fails"  pull_request "$(needs tttt success success success success success success skipped)"
+gate 1 "missing plan output fails"        pull_request '{"changes":{"result":"success","outputs":{}},"static-checks":{"result":"success"},"structure":{"result":"success"},"unit-tests":{"result":"skipped"},"golden-suite":{"result":"skipped"},"build-macos":{"result":"skipped"},"ios":{"result":"skipped"},"ios-packages":{"result":"skipped"}}'
+gate 1 "missing job fails"                pull_request '{"changes":{"result":"success","outputs":{}}}'
+
 echo; echo "selftest: $pass passed, $fail failed"
 [[ $fail == 0 ]]

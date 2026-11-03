@@ -36,7 +36,7 @@
 
 | 経路 | 役割 |
 |---|---|
-| GitHub Actions `.github/workflows/ci.yml` | マージ品質。`ios` ジョブは `macos-26`、シミュレータ SDK 向け `xcodebuild build`、署名なし。`ios-paths` が `Apps/BlueTicker/` または `ci.yml` の差分を見たときだけ走る。サーバーの `swift test` とはジョブを分けて並列 |
+| GitHub Actions `.github/workflows/ci.yml` | マージ品質。`ios` ジョブは `macos-26`、シミュレータ SDK 向け `xcodebuild build`、署名なし。`changes` ジョブが `Apps/BlueTicker/`・`ci.yml`・`Package.swift`/`Package.resolved` の差分を見たとき（と main への push）だけ走る。サーバーの `swift test` とはジョブを分けて並列 |
 | Xcode Cloud | 配布のみ。Release Archive → TestFlight Internal。ワークフローは App Store Connect が正本 |
 
 Xcode Cloud を GitHub の required check にしない。PR Changes も、Archive ワークフローへの Test / Analyze も足さない。GHA に Archive や TestFlight アップロードを足さない。証明書と ASC API キーは GitHub secrets に置かない。

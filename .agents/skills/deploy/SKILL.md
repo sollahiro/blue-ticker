@@ -45,7 +45,7 @@ fly deploy
 
 | ワークフロー | 役割 |
 |---|---|
-| `ci.yml` | macOS ビルド確認（キャッシュなし）/ Linux test・iOS シミュレータ向けコンパイル（`ios` ジョブは `Apps/BlueTicker/` または `ci.yml` 差分時のみ、`macos-26`）・product/serviceless ガード。iOS TestFlight / Archive は Xcode Cloud（`docs/ios-client.md`）。この skill の対象外 |
+| `ci.yml` | 必須チェックは集約ジョブ `ci-ok` だけ。PR は `changes` が変更範囲から必要なジョブを決め、main への push は全ジョブ（`docs/ci-checks.md`）。macOS は blt-ingest のビルド確認（キャッシュなし）/ Linux の build+test・golden / iOS シミュレータ向けコンパイル（`macos-26`）・product/serviceless ガード。iOS TestFlight / Archive は Xcode Cloud（`docs/ios-client.md`）。この skill の対象外 |
 | `deploy.yml` | CI 成功後の Fly 自動デプロイ（`v*` タグでは起動しない） |
 | `feed-trend-worker.yml` | Feed Trend Worker デプロイ + Fly origin の URL/token |
 | `edge-security-smoke.yml` | Access / serviceless 外形監視 |
