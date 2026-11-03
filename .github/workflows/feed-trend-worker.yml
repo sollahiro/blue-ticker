@@ -10,6 +10,11 @@ name: Feed Trend Worker
 #   BLT_FEED_TREND_TOKEN  origin と Worker TOKEN の共有値
 #   AE_SQL_TOKEN          Account Analytics:Read（CLOUDFLARE_API_TOKEN と分けられるとき）
 #   FLY_API_TOKEN         既存の Fly デプロイと同じ
+#
+# デプロイ前に、このジョブがチェックアウトしたコミット（＝デプロイするコミット）で
+# Worker のテストを流し、落ちたら出さない（CI の static-checks と同じ scripts/ci/worker-tests.sh）。
+# CI(main) の成功を workflow_run で待たないのは、Swift 側（golden など）の失敗や遅延で
+# Worker の出荷が止まらないようにするため。Worker の検証は Worker のテストだけで閉じている。
 
 on:
   push:
@@ -30,6 +35,9 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v4
+
+      - name: Worker のテスト（デプロイするコミットで検証）
+        run: scripts/ci/worker-tests.sh feed-trend
 
       - name: GitHub secrets の有無
         env:

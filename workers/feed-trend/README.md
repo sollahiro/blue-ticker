@@ -24,7 +24,7 @@ export AE_SQL_TOKEN="$CLOUDFLARE_API_TOKEN"
 ./scripts/feed-trend-ship.sh
 ```
 
-`main` では `.github/workflows/feed-trend-worker.yml` が Worker を出し、Fly に `BLT_FEED_TREND_URL` / `BLT_FEED_TREND_TOKEN` を載せる。
+`main` では `.github/workflows/feed-trend-worker.yml` が Worker を出し、Fly に `BLT_FEED_TREND_URL` / `BLT_FEED_TREND_TOKEN` を載せる。出す前に同じコミットで `scripts/ci/worker-tests.sh feed-trend` を流し、落ちたらデプロイしない。
 
 手動:
 
