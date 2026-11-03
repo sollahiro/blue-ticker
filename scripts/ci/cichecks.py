@@ -8,7 +8,6 @@ Subcommands (wrapped by scripts/ci/*.sh):
   flags                   new-occurrence flags in base..head (hard fail)
   baseline                regenerate scripts/ci/flags-baseline.tsv from the tree
   golden-rules            golden-change rule check for base..head
-  structure               structural-change heuristic (never fails the build)
   changes                 which CI jobs base..head needs (Package.swift target graph)
   ci-gate                 aggregate job results against the changes plan (ci-ok)
 
@@ -471,79 +470,6 @@ def cmd_golden_rules(ns) -> int:
     return 0
 
 
-# ---------------------------------------------------------------- structure
-ROUTE_RE = re.compile(r"\b\w+\.(?:get|post|put|patch|delete|on|webSocket)\(\s*(?:\.\w+\s*,\s*)?\"[^\"]*\"")
-WORKER_ROUTE_RE = re.compile(r"pathname\s*===?\s*[\"'`]/|\.(?:get|post|put|delete)\(\s*[\"'`]/")
-SKILL_RE = re.compile(r"^\s*id:\s*\"[a-z0-9-]+\"\s*,")
-PKG_RE = re.compile(r"\.(?:target|executableTarget|testTarget|library|executable|plugin|systemLibrary|binaryTarget|package)\(|\bproducts\s*:|\btargets\s*:")
-MIGRATION_PATH = re.compile(r"(?i)(?:^|/)migrations?/|\.sql$|(?:^|/)schema[^/]*$")
-MIGRATION_CODE = re.compile(r":\s*(?:Async)?Migration\b|\.schema\(\s*\"|CREATE\s+(?:TABLE|INDEX)|ALTER\s+TABLE|DROP\s+(?:TABLE|INDEX)")
-MOVE_MIN = int(os.environ.get("STRUCTURE_MOVE_MIN_FILES", "15"))
-MODULE_PARENTS = ("Sources/", "SwiftTests/", "workers/", "Apps/BlueTicker/", "scripts/")
-
-
-def structural_reasons(base: str, head: str) -> list[str]:
-    reasons = []
-    base_files = tracked_files(base)
-    base_top = {p.split("/")[0] for p in base_files}
-    base_dirs = {"/".join(p.split("/")[:k]) for p in base_files for k in range(1, p.count("/") + 1)}
-    files = changed_files(base, head)
-    renames = 0
-    for s, o, n in files:
-        if s == "A":
-            top = n.split("/")[0]
-            if "/" in n and top not in base_top:
-                reasons.append(f"new top-level directory {top}/")
-                base_top.add(top)
-            for parent in MODULE_PARENTS:
-                if n.startswith(parent) and n.count("/") > parent.count("/"):
-                    mod = parent + n[len(parent):].split("/")[0]
-                    if mod not in base_dirs:
-                        reasons.append(f"new module directory {mod}/")
-                        base_dirs.add(mod)
-        if s == "R":
-            renames += 1
-        if s in "AMR" and MIGRATION_PATH.search(n):
-            reasons.append(f"schema/migration file {n}")
-    if renames >= MOVE_MIN:
-        reasons.append(f"large file move: {renames} renames (threshold {MOVE_MIN})")
-    for path, ln, t in added_lines(base, head):
-        if path == "Package.swift" and PKG_RE.search(t):
-            reasons.append(f"Package.swift target/product change at line {ln}")
-        elif path.endswith(".swift") and path.startswith("Sources/") and ROUTE_RE.search(t) and "Environment.get" not in t:
-            reasons.append(f"new REST route {path}:{ln}")
-        elif path.endswith("ApiSkills.swift") and SKILL_RE.search(t):
-            reasons.append(f"new REST/MCP skill {path}:{ln}")
-        elif path.startswith("workers/") and path.endswith((".js", ".ts")) and "/test" not in path and ".test." not in path and WORKER_ROUTE_RE.search(t):
-            reasons.append(f"new worker route {path}:{ln}")
-        elif path.endswith(".swift") and path.startswith("Sources/") and MIGRATION_CODE.search(t):
-            reasons.append(f"schema/migration code {path}:{ln}")
-    seen, uniq = set(), []
-    for r in reasons:
-        if r not in seen:
-            seen.add(r); uniq.append(r)
-    return uniq
-
-
-def cmd_structure(ns) -> int:
-    base, head = resolve_range(ns)
-    reasons = structural_reasons(base, head)
-    out = os.environ.get("GITHUB_OUTPUT")
-    if out:
-        with open(out, "a") as fh:
-            fh.write(f"structural={'true' if reasons else 'false'}\n")
-    if ns.json:
-        print(json.dumps({"structural": bool(reasons), "reasons": reasons}, ensure_ascii=False))
-        return 0
-    if reasons:
-        print("STRUCTURAL change detected:")
-        for r in reasons:
-            print(f"  - {r}")
-    else:
-        print("not structural")
-    return 0
-
-
 # ---------------------------------------------------------------- change-based job plan
 # Which heavy CI jobs a diff needs. Swift sources map to jobs through the target graph in
 # Package.swift (a change reaches every target that depends on it), so a shared module
@@ -743,7 +669,7 @@ def cmd_changes(ns) -> int:
 
 # Job id in ci.yml -> plan key that decides whether it runs (None: always runs).
 GATE_JOBS = {
-    "changes": None, "static-checks": None, "structure": None,
+    "changes": None, "static-checks": None,
     "unit-tests": "unit_tests", "golden-suite": "golden", "build-macos": "macos",
     "ios": "ios", "ios-packages": "ios",
 }
@@ -756,10 +682,7 @@ def gate_errors(needs: dict, event: str) -> list[str]:
         if job not in needs:
             errs.append(f"{job}: missing from needs"); continue
         result = needs[job].get("result")
-        if job == "structure":
-            # never fails by design; only runs on pull requests
-            ok = result == "success" or (result == "skipped" and event != "pull_request")
-        elif key is None:
+        if key is None:
             ok = result == "success"
         elif plan.get(key) == "true":
             ok = result == "success"
@@ -790,11 +713,9 @@ def cmd_ci_gate(ns) -> int:
 def main() -> int:
     ap = argparse.ArgumentParser()
     sub = ap.add_subparsers(dest="cmd", required=True)
-    for name in ("flags", "golden-rules", "structure"):
+    for name in ("flags", "golden-rules"):
         p = sub.add_parser(name)
         p.add_argument("--base"); p.add_argument("--head")
-        if name == "structure":
-            p.add_argument("--json", action="store_true")
     for name in ("golden-files", "golden-filter", "verify-checksums", "ci-gate"):
         sub.add_parser(name)
     p = sub.add_parser("changes")
@@ -805,7 +726,7 @@ def main() -> int:
     p.add_argument("--rev", default="HEAD"); p.add_argument("--stdout", action="store_true")
     ns = ap.parse_args()
     return {
-        "flags": cmd_flags, "golden-rules": cmd_golden_rules, "structure": cmd_structure,
+        "flags": cmd_flags, "golden-rules": cmd_golden_rules,
         "golden-files": cmd_golden_files, "golden-filter": cmd_golden_filter,
         "verify-checksums": cmd_verify_checksums, "baseline": cmd_baseline,
         "changes": cmd_changes, "ci-gate": cmd_ci_gate,

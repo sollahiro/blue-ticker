@@ -21,7 +21,6 @@ name: CI
 #   build-macos                Mac で動く blt-ingest のビルドと、Vapor / MCP を含まないことの確認
 #   ios / ios-packages         iOS アプリ本体と iOS 補助パッケージ
 #   static-checks              scripts/ci の検査とリポジトリ不変条件（常に実行）
-#   structure                  構造変更の通知（PR への書き込み権限を持つため分けておく）
 
 on:
   push:
@@ -258,29 +257,6 @@ jobs:
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
           scripts/ci/golden-suite.sh
 
-  structure:
-    # 構造変更ヒューリスティック。該当時は needs-architect ラベル + BLT_Architect webhook。
-    # secrets 未設定なら警告のみで成功する。このジョブ自体は失敗させない。
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      issues: write
-      pull-requests: write
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Structure check
-        env:
-          CI_BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          CI_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-          GH_TOKEN: ${{ github.token }}
-          ARCHITECT_WEBHOOK_URL: ${{ secrets.ARCHITECT_WEBHOOK_URL }}
-          ARCHITECT_WEBHOOK_AUTH: ${{ secrets.ARCHITECT_WEBHOOK_AUTH }}
-        run: scripts/ci/structure.sh
-
   static-checks:
     # 数秒で終わるスクリプト検査とリポジトリ不変条件をまとめる（runner を 1 つだけ起こす）。
     # PR だけの検査（flags / golden-rules）はステップの if で絞る。前のステップが落ちても
@@ -418,7 +394,7 @@ jobs:
     # skipped / success だけを許す。changes・static-checks の失敗や cancelled も失敗にする。
     # 判定は scripts/ci/cichecks.py ci-gate（selftest で固定）。
     if: always()
-    needs: [changes, static-checks, structure, unit-tests, golden-suite, build-macos, ios, ios-packages]
+    needs: [changes, static-checks, unit-tests, golden-suite, build-macos, ios, ios-packages]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

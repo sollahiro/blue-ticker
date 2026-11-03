@@ -16,7 +16,6 @@ plan from `changes` (see "Change-based job plan" below).
 | `static-checks` | `scripts/ci/tests/selftest.sh`, then on PRs `scripts/ci/flags.sh`, `scripts/ci/golden-suite.sh --checksums-only` + `scripts/ci/golden-rules.sh`, then the repo invariants (Package products, serviceless `fly.toml`, Worker unit tests) | any check misbehaving on crafted bad/clean diffs; new flagged occurrence or baseline growth; golden change rules below; a broken invariant |
 | `unit-tests` | `swift build --build-tests` (Build step), then `swift test` (golden filter skipped) with a Postgres 16 service | the package or its tests do not compile on Linux; any non-golden test, including `PostgresIntegrationTests` and `ReadOnlyRolePostgresTests` |
 | `build-macos` | `swift build --product blt-ingest` | `blt-ingest` does not compile on macOS, or its build contains Vapor / MCP modules |
-| `structure` | `scripts/ci/structure.sh` | never (labels + notifies only) |
 
 Each job has one responsibility, so a red check (or step) names what broke. `unit-tests`
 compiles everything in its Build step before testing, which replaces a separate Linux build job
@@ -29,7 +28,7 @@ cache entry has failed with a missing `_NumericsShims`.
 ## Change-based job plan (`changes`)
 
 `cichecks.py changes` diffs a range and decides which of `unit_tests`, `golden`, `macos`
-and `ios` to run. `static-checks`, `structure` and `ci-ok` always run.
+and `ios` to run. `static-checks` and `ci-ok` always run.
 
 | Event | Range |
 |---|---|
@@ -134,25 +133,3 @@ An added line whose hash is in the baseline (a moved or re-indented old line) pa
 **may only shrink**: any line added to it fails. The PR that creates it passes only when
 it matches exactly what `scripts/ci/flags.sh --baseline --rev <base>` generates.
 After you remove an occurrence, delete its row.
-
-## Structure check (`structure.sh`)
-
-A change counts as structural when any of these holds:
-
-- a new top-level directory, or a new module directory directly under `Sources/`,
-  `SwiftTests/`, `workers/`, `Apps/BlueTicker/` or `scripts/`
-- added `Package.swift` lines that touch targets or products (`.target(`, `.testTarget(`,
-  `products:` …)
-- new REST routes (`v1.get("…")` and similar in `Sources/`), new skills (`id: "…"` in
-  `ApiSkills.swift`, which become both REST and MCP tools), or new worker routes
-- schema or migrations: `Migrations/`, `*.sql`, `schema*` files, `AsyncMigration`,
-  `.schema("…")`, or `CREATE/ALTER/DROP TABLE|INDEX`
-- a large move: 15 or more renames (`STRUCTURE_MOVE_MIN_FILES`)
-
-When it triggers on a PR, the script adds the label `needs-architect` (creating it if
-needed). Right after the label is newly added (never when it was already on the PR),
-it POSTs `{"pr": N}` to `ARCHITECT_WEBHOOK_URL` with header
-`Authorization: $ARCHITECT_WEBHOOK_AUTH`. The secret is the full header value and is sent
-as-is, with no `Bearer` prefix added. The URL and key go to curl on stdin and never
-reach argv or logs. If either secret is missing, the script skips the POST with a
-warning and does not fail.
