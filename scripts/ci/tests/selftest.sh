@@ -228,7 +228,7 @@ for d in Sources/BlueTicker Sources/BltStoreCore Sources/BltIngestCore Sources/B
   mkdir -p "$d" && echo "// seed" > "$d/Seed.swift"
 done
 git add -A && git commit -qm "changes base" && CB=$(git rev-parse HEAD)
-C="python3 scripts/ci/cichecks.py changes --base $CB --head HEAD"
+C="python3 scripts/ci/cichecks.py changes --event pull_request --base $CB --head HEAD"
 plan() { # plan <name> <expected "unit_tests golden macos ios" as t/f> <file>...
   local name=$1 want=$2; shift 2
   git checkout -q -B "c-$name" "$CB"
@@ -261,9 +261,9 @@ git checkout -q -B c-xbrl "$CB"
 printf 'struct LiveTests { func t() { SmokeCacheSupport.ensureCached("x") } }\n' > SwiftTests/BltServerCoreTests/LiveTests.swift
 git add -A && git commit -qm xbrl && CX=$(git rev-parse HEAD)
 git checkout -q -B c-xbrl-edit "$CX"; echo "// edit" >> Sources/BltServerCore/Seed.swift && git commit -qam edit
-expect_out "^golden=true" "changes: real-XBRL suite outside BlueTickerTests -> golden" python3 scripts/ci/cichecks.py changes --base "$CX" --head HEAD
+expect_out "^golden=true" "changes: real-XBRL suite outside BlueTickerTests -> golden" python3 scripts/ci/cichecks.py changes --event pull_request --base "$CX" --head HEAD
 expect_out "^golden=true" "changes: push event runs every job" python3 scripts/ci/cichecks.py changes --event push
-expect_out "cannot plan" "changes: unknown base runs every job" python3 scripts/ci/cichecks.py changes --base 0000000000000000000000000000000000000000 --head HEAD
+expect_out "cannot plan" "changes: unknown base runs every job" python3 scripts/ci/cichecks.py changes --event pull_request --base 0000000000000000000000000000000000000000 --head HEAD
 git checkout -q -B c-badpkg "$CB"; echo "garbage" > Package.swift && git commit -qam badpkg
 expect_out "^macos=true" "changes: unparsable Package.swift runs every job" $C
 
