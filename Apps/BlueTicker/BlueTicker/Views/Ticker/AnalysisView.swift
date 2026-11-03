@@ -878,7 +878,7 @@ private struct ProductivitySection: View {
             if years.contains(where: { Self.salesPerEmployee($0) != nil }) {
                 salesPerEmployeeChart
                 if let scale {
-                    AnalysisNote(text: "単位は\(scale.unit)です。従業員数は期末の連結従業員数です。")
+                    AnalysisNote(text: "単位は\(scale.unit)です。")
                 }
             } else {
                 AnalysisNote(text: "従業員あたりの売上高は未算出です。")
