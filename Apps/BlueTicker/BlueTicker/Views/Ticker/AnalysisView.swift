@@ -450,18 +450,21 @@ private struct BusinessProfitSection: View {
                 }
             }
         }
-        // タップした枠が前年差なら、その年の要因分解に切り替える。スクロールを奪わないようタップだけ拾う。
-        .chartXSelection(
-            value: Binding<String?>(
-                get: { nil },
-                set: { slot in
-                    guard let slot, let delta = deltas.first(where: { $0.slot == slot }) else { return }
-                    selectedYearID = delta.id
-                    selectedFactor = nil
-                })
-        )
+        // 前年の棒の中心から当年の棒の中心までを、その前年差のタップ範囲にする。
+        // 細い浮き棒の枠だけだと狙いにくいため。スクロールを奪わないようタップだけ拾う。
         .chartGesture { proxy in
-            SpatialTapGesture().onEnded { proxy.selectXValue(at: $0.location.x) }
+            SpatialTapGesture().onEnded { value in
+                let x = value.location.x
+                let hit = deltas.first { delta in
+                    guard let from = proxy.position(forX: delta.priorLabel),
+                          let to = proxy.position(forX: delta.label)
+                    else { return false }
+                    return x >= min(from, to) && x <= max(from, to)
+                }
+                guard let hit else { return }
+                selectedYearID = hit.id
+                selectedFactor = nil
+            }
         }
         .chartYAxis {
             AxisMarks(position: .leading, values: .automatic(desiredCount: 4)) { value in
