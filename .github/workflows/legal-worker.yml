@@ -6,6 +6,11 @@ name: Legal page Worker
 # GitHub secrets（Feed Trend と同じ）:
 #   CLOUDFLARE_API_TOKEN  Workers Scripts Edit
 #   CLOUDFLARE_ACCOUNT_ID
+#
+# デプロイ前に、このジョブがチェックアウトしたコミット（＝デプロイするコミット）で
+# Worker のテストを流し、落ちたら出さない（CI の static-checks と同じ scripts/ci/worker-tests.sh）。
+# CI(main) の成功を workflow_run で待たないのは、Swift 側（golden など）の失敗や遅延で
+# Worker の出荷が止まらないようにするため。Worker の検証は Worker のテストだけで閉じている。
 
 on:
   push:
@@ -26,6 +31,9 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v4
+
+      - name: Worker のテスト（デプロイするコミットで検証）
+        run: scripts/ci/worker-tests.sh legal
 
       - name: GitHub secrets の有無
         env:

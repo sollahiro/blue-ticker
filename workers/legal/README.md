@@ -27,7 +27,7 @@ Custom Domain `sollahiro.com` も残し、次の 6 パスだけを `yuholab.com`
 
 ## デプロイ
 
-`main` では `.github/workflows/legal-worker.yml` が出す（`workers/legal/**` の変更で起動。マージ＝公開）。`yuholab.com` の Custom Domain は Cloudflare に `yuholab.com` のゾーンがあることが前提。GitHub secrets は Feed Trend と同じ `CLOUDFLARE_API_TOKEN` · `CLOUDFLARE_ACCOUNT_ID`。
+`main` では `.github/workflows/legal-worker.yml` が出す（`workers/legal/**` の変更で起動。マージ＝公開）。出す前に同じコミットで `scripts/ci/worker-tests.sh legal` を流し、落ちたらデプロイしない。`yuholab.com` の Custom Domain は Cloudflare に `yuholab.com` のゾーンがあることが前提。GitHub secrets は Feed Trend と同じ `CLOUDFLARE_API_TOKEN` · `CLOUDFLARE_ACCOUNT_ID`。
 
 手動:
 
