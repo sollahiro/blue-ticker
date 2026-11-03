@@ -6,7 +6,7 @@ import Logging
 /// Vapor 既定の ConsoleLogger の代わりに JSON 1 行ログを有効化する。
 package func bootstrapBltLogging(level: Logger.Level) {
     LoggingSystem.bootstrap { label in
-        let handler = JsonLogHandler.standardError(label: label)
+        var handler = JsonLogHandler.standardError(label: label)
         handler.logLevel = level
         return handler
     }

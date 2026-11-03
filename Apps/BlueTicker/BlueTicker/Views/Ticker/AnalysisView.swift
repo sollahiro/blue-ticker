@@ -29,11 +29,9 @@ struct AnalysisView: View {
         return ScrollView {
             VStack(spacing: Theme.cardContentInset) {
                 PerformanceSection(years: years, currency: currency)
-                BusinessProfitSection(years: years)
+                BusinessProfitSection(years: years, currency: currency)
                 CapitalEfficiencySection(years: years)
-                AnalysisCard(title: "資金配分") {
-                    AnalysisNote(text: "準備中です。")
-                }
+                CashAllocationSection(years: years, currency: currency)
                 ProductivitySection(years: years, currency: currency)
             }
             .padding(Theme.cardContentInset)
@@ -105,11 +103,14 @@ private struct AnalysisNote: View {
 
 private enum ChartStyle {
     static let height: CGFloat = 220
+    /// 目盛り線と、ウォーターフォールの段をつなぐ点線。0 の線より薄くする。
     static let grid = StrokeStyle(lineWidth: 0.5, dash: [3, 3])
     static let gridColor = Theme.textMuted.opacity(0.35)
     static let primaryBar = Color(white: 0.88)
     static let secondaryBar = Color(white: 0.45)
     static let line = Color(red: 0.30, green: 0.52, blue: 0.95)
+    /// 0 の線。Swift Charts の `RuleMark` と横棒で同じ色にする。
+    static let zeroLine = Theme.textMuted.opacity(0.6)
 }
 
 /// 凡例の印。棒は角丸の四角、線は丸。
@@ -333,24 +334,31 @@ private struct PerformanceSection: View {
 
 // MARK: - 収益構造
 
-/// 事業利益の分解。年次バーで年を選び、売上・利益率・販管費の要因を出す。
+/// 事業利益の推移。年ごとの事業利益の棒の間に前年差の浮き棒を置き、前年差をタップすると
+/// 売上・利益率・販管費の要因を出す。
 private struct BusinessProfitSection: View {
     var years: [FinancialsYear]
+    var currency: String?
     @State private var selectedYearID: String?
     @State private var selectedFactor: FactorKind?
 
     var body: some View {
         AnalysisCard(title: "収益構造") {
-            AnalysisSubheading(text: "事業利益の分解")
+            AnalysisSubheading(text: "事業利益の推移")
             if years.contains(where: { $0.businessProfit != nil }) {
-                yearBars
+                profitChart
+                ChartLegend(items: [
+                    LegendItem(title: "事業利益", color: ChartStyle.primaryBar, shape: .bar),
+                    LegendItem(title: "増益", color: Theme.positive, shape: .bar),
+                    LegendItem(title: "減益", color: Theme.negative, shape: .bar),
+                ])
             } else {
                 AnalysisNote(text: "事業利益は未算出です。")
             }
             if let selectedYear = years.first(where: { $0.id == currentYearID && isYearSelectable($0) }) {
                 factorChart(selectedYear, years: years)
             } else {
-                AnalysisNote(text: "年を選ぶと売上要因・利益率要因・販管費要因を表示します。")
+                AnalysisNote(text: "前年差をタップすると売上要因・利益率要因・販管費要因を表示します。")
             }
             AnalysisNote(text: "事業利益は売上総利益 − 販管費です。開示されている営業利益と一致しない場合がございます。")
         }
@@ -361,82 +369,128 @@ private struct BusinessProfitSection: View {
         selectedYearID ?? years.last { isYearSelectable($0) }?.id
     }
 
-    private var yearBars: some View {
-        let peak = years.compactMap(\.businessProfit).map(abs).max() ?? 0
-        return VStack(alignment: .leading, spacing: 6) {
+    /// 年をまたぐ前年差の段。`start` は前年、`end` は当年の事業利益。
+    private struct ProfitDelta: Identifiable {
+        var year: FinancialsYear
+        var priorLabel: String
+        var label: String
+        var start: Double
+        var end: Double
+        var id: String { year.id }
+        /// x 軸のカテゴリ。年のラベルと重ならないようにし、軸には出さない。
+        var slot: String { "差\(label)" }
+    }
+
+    /// 前年差の要因がある年だけ、前年と当年の事業利益の間に段を置く。
+    private var deltas: [ProfitDelta] {
+        years.compactMap { year in
+            guard isYearSelectable(year), let end = year.businessProfit,
+                  let prior = priorYear(of: year, in: years), let start = prior.businessProfit
+            else { return nil }
+            return ProfitDelta(
+                year: year, priorLabel: Format.fy(prior.fyEnd), label: Format.fy(year.fyEnd), start: start, end: end)
+        }
+    }
+
+    /// 業績カードと同じ形の縦棒。事業利益の棒の間に前年差の浮き棒を置き、点線で段をつなぐ。
+    /// 前年差をタップすると下の要因分解がその年に切り替わる。選んでいない前年差は薄くする。
+    private var profitChart: some View {
+        let deltas = deltas
+        let yearLabels = years.map { Format.fy($0.fyEnd) }
+        let slots: [String] = years.flatMap { year -> [String] in
+            let label = Format.fy(year.fyEnd)
+            guard let delta = deltas.first(where: { $0.id == year.id }) else { return [label] }
+            return [delta.slot, label]
+        }
+        let scale = Format.commonScale(for: years.map(\.businessProfit), currency: currency)
+        let selectedID = currentYearID
+        return Chart {
             ForEach(years) { year in
-                let selectable = isYearSelectable(year)
-                let selected = selectable && year.id == currentYearID
-                let row = HStack(spacing: 8) {
-                    Text(Format.fy(year.fyEnd))
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(Theme.text)
-                        .frame(width: 48, alignment: .leading)
-                    SignedBar(value: year.businessProfit ?? 0, peak: peak)
-                        .frame(height: 18)
-                    Text(Format.autoYen(year.businessProfit, currency: year.currency))
-                        .font(.caption.monospacedDigit())
-                        .foregroundStyle(Theme.text)
-                        .frame(width: 88, alignment: .trailing)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.7)
+                if let profit = year.businessProfit {
+                    let label = Format.fy(year.fyEnd)
+                    BarMark(x: .value("年度", label), y: .value("金額", profit), width: .fixed(16))
+                        .foregroundStyle(profit < 0 ? Theme.negative : ChartStyle.primaryBar)
+                        .cornerRadius(3)
+                        .accessibilityLabel("\(label) 事業利益")
+                        .accessibilityValue(Format.autoYen(profit, currency: currency))
                 }
-                .padding(.vertical, 6)
-                .padding(.horizontal, 8)
-                .background(selected ? Theme.accent.opacity(0.18) : Color.clear)
-                .clipShape(RoundedRectangle(cornerRadius: 6))
-                if selectable {
-                    Button {
-                        selectedYearID = year.id
-                        selectedFactor = nil
-                    } label: {
-                        row
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityAddTraits(selected ? .isSelected : [])
-                } else {
-                    row
+            }
+            ForEach(deltas) { delta in
+                let selected = delta.id == selectedID
+                BarMark(
+                    x: .value("年度", delta.slot), yStart: .value("金額", delta.start), yEnd: .value("金額", delta.end),
+                    width: .fixed(12)
+                )
+                .foregroundStyle((delta.end >= delta.start ? Theme.positive : Theme.negative).opacity(selected ? 1 : 0.4))
+                .cornerRadius(3)
+                .accessibilityLabel("\(delta.label) 前年差")
+                .accessibilityValue(Format.autoYen(delta.end - delta.start, currency: currency))
+                // 前年の棒の上端 → 前年差 → 当年の棒の上端を点線でつなぐ。
+                ForEach([(delta.priorLabel, delta.start, "a"), (delta.label, delta.end, "b")], id: \.2) { label, value, side in
+                    LineMark(x: .value("年度", label), y: .value("金額", value), series: .value("線", "\(delta.id)-\(side)"))
+                        .foregroundStyle(ChartStyle.gridColor)
+                        .lineStyle(ChartStyle.grid)
+                    LineMark(x: .value("年度", delta.slot), y: .value("金額", value), series: .value("線", "\(delta.id)-\(side)"))
+                        .foregroundStyle(ChartStyle.gridColor)
+                        .lineStyle(ChartStyle.grid)
+                }
+            }
+            RuleMark(y: .value("zero", 0))
+                .foregroundStyle(ChartStyle.zeroLine)
+                .lineStyle(StrokeStyle(lineWidth: 0.5))
+        }
+        .chartXScale(domain: slots)
+        .chartXAxis {
+            AxisMarks { value in
+                // 前年差の枠にはラベルを出さない。
+                if let slot = value.as(String.self), yearLabels.contains(slot) {
+                    AxisValueLabel()
+                        .font(.caption2)
+                        .foregroundStyle(Theme.textMuted)
                 }
             }
         }
+        // タップした枠が前年差なら、その年の要因分解に切り替える。スクロールを奪わないようタップだけ拾う。
+        .chartXSelection(
+            value: Binding<String?>(
+                get: { nil },
+                set: { slot in
+                    guard let slot, let delta = deltas.first(where: { $0.slot == slot }) else { return }
+                    selectedYearID = delta.id
+                    selectedFactor = nil
+                })
+        )
+        .chartGesture { proxy in
+            SpatialTapGesture().onEnded { proxy.selectXValue(at: $0.location.x) }
+        }
+        .chartYAxis {
+            AxisMarks(position: .leading, values: .automatic(desiredCount: 4)) { value in
+                AxisGridLine(stroke: ChartStyle.grid)
+                    .foregroundStyle(ChartStyle.gridColor)
+                AxisValueLabel {
+                    if let number = value.as(Double.self) {
+                        Text(scale.map { Format.scaledYen(number, scale: $0) } ?? Format.autoYen(number))
+                            .font(.caption2)
+                            .foregroundStyle(Theme.textMuted)
+                    }
+                }
+            }
+        }
+        .chartLegend(.hidden)
+        .frame(height: ChartStyle.height)
     }
 
     private func factorChart(_ year: FinancialsYear, years: [FinancialsYear]) -> some View {
         let spec = factorSpec(year)
-        let peak = (spec.factors.map { abs($0.value ?? 0) } + [abs(spec.totalValue ?? 0)]).max() ?? 0
         let prior = priorYear(of: year, in: years)
         return VStack(alignment: .leading, spacing: 8) {
             Text(yearOutcomeTitle(year, total: spec.totalValue))
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(Theme.text)
-            ForEach(spec.factors) { factor in
-                let selected = selectedFactor == factor.kind
-                factorRow(
-                    title: factor.kind.title,
-                    value: factor.value,
-                    peak: peak,
-                    format: spec.format,
-                    selected: selected,
-                    emphasized: false
-                )
-                .contentShape(Rectangle())
-                .onTapGesture {
-                    selectedFactor = (selectedFactor == factor.kind ? nil : factor.kind)
-                }
+            WaterfallChart(steps: factorSteps(spec), selectedID: selectedFactor?.rawValue) { id in
+                guard let kind = FactorKind(rawValue: id) else { return }
+                selectedFactor = (selectedFactor == kind ? nil : kind)
             }
-            Rectangle()
-                .fill(Theme.textMuted.opacity(0.45))
-                .frame(height: 1)
-                .padding(.vertical, 2)
-            factorRow(
-                title: spec.totalTitle,
-                value: spec.totalValue,
-                peak: peak,
-                format: spec.format,
-                selected: false,
-                emphasized: true
-            )
-            .accessibilityLabel("\(spec.totalTitle) \(spec.format(spec.totalValue))")
             if let selectedFactor, let factor = spec.factors.first(where: { $0.kind == selectedFactor }) {
                 let detail = selectedFactor.detail(year: year, prior: prior, contribution: factor.value)
                 VStack(alignment: .leading, spacing: 4) {
@@ -467,30 +521,33 @@ private struct BusinessProfitSection: View {
         .padding(.top, 8)
     }
 
-    private func factorRow(
-        title: String,
-        value: Double?,
-        peak: Double,
-        format: (Double?) -> String,
-        selected: Bool,
-        emphasized: Bool
-    ) -> some View {
-        HStack(spacing: 8) {
-            Text(title)
-                .font(.caption.weight(selected || emphasized ? .bold : .regular))
-                .foregroundStyle(selected ? Theme.accent : Theme.text)
-                .frame(width: 88, alignment: .leading)
-            MagnitudeBar(value: value ?? 0, peak: peak)
-                .frame(height: 16)
-            Text(format(value))
-                .font(.caption.monospacedDigit().weight(emphasized ? .semibold : .regular))
-                .foregroundStyle(factorColor(value))
-                .frame(width: 88, alignment: .trailing)
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
+    /// 売上・利益率・販管費の要因を順に積み、前年差は 0 から伸ばす。
+    private func factorSteps(_ spec: FactorSpec) -> [WaterfallStep] {
+        var running = 0.0
+        var steps: [WaterfallStep] = spec.factors.map { factor in
+            let value = factor.value ?? 0
+            defer { running += value }
+            return WaterfallStep(
+                id: factor.kind.rawValue,
+                title: factor.kind.title,
+                start: running,
+                end: running + value,
+                valueText: spec.format(factor.value),
+                valueColor: factorColor(factor.value),
+                isTotal: false
+            )
         }
-        .padding(.vertical, 2)
-        .background(selected ? Theme.accent.opacity(0.12) : Color.clear)
+        steps.append(
+            WaterfallStep(
+                id: "total",
+                title: spec.totalTitle,
+                start: 0,
+                end: spec.totalValue ?? running,
+                valueText: spec.format(spec.totalValue),
+                valueColor: factorColor(spec.totalValue),
+                isTotal: true
+            ))
+        return steps
     }
 
     /// 「26年2月期の事業利益は、前年より増えました」のように前年差の結論だけを見出しにする。
@@ -665,8 +722,10 @@ private struct BusinessProfitSection: View {
     }
 
     private func factorColor(_ value: Double?) -> Color {
-        guard let value, value < 0 else { return Theme.text }
-        return Theme.negative
+        guard let value else { return Theme.text }
+        if value < 0 { return Theme.negative }
+        if value > 0 { return Theme.positive }
+        return Theme.text
     }
 
     /// 事業利益は前年差（要因分解の合計）がある年度だけ選べる。資本効率は年度を選ばない。
@@ -900,7 +959,7 @@ private struct ProductivitySection: View {
             if years.contains(where: { Self.salesPerEmployee($0) != nil }) {
                 salesPerEmployeeChart
                 if let scale {
-                    AnalysisNote(text: "単位は\(scale.unit)です。従業員数は期末の連結従業員数です。")
+                    AnalysisNote(text: "単位は\(scale.unit)です。")
                 }
             } else {
                 AnalysisNote(text: "従業員あたりの売上高は未算出です。")
@@ -1000,56 +1059,336 @@ private struct ProductivitySection: View {
     }
 }
 
-/// 年次バー。0 を中央に置き、マイナスは左、プラスは右へ伸ばす。
-private struct SignedBar: View {
-    var value: Double
-    var peak: Double
+// MARK: - 資金配分
+
+/// フリーCF から現金増減までのウォーターフォールと、現金残高の増減（期末の現金の棒・正味現金の折れ線）。
+/// 値は CF の符号（収入が正、支出が負）。換算差額とその他の現金増減は「その他」にまとめる。
+private struct CashAllocationSection: View {
+    var years: [FinancialsYear]
+    var currency: String?
+    @State private var selectedYearID: String?
 
     var body: some View {
-        GeometryReader { geo in
-            let mid = geo.size.width / 2
-            let magnitude = peak > 0 ? CGFloat(abs(value) / peak) * mid : 0
-            let barWidth = value == 0 ? 0 : max(magnitude, 4)
-            ZStack(alignment: .leading) {
-                RoundedRectangle(cornerRadius: 2)
-                    .fill(Theme.idleTab.opacity(0.55))
-                    .frame(width: geo.size.width, height: geo.size.height)
-                Rectangle()
-                    .fill(Theme.text)
-                    .frame(width: 1, height: geo.size.height)
-                    .offset(x: mid)
-                if value > 0 {
-                    RoundedRectangle(cornerRadius: 2)
-                        .fill(Theme.positive)
-                        .frame(width: barWidth, height: geo.size.height)
-                        .offset(x: mid)
-                } else if value < 0 {
-                    RoundedRectangle(cornerRadius: 2)
-                        .fill(Theme.negative)
-                        .frame(width: barWidth, height: geo.size.height)
-                        .offset(x: mid - barWidth)
+        AnalysisCard(title: "資金配分") {
+            AnalysisSubheading(text: "フリーCFの使い道")
+            if selectableYears.isEmpty {
+                AnalysisNote(text: "キャッシュ・フロー計算書の内訳は未集計です。")
+            } else {
+                yearPicker
+                if let year = selectableYears.first(where: { $0.id == currentYearID }) {
+                    waterfall(year)
                 }
+            }
+            AnalysisSubheading(text: "現金残高の増減")
+            if years.contains(where: { $0.cashEquivalents != nil }) {
+                balanceChart
+                ChartLegend(items: [
+                    LegendItem(title: "現金及び現金同等物", color: ChartStyle.primaryBar, shape: .bar),
+                    LegendItem(title: "正味現金", color: ChartStyle.line, shape: .line),
+                ])
+            } else {
+                AnalysisNote(text: "現金及び現金同等物は未集計です。")
             }
         }
     }
-}
 
-/// 要因分解。符号に関わらず右へ伸ばし、色でプラス／マイナスを示す。
-private struct MagnitudeBar: View {
-    var value: Double
-    var peak: Double
+    private var selectableYears: [FinancialsYear] {
+        years.filter { $0.cfCashChange != nil && $0.cfc != nil && $0.cff != nil }
+    }
 
-    var body: some View {
-        GeometryReader { geo in
-            let width = peak > 0 ? max(CGFloat(abs(value) / peak) * geo.size.width, value == 0 ? 0 : 4) : 0
-            ZStack(alignment: .leading) {
-                RoundedRectangle(cornerRadius: 2)
-                    .fill(Theme.idleTab.opacity(0.55))
-                    .frame(width: geo.size.width, height: geo.size.height)
-                RoundedRectangle(cornerRadius: 2)
-                    .fill(value >= 0 ? Theme.positive : Theme.negative)
-                    .frame(width: width, height: geo.size.height)
+    private var currentYearID: String? {
+        selectedYearID ?? selectableYears.last?.id
+    }
+
+    private var yearPicker: some View {
+        YearPicker(years: selectableYears, selectedID: currentYearID) { selectedYearID = $0 }
+    }
+
+    private struct Step: Identifiable {
+        var title: String
+        var value: Double
+        var start: Double
+        var end: Double
+        var isTotal: Bool
+        var id: String { title }
+    }
+
+    /// 銀行など借入・配当の内訳が無い年は、財務CF を 1 行で出す。
+    private static func steps(_ year: FinancialsYear) -> [Step] {
+        var items: [(String, Double)] = [("フリーCF", year.cfc ?? 0)]
+        if let debt = year.cfDebtChange, let dividends = year.cfDividendsParent, let other = year.cfOtherFinancing {
+            items.append(("借入の増減", debt))
+            // 無配の年は配当の段を出さない。
+            if dividends != 0 { items.append(("配当", dividends)) }
+            items.append(("その他財務CF", other))
+        } else {
+            items.append(("財務CF", year.cff ?? 0))
+        }
+        items.append(("その他", (year.cfFxEffect ?? 0) + (year.cfOtherCashChange ?? 0)))
+        var running = 0.0
+        var steps: [Step] = items.map { title, value in
+            defer { running += value }
+            return Step(title: title, value: value, start: running, end: running + value, isTotal: false)
+        }
+        let total = year.cfCashChange ?? running
+        steps.append(Step(title: "現金の増減", value: total, start: 0, end: total, isTotal: true))
+        return steps
+    }
+
+    private func waterfall(_ year: FinancialsYear) -> some View {
+        let steps = Self.steps(year)
+        // 行ごとに単位が変わると桁を比べにくいので、カード内は共通の単位にそろえる。
+        let yearCurrency = year.currency ?? currency
+        let scale = Format.commonScale(for: steps.map(\.value), currency: yearCurrency)
+        let format: (Double) -> String = { value in
+            scale.map { Format.scaledYen(value, scale: $0) + $0.unit } ?? Format.autoYen(value, currency: yearCurrency)
+        }
+        return VStack(alignment: .leading, spacing: 8) {
+            WaterfallChart(
+                steps: steps.map { step in
+                    WaterfallStep(
+                        id: step.id,
+                        title: step.title,
+                        start: step.start,
+                        end: step.end,
+                        valueText: format(step.value),
+                        valueColor: step.value > 0 ? Theme.positive : step.value < 0 ? Theme.negative : Theme.text,
+                        isTotal: step.isTotal
+                    )
+                })
+        }
+        .padding(.top, 4)
+    }
+
+    /// 現金の棒と正味現金の折れ線。正味現金はマイナスになり得るので 0 の線を引く。
+    private var balanceChart: some View {
+        let labels = years.map { Format.fy($0.fyEnd) }
+        let scale = Format.commonScale(
+            for: years.map(\.cashEquivalents) + years.map(\.netCash), currency: currency)
+        let netCash = ChartMath.linePoints(years) { $0.netCash }
+        return Chart {
+            ForEach(years) { year in
+                if let cash = year.cashEquivalents {
+                    let label = Format.fy(year.fyEnd)
+                    BarMark(x: .value("年度", label), y: .value("金額", cash), width: .fixed(16))
+                        .foregroundStyle(ChartStyle.primaryBar)
+                        .cornerRadius(3)
+                        .accessibilityLabel("\(label) 現金及び現金同等物")
+                        .accessibilityValue(Format.autoYen(cash, currency: currency))
+                }
+            }
+            ForEach(netCash) { point in
+                LineMark(
+                    x: .value("年度", point.label),
+                    y: .value("金額", point.value),
+                    series: .value("線", "net-cash-\(point.run)")
+                )
+                .foregroundStyle(ChartStyle.line)
+                .lineStyle(StrokeStyle(lineWidth: 2.5))
+                PointMark(x: .value("年度", point.label), y: .value("金額", point.value))
+                    .foregroundStyle(ChartStyle.line)
+                    .symbolSize(40)
+                    .accessibilityLabel("\(point.label) 正味現金")
+                    .accessibilityValue(Format.autoYen(point.value, currency: currency))
+            }
+            RuleMark(y: .value("zero", 0))
+                .foregroundStyle(Theme.textMuted.opacity(0.6))
+                .lineStyle(StrokeStyle(lineWidth: 0.5))
+        }
+        .chartXScale(domain: labels)
+        .chartXAxis {
+            AxisMarks { _ in
+                AxisValueLabel()
+                    .font(.caption2)
+                    .foregroundStyle(Theme.textMuted)
             }
         }
+        .chartYAxis {
+            AxisMarks(position: .leading, values: .automatic(desiredCount: 4)) { value in
+                AxisGridLine(stroke: ChartStyle.grid)
+                    .foregroundStyle(ChartStyle.gridColor)
+                AxisValueLabel {
+                    if let number = value.as(Double.self) {
+                        Text(scale.map { Format.scaledYen(number, scale: $0) } ?? Format.autoYen(number))
+                            .font(.caption2)
+                            .foregroundStyle(Theme.textMuted)
+                    }
+                }
+            }
+        }
+        .chartLegend(.hidden)
+        .frame(height: ChartStyle.height)
+    }
+}
+
+/// ウォーターフォールの 1 段。合計の段は `start` を 0 にして 0 から伸ばす。
+private struct WaterfallStep: Identifiable {
+    var id: String
+    var title: String
+    var start: Double
+    var end: Double
+    var valueText: String
+    var valueColor: Color
+    var isTotal: Bool
+}
+
+/// 浮き棒のウォーターフォール（資金配分・収益構造で共通）。
+/// 各段の終点から次の段へ点線を引く。
+/// 段をまたぐ点線をつなげるため、棒は行ごとでなく全段まとめて 1 枚の背景に描く。
+private struct WaterfallChart: View {
+    var steps: [WaterfallStep]
+    var selectedID: String?
+    /// 渡すと合計以外の段をタップで選べる。
+    var onSelect: ((String) -> Void)?
+
+    private static let sideWidth: CGFloat = 88
+    private static let columnSpacing: CGFloat = 8
+    private static let barHeight: CGFloat = 16
+    private static let rowPadding: CGFloat = 2
+    private static let rowSpacing: CGFloat = 8
+    /// 合計の前の区切り線（1pt と上下 2pt）。
+    private static let dividerHeight: CGFloat = 5
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Self.rowSpacing) {
+            ForEach(steps) { step in
+                if step.isTotal {
+                    Rectangle()
+                        .fill(Theme.textMuted.opacity(0.45))
+                        .frame(height: 1)
+                        .padding(.vertical, 2)
+                }
+                row(step)
+            }
+        }
+        .background(alignment: .topLeading) {
+            GeometryReader { geo in
+                bars(width: geo.size.width)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func row(_ step: WaterfallStep) -> some View {
+        let selected = step.id == selectedID
+        let content = HStack(spacing: Self.columnSpacing) {
+            Text(step.title)
+                .font(.caption.weight(selected || step.isTotal ? .bold : .regular))
+                .foregroundStyle(selected ? Theme.accent : Theme.text)
+                .frame(width: Self.sideWidth, alignment: .leading)
+            Spacer(minLength: 0)
+            Text(step.valueText)
+                .font(.caption.monospacedDigit().weight(step.isTotal ? .semibold : .regular))
+                .foregroundStyle(step.valueColor)
+                .frame(width: Self.sideWidth, alignment: .trailing)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+        }
+        .frame(height: Self.barHeight + Self.rowPadding * 2)
+        .background(selected ? Theme.accent.opacity(0.12) : Color.clear)
+        .accessibilityElement(children: .combine)
+        if let onSelect, !step.isTotal {
+            content
+                .contentShape(Rectangle())
+                .onTapGesture { onSelect(step.id) }
+                .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
+        } else {
+            content
+        }
+    }
+
+    /// 各段の棒の上端。合計の段は区切り線の分だけ下がる。
+    private var barTops: [CGFloat] {
+        var y: CGFloat = 0
+        return steps.map { step in
+            if step.isTotal { y += Self.dividerHeight + Self.rowSpacing }
+            defer { y += Self.barHeight + Self.rowPadding * 2 + Self.rowSpacing }
+            return y + Self.rowPadding
+        }
+    }
+
+    private func bars(width: CGFloat) -> some View {
+        let bounds: [Double] = steps.flatMap { step -> [Double] in [step.start, step.end] } + [0.0]
+        let lower = bounds.min() ?? 0
+        let upper = bounds.max() ?? 0
+        let left = Self.sideWidth + Self.columnSpacing
+        let span = max(width - left * 2, 0)
+        let x: (Double) -> CGFloat = { upper > lower ? left + CGFloat(($0 - lower) / (upper - lower)) * span : left }
+        let tops = barTops
+        return ZStack(alignment: .topLeading) {
+            ForEach(Array(steps.enumerated()), id: \.element.id) { index, step in
+                let barLeft = x(min(step.start, step.end))
+                let barWidth = step.end == step.start ? 0 : max(x(max(step.start, step.end)) - barLeft, 4)
+                // 0 から伸ばす最初と合計の段は 0 軸側を直角に、間の段は両端を控えめに丸める。
+                UnevenRoundedRectangle.horizontalBar(
+                    growsRight: step.end >= step.start, fromZero: index == 0 || step.isTotal
+                )
+                .fill(step.end >= step.start ? Theme.positive : Theme.negative)
+                    .frame(width: barWidth, height: Self.barHeight)
+                    .offset(x: barLeft, y: tops[index])
+            }
+            Path { path in
+                for index in steps.indices.dropLast() {
+                    let connectorX = x(steps[index].end)
+                    path.move(to: CGPoint(x: connectorX, y: tops[index] + Self.barHeight))
+                    path.addLine(to: CGPoint(x: connectorX, y: tops[index + 1]))
+                }
+            }
+            .stroke(ChartStyle.gridColor, style: ChartStyle.grid)
+            if let first = tops.first, let last = tops.last {
+                Rectangle()
+                    .fill(ChartStyle.zeroLine)
+                    .frame(width: 0.5, height: last + Self.barHeight - first)
+                    .offset(x: x(0), y: first)
+            }
+        }
+        .accessibilityHidden(true)
+    }
+}
+
+private extension UnevenRoundedRectangle {
+    /// 横棒。0 から伸ばす棒は 0 軸側を直角にし、伸びた先の端だけ控えめに丸める。
+    /// 0 に接しない棒（ウォーターフォールの間の段）は両端とも丸める。
+    static func horizontalBar(growsRight: Bool, fromZero: Bool = true) -> UnevenRoundedRectangle {
+        let radius: CGFloat = 3
+        let start: CGFloat = fromZero ? 0 : radius
+        return growsRight
+            ? UnevenRoundedRectangle(
+                topLeadingRadius: start, bottomLeadingRadius: start,
+                bottomTrailingRadius: radius, topTrailingRadius: radius)
+            : UnevenRoundedRectangle(
+                topLeadingRadius: radius, bottomLeadingRadius: radius,
+                bottomTrailingRadius: start, topTrailingRadius: start)
+    }
+}
+
+/// 年を選ぶボタンの行（収益構造の要因分解・資金配分のウォーターフォールで共通）。
+private struct YearPicker: View {
+    var years: [FinancialsYear]
+    var selectedID: String?
+    var onSelect: (String) -> Void
+
+    var body: some View {
+        ScrollView(.horizontal) {
+            HStack(spacing: 6) {
+                ForEach(years) { year in
+                    let selected = year.id == selectedID
+                    Button {
+                        onSelect(year.id)
+                    } label: {
+                        Text(Format.fy(year.fyEnd))
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(selected ? Theme.text : Theme.textMuted)
+                            .padding(.vertical, 6)
+                            .padding(.horizontal, 10)
+                            .background(selected ? Theme.accent.opacity(0.18) : Theme.idleTab.opacity(0.25))
+                            .clipShape(RoundedRectangle(cornerRadius: 6))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityAddTraits(selected ? .isSelected : [])
+                }
+            }
+        }
+        .scrollIndicators(.hidden)
     }
 }

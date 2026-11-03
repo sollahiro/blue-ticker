@@ -21,7 +21,7 @@ import Testing
         }
         defer { try? handle.close() }
 
-        let handler = JsonLogHandler(label: "test.logger", handle: handle)
+        var handler = JsonLogHandler(label: "test.logger", handle: handle)
         handler.logLevel = .trace
         handler.log(
             event: LogEvent(
@@ -95,7 +95,7 @@ import Testing
         }
         defer { try? handle.close() }
 
-        let handler = JsonLogHandler(label: "test.logger", handle: handle)
+        var handler = JsonLogHandler(label: "test.logger", handle: handle)
         handler.logLevel = .trace
         handler.log(
             event: LogEvent(
@@ -136,5 +136,28 @@ private final class CapturingHandler: LogHandler, @unchecked Sendable {
 
     func log(event: LogEvent) {
         messages.append((event.level, event.metadata ?? [:]))
+    }
+
+    /// `Logger` のコピーに metadata を足しても元や他のコピーに漏れない（値型）。
+    /// 並行に足しても落ちない（PostgresNIO が接続ごとに `var logger = logger` で足す）。
+    @Test func copiedLoggerMetadataIsIndependent() async throws {
+        let base = Logger(label: "test.logger") { label in
+            JsonLogHandler(label: label, handle: FileHandle.nullDevice)
+        }
+        var copy = base
+        copy[metadataKey: "psql_connection_id"] = "1"
+        #expect(base[metadataKey: "psql_connection_id"] == nil)
+        #expect(copy[metadataKey: "psql_connection_id"] == "1")
+
+        await withTaskGroup(of: Void.self) { group in
+            for index in 0..<200 {
+                group.addTask {
+                    var logger = base
+                    logger[metadataKey: "psql_connection_id"] = "\(index)"
+                    logger[metadataKey: "request-id"] = "r\(index)"
+                }
+            }
+        }
+        #expect(base[metadataKey: "request-id"] == nil)
     }
 }
