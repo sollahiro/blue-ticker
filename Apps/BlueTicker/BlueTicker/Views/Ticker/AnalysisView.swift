@@ -978,7 +978,7 @@ private struct ProductivitySection: View {
 
 // MARK: - 資金配分
 
-/// フリーCF から現金増減までのウォーターフォールと、期末の現金（棒）・正味現金（折れ線）。
+/// フリーCF から現金増減までのウォーターフォールと、現金残高の増減（期末の現金の棒・正味現金の折れ線）。
 /// 値は CF の符号（収入が正、支出が負）。換算差額とその他の現金増減は「その他」にまとめる。
 private struct CashAllocationSection: View {
     var years: [FinancialsYear]
@@ -996,14 +996,13 @@ private struct CashAllocationSection: View {
                     waterfall(year)
                 }
             }
-            AnalysisSubheading(text: "期末の現金")
+            AnalysisSubheading(text: "現金残高の増減")
             if years.contains(where: { $0.cashEquivalents != nil }) {
                 balanceChart
                 ChartLegend(items: [
                     LegendItem(title: "現金", color: ChartStyle.primaryBar, shape: .bar),
                     LegendItem(title: "正味現金", color: ChartStyle.line, shape: .line),
                 ])
-                AnalysisNote(text: "現金は現金及び現金同等物です。正味現金は現金 − 有利子負債で、マイナスは有利子負債が現金を上回ることを示します。")
             } else {
                 AnalysisNote(text: "現金及び現金同等物は未集計です。")
             }
@@ -1082,9 +1081,6 @@ private struct CashAllocationSection: View {
             scale.map { Format.scaledYen(value, scale: $0) + $0.unit } ?? Format.autoYen(value, currency: yearCurrency)
         }
         return VStack(alignment: .leading, spacing: 8) {
-            Text("\(Format.fyJapanese(year.fyEnd))の現金の動き")
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(Theme.text)
             WaterfallChart(
                 steps: steps.map { step in
                     WaterfallStep(
@@ -1097,7 +1093,6 @@ private struct CashAllocationSection: View {
                         isTotal: step.isTotal
                     )
                 })
-            AnalysisNote(text: "フリーCFは営業CF＋投資CFです。配当は親会社株主への支払いのみで、非支配株主への配当はその他財務CFに含みます。その他は為替換算差額と、連結範囲の変動など CF の 3 区分以外の現金の増減です。")
         }
         .padding(.top, 4)
     }
@@ -1175,8 +1170,8 @@ private struct WaterfallStep: Identifiable {
 }
 
 /// 浮き棒のウォーターフォール（資金配分・収益構造で共通）。
-/// 各段の終点から次の段へ点線を引き、0 の実線を最上段から最下段まで通す。
-/// 段をまたぐ線をつなげるため、棒は行ごとでなく全段まとめて 1 枚の背景に描く。
+/// 各段の終点から次の段へ点線を引く。
+/// 段をまたぐ点線をつなげるため、棒は行ごとでなく全段まとめて 1 枚の背景に描く。
 private struct WaterfallChart: View {
     var steps: [WaterfallStep]
     var selectedID: String?
@@ -1261,11 +1256,7 @@ private struct WaterfallChart: View {
             ForEach(Array(steps.enumerated()), id: \.element.id) { index, step in
                 let barLeft = x(min(step.start, step.end))
                 let barWidth = step.end == step.start ? 0 : max(x(max(step.start, step.end)) - barLeft, 4)
-                RoundedRectangle(cornerRadius: 2)
-                    .fill(Theme.idleTab.opacity(0.55))
-                    .frame(width: span, height: Self.barHeight)
-                    .offset(x: left, y: tops[index])
-                RoundedRectangle(cornerRadius: 2)
+                UnevenRoundedRectangle.horizontalBar(growsRight: step.end >= step.start)
                     .fill(step.end >= step.start ? Theme.positive : Theme.negative)
                     .frame(width: barWidth, height: Self.barHeight)
                     .offset(x: barLeft, y: tops[index])
@@ -1278,14 +1269,18 @@ private struct WaterfallChart: View {
                 }
             }
             .stroke(Theme.textMuted, style: StrokeStyle(lineWidth: 1, dash: [2, 2]))
-            if let first = tops.first, let last = tops.last {
-                Rectangle()
-                    .fill(Theme.text)
-                    .frame(width: 1, height: last + Self.barHeight - first)
-                    .offset(x: x(0), y: first)
-            }
         }
         .accessibilityHidden(true)
+    }
+}
+
+private extension UnevenRoundedRectangle {
+    /// 横棒。伸び始めの側（0 軸や前の段とつながる側）は直角、伸びた先の端だけ控えめに丸める。
+    static func horizontalBar(growsRight: Bool) -> UnevenRoundedRectangle {
+        let radius: CGFloat = 3
+        return growsRight
+            ? UnevenRoundedRectangle(bottomTrailingRadius: radius, topTrailingRadius: radius)
+            : UnevenRoundedRectangle(topLeadingRadius: radius, bottomLeadingRadius: radius)
     }
 }
 
@@ -1300,20 +1295,13 @@ private struct SignedBar: View {
             let magnitude = peak > 0 ? CGFloat(abs(value) / peak) * mid : 0
             let barWidth = value == 0 ? 0 : max(magnitude, 4)
             ZStack(alignment: .leading) {
-                RoundedRectangle(cornerRadius: 2)
-                    .fill(Theme.idleTab.opacity(0.55))
-                    .frame(width: geo.size.width, height: geo.size.height)
-                Rectangle()
-                    .fill(Theme.text)
-                    .frame(width: 1, height: geo.size.height)
-                    .offset(x: mid)
                 if value > 0 {
-                    RoundedRectangle(cornerRadius: 2)
+                    UnevenRoundedRectangle.horizontalBar(growsRight: true)
                         .fill(Theme.positive)
                         .frame(width: barWidth, height: geo.size.height)
                         .offset(x: mid)
                 } else if value < 0 {
-                    RoundedRectangle(cornerRadius: 2)
+                    UnevenRoundedRectangle.horizontalBar(growsRight: false)
                         .fill(Theme.negative)
                         .frame(width: barWidth, height: geo.size.height)
                         .offset(x: mid - barWidth)
