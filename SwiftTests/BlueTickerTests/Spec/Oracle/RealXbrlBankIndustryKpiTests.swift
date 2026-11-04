@@ -122,6 +122,95 @@ import Testing
         #expect(
             payload.fact(key: industryKpiKeyOperatingExpenses, scope: scope)?.sourceRef
                 == "GeneralAndAdministrativeExpensesOEBNK")
+        #expect(!payload.warnings.contains(industryKpiWarningNcdAbsentAssumedZero))
+    }
+
+    // source: code=8699 fy_end=2026-03-31 doc_id=S100YJQ6 page=0 field=industry_kpi.target
+    @Test func hsHoldingsBankSubsidiaryItemsAreNotApplicable() async {
+        guard let dir = await Self.ensureAvailable("S100YJQ6") else { return }
+        guard case .notApplicable(let reason) =
+            BankIndustryKpiExtractor.resolve(
+                xbrlDir: dir, edinetIndustry: "証券、商品先物取引業", listedCode: "8699")
+        else {
+            Issue.record("HSホールディングス S100YJQ6: expected not_bank")
+            return
+        }
+        #expect(reason == industryKpiNotApplicableNotBank)
+    }
+
+    // source: code=8729 fy_end=2026-03-31 doc_id=S100YCL0 page=0 field=industry_kpi.target
+    @Test func sonyFinancialGroupBankSubsidiaryItemsAreNotApplicable() async {
+        guard let dir = await Self.ensureAvailable("S100YCL0") else { return }
+        guard case .notApplicable(let reason) =
+            BankIndustryKpiExtractor.resolve(
+                xbrlDir: dir, edinetIndustry: "保険業", listedCode: "8729")
+        else {
+            Issue.record("ソニーFG S100YCL0: expected not_bank")
+            return
+        }
+        #expect(reason == industryKpiNotApplicableNotBank)
+    }
+
+    // source: code=7182 fy_end=2026-03-31 doc_id=S100Y9G1 page=0 field=industry_kpi.deposits
+    @Test func japanPostBankUsesDepositsLiabilitiesFallback() async throws {
+        guard let dir = await Self.ensureAvailable("S100Y9G1") else { return }
+        guard case .resolved(let payload, _, _) =
+            BankIndustryKpiExtractor.resolve(
+                xbrlDir: dir, edinetIndustry: Xbrl.bankEdinetIndustry, listedCode: "7182")
+        else {
+            Issue.record("ゆうちょ銀行 S100Y9G1: expected resolved with deposits fallback")
+            return
+        }
+        let scope = industryKpiScopeConsolidated
+        let deposits = try #require(payload.fact(key: industryKpiKeyDeposits, scope: scope))
+        #expect(deposits.sourceRef == industryKpiDepositsFallbackTag)
+        #expect(deposits.value == 186_108_700 * Self.million)
+        let loans = try #require(payload.fact(key: industryKpiKeyLoans, scope: scope))
+        #expect(loans.value == 4_372_193 * Self.million)
+        let ldr = try #require(payload.fact(key: industryKpiKeyLDR, scope: scope))
+        #expect(round2(ldr.value) == 2.35)
+        #expect(payload.warnings.contains(industryKpiWarningDepositsLiabilitiesFallback))
+        #expect(!payload.warnings.contains(industryKpiWarningLDRUncomputed))
+    }
+
+    // source: code=8558 fy_end=2026-03-31 doc_id=S100YCZF page=0 field=industry_kpi.ohr
+    @Test func towaBankNonpositiveGrossProfitOmitsOHR() async throws {
+        guard let dir = await Self.ensureAvailable("S100YCZF") else { return }
+        guard case .resolved(let payload, _, _) =
+            BankIndustryKpiExtractor.resolve(
+                xbrlDir: dir, edinetIndustry: Xbrl.bankEdinetIndustry, listedCode: "8558")
+        else {
+            Issue.record("東和銀行 S100YCZF: expected resolved without OHR")
+            return
+        }
+        let scope = industryKpiScopeConsolidated
+        let gp = try #require(payload.fact(key: industryKpiKeyGrossBusinessProfit, scope: scope)?.value)
+        #expect(gp < 0)
+        #expect(payload.fact(key: industryKpiKeyOHR, scope: scope) == nil)
+        #expect(payload.warnings.contains(industryKpiWarningGrossProfitNonpositive))
+        #expect(payload.needsReview == true)
+        #expect(payload.fact(key: industryKpiKeyLDR, scope: scope) != nil)
+    }
+
+    // source: code=8421 fy_end=2026-03-31 doc_id=S100YH59 page=0 field=industry_kpi.ohr
+    @Test func shinkinCentralBankExtensionOperatingExpensesYieldOHR() async throws {
+        guard let dir = await Self.ensureAvailable("S100YH59") else { return }
+        guard case .resolved(let payload, _, _) =
+            BankIndustryKpiExtractor.resolve(
+                xbrlDir: dir, edinetIndustry: "その他金融業", listedCode: "8421")
+        else {
+            Issue.record("信金中央金庫 S100YH59: expected resolved with extension opex")
+            return
+        }
+        let scope = industryKpiScopeConsolidated
+        let opex = try #require(payload.fact(key: industryKpiKeyOperatingExpenses, scope: scope))
+        #expect(opex.sourceRef == "GeneralAndAdministrativeExpenses")
+        #expect(opex.value == 63_551 * Self.million)
+        let gp = try #require(payload.fact(key: industryKpiKeyGrossBusinessProfit, scope: scope)?.value)
+        let ohr = try #require(payload.fact(key: industryKpiKeyOHR, scope: scope))
+        #expect(round2(ohr.value) == round2(opex.value / gp * 100))
+        #expect(round2(ohr.value) == 54.04)
+        #expect(!payload.warnings.contains(industryKpiWarningOHRUncomputed))
     }
 
     private func round2(_ value: Double) -> Double {

@@ -25,7 +25,8 @@ import Testing
             "GeneralAndAdministrativeExpensesOEBNK": ["CurrentYearDuration": 104_888 * million],
         ]
         guard case .resolved(let payload, let source, _) =
-            BankIndustryKpiExtractor.resolve(tagElements: tags)
+            BankIndustryKpiExtractor.resolve(
+                tagElements: tags, edinetIndustry: Xbrl.bankEdinetIndustry)
         else {
             Issue.record("expected resolved bank KPI snapshot")
             return
@@ -61,7 +62,8 @@ import Testing
             "InterestIncomeOIBNK": ["CurrentYearDuration": 20 * million],
         ]
         guard case .resolved(let payload, _, _) =
-            BankIndustryKpiExtractor.resolve(tagElements: tags)
+            BankIndustryKpiExtractor.resolve(
+                tagElements: tags, edinetIndustry: Xbrl.bankEdinetIndustry)
         else {
             Issue.record("expected resolved")
             return
@@ -86,7 +88,8 @@ import Testing
             ],
         ]
         guard case .resolved(let payload, _, _) =
-            BankIndustryKpiExtractor.resolve(tagElements: tags)
+            BankIndustryKpiExtractor.resolve(
+                tagElements: tags, edinetIndustry: Xbrl.bankEdinetIndustry)
         else {
             Issue.record("expected resolved")
             return
@@ -108,7 +111,8 @@ import Testing
         ]
         guard case .resolved(let payload, _, _) =
             BankIndustryKpiExtractor.resolve(
-                tagElements: tags, hasConsolidatedStatements: false)
+                tagElements: tags, edinetIndustry: Xbrl.bankEdinetIndustry,
+                hasConsolidatedStatements: false)
         else {
             Issue.record("expected resolved filer-only bank")
             return
@@ -133,7 +137,8 @@ import Testing
         ]
         guard case .resolved(let payload, _, _) =
             BankIndustryKpiExtractor.resolve(
-                tagElements: tags, hasConsolidatedStatements: false)
+                tagElements: tags, edinetIndustry: Xbrl.bankEdinetIndustry,
+                hasConsolidatedStatements: false)
         else {
             Issue.record("expected resolved filer-only bank with NonConsolidatedMember contexts")
             return
@@ -165,7 +170,8 @@ import Testing
             "DepositsLiabilitiesBNK": ["CurrentYearInstant": 100 * million],
         ]
         guard case .resolved(let payload, _, _) =
-            BankIndustryKpiExtractor.resolve(tagElements: tags)
+            BankIndustryKpiExtractor.resolve(
+                tagElements: tags, edinetIndustry: Xbrl.bankEdinetIndustry)
         else {
             Issue.record("expected resolved with deposits only")
             return
@@ -206,7 +212,8 @@ import Testing
             """)
         XBRLTestSupport.withXbrlDir(xml) { dir in
             guard case .resolved(let payload, _, _) =
-                BankIndustryKpiExtractor.resolve(xbrlDir: dir)
+                BankIndustryKpiExtractor.resolve(
+                    xbrlDir: dir, edinetIndustry: Xbrl.bankEdinetIndustry)
             else {
                 Issue.record("expected resolved from synthetic XBRL")
                 return
@@ -224,6 +231,189 @@ import Testing
                 Issue.record("expected OHR from synthetic XBRL")
             }
         }
+    }
+
+    @Test func depositMarkerWithoutBankFormatIncomeStatementIsNotApplicable() {
+        let tags: XbrlTagElements = [
+            "DepositsLiabilitiesBNK": ["CurrentYearInstant": 100 * million],
+            "LoansAndBillsDiscountedAssetsBNK": ["CurrentYearInstant": 80 * million],
+            "InterestIncomeOIBNK": ["CurrentYearDuration": 20 * million],
+            "GeneralAndAdministrativeExpensesOEBNK": ["CurrentYearDuration": 10 * million],
+        ]
+        guard case .notApplicable(let reason) =
+            BankIndustryKpiExtractor.resolve(tagElements: tags, edinetIndustry: "保険業")
+        else {
+            Issue.record("expected not_bank when IS is not bank-format")
+            return
+        }
+        #expect(reason == industryKpiNotApplicableNotBank)
+    }
+
+    @Test func bankFormatIncomeStatementIncludesNonBankIndustry() throws {
+        let tags: XbrlTagElements = [
+            "OrdinaryIncomeBNK": ["CurrentYearDuration": 30 * million],
+            "DepositsLiabilitiesBNK": ["CurrentYearInstant": 100 * million],
+            "LoansAndBillsDiscountedAssetsBNK": ["CurrentYearInstant": 80 * million],
+        ]
+        guard case .resolved(let payload, _, _) =
+            BankIndustryKpiExtractor.resolve(tagElements: tags, edinetIndustry: "その他金融業")
+        else {
+            Issue.record("expected resolved from bank-format IS")
+            return
+        }
+        let ldr = try #require(payload.fact(key: industryKpiKeyLDR, scope: industryKpiScopeConsolidated))
+        #expect(ldr.value == 80)
+    }
+
+    @Test func allowlistedCodeIsIncludedWithoutBankIndustryOrBankFormatIS() throws {
+        let tags: XbrlTagElements = [
+            "DepositsLiabilitiesBNK": ["CurrentYearInstant": 100 * million],
+            "LoansAndBillsDiscountedAssetsBNK": ["CurrentYearInstant": 80 * million],
+        ]
+        guard case .resolved(let payload, _, _) =
+            BankIndustryKpiExtractor.resolve(
+                tagElements: tags, edinetIndustry: "その他金融業",
+                listedCode: "8421")
+        else {
+            Issue.record("expected resolved via listed-code allowlist")
+            return
+        }
+        #expect(payload.fact(key: industryKpiKeyLDR, scope: industryKpiScopeConsolidated)?.value == 80)
+    }
+
+    @Test func bnkDepositsArePreferredOverNonBnkFallback() throws {
+        let tags: XbrlTagElements = [
+            "DepositsLiabilitiesBNK": ["CurrentYearInstant": 100 * million],
+            "DepositsLiabilities": ["CurrentYearInstant": 999 * million],
+            "LoansAndBillsDiscountedAssetsBNK": ["CurrentYearInstant": 80 * million],
+        ]
+        guard case .resolved(let payload, _, _) =
+            BankIndustryKpiExtractor.resolve(
+                tagElements: tags, edinetIndustry: Xbrl.bankEdinetIndustry)
+        else {
+            Issue.record("expected resolved preferring BNK deposits")
+            return
+        }
+        let deposits = try #require(
+            payload.fact(key: industryKpiKeyDeposits, scope: industryKpiScopeConsolidated))
+        #expect(deposits.value == 100 * million)
+        #expect(deposits.sourceRef == Xbrl.bankDepositsTags[0])
+        #expect(!payload.warnings.contains(industryKpiWarningDepositsLiabilitiesFallback))
+    }
+
+    @Test func bankIndustryFallsBackToNonBnkDepositsWithWarning() throws {
+        let tags: XbrlTagElements = [
+            "DepositsLiabilities": ["CurrentYearInstant": 200 * million],
+            "LoansAndBillsDiscountedAssetsBNK": ["CurrentYearInstant": 50 * million],
+            "InterestIncomeOIBNK": ["CurrentYearDuration": 20 * million],
+            "GeneralAndAdministrativeExpensesOEBNK": ["CurrentYearDuration": 8 * million],
+        ]
+        guard case .resolved(let payload, _, _) =
+            BankIndustryKpiExtractor.resolve(
+                tagElements: tags, edinetIndustry: Xbrl.bankEdinetIndustry)
+        else {
+            Issue.record("expected resolved via DepositsLiabilities fallback")
+            return
+        }
+        let deposits = try #require(
+            payload.fact(key: industryKpiKeyDeposits, scope: industryKpiScopeConsolidated))
+        #expect(deposits.value == 200 * million)
+        #expect(deposits.sourceRef == industryKpiDepositsFallbackTag)
+        let ldr = try #require(payload.fact(key: industryKpiKeyLDR, scope: industryKpiScopeConsolidated))
+        #expect(ldr.value == 25)
+        #expect(payload.warnings.contains(industryKpiWarningDepositsLiabilitiesFallback))
+        #expect(payload.fact(key: industryKpiKeyOHR, scope: industryKpiScopeConsolidated) != nil)
+        #expect(payload.needsReview == false)
+    }
+
+    @Test func nonBankIndustryDoesNotUseNonBnkDepositsFallback() {
+        let tags: XbrlTagElements = [
+            "OrdinaryIncomeBNK": ["CurrentYearDuration": 10 * million],
+            "DepositsLiabilities": ["CurrentYearInstant": 200 * million],
+            "LoansAndBillsDiscountedAssetsBNK": ["CurrentYearInstant": 50 * million],
+        ]
+        guard case .resolved(let payload, _, _) =
+            BankIndustryKpiExtractor.resolve(tagElements: tags, edinetIndustry: "その他金融業")
+        else {
+            Issue.record("expected resolved from bank-format IS")
+            return
+        }
+        #expect(payload.fact(key: industryKpiKeyDeposits, scope: industryKpiScopeConsolidated) == nil)
+        #expect(!payload.warnings.contains(industryKpiWarningDepositsLiabilitiesFallback))
+    }
+
+    @Test func nonpositiveGrossProfitOmitsOHRAndSetsNeedsReview() throws {
+        let tags: XbrlTagElements = [
+            "DepositsLiabilitiesBNK": ["CurrentYearInstant": 100 * million],
+            "LoansAndBillsDiscountedAssetsBNK": ["CurrentYearInstant": 80 * million],
+            "InterestIncomeOIBNK": ["CurrentYearDuration": 10 * million],
+            "InterestExpensesOEBNK": ["CurrentYearDuration": 20 * million],
+            "GeneralAndAdministrativeExpensesOEBNK": ["CurrentYearDuration": 5 * million],
+        ]
+        guard case .resolved(let payload, _, _) =
+            BankIndustryKpiExtractor.resolve(
+                tagElements: tags, edinetIndustry: Xbrl.bankEdinetIndustry)
+        else {
+            Issue.record("expected resolved with nonpositive GP")
+            return
+        }
+        let scope = industryKpiScopeConsolidated
+        #expect(payload.fact(key: industryKpiKeyGrossBusinessProfit, scope: scope)?.value == -10 * million)
+        #expect(payload.fact(key: industryKpiKeyOHR, scope: scope) == nil)
+        #expect(payload.fact(key: industryKpiKeyLDR, scope: scope) != nil)
+        #expect(payload.warnings.contains(industryKpiWarningGrossProfitNonpositive))
+        #expect(!payload.warnings.contains(industryKpiWarningOHRUncomputed))
+        #expect(payload.needsReview == true)
+    }
+
+    @Test func filerExtensionOperatingExpensesLocalNameYieldsOHR() throws {
+        let tags: XbrlTagElements = [
+            "OrdinaryIncomeBNK": ["CurrentYearDuration": 50 * million],
+            "DepositsLiabilitiesBNK": ["CurrentYearInstant": 100 * million],
+            "LoansAndBillsDiscountedAssetsBNK": ["CurrentYearInstant": 80 * million],
+            "InterestIncomeOIBNK": ["CurrentYearDuration": 20 * million],
+            "GeneralAndAdministrativeExpenses": ["CurrentYearDuration": 8 * million],
+        ]
+        guard case .resolved(let payload, _, _) =
+            BankIndustryKpiExtractor.resolve(tagElements: tags, edinetIndustry: "その他金融業")
+        else {
+            Issue.record("expected resolved with extension opex local name")
+            return
+        }
+        let scope = industryKpiScopeConsolidated
+        let opex = try #require(payload.fact(key: industryKpiKeyOperatingExpenses, scope: scope))
+        #expect(opex.value == 8 * million)
+        #expect(opex.sourceRef == "GeneralAndAdministrativeExpenses")
+        let ohr = try #require(payload.fact(key: industryKpiKeyOHR, scope: scope))
+        #expect(ohr.value == 40)
+        #expect(!payload.warnings.contains(industryKpiWarningOHRUncomputed))
+    }
+
+    @Test func ncdWarningUsesAdoptedScopeSoFilerGapIsIgnoredWhenConsolidatedHasNCD() throws {
+        let tags: XbrlTagElements = [
+            "DepositsLiabilitiesBNK": [
+                "CurrentYearInstant": 200 * million,
+                "CurrentYearInstant_NonConsolidatedMember": 150 * million,
+            ],
+            "NegotiableCertificatesOfDepositLiabilitiesBNK": [
+                "CurrentYearInstant": 10 * million
+            ],
+            "LoansAndBillsDiscountedAssetsBNK": [
+                "CurrentYearInstant": 100 * million,
+                "CurrentYearInstant_NonConsolidatedMember": 90 * million,
+            ],
+        ]
+        guard case .resolved(let payload, _, _) =
+            BankIndustryKpiExtractor.resolve(
+                tagElements: tags, edinetIndustry: Xbrl.bankEdinetIndustry)
+        else {
+            Issue.record("expected resolved dual-scope with consolidated NCD")
+            return
+        }
+        #expect(payload.fact(key: industryKpiKeyNegotiableCDs, scope: industryKpiScopeConsolidated) != nil)
+        #expect(payload.fact(key: industryKpiKeyNegotiableCDs, scope: industryKpiScopeFiler) == nil)
+        #expect(payload.fact(key: industryKpiKeyLDR, scope: industryKpiScopeFiler) != nil)
+        #expect(!payload.warnings.contains(industryKpiWarningNcdAbsentAssumedZero))
     }
 
     @Test func payloadUsesSnakeCaseKeys() throws {
