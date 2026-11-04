@@ -11,6 +11,10 @@ struct WatchlistView: View {
     /// ドラッグ中のタイルの銘柄コード。ゴミ箱の表示と並べ替えの目印。
     @State private var draggingCode: String?
     @State private var trashTargeted = false
+    /// Haptic の合図。値が変わるたびに1回鳴る。
+    @State private var liftTick = 0
+    @State private var swapTick = 0
+    @State private var deleteTick = 0
 
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 10, alignment: .top), count: 3)
 
@@ -44,19 +48,24 @@ struct WatchlistView: View {
                             .opacity(draggingCode == item.code ? 0.4 : 1)
                             .onDrag {
                                 draggingCode = item.code
+                                liftTick += 1
                                 return NSItemProvider(object: item.code as NSString)
                             }
                             .onDrop(
                                 of: [.plainText],
                                 delegate: TileDropDelegate(target: item.code, dragging: $draggingCode) { from, to in
-                                    withAnimation(.snappy) { move(from, to: to) }
+                                    withAnimation(.snappy(duration: 0.3)) { move(from, to: to) }
+                                    swapTick += 1
                                 }
                             )
                             .accessibilityAction(named: "リストから外す") {
                                 remove(item)
                             }
+                            .transition(.scale(scale: 0.6).combined(with: .opacity))
                         }
                     }
+                    // 並びが変わったとき、他のタイルがなめらかに入れ替わる。
+                    .animation(.snappy(duration: 0.3), value: visibleCompanies.map(\.code))
                 }
 
                 #if DEBUG
@@ -91,6 +100,10 @@ struct WatchlistView: View {
             }
         }
         .animation(.snappy, value: draggingCode != nil)
+        .sensoryFeedback(.impact(weight: .medium), trigger: liftTick)
+        .sensoryFeedback(.selection, trigger: swapTick)
+        .sensoryFeedback(trigger: trashTargeted) { _, targeted in targeted ? .selection : nil }
+        .sensoryFeedback(.impact(weight: .heavy), trigger: deleteTick)
         .onChange(of: sectorCounts.map(\.sector)) { _, sectors in
             if let selectedSector, !sectors.contains(selectedSector) {
                 self.selectedSector = nil
@@ -163,6 +176,7 @@ struct WatchlistView: View {
                 delegate: TrashDropDelegate(isTargeted: $trashTargeted, dragging: $draggingCode) { code in
                     if let item = companies.first(where: { $0.code == code }) {
                         withAnimation(.snappy) { remove(item) }
+                        deleteTick += 1
                     }
                 }
             )
