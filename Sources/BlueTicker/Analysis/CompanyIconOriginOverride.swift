@@ -95,6 +95,8 @@ enum CompanyIconOriginOverride {
     /// のワンオフ 512 白地を R2 CDN へ（公式 URL は ingest 不能。本番キーへ先置き）。
     /// 2026-10-31: 2802 / 2871 / 3539 / 4075 / 7963 / 9240。Sorahiro visual GO の
     /// ワンオフ 512 白地を R2 CDN へ（本番キーへ先置き。ingest は CDN sha 一致後）。
+    /// 2026-11-04: visual_ng_20261031 再ソース。Sorahiro visual GO 82 社（チャット）。
+    /// 本番 R2 `company-icons/{code}.png` 先置き（再中心・円フィット）。マップは CDN。ingest はマージ後。
     static let manualSources: [String: CompanyIconManualSource] = [
         "7203": .homepageOrigin("https://toyota.jp"),
         "9267": .homepageOrigin("https://www.genky.co.jp"),
@@ -756,6 +758,90 @@ enum CompanyIconOriginOverride {
         "8071": .imageURL("https://icons.sollahiro.com/company-icons/8071.png"), // R2 CDN circle-safe 512 // pragma: allowlist secret
         "8747": .imageURL("https://icons.sollahiro.com/company-icons/8747.png"), // R2 CDN circle-safe 512 // pragma: allowlist secret
         "9322": .imageURL("https://icons.sollahiro.com/company-icons/9322.png"), // R2 CDN circle-safe 512 // pragma: allowlist secret
+        // 2026-11-04: visual_ng_20261031 再ソース。Sorahiro visual GO 82 社（チャット）。
+        // 本番 R2 company-icons/{code}.png へ先置き済み（再中心・円フィット）。マップは CDN。ingest はマージ後。
+        "1447": .imageURL("https://icons.sollahiro.com/company-icons/1447.png"), // R2 CDN visual GO 2026-11-04 // pragma: allowlist secret
+        "1771": .imageURL("https://icons.sollahiro.com/company-icons/1771.png"), // R2 CDN visual GO 2026-11-04 // pragma: allowlist secret
+        "1898": .imageURL("https://icons.sollahiro.com/company-icons/1898.png"), // R2 CDN visual GO 2026-11-04 // pragma: allowlist secret
+        "1981": .imageURL("https://icons.sollahiro.com/company-icons/1981.png"), // R2 CDN visual GO 2026-11-04 // pragma: allowlist secret
+        "2137": .imageURL("https://icons.sollahiro.com/company-icons/2137.png"), // R2 CDN visual GO 2026-11-04 // pragma: allowlist secret
+        "2294": .imageURL("https://icons.sollahiro.com/company-icons/2294.png"), // R2 CDN visual GO 2026-11-04 // pragma: allowlist secret
+        "2345": .imageURL("https://icons.sollahiro.com/company-icons/2345.png"), // R2 CDN visual GO 2026-11-04 // pragma: allowlist secret
+        "2388": .imageURL("https://icons.sollahiro.com/company-icons/2388.png"), // R2 CDN visual GO 2026-11-04 // pragma: allowlist secret
+        "2418": .imageURL("https://icons.sollahiro.com/company-icons/2418.png"), // R2 CDN visual GO 2026-11-04 // pragma: allowlist secret
+        "2668": .imageURL("https://icons.sollahiro.com/company-icons/2668.png"), // R2 CDN visual GO 2026-11-04 // pragma: allowlist secret
+        "2795": .imageURL("https://icons.sollahiro.com/company-icons/2795.png"), // R2 CDN visual GO 2026-11-04 // pragma: allowlist secret
+        "2819": .imageURL("https://icons.sollahiro.com/company-icons/2819.png"), // R2 CDN visual GO 2026-11-04 // pragma: allowlist secret
+        "2911": .imageURL("https://icons.sollahiro.com/company-icons/2911.png"), // R2 CDN visual GO 2026-11-04 // pragma: allowlist secret
+        "2915": .imageURL("https://icons.sollahiro.com/company-icons/2915.png"), // R2 CDN visual GO 2026-11-04 // pragma: allowlist secret
+        "2999": .imageURL("https://icons.sollahiro.com/company-icons/2999.png"), // R2 CDN visual GO 2026-11-04 // pragma: allowlist secret
+        "3030": .imageURL("https://icons.sollahiro.com/company-icons/3030.png"), // R2 CDN visual GO 2026-11-04 // pragma: allowlist secret
+        "3143": .imageURL("https://icons.sollahiro.com/company-icons/3143.png"), // R2 CDN visual GO 2026-11-04 // pragma: allowlist secret
+        "3161": .imageURL("https://icons.sollahiro.com/company-icons/3161.png"), // R2 CDN visual GO 2026-11-04 // pragma: allowlist secret
+        "3192": .imageURL("https://icons.sollahiro.com/company-icons/3192.png"), // R2 CDN visual GO 2026-11-04 // pragma: allowlist secret
+        "3422": .imageURL("https://icons.sollahiro.com/company-icons/3422.png"), // R2 CDN visual GO 2026-11-04 // pragma: allowlist secret
+        "3556": .imageURL("https://icons.sollahiro.com/company-icons/3556.png"), // R2 CDN visual GO 2026-11-04 // pragma: allowlist secret
+        "3652": .imageURL("https://icons.sollahiro.com/company-icons/3652.png"), // R2 CDN visual GO 2026-11-04 // pragma: allowlist secret
+        "3988": .imageURL("https://icons.sollahiro.com/company-icons/3988.png"), // R2 CDN visual GO 2026-11-04 // pragma: allowlist secret
+        "4026": .imageURL("https://icons.sollahiro.com/company-icons/4026.png"), // R2 CDN visual GO 2026-11-04 // pragma: allowlist secret
+        "4113": .imageURL("https://icons.sollahiro.com/company-icons/4113.png"), // R2 CDN visual GO 2026-11-04 // pragma: allowlist secret
+        "4179": .imageURL("https://icons.sollahiro.com/company-icons/4179.png"), // R2 CDN visual GO 2026-11-04 // pragma: allowlist secret
+        "4220": .imageURL("https://icons.sollahiro.com/company-icons/4220.png"), // R2 CDN visual GO 2026-11-04 // pragma: allowlist secret
+        "4234": .imageURL("https://icons.sollahiro.com/company-icons/4234.png"), // R2 CDN visual GO 2026-11-04 // pragma: allowlist secret
+        "4299": .imageURL("https://icons.sollahiro.com/company-icons/4299.png"), // R2 CDN visual GO 2026-11-04 // pragma: allowlist secret
+        "4344": .imageURL("https://icons.sollahiro.com/company-icons/4344.png"), // R2 CDN visual GO 2026-11-04 // pragma: allowlist secret
+        "4351": .imageURL("https://icons.sollahiro.com/company-icons/4351.png"), // R2 CDN visual GO 2026-11-04 // pragma: allowlist secret
+        "4421": .imageURL("https://icons.sollahiro.com/company-icons/4421.png"), // R2 CDN visual GO 2026-11-04 // pragma: allowlist secret
+        "4425": .imageURL("https://icons.sollahiro.com/company-icons/4425.png"), // R2 CDN visual GO 2026-11-04 // pragma: allowlist secret
+        "4591": .imageURL("https://icons.sollahiro.com/company-icons/4591.png"), // R2 CDN visual GO 2026-11-04 // pragma: allowlist secret
+        "5074": .imageURL("https://icons.sollahiro.com/company-icons/5074.png"), // R2 CDN visual GO 2026-11-04 // pragma: allowlist secret
+        "5078": .imageURL("https://icons.sollahiro.com/company-icons/5078.png"), // R2 CDN visual GO 2026-11-04 // pragma: allowlist secret
+        "5576": .imageURL("https://icons.sollahiro.com/company-icons/5576.png"), // R2 CDN visual GO 2026-11-04 // pragma: allowlist secret
+        "5603": .imageURL("https://icons.sollahiro.com/company-icons/5603.png"), // R2 CDN visual GO 2026-11-04 // pragma: allowlist secret
+        "5621": .imageURL("https://icons.sollahiro.com/company-icons/5621.png"), // R2 CDN visual GO 2026-11-04 // pragma: allowlist secret
+        "5891": .imageURL("https://icons.sollahiro.com/company-icons/5891.png"), // R2 CDN visual GO 2026-11-04 // pragma: allowlist secret
+        "5936": .imageURL("https://icons.sollahiro.com/company-icons/5936.png"), // R2 CDN visual GO 2026-11-04 // pragma: allowlist secret
+        "6167": .imageURL("https://icons.sollahiro.com/company-icons/6167.png"), // R2 CDN visual GO 2026-11-04 // pragma: allowlist secret
+        "6177": .imageURL("https://icons.sollahiro.com/company-icons/6177.png"), // R2 CDN visual GO 2026-11-04 // pragma: allowlist secret
+        "6266": .imageURL("https://icons.sollahiro.com/company-icons/6266.png"), // R2 CDN visual GO 2026-11-04 // pragma: allowlist secret
+        "6316": .imageURL("https://icons.sollahiro.com/company-icons/6316.png"), // R2 CDN visual GO 2026-11-04 // pragma: allowlist secret
+        "6518": .imageURL("https://icons.sollahiro.com/company-icons/6518.png"), // R2 CDN visual GO 2026-11-04 // pragma: allowlist secret
+        "6571": .imageURL("https://icons.sollahiro.com/company-icons/6571.png"), // R2 CDN visual GO 2026-11-04 // pragma: allowlist secret
+        "6623": .imageURL("https://icons.sollahiro.com/company-icons/6623.png"), // R2 CDN visual GO 2026-11-04 // pragma: allowlist secret
+        "6658": .imageURL("https://icons.sollahiro.com/company-icons/6658.png"), // R2 CDN visual GO 2026-11-04 // pragma: allowlist secret
+        "6668": .imageURL("https://icons.sollahiro.com/company-icons/6668.png"), // R2 CDN visual GO 2026-11-04 // pragma: allowlist secret
+        "6800": .imageURL("https://icons.sollahiro.com/company-icons/6800.png"), // R2 CDN visual GO 2026-11-04 // pragma: allowlist secret
+        "6864": .imageURL("https://icons.sollahiro.com/company-icons/6864.png"), // R2 CDN visual GO 2026-11-04 // pragma: allowlist secret
+        "6908": .imageURL("https://icons.sollahiro.com/company-icons/6908.png"), // R2 CDN visual GO 2026-11-04 // pragma: allowlist secret
+        "6942": .imageURL("https://icons.sollahiro.com/company-icons/6942.png"), // R2 CDN visual GO 2026-11-04 // pragma: allowlist secret
+        "6947": .imageURL("https://icons.sollahiro.com/company-icons/6947.png"), // R2 CDN visual GO 2026-11-04 // pragma: allowlist secret
+        "7058": .imageURL("https://icons.sollahiro.com/company-icons/7058.png"), // R2 CDN visual GO 2026-11-04 // pragma: allowlist secret
+        "7244": .imageURL("https://icons.sollahiro.com/company-icons/7244.png"), // R2 CDN visual GO 2026-11-04 // pragma: allowlist secret
+        "7273": .imageURL("https://icons.sollahiro.com/company-icons/7273.png"), // R2 CDN visual GO 2026-11-04 // pragma: allowlist secret
+        "7472": .imageURL("https://icons.sollahiro.com/company-icons/7472.png"), // R2 CDN visual GO 2026-11-04 // pragma: allowlist secret
+        "7481": .imageURL("https://icons.sollahiro.com/company-icons/7481.png"), // R2 CDN visual GO 2026-11-04 // pragma: allowlist secret
+        "7531": .imageURL("https://icons.sollahiro.com/company-icons/7531.png"), // R2 CDN visual GO 2026-11-04 // pragma: allowlist secret
+        "7554": .imageURL("https://icons.sollahiro.com/company-icons/7554.png"), // R2 CDN visual GO 2026-11-04 // pragma: allowlist secret
+        "7625": .imageURL("https://icons.sollahiro.com/company-icons/7625.png"), // R2 CDN visual GO 2026-11-04 // pragma: allowlist secret
+        "8093": .imageURL("https://icons.sollahiro.com/company-icons/8093.png"), // R2 CDN visual GO 2026-11-04 // pragma: allowlist secret
+        "8336": .imageURL("https://icons.sollahiro.com/company-icons/8336.png"), // R2 CDN visual GO 2026-11-04 // pragma: allowlist secret
+        "8364": .imageURL("https://icons.sollahiro.com/company-icons/8364.png"), // R2 CDN visual GO 2026-11-04 // pragma: allowlist secret
+        "8739": .imageURL("https://icons.sollahiro.com/company-icons/8739.png"), // R2 CDN visual GO 2026-11-04 // pragma: allowlist secret
+        "8783": .imageURL("https://icons.sollahiro.com/company-icons/8783.png"), // R2 CDN visual GO 2026-11-04 // pragma: allowlist secret
+        "8841": .imageURL("https://icons.sollahiro.com/company-icons/8841.png"), // R2 CDN visual GO 2026-11-04 // pragma: allowlist secret
+        "8894": .imageURL("https://icons.sollahiro.com/company-icons/8894.png"), // R2 CDN visual GO 2026-11-04 // pragma: allowlist secret
+        "8908": .imageURL("https://icons.sollahiro.com/company-icons/8908.png"), // R2 CDN visual GO 2026-11-04 // pragma: allowlist secret
+        "9060": .imageURL("https://icons.sollahiro.com/company-icons/9060.png"), // R2 CDN visual GO 2026-11-04 // pragma: allowlist secret
+        "9218": .imageURL("https://icons.sollahiro.com/company-icons/9218.png"), // R2 CDN visual GO 2026-11-04 // pragma: allowlist secret
+        "9233": .imageURL("https://icons.sollahiro.com/company-icons/9233.png"), // R2 CDN visual GO 2026-11-04 // pragma: allowlist secret
+        "9319": .imageURL("https://icons.sollahiro.com/company-icons/9319.png"), // R2 CDN visual GO 2026-11-04 // pragma: allowlist secret
+        "9365": .imageURL("https://icons.sollahiro.com/company-icons/9365.png"), // R2 CDN visual GO 2026-11-04 // pragma: allowlist secret
+        "9644": .imageURL("https://icons.sollahiro.com/company-icons/9644.png"), // R2 CDN visual GO 2026-11-04 // pragma: allowlist secret
+        "9701": .imageURL("https://icons.sollahiro.com/company-icons/9701.png"), // R2 CDN visual GO 2026-11-04 // pragma: allowlist secret
+        "9765": .imageURL("https://icons.sollahiro.com/company-icons/9765.png"), // R2 CDN visual GO 2026-11-04 // pragma: allowlist secret
+        "9845": .imageURL("https://icons.sollahiro.com/company-icons/9845.png"), // R2 CDN visual GO 2026-11-04 // pragma: allowlist secret
+        "9857": .imageURL("https://icons.sollahiro.com/company-icons/9857.png"), // R2 CDN visual GO 2026-11-04 // pragma: allowlist secret
+        "9986": .imageURL("https://icons.sollahiro.com/company-icons/9986.png"), // R2 CDN visual GO 2026-11-04 // pragma: allowlist secret
     ]
 
     static func manualSource(for code: String) -> CompanyIconManualSource? {
