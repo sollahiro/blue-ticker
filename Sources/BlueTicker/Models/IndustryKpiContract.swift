@@ -7,7 +7,7 @@
 import Foundation
 
 /// Neon `industry_kpi_facts.cache_version`。銀行 XBRL 数値の意味を変えるときだけバンプする。
-public let industryKpiCacheVersion = "industry-kpi-bank-v1"
+public let industryKpiCacheVersion = "industry-kpi-bank-v2"
 
 /// 業種グループ。ステップ 1 は `bank` のみ。後で insurance / railway 等を足す。
 public let industryKpiGroupBank = "bank"
@@ -20,9 +20,21 @@ public let industryKpiNotApplicableNotBank = "not_bank"
 /// 業種 KPI（銀行）の対象選定に使う statements BS の預金マーカー（`Xbrl.bankMarkerTag`）。
 public let industryKpiBankDepositMarkerTag = Xbrl.bankMarkerTag
 
+/// 銀行様式の損益計算書トップライン（経常収益）。提出者業種が銀行業でない会社の対象判定。
+public let industryKpiBankFormatIncomeStatementTag = "OrdinaryIncomeBNK"
+
+/// ゆうちょ等が貯金を載せる非 BNK 預金。提出者業種が銀行業で BNK 預金が無いときのフォールバック。
+public let industryKpiDepositsFallbackTag = "DepositsLiabilities"
+
+/// 提出者業種が銀行業でなくても銀行 KPI の対象にする上場コード。
+/// 信金中央金庫は EDINET 上「その他金融業」だが銀行様式で開示する中央機関。
+public let industryKpiBankAlwaysIncludeCodes: Set<String> = ["8421"]
+
 public let industryKpiWarningNcdAbsentAssumedZero = "ncd_absent_assumed_zero"
 public let industryKpiWarningLDRUncomputed = "ldr_uncomputed"
 public let industryKpiWarningOHRUncomputed = "ohr_uncomputed"
+public let industryKpiWarningDepositsLiabilitiesFallback = "deposits_liabilities_fallback"
+public let industryKpiWarningGrossProfitNonpositive = "gross_profit_nonpositive"
 
 public let industryKpiKeyDeposits = "deposits"
 public let industryKpiKeyNegotiableCDs = "negotiable_cds"

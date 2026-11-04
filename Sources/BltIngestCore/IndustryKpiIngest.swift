@@ -3,9 +3,9 @@
 // 候補選定は filingSectionCandidates を再利用する。
 //
 // `--stages` の既定からは外す（relations と同じ。本番 drain に乗せない。Mac で明示指定）。
-// 対象会社は「提出者業種が銀行業」または「statements BS に預金マーカーあり」に先に絞る
-// （`industryKpiBankCandidateCodes`）。上場全体 ~2 万件に空行を書かない。
-// 絞った後でも XBRL 判定で非銀行だった書類は not_applicable プレースホルダを残し、
+// 対象会社は「提出者業種が銀行業」または許可リストまたは statements の銀行様式 IS /
+// 預金マーカーに先に絞る（`industryKpiBankCandidateCodes`）。上場全体 ~2 万件に空行を書かない。
+// 絞った後でも XBRL 判定で非銀行だった書類は not_applicable プレースホルダへ置換し、
 // 現行 cache_version なら skip する。
 
 import BltStoreCore
@@ -110,26 +110,21 @@ func runIndustryKpiIngest(
             }
             stored += 1
         case .notApplicable(let reason):
+            // 決定論の対象判定なので、対象外になった会社の既存 xbrl_facts もプレースホルダへ置換する。
+            // LLM 経路の breakdown / notes とは違い、一時失敗で格下げすることはない。
             notApplicable += 1
-            let classifiedSource = classifyIndex[key]?.source
-            if let classifiedSource, classifiedSource != industryKpiSourceNotApplicable {
-                logger?.warning(
-                    "業種KPI取り込み(\(industryGroup)): 既存の実データ行を notApplicable(\(reason)) で上書きしません(次回再試行): docID=\(cand.docID) code=\(cand.code)"
-                )
-            } else {
-                let placeholder = IndustryKpiSnapshotPayload(
-                    industryGroup: industryGroup, facts: [])
-                try await withDbRetry(
-                    logger: logger, context: "docID=\(cand.docID)", onRetry: { unhealthyRetries += 1 }
-                ) {
-                    try await storeIndustryKpiFact(
-                        existing: try await IndustryKpiFact.find(key, on: db),
-                        docID: cand.docID, industryGroup: industryGroup,
-                        code: cand.code, submitDateTime: cand.submitDateTime,
-                        payload: placeholder, source: industryKpiSourceNotApplicable,
-                        contentHash: "", cacheVersion: industryKpiCacheVersion,
-                        notApplicableReason: reason, db: db)
-                }
+            let placeholder = IndustryKpiSnapshotPayload(
+                industryGroup: industryGroup, facts: [])
+            try await withDbRetry(
+                logger: logger, context: "docID=\(cand.docID)", onRetry: { unhealthyRetries += 1 }
+            ) {
+                try await storeIndustryKpiFact(
+                    existing: try await IndustryKpiFact.find(key, on: db),
+                    docID: cand.docID, industryGroup: industryGroup,
+                    code: cand.code, submitDateTime: cand.submitDateTime,
+                    payload: placeholder, source: industryKpiSourceNotApplicable,
+                    contentHash: "", cacheVersion: industryKpiCacheVersion,
+                    notApplicableReason: reason, db: db)
             }
         case .failed:
             failed += 1
@@ -231,30 +226,52 @@ func industryKpiClassifyRows(
         .all()
 }
 
-/// 業種 KPI（銀行）の対象会社: `listedCodes` のうち、提出者業種が銀行業（`bankIndustryCodes`）か、
-/// company_statements の BS に預金マーカー（`industryKpiBankDepositMarkerTag`）がある会社。
-/// 業種が銀行業以外でも銀行様式で開示する持株会社（預金マーカーあり）を拾う。
-/// statements 未取り込みの書類しか無い会社は、業種が銀行業でない限り次の statements 取り込み後に拾われる。
+/// 業種 KPI（銀行）の対象会社: `listedCodes` のうち、提出者業種が銀行業、許可リスト、
+/// statements の銀行様式 IS（`OrdinaryIncomeBNK`）、または BS 預金マーカーがある会社。
+/// 預金マーカーだけの持株は候補に残し、抽出側が not_applicable プレースホルダへ置換する。
+/// statements 未取り込みでも業種が銀行業か許可リストなら対象。
 func industryKpiBankCandidateCodes(
     db: Database, listedCodes: Set<String>, bankIndustryCodes: Set<String>
 ) async throws -> Set<String> {
-    let depositCodes = try await industryKpiDepositMarkerCodes(db: db)
-    return listedCodes.intersection(bankIndustryCodes.union(depositCodes))
+    let depositCodes = try await industryKpiStatementTagCodes(
+        db: db, statementKey: "balance_sheet", tag: industryKpiBankDepositMarkerTag)
+    let bankFormatCodes = try await industryKpiStatementTagCodes(
+        db: db, statementKey: "income_statement", tag: industryKpiBankFormatIncomeStatementTag)
+    return listedCodes.intersection(
+        bankIndustryCodes
+            .union(depositCodes)
+            .union(bankFormatCodes)
+            .union(industryKpiBankAlwaysIncludeCodes))
 }
 
-/// company_statements の BS に預金マーカーがある会社コード。payload は転送しない。
-/// Postgres は jsonb 包含で balance_sheet だけを見る。SQLite（テスト）は TEXT の部分一致。
+/// company_statements の指定配列にタグがある会社コード。payload は転送しない。
+/// Postgres は jsonb 包含。SQLite（テスト）は TEXT の部分一致。
 func industryKpiDepositMarkerCodes(db: Database) async throws -> Set<String> {
+    try await industryKpiStatementTagCodes(
+        db: db, statementKey: "balance_sheet", tag: industryKpiBankDepositMarkerTag)
+}
+
+func industryKpiStatementTagCodes(
+    db: Database, statementKey: String, tag: String
+) async throws -> Set<String> {
     let sql = try requireSQLDatabase(db)
-    let tag = industryKpiBankDepositMarkerTag
     let query: SQLQueryString
     if sql.dialect.name == "postgresql" {
         let containment = #"[{"tag":"\#(tag)"}]"#
-        query = """
-            SELECT DISTINCT \(ident: "code") AS code
-            FROM \(ident: CompanyStatement.schema)
-            WHERE \(ident: "payload") -> 'balance_sheet' @> CAST(\(bind: containment) AS jsonb)
-            """
+        switch statementKey {
+        case "income_statement":
+            query = """
+                SELECT DISTINCT \(ident: "code") AS code
+                FROM \(ident: CompanyStatement.schema)
+                WHERE \(ident: "payload") -> 'income_statement' @> CAST(\(bind: containment) AS jsonb)
+                """
+        default:
+            query = """
+                SELECT DISTINCT \(ident: "code") AS code
+                FROM \(ident: CompanyStatement.schema)
+                WHERE \(ident: "payload") -> 'balance_sheet' @> CAST(\(bind: containment) AS jsonb)
+                """
+        }
     } else {
         let pattern = "%\"\(tag)\"%"
         query = """

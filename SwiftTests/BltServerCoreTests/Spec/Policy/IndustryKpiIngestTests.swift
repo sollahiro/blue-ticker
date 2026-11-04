@@ -46,7 +46,8 @@ private func seedDoc(
 }
 
 private func seedStatement(
-    _ docID: String, code: String, balanceSheetTags: [String], db: Database
+    _ docID: String, code: String, balanceSheetTags: [String],
+    incomeStatementTags: [String] = [], db: Database
 ) async throws {
     let row = CompanyStatement()
     row.id = docID
@@ -57,7 +58,9 @@ private func seedStatement(
         balanceSheet: balanceSheetTags.map {
             StatementLineItem(tag: $0, label: nil, value: 1, unit: "JPY", order: nil)
         },
-        incomeStatement: [], cashFlow: [])
+        incomeStatement: incomeStatementTags.map {
+            StatementLineItem(tag: $0, label: nil, value: 1, unit: "JPY", order: nil)
+        }, cashFlow: [])
     row.cacheVersion = statementCacheVersion
     try await row.create(on: db)
 }
@@ -183,7 +186,7 @@ private func samplePayload() -> IndustryKpiSnapshotPayload {
 
     @Test func candidateCodesAreBankIndustryOrDepositMarker() async throws {
         try await withMigratedApp { app in
-            // 8570: 業種は銀行業以外だが BS に預金マーカーあり → 対象。
+            // 8570: 業種は銀行業以外だが BS に預金マーカーあり → 対象（抽出側で not_applicable になり得る）。
             try await seedStatement(
                 "S1", code: "8570",
                 balanceSheetTags: ["CashAndDueFromBanksAssetsBNK", industryKpiBankDepositMarkerTag],
@@ -195,13 +198,47 @@ private func samplePayload() -> IndustryKpiSnapshotPayload {
             try await seedStatement(
                 "S3", code: "9999", balanceSheetTags: [industryKpiBankDepositMarkerTag],
                 db: app.db)
+            // 8600: 預金マーカーも業種も無いが銀行様式 IS → 対象。
+            try await seedStatement(
+                "S4", code: "8600", balanceSheetTags: ["TotalAssets"],
+                incomeStatementTags: [industryKpiBankFormatIncomeStatementTag], db: app.db)
 
             let codes = try await industryKpiBankCandidateCodes(
-                db: app.db, listedCodes: ["8570", "7203", "8331", "7182"],
+                db: app.db, listedCodes: ["8570", "7203", "8331", "7182", "8600", "8421"],
                 bankIndustryCodes: ["8331", "7182"])
 
             // 8331 / 7182 は statements が無くても業種＝銀行業で対象（ゆうちょは預金マーカーを持たない）。
-            #expect(codes == ["8570", "8331", "7182"])
+            // 8421 は業種が銀行業でなくても許可リストで対象。
+            #expect(codes == ["8570", "8331", "7182", "8600", "8421"])
+        }
+    }
+
+    @Test func ingestReplacesExistingFactsWithNotApplicablePlaceholder() async throws {
+        try await withMigratedApp { app in
+            try await seedDoc("S1", secCode: "86990", db: app.db)
+            let row = IndustryKpiFact(docID: "S1", industryGroup: industryKpiGroupBank)
+            row.code = "8699"
+            row.submitDateTime = "2026-06-20 09:00"
+            row.payload = samplePayload()
+            row.needsReview = false
+            row.source = industryKpiSourceXbrlFacts
+            row.contentHash = "old"
+            row.cacheVersion = "industry-kpi-bank-stale"
+            try await row.create(on: app.db)
+
+            let summary = try await runIndustryKpiIngest(
+                db: app.db, listedCodes: ["8699"], years: 3, limit: nil
+            ) { _, _ in .notApplicable(reason: industryKpiNotApplicableNotBank) }
+
+            #expect(summary.attempted == 1)
+            #expect(summary.notApplicable == 1)
+            let key = IndustryKpiFact.compositeID(
+                docID: "S1", industryGroup: industryKpiGroupBank)
+            let stored = try #require(try await IndustryKpiFact.find(key, on: app.db))
+            #expect(stored.source == industryKpiSourceNotApplicable)
+            #expect(stored.notApplicableReason == industryKpiNotApplicableNotBank)
+            #expect(stored.payload.facts.isEmpty)
+            #expect(stored.cacheVersion == industryKpiCacheVersion)
         }
     }
 }

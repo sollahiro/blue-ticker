@@ -541,8 +541,8 @@ public func runFactsIngestCommand(
         }
         if targets.contains(.industryKpis) {
             // 業種 KPI: 既定 drain には載せない。`--stages industry-kpis` の明示指定。
-            // 対象は「提出者業種が銀行業」または「statements BS に預金マーカーあり」の会社
-            // （`--codes` でさらに絞る）。日経225は処理順の先頭寄せのみ。
+            // 対象は「提出者業種が銀行業」または許可リストまたは statements の銀行様式 IS /
+            // 預金マーカー（`--codes` でさらに絞る）。日経225は処理順の先頭寄せのみ。
             let bankIndustryCodes = await context.bankIndustryListedCodes()
             let kpiListed = try await withDbRetry(
                 logger: app.logger, context: "業種KPI取り込み 対象会社"

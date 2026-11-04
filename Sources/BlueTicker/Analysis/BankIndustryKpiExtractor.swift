@@ -14,51 +14,71 @@ enum BankIndustryKpiExtractor {
         let expenseTags: [String]
     }
 
-    static func resolve(xbrlDir: URL, edinetIndustry: String? = nil) -> IndustryKpiResolveResult {
+    static func resolve(
+        xbrlDir: URL, edinetIndustry: String? = nil, listedCode: String? = nil
+    ) -> IndustryKpiResolveResult {
         let tagElements = XBRLUtils.collectAllNumericElements(in: xbrlDir, nilAsZero: false)
         guard !tagElements.isEmpty else { return .failed }
         return resolve(
-            tagElements: tagElements, edinetIndustry: edinetIndustry,
+            tagElements: tagElements, edinetIndustry: edinetIndustry, listedCode: listedCode,
             hasConsolidatedStatements: BorrowingsSchedule.filerHasConsolidatedStatements(
                 xbrlDir: xbrlDir))
     }
 
     /// `hasConsolidatedStatements` は DEI（`BorrowingsSchedule.filerHasConsolidatedStatements`）。
     /// `nil` は tagElements 単体テスト用で、未指定コンテキストを連結として扱う。
+    ///
+    /// 対象判定は IBD / Summary の `Xbrl.isBankFiling`（預金マーカー）とは別。提出者業種が銀行業、
+    /// 上場コードの許可リスト、または損益計算書が銀行様式（`OrdinaryIncomeBNK`）のときだけ対象。
+    /// 預金マーカーだけの持株（子会社銀行科目のみ）は not_applicable。
     static func resolve(
         tagElements: XbrlTagElements, edinetIndustry: String? = nil,
-        hasConsolidatedStatements: Bool? = nil
+        listedCode: String? = nil, hasConsolidatedStatements: Bool? = nil
     ) -> IndustryKpiResolveResult {
         let consInstant = fieldSetFromConsolidatedInstant(tagElements)
         let consDuration = fieldSetFromConsolidatedDuration(tagElements)
         let filerInstant = fieldSetFromNonConsolidatedInstant(tagElements)
         let filerDuration = fieldSetFromNonConsolidatedDuration(tagElements)
-        guard Xbrl.isBankFiling(consInstant, edinetIndustry: edinetIndustry)
-            || Xbrl.isBankFiling(filerInstant, edinetIndustry: edinetIndustry)
+        guard isBankKpiTarget(
+            consDuration: consDuration, filerDuration: filerDuration,
+            edinetIndustry: edinetIndustry, listedCode: listedCode)
         else {
             return .notApplicable(reason: industryKpiNotApplicableNotBank)
         }
 
+        let allowNonBnkDeposits = edinetIndustry == Xbrl.bankEdinetIndustry
         let hasConsolidated = hasConsolidatedStatements ?? true
         var facts: [IndustryKpiFactValue] = []
+        var usedDepositsFallback = false
         if hasConsolidated {
-            facts.append(contentsOf: factsForScope(
-                instant: consInstant, duration: consDuration, scope: industryKpiScopeConsolidated))
-            facts.append(contentsOf: factsForScope(
-                instant: filerInstant, duration: filerDuration, scope: industryKpiScopeFiler))
+            let cons = factsForScope(
+                instant: consInstant, duration: consDuration, scope: industryKpiScopeConsolidated,
+                allowNonBnkDeposits: allowNonBnkDeposits)
+            facts.append(contentsOf: cons.facts)
+            usedDepositsFallback = usedDepositsFallback || cons.depositsFallback
+            let filer = factsForScope(
+                instant: filerInstant, duration: filerDuration, scope: industryKpiScopeFiler,
+                allowNonBnkDeposits: allowNonBnkDeposits)
+            facts.append(contentsOf: filer.facts)
+            usedDepositsFallback = usedDepositsFallback || filer.depositsFallback
         } else {
             // 連結を作らない会社の単体は通常メンバー無しの文脈。NonConsolidatedMember で付ける会社もある
             // （豊和銀行 8559）ので、メンバー無しで拾えなければそちらを単体として読む。
             let plain = factsForScope(
-                instant: consInstant, duration: consDuration, scope: industryKpiScopeFiler)
-            facts.append(contentsOf: plain.isEmpty
+                instant: consInstant, duration: consDuration, scope: industryKpiScopeFiler,
+                allowNonBnkDeposits: allowNonBnkDeposits)
+            let chosen = plain.facts.isEmpty
                 ? factsForScope(
-                    instant: filerInstant, duration: filerDuration, scope: industryKpiScopeFiler)
-                : plain)
+                    instant: filerInstant, duration: filerDuration, scope: industryKpiScopeFiler,
+                    allowNonBnkDeposits: allowNonBnkDeposits)
+                : plain
+            facts.append(contentsOf: chosen.facts)
+            usedDepositsFallback = chosen.depositsFallback
         }
         guard !facts.isEmpty else { return .failed }
 
-        let (needsReview, warnings) = payloadFlags(facts)
+        let (needsReview, warnings) = payloadFlags(
+            facts, usedDepositsFallback: usedDepositsFallback)
         let payload = IndustryKpiSnapshotPayload(
             industryGroup: industryKpiGroupBank, facts: facts,
             needsReview: needsReview, warnings: warnings)
@@ -67,13 +87,38 @@ enum BankIndustryKpiExtractor {
             contentHash: contentHash(facts))
     }
 
+    /// 標準 `GeneralAndAdministrativeExpensesOEBNK` が無い提出者拡張は、パーサが既にローカル名へ
+    /// 正規化するので `GeneralAndAdministrativeExpenses` を次点にする。個社マッピングより汎用で、
+    /// 同じローカル名の他提出者も拾える。Summary 業務純益の `Xbrl.bankOperatingExpensesTags` は
+    /// 変えない（信金中金はそちらでは営業経費欠測のまま fail closed）。
+    private static let operatingExpenseTags: [String] = [
+        "GeneralAndAdministrativeExpensesOEBNK",
+        "GeneralAndAdministrativeExpenses",
+    ]
+
+    private static func isBankKpiTarget(
+        consDuration: FieldSet, filerDuration: FieldSet,
+        edinetIndustry: String?, listedCode: String?
+    ) -> Bool {
+        if let listedCode, industryKpiBankAlwaysIncludeCodes.contains(listedCode) {
+            return true
+        }
+        if edinetIndustry == Xbrl.bankEdinetIndustry { return true }
+        return hasBankFormatIncomeStatement(consDuration)
+            || hasBankFormatIncomeStatement(filerDuration)
+    }
+
+    private static func hasBankFormatIncomeStatement(_ duration: FieldSet) -> Bool {
+        guard let fv = duration[industryKpiBankFormatIncomeStatementTag] else { return false }
+        return fv.current != nil || fv.prior != nil
+    }
+
     private static func factsForScope(
-        instant: FieldSet, duration: FieldSet, scope: String
-    ) -> [IndustryKpiFactValue] {
+        instant: FieldSet, duration: FieldSet, scope: String, allowNonBnkDeposits: Bool
+    ) -> (facts: [IndustryKpiFactValue], depositsFallback: Bool) {
         var facts: [IndustryKpiFactValue] = []
-        appendBalance(
-            &facts, fieldSet: instant, tags: Xbrl.bankDepositsTags,
-            kpiKey: industryKpiKeyDeposits, scope: scope)
+        let depositsFallback = appendDeposits(
+            &facts, fieldSet: instant, scope: scope, allowNonBnkFallback: allowNonBnkDeposits)
         appendBalance(
             &facts, fieldSet: instant, tags: Xbrl.bankNegotiableCDTags,
             kpiKey: industryKpiKeyNegotiableCDs, scope: scope)
@@ -83,7 +128,7 @@ enum BankIndustryKpiExtractor {
 
         appendGrossProfitComponents(&facts, fieldSet: duration, scope: scope)
         appendSigned(
-            &facts, fieldSet: duration, tags: Xbrl.bankOperatingExpensesTags,
+            &facts, fieldSet: duration, tags: operatingExpenseTags,
             kpiKey: industryKpiKeyOperatingExpenses, scope: scope, sign: 1)
 
         if let gp = BankBusinessGrossProfit.signedTotal(from: duration).current {
@@ -100,7 +145,28 @@ enum BankIndustryKpiExtractor {
 
         appendLDR(&facts, scope: scope)
         appendOHR(&facts, scope: scope)
-        return facts
+        return (facts, depositsFallback)
+    }
+
+    /// 預金は BNK タグ優先。提出者業種が銀行業でそれが無いときだけ非 BNK の貯金へ倒す。
+    private static func appendDeposits(
+        _ facts: inout [IndustryKpiFactValue], fieldSet: FieldSet, scope: String,
+        allowNonBnkFallback: Bool
+    ) -> Bool {
+        let primary = resolveItem(fieldSet, tags: Xbrl.bankDepositsTags)
+        if primary.tag != nil, primary.current != nil {
+            appendBalance(
+                &facts, fieldSet: fieldSet, tags: Xbrl.bankDepositsTags,
+                kpiKey: industryKpiKeyDeposits, scope: scope)
+            return false
+        }
+        guard allowNonBnkFallback else { return false }
+        let fallback = resolveItem(fieldSet, tags: [industryKpiDepositsFallbackTag])
+        guard fallback.tag != nil, fallback.current != nil else { return false }
+        appendBalance(
+            &facts, fieldSet: fieldSet, tags: [industryKpiDepositsFallbackTag],
+            kpiKey: industryKpiKeyDeposits, scope: scope)
+        return true
     }
 
     /// `Xbrl.businessGrossProfitComponents` を +1/−1 の対は純額、単独は符号付きで出す。
@@ -224,14 +290,14 @@ enum BankIndustryKpiExtractor {
                 sourceKind: industryKpiSourceKindDerived, sourceRef: sourceRef))
     }
 
-    /// OHR = 営業経費 ÷ 連結粗利益 × 100。どちらか欠ければ作らない。
+    /// OHR = 営業経費 ÷ 連結粗利益 × 100。どちらか欠ける、または粗利益が 0 以下なら作らない。
     private static func appendOHR(_ facts: inout [IndustryKpiFactValue], scope: String) {
         guard let opex = factValue(facts, industryKpiKeyOperatingExpenses, scope),
-            let gp = factValue(facts, industryKpiKeyGrossBusinessProfit, scope), gp != 0
+            let gp = factValue(facts, industryKpiKeyGrossBusinessProfit, scope), gp > 0
         else { return }
         let opexRef = facts.first {
             $0.kpiKey == industryKpiKeyOperatingExpenses && $0.scope == scope
-        }?.sourceRef ?? Xbrl.bankOperatingExpensesTags[0]
+        }?.sourceRef ?? operatingExpenseTags[0]
         facts.append(
             IndustryKpiFactValue(
                 kpiKey: industryKpiKeyOHR, value: opex / gp * Financial.percent,
@@ -242,7 +308,7 @@ enum BankIndustryKpiExtractor {
     }
 
     private static func payloadFlags(
-        _ facts: [IndustryKpiFactValue]
+        _ facts: [IndustryKpiFactValue], usedDepositsFallback: Bool
     ) -> (needsReview: Bool, warnings: [String]) {
         var warnings: [String] = []
         let reviewScope: String?
@@ -257,20 +323,27 @@ enum BankIndustryKpiExtractor {
             if factValue(facts, industryKpiKeyLDR, scope) == nil {
                 warnings.append(industryKpiWarningLDRUncomputed)
             }
-            if factValue(facts, industryKpiKeyOHR, scope) == nil {
+            let gp = factValue(facts, industryKpiKeyGrossBusinessProfit, scope)
+            if let gp, gp <= 0 {
+                warnings.append(industryKpiWarningGrossProfitNonpositive)
+            } else if factValue(facts, industryKpiKeyOHR, scope) == nil {
                 warnings.append(industryKpiWarningOHRUncomputed)
             }
+            // 採用した範囲（連結があれば連結、なければ提出会社）だけ見る。
+            // 連結に譲渡性預金がある会社の個別欠測では警告しない。
+            if factValue(facts, industryKpiKeyLDR, scope) != nil,
+                factValue(facts, industryKpiKeyNegotiableCDs, scope) == nil
+            {
+                warnings.append(industryKpiWarningNcdAbsentAssumedZero)
+            }
         }
-        let ldrScopes = Set(
-            facts.filter { $0.kpiKey == industryKpiKeyLDR }.map(\.scope))
-        let ncdScopes = Set(
-            facts.filter { $0.kpiKey == industryKpiKeyNegotiableCDs }.map(\.scope))
-        if ldrScopes.contains(where: { !ncdScopes.contains($0) }) {
-            warnings.append(industryKpiWarningNcdAbsentAssumedZero)
+        if usedDepositsFallback {
+            warnings.append(industryKpiWarningDepositsLiabilitiesFallback)
         }
         let needsReview =
             warnings.contains(industryKpiWarningLDRUncomputed)
             || warnings.contains(industryKpiWarningOHRUncomputed)
+            || warnings.contains(industryKpiWarningGrossProfitNonpositive)
         return (needsReview, warnings)
     }
 
