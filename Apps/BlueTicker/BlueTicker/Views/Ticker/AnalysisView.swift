@@ -1123,6 +1123,8 @@ private struct CashAllocationSection: View {
             items.append(("借入の増減", debt))
             // 無配の年は配当の段を出さない。
             if dividends != 0 { items.append(("配当", dividends)) }
+            // 自己株式の取得が無い年（旧データで cf_buyback が無い年を含む）は段を出さない。
+            if let buyback = year.cfBuyback, buyback != 0 { items.append(("自己株式取得", buyback)) }
             items.append(("その他財務CF", other))
         } else {
             items.append(("財務CF", year.cff ?? 0))

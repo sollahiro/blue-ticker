@@ -1,8 +1,8 @@
 // 資金配分（waterfall の現金増減ブリッジ）の材料。正本は statement の CF 本表行。
 //
-// フリーCF（cfo + cfi）→ 有利子負債の増減 → 親会社株主への配当 → その他の財務CF →
+// フリーCF（cfo + cfi）→ 有利子負債の増減 → 親会社株主への配当 → 自己株式の取得 → その他の財務CF →
 // 換算差額 → その他 → 現金増減。財務CFの各行は次の順で区分する（`docs/financials-summary-separation.md`）。
-// 1. 標準タグの一覧（債務・リース → debt、親会社株主への配当 → dividend_parent、それ以外の既知 → other）
+// 1. 標準タグの一覧（債務・リース → debt、親会社株主への配当 → dividend_parent、自己株式の取得 → buyback、それ以外の既知 → other）
 // 2. 会社拡張タグはラベルの決まり（借入金・社債・CP・リース負債 → debt など）
 // 3. それでも決まらない行だけ Jev に区分を選ばせる（金額は返させない。0.9 未満・不一致は fail closed）
 // 財務CFの内訳は、区分した行の和が財務CF合計に（行ごとの丸めの範囲で）一致したときだけ出す。
@@ -16,7 +16,10 @@ enum CashFlowFinancingRole: String, CaseIterable, Sendable {
     case debt
     /// 親会社株主への配当金の支払。
     case dividendParent = "dividend_parent"
-    /// それ以外（自己株式・非支配持分への配当・子会社株式の取引・利息の支払・その他）。
+    /// 自己株式の取得による支出。取得と処分を純額で 1 行にした書類はその行。処分による収入・子会社が持つ
+    /// 自己株式の取得は含めない（other）。
+    case buyback
+    /// それ以外（自己株式の処分・非支配持分への配当・子会社株式の取引・利息の支払・その他）。
     case other
 }
 
@@ -53,7 +56,9 @@ struct CashAllocationValues: Equatable, Sendable {
     var debtChange: Double?
     /// 親会社株主への配当（dividend_parent 行の和。支払は負）。
     var dividendsParent: Double?
-    /// その他の財務CF（財務CF − 有利子負債の増減 − 配当）。
+    /// 自己株式の取得（buyback 行の和。支払は負）。
+    var buyback: Double?
+    /// その他の財務CF（財務CF − 有利子負債の増減 − 配当 − 自己株式の取得）。
     var otherFinancing: Double?
     /// 現金及び現金同等物に係る換算差額。行が無い書類は 0。
     var fxEffect: Double?
@@ -131,6 +136,7 @@ enum CashAllocationResolver {
     static func classify(_ item: StatementLineItem) -> CashFlowFinancingRole? {
         if debtTags.contains(item.tag) { return .debt }
         if dividendParentTags.contains(item.tag) { return .dividendParent }
+        if buybackTags.contains(item.tag) { return .buyback }
         if otherTags.contains(item.tag) { return .other }
         return classify(label: item.label ?? "")
     }
@@ -149,11 +155,22 @@ enum CashAllocationResolver {
             return (ambiguous || otherHit) ? nil : .debt
         }
         if ambiguous { return nil }
+        if isBuybackLabel(label) { return .buyback }
         if label.contains("配当") || label.contains("分配") {
             return dividendToOthersKeywords.contains { label.contains($0) } ? .other : .dividendParent
         }
         if otherKeywords.contains(where: { label.contains($0) }) { return .other }
         return nil
+    }
+
+    /// 自己株式の取得（または取得と処分の純額）の行。処分・売却だけの行と、子会社・非支配持分の自己株式は含めない。
+    static func isBuybackLabel(_ label: String) -> Bool {
+        guard label.contains("自己株式") || label.contains("自己株") else { return false }
+        if ["子会社", "関係会社", "非支配", "少数株主"].contains(where: { label.contains($0) }) { return false }
+        let acquires = ["取得", "買付", "購入", "買入", "増減", "純額"].contains { label.contains($0) }
+        let disposesOnly = ["処分", "売却", "譲渡", "交付", "払出"].contains { label.contains($0) }
+            && !["取得", "買付", "購入", "買入", "増減"].contains { label.contains($0) }
+        return acquires && !disposesOnly
     }
 
     /// 区分が揃った行から値を組む。未区分の行が残る・和が財務CF合計に合わないときは内訳を出さない。
@@ -172,19 +189,22 @@ enum CashAllocationResolver {
         else { return out }
         var debt = 0.0
         var dividends = 0.0
+        var buyback = 0.0
         var other = 0.0
         for (row, role) in zip(prepared.rows, roles) {
             switch role {
             case .debt: debt += row.item.value
             case .dividendParent: dividends += row.item.value
+            case .buyback: buyback += row.item.value
             case .other, .none: other += row.item.value
             }
         }
         let tolerance = Double(max(prepared.rows.count, 1)) * financingSumTolerancePerRowYen
-        guard abs(debt + dividends + other - cff) <= tolerance else { return out }
+        guard abs(debt + dividends + buyback + other - cff) <= tolerance else { return out }
         out.debtChange = debt
         out.dividendsParent = dividends
-        out.otherFinancing = cff - debt - dividends
+        out.buyback = buyback
+        out.otherFinancing = cff - debt - dividends - buyback
         return out
     }
 
@@ -376,15 +396,20 @@ enum CashAllocationResolver {
     static let dividendParentTags: Set<String> = Set(
         Xbrl.dividendPaidCFJGAAPTags + Xbrl.dividendPaidCFIFRSTags)
 
-    /// 債務でも親会社株主への配当でもない既知の標準タグ。
+    /// 自己株式の取得（親会社）。取得だけの標準タグ（`Xbrl.shareBuybackCF*Tags`）と、取得と処分の純額を 1 行で開示する標準タグ。
+    static let buybackTags: Set<String> = Set(
+        Xbrl.shareBuybackCFJGAAPTags + Xbrl.shareBuybackCFIFRSTags + [
+            "DecreaseIncreaseInTreasuryStockFinCF", "NetDecreaseIncreaseInTreasuryStockFinCF",
+            "NetDecreaseIncreaseInTreasurySharesFinCFIFRS", "PurchasesAndSalesOfTreasuryStockNetFinCFIFRS",
+        ])
+
+    /// 債務・親会社株主への配当・自己株式の取得のどれでもない既知の標準タグ。
     static let otherTags: Set<String> = [
         "OtherNetFinCF", "OtherFinCFIFRS", "OtherNetFinCFINS", "OtherPaymentsFinCF",
-        "PurchaseOfTreasuryStockFinCF", "ProceedsFromSalesOfTreasuryStockFinCF",
-        "ProceedsFromDisposalOfTreasuryStockFinCF", "DecreaseIncreaseInTreasuryStockFinCF",
-        "NetDecreaseIncreaseInTreasuryStockFinCF",
-        "PaymentsForPurchaseOfTreasurySharesFinCFIFRS", "ProceedsFromSaleOfTreasurySharesFinCFIFRS",
-        "NetDecreaseIncreaseInTreasurySharesFinCFIFRS", "PurchasesAndSalesOfTreasuryStockNetFinCFIFRS",
-        "ReissuanceRepurchaseOfTreasuryStockFinCFIFRS", "ProceedsFromDisposalOfTreasurySharesFinCFIFRS",
+        "ProceedsFromSalesOfTreasuryStockFinCF",
+        "ProceedsFromDisposalOfTreasuryStockFinCF",
+        "ProceedsFromSaleOfTreasurySharesFinCFIFRS",
+        "ProceedsFromDisposalOfTreasurySharesFinCFIFRS",
         "ProceedsFromDispositionOfTreasuryStockFinCFIFRS",
         "PurchaseOfTreasuryStockOfSubsidiariesInConsolidationFinCF",
         "PurchaseOfTreasuryStockOfSubsidiariesInConsolidationFinCFIFRS",
@@ -485,9 +510,16 @@ struct OpenRouterCashFlowFinancingRowDecider: CashFlowFinancingRowDeciding {
                     dividends to non-controlling interests and not distributions to fund investors.
                     """),
             JevPresentedCandidate(
+                key: CashFlowFinancingRole.buyback.rawValue,
+                criterion: """
+                    The company repurchasing its own shares (自己株式の取得による支出), or a single \
+                    row that nets purchases and sales of treasury stock. Not proceeds from selling or \
+                    disposing of treasury stock alone, and not treasury stock held by subsidiaries.
+                    """),
+            JevPresentedCandidate(
                 key: CashFlowFinancingRole.other.rawValue,
                 criterion: """
-                    Anything else: treasury stock, share issuance, transactions with \
+                    Anything else: proceeds from disposing of treasury stock, share issuance, transactions with \
                     non-controlling interests, dividends to non-controlling interests, interest \
                     paid, derivatives, fees, deposits that do not bear interest, and "その他".
                     """),

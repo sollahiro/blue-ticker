@@ -22,7 +22,7 @@ import Testing
           "net_cash": null, "net_de": null, "cfo": null, "cfi": null, "cfc": null,
           "capex": null, "buyback": null, "rd": null, "cf_treasury_stock": null,
           "dividend_ss": null, "dividend_paid_cf": null,
-          "cff": null, "cf_debt_change": null, "cf_dividends_parent": null, "cf_other_financing": null,
+          "cff": null, "cf_debt_change": null, "cf_dividends_parent": null, "cf_buyback": null, "cf_other_financing": null,
           "cf_fx_effect": null, "cf_cash_change": null, "cf_other_cash_change": null, "eps": null, "bps": null,
           "issued_shares": null, "employees": null, "business_profit": null,
           "business_profit_margin": null, "business_profit_change": null,

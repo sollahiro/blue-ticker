@@ -222,6 +222,7 @@ struct IndividualAnalyzer {
             calc.cff = allocation.cff.map { $0 / millionYen }
             calc.cfDebtChange = allocation.debtChange.map { $0 / millionYen }
             calc.cfDividendsParent = allocation.dividendsParent.map { $0 / millionYen }
+            calc.cfBuyback = allocation.buyback.map { $0 / millionYen }
             calc.cfOtherFinancing = allocation.otherFinancing.map { $0 / millionYen }
             calc.cfFxEffect = allocation.fxEffect.map { $0 / millionYen }
             calc.cfCashChange = allocation.cashChange.map { $0 / millionYen }

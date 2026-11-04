@@ -18,7 +18,7 @@ public enum FinancialsComputeResult: Sendable {
 
 /// Neon `company_financials.cache_version`。財務計算ロジックまたは本契約の意味変更時のみバンプ。
 /// `blueTickerVersion` とは独立。経緯は Git。
-public let companyFinancialsCacheVersion = "fin-v24"
+public let companyFinancialsCacheVersion = "fin-v25"
 
 /// financials read（REST）が 200 を返す最低計算バージョン番号（`fin-vN` の N）。
 /// **明示指定**であり、「現行から 2 つ前」のような機械オフセットではない。人手で上げる。
@@ -94,7 +94,7 @@ public func isCurrentFinancialsAssemblyFingerprint(_ stored: String?) -> Bool {
 // | cash_equivalents | statement | StatementFinancialsResolver（#5b-1） | done |
 // | cfo, cfi | statement（cash_flow 合計行。IFRS は `NetCashProvidedByUsedIn*ActivitiesIFRS`。Summary は使わない） | StatementFinancialsResolver（#5c） | done |
 // | dividend_paid_cf | statement | StatementFinancialsResolver（#5b-1） | done |
-// | cff, cf_debt_change, cf_dividends_parent, cf_other_financing, cf_fx_effect, cf_cash_change, cf_other_cash_change | statement CF 本表行（Waterfall 専用。区分は標準タグ → ラベル規則 → Jev。`docs/financials-summary-separation.md`「資金配分」） | CashAllocationResolver | done |
+// | cff, cf_debt_change, cf_dividends_parent, cf_buyback, cf_other_financing, cf_fx_effect, cf_cash_change, cf_other_cash_change | statement CF 本表行（Waterfall 専用。区分は標準タグ → ラベル規則 → Jev。`docs/financials-summary-separation.md`「資金配分」） | CashAllocationResolver | done |
 // | eps | notes `per_share_information`（tag=eps） | StatementNotesResolver.financialsCanonicalEps | done |
 // | bps | notes `per_share_information`（tag=bps） | StatementNotesResolver.financialsCanonicalBps | done |
 // | issued_shares | notes `issued_shares_and_capital`（as_of_period_end） | StatementNotesResolver.financialsCanonicalIssuedShares | done |
@@ -172,6 +172,7 @@ struct FinancialsYear: Codable, Sendable {
     var cff: Double?
     var cfDebtChange: Double?
     var cfDividendsParent: Double?
+    var cfBuyback: Double?
     var cfOtherFinancing: Double?
     var cfFxEffect: Double?
     var cfCashChange: Double?
@@ -250,6 +251,7 @@ struct FinancialsYear: Codable, Sendable {
         case cff
         case cfDebtChange = "cf_debt_change"
         case cfDividendsParent = "cf_dividends_parent"
+        case cfBuyback = "cf_buyback"
         case cfOtherFinancing = "cf_other_financing"
         case cfFxEffect = "cf_fx_effect"
         case cfCashChange = "cf_cash_change"
@@ -328,6 +330,7 @@ struct FinancialsYear: Codable, Sendable {
             case .cff: try container.encode(cff, forKey: key)
             case .cfDebtChange: try container.encode(cfDebtChange, forKey: key)
             case .cfDividendsParent: try container.encode(cfDividendsParent, forKey: key)
+            case .cfBuyback: try container.encode(cfBuyback, forKey: key)
             case .cfOtherFinancing: try container.encode(cfOtherFinancing, forKey: key)
             case .cfFxEffect: try container.encode(cfFxEffect, forKey: key)
             case .cfCashChange: try container.encode(cfCashChange, forKey: key)
@@ -413,6 +416,7 @@ extension FinancialsYear {
         cff = calc.cff
         cfDebtChange = calc.cfDebtChange
         cfDividendsParent = calc.cfDividendsParent
+        cfBuyback = calc.cfBuyback
         cfOtherFinancing = calc.cfOtherFinancing
         cfFxEffect = calc.cfFxEffect
         cfCashChange = calc.cfCashChange
@@ -496,6 +500,7 @@ extension FinancialsYear {
         calc.cff = cff
         calc.cfDebtChange = cfDebtChange
         calc.cfDividendsParent = cfDividendsParent
+        calc.cfBuyback = cfBuyback
         calc.cfOtherFinancing = cfOtherFinancing
         calc.cfFxEffect = cfFxEffect
         calc.cfCashChange = cfCashChange
@@ -539,7 +544,7 @@ extension FinancialsYear {
         "gross_margin_change_impact", "sga_change_impact",
         "net_margin", "asset_turnover", "financial_leverage",
         "working_capital", "dso", "dio", "dpo", "ccc",
-        "cff", "cf_debt_change", "cf_dividends_parent", "cf_other_financing",
+        "cff", "cf_debt_change", "cf_dividends_parent", "cf_buyback", "cf_other_financing",
         "cf_fx_effect", "cf_cash_change", "cf_other_cash_change",
     ]
 
@@ -610,7 +615,7 @@ let financialsUnits: [String: AmountUnit.Code] = {
         "net_assets", "accounts_receivable", "inventory", "accounts_payable", "working_capital",
         "cash_equivalents", "net_cash", "cfo", "cfi", "cfc", "capex", "buyback", "rd",
         "cf_treasury_stock", "dividend_ss", "dividend_paid_cf",
-        "cff", "cf_debt_change", "cf_dividends_parent", "cf_other_financing",
+        "cff", "cf_debt_change", "cf_dividends_parent", "cf_buyback", "cf_other_financing",
         "cf_fx_effect", "cf_cash_change", "cf_other_cash_change",
         "business_profit", "business_profit_change", "sales_change_impact",
         "gross_margin_change_impact", "sga_change_impact",
