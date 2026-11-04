@@ -1085,6 +1085,108 @@ import Testing
         }
     }
 
+
+    /// 2026-11-04: visual_ng_20261031 再ソース。Sorahiro visual GO 82 社（チャット）。
+    /// 本番 R2 company-icons/{code}.png 先置き。マップは CDN。NG のうち見つからず 15 は台帳に残す。
+    @Test func pins20261104VisualNgResourceManualImageURLs() {
+        let expected: [(String, String)] = [
+            ("1447", "https://icons.sollahiro.com/company-icons/1447.png"), // pragma: allowlist secret
+            ("1771", "https://icons.sollahiro.com/company-icons/1771.png"), // pragma: allowlist secret
+            ("1898", "https://icons.sollahiro.com/company-icons/1898.png"), // pragma: allowlist secret
+            ("1981", "https://icons.sollahiro.com/company-icons/1981.png"), // pragma: allowlist secret
+            ("2137", "https://icons.sollahiro.com/company-icons/2137.png"), // pragma: allowlist secret
+            ("2294", "https://icons.sollahiro.com/company-icons/2294.png"), // pragma: allowlist secret
+            ("2345", "https://icons.sollahiro.com/company-icons/2345.png"), // pragma: allowlist secret
+            ("2388", "https://icons.sollahiro.com/company-icons/2388.png"), // pragma: allowlist secret
+            ("2418", "https://icons.sollahiro.com/company-icons/2418.png"), // pragma: allowlist secret
+            ("2668", "https://icons.sollahiro.com/company-icons/2668.png"), // pragma: allowlist secret
+            ("2795", "https://icons.sollahiro.com/company-icons/2795.png"), // pragma: allowlist secret
+            ("2819", "https://icons.sollahiro.com/company-icons/2819.png"), // pragma: allowlist secret
+            ("2911", "https://icons.sollahiro.com/company-icons/2911.png"), // pragma: allowlist secret
+            ("2915", "https://icons.sollahiro.com/company-icons/2915.png"), // pragma: allowlist secret
+            ("2999", "https://icons.sollahiro.com/company-icons/2999.png"), // pragma: allowlist secret
+            ("3030", "https://icons.sollahiro.com/company-icons/3030.png"), // pragma: allowlist secret
+            ("3143", "https://icons.sollahiro.com/company-icons/3143.png"), // pragma: allowlist secret
+            ("3161", "https://icons.sollahiro.com/company-icons/3161.png"), // pragma: allowlist secret
+            ("3192", "https://icons.sollahiro.com/company-icons/3192.png"), // pragma: allowlist secret
+            ("3422", "https://icons.sollahiro.com/company-icons/3422.png"), // pragma: allowlist secret
+            ("3556", "https://icons.sollahiro.com/company-icons/3556.png"), // pragma: allowlist secret
+            ("3652", "https://icons.sollahiro.com/company-icons/3652.png"), // pragma: allowlist secret
+            ("3988", "https://icons.sollahiro.com/company-icons/3988.png"), // pragma: allowlist secret
+            ("4026", "https://icons.sollahiro.com/company-icons/4026.png"), // pragma: allowlist secret
+            ("4113", "https://icons.sollahiro.com/company-icons/4113.png"), // pragma: allowlist secret
+            ("4179", "https://icons.sollahiro.com/company-icons/4179.png"), // pragma: allowlist secret
+            ("4220", "https://icons.sollahiro.com/company-icons/4220.png"), // pragma: allowlist secret
+            ("4234", "https://icons.sollahiro.com/company-icons/4234.png"), // pragma: allowlist secret
+            ("4299", "https://icons.sollahiro.com/company-icons/4299.png"), // pragma: allowlist secret
+            ("4344", "https://icons.sollahiro.com/company-icons/4344.png"), // pragma: allowlist secret
+            ("4351", "https://icons.sollahiro.com/company-icons/4351.png"), // pragma: allowlist secret
+            ("4421", "https://icons.sollahiro.com/company-icons/4421.png"), // pragma: allowlist secret
+            ("4425", "https://icons.sollahiro.com/company-icons/4425.png"), // pragma: allowlist secret
+            ("4591", "https://icons.sollahiro.com/company-icons/4591.png"), // pragma: allowlist secret
+            ("5074", "https://icons.sollahiro.com/company-icons/5074.png"), // pragma: allowlist secret
+            ("5078", "https://icons.sollahiro.com/company-icons/5078.png"), // pragma: allowlist secret
+            ("5576", "https://icons.sollahiro.com/company-icons/5576.png"), // pragma: allowlist secret
+            ("5603", "https://icons.sollahiro.com/company-icons/5603.png"), // pragma: allowlist secret
+            ("5621", "https://icons.sollahiro.com/company-icons/5621.png"), // pragma: allowlist secret
+            ("5891", "https://icons.sollahiro.com/company-icons/5891.png"), // pragma: allowlist secret
+            ("5936", "https://icons.sollahiro.com/company-icons/5936.png"), // pragma: allowlist secret
+            ("6167", "https://icons.sollahiro.com/company-icons/6167.png"), // pragma: allowlist secret
+            ("6177", "https://icons.sollahiro.com/company-icons/6177.png"), // pragma: allowlist secret
+            ("6266", "https://icons.sollahiro.com/company-icons/6266.png"), // pragma: allowlist secret
+            ("6316", "https://icons.sollahiro.com/company-icons/6316.png"), // pragma: allowlist secret
+            ("6518", "https://icons.sollahiro.com/company-icons/6518.png"), // pragma: allowlist secret
+            ("6571", "https://icons.sollahiro.com/company-icons/6571.png"), // pragma: allowlist secret
+            ("6623", "https://icons.sollahiro.com/company-icons/6623.png"), // pragma: allowlist secret
+            ("6658", "https://icons.sollahiro.com/company-icons/6658.png"), // pragma: allowlist secret
+            ("6668", "https://icons.sollahiro.com/company-icons/6668.png"), // pragma: allowlist secret
+            ("6800", "https://icons.sollahiro.com/company-icons/6800.png"), // pragma: allowlist secret
+            ("6864", "https://icons.sollahiro.com/company-icons/6864.png"), // pragma: allowlist secret
+            ("6908", "https://icons.sollahiro.com/company-icons/6908.png"), // pragma: allowlist secret
+            ("6942", "https://icons.sollahiro.com/company-icons/6942.png"), // pragma: allowlist secret
+            ("6947", "https://icons.sollahiro.com/company-icons/6947.png"), // pragma: allowlist secret
+            ("7058", "https://icons.sollahiro.com/company-icons/7058.png"), // pragma: allowlist secret
+            ("7244", "https://icons.sollahiro.com/company-icons/7244.png"), // pragma: allowlist secret
+            ("7273", "https://icons.sollahiro.com/company-icons/7273.png"), // pragma: allowlist secret
+            ("7472", "https://icons.sollahiro.com/company-icons/7472.png"), // pragma: allowlist secret
+            ("7481", "https://icons.sollahiro.com/company-icons/7481.png"), // pragma: allowlist secret
+            ("7531", "https://icons.sollahiro.com/company-icons/7531.png"), // pragma: allowlist secret
+            ("7554", "https://icons.sollahiro.com/company-icons/7554.png"), // pragma: allowlist secret
+            ("7625", "https://icons.sollahiro.com/company-icons/7625.png"), // pragma: allowlist secret
+            ("8093", "https://icons.sollahiro.com/company-icons/8093.png"), // pragma: allowlist secret
+            ("8336", "https://icons.sollahiro.com/company-icons/8336.png"), // pragma: allowlist secret
+            ("8364", "https://icons.sollahiro.com/company-icons/8364.png"), // pragma: allowlist secret
+            ("8739", "https://icons.sollahiro.com/company-icons/8739.png"), // pragma: allowlist secret
+            ("8783", "https://icons.sollahiro.com/company-icons/8783.png"), // pragma: allowlist secret
+            ("8841", "https://icons.sollahiro.com/company-icons/8841.png"), // pragma: allowlist secret
+            ("8894", "https://icons.sollahiro.com/company-icons/8894.png"), // pragma: allowlist secret
+            ("8908", "https://icons.sollahiro.com/company-icons/8908.png"), // pragma: allowlist secret
+            ("9060", "https://icons.sollahiro.com/company-icons/9060.png"), // pragma: allowlist secret
+            ("9218", "https://icons.sollahiro.com/company-icons/9218.png"), // pragma: allowlist secret
+            ("9233", "https://icons.sollahiro.com/company-icons/9233.png"), // pragma: allowlist secret
+            ("9319", "https://icons.sollahiro.com/company-icons/9319.png"), // pragma: allowlist secret
+            ("9365", "https://icons.sollahiro.com/company-icons/9365.png"), // pragma: allowlist secret
+            ("9644", "https://icons.sollahiro.com/company-icons/9644.png"), // pragma: allowlist secret
+            ("9701", "https://icons.sollahiro.com/company-icons/9701.png"), // pragma: allowlist secret
+            ("9765", "https://icons.sollahiro.com/company-icons/9765.png"), // pragma: allowlist secret
+            ("9845", "https://icons.sollahiro.com/company-icons/9845.png"), // pragma: allowlist secret
+            ("9857", "https://icons.sollahiro.com/company-icons/9857.png"), // pragma: allowlist secret
+            ("9986", "https://icons.sollahiro.com/company-icons/9986.png"), // pragma: allowlist secret
+        ]
+        #expect(expected.count == 82)
+        #expect(Set(expected.map(\.0)).count == 82)
+        #expect(
+            Set(expected.map(\.0))
+                .isDisjoint(with: Set(CompanyIconOriginOverride.pronexusDisclosureHomepages.keys)))
+        for (code, url) in expected {
+            #expect(!url.contains("prtimes.jp"), "code=\(code)")
+            #expect(!url.contains("i0.wp.com"), "code=\(code)")
+            #expect(url.hasSuffix("/company-icons/\(code).png"), "code=\(code)")
+            let src = CompanyIconOriginOverride.manualSources[code]
+            #expect(src == .imageURL(url), "code=\(code)")
+        }
+    }
+
     @Test func pinsIgridSolutionsMissingListedManualImageURL() {
         let jpeg = "https://igrid.co.jp/wp-content/themes/igrid2024/dist/img/favicon/256.jpg"
         #expect(
