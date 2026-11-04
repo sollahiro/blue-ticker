@@ -1,7 +1,7 @@
 // `GET /v1/screen/snapshot` の作り置き。
 //
 // screen_index は財務 ingest でしか変わらないので、全行の読み取り・直列化・ETag 計算は
-// リクエストごとにせず、起動時と `Api.screenSnapshotRebuildIntervalSeconds`（3 日）ごとに裏で行う。
+// リクエストごとにせず、起動時と `Api.screenSnapshotRebuildIntervalSeconds`（1 時間）ごとに裏で行う。
 // リクエストは作り置きの本文を返すだけ（304 の判定も作り置きの ETag で行う）。
 // 起動直後で作り置きがまだ無いときだけ、そのリクエストで作って置く。
 // 手元から Neon に ingest した直後に反映したいときはサーバーを再起動する。
@@ -83,7 +83,7 @@ func refreshScreenSnapshot(cache: ScreenSnapshotCache, db: Database, logger: Log
 }
 
 /// サーバー起動時に作り直しループを始める（DATABASE_URL 設定時のみ呼び出し側が呼ぶ。`registerRoutes` の後）。
-/// 成功後は 3 日待つ。未生成・失敗は `Api.screenSnapshotRetryIntervalSeconds` で再試行する。
+/// 成功後は 1 時間待つ。未生成・失敗は `Api.screenSnapshotRetryIntervalSeconds` で再試行する。
 func startScreenSnapshotRefresh(app: Application) {
     guard let cache = app.storage[ScreenSnapshotCacheKey.self] else { return }
     let db = app.db
