@@ -1187,6 +1187,29 @@ import Testing
         }
     }
 
+    /// 2026-11-04 20:44 JST: visual_ng_20261031 残り After。Sorahiro visual GO 4 社（チャット）。
+    /// 本番 R2 company-icons/{code}.png 先置き。マップは CDN。
+    @Test func pins20261104LeftoverAftersManualImageURLs() {
+        let expected: [(String, String)] = [
+            ("3172", "https://icons.sollahiro.com/company-icons/3172.png"), // pragma: allowlist secret
+            ("4616", "https://icons.sollahiro.com/company-icons/4616.png"), // pragma: allowlist secret
+            ("4662", "https://icons.sollahiro.com/company-icons/4662.png"), // pragma: allowlist secret
+            ("6059", "https://icons.sollahiro.com/company-icons/6059.png"), // pragma: allowlist secret
+        ]
+        #expect(expected.count == 4)
+        #expect(Set(expected.map(\.0)).count == 4)
+        #expect(
+            Set(expected.map(\.0))
+                .isDisjoint(with: Set(CompanyIconOriginOverride.pronexusDisclosureHomepages.keys)))
+        for (code, url) in expected {
+            #expect(!url.contains("prtimes.jp"), "code=\(code)")
+            #expect(!url.contains("i0.wp.com"), "code=\(code)")
+            #expect(url.hasSuffix("/company-icons/\(code).png"), "code=\(code)")
+            let src = CompanyIconOriginOverride.manualSources[code]
+            #expect(src == .imageURL(url), "code=\(code)")
+        }
+    }
+
     @Test func pinsIgridSolutionsMissingListedManualImageURL() {
         let jpeg = "https://igrid.co.jp/wp-content/themes/igrid2024/dist/img/favicon/256.jpg"
         #expect(

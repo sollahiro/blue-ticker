@@ -842,6 +842,12 @@ enum CompanyIconOriginOverride {
         "9845": .imageURL("https://icons.sollahiro.com/company-icons/9845.png"), // R2 CDN visual GO 2026-11-04 // pragma: allowlist secret
         "9857": .imageURL("https://icons.sollahiro.com/company-icons/9857.png"), // R2 CDN visual GO 2026-11-04 // pragma: allowlist secret
         "9986": .imageURL("https://icons.sollahiro.com/company-icons/9986.png"), // R2 CDN visual GO 2026-11-04 // pragma: allowlist secret
+        // 2026-11-04 20:44 JST: visual_ng_20261031 残り After。Sorahiro visual GO 4 社（チャット）。
+        // 本番 R2 company-icons/{code}.png へ先置き済み。マップは CDN。ingest はマージ後。
+        "3172": .imageURL("https://icons.sollahiro.com/company-icons/3172.png"), // R2 CDN visual GO 2026-11-04 20:44 // pragma: allowlist secret
+        "4616": .imageURL("https://icons.sollahiro.com/company-icons/4616.png"), // R2 CDN visual GO 2026-11-04 20:44 // pragma: allowlist secret
+        "4662": .imageURL("https://icons.sollahiro.com/company-icons/4662.png"), // R2 CDN visual GO 2026-11-04 20:44 // pragma: allowlist secret
+        "6059": .imageURL("https://icons.sollahiro.com/company-icons/6059.png"), // R2 CDN visual GO 2026-11-04 20:44 // pragma: allowlist secret
     ]
 
     static func manualSource(for code: String) -> CompanyIconManualSource? {
