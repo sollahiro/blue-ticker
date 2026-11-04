@@ -115,6 +115,7 @@ struct FinancialsYear: Codable, Hashable, Identifiable {
     var cff: Double?
     var cfDebtChange: Double?
     var cfDividendsParent: Double?
+    var cfBuyback: Double?
     var cfOtherFinancing: Double?
     var cfFxEffect: Double?
     var cfCashChange: Double?
@@ -164,6 +165,7 @@ struct FinancialsYear: Codable, Hashable, Identifiable {
         case cfc, cff
         case cfDebtChange = "cf_debt_change"
         case cfDividendsParent = "cf_dividends_parent"
+        case cfBuyback = "cf_buyback"
         case cfOtherFinancing = "cf_other_financing"
         case cfFxEffect = "cf_fx_effect"
         case cfCashChange = "cf_cash_change"

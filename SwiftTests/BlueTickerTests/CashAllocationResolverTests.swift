@@ -36,13 +36,14 @@ import Testing
         ]
     }
 
-    @Test func jgaapRowsSplitIntoDebtDividendsAndOther() throws {
+    @Test func jgaapRowsSplitIntoDebtDividendsBuybackAndOther() throws {
         let values = CashAllocationResolver.resolve(
             cashFlow: smcCashFlow(), cfo: nil, cfi: nil, isBank: false)
         #expect(values.cff == -94_119 * million)
         #expect(values.debtChange == 51 * million)
         #expect(values.dividendsParent == -63_535 * million)
-        #expect(values.otherFinancing == (-30_018 - 617) * million)
+        #expect(values.buyback == -30_018 * million)
+        #expect(values.otherFinancing == -617 * million)
         #expect(values.fxEffect == 44_553 * million)
         #expect(values.cashChange == (573_769 - 531_649) * million)
         // cfi が無ければ「その他」は出さない。
@@ -59,12 +60,12 @@ import Testing
         // 期末 − 期首 = cfo + cfi + cff + 換算差額 + その他。連結範囲の変更 10,281 がここに入る。
         let expected = (573_769 - 531_649) * million - cfo - cfi - (-94_119 * million) - 44_553 * million
         #expect(abs(other - expected) < 1)
-        let bridge = cfo + cfi + values.debtChange! + values.dividendsParent!
+        let bridge = cfo + cfi + values.debtChange! + values.dividendsParent! + values.buyback!
             + values.otherFinancing! + values.fxEffect! + other
         #expect(abs(bridge - values.cashChange!) < 1)
     }
 
-    @Test func ifrsDividendsToNonControllingInterestsGoToOther() throws {
+    @Test func ifrsNonControllingDividendsGoToOtherAndNetTreasuryRowIsBuyback() throws {
         // トヨタ 7203（IFRS）の財務区分（百万円）。
         let cashFlow = [
             row("IncreaseDecreaseInShortTermDebtFinCFIFRS", "短期有利子負債の純増減額（△は減少）", -90_691, order: 0, section: .financing),
@@ -84,8 +85,10 @@ import Testing
             cashFlow: cashFlow, cfo: nil, cfi: nil, isBank: false)
         #expect(values.debtChange == (-90_691 + 12_880_225 - 11_956_541) * million)
         #expect(values.dividendsParent == -1_238_974 * million)
+        // 取得と処分を純額で開示する行は自己株式の取得。
+        #expect(values.buyback == -39_975 * million)
         // 行の和（−536,660）と合計（−536,659）の丸め差は許容し、その他は合計から引いて出す。
-        #expect(values.otherFinancing == (-125_416 - 39_975 + 34_712 + 1) * million)
+        #expect(values.otherFinancing == (-125_416 + 34_712 + 1) * million)
         #expect(values.fxEffect == 377_197 * million)
     }
 
@@ -131,7 +134,12 @@ import Testing
         #expect(CashAllocationResolver.classify(label: "配当金の支払額") == .dividendParent)
         #expect(CashAllocationResolver.classify(label: "非支配株主への配当金の支払額") == .other)
         #expect(CashAllocationResolver.classify(label: "SVFの外部投資家に対する分配額・返還額") == .other)
-        #expect(CashAllocationResolver.classify(label: "自己株式の取得による支出") == .other)
+        #expect(CashAllocationResolver.classify(label: "自己株式の取得による支出") == .buyback)
+        #expect(CashAllocationResolver.classify(label: "自己株式の取得及び処分") == .buyback)
+        #expect(CashAllocationResolver.classify(label: "自己株式の純増減額（△は増加）") == .buyback)
+        #expect(CashAllocationResolver.classify(label: "自己株式の処分による収入") == .other)
+        #expect(CashAllocationResolver.classify(label: "自己株式の売却による収入") == .other)
+        #expect(CashAllocationResolver.classify(label: "連結子会社による自己株式の取得による支出") == .other)
         #expect(CashAllocationResolver.classify(label: "その他") == .other)
         // 曖昧な行は Jev 行き。
         #expect(CashAllocationResolver.classify(label: "カード事業の短期借入金の純増減額（△は減少）") == nil)
@@ -185,7 +193,8 @@ import Testing
         year.cff = -94_119
         year.cfDebtChange = 51
         year.cfDividendsParent = -63_535
-        year.cfOtherFinancing = -30_635
+        year.cfBuyback = -30_018
+        year.cfOtherFinancing = -617
         year.cfFxEffect = 44_553
         year.cfCashChange = 42_120
         year.cfOtherCashChange = 10_281
@@ -193,7 +202,7 @@ import Testing
         #expect(analysis["cf_debt_change"] as? Double == 51)
         #expect(analysis["cf_other_cash_change"] as? Double == 10_281)
         let summary = year.summaryJsonObject()
-        for key in ["cff", "cf_debt_change", "cf_dividends_parent", "cf_other_financing",
+        for key in ["cff", "cf_debt_change", "cf_dividends_parent", "cf_buyback", "cf_other_financing",
                     "cf_fx_effect", "cf_cash_change", "cf_other_cash_change"] {
             #expect(summary[key] == nil)
             #expect(financialsUnits[key] == .currencyAmount)

@@ -123,6 +123,7 @@ struct CalculatedData: Codable {
     var cff: Double?
     var cfDebtChange: Double?
     var cfDividendsParent: Double?
+    var cfBuyback: Double?
     var cfOtherFinancing: Double?
     var cfFxEffect: Double?
     var cfCashChange: Double?
@@ -172,7 +173,8 @@ struct CalculatedData: Codable {
         case cfTreasuryStock = "CFTreasuryStock"
         case dividendSS = "DividendSS"; case dividendPaidCF = "DividendPaidCF"
         case cff = "CFF"; case cfDebtChange = "CFDebtChange"
-        case cfDividendsParent = "CFDividendsParent"; case cfOtherFinancing = "CFOtherFinancing"
+        case cfDividendsParent = "CFDividendsParent"; case cfBuyback = "CFBuyback"
+        case cfOtherFinancing = "CFOtherFinancing"
         case cfFxEffect = "CFFxEffect"; case cfCashChange = "CFCashChange"
         case cfOtherCashChange = "CFOtherCashChange"
         case accountsReceivable = "AccountsReceivable"
