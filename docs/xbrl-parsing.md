@@ -143,7 +143,7 @@ CI では必須チェック `golden-suite` に repo secret `BLT_EDINET_API_KEY` 
 
 ### 3.3 訂正有報(130) の XBRL overlay
 
-有報の行 identity（`company_statement_notes.doc_id`、statements / breakdowns / filing-sections の `doc_id`、financials の年度帰属、公開 `doc_id`）は**原本 120** のままにする。同一会社・同一期間（`edinetCode` + 期末。期末は `periodEnd`、無ければ概要文の西暦）の訂正 130 を、提出が古い順に原本 XBRL へ重ねる。`parentDocID` / `parent_doc_id` は同期メタであり照合には使わない。overlay パッケージから作る通期成果物は financials（Summary / `screen_index` の入力）、statements、statement-notes（`per_share_information` を含む）、breakdowns（product_service / geography / 収益認識ほか全軸）、filing-sections、overviews、icons。
+有報の行 identity（`company_statement_notes.doc_id`、statements / breakdowns / filing-sections の `doc_id`、financials の年度帰属、公開 `doc_id`）は**原本 120** のままにする。同一会社・同一期間（`edinetCode` + 期末。期末は `periodEnd`、無ければ概要文の西暦）の訂正 130 を、提出が古い順に原本 XBRL へ重ねる。`parentDocID` / `parent_doc_id` は同期メタであり照合には使わない。overlay パッケージから作る通期成果物は financials（Summary / `screen_index` の入力）、statements、statement-notes（`per_share_information` を含む）、breakdowns（product_service / geography / 収益認識ほか全軸）、filing-sections、overviews。
 
 - **数値 fact**: キーは element + contextRef。訂正に無い項目は原本の値。
 - **行メンバー表**（`Row{N}Member`）: 訂正がその表を含めば行ごと置換（セル混在しない）。

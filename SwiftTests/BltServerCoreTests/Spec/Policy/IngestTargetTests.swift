@@ -24,7 +24,6 @@ struct IngestTargetTests {
         #expect(parseIngestTargets("breakdowns") == [.breakdowns])
         #expect(parseIngestTargets("statements") == [.statements])
         #expect(parseIngestTargets("statement-notes") == [.notes])
-        #expect(parseIngestTargets("icons") == [.icons])
         #expect(parseIngestTargets("overviews") == [.overviews])
         #expect(parseIngestTargets("relations") == [.relations])
         #expect(parseIngestTargets("industry-kpis") == [.industryKpis])
@@ -35,7 +34,7 @@ struct IngestTargetTests {
         #expect(parseIngestTargets("financials,filing-sections") == [.financials, .filingSections])
         #expect(
             parseIngestTargets(
-                "financials,filing-sections,breakdowns,statements,statement-notes,icons,overviews,relations,industry-kpis")
+                "financials,filing-sections,breakdowns,statements,statement-notes,overviews,relations,industry-kpis")
                 == Set(IngestTarget.allCases))
     }
 
@@ -47,7 +46,7 @@ struct IngestTargetTests {
 
     @Test("旧数値トークンと未知トークンは nil")
     func legacyAndUnknownTokensAreNil() {
-        for token in ["3", "4", "4half", "5", "6", "7", "financials,4", "foo"] {
+        for token in ["3", "4", "4half", "5", "6", "7", "financials,4", "foo", "icons"] {
             #expect(parseIngestTargets(token) == nil)
         }
     }

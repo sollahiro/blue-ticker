@@ -1,5 +1,5 @@
 // `blt-ingest ingest` の本体。財務取り込み・有報セクション・内訳・Statement・注記・
-// アイコン・Overview・関係を取り込む。数値 fact の Neon 永続（旧 edinet_xbrl_facts）は閉じた。
+// Overview・関係を取り込む。数値 fact の Neon 永続（旧 edinet_xbrl_facts）は閉じた。
 // 配信も他 stage も生 XBRL を直接読む。
 
 import BltStoreCore
@@ -21,9 +21,9 @@ let unpublishedBreakdownIngestLimit = 30
 /// 財務取り込み（計算済み財務サマリ）→ 有報セクション取り込み（有報セクション）→
 /// 内訳取り込み（product_service/geography・決定論指標軸ともに上場全体。日経225は処理順の先頭寄せ）を取り込む。
 ///
-/// `targets` は実行する financials/filing-sections/breakdowns/statements/statement-notes/icons/overviews/industry-kpis の集合
-/// （CLI: `--stages filing-sections` 等）。既定は relations と industry-kpis 以外。icons は `BLT_R2_*` 環境変数未設定時は
-/// スキップされる。overviews は `OPENROUTER_OVERVIEW_API_KEY` 未設定時はスキップされる。
+/// `targets` は実行する financials/filing-sections/breakdowns/statements/statement-notes/overviews/industry-kpis の集合
+/// （CLI: `--stages filing-sections` 等）。既定は relations と industry-kpis 以外。overviews は
+/// `OPENROUTER_OVERVIEW_API_KEY` 未設定時はスキップされる。
 /// 例えば有報セクション取り込みだけを先に流したいとき、重い financials の全件 drain を挟まずに済む。
 /// `codes` は financials/filing-sections/breakdowns の対象を明示的な証券コード集合に絞る（CLI: `--codes 7203,6758`）。
 /// `docIDs` は会社-FY（原本 120 の doc_id）単位の再 ingest（CLI: `--doc-ids S100W0S7`）。
@@ -141,7 +141,7 @@ public func runFactsIngestCommand(
         let inFlightListedCodes: Set<String>
         if inFlightOriginalIDs.isEmpty {
             let companyWide =
-                targets.contains(.financials) || targets.contains(.icons)
+                targets.contains(.financials)
                 || targets.contains(.overviews) || targets.contains(.relations)
                 || targets.contains(.industryKpis)
             inFlightListedCodes = codes ?? (companyWide ? listed : [])
@@ -467,28 +467,6 @@ public func runFactsIngestCommand(
                     stored: s8.stored, failed: s8.failed, skipped: s8.skipped,
                     servable: notesCoverage?.servable, unservable: notesCoverage?.unservable,
                     notApplicable: s8.notApplicable, purged: s8.purged)
-            }
-        }
-        if targets.contains(.icons) {
-            // 会社アイコン取り込み: R2クレデンシャル（`BLT_R2_*`）が無い環境（ローカル未設定・Cursor Cloud等）
-            // では対象に含めてもスキップし、他ステージの ingest を妨げない。
-            if let r2Config = R2Config.resolveFromEnvironment() {
-                let s9 = try await runIconsIngest(
-                    db: app.db, listedCodes: listed, limit: stageLimit, explicitCodes: codes,
-                    priorityCodes: priority, cachedDocIDs: cachedDocIDs,
-                    logger: app.logger
-                ) { docID, code in
-                    await context.extractAndUploadCompanyIcon(
-                        docID: docID, code: code, r2Config: r2Config,
-                        correctionDocIDs: correctionIDsByOriginal[docID] ?? [])
-                }
-                logIngestSummary(
-                    app.logger, target: "icons", attempted: s9.attempted, stored: s9.stored,
-                    failed: s9.failed, skipped: s9.skipped)
-            } else {
-                app.logger.notice(
-                    "会社アイコン取り込み skipped (BLT_R2_* 環境変数未設定)",
-                    metadata: ["event": "ingest_skipped", "target": "icons", "reason": "r2_config_missing"])
             }
         }
         if targets.contains(.overviews) {

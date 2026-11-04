@@ -14,22 +14,11 @@ import Testing
     }
 
     @Test(.enabled(if: liveEnabled, "BLT_R2_XBRL_LIVE_TEST=1 and R2 XBRL creds required"))
-    func probeXbrlAndIconsBuckets() async {
+    func probeXbrlBucket() async {
         let xbrl = R2StorageConfig.resolveXbrlFromEnvironment()!
         let missing = "jp/edinet/xbrl/__blt_probe_missing__.zip"
         let xbrlResult = await R2Client.download(key: missing, config: xbrl)
         print("XBRL bucket probe: \(probeLabel(xbrlResult))")
-
-        if let icons = R2StorageConfig.resolveIconsFromEnvironment() {
-            let iconsResult = await R2Client.download(key: missing, config: icons)
-            print("icons bucket probe: \(probeLabel(iconsResult))")
-            switch iconsResult {
-            case .notFound, .success:
-                break
-            default:
-                Issue.record("icons bucket unexpected: \(probeLabel(iconsResult))")
-            }
-        }
 
         switch xbrlResult {
         case .notFound, .success:
@@ -37,8 +26,8 @@ import Testing
         case .httpStatus(403, _):
             Issue.record(
                 """
-                XBRL bucket 403 AccessDenied. Same token returns 404 on the icons bucket for a missing key, so SigV4 is fine. \
-                Grant Object Read & Write on BLT_R2_XBRL_BUCKET (create the bucket if it does not exist).
+                XBRL bucket 403 AccessDenied. Grant Object Read & Write on BLT_R2_XBRL_BUCKET \
+                (create the bucket if it does not exist).
                 """)
         default:
             Issue.record("XBRL bucket unexpected: \(probeLabel(xbrlResult))")
@@ -58,7 +47,9 @@ import Testing
             return
         }
         let apiKey = ProcessInfo.processInfo.environment["BLT_EDINET_API_KEY"]
-        if let iconsBucket = R2StorageConfig.resolveIconsFromEnvironment()?.bucket {
+        if let iconsBucket = ProcessInfo.processInfo.environment["BLT_R2_ICONS_BUCKET"],
+            !iconsBucket.isEmpty
+        {
             #expect(iconsBucket != config.bucket)
         }
 
