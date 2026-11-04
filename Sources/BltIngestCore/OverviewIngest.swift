@@ -1,5 +1,5 @@
 // 銘柄 Overview 取り込み: 上場企業の直近有報から「事業の内容」を材料に短い会社説明を生成し
-// company_overviews へ upsert する。1社=1行（icons と同じ。過去書類の履歴保持・purgeは不要）。
+// company_overviews へ upsert する。1社=1行（過去書類の履歴保持・purgeは不要）。
 // 生成は LLM（`source=llm`）。入力が空で applicable=false の行は `not_applicable`。
 // `ok=false` は needs_review として再試行する。最新有報の doc_id が変わったら上書きする。
 // cache_version バンプだけでは LLM 成功行は再生成しない（有報が同じなら skip）。
@@ -32,7 +32,7 @@ public typealias CompanyOverviewGenerating =
 
 /// 上場企業の直近有報1件ずつを走査し、未生成 / 最新 doc 変更 / needs_review /
 /// 版ずれの not_applicable の Overview を生成・格納する。
-/// `explicitCodes` / `priorityCodes` / `cachedDocIDs` は icons と同じ意味。
+/// `explicitCodes` / `priorityCodes` / `cachedDocIDs` は対象絞り込みと処理順（日経225先頭寄せ・キャッシュ済み先行）。
 func runOverviewIngest(
     db: Database, listedCodes: Set<String>, limit: Int?, explicitCodes: Set<String>? = nil,
     priorityCodes: Set<String> = [], cachedDocIDs: Set<String> = [],
@@ -197,5 +197,40 @@ final class CompanyOverviewClassifyRow: Model, @unchecked Sendable {
     init() {}
 }
 
-// MARK: - read 経路（REST overview）
+// MARK: - 会社単位ステージ共通（overviews / relations）
+
+/// 上場（listedCodes）× 会社有報(120・府令010) の直近1件を会社ごとに選ぶ。
+/// `explicitCodes` を渡すとその集合だけを対象にし、listedCodes 未収録でも有報があれば含める。
+/// docType 120 でも特定有価証券府令(030)の信託受益証券等は除外（statements / filings と同じ）。
+func latestAnnualReportPerCompany(
+    db: Database, listedCodes: Set<String>, explicitCodes: Set<String>? = nil, logger: Logger? = nil
+) async throws -> [(docID: String, code: String, submitDateTime: String)] {
+    let listedSecByEdinet = await listedSecCodeByEdinetCode()
+    let documents = try await withDbRetry(logger: logger, context: "有報一覧") {
+        try await EdinetDocumentListing.query(on: db)
+            .filter(\.$docTypeCode == Api.docTypeAnnualReport)
+            .filter(\.$ordinanceCode == Api.ordinanceCompanyDisclosure)
+            .all()
+    }
+
+    var byCode: [String: (docID: String, submitDateTime: String)] = [:]
+    for doc in documents {
+        guard let docID = doc.id,
+            let code = listedIssuerCode(
+                secCode: doc.secCode, edinetCode: doc.edinetCode,
+                listedSecCodeByEdinetCode: listedSecByEdinet)
+        else { continue }
+        // `--codes` はマスタ未収録の新規上場（英数字コード等）でも、有報 120 があれば取り込む。
+        if let explicit = explicitCodes {
+            guard explicit.contains(code) else { continue }
+        } else {
+            guard listedCodes.contains(code) else { continue }
+        }
+        if let current = byCode[code], current.submitDateTime >= doc.submitDateTime { continue }
+        byCode[code] = (docID, doc.submitDateTime)
+    }
+    return byCode.map {
+        (docID: $0.value.docID, code: $0.key, submitDateTime: $0.value.submitDateTime)
+    }.sorted { $0.code < $1.code }
+}
 

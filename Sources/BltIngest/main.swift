@@ -6,7 +6,7 @@
 //                                                            冒頭で同じ適用を行う。blt-server のデプロイ前に実行する）
 //   blt-ingest sync [--from YYYY-MM-DD] [--to YYYY-MM-DD]    EDINET 書類一覧を DB へ同期
 //   blt-ingest ingest [--limit N] [--stages financials,
-//                     filing-sections,breakdowns,statements,statement-notes,icons,overviews,
+//                     filing-sections,breakdowns,statements,statement-notes,overviews,
 //                     relations,industry-kpis]
 //                     [--codes 7203,6758] [--doc-ids S100W0S7]
 //                     [--note-types per_share_information,property_plant_equipment_schedule,...]
@@ -16,7 +16,6 @@
 //                                                            （1ジョブ 30。日経225は処理順の優先のみ）。
 //                                                            statements は上場全体（日経225は処理順の優先のみ）。
 //                                                            statement-notes も上場全体（日経225は処理順の優先のみ）。
-//                                                            icons は BLT_R2_* 環境変数未設定時はスキップされる。
 //                                                            overviews は OPENROUTER_OVERVIEW_API_KEY 未設定時は
 //                                                            スキップされる。上場全体・最新有報1件（日経225は処理順）。
 //                                                            --codes で対象を証券コード集合に絞り、--limit を無視して全件処理する。
@@ -73,7 +72,7 @@ do {
         )
     } else if argv.count > 1, argv[1] == "ingest" {
         guard let targets = parseIngestTargets(optionValue("--stages", in: argv)) else {
-            printError("blt-ingest error: --stages は financials,filing-sections,breakdowns,statements,statement-notes,icons,overviews,relations,industry-kpis のカンマ区切りで指定してください\n")
+            printError("blt-ingest error: --stages は financials,filing-sections,breakdowns,statements,statement-notes,overviews,relations,industry-kpis のカンマ区切りで指定してください\n")
             exit(1)
         }
         // `optionValue` はフラグが argv 末尾（値なし）のとき nil を返し、フラグ未指定と区別できない。

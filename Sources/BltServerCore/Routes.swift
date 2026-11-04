@@ -77,7 +77,7 @@ func registerRoutes(
     installFeedTrendDefaults(app)
 
     // GET /v1/companies?q={query}
-    // icon_url は company_icons（R2格納済み favicon）のバッチ lookup で合成する（未格納・R2未設定・
+    // icon_url は company_icons（R2 格納済み）のバッチ lookup で合成する（未格納・R2未設定・
     // DB未接続時は null）。searchCompanies 自体は DB 非依存のファサード（BlueTickerCore）のため、
     // ここ（BltServerCore・DB 接続を持つ層）で合成する。
     v1.get("companies") { req async -> Response in
@@ -403,7 +403,7 @@ private func attachIconURLs(to items: [[String: Any]], db: Database?) async -> [
 
 /// 候補 code に対応する会社アイコンの公開URLをバッチ取得する。`BLT_R2_PUBLIC_BASE_URL` 未設定・
 /// DB クエリ失敗時は空辞書（呼び出し側は該当 code を icon_url: null として扱う）。
-/// read 経路のためアップロード用秘密鍵（`R2Config`）は要求しない（`R2PublicURLConfig` のみ使用）。
+/// read 経路のためアップロード用秘密鍵は要求しない（`R2PublicURLConfig` のみ使用）。
 /// `environment` はテスト注入用（既定はプロセス環境）。
 func iconURLs(
     for codes: [String], db: Database,

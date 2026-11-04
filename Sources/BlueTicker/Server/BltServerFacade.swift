@@ -418,39 +418,6 @@ public extension BltServerContext {
             docID: docID, statementTypes: statementTypes, correctionDocIDs: correctionDocIDs)
     }
 
-    /// 会社アイコン取り込み: 手動 origin / 公式画像があれば XBRL を使わず取得する。それ以外は
-    /// 書類1件分のXBRLから電子公告URLを抽出し、faviconを取得してR2へアップロードする。
-    /// URL抽出（`CorporateWebsiteExtractor`）・favicon取得（`FaviconFetcher`）・R2アップロード
-    /// （`R2Client`）のいずれかが失敗すれば `.failure`（戻り値パターン。段名をログ用に返す）。
-    /// `r2Config` は呼び出し側（BltServerCore ingest）が環境変数から解決して渡す。
-    func extractAndUploadCompanyIcon(
-        docID: String, code: String, r2Config: R2Config, correctionDocIDs: [String] = []
-    ) async
-        -> Swift.Result<CompanyIconExtractResult, CompanyIconExtractFailure>
-    {
-        if let manual = CompanyIconOriginOverride.manualSource(for: code) {
-            return await fetchAndUploadManualCompanyIcon(
-                source: manual, code: code, r2Config: r2Config)
-        }
-        guard let xbrlDir = await downloadAnnualFilingXbrl(
-            docID: docID, correctionDocIDs: correctionDocIDs
-        ) else {
-            return .failure(.downloadFailed)
-        }
-        let extracted = CorporateWebsiteExtractor.extract(xbrlDir: xbrlDir)
-        guard let extractedOrigin = extracted.url else {
-            return .failure(CompanyIconExtractFailure.urlExtractFailed(method: extracted.method))
-        }
-        let origin = CompanyIconOriginOverride.originForFavicon(
-            code: code, extractedOrigin: extractedOrigin)
-        guard let icon = await FaviconFetcher.fetch(origin: origin) else {
-            return .failure(CompanyIconExtractFailure.faviconFetchFailed(origin: origin))
-        }
-        return await uploadFetchedCompanyIcon(
-            icon, code: code, sourceURL: origin, cacheVersion: companyIconsCacheVersion,
-            r2Config: r2Config)
-    }
-
     /// ユーザーが用意した優先コード一覧（`assets/nikkei225.csv`）の証券コード集合。
     /// financials/filing-sections/breakdowns/statement-notes 取り込みの処理順序づけに使う
     /// （対象選定ではなく優先度のみ）。ファイル未配置なら空集合（優先なし・従来どおりの順序にフォールバック）。
@@ -1931,64 +1898,5 @@ private extension BltServerContext {
     /// 企業検索結果の公開 JSON。
     func companyJSON(_ s: StockSearchResult) -> [String: Any] {
         ["code": s.code, "name": s.name, "sector": s.sector, "market": s.market, "location": s.location]
-    }
-}
-
-private func fetchAndUploadManualCompanyIcon(
-    source: CompanyIconManualSource, code: String, r2Config: R2Config
-) async -> Swift.Result<CompanyIconExtractResult, CompanyIconExtractFailure> {
-    switch source {
-    case .homepageOrigin(let origin):
-        guard let icon = await FaviconFetcher.fetch(origin: origin) else {
-            return .failure(.faviconFetchFailed(origin: origin))
-        }
-        return await uploadFetchedCompanyIcon(
-            icon, code: code, sourceURL: origin, cacheVersion: companyIconsManualCacheVersion,
-            r2Config: r2Config)
-    case .imageURL(let urlString):
-        guard let icon = await FaviconFetcher.fetch(imageURL: urlString) else {
-            return .failure(.faviconFetchFailed(origin: urlString))
-        }
-        return await uploadFetchedCompanyIcon(
-            icon, code: code, sourceURL: urlString, cacheVersion: companyIconsManualCacheVersion,
-            r2Config: r2Config)
-    }
-}
-
-private func uploadFetchedCompanyIcon(
-    _ icon: FaviconFetcher.FetchedIcon, code: String, sourceURL: String, cacheVersion: String,
-    r2Config: R2Config
-) async -> Swift.Result<CompanyIconExtractResult, CompanyIconExtractFailure> {
-    let key = "company-icons/\(code)\(companyIconFileExtension(forContentType: icon.contentType))"
-    switch await R2Client.upload(
-        icon.data, key: key, contentType: icon.contentType, config: r2Config
-    ) {
-    case .success:
-        return .success(
-            CompanyIconExtractResult(
-                sourceURL: sourceURL, r2ObjectKey: key, contentType: icon.contentType,
-                cacheVersion: cacheVersion))
-    case .invalidURL:
-        return .failure(CompanyIconExtractFailure.r2UploadFailed(detail: "invalid_url"))
-    case .transportError(let message):
-        return .failure(CompanyIconExtractFailure.r2UploadFailed(detail: "transport:\(message)"))
-    case .httpStatus(let status, let bodySnippet):
-        return .failure(
-            CompanyIconExtractFailure.r2UploadFailed(detail: "http_\(status):\(bodySnippet)"))
-    }
-}
-
-/// R2オブジェクトキーの拡張子（`FaviconFetcher.sniffImageContentType` が返す値のみ受理）。
-/// 未知の content-type は拡張子なし（`R2Client` 側はキーそのものでアップロードでき、必須ではない）。
-private func companyIconFileExtension(forContentType contentType: String) -> String {
-    switch contentType {
-    case "image/png": return ".png"
-    case "image/x-icon": return ".ico"
-    case "image/jpeg": return ".jpg"
-    case "image/gif": return ".gif"
-    case "image/bmp": return ".bmp"
-    case "image/svg+xml": return ".svg"
-    case "image/webp": return ".webp"
-    default: return ""
     }
 }

@@ -1,12 +1,12 @@
-// 会社アイコン取り込み: 会社1社=1行で favicon の R2 格納先を保持する。実バイナリは R2 に置き、
-// このテーブルは R2 オブジェクトキーと取得元・抽出バージョンのみを持つ（他テーブルの JSONB payload
+// 会社アイコン: 会社1社=1行で R2 格納先を保持する。実バイナリは R2 に置き、
+// このテーブルは R2 オブジェクトキーと取得元・cache_version のみを持つ（他テーブルの JSONB payload
 // 方式とは異なり、REST read は r2_object_key から公開URLを組み立てるだけで済むため）。
 
 import BlueTickerCore
 import FluentKit
 import Foundation
 
-/// 会社1社分の favicon 格納メタデータ。証券コードを主キー（user 生成）とする。
+/// 会社1社分のアイコン格納メタデータ。証券コードを主キー（user 生成）とする。
 package final class CompanyIcon: Model, @unchecked Sendable {
     package static let schema = "company_icons"
 
@@ -14,25 +14,23 @@ package final class CompanyIcon: Model, @unchecked Sendable {
     @ID(custom: "code", generatedBy: .user)
     package var id: String?
 
-    /// 取得元 URL。自動行は電子公告 origin（`CorporateWebsiteExtractor` の scheme://host）。
-    /// 手動行は公式サイト origin または公式画像の直 URL。
+    /// 取得元 URL（歴史的。ingest 廃止後は既存行の値を保持するだけ）。
     @Field(key: "source_url")
     package var sourceURL: String
 
-    /// R2 バケット内のオブジェクトキー。公開URLは `R2PublicURLConfig.publicURL(forKey:)`（read経路）
-    /// または `R2Config.publicURL(forKey:)`（アップロード経路）で組み立てる。
+    /// R2 バケット内のオブジェクトキー。公開URLは `R2PublicURLConfig.publicURL(forKey:)` で組み立てる。
     @Field(key: "r2_object_key")
     package var r2ObjectKey: String
 
-    /// favicon 実体の MIME（`FaviconFetcher.sniffImageContentType` の判定結果）。
+    /// 画像の MIME。
     @Field(key: "content_type")
     package var contentType: String
 
-    /// 取得時の companyIconsCacheVersion。読込・取り込みで照合し、不一致なら再取得する。
+    /// 格納時の cache_version（歴史的。ingest 廃止後は照合しない）。
     @Field(key: "cache_version")
     package var cacheVersion: String
 
-    /// 最終取得時刻（favicon を取得し R2 へアップロードしたタイミング）。
+    /// 最終更新時刻。
     @Timestamp(key: "fetched_at", on: .update)
     package var fetchedAt: Date?
 

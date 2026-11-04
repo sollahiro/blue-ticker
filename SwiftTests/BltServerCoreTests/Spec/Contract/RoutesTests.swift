@@ -551,7 +551,7 @@ private func send(
             let icon = CompanyIcon(
                 code: "7203", sourceURL: "https://global.toyota",
                 r2ObjectKey: "company-icons/7203.png", contentType: "image/png",
-                cacheVersion: companyIconsCacheVersion)
+                cacheVersion: "icons-v2")
             try await icon.create(on: app.db)
 
             let result = await iconURLs(for: ["7203"], db: app.db, environment: [:])
@@ -566,7 +566,7 @@ private func send(
             let icon = CompanyIcon(
                 code: "7203", sourceURL: "https://global.toyota",
                 r2ObjectKey: "company-icons/7203.png", contentType: "image/png",
-                cacheVersion: companyIconsCacheVersion)
+                cacheVersion: "icons-v2")
             try await icon.create(on: app.db)
 
             let env = ["BLT_R2_PUBLIC_BASE_URL": "https://icons.example.com"]

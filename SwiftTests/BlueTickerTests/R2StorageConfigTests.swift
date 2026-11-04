@@ -18,38 +18,18 @@ import Testing
         let storage = R2StorageConfig.resolveXbrlFromEnvironment(env)
         #expect(storage?.bucket == "xbrl-private")
         #expect(storage?.endpointHost == "acct.r2.cloudflarestorage.com")
-        #expect(R2Config.resolveFromEnvironment(env) == nil)
-        #expect(R2StorageConfig.resolveIconsFromEnvironment(env) == nil)
     }
 
-    @Test func xbrlDoesNotFallBackToIconBucket() {
+    @Test func xbrlDoesNotFallBackToOtherBucketNames() {
         var env = creds
         env["BLT_R2_ICONS_BUCKET"] = "icons-public"
         env["BLT_R2_BUCKET"] = "legacy-icons"
-        #expect(R2StorageConfig.resolveXbrlFromEnvironment(env) == nil)
-    }
-
-    @Test func iconsPreferDedicatedBucketOverLegacy() {
-        var env = creds
-        env["BLT_R2_ICONS_BUCKET"] = "icons-public"
-        env["BLT_R2_BUCKET"] = "legacy-icons"
-        env["BLT_R2_PUBLIC_BASE_URL"] = "https://icons.example.com"
-        #expect(R2StorageConfig.resolveIconsFromEnvironment(env)?.bucket == "icons-public")
-        #expect(R2Config.resolveFromEnvironment(env)?.bucket == "icons-public")
-    }
-
-    @Test func iconsFallBackToLegacyBucketName() {
-        var env = creds
-        env["BLT_R2_BUCKET"] = "legacy-icons"
-        env["BLT_R2_PUBLIC_BASE_URL"] = "https://icons.example.com"
-        #expect(R2Config.resolveFromEnvironment(env)?.bucket == "legacy-icons")
         #expect(R2StorageConfig.resolveXbrlFromEnvironment(env) == nil)
     }
 
     @Test func nilWhenCredentialsMissing() {
         let env = ["BLT_R2_XBRL_BUCKET": "xbrl-private"]
         #expect(R2StorageConfig.resolveXbrlFromEnvironment(env) == nil)
-        #expect(R2StorageConfig.resolveIconsFromEnvironment(env) == nil)
     }
 
     @Test func xbrlObjectKeyUsesRegionSourcePrefix() {

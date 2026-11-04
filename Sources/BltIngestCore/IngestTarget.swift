@@ -18,9 +18,6 @@ public enum IngestTarget: String, CaseIterable, Sendable {
     /// 財務諸表注記（company_statement_notes）。対象は上場全体（日経225は処理順の優先のみ。
     /// 2026-09: 日経225限定を廃止して statements と同じ母集団へ拡大）。
     case notes = "statement-notes"
-    /// 会社アイコン（company_icons、favicon の R2 格納先メタデータ）。`BLT_R2_*` 環境変数未設定時は
-    /// 対象に含めてもスキップされる（`runFactsIngestCommand` 参照）。
-    case icons
     /// 銘柄 Overview（company_overviews、会社1社=1行の短い会社説明）。
     /// `OPENROUTER_OVERVIEW_API_KEY` 未設定時は対象に含めてもスキップされる。
     case overviews

@@ -80,7 +80,7 @@ package func registerBltMigrations(_ migrations: Migrations) {
     migrations.add(CreateCompanyStatementNotes())
     // 半期分析機能の削除に伴い company_half_financials テーブルを削除（不可逆）。
     migrations.add(DropCompanyHalfFinancials())
-    // 会社アイコン取り込み: favicon の R2 格納先メタデータ（company_icons、会社単位）。
+    // 会社アイコン: R2 格納先メタデータ（company_icons、会社単位。ingest なし。read 専用）。
     migrations.add(CreateCompanyIcons())
     // 銘柄 Overview: 短い会社説明（company_overviews、会社単位 JSONB）。ingest stage は `overviews`。
     migrations.add(CreateCompanyOverviews())

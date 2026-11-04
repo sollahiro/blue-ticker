@@ -156,9 +156,6 @@ public enum Api {
     /// R2 へ置く XBRL パッケージの Content-Type。
     static let xbrlZipContentType = "application/zip"
 
-    /// 会社アイコン PUT の待ち上限（秒）。小さいオブジェクト向け。
-    static let r2IconUploadTimeoutSeconds: Double = 15
-
     /// 生 XBRL ZIP の R2 GET/PUT 待ち上限（秒）。有報パッケージは数十 MB になりうる。
     static let r2XbrlTransferTimeoutSeconds: Double = 180
 
