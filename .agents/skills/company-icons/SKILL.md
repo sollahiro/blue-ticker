@@ -147,7 +147,7 @@ CSV 列: `code`, name, source URL, `w`, `h`, 長辺 %, 短辺 %, flags。チャ�
 3. GO なし・却下・無回答はマップに入れない。台帳に `awaiting_go` / `rejected`
 4. 差し替えを未 GO のまま欠測 Ready PR に混ぜない。欠測だけ先に出すなら PR を分ける
 
-無理に引き伸ばさない。ユーザー添付の高解像ロゴやワンオフ白地パッドは **CDN マップ**（公式の低解像 URL を残すと次の ingest が戻る）。visual GO 済みピンに実アルファがあるときは白 flatten する。**サークルセーフ:** 中身を切らず再検出もせず、512 白地の中央にフレーム全体を置く。四隅が内接円の内側に入る長辺比 `L = min(0.85, 1/sqrt(1+1/a^2))`（`a = 長辺/短辺 >= 1`）。正方形は 70.7% になるので **70%**。Lanczos。透明は白。
+無理に引き伸ばさない。ユーザー添付の高解像ロゴやワンオフ白地パッドは **CDN マップ**（公式の低解像 URL を残すと次の ingest が戻る）。visual GO 済みピンに実アルファがあるときは白 flatten する。**サークルセーフ:** 中身を切らず再検出しない。配置の中心は **キャンバスではなくコンテンツ bbox**（角色との差 30 の外接。余白込みの 512 フレームをそのまま中央へ置かない）。その bbox を 512 白地の中央へ。長辺比 `L = min(0.85, 1/sqrt(1+1/a^2))`（`a = 長辺/短辺 >= 1`）。正方形は 70.7% → **70%**。加えて、配置後の **すべてのコンテンツ画素が中心から約 240px 以内**（512 の内接円半径 256 の余裕。円クリップで欠けない）。Lanczos。透明は白。
 
 visual GO でワードマーク／社名ロックアップが却下されマークのみを求められたら、公式の高解像ソース（SVG・大きい PNG・ブランドページ・OGP）からマークだけをワンオフ 512 白地にして `review/` に再仮置きし、その code だけ再 webhook する。次の visual GO までマップしない。
 
@@ -261,7 +261,7 @@ Git に Linear ID（`BLT-N`）を新たに書かない。
 3. Cloud フラグで release ビルド:
 
 ```bash
-swift build -c release -Xswiftc -disable-upcoming-feature -Xswiftc MemberImportVisibility --product blt-server
+swift build -c release -Xswiftc -disable-upcoming-feature -Xswiftc MemberImportVisibility --product blt-ingest
 DATABASE_URL="$BLT_NEON_WRITE_DATABASE_URL" ./.build/release/blt-ingest ingest --stages icons --codes <codes>
 ```
 
@@ -327,7 +327,8 @@ DATABASE_URL="$BLT_NEON_WRITE_DATABASE_URL" ./.build/release/blt-ingest ingest -
 - **GO 後の公式 URL 再取得。** 非 ASCII パスは percent-encode してから GET。公式 HTML 上の Wix / GCS apple-touch は first-party。GO 済みで origin が 403 / TLS 不能なら After を CDN マップする
 - **Pronexus × imageURL。** `pronexusDisclosureHomepages` と `manualSources` の homepageOrigin は重ねない。GO 済み imageURL は Pronexus 16 社にも載せてよい（ingest は imageURL、origin リマップは Pronexus マップ）
 - **透明は黒地で消える。** アプリは黒地で描画する。visual GO 済みピンに実アルファがあれば白 flatten して CDN マップ
-- **サークルセーフ。** アプリは円クリップする。GO 済み画像のフレーム全体を 512 白地中央へ。四隅が内接円内: `L = min(0.85, 1/sqrt(1+1/a^2))`（`a = 長辺/短辺`）。正方形は 70.7% → **70%**。切らない・再検出しない。透明は白。Lanczos
+- **サークルセーフ。** アプリは円クリップする。GO 済み画像は **コンテンツ bbox の中心**を 512 白地中央へ（キャンバス中心ではない。余白が多い 512 をそのまま置くと中身が寄る）。長辺比 `L = min(0.85, 1/sqrt(1+1/a^2))`（正方形 **70%**）。配置後の全コンテンツ画素は中心から **約 240px 以内**（内接円半径 256 の余裕）。切らない・再検出しない。透明は白。Lanczos
+- **icons WRITE の product。** `swift build --product blt-ingest`。`blt-server` だと `.build/release/blt-ingest` が出来ない
 - **visual NG。** 欠測ピンの visual NG はマップから外し台帳 `visual_ng_YYYYMMDD`。後ランでコーポレートマーク（85% After）を再ソースして visual GO。同じ公式 URL を再ピンしない
 
 ## 完了条件

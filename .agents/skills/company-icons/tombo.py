@@ -26,6 +26,8 @@ MARGIN = 40
 THRESHOLD = 30
 LOW_VIS = 0.70
 AFTER_TARGET = 0.85
+# 512 白地の円フィット: 内接円半径 256。コンテンツ画素は中心から約 240px 以内。
+CIRCLE_RMAX_512 = 240.0
 FONTS = (
     "/usr/share/fonts/truetype/wqy/wqy-microhei.ttc",
     "/usr/share/fonts/truetype/droid/DroidSansFallbackFull.ttf",
@@ -74,9 +76,34 @@ def _font(size: int) -> ImageFont.ImageFont:
     return ImageFont.load_default()
 
 
+def content_rmax_512(img: Image.Image) -> float | None:
+    """Farthest content-bbox corner from canvas center, in px, if the image is 512×512.
+
+    Circle-fit: every content pixel should stay within CIRCLE_RMAX_512 of center
+    (inscribed-circle radius is 256). Non-512 inputs return None; long% still uses
+    aspect-fit to SQUARE.
+    """
+    rgb = img.convert("RGBA")
+    bg = Image.new("RGBA", rgb.size, "white")
+    bg.alpha_composite(rgb)
+    rgb = bg.convert("RGB")
+    if rgb.size != (512, 512):
+        return None
+    bbox = mark_bbox(rgb)
+    if bbox is None:
+        return 0.0
+    cx = cy = 255.5
+    x0, y0, x1, y1 = bbox
+    return max(
+        ((x - cx) ** 2 + (y - cy) ** 2) ** 0.5
+        for x, y in ((x0, y0), (x1 - 1, y0), (x0, y1 - 1), (x1 - 1, y1 - 1))
+    )
+
+
 def measure(img: Image.Image, size: int = SQUARE) -> dict:
     square = fit_square(img, size)
     bbox = mark_bbox(square)
+    rmax = content_rmax_512(img)
     if bbox is None:
         return {
             "long": 0.0,
@@ -84,6 +111,7 @@ def measure(img: Image.Image, size: int = SQUARE) -> dict:
             "height": 0.0,
             "bbox": None,
             "square": square,
+            "rmax_512": rmax,
         }
     x0, y0, x1, y1 = bbox
     width = (x1 - x0) / size
@@ -94,6 +122,7 @@ def measure(img: Image.Image, size: int = SQUARE) -> dict:
         "height": height,
         "bbox": bbox,
         "square": square,
+        "rmax_512": rmax,
     }
 
 
@@ -167,8 +196,13 @@ def main(argv: list[str] | None = None) -> int:
         stats = measure(img)
         long = stats["long"]
         verdict = "OK" if long >= LOW_VIS else "low-vis"
+        extra = ""
+        rmax = stats.get("rmax_512")
+        if rmax is not None:
+            circle = "circle-ok" if rmax <= CIRCLE_RMAX_512 else "circle-out"
+            extra = f"\trmax={rmax:.1f}\t{circle}"
         print(
-            f"{path}\tlong={long:.1%}\tw={stats['width']:.1%}\th={stats['height']:.1%}\t{verdict}"
+            f"{path}\tlong={long:.1%}\tw={stats['width']:.1%}\th={stats['height']:.1%}\t{verdict}{extra}"
         )
         if overlay_file is not None:
             overlay(img, path.stem).save(overlay_file)
