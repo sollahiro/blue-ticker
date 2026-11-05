@@ -19,6 +19,13 @@ struct WatchlistView: View {
     @State private var dragPoint: CGPoint = .zero
     /// つかんだ位置とタイル中心のずれ。最初のドラッグ値が来るまで nil。
     @State private var dragGrab: CGSize?
+    /// 指に付いてくるカード。元のタイルを消す（削除する）あとも描けるよう、持ち上げた時点で控える。
+    @State private var floatingCompany: CompanyRef?
+    @State private var floatSize: CGSize = .zero
+    @State private var floatScale: CGFloat = 1
+    @State private var floatOpacity: Double = 1
+    /// 指を離したあと、カードが着地する（ゴミ箱へ消える）アニメーションの間。
+    @State private var isSettling = false
     /// 直前に入れ替えた相手。同じ相手との入れ替わりを繰り返さない。
     @State private var lastSwapTarget: String?
     @State private var tileFrames: [String: CGRect] = [:]
@@ -60,7 +67,6 @@ struct WatchlistView: View {
                             .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { frame in
                                 tileFrames[item.code] = frame
                             }
-                            .gesture(reorderGesture(for: item.code))
                             .accessibilityAction(named: "リストから外す") {
                                 remove(item)
                             }
@@ -97,6 +103,13 @@ struct WatchlistView: View {
                 contentOrigin = origin
             }
             .overlay(alignment: .topLeading) { floatingTile }
+            .background(
+                LongPressDragBridge(
+                    onBegan: gestureBegan,
+                    onMoved: gestureMoved,
+                    onEnded: gestureEnded
+                )
+            )
         }
         .scrollDisabled(draggingCode != nil)
         .bltChrome("リスト")
@@ -120,47 +133,40 @@ struct WatchlistView: View {
         }
     }
 
-    /// 長押し→ドラッグ。離したとき（動かさずに離したときも）必ず `onEnded` が呼ばれる。
-    private func reorderGesture(for code: String) -> some Gesture {
-        LongPressGesture(minimumDuration: 0.3)
-            .sequenced(before: DragGesture(minimumDistance: 0, coordinateSpace: .global))
-            .onChanged { value in
-                guard case .second(true, let drag) = value else { return }
-                if draggingCode == nil { beginDrag(code) }
-                guard draggingCode == code, let drag else { return }
-                updateDrag(code, start: drag.startLocation, location: drag.location)
-            }
-            .onEnded { _ in finishDrag() }
-    }
-
-    private func beginDrag(_ code: String) {
-        guard let frame = tileFrames[code] else { return }
+    private func gestureBegan(_ point: CGPoint) {
+        guard draggingCode == nil, !isSettling else { return }
+        guard let item = visibleCompanies.first(where: { tileFrames[$0.code]?.contains(point) == true }),
+              let frame = tileFrames[item.code]
+        else { return }
         ListHaptics.lift()
-        dragPoint = CGPoint(x: frame.midX, y: frame.midY)
-        dragGrab = nil
+        floatingCompany = CompanyRef(item)
+        floatSize = frame.size
+        floatScale = 1
+        floatOpacity = 1
+        dragGrab = CGSize(width: point.x - frame.midX, height: point.y - frame.midY)
+        dragPoint = point
         lastSwapTarget = nil
-        draggingCode = code
+        draggingCode = item.code
+        withAnimation(.snappy(duration: 0.2)) { floatScale = 1.05 }
     }
 
-    private func updateDrag(_ code: String, start: CGPoint, location: CGPoint) {
-        if dragGrab == nil, let frame = tileFrames[code] {
-            dragGrab = CGSize(width: start.x - frame.midX, height: start.y - frame.midY)
-        }
-        dragPoint = location
+    private func gestureMoved(_ point: CGPoint) {
+        guard let code = draggingCode, !isSettling else { return }
+        dragPoint = point
 
-        let overTrash = !trashFrame.isEmpty && trashFrame.insetBy(dx: -24, dy: -24).contains(location)
+        let overTrash = !trashFrame.isEmpty && trashFrame.insetBy(dx: -24, dy: -24).contains(point)
         if overTrash != trashTargeted {
             trashTargeted = overTrash
             if overTrash { ListHaptics.swap() }
         }
         if overTrash { return }
 
-        if tileFrames[code]?.contains(location) == true {
+        if tileFrames[code]?.contains(point) == true {
             lastSwapTarget = nil
             return
         }
         let target = visibleCompanies.first {
-            $0.code != code && tileFrames[$0.code]?.contains(location) == true
+            $0.code != code && tileFrames[$0.code]?.contains(point) == true
         }?.code
         if let target, target != lastSwapTarget {
             lastSwapTarget = target
@@ -169,20 +175,43 @@ struct WatchlistView: View {
         }
     }
 
-    private func finishDrag() {
-        if trashTargeted, let code = draggingCode,
-           let item = companies.first(where: { $0.code == code })
-        {
-            withAnimation(.snappy) { remove(item) }
+    /// 離したとき（動かさずに離したときも）。カードを空いた場所へ滑り込ませる。ゴミ箱の上なら縮んで消す。
+    private func gestureEnded() {
+        guard let code = draggingCode, !isSettling else { return }
+        let grab = dragGrab ?? .zero
+        if trashTargeted, !trashFrame.isEmpty, let item = companies.first(where: { $0.code == code }) {
+            isSettling = true
             ListHaptics.delete()
+            withAnimation(.snappy(duration: 0.28)) {
+                dragPoint = CGPoint(x: trashFrame.midX + grab.width, y: trashFrame.midY + grab.height)
+                floatScale = 0.2
+                floatOpacity = 0
+                remove(item)
+            }
+        } else if let frame = tileFrames[code] {
+            isSettling = true
+            withAnimation(.spring(duration: 0.32, bounce: 0.12)) {
+                dragPoint = CGPoint(x: frame.midX + grab.width, y: frame.midY + grab.height)
+                floatScale = 1
+            }
+        } else {
+            endDrag()
+            return
         }
-        endDrag()
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(340))
+            endDrag()
+        }
     }
 
     private func endDrag() {
-        if trashTargeted { trashTargeted = false }
+        isSettling = false
+        trashTargeted = false
         dragGrab = nil
         lastSwapTarget = nil
+        floatingCompany = nil
+        floatScale = 1
+        floatOpacity = 1
         if draggingCode != nil {
             withAnimation(.snappy) { draggingCode = nil }
         }
@@ -191,15 +220,13 @@ struct WatchlistView: View {
     /// 指に付いてくるカード。不透明 100% で、元の場所は空白。
     @ViewBuilder
     private var floatingTile: some View {
-        if let code = draggingCode,
-           let item = companies.first(where: { $0.code == code }),
-           let frame = tileFrames[code]
-        {
+        if draggingCode != nil, let company = floatingCompany {
             let grab = dragGrab ?? .zero
-            CompanyTile(company: CompanyRef(item))
-                .frame(width: frame.width, height: frame.height)
-                .scaleEffect(1.05)
-                .shadow(color: .black.opacity(0.4), radius: 12, y: 6)
+            CompanyTile(company: company)
+                .frame(width: floatSize.width, height: floatSize.height)
+                .scaleEffect(floatScale)
+                .opacity(floatOpacity)
+                .shadow(color: .black.opacity(0.4 * Double(max(floatScale - 1, 0)) / 0.05), radius: 12, y: 6)
                 .position(
                     x: dragPoint.x - grab.width - contentOrigin.x,
                     y: dragPoint.y - grab.height - contentOrigin.y
@@ -339,5 +366,97 @@ private enum ListHaptics {
     /// 削除した。
     static func delete() {
         heavy.impactOccurred()
+    }
+}
+
+/// スクロール領域（`UIScrollView`）に長押しの認識器を直接付ける。
+/// SwiftUI のジェスチャをタイルに付けるとスクロールを妨げるため。0.3 秒動かさずに押すと始まり、
+/// それより前に動かすとスクロールのまま。始まったあとは離すまで指の位置を送る（動かさずに離しても終わりが届く）。
+private struct LongPressDragBridge: UIViewRepresentable {
+    var onBegan: (CGPoint) -> Void
+    var onMoved: (CGPoint) -> Void
+    var onEnded: () -> Void
+
+    func makeCoordinator() -> Coordinator { Coordinator(self) }
+
+    func makeUIView(context: Context) -> BridgeView {
+        let view = BridgeView()
+        view.isUserInteractionEnabled = false
+        view.coordinator = context.coordinator
+        return view
+    }
+
+    func updateUIView(_ uiView: BridgeView, context: Context) {
+        context.coordinator.parent = self
+    }
+
+    final class BridgeView: UIView {
+        weak var coordinator: Coordinator?
+
+        override func didMoveToWindow() {
+            super.didMoveToWindow()
+            if window != nil {
+                coordinator?.attach(to: enclosingScrollView())
+            } else {
+                coordinator?.detach()
+            }
+        }
+
+        private func enclosingScrollView() -> UIScrollView? {
+            var view: UIView? = superview
+            while let current = view {
+                if let scroll = current as? UIScrollView { return scroll }
+                view = current.superview
+            }
+            return nil
+        }
+    }
+
+    @MainActor
+    final class Coordinator: NSObject, UIGestureRecognizerDelegate {
+        var parent: LongPressDragBridge
+        private let recognizer = UILongPressGestureRecognizer()
+        private weak var scrollView: UIScrollView?
+
+        init(_ parent: LongPressDragBridge) {
+            self.parent = parent
+            super.init()
+            recognizer.minimumPressDuration = 0.3
+            recognizer.delegate = self
+            recognizer.addTarget(self, action: #selector(handle(_:)))
+        }
+
+        func attach(to scrollView: UIScrollView?) {
+            guard let scrollView, self.scrollView !== scrollView else { return }
+            detach()
+            scrollView.addGestureRecognizer(recognizer)
+            self.scrollView = scrollView
+        }
+
+        func detach() {
+            scrollView?.removeGestureRecognizer(recognizer)
+            scrollView = nil
+        }
+
+        @objc private func handle(_ gesture: UILongPressGestureRecognizer) {
+            let point = gesture.location(in: nil)
+            switch gesture.state {
+            case .began:
+                parent.onBegan(point)
+            case .changed:
+                parent.onMoved(point)
+            case .ended, .cancelled, .failed:
+                parent.onEnded()
+            default:
+                break
+            }
+        }
+
+        nonisolated func gestureRecognizer(
+            _ gestureRecognizer: UIGestureRecognizer,
+            shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer
+        ) -> Bool {
+            true
+        }
     }
 }
