@@ -1,7 +1,6 @@
 import SwiftData
 import SwiftUI
 import UIKit
-import UniformTypeIdentifiers
 
 struct WatchlistView: View {
     @Query(sort: \WatchedCompany.sortOrder) private var companies: [WatchedCompany]
@@ -13,7 +12,15 @@ struct WatchlistView: View {
     /// ドラッグ中のタイルの銘柄コード。ゴミ箱の表示と並べ替えの目印。
     @State private var draggingCode: String?
     @State private var trashTargeted = false
-    @State private var activity = DragActivity()
+    /// 指の位置（画面座標）。
+    @State private var dragPoint: CGPoint = .zero
+    /// つかんだ位置とタイル中心のずれ。最初のドラッグ値が来るまで nil。
+    @State private var dragGrab: CGSize?
+    /// 直前に入れ替えた相手。同じ相手との入れ替わりを繰り返さない。
+    @State private var lastSwapTarget: String?
+    @State private var tileFrames: [String: CGRect] = [:]
+    @State private var trashFrame: CGRect = .zero
+    @State private var contentOrigin: CGPoint = .zero
 
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 10, alignment: .top), count: 3)
 
@@ -44,20 +51,12 @@ struct WatchlistView: View {
                                 CompanyTile(company: CompanyRef(item))
                             }
                             .buttonStyle(.plain)
-                            .opacity(draggingCode == item.code ? 0.4 : 1)
-                            .onDrag {
-                                draggingCode = item.code
-                                ListHaptics.lift()
-                                startWatchdog()
-                                return NSItemProvider(object: item.code as NSString)
+                            // ドラッグ中の元の場所は空白にする（指に付いてくるカードは別に描く）。
+                            .opacity(draggingCode == item.code ? 0 : 1)
+                            .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { frame in
+                                tileFrames[item.code] = frame
                             }
-                            .onDrop(
-                                of: [.plainText],
-                                delegate: TileDropDelegate(target: item.code, dragging: $draggingCode, activity: activity) { from, to in
-                                    withAnimation(.snappy(duration: 0.3)) { move(from, to: to) }
-                                    ListHaptics.swap()
-                                }
-                            )
+                            .gesture(reorderGesture(for: item.code))
                             .accessibilityAction(named: "リストから外す") {
                                 remove(item)
                             }
@@ -90,9 +89,13 @@ struct WatchlistView: View {
             }
             .padding(.horizontal, 12)
             .padding(.top, 8)
+            .onGeometryChange(for: CGPoint.self) { $0.frame(in: .global).origin } action: { origin in
+                contentOrigin = origin
+            }
+            .overlay(alignment: .topLeading) { floatingTile }
         }
+        .scrollDisabled(draggingCode != nil)
         .bltChrome("リスト")
-        .onDrop(of: [.plainText], delegate: DragEndDropDelegate(dragging: $draggingCode, activity: activity))
         .safeAreaInset(edge: .bottom) {
             if draggingCode != nil {
                 trashZone
@@ -100,12 +103,8 @@ struct WatchlistView: View {
             }
         }
         .animation(.snappy, value: draggingCode != nil)
-        // ドラッグ終了を取りこぼしたときの保険。画面に触れたら元の状態へ戻す。
-        .simultaneousGesture(TapGesture().onEnded { endDrag() })
         .onChange(of: scenePhase) { _, _ in endDrag() }
-        .onChange(of: trashTargeted) { _, targeted in
-            if targeted { ListHaptics.swap() }
-        }
+        .onDisappear { endDrag() }
         .onChange(of: sectorCounts.map(\.sector)) { _, sectors in
             if let selectedSector, !sectors.contains(selectedSector) {
                 self.selectedSector = nil
@@ -117,28 +116,91 @@ struct WatchlistView: View {
         }
     }
 
-    private func endDrag() {
-        activity.suspended = nil
-        if draggingCode != nil { draggingCode = nil }
-        if trashTargeted { trashTargeted = false }
+    /// 長押し→ドラッグ。離したとき（動かさずに離したときも）必ず `onEnded` が呼ばれる。
+    private func reorderGesture(for code: String) -> some Gesture {
+        LongPressGesture(minimumDuration: 0.3)
+            .sequenced(before: DragGesture(minimumDistance: 0, coordinateSpace: .global))
+            .onChanged { value in
+                guard case .second(true, let drag) = value else { return }
+                if draggingCode == nil { beginDrag(code) }
+                guard draggingCode == code, let drag else { return }
+                updateDrag(code, start: drag.startLocation, location: drag.location)
+            }
+            .onEnded { _ in finishDrag() }
     }
 
-    /// 取り消しや一瞬で離したときは終了が通知されない。ドロップ側の更新が途絶えたら状態を戻す。
-    /// 画面内に指が戻ってきたら（`DragEndDropDelegate`）同じタイルで再開する。
-    private func startWatchdog() {
-        activity.suspended = nil
-        activity.touch()
-        activity.task?.cancel()
-        activity.task = Task { @MainActor in
-            while !Task.isCancelled {
-                try? await Task.sleep(for: .milliseconds(400))
-                guard let code = draggingCode else { return }
-                if Date.now.timeIntervalSince(activity.last) > 1.5 {
-                    endDrag()
-                    activity.suspended = code
-                    return
-                }
-            }
+    private func beginDrag(_ code: String) {
+        guard let frame = tileFrames[code] else { return }
+        ListHaptics.lift()
+        dragPoint = CGPoint(x: frame.midX, y: frame.midY)
+        dragGrab = nil
+        lastSwapTarget = nil
+        draggingCode = code
+    }
+
+    private func updateDrag(_ code: String, start: CGPoint, location: CGPoint) {
+        if dragGrab == nil, let frame = tileFrames[code] {
+            dragGrab = CGSize(width: start.x - frame.midX, height: start.y - frame.midY)
+        }
+        dragPoint = location
+
+        let overTrash = !trashFrame.isEmpty && trashFrame.insetBy(dx: -24, dy: -24).contains(location)
+        if overTrash != trashTargeted {
+            trashTargeted = overTrash
+            if overTrash { ListHaptics.swap() }
+        }
+        if overTrash { return }
+
+        if tileFrames[code]?.contains(location) == true {
+            lastSwapTarget = nil
+            return
+        }
+        let target = visibleCompanies.first {
+            $0.code != code && tileFrames[$0.code]?.contains(location) == true
+        }?.code
+        if let target, target != lastSwapTarget {
+            lastSwapTarget = target
+            withAnimation(.snappy(duration: 0.3)) { move(code, to: target) }
+            ListHaptics.swap()
+        }
+    }
+
+    private func finishDrag() {
+        if trashTargeted, let code = draggingCode,
+           let item = companies.first(where: { $0.code == code })
+        {
+            withAnimation(.snappy) { remove(item) }
+            ListHaptics.delete()
+        }
+        endDrag()
+    }
+
+    private func endDrag() {
+        if trashTargeted { trashTargeted = false }
+        dragGrab = nil
+        lastSwapTarget = nil
+        if draggingCode != nil {
+            withAnimation(.snappy) { draggingCode = nil }
+        }
+    }
+
+    /// 指に付いてくるカード。不透明 100% で、元の場所は空白。
+    @ViewBuilder
+    private var floatingTile: some View {
+        if let code = draggingCode,
+           let item = companies.first(where: { $0.code == code }),
+           let frame = tileFrames[code]
+        {
+            let grab = dragGrab ?? .zero
+            CompanyTile(company: CompanyRef(item))
+                .frame(width: frame.width, height: frame.height)
+                .scaleEffect(1.05)
+                .shadow(color: .black.opacity(0.4), radius: 12, y: 6)
+                .position(
+                    x: dragPoint.x - grab.width - contentOrigin.x,
+                    y: dragPoint.y - grab.height - contentOrigin.y
+                )
+                .allowsHitTesting(false)
         }
     }
 
@@ -195,18 +257,12 @@ struct WatchlistView: View {
             .background(trashTargeted ? Color.red : Theme.card, in: Circle())
             .scaleEffect(trashTargeted ? 1.15 : 1)
             .animation(.snappy, value: trashTargeted)
+            .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { frame in
+                trashFrame = frame
+            }
+            .onDisappear { trashFrame = .zero }
             .padding(.bottom, 8)
             .frame(maxWidth: .infinity)
-            .contentShape(Rectangle())
-            .onDrop(
-                of: [.plainText],
-                delegate: TrashDropDelegate(isTargeted: $trashTargeted, dragging: $draggingCode, activity: activity) { code in
-                    if let item = companies.first(where: { $0.code == code }) {
-                        withAnimation(.snappy) { remove(item) }
-                        ListHaptics.delete()
-                    }
-                }
-            )
             .accessibilityLabel("ゴミ箱。ここへドラッグするとリストから外します")
     }
 
@@ -258,100 +314,7 @@ struct WatchlistView: View {
     #endif
 }
 
-/// タイルの上へ入ったら、ドラッグ中のタイルをその位置へ動かす。
-private struct TileDropDelegate: DropDelegate {
-    let target: String
-    @Binding var dragging: String?
-    let activity: DragActivity
-    let move: (String, String) -> Void
-
-    func validateDrop(info: DropInfo) -> Bool { dragging != nil }
-
-    func dropEntered(info: DropInfo) {
-        activity.touch()
-        guard let dragging, dragging != target else { return }
-        move(dragging, target)
-    }
-
-    func dropUpdated(info: DropInfo) -> DropProposal? {
-        activity.touch()
-        return DropProposal(operation: .move)
-    }
-
-    func performDrop(info: DropInfo) -> Bool {
-        activity.suspended = nil
-        dragging = nil
-        return true
-    }
-}
-
-/// ゴミ箱の上で離したら外す。
-private struct TrashDropDelegate: DropDelegate {
-    @Binding var isTargeted: Bool
-    @Binding var dragging: String?
-    let activity: DragActivity
-    let remove: (String) -> Void
-
-    func validateDrop(info: DropInfo) -> Bool { dragging != nil }
-    func dropEntered(info: DropInfo) {
-        activity.touch()
-        isTargeted = true
-    }
-    func dropExited(info: DropInfo) { isTargeted = false }
-    func dropUpdated(info: DropInfo) -> DropProposal? {
-        activity.touch()
-        return DropProposal(operation: .move)
-    }
-
-    func performDrop(info: DropInfo) -> Bool {
-        activity.suspended = nil
-        isTargeted = false
-        if let code = dragging { remove(code) }
-        dragging = nil
-        return true
-    }
-}
-
-/// 画面のどこで離してもドラッグ状態（ゴミ箱の表示）を終える。
-private struct DragEndDropDelegate: DropDelegate {
-    @Binding var dragging: String?
-    let activity: DragActivity
-
-    func dropEntered(info: DropInfo) { resumeIfSuspended() }
-
-    func dropUpdated(info: DropInfo) -> DropProposal? {
-        activity.touch()
-        resumeIfSuspended()
-        return DropProposal(operation: .move)
-    }
-
-    func performDrop(info: DropInfo) -> Bool {
-        activity.suspended = nil
-        dragging = nil
-        return true
-    }
-
-    /// 更新の途絶で一度戻したあとも、指が画面に戻ってきたらドラッグ中の表示へ戻す。
-    private func resumeIfSuspended() {
-        activity.touch()
-        guard dragging == nil, let code = activity.suspended else { return }
-        activity.suspended = nil
-        dragging = code
-    }
-}
-
-/// ドロップ側の更新時刻。画面の再描画に使わないので参照型にしている。
-@MainActor
-private final class DragActivity {
-    var last = Date.now
-    /// 更新の途絶で一度戻したときのタイルの銘柄コード。
-    var suspended: String?
-    var task: Task<Void, Never>?
-
-    func touch() { last = .now }
-}
-
-/// 並べ替えの Haptic。ドラッグ中の `sensoryFeedback` は鳴らないことがあるため UIKit を直接使う。
+/// 並べ替えの Haptic。ドラッグ中は `sensoryFeedback` が鳴らなかったため UIKit を直接使う。
 @MainActor
 private enum ListHaptics {
     private static let impact = UIImpactFeedbackGenerator(style: .medium)
