@@ -6,6 +6,9 @@ struct WatchlistView: View {
     @Query(sort: \WatchedCompany.sortOrder) private var companies: [WatchedCompany]
     @Environment(\.modelContext) private var modelContext
     @Environment(\.scenePhase) private var scenePhase
+    /// 銘柄面へ進む経路。タイルは `NavigationLink`（ボタン）にせず、タップで積む。
+    /// ボタンにすると長押しがボタンに取られて、並べ替えが始まらない。
+    @Binding var path: NavigationPath
 
     /// 業種フィルタ。nil はすべて。
     @State private var selectedSector: TOPIX17Sector?
@@ -47,10 +50,11 @@ struct WatchlistView: View {
                     .padding(.horizontal, 4)
                     LazyVGrid(columns: columns, spacing: 10) {
                         ForEach(visibleCompanies) { item in
-                            NavigationLink(value: CompanyRef(item)) {
-                                CompanyTile(company: CompanyRef(item))
-                            }
-                            .buttonStyle(.plain)
+                            CompanyTile(company: CompanyRef(item))
+                                .onTapGesture {
+                                    path.append(CompanyRef(item))
+                                }
+                                .accessibilityAddTraits(.isButton)
                             // ドラッグ中の元の場所は空白にする（指に付いてくるカードは別に描く）。
                             .opacity(draggingCode == item.code ? 0 : 1)
                             .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { frame in
