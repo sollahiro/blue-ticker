@@ -1,20 +1,18 @@
 import SwiftData
 import SwiftUI
+import UIKit
 import UniformTypeIdentifiers
 
 struct WatchlistView: View {
     @Query(sort: \WatchedCompany.sortOrder) private var companies: [WatchedCompany]
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.scenePhase) private var scenePhase
 
     /// 業種フィルタ。nil はすべて。
     @State private var selectedSector: TOPIX17Sector?
     /// ドラッグ中のタイルの銘柄コード。ゴミ箱の表示と並べ替えの目印。
     @State private var draggingCode: String?
     @State private var trashTargeted = false
-    /// Haptic の合図。値が変わるたびに1回鳴る。
-    @State private var liftTick = 0
-    @State private var swapTick = 0
-    @State private var deleteTick = 0
 
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 10, alignment: .top), count: 3)
 
@@ -48,20 +46,29 @@ struct WatchlistView: View {
                             .opacity(draggingCode == item.code ? 0.4 : 1)
                             .onDrag {
                                 draggingCode = item.code
-                                liftTick += 1
+                                ListHaptics.lift()
                                 return NSItemProvider(object: item.code as NSString)
                             }
                             .onDrop(
                                 of: [.plainText],
                                 delegate: TileDropDelegate(target: item.code, dragging: $draggingCode) { from, to in
                                     withAnimation(.snappy(duration: 0.3)) { move(from, to: to) }
-                                    swapTick += 1
+                                    ListHaptics.swap()
                                 }
                             )
                             .accessibilityAction(named: "リストから外す") {
                                 remove(item)
                             }
                             .transition(.scale(scale: 0.6).combined(with: .opacity))
+                            // 取り消し・領域外で離したときも含め、ドラッグが終わったら状態を戻す。
+                            .onDragSessionUpdated { session in
+                                switch session.phase {
+                                case .ended, .dataTransferCompleted:
+                                    endDrag()
+                                default:
+                                    break
+                                }
+                            }
                         }
                     }
                     // 並びが変わったとき、他のタイルがなめらかに入れ替わる。
@@ -100,10 +107,12 @@ struct WatchlistView: View {
             }
         }
         .animation(.snappy, value: draggingCode != nil)
-        .sensoryFeedback(.impact(weight: .medium), trigger: liftTick)
-        .sensoryFeedback(.selection, trigger: swapTick)
-        .sensoryFeedback(trigger: trashTargeted) { _, targeted in targeted ? .selection : nil }
-        .sensoryFeedback(.impact(weight: .heavy), trigger: deleteTick)
+        // ドラッグ終了を取りこぼしたときの保険。画面に触れたら元の状態へ戻す。
+        .simultaneousGesture(TapGesture().onEnded { endDrag() })
+        .onChange(of: scenePhase) { _, _ in endDrag() }
+        .onChange(of: trashTargeted) { _, targeted in
+            if targeted { ListHaptics.swap() }
+        }
         .onChange(of: sectorCounts.map(\.sector)) { _, sectors in
             if let selectedSector, !sectors.contains(selectedSector) {
                 self.selectedSector = nil
@@ -113,6 +122,11 @@ struct WatchlistView: View {
             WatchedCompany.repairSortOrderIfNeeded(companies)
             WatchedCompany.removeDuplicateCodes(companies, in: modelContext)
         }
+    }
+
+    private func endDrag() {
+        if draggingCode != nil { draggingCode = nil }
+        if trashTargeted { trashTargeted = false }
     }
 
     /// 業種フィルタ適用後のタイル。並びは全体の `sortOrder` のまま。
@@ -176,7 +190,7 @@ struct WatchlistView: View {
                 delegate: TrashDropDelegate(isTargeted: $trashTargeted, dragging: $draggingCode) { code in
                     if let item = companies.first(where: { $0.code == code }) {
                         withAnimation(.snappy) { remove(item) }
-                        deleteTick += 1
+                        ListHaptics.delete()
                     }
                 }
             )
@@ -280,5 +294,29 @@ private struct DragEndDropDelegate: DropDelegate {
     func performDrop(info: DropInfo) -> Bool {
         dragging = nil
         return true
+    }
+}
+
+/// 並べ替えの Haptic。ドラッグ中の `sensoryFeedback` は鳴らないことがあるため UIKit を直接使う。
+@MainActor
+private enum ListHaptics {
+    private static let impact = UIImpactFeedbackGenerator(style: .medium)
+    private static let heavy = UIImpactFeedbackGenerator(style: .heavy)
+    private static let selection = UISelectionFeedbackGenerator()
+
+    /// タイルを持ち上げた。
+    static func lift() {
+        impact.impactOccurred()
+    }
+
+    /// 場所が入れ替わった・ゴミ箱の上に入った。
+    static func swap() {
+        selection.selectionChanged()
+        selection.prepare()
+    }
+
+    /// 削除した。
+    static func delete() {
+        heavy.impactOccurred()
     }
 }
