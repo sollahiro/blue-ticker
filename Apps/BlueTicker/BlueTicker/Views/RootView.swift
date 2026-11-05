@@ -5,6 +5,7 @@ struct RootView: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var tab = 0
     @State private var searchPath = NavigationPath()
+    @State private var listPath = NavigationPath()
     @State private var searchQuery = ""
     @State private var screenSession = ScreenSession()
     @State private var feedSession = FeedSession()
@@ -20,8 +21,8 @@ struct RootView: View {
             .tabItem { Label("ホーム", systemImage: "house") }
             .tag(0)
 
-            NavigationStack {
-                WatchlistView()
+            NavigationStack(path: $listPath) {
+                WatchlistView(path: $listPath)
                     .navigationDestination(for: CompanyRef.self, destination: ticker)
             }
             .toolbarTitleDisplayMode(.inline)
