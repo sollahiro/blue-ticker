@@ -26,6 +26,9 @@ struct WatchlistView: View {
     @State private var floatOpacity: Double = 1
     /// 指を離したあと、カードが着地する（ゴミ箱へ消える）アニメーションの間。
     @State private var isSettling = false
+    /// ゴミ箱の表示。着地のアニメーションの間はカードと元のタイルの入れ替えを一瞬で行いたいので、
+    /// `draggingCode` とは別に持つ。
+    @State private var trashVisible = false
     /// 直前に入れ替えた相手。同じ相手との入れ替わりを繰り返さない。
     @State private var lastSwapTarget: String?
     @State private var tileFrames: [String: CGRect] = [:]
@@ -114,12 +117,12 @@ struct WatchlistView: View {
         .scrollDisabled(draggingCode != nil)
         .bltChrome("リスト")
         .safeAreaInset(edge: .bottom) {
-            if draggingCode != nil {
+            if trashVisible {
                 trashZone
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
-        .animation(.snappy, value: draggingCode != nil)
+        .animation(.snappy, value: trashVisible)
         .onChange(of: scenePhase) { _, _ in endDrag() }
         .onDisappear { endDrag() }
         .onChange(of: sectorCounts.map(\.sector)) { _, sectors in
@@ -147,7 +150,10 @@ struct WatchlistView: View {
         dragPoint = point
         lastSwapTarget = nil
         draggingCode = item.code
-        withAnimation(.snappy(duration: 0.2)) { floatScale = 1.05 }
+        withAnimation(.snappy(duration: 0.2)) {
+            floatScale = 1.05
+            trashVisible = true
+        }
     }
 
     private func gestureMoved(_ point: CGPoint) {
@@ -193,6 +199,7 @@ struct WatchlistView: View {
             withAnimation(.spring(duration: 0.32, bounce: 0.12)) {
                 dragPoint = CGPoint(x: frame.midX + grab.width, y: frame.midY + grab.height)
                 floatScale = 1
+                trashVisible = false
             }
         } else {
             endDrag()
@@ -212,8 +219,13 @@ struct WatchlistView: View {
         floatingCompany = nil
         floatScale = 1
         floatOpacity = 1
+        withAnimation(.snappy) { trashVisible = false }
         if draggingCode != nil {
-            withAnimation(.snappy) { draggingCode = nil }
+            // カードは元のタイルと同じ位置・大きさに着地している。入れ替えは一瞬で行い、
+            // フェードさせない（カードが消えてから元のタイルが現れる間が「一瞬消える」に見える）。
+            var transaction = Transaction()
+            transaction.disablesAnimations = true
+            withTransaction(transaction) { draggingCode = nil }
         }
     }
 
