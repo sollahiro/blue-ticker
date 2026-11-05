@@ -196,7 +196,8 @@ struct WatchlistView: View {
             }
         } else if let frame = tileFrames[code] {
             isSettling = true
-            withAnimation(.spring(duration: 0.32, bounce: 0.12)) {
+            // 跳ねない動きにする（跳ねの途中で打ち切ると、入れ替えの瞬間に位置が飛ぶ）。
+            withAnimation(.smooth(duration: 0.28)) {
                 dragPoint = CGPoint(x: frame.midX + grab.width, y: frame.midY + grab.height)
                 floatScale = 1
                 trashVisible = false
