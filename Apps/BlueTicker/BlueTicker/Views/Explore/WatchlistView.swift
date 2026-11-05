@@ -13,6 +13,7 @@ struct WatchlistView: View {
     /// ドラッグ中のタイルの銘柄コード。ゴミ箱の表示と並べ替えの目印。
     @State private var draggingCode: String?
     @State private var trashTargeted = false
+    @State private var activity = DragActivity()
 
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 10, alignment: .top), count: 3)
 
@@ -47,11 +48,12 @@ struct WatchlistView: View {
                             .onDrag {
                                 draggingCode = item.code
                                 ListHaptics.lift()
+                                startWatchdog()
                                 return NSItemProvider(object: item.code as NSString)
                             }
                             .onDrop(
                                 of: [.plainText],
-                                delegate: TileDropDelegate(target: item.code, dragging: $draggingCode) { from, to in
+                                delegate: TileDropDelegate(target: item.code, dragging: $draggingCode, activity: activity) { from, to in
                                     withAnimation(.snappy(duration: 0.3)) { move(from, to: to) }
                                     ListHaptics.swap()
                                 }
@@ -60,15 +62,6 @@ struct WatchlistView: View {
                                 remove(item)
                             }
                             .transition(.scale(scale: 0.6).combined(with: .opacity))
-                            // 取り消し・領域外で離したときも含め、ドラッグが終わったら状態を戻す。
-                            .onDragSessionUpdated { session in
-                                switch session.phase {
-                                case .ended, .dataTransferCompleted:
-                                    endDrag()
-                                default:
-                                    break
-                                }
-                            }
                         }
                     }
                     // 並びが変わったとき、他のタイルがなめらかに入れ替わる。
@@ -99,7 +92,7 @@ struct WatchlistView: View {
             .padding(.top, 8)
         }
         .bltChrome("リスト")
-        .onDrop(of: [.plainText], delegate: DragEndDropDelegate(dragging: $draggingCode))
+        .onDrop(of: [.plainText], delegate: DragEndDropDelegate(dragging: $draggingCode, activity: activity))
         .safeAreaInset(edge: .bottom) {
             if draggingCode != nil {
                 trashZone
@@ -125,8 +118,28 @@ struct WatchlistView: View {
     }
 
     private func endDrag() {
+        activity.suspended = nil
         if draggingCode != nil { draggingCode = nil }
         if trashTargeted { trashTargeted = false }
+    }
+
+    /// 取り消しや一瞬で離したときは終了が通知されない。ドロップ側の更新が途絶えたら状態を戻す。
+    /// 画面内に指が戻ってきたら（`DragEndDropDelegate`）同じタイルで再開する。
+    private func startWatchdog() {
+        activity.suspended = nil
+        activity.touch()
+        activity.task?.cancel()
+        activity.task = Task { @MainActor in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .milliseconds(400))
+                guard let code = draggingCode else { return }
+                if Date.now.timeIntervalSince(activity.last) > 1.5 {
+                    endDrag()
+                    activity.suspended = code
+                    return
+                }
+            }
+        }
     }
 
     /// 業種フィルタ適用後のタイル。並びは全体の `sortOrder` のまま。
@@ -187,7 +200,7 @@ struct WatchlistView: View {
             .contentShape(Rectangle())
             .onDrop(
                 of: [.plainText],
-                delegate: TrashDropDelegate(isTargeted: $trashTargeted, dragging: $draggingCode) { code in
+                delegate: TrashDropDelegate(isTargeted: $trashTargeted, dragging: $draggingCode, activity: activity) { code in
                     if let item = companies.first(where: { $0.code == code }) {
                         withAnimation(.snappy) { remove(item) }
                         ListHaptics.delete()
@@ -249,18 +262,24 @@ struct WatchlistView: View {
 private struct TileDropDelegate: DropDelegate {
     let target: String
     @Binding var dragging: String?
+    let activity: DragActivity
     let move: (String, String) -> Void
 
     func validateDrop(info: DropInfo) -> Bool { dragging != nil }
 
     func dropEntered(info: DropInfo) {
+        activity.touch()
         guard let dragging, dragging != target else { return }
         move(dragging, target)
     }
 
-    func dropUpdated(info: DropInfo) -> DropProposal? { DropProposal(operation: .move) }
+    func dropUpdated(info: DropInfo) -> DropProposal? {
+        activity.touch()
+        return DropProposal(operation: .move)
+    }
 
     func performDrop(info: DropInfo) -> Bool {
+        activity.suspended = nil
         dragging = nil
         return true
     }
@@ -270,14 +289,22 @@ private struct TileDropDelegate: DropDelegate {
 private struct TrashDropDelegate: DropDelegate {
     @Binding var isTargeted: Bool
     @Binding var dragging: String?
+    let activity: DragActivity
     let remove: (String) -> Void
 
     func validateDrop(info: DropInfo) -> Bool { dragging != nil }
-    func dropEntered(info: DropInfo) { isTargeted = true }
+    func dropEntered(info: DropInfo) {
+        activity.touch()
+        isTargeted = true
+    }
     func dropExited(info: DropInfo) { isTargeted = false }
-    func dropUpdated(info: DropInfo) -> DropProposal? { DropProposal(operation: .move) }
+    func dropUpdated(info: DropInfo) -> DropProposal? {
+        activity.touch()
+        return DropProposal(operation: .move)
+    }
 
     func performDrop(info: DropInfo) -> Bool {
+        activity.suspended = nil
         isTargeted = false
         if let code = dragging { remove(code) }
         dragging = nil
@@ -288,13 +315,40 @@ private struct TrashDropDelegate: DropDelegate {
 /// 画面のどこで離してもドラッグ状態（ゴミ箱の表示）を終える。
 private struct DragEndDropDelegate: DropDelegate {
     @Binding var dragging: String?
+    let activity: DragActivity
 
-    func dropUpdated(info: DropInfo) -> DropProposal? { DropProposal(operation: .move) }
+    func dropEntered(info: DropInfo) { resumeIfSuspended() }
+
+    func dropUpdated(info: DropInfo) -> DropProposal? {
+        activity.touch()
+        resumeIfSuspended()
+        return DropProposal(operation: .move)
+    }
 
     func performDrop(info: DropInfo) -> Bool {
+        activity.suspended = nil
         dragging = nil
         return true
     }
+
+    /// 更新の途絶で一度戻したあとも、指が画面に戻ってきたらドラッグ中の表示へ戻す。
+    private func resumeIfSuspended() {
+        activity.touch()
+        guard dragging == nil, let code = activity.suspended else { return }
+        activity.suspended = nil
+        dragging = code
+    }
+}
+
+/// ドロップ側の更新時刻。画面の再描画に使わないので参照型にしている。
+@MainActor
+private final class DragActivity {
+    var last = Date.now
+    /// 更新の途絶で一度戻したときのタイルの銘柄コード。
+    var suspended: String?
+    var task: Task<Void, Never>?
+
+    func touch() { last = .now }
 }
 
 /// 並べ替えの Haptic。ドラッグ中の `sensoryFeedback` は鳴らないことがあるため UIKit を直接使う。
