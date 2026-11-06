@@ -9,7 +9,6 @@ struct TickerView: View {
     @Query private var watched: [WatchedCompany]
     @State private var resolvedSector = ""
     @State private var showsCompanyCard = false
-    @State private var showsChat = false
     /// ブックマーク押下の結果。上端に数秒だけ出す。
     @State private var watchToast: WatchToast?
     /// 社名ピルの見た目を窓上のガラスへ渡したか。
@@ -49,7 +48,7 @@ struct TickerView: View {
                     company: displayCompany,
                     onExpanded: { showsCompanyCard = $0 },
                     onFittedPill: { pillRect = $0 },
-                    trailingButtonCount: CompanyChatFeature.isEnabled ? 2 : 1
+                    trailingButtonCount: 1
                 )
             }
             .navigationTitle("")
@@ -97,15 +96,7 @@ struct TickerView: View {
                         action: toggleWatch
                     )
                     .accessibilityAddTraits(isWatched ? .isSelected : [])
-                    if CompanyChatFeature.isEnabled {
-                        Button("チャット", systemImage: "text.bubble") {
-                            showsChat = true
-                        }
-                    }
                 }
-            }
-            .sheet(isPresented: $showsChat) {
-                CompanyChatSheet(company: displayCompany)
             }
             .background { InteractivePopGestureEnabler(allowsPop: !showsCompanyCard) }
             .task { await hydrateSector() }
