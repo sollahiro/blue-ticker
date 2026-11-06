@@ -42,7 +42,7 @@
 | 第三者 REST | `api.*` | 段階 B / HAPIS + x402（`public-api.md`） |
 | iOS | HAPIS ゲートウェイ（Release）/ loopback（Simulator） | Release = HAPIS + App Attest。Simulator = ローカル stub。開発 / agents の REST 直叩きは Service Token（アプリには埋め込まない）。Access SSO / OTP は使わない |
 
-面分離: REST 機械入口＝Service Token。開発用 MCP＝Managed OAuth（ホストは解体しない）。公開 MCP コネクタ＝HAPIS OAuth（Claude を先に、次に ChatGPT）。REST で機能単位の有料マスクは採らない。コネクタに出す範囲は HAPIS のカタログで決める。
+面分離: REST 機械入口＝Service Token。開発用 MCP＝Managed OAuth（ホストは解体しない）。公開 MCP コネクタ＝HAPIS OAuth（Claude を先に、次に ChatGPT）。REST で機能単位の有料マスクは採らない。コネクタに出す範囲は `hapis/catalog.json`（HAPIS へ同期）で決める。
 
 手順: `.agents/skills/deploy/SKILL.md`「REST Service Token」。
 

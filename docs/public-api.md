@@ -49,7 +49,7 @@
 | 契約の安定化 | 後方互換の約束を厳格化（段階 B で deprecation 期間等を足す） |
 | 利用制御 | レート制限は HAPIS。機械の従量は x402 |
 
-機能単位の有料マスクは採らない。**段階 B の機械 REST は x402**。公開 MCP コネクタは HAPIS の OAuth（利用者ごとの `end_user` アカウント）で認証し、x402 の対象外。どのツール・引数を出すかは HAPIS のカタログで決める（プラン別の出し分けは HAPIS で検討中）。開発用の `BltMcpServerCore` は HAPIS に依存させない。
+機能単位の有料マスクは採らない。**段階 B の機械 REST は x402**。公開 MCP コネクタは HAPIS の OAuth（利用者ごとの `end_user` アカウント）で認証し、x402 の対象外。どのツール・引数を出すかは `hapis/catalog.json` で決め、HAPIS へ同期する（プラン別の出し分けは HAPIS で検討中）。開発用の `BltMcpServerCore` は HAPIS に依存させない。
 
 iOS のアカウント不要パス（短命匿名トークン + App Attest）はゲートウェイ責務であり、blt-server の責務ではない。
 

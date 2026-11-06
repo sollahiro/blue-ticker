@@ -49,7 +49,7 @@ curl -s "https://api.yuholab.com/v1/companies/7203/financials?years=1" \
 
 ### MCP
 
-公開コネクタは HAPIS（[sollahiro/hapis](https://github.com/sollahiro/hapis) の `mcp/`）が提供し、HAPIS ゲートウェイ経由で REST を呼びます。出すツールと引数の範囲は HAPIS のカタログが決めます。
+公開コネクタは HAPIS（[sollahiro/hapis](https://github.com/sollahiro/hapis) の `mcp/`）が提供し、HAPIS ゲートウェイ経由で REST を呼びます。出すツールと引数の範囲は [`hapis/catalog.json`](hapis/catalog.json) が正本で、`scripts/hapis-sync-catalog.sh` で HAPIS へ同期します（[`hapis/README.md`](hapis/README.md)）。
 
 `BltMcpServerCore` は Cursor と手元検証向けの開発用 MCP で、REST と同じ能力をツールとして提供します。ホストや OAuth の配線は deploy skill。
 

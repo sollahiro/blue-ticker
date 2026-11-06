@@ -1,0 +1,353 @@
+{
+  "api": {
+    "slug": "yuholab",
+    "name": "有報LAB",
+    "description": "有報LAB (YuhoLAB): data on Japanese listed companies, extracted from annual securities reports (有価証券報告書) and other filings published on EDINET by Japan's Financial Services Agency. Start with search_companies to resolve a 4-digit ticker code (e.g. 7203), then call the per-company tools. Amounts are million JPY and ratios are percent unless a response says otherwise. Figures are processed from the original filings and may differ from them; check EDINET for the source documents. Information only, not investment advice. All tools are read-only."
+  },
+  "endpoints": [
+    {
+      "method": "GET",
+      "path": "/v1/companies",
+      "operation_id": "search-companies",
+      "summary": "Search companies",
+      "description": "Search listed issuers by ticker code or company name. Returns code, name, market, sector and location for each match.",
+      "parameters": [
+        {
+          "name": "q",
+          "in": "query",
+          "required": false,
+          "description": "Search query (ticker code or company name).",
+          "schema": { "type": "string" }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/v1/companies/{code}/filings",
+      "operation_id": "get-filings",
+      "summary": "List filings",
+      "description": "EDINET document list for an issuer, including doc_id values used by filing-content.",
+      "parameters": [
+        {
+          "name": "code",
+          "in": "path",
+          "required": true,
+          "description": "Issuer ticker code (e.g. 6758).",
+          "schema": { "type": "string" }
+        },
+        {
+          "name": "max_years",
+          "in": "query",
+          "required": false,
+          "description": "How many years of filings to return (default 5).",
+          "schema": { "type": "integer", "default": 5 }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/v1/companies/{code}/financials",
+      "operation_id": "get-financials",
+      "summary": "Financial summary",
+      "description": "Annual financial summary (levels such as sales, operating_profit and net_profit). Amounts in million JPY; ratios in percent.",
+      "parameters": [
+        {
+          "name": "code",
+          "in": "path",
+          "required": true,
+          "description": "Issuer ticker code (e.g. 6758).",
+          "schema": { "type": "string" }
+        },
+        {
+          "name": "years",
+          "in": "query",
+          "required": false,
+          "description": "How many years of summary to return.",
+          "schema": { "type": "integer" }
+        },
+        {
+          "name": "fields",
+          "in": "query",
+          "required": false,
+          "description": "Comma-separated response keys to include (e.g. sales,operating_profit,net_profit).",
+          "schema": { "type": "string" }
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Financial summary, proxied unchanged. Must-preserve JSON keys: sales, operating_profit, net_profit.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true,
+                "properties": {
+                  "sales": {
+                    "type": "number",
+                    "description": "Sales / revenue. Amount in million JPY. Gateway must not rename this key."
+                  },
+                  "operating_profit": {
+                    "type": "number",
+                    "description": "Operating profit. Amount in million JPY. Gateway must not rename this key."
+                  },
+                  "net_profit": {
+                    "type": "number",
+                    "description": "Net profit. Amount in million JPY. Gateway must not rename this key."
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/v1/companies/{code}/waterfall",
+      "operation_id": "get-waterfall",
+      "summary": "Year-over-year waterfall",
+      "description": "Year-over-year factor decomposition (waterfall) for the same levels as financials.",
+      "parameters": [
+        {
+          "name": "code",
+          "in": "path",
+          "required": true,
+          "description": "Issuer ticker code (e.g. 6758).",
+          "schema": { "type": "string" }
+        },
+        {
+          "name": "years",
+          "in": "query",
+          "required": false,
+          "description": "How many years of waterfall to return.",
+          "schema": { "type": "integer" }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/v1/companies/{code}/filing-content",
+      "operation_id": "get-filing-content",
+      "summary": "Filing section text",
+      "description": "Section text from an EDINET filing. doc_id is optional; when omitted, the latest annual report is used.",
+      "parameters": [
+        {
+          "name": "code",
+          "in": "path",
+          "required": true,
+          "description": "Issuer ticker code (e.g. 6758).",
+          "schema": { "type": "string" }
+        },
+        {
+          "name": "doc_id",
+          "in": "query",
+          "required": false,
+          "description": "EDINET document id. Optional; omit for the latest annual report.",
+          "schema": { "type": "string" }
+        },
+        {
+          "name": "sections",
+          "in": "query",
+          "required": false,
+          "description": "Comma-separated section keys. Omit for all sections.",
+          "schema": { "type": "string" }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/v1/companies/{code}/overview",
+      "operation_id": "get-overview",
+      "summary": "Company overview",
+      "description": "Short company description for an issuer (stored data only).",
+      "parameters": [
+        {
+          "name": "code",
+          "in": "path",
+          "required": true,
+          "description": "Issuer ticker code (e.g. 7203).",
+          "schema": { "type": "string" }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/v1/companies/{code}/breakdown",
+      "operation_id": "get-breakdown",
+      "summary": "Segment breakdown",
+      "description": "Structured breakdown from an annual report, by axis: segment (reportable segments: sales, segment profit and more), geography (sales by region) or employees (headcount by segment). Amounts in JPY; employees in persons.",
+      "parameters": [
+        {
+          "name": "code",
+          "in": "path",
+          "required": true,
+          "description": "Issuer ticker code (e.g. 6758).",
+          "schema": { "type": "string" }
+        },
+        {
+          "name": "doc_id",
+          "in": "query",
+          "required": false,
+          "description": "EDINET document id. Optional; omit for the latest annual report.",
+          "schema": { "type": "string" }
+        },
+        {
+          "name": "axis",
+          "in": "query",
+          "required": true,
+          "description": "Breakdown axis: segment, geography or employees.",
+          "schema": { "type": "string", "enum": ["segment", "geography", "employees"] }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/v1/companies/{code}/statement",
+      "operation_id": "get-statement",
+      "summary": "Financial statements",
+      "description": "Full BS/PL/CF/SS statement items for an issuer (stored data only).",
+      "parameters": [
+        {
+          "name": "code",
+          "in": "path",
+          "required": true,
+          "description": "Issuer ticker code (e.g. 7203).",
+          "schema": { "type": "string" }
+        },
+        {
+          "name": "doc_id",
+          "in": "query",
+          "required": false,
+          "description": "EDINET document id. Optional.",
+          "schema": { "type": "string" }
+        },
+        {
+          "name": "years",
+          "in": "query",
+          "required": false,
+          "description": "How many years of statements to return.",
+          "schema": { "type": "integer" }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/v1/companies/{code}/shares",
+      "operation_id": "get-shares",
+      "summary": "Share metrics",
+      "description": "EPS, diluted EPS, BPS and issued shares as disclosed in the annual report (items keyed eps / diluted_eps / bps / issued_shares, among others). Replaces the retired statement/notes route.",
+      "parameters": [
+        {
+          "name": "code",
+          "in": "path",
+          "required": true,
+          "description": "Issuer ticker code (e.g. 7203).",
+          "schema": { "type": "string" }
+        },
+        {
+          "name": "doc_id",
+          "in": "query",
+          "required": false,
+          "description": "EDINET document id. Optional; omit for the latest annual report.",
+          "schema": { "type": "string" }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/v1/feed/updates",
+      "operation_id": "get-feed-updates",
+      "summary": "Filing update feed",
+      "description": "Recent listed-company filings across issuers, newest first.",
+      "parameters": [
+        {
+          "name": "limit",
+          "in": "query",
+          "required": false,
+          "description": "Maximum number of items to return.",
+          "schema": { "type": "integer" }
+        },
+        {
+          "name": "days",
+          "in": "query",
+          "required": false,
+          "description": "Lookback window in days.",
+          "schema": { "type": "integer" }
+        },
+        {
+          "name": "doc_type",
+          "in": "query",
+          "required": false,
+          "description": "Comma-separated EDINET document types (e.g. 120,160).",
+          "schema": { "type": "string" }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/v1/feed/trend",
+      "operation_id": "get-feed-trend",
+      "visibility": "private",
+      "summary": "Search trend feed",
+      "description": "Recently searched or referenced issuers (anonymous counts). Private for now: built from app users' searches, so not published in OpenAPI, skills or MCP tools.",
+      "parameters": [
+        {
+          "name": "limit",
+          "in": "query",
+          "required": false,
+          "description": "Maximum number of items to return.",
+          "schema": { "type": "integer" }
+        },
+        {
+          "name": "days",
+          "in": "query",
+          "required": false,
+          "description": "Lookback window in days.",
+          "schema": { "type": "integer" }
+        },
+        {
+          "name": "code",
+          "in": "query",
+          "required": false,
+          "description": "Optional issuer code for a single-name breakdown.",
+          "schema": { "type": "string" }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/v1/screen",
+      "operation_id": "get-screen",
+      "visibility": "private",
+      "summary": "Screen issuers",
+      "description": "Screen listed issuers by financial conditions. Private for now: allowlisted at the gateway for the first-party app, not published in OpenAPI, skills or MCP tools.",
+      "parameters": [
+        {
+          "name": "q",
+          "in": "query",
+          "required": false,
+          "description": "Screen query.",
+          "schema": { "type": "string" }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/v1/screen/snapshot",
+      "operation_id": "get-screen-snapshot",
+      "visibility": "private",
+      "summary": "Screen snapshot (first-party)",
+      "description": "Every screen_index row in columnar form, for on-device screening in the iOS app. Supports conditional GET. Private: allowlisted at the gateway but not published in OpenAPI, skills or MCP tools."
+    },
+    {
+      "method": "POST",
+      "path": "/v1/chat",
+      "operation_id": "chat",
+      "visibility": "private",
+      "rate_per_minute": 5,
+      "rate_per_day": 10,
+      "summary": "Company chat (first-party)",
+      "description": "Answers a question about one issuer from its annual report data, streamed as server-sent events. Body: {code, messages:[{role, content}]}. Private, and capped per consumer at 5 per minute and 10 per day because each call runs an LLM."
+    }
+  ]
+}
