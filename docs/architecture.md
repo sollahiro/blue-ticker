@@ -8,7 +8,7 @@
 |---|---|
 | REST `/v1` | **製品の契約の正**。段階 A は Access Service Token。段階 B の公開入口は HAPIS（併存は `public-api.md` / `api-auth.md`） |
 | iOS | 近傍の製品面（`Apps/BlueTicker`。REST `/v1` の HTTP クライアント。IA は `ios-client.md`、進捗は Linear Team `blue-ticker`） |
-| MCP（`POST /`） | **開発時のみ**（Cursor / 手元）。`BltMcpServerCore` は残す。製品として伸ばさない。ChatGPT Apps は凍結 |
+| MCP（`POST /`） | **開発時のみ**（Cursor / 手元）。`BltMcpServerCore`。公開コネクタは別で、HAPIS の `mcp/`（公開コネクタ。Claude の Connectors Directory を先に、次に ChatGPT）が HAPIS ゲートウェイ経由で REST を呼ぶ |
 | Web / RSS | Web は将来候補（優先度低）。RSS は `workers/feed-rss` の静的フィード（日次 Cron → R2。REST が正。`public-api.md` の例外） |
 
 機能単位の有料マスクは採らない。公開ゲート（どの Feature をいつ外に出すか）は Linear。実装サイクルは `.agents/skills/xbrl-development/SKILL.md`。
@@ -39,7 +39,7 @@ EU / ESEF 製品トラックは中止。
 
 ## デプロイモード
 
-配布 CLI `ticker` / 開発 CLI `TickerDev` は廃止。製品接点は REST。検証は `swift test`（smoke/golden）と、ローカル Postgres へ ingest したうえでの `/v1`。MCP は開発検証用。
+配布 CLI `ticker` / 開発 CLI `TickerDev` は廃止。製品接点は REST（公開 MCP コネクタも HAPIS 経由で REST を呼ぶ）。検証は `swift test`（smoke/golden）と、ローカル Postgres へ ingest したうえでの `/v1`。MCP は開発検証用。
 
 | モード | EDINET | blt-server | 状態 |
 |---|---|---|---|
@@ -127,7 +127,7 @@ flowchart LR
 | `GET /v1/skills` · `/v1/skills/{id}` | 能力カタログ |
 | `GET /v1/companies?q=` | 企業検索（JP / EDINET） |
 | `GET /v1/companies/{code}/filings` | 提出書類一覧 |
-| `GET /v1/companies/{code}/overview` | 短い会社説明（格納済み。MCP には出さない） |
+| `GET /v1/companies/{code}/overview` | 短い会社説明（格納済み。公開コネクタに出す。開発用 MCP には無い） |
 | `GET /v1/companies/{code}/relations?type=` | 取引先・関係会社（有報の記載のみ。顧客・関係会社・出資先・大株主と、他社の有報からの逆引き＝仕入先・親会社・大株主になっている会社。格納済み。MCP には出さない。`docs/public-api.md`） |
 | `GET /v1/companies/{code}/financials` | Summary（床未満・未格納 404）。`?fields=` で `years[]` の公開キーを射影（不明キー 400） |
 | `GET /v1/companies/{code}/waterfall` | Waterfall |
@@ -144,7 +144,7 @@ flowchart LR
 
 ### MCP（開発用 `POST /`）
 
-`BltMcpServerCore`（プロトコル）＋ `MCPRoute.swift`（Vapor 配線）。ツールは REST と共有 serve。カタログ正本は `ApiSkills.swift`。Managed OAuth は `mcp.*` 専用（パス付きホストでは不可）。製品面ではない。非標準プレハンドシェイク等の吸収は `MCPRoute.swift` コメントが正本。iOS は公開 REST のクライアント（トークン / Service Token を埋め込まない。開発は loopback / http 無認証。`https://api.sollahiro.com` プレビューは Access JWT。段階 B は HAPIS 短命 + Attest。`api-auth.md` / `ios-client.md`）。
+`BltMcpServerCore`（プロトコル）＋ `MCPRoute.swift`（Vapor 配線）。ツールは REST と共有 serve。カタログ正本は `ApiSkills.swift`。Managed OAuth は `mcp.*` 専用（パス付きホストでは不可）。公開コネクタ（HAPIS `mcp/`）とは別物。非標準プレハンドシェイク等の吸収は `MCPRoute.swift` コメントが正本。iOS は公開 REST のクライアント（トークン / Service Token を埋め込まない。開発は loopback / http 無認証。`https://api.sollahiro.com` プレビューは Access JWT。段階 B は HAPIS 短命 + Attest。`api-auth.md` / `ios-client.md`）。
 
 ## 環境変数（薄い表）
 
