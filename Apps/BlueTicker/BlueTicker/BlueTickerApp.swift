@@ -1,3 +1,4 @@
+import AppIntents
 import SwiftData
 import SwiftUI
 
@@ -8,6 +9,8 @@ struct BlueTickerApp: App {
     init() {
         Theme.applyChrome()
         modelContainer = Self.makeWatchlistContainer()
+        // 銘柄を含む Siri フレーズの候補を、起動のたびに登録し直す。
+        BlueTickerShortcuts.updateAppShortcutParameters()
     }
 
     var body: some Scene {
