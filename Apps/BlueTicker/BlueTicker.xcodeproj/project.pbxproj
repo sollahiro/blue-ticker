@@ -11,6 +11,7 @@
 		AA0000000000000000000001 /* BlueTickerApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000001 /* BlueTickerApp.swift */; };
 		AA0000000000000000000002 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000002 /* Theme.swift */; };
 		AA0000000000000000000003 /* Format.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000003 /* Format.swift */; };
+		AA0000000000000000000070 /* CompanyIntents.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000070 /* CompanyIntents.swift */; };
 		AA0000000000000000000004 /* APIConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000004 /* APIConfiguration.swift */; };
 		AA0000000000000000000005 /* DTOs.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000005 /* DTOs.swift */; };
 		AA0000000000000000000006 /* APIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000006 /* APIClient.swift */; };
@@ -41,9 +42,6 @@
 		AA0000000000000000000043 /* ScreenSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000043 /* ScreenSnapshot.swift */; };
 		AA0000000000000000000044 /* ScreenSnapshotStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000044 /* ScreenSnapshotStore.swift */; };
 		AA0000000000000000000050 /* AppIcon.icon in Resources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000050 /* AppIcon.icon */; };
-		AA0000000000000000000060 /* CompanyChatSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000060 /* CompanyChatSheet.swift */; };
-		AA0000000000000000000061 /* ChatFacts.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000061 /* ChatFacts.swift */; };
-		AA0000000000000000000062 /* ServerChat.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000062 /* ServerChat.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -52,6 +50,7 @@
 		BB0000000000000000000001 /* BlueTickerApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlueTickerApp.swift; sourceTree = "<group>"; };
 		BB0000000000000000000002 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
 		BB0000000000000000000003 /* Format.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Format.swift; sourceTree = "<group>"; };
+		BB0000000000000000000070 /* CompanyIntents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompanyIntents.swift; sourceTree = "<group>"; };
 		BB0000000000000000000004 /* APIConfiguration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIConfiguration.swift; sourceTree = "<group>"; };
 		BB0000000000000000000005 /* DTOs.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DTOs.swift; sourceTree = "<group>"; };
 		BB0000000000000000000006 /* APIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClient.swift; sourceTree = "<group>"; };
@@ -86,9 +85,6 @@
 		BB0000000000000000000043 /* ScreenSnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenSnapshot.swift; sourceTree = "<group>"; };
 		BB0000000000000000000044 /* ScreenSnapshotStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenSnapshotStore.swift; sourceTree = "<group>"; };
 		BB0000000000000000000050 /* AppIcon.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = AppIcon.icon; sourceTree = "<group>"; };
-		BB0000000000000000000060 /* CompanyChatSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompanyChatSheet.swift; sourceTree = "<group>"; };
-		BB0000000000000000000061 /* ChatFacts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatFacts.swift; sourceTree = "<group>"; };
-		BB0000000000000000000062 /* ServerChat.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerChat.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -110,7 +106,6 @@
 				DD0000000000000000000010 /* ZeroAxisFill */,
 				DD0000000000000000000012 /* FeedRSS */,
 				DD0000000000000000000013 /* ScreenSnapshot */,
-				DD0000000000000000000014 /* ChatFacts */,
 				DD0000000000000000000003 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -121,6 +116,7 @@
 				BB0000000000000000000001 /* BlueTickerApp.swift */,
 				BB0000000000000000000002 /* Theme.swift */,
 				BB0000000000000000000003 /* Format.swift */,
+				BB0000000000000000000070 /* CompanyIntents.swift */,
 				DD0000000000000000000004 /* API */,
 				DD0000000000000000000005 /* Models */,
 				DD0000000000000000000006 /* Views */,
@@ -196,7 +192,6 @@
 				BB0000000000000000000016 /* TickerView.swift */,
 				BB0000000000000000000017 /* OverviewText.swift */,
 				BB0000000000000000000018 /* AnalysisView.swift */,
-				BB0000000000000000000060 /* CompanyChatSheet.swift */,
 			);
 			path = Ticker;
 			sourceTree = "<group>";
@@ -239,16 +234,6 @@
 			);
 			name = ScreenSnapshot;
 			path = ScreenSnapshot/Sources/ScreenSnapshot;
-			sourceTree = "<group>";
-		};
-		DD0000000000000000000014 /* ChatFacts */ = {
-			isa = PBXGroup;
-			children = (
-				BB0000000000000000000061 /* ChatFacts.swift */,
-				BB0000000000000000000062 /* ServerChat.swift */,
-			);
-			name = ChatFacts;
-			path = ChatFacts/Sources/ChatFacts;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -327,6 +312,7 @@
 				AA0000000000000000000001 /* BlueTickerApp.swift in Sources */,
 				AA0000000000000000000002 /* Theme.swift in Sources */,
 				AA0000000000000000000003 /* Format.swift in Sources */,
+				AA0000000000000000000070 /* CompanyIntents.swift in Sources */,
 				AA0000000000000000000004 /* APIConfiguration.swift in Sources */,
 				AA0000000000000000000005 /* DTOs.swift in Sources */,
 				AA0000000000000000000006 /* APIClient.swift in Sources */,
@@ -349,9 +335,6 @@
 				AA0000000000000000000016 /* TickerView.swift in Sources */,
 				AA0000000000000000000017 /* OverviewText.swift in Sources */,
 				AA0000000000000000000018 /* AnalysisView.swift in Sources */,
-				AA0000000000000000000060 /* CompanyChatSheet.swift in Sources */,
-				AA0000000000000000000061 /* ChatFacts.swift in Sources */,
-				AA0000000000000000000062 /* ServerChat.swift in Sources */,
 				AA0000000000000000000032 /* ZeroAxisFill.swift in Sources */,
 				AA0000000000000000000040 /* FeedRSS.swift in Sources */,
 				AA0000000000000000000041 /* FeedRSSStore.swift in Sources */,
