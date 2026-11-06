@@ -1,6 +1,6 @@
 # 有報LAB API
 
-日本株の財務データ基盤。外向きの製品名は **有報LAB**（API・MCP も有報LAB）。内部の抽出・解析ロジックは **BLT**（Business Line Terminal）と呼び、`blt-*` の名前はこの略です。**Swift** 製の **REST API**（`blt-server`）が、EDINET 由来のデータを取り込み・提供します。近傍の製品面は REST と iOS。MCP は開発時（Cursor / 手元）のみ使い、製品としては伸ばしません。
+日本株の財務データ基盤。外向きの製品名は **有報LAB**（API・MCP も有報LAB）。内部の抽出・解析ロジックは **BLT**（Business Line Terminal）と呼び、`blt-*` の名前はこの略です。**Swift** 製の **REST API**（`blt-server`）が、EDINET 由来のデータを取り込み・提供します。製品面は REST・iOS と、HAPIS 経由の公開 MCP コネクタ（Claude を先に、次に ChatGPT）です。
 
 ## 主な機能
 
@@ -47,9 +47,11 @@ curl -s "https://api.yuholab.com/v1/companies/7203/financials?years=1" \
 認証の住み分け: [`docs/api-auth.md`](docs/api-auth.md)。発行手順: [`.agents/skills/deploy/SKILL.md`](.agents/skills/deploy/SKILL.md)  
 互換ポリシー: [`docs/api-compatibility.md`](docs/api-compatibility.md)
 
-### MCP（開発用）
+### MCP
 
-Cursor と手元検証向けに `BltMcpServerCore` が REST と同じ能力をツールとして提供します。ChatGPT Apps 向けの公開は凍結しています。ホストや OAuth の配線は deploy skill。
+公開コネクタは HAPIS（[sollahiro/hapis](https://github.com/sollahiro/hapis) の `mcp/`）が提供し、HAPIS ゲートウェイ経由で REST を呼びます。出すツールと引数の範囲は [`hapis/catalog.json`](hapis/catalog.json) が正本で、`scripts/hapis-sync-catalog.sh` で HAPIS へ同期します（[`hapis/README.md`](hapis/README.md)）。
+
+`BltMcpServerCore` は Cursor と手元検証向けの開発用 MCP で、REST と同じ能力をツールとして提供します。ホストや OAuth の配線は deploy skill。
 
 ## ドキュメント
 
