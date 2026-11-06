@@ -42,7 +42,13 @@ struct CompanyEntityQuery: EntityStringQuery {
         return hits.prefix(10).map(CompanyEntity.init(hit:))
     }
 
-    func suggestedEntities() async throws -> [CompanyEntity] { [] }
+    /// 銘柄を含むフレーズを Siri が認識するには候補が要る。注目の銘柄（フィード）を出す。
+    func suggestedEntities() async throws -> [CompanyEntity] {
+        let items = (try? await APIClient.shared.feedTrend().items) ?? []
+        return items.prefix(10).map {
+            CompanyEntity(code: $0.code, name: Format.displayName($0.name, fallback: $0.code))
+        }
+    }
 }
 
 private struct CompanyIntentError: LocalizedError {
@@ -106,8 +112,28 @@ struct CompanyFinancialsIntent: AppIntent {
     }
 }
 
+/// 銘柄を選ばないショートカット。App Shortcuts が登録されているかを確かめる入口にもなる。
+struct OpenBlueTickerIntent: AppIntent {
+    static let title: LocalizedStringResource = "有報LABを開く"
+    static let description = IntentDescription("有報LABを開きます。")
+    static let openAppWhenRun = true
+
+    func perform() async throws -> some IntentResult {
+        .result()
+    }
+}
+
 struct BlueTickerShortcuts: AppShortcutsProvider {
     static var appShortcuts: [AppShortcut] {
+        AppShortcut(
+            intent: OpenBlueTickerIntent(),
+            phrases: [
+                "\(.applicationName)を開く",
+                "\(.applicationName)を起動",
+            ],
+            shortTitle: "有報LABを開く",
+            systemImageName: "chart.line.uptrend.xyaxis"
+        )
         AppShortcut(
             intent: CompanyOverviewIntent(),
             phrases: [
