@@ -103,7 +103,12 @@ test("privacy pages name the operator Sorahiro Shuto", () => {
 
 test("privacy disclaimer matches product facts without overbroad liability", () => {
   const html = readFileSync(join(publicDir, "index.html"), "utf8");
-  assert.match(html, /閲覧補助アプリ/);
+  assert.match(html, /閲覧補助サービス/);
+  // 公開コネクタ（HAPIS mcp/）の章: 識別子はハッシュのみ、会話本文は届かない、出典表示。
+  assert.match(html, /<h2>3\. 有報LAB コネクタ（AI アシスタント向け）<\/h2>/);
+  assert.match(html, /一方向のハッシュ値だけを保存します/);
+  assert.match(html, /会話の本文、ファイル、AI アシスタントに登録した利用者の情報は、コネクタには届きません/);
+  assert.match(html, /出典：EDINET（金融庁）/);
   assert.match(
     html,
     /金融商品取引法上の金融商品取引業者（投資助言・代理業者等）の登録を受けていません/,
@@ -144,7 +149,6 @@ test("privacy disclaimer matches product facts without overbroad liability", () 
   assert.doesNotMatch(html, /13 歳未満/);
   assert.doesNotMatch(html, /一切の責任を負/);
   assert.doesNotMatch(html, /TestFlight/);
-  assert.doesNotMatch(html, /MCP/);
   assert.doesNotMatch(html, /ChatGPT/);
   assert.doesNotMatch(html, /2026-09-19/);
   assert.doesNotMatch(html, /端末を識別できない/);
@@ -174,7 +178,9 @@ test("terms page is auxiliary to the original filing", () => {
   assert.match(html, /<h1>有報LAB 利用規約<\/h1>/);
   assert.match(html, /「本アプリ」：運営者が配布する iOS アプリケーション「有報LAB」をいいます/);
   assert.match(html, /本アプリは、運営者が運営する有報LAB API（YuhoLAB API）を利用して作られています/);
-  assert.match(html, /最終更新: 2026-10-27/);
+  assert.match(html, /最終更新: 2026-11-06/);
+  assert.match(html, /「本コネクタ」：運営者が提供する、AI サービスから本 API のデータを読み出すための接続先/);
+  assert.match(html, /AI サービスによる要約、解釈、計算その他の回答の内容について責任を負いません/);
   assert.match(html, /href="mailto:support@yuholab.com">support@yuholab.com</);
   assert.match(html, /<a href="\/privacy">https:\/\/yuholab.com\/privacy<\/a>/);
   assert.doesNotMatch(html, /blueticker@sollahiro\.com/);
@@ -184,7 +190,6 @@ test("terms page is auxiliary to the original filing", () => {
   assert.doesNotMatch(html, /要確認/);
   assert.doesNotMatch(html, /対価の範囲/);
   assert.doesNotMatch(html, /13歳/);
-  assert.doesNotMatch(html, /MCP/);
   assert.doesNotMatch(html, /ChatGPT/);
   assert.doesNotMatch(html, /TestFlight/);
   assert.doesNotMatch(html, /必要と判断したした場合/);
