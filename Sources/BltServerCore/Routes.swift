@@ -325,9 +325,6 @@ func registerRoutes(
             db: dbAvailable ? req.db : nil)
     }
 
-    // POST /v1/chat（有報データを読みながら LLM が答える。SSE。ChatRoute.swift 参照）
-    registerChatRoute(v1, dbAvailable: dbAvailable)
-
     // POST /（MCP プロトコル。/v1 と同じ認証グループ配下。ルートパスの理由は MCPRoute.swift 参照）
     try await registerMcpRoute(
         authenticated, app: app, context: context, dbAvailable: dbAvailable)
