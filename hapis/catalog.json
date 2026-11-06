@@ -338,16 +338,6 @@
       "visibility": "private",
       "summary": "Screen snapshot (first-party)",
       "description": "Every screen_index row in columnar form, for on-device screening in the iOS app. Supports conditional GET. Private: allowlisted at the gateway but not published in OpenAPI, skills or MCP tools."
-    },
-    {
-      "method": "POST",
-      "path": "/v1/chat",
-      "operation_id": "chat",
-      "visibility": "private",
-      "rate_per_minute": 5,
-      "rate_per_day": 10,
-      "summary": "Company chat (first-party)",
-      "description": "Answers a question about one issuer from its annual report data, streamed as server-sent events. Body: {code, messages:[{role, content}]}. Private, and capped per consumer at 5 per minute and 10 per day because each call runs an LLM."
     }
   ]
 }
