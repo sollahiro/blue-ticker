@@ -11,6 +11,7 @@
 		AA0000000000000000000001 /* BlueTickerApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000001 /* BlueTickerApp.swift */; };
 		AA0000000000000000000002 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000002 /* Theme.swift */; };
 		AA0000000000000000000003 /* Format.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000003 /* Format.swift */; };
+		AA0000000000000000000070 /* CompanyIntents.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000070 /* CompanyIntents.swift */; };
 		AA0000000000000000000004 /* APIConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000004 /* APIConfiguration.swift */; };
 		AA0000000000000000000005 /* DTOs.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000005 /* DTOs.swift */; };
 		AA0000000000000000000006 /* APIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000006 /* APIClient.swift */; };
@@ -49,6 +50,7 @@
 		BB0000000000000000000001 /* BlueTickerApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlueTickerApp.swift; sourceTree = "<group>"; };
 		BB0000000000000000000002 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
 		BB0000000000000000000003 /* Format.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Format.swift; sourceTree = "<group>"; };
+		BB0000000000000000000070 /* CompanyIntents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompanyIntents.swift; sourceTree = "<group>"; };
 		BB0000000000000000000004 /* APIConfiguration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIConfiguration.swift; sourceTree = "<group>"; };
 		BB0000000000000000000005 /* DTOs.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DTOs.swift; sourceTree = "<group>"; };
 		BB0000000000000000000006 /* APIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClient.swift; sourceTree = "<group>"; };
@@ -114,6 +116,7 @@
 				BB0000000000000000000001 /* BlueTickerApp.swift */,
 				BB0000000000000000000002 /* Theme.swift */,
 				BB0000000000000000000003 /* Format.swift */,
+				BB0000000000000000000070 /* CompanyIntents.swift */,
 				DD0000000000000000000004 /* API */,
 				DD0000000000000000000005 /* Models */,
 				DD0000000000000000000006 /* Views */,
@@ -309,6 +312,7 @@
 				AA0000000000000000000001 /* BlueTickerApp.swift in Sources */,
 				AA0000000000000000000002 /* Theme.swift in Sources */,
 				AA0000000000000000000003 /* Format.swift in Sources */,
+				AA0000000000000000000070 /* CompanyIntents.swift in Sources */,
 				AA0000000000000000000004 /* APIConfiguration.swift in Sources */,
 				AA0000000000000000000005 /* DTOs.swift in Sources */,
 				AA0000000000000000000006 /* APIClient.swift in Sources */,
