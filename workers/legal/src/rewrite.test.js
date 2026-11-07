@@ -197,6 +197,7 @@ test("terms page is auxiliary to the original filing", () => {
   assert.match(html, /最終更新: 2026-11-08/);
   assert.match(html, /第9条（データの利用および免責）/);
   assert.match(html, /個人的または商業的な目的を問わず、自由に利用、複製、加工、再配布および第三者への提供を行うことができます/);
+  assert.match(html, /出典（「有報LAB」および EDINET）を表示し、加工されたものである旨を示すよう努めるものとします/);
   assert.match(html, /正確性、完全性、最新性、有用性または特定の目的への適合性を保証しません/);
   assert.match(html, /「本コネクタ」：運営者が提供する、AI サービスから本 API のデータを読み出すための接続先/);
   assert.match(html, /AI サービスによる要約、解釈、計算その他の回答の内容について責任を負いません/);
@@ -229,6 +230,7 @@ test("English pages are translations of the Japanese pages", () => {
   assert.match(privacy, /Public Data License \(Version 1\.0\)/);
   assert.match(privacy, /you sign in with a Google account/);
   assert.match(terms, /Osaka District Court/);
+  assert.match(terms, /shall endeavor to credit the source/);
   assert.match(terms, /Article 9 \(Use of data and disclaimer\)/);
   assert.match(terms, /Last updated: 2026-11-08/);
   assert.match(terms, /support@yuholab\.com/);
