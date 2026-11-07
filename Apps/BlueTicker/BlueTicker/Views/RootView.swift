@@ -37,7 +37,6 @@ struct RootView: View {
         .tabBarMinimizeBehavior(.onScrollDown)
         .task(id: watched.map(\.code).joined(separator: ",")) {
             let codes = Array(Set(watched.map(\.code)))
-            await APIClient.shared.setPinnedCodes(Set(codes))
             // 銘柄面など interactive GET を先に出す。先読みは 429 で止めて間引く。
             try? await Task.sleep(for: .milliseconds(800))
             guard !Task.isCancelled else { return }

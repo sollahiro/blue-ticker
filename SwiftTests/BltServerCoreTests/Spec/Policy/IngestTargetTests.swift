@@ -1,5 +1,6 @@
 // `--stages` CSV のパース仕様を検証する。未指定＝relations と industry-kpis 以外、部分選択、不正入力＝nil。
 
+import BlueTickerCore
 import Testing
 
 @testable import BltServerCore
@@ -95,5 +96,39 @@ struct StatementNoteTypesParseTests {
     @Test("空選択は nil")
     func emptyIsNil() {
         #expect(parseStatementNoteTypes("") == nil)
+    }
+}
+
+/// `--axes`: breakdowns ステージを指定した軸だけに絞る。未指定は全軸、未知の軸・空は nil(usage エラー)。
+@Suite("parseIngestAxes")
+struct IngestAxesTests {
+    @Test("未指定は絞り込みなし")
+    func nilMeansAllAxes() {
+        #expect(parseIngestAxes(nil) == nil)
+    }
+
+    @Test("単一・複数の軸を選択")
+    func selectsAxes() {
+        #expect(parseIngestAxes("capex") == ["capex"])
+        #expect(
+            parseIngestAxes("capex, research_and_development")
+                == ["capex", "research_and_development"])
+    }
+
+    @Test("未知の軸・空は nil")
+    func rejectsUnknownOrEmpty() {
+        #expect(parseIngestAxes("capex,unknown_axis") == nil)
+        #expect(parseIngestAxes("") == nil)
+        #expect(parseIngestAxes(",") == nil)
+    }
+
+    @Test("実装済みの軸はすべて受理する")
+    func acceptsEverySupportedAxis() {
+        for axis in [
+            breakdownAxisSegment, breakdownAxisProductService, breakdownAxisGeography,
+            breakdownAxisInterestBearingDebt,
+        ] + breakdownAssetCategoryAxes + breakdownSegmentMetricAxes {
+            #expect(parseIngestAxes(axis) == [axis], "\(axis)")
+        }
     }
 }

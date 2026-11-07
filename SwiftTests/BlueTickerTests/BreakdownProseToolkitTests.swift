@@ -25,6 +25,28 @@ import Testing
         #expect(fullwidth.map(\.yen) == [4_409_000_000])
     }
 
+    /// キングジム 7962 S100Z29T の設備投資の概要:「総額６億8,006万円の設備投資を実施いたしました」。
+    /// 「億」と「万円」の併記、「万円」だけの表記も円に換算する。百万円・千円の既存挙動は変えない。
+    @Test func convertsOkuManCompoundAndManYen() {
+        let compound = BreakdownProseToolkit.candidates(
+            in: "当連結会計年度において、総額６億8,006万円の設備投資を実施いたしました。",
+            preferredPhrases: [])
+        #expect(compound.map(\.yen) == [680_060_000])
+        let man = BreakdownProseToolkit.candidates(
+            in: "設備投資の総額は5,256万円であります。", preferredPhrases: [])
+        #expect(man.map(\.yen) == [52_560_000])
+        let hundredMillion = BreakdownProseToolkit.candidates(
+            in: "設備投資の総額は100百万円であります。", preferredPhrases: [])
+        #expect(hundredMillion.map(\.yen) == [100_000_000])
+        // 億円 と 万円 が別々の金額として並ぶ文は 2 金額なので候補にしない。
+        #expect(
+            BreakdownProseToolkit.candidates(
+                in: "Aは3億円、Bは5,256万円であります。", preferredPhrases: []).isEmpty)
+        #expect(
+            BreakdownProseToolkit.candidates(
+                in: "総額は△5,256万円であります。", preferredPhrases: []).isEmpty)
+    }
+
     @Test func remainderMatchUsesSentenceYenAndDoesNotInventTheGap() {
         let pool = [
             BreakdownProseCandidate(sentence: "全社は20百万円であります", yen: 20_000_000),

@@ -333,15 +333,8 @@ struct WatchlistView: View {
 
     private func delete(at offsets: IndexSet) {
         let removed = offsets.map { companies[$0] }
-        let removedCodes = Set(removed.map(\.code))
         for item in removed {
             modelContext.delete(item)
-        }
-        let remaining = companies.filter { item in
-            !removed.contains { $0.persistentModelID == item.persistentModelID }
-        }
-        for code in removedCodes where !remaining.contains(where: { $0.code == code }) {
-            Task { await APIClient.shared.unpinCode(code) }
         }
     }
 

@@ -130,6 +130,8 @@ DATABASE_URL="$BLT_NEON_WRITE_DATABASE_URL" ./.build/release/blt-ingest ingest \
   --note-types per_share_information
 ```
 
+`--axes` は `breakdowns` ステージを指定した内訳の軸だけに絞る（例: `--stages breakdowns --axes capex`。未指定は全軸）。Jev を使う軸だけを回す、対象軸の行を削除したあとにその軸だけを再取り込みする、といった用途。`--doc-ids` は書類の全軸を書き直すので、軸を絞りたいときは行を削除して `--codes` と併用する。
+
 `--codes` / `--doc-ids` は `--limit` を無視して全件。`--doc-ids` は原本有報(120)の会社-FY 単位（他 FY は purge しない。financials は会社1行なので当該発行体を再計算し、overlay は訂正がある FY だけ）。指定 doc は cache_version / needs_review に関係なく書き直す（financials は格納行の cache_version・high_water・assembly_fingerprint が現行でも再計算して格納する。最新 FY を失う上書き・years 行へのプレースホルダ上書きは縮小ガードで保留されるのは同じ）。定期ジョブでは使わない。
 
 Screen 索引の列定義が変わったあと（`sales_cagr_3y` / screen-v3 指標の追加、screen-v4 の配当性向 3 年平均など）は `fin-vN` を上げない。次回の financials ingest は公開床（servable）の `company_financials` から screen_index を投影する（現行 fin-vN 一致・skip は問わない）。手動で急ぐときだけ WRITE で一発再生成する:

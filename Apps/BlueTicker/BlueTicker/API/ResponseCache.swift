@@ -6,17 +6,18 @@ struct ResponseCacheRecord: Codable {
 }
 
 /// 解析 REST（概要・分解・Overview）の端末キャッシュ。
-/// 有報は年次なので短時間の再取得を避け、ウォッチリスト銘柄はより長く持つ。
+/// 有報は年次なので短時間の再取得を避ける。ウォッチリスト銘柄も含め、全銘柄 6 時間で取り直す
+/// （長く持つと再取り込みの修正が届かない）。取り直しに失敗したときだけ、7 日以内の古い応答を返す。
 /// iOS は `BlueTickerCore` をリンクしないため、サーバー側の `CacheManager` は使わない。
 /// メモリは `memoryLimit` 件まで（参照の古い順に退避）。ディスクは最長 TTL を超えた
 /// ファイルを起動時に sweep する。
 actor ResponseCache {
     static let shared = ResponseCache()
 
-    /// 通常の解析応答。6 時間。
+    /// 解析応答の有効期間。全銘柄 6 時間。
     static let analysisTTL: TimeInterval = 6 * 60 * 60
-    /// ウォッチリスト銘柄。7 日。ディスク上の最長保持期間でもある（sweep の基準）。
-    static let watchlistTTL: TimeInterval = 7 * 24 * 60 * 60
+    /// 取り直しに失敗したときに返してよい古い応答の上限。7 日。ディスク上の最長保持期間でもある（sweep の基準）。
+    static let staleFallbackLimit: TimeInterval = 7 * 24 * 60 * 60
     /// メモリキャッシュの保持件数上限。超過分は参照の古いものからメモリのみ退避する。
     static let memoryLimit = 200
     /// ディスクの置き場所の版。応答の単位・形が変わったら上げ、旧版のディレクトリは起動時に捨てる。
@@ -48,7 +49,7 @@ actor ResponseCache {
         encoder.dateEncodingStrategy = .iso8601
         fileEncoder = encoder
         // 最長 TTL を超えたキャッシュは二度とヒットしないので起動時に捨てる（完了は待たない）。
-        Task { await self.purgeExpired(maxAge: Self.watchlistTTL) }
+        Task { await self.purgeExpired(maxAge: Self.staleFallbackLimit) }
     }
 
     static func key(for url: URL) -> String {

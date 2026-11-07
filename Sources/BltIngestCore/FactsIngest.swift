@@ -35,13 +35,16 @@ let unpublishedBreakdownIngestLimit = 30
 /// 使わない）。指定時は `limit` を無視して該当コードを全件処理する（対象自体が小さいため）。
 /// 内訳取り込み: product_service/geography・決定論指標軸ともに `listed`（上場全体。日経225=`priority`は
 /// 処理順の先頭寄せのみ）。`--codes` 指定時は全軸その集合。
+/// `axes` は breakdowns ステージを指定した軸だけに絞る（CLI: `--axes capex`。未指定は全軸）。
+/// 行を削除したあとの特定軸だけの再取り込みや、Jev を使う軸だけを回したいときに使う。
 /// DATABASE_URL 未設定なら databaseUnavailable、EDINET キー未設定なら apiKeyMissing を投げる。
 public func runFactsIngestCommand(
     limit: Int?,
     targets: Set<IngestTarget> = Set(IngestTarget.allCases),
     codes: Set<String>? = nil,
     docIDs: Set<String>? = nil,
-    noteTypes: Set<String>? = nil
+    noteTypes: Set<String>? = nil,
+    axes: Set<String>? = nil
 ) async throws {
     guard let context = await makeBltServerContext() else {
         throw DocumentSyncError.apiKeyMissing
@@ -347,7 +350,8 @@ public func runFactsIngestCommand(
                 },
             ]
             var summaries: [(stage: BreakdownStage, summary: BreakdownIngestSummary)] = []
-            for stage in stages {
+            let selectedStages = axes.map { axes in stages.filter { axes.contains($0.axis) } } ?? stages
+            for stage in selectedStages {
                 let summary = try await runBreakdownIngest(
                     db: app.db, listedCodes: stage.listedCodes, years: filingSectionsIngestYears,
                     limit: stage.limit, explicitCodes: codes, priorityCodes: priority,

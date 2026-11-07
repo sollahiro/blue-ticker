@@ -65,3 +65,19 @@ public func parseIngestTargets(_ csv: String?) -> Set<IngestTarget>? {
     }
     return result.isEmpty ? nil : result
 }
+
+/// `--axes` の CSV 値を内訳の軸集合へ変換する。`breakdowns` ステージを指定した軸だけに絞る。
+/// - `nil`（フラグ未指定）: 絞り込みなし（全軸。従来どおり）。
+/// - 実装済みの軸（`isSupportedBreakdownAxis`）だけのトークン: その集合。
+/// - 未知の軸を含む・有効なトークンが 0 個: `nil`（呼び出し側で usage エラー。フラグの有無は別に判定する）。
+public func parseIngestAxes(_ csv: String?) -> Set<String>? {
+    guard let csv else { return nil }
+    var result = Set<String>()
+    for token in csv.split(separator: ",") {
+        let value = token.trimmingCharacters(in: .whitespaces)
+        if value.isEmpty { continue }
+        guard isSupportedBreakdownAxis(value) else { return nil }
+        result.insert(value)
+    }
+    return result.isEmpty ? nil : result
+}
