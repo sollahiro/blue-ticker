@@ -36,13 +36,13 @@
 |---|---|---|
 | curl / CI | `api.*` | Service Token |
 | ブラウザで api | `api.*` | SSO / OTP |
-| MCP（開発用） | `mcp.*` | Managed OAuth |
-| MCP（公開コネクタ） | HAPIS `mcp/` | HAPIS OAuth（利用者ごと。Google / Apple サインイン）。HAPIS ゲートウェイ経由で REST |
+| MCP（開発用） | 公開ホストなし（`mcp.*` は公開コネクタが使う） | ローカルのみ。Cursor / 手元検証は loopback。無認証 |
+| MCP（公開コネクタ） | HAPIS `mcp/` | HAPIS OAuth（利用者ごと。当面 Google サインインのみ。`https://mcp.yuholab.com/mcp`）。HAPIS ゲートウェイ経由で REST |
 | ローカル | `127.0.0.1` / LAN `http` | loopback は無認証。LAN 向けに `0.0.0.0` 等へ bind するときは `BLT_ALLOW_UNAUTHENTICATED=1` |
 | 第三者 REST | `api.*` | 段階 B / HAPIS + x402（`public-api.md`） |
 | iOS | HAPIS ゲートウェイ（Release）/ loopback（Simulator） | Release = HAPIS + App Attest。Simulator = ローカル stub。開発 / agents の REST 直叩きは Service Token（アプリには埋め込まない）。Access SSO / OTP は使わない |
 
-面分離: REST 機械入口＝Service Token。開発用 MCP＝Managed OAuth（ホストは解体しない）。公開 MCP コネクタ＝HAPIS OAuth（Claude を先に、次に ChatGPT）。REST で機能単位の有料マスクは採らない。コネクタに出す範囲は `hapis/catalog.json`（HAPIS へ同期）で決める。
+面分離: REST 機械入口＝Service Token。開発用 MCP＝公開しない（ローカルのみ。Tunnel / Access の公開ホストは外した）。公開 MCP コネクタ＝HAPIS OAuth（Claude を先に、次に ChatGPT）。REST で機能単位の有料マスクは採らない。コネクタに出す範囲は `hapis/catalog.json`（HAPIS へ同期）で決める。
 
 手順: `.agents/skills/deploy/SKILL.md`「REST Service Token」。
 
@@ -54,7 +54,7 @@
 - 任意 Bearer: 顧客アカウントは有料機能・ウォッチリスト同期が要るときだけ
 - 機械 / エンドポイント直叩き: x402
 - Web: 当面、アカウント不要の無料枠は出さない
-- 開発用 MCP: Access OTP。HAPIS に依存させない
+- 開発用 MCP: 公開しない（ローカルのみ）。HAPIS に依存させない
 - 公開 MCP コネクタ: HAPIS OAuth。HAPIS ゲートウェイ経由で REST を呼ぶ
 - iOS にトークン / Service Token を埋め込まない
 

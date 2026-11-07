@@ -143,7 +143,7 @@ flowchart LR
 
 ### MCP（開発用 `POST /`）
 
-`BltMcpServerCore`（プロトコル）＋ `MCPRoute.swift`（Vapor 配線）。ツールは REST と共有 serve。カタログ正本は `ApiSkills.swift`。Managed OAuth は `mcp.*` 専用（パス付きホストでは不可）。公開コネクタ（HAPIS `mcp/`）とは別物。非標準プレハンドシェイク等の吸収は `MCPRoute.swift` コメントが正本。iOS は公開 REST のクライアント（トークン / Service Token を埋め込まない。開発は loopback / http 無認証。`https://api.sollahiro.com` プレビューは Access JWT。段階 B は HAPIS 短命 + Attest。`api-auth.md` / `ios-client.md`）。
+`BltMcpServerCore`（プロトコル）＋ `MCPRoute.swift`（Vapor 配線）。ツールは REST と共有 serve。カタログ正本は `ApiSkills.swift`。公開ホストは持たない（Cursor / 手元検証は loopback。`mcp.yuholab.com` は公開コネクタ＝HAPIS `mcp/` が使う）。公開コネクタとは別物。非標準プレハンドシェイク等の吸収は `MCPRoute.swift` コメントが正本。iOS は公開 REST のクライアント（トークン / Service Token を埋め込まない。開発は loopback / http 無認証。`https://api.sollahiro.com` プレビューは Access JWT。段階 B は HAPIS 短命 + Attest。`api-auth.md` / `ios-client.md`）。
 
 ## 環境変数（薄い表）
 

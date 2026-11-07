@@ -79,7 +79,7 @@ container exec blt-server /app/blt-ingest ingest --limit 50
 
 ### Feed Trend Worker
 
-匿名カウンターは Cloudflare Worker + Analytics Engine（`workers/feed-trend/`）。origin は URL + Bearer で POST するだけ（Fly 固有 API は使わない）。**この Worker を Tunnel の `api.*` / `mcp.*` に差し込まない。**
+匿名カウンターは Cloudflare Worker + Analytics Engine（`workers/feed-trend/`）。origin は URL + Bearer で POST するだけ（Fly 固有 API は使わない）。**この Worker を Tunnel の `api.*` に差し込まない。`mcp.yuholab.com` は公開コネクタ（HAPIS `mcp/`）のカスタムドメイン。**
 
 初回（手元 Mac。`.env` の `BLT_R2_ACCOUNT_ID` を流用可）:
 
@@ -106,7 +106,7 @@ fly secrets set BLT_FEED_TREND_URL='https://blt-feed-trend.<account>.workers.dev
 
 ### Legal page Worker
 
-有報LAB（iOS アプリ）の免責・プライバシー・利用規約は静的 HTML（`workers/legal/`）。トークンは無い。**この Worker を Tunnel の `api.*` / `mcp.*` に差し込まない。**
+有報LAB（iOS アプリ）の免責・プライバシー・利用規約は静的 HTML（`workers/legal/`）。トークンは無い。**この Worker を Tunnel の `api.*` に差し込まない。`mcp.yuholab.com` は公開コネクタ（HAPIS `mcp/`）のカスタムドメイン。**
 
 ```bash
 cd workers/legal
@@ -127,16 +127,9 @@ SSO は `Cookie: CF_Authorization=<jwt>`（`Cf-Access-Jwt-Assertion` だけで�
 
 レート制限はゾーン Free の短い period のみ。悪用が観測されたらプラン検討。
 
-## MCP（Managed OAuth・開発用）
+## MCP（開発用）
 
-製品面ではない。ChatGPT Apps は凍結。ホストは解体しない。Cursor / 手元検証で使うときだけ触る。
-
-`POST /`。Managed OAuth は**パス付きホスト不可** → 専用 `mcp.<domain>`。
-
-1. Tunnel に `mcp.<domain>` → 同 origin
-2. Access アプリ（パスなし）＋ Managed OAuth ON
-3. 許可 IdP と redirect URI（`http://localhost/callback`・`http://127.0.0.1/callback` — ポートなしで登録）
-4. discovery が 200、未認証 `tools/list` が 401 であることを確認
+製品面ではない。公開ホストは持たない（Tunnel の `mcp.*` と Access アプリ「有報LAB_MCP」は 2026-11-07 に外した。`mcp.yuholab.com` は公開コネクタ＝HAPIS `mcp/` のカスタムドメイン）。Cursor / 手元検証は loopback の `POST /` を使う。外部から開発用 MCP を使う必要が出たら、`mcp.yuholab.com` 以外のホスト（例: `mcp-dev.<domain>`）で Tunnel と Access アプリ（パスなし・Managed OAuth はパス付きホスト不可）を作り直す。
 
 ## 定期同期（ローカル）
 
