@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>YuhoLAB Disclaimer and Privacy Policy</title>
+  <style>
+    :root {
+      color-scheme: light;
+    }
+    body {
+      margin: 0;
+      font: 16px/1.7 -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Hiragino Kaku Gothic ProN", sans-serif;
+      color: #111;
+      background: #fff;
+    }
+    main {
+      max-width: 40rem;
+      margin: 0 auto;
+      padding: 2.5rem 1.25rem 4rem;
+    }
+    h1 {
+      font-size: 1.5rem;
+      font-weight: 650;
+      line-height: 1.35;
+      margin: 0 0 0.4rem;
+    }
+    .meta {
+      color: #555;
+      font-size: 0.9rem;
+      margin-bottom: 2rem;
+    }
+    h2 {
+      font-size: 1.15rem;
+      margin: 2rem 0 0.6rem;
+    }
+    h3 {
+      font-size: 1rem;
+      margin: 1.4rem 0 0.4rem;
+    }
+    p {
+      margin: 0.6rem 0;
+    }
+    ul {
+      margin: 0.4rem 0 0.8rem;
+      padding-left: 1.3rem;
+    }
+    li {
+      margin: 0.25rem 0;
+    }
+    blockquote {
+      margin: 0.8rem 0;
+      padding: 0.6rem 0.9rem;
+      background: #f7f7f8;
+      border-left: 3px solid #ccc;
+      color: #444;
+      font-size: 0.92rem;
+    }
+    blockquote p {
+      margin: 0;
+    }
+    a {
+      color: #0b63ce;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <p class="meta"><a href="/privacy">日本語</a></p>
+    <h1>YuhoLAB Disclaimer and Privacy Policy</h1>
+    <p class="meta">Last updated: 2026-11-07<br>Operator: Sorahiro Shuto<br>This is an English translation for convenience. If it differs from the <a href="/privacy">Japanese version</a>, the Japanese version prevails.</p>
+
+    <h2>1. Disclaimer</h2>
+    <p>YuhoLAB extracts, processes and restructures financial figures and company descriptions from annual securities reports and other filings published on EDINET, the disclosure system of Japan's Financial Services Agency, and presents them as a reading aid. There is an iOS app and a connector for AI assistants such as Claude (see "3. YuhoLAB Connector"). The data comes from the YuhoLAB API, which the operator runs. Company descriptions include summaries and restructured text produced by automated processing and generative AI.</p>
+    <ul>
+      <li><strong>Not investment advice:</strong> The information is not a solicitation to invest, investment advice, or a recommendation to buy or sell any financial product. The operator is not registered as a financial instruments business operator (investment advisory or agency business) under the Financial Instruments and Exchange Act of Japan.</li>
+      <li><strong>Accuracy:</strong> Because of extraction, processing, normalization, automated restructuring and the timing of amended filings, what is shown may differ from the original EDINET filings or a company's official disclosures. Completeness, accuracy and timeliness are not guaranteed.</li>
+      <li><strong>Decide for yourself:</strong> Check the original filings on EDINET and each company's official information, and make investment and other financial decisions at your own responsibility. The extent of liability follows the Terms of Use.</li>
+    </ul>
+
+    <h2>2. Privacy Policy (iOS app)</h2>
+    <p>This chapter covers the iOS app. For the connector, see "3. YuhoLAB Connector". The iOS app has no account registration or login. It uses no advertising SDKs, no third-party SDKs for tracking user behavior, and no analytics or crash-reporting services.</p>
+
+    <h3>2.1 Data stored on your device and in iCloud</h3>
+    <p>The following data is stored on your device for the app's features. To sync it between devices signed in with the same Apple ID, Apple's iCloud (CloudKit) is also used. It is not sent to or stored on the operator's servers.</p>
+    <ul>
+      <li>Stocks you added to your lists</li>
+      <li>Number of shares held, acquisition price, brokerage and account type</li>
+    </ul>
+    <blockquote>
+      <p><strong>Note:</strong> If you are not signed in to iCloud, the data stays on the device only. Data in iCloud may remain after you delete the app. To remove it, empty your lists in the app, or delete YuhoLAB's data from iOS Settings &gt; [Apple ID] &gt; iCloud &gt; Manage Account Storage.</p>
+    </blockquote>
+
+    <h3>2.2 Communication with the operator's servers</h3>
+    <p>To search and show stock and financial information, the app communicates with the operator's servers over HTTPS (encrypted). Requests carry only what is needed for the screen, such as search keywords, stock codes and screening conditions.</p>
+    <ul>
+      <li><strong>Not sent:</strong> Personal settings and asset data such as shares held, acquisition price, brokerage and account type in your lists are not included.</li>
+      <li><strong>Verifying genuine use:</strong> To prevent abuse and confirm that requests come from the genuine app, Apple's App Attest and short-lived anonymous tokens are used. They are not used for advertising or tracking.</li>
+      <li><strong>IP address:</strong> In the course of communication, the connecting IP address and similar information temporarily reaches the server side. The operator does not permanently store IP addresses in its database.</li>
+    </ul>
+
+    <h3>2.3 Logs and identifiers kept on the servers</h3>
+    <ul>
+      <li><strong>Authentication identifiers:</strong> The key identifier and public key used by App Attest are kept on the servers to prevent abuse. They are not linked to personal information such as your name or Apple ID, and there are no accounts. They are not advertising identifiers and are not used for tracking through analytics or crash-reporting SDKs. Identifiers on the servers are not deleted automatically. Because there is no name or account, individual deletion requests cannot, in principle, be accommodated.</li>
+      <li><strong>Access logs:</strong> For stable operation and security, access logs may be kept temporarily by the hosting provider (Cloudflare). They contain access time, request content (which may include search terms and stock codes), response status and connection information. Under Cloudflare's specifications they are kept for up to 7 days and then deleted automatically.</li>
+    </ul>
+
+    <h3>2.4 Third-party services</h3>
+    <p>The following external services are used. Only the data needed for each function is passed to them.</p>
+    <ul>
+      <li><strong>Cloudflare:</strong> hosting and network security</li>
+      <li><strong>Fly.io and Neon:</strong> hosting of the YuhoLAB API server and database (what is stored is data built from disclosure filings, not user data)</li>
+      <li><strong>Apple (App Attest / iCloud):</strong> verifying genuine use of the app, and syncing data between devices</li>
+    </ul>
+
+    <h3>2.5 Deleting data</h3>
+    <ul>
+      <li>Uninstalling the app removes the data stored in the app's area on the device (lists, holdings and so on). The anonymous token and App Attest record stored in the iOS Keychain may not be removed by uninstalling alone, and may remain until the OS or you remove them.</li>
+      <li>Delete data remaining in iCloud as described in "2.1 Data stored on your device and in iCloud".</li>
+      <li>Communication logs are deleted automatically after the retention period (up to 7 days).</li>
+    </ul>
+
+    <h3>2.6 Changes to this policy</h3>
+    <p>This policy may be revised to reflect changes to the service or to the law. For important changes, the "Last updated" date on this page is updated.</p>
+
+    <h2>3. YuhoLAB Connector (for AI assistants)</h2>
+    <p>The YuhoLAB Connector (the "Connector") is an endpoint that lets AI assistants such as Claude read YuhoLAB data (<code>https://mcp.yuholab.com/mcp</code>, Model Context Protocol). This chapter covers how personal information is handled by the Connector.</p>
+
+    <h3>3.1 Sign-in when connecting</h3>
+    <p>When you connect the Connector to an AI assistant, you sign in with a Google account.</p>
+    <ul>
+      <li><strong>What we receive:</strong> The user identifier that Google issues as a result of the sign-in, which is meaningful only within Google. We do not ask for or store your email address, name or profile picture.</li>
+      <li><strong>What we store:</strong> We do not store the user identifier itself, only a one-way hash computed with the operator's secret key. We also store an internal ID that the operator assigns (user and account), a record of the connection (the AI assistant that connected, creation time and expiry), and a hash of the token used to reconnect.</li>
+      <li><strong>Why sign-in is required:</strong> The iOS app confirms that it is the genuine app on a genuine device using Apple's App Attest. The Connector, used from AI assistants, cannot do this device check. So that excessive access can be limited and abuse prevented, sign-in is required for each person who connects, in order to tell whether requests come from the same person.</li>
+      <li><strong>How it is used:</strong> Only to treat connections from the same person as the same user, to revoke connections, to apply usage limits, and to prevent abuse.</li>
+    </ul>
+
+    <h3>3.2 Information that arrives from the AI assistant</h3>
+    <ul>
+      <li><strong>What we receive:</strong> When the AI assistant calls a Connector tool, the tool name and its arguments (stock codes, search terms such as company names, number of years, kind of breakdown and so on).</li>
+      <li><strong>What we do not receive:</strong> The text of your conversation, files, and the information you registered with the AI assistant do not reach the Connector. However, an AI assistant may put parts of the conversation into arguments such as search terms. Please do not include personally identifiable information in arguments.</li>
+      <li><strong>Handling inside the AI assistant:</strong> How conversations and Connector responses are handled inside the AI assistant follows the policy of its provider (Anthropic, for Claude).</li>
+    </ul>
+
+    <h3>3.3 Logs and usage counts</h3>
+    <ul>
+      <li><strong>Usage counts:</strong> To keep to usage limits, counts per internal ID and per tool are recorded.</li>
+      <li><strong>Logs:</strong> For stable operation and security, processing logs are kept by the hosting provider (Cloudflare). They contain time, internal ID, tool name, request content (which may include stock codes and search terms) and response status. They are kept for up to 7 days and then deleted automatically.</li>
+      <li><strong>What we do not do:</strong> The data is not used for advertising or tracking, and is not sold to third parties.</li>
+    </ul>
+
+    <h3>3.4 Third-party services</h3>
+    <ul>
+      <li><strong>Google:</strong> sign-in when connecting</li>
+      <li><strong>Cloudflare:</strong> hosting of the Connector and the authorization server, and storage of the data in 3.1</li>
+      <li><strong>Fly.io and Neon:</strong> hosting of the YuhoLAB API server and database (tool arguments are processed there)</li>
+    </ul>
+    <p>Some of these providers process data on servers outside Japan. The operator does not provide or sell the data in 3.1 or 3.2 to them.</p>
+
+    <h3>3.5 Disconnecting and deletion</h3>
+    <ul>
+      <li><strong>Disconnecting:</strong> Remove the Connector in your AI assistant's settings. A connection that is not used for 90 days expires automatically.</li>
+      <li><strong>Deletion requests:</strong> The data stored under 3.1 is not linked to an email address or name, and the operator cannot find the data of a specific person. Individual deletion requests therefore cannot, in principle, be accommodated. When you disconnect, that connection can no longer be used and its reconnection token is invalidated. For questions, contact <a href="mailto:support@yuholab.com">support@yuholab.com</a>.</li>
+      <li><strong>Logs:</strong> Deleted automatically after the retention period (up to 7 days).</li>
+    </ul>
+
+    <h2>4. Source of the data</h2>
+    <p>The data that YuhoLAB shows and provides is extracted, processed and restructured by the operator from disclosure filings published on EDINET (Financial Services Agency). It is not the original EDINET filing itself.</p>
+    <p>Source: <a href="https://disclosure2.edinet-fsa.go.jp/">EDINET (Electronic Disclosure for Investors' NETwork) site</a>, <a href="https://www.digital.go.jp/resources/open_data/public_data_license_v1.0">Public Data License (Version 1.0)</a> (PDL1.0)</p>
+    <p>The operator edited and processed it to create this data. What has been edited or processed is not unprocessed information created by the national government (the Financial Services Agency).</p>
+
+    <h2>5. Contact</h2>
+    <ul>
+      <li><strong>Email:</strong> <a href="mailto:support@yuholab.com">support@yuholab.com</a></li>
+      <li><strong>App Store:</strong> the support link on the app page</li>
+      <li><strong>Terms of Use:</strong> <a href="/en/terms">YuhoLAB Terms of Use</a></li>
+    </ul>
+  </main>
+</body>
+</html>
