@@ -108,6 +108,7 @@ test("privacy disclaimer matches product facts without overbroad liability", () 
   assert.match(html, /<h2>3\. 有報LAB コネクタ（AI アシスタント向け）<\/h2>/);
   assert.match(html, /一方向のハッシュ値だけを保存します/);
   assert.match(html, /会話の本文、ファイル、AI アシスタントに登録した利用者の情報は、コネクタには届きません/);
+  assert.match(html, /コネクタでは、この端末の確認ができません/);
   assert.match(html, /個別の削除の依頼には原則として応じられません/);
   assert.match(html, /出典：<a href="https:\/\/disclosure2\.edinet-fsa\.go\.jp\/">EDINET閲覧（提出）サイト<\/a>/);
   assert.match(html, /公共データ利用規約（第1\.0版）/);
