@@ -6,8 +6,8 @@ iOS アプリ「有報LAB」と公開 MCP コネクタ（HAPIS `mcp/`、`https:/
 
 公開 URL（Custom Domain `yuholab.com`）:
 
-- https://yuholab.com （免責・プライバシー、問い合わせ）
-- https://yuholab.com/privacy （同じ内容）
+- https://yuholab.com （ランディングページ。サポート URL の先でもあり、問い合わせ先を載せる）
+- https://yuholab.com/privacy （免責・プライバシー）
 - https://yuholab.com/terms
 - https://yuholab.com/en/privacy ・ https://yuholab.com/en/terms （英語版。日本語版の翻訳で、食い違うときは日本語版が優先。Assets がそのまま配信するので Worker の書き換えは要らない。日本語版を変えたら英語版も合わせる）
 - https://blt-legal.sollahiro.workers.dev/
@@ -24,7 +24,7 @@ Custom Domain `sollahiro.com` も残し、次の 6 パスだけを `yuholab.com`
 | `/blue-ticker/privacy`・`/yuholab/privacy` | `https://yuholab.com/privacy` |
 | `/blue-ticker/terms`・`/yuholab/terms` | `https://yuholab.com/terms` |
 
-公開ページの本文は `workers/legal/public/index.html`（`privacy.html` も同じ）。利用規約は `workers/legal/public/terms.html`。
+ランディングページは `workers/legal/public/index.html`（アイコンは `logo-white.svg`）。免責・プライバシーは `privacy.html`。利用規約は `workers/legal/public/terms.html`。
 
 ## デプロイ
 

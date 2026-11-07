@@ -48,12 +48,35 @@
     li {
       margin: 0.25rem 0;
     }
+    .site-header {
+      background: linear-gradient(160deg, #1479d8 0%, #0a46aa 100%);
+    }
+    .site-header .bar {
+      max-width: 40rem;
+      margin: 0 auto;
+      padding: 0.8rem 1.25rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+    }
+    .site-header img { height: 30px; width: auto; display: block; }
+    .site-header nav { display: flex; flex-wrap: wrap; gap: 0.3rem 1.1rem; font-size: 0.85rem; }
+    .site-header nav a { color: #fff; text-decoration: none; opacity: 0.85; }
+    .site-header nav a:hover, .site-header nav a[aria-current="page"] { opacity: 1; text-decoration: underline; text-underline-offset: 4px; }
+    .site-header a:focus-visible { outline: 3px solid #ffd23f; outline-offset: 3px; }
   </style>
 </head>
 <body>
+  <header class="site-header">
+    <div class="bar">
+      <a href="/"><img src="/logo-white.svg" alt="有報LAB" width="107" height="30"></a>
+      <nav aria-label="Pages"><a href="/privacy">プライバシー</a><a href="/terms" aria-current="page">利用規約</a><a href="/en/terms">English</a></nav>
+    </div>
+  </header>
   <main>
     <h1>有報LAB 利用規約</h1>
-    <p class="meta">最終更新: 2026-11-06<br>運営: Sorahiro Shuto<br><a href="/en/terms">English</a></p>
+    <p class="meta">最終更新: 2026-11-06<br>運営: Sorahiro Shuto</p>
 
     <h2>第1条（適用）</h2>
     <p>1. 本規約は、Sorahiro Shuto（以下「運営者」）が提供する iOS アプリケーション「有報LAB」、AI アシスタント向けの「有報LAB コネクタ」、およびこれらを通じて提供されるサービス（以下「本サービス」）の利用条件を定めるものです。</p>

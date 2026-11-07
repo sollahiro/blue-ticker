@@ -62,11 +62,33 @@
     a {
       color: #0b63ce;
     }
+    .site-header {
+      background: linear-gradient(160deg, #1479d8 0%, #0a46aa 100%);
+    }
+    .site-header .bar {
+      max-width: 40rem;
+      margin: 0 auto;
+      padding: 0.8rem 1.25rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+    }
+    .site-header img { height: 30px; width: auto; display: block; }
+    .site-header nav { display: flex; flex-wrap: wrap; gap: 0.3rem 1.1rem; font-size: 0.85rem; }
+    .site-header nav a { color: #fff; text-decoration: none; opacity: 0.85; }
+    .site-header nav a:hover, .site-header nav a[aria-current="page"] { opacity: 1; text-decoration: underline; text-underline-offset: 4px; }
+    .site-header a:focus-visible { outline: 3px solid #ffd23f; outline-offset: 3px; }
   </style>
 </head>
 <body>
+  <header class="site-header">
+    <div class="bar">
+      <a href="/"><img src="/logo-white.svg" alt="YuhoLAB" width="107" height="30"></a>
+      <nav aria-label="Pages"><a href="/en/privacy" aria-current="page">Privacy</a><a href="/en/terms">Terms</a><a href="/privacy">日本語</a></nav>
+    </div>
+  </header>
   <main>
-    <p class="meta"><a href="/privacy">日本語</a></p>
     <h1>YuhoLAB Disclaimer and Privacy Policy</h1>
     <p class="meta">Last updated: 2026-11-07<br>Operator: Sorahiro Shuto<br>This is an English translation for convenience. If it differs from the <a href="/privacy">Japanese version</a>, the Japanese version prevails.</p>
 

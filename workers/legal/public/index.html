@@ -3,178 +3,293 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>有報LAB 免責事項およびプライバシーポリシー</title>
+  <title>有報LAB｜日本企業の財務データを、分かりやすく分析できる！</title>
+  <meta name="description" content="日本企業の財務データを、分かりやすく分析できる！有報LABは、EDINETの有価証券報告書から数字を抜き出し、利益の増減を要因に分けて見せる閲覧補助サービス。iOSアプリと、ClaudeなどのAIアシスタント向けコネクタで使えます。">
+  <meta property="og:title" content="有報LAB｜日本企業の財務データを、分かりやすく分析できる！">
+  <meta property="og:description" content="利益が増えた理由、減った理由が、有報から一目でわかる。iOSアプリとAIアシスタント向けコネクタ。">
+  <meta property="og:image" content="https://yuholab.com/img/hero.avif">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://yuholab.com/">
   <style>
     :root {
-      color-scheme: light;
+      --blue: #1469dc;
+      --blue-dark: #0a46aa;
+      --ink: #101322;
+      --muted: #5a6075;
+      --line: #e3e6ef;
+      --bg: #f6f7fb;
+      --yellow: #ffd23f;
+      --green: #1a9b5b;
+      --red: #d6393f;
     }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
     body {
       margin: 0;
-      font: 16px/1.7 -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Hiragino Kaku Gothic ProN", sans-serif;
-      color: #111;
+      font: 16px/1.75 -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP", sans-serif;
+      color: var(--ink);
       background: #fff;
     }
-    main {
-      max-width: 40rem;
-      margin: 0 auto;
-      padding: 2.5rem 1.25rem 4rem;
+    a { color: var(--blue); }
+    .wrap { max-width: 64rem; margin: 0 auto; padding: 0 1.25rem; }
+    .btn {
+      display: inline-block;
+      padding: 0.85rem 1.6rem;
+      border-radius: 999px;
+      font-weight: 700;
+      text-decoration: none;
+      background: var(--yellow);
+      color: #1a1a1a;
     }
-    h1 {
-      font-size: 1.5rem;
-      font-weight: 650;
-      line-height: 1.35;
-      margin: 0 0 0.4rem;
+    .badge { display: inline-block; line-height: 0; border-radius: 10px; }
+    .badge img { height: 60px; width: auto; display: block; }
+    .btn.ghost { background: transparent; color: #fff; border: 1.5px solid rgba(255,255,255,.55); }
+    .badge:focus-visible, .btn:focus-visible, a:focus-visible { outline: 3px solid var(--yellow); outline-offset: 3px; }
+
+    header.hero {
+      background:
+        linear-gradient(160deg, rgba(14,116,222,.72) 0%, rgba(10,70,170,.62) 100%),
+        url("/img/hero.avif") center / cover no-repeat,
+        #1479d8;
+      color: #fff;
+      padding: 1.25rem 0 4.5rem;
+      overflow: hidden;
     }
-    .meta {
-      color: #555;
-      font-size: 0.9rem;
-      margin-bottom: 2rem;
+    .nav { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+    .nav img { height: 34px; width: auto; display: block; }
+    .nav a.link { color: #fff; text-decoration: none; font-size: 0.9rem; opacity: .85; }
+    .hero-grid { display: grid; grid-template-columns: 1.25fr 0.75fr; gap: 2.5rem; align-items: center; margin-top: 3rem; }
+    h1 { font-size: clamp(1.6rem, 4vw, 2.5rem); word-break: auto-phrase; text-wrap: balance; line-height: 1.25; margin: 0 0 1rem; font-weight: 800; letter-spacing: .01em; }
+    h1 em { font-style: normal; color: var(--yellow); }
+    .lead { font-size: 1.05rem; opacity: .95; margin: 0 0 1.8rem; max-width: 34rem; text-shadow: 0 1px 8px rgba(0,60,120,.35); }
+    .cta { display: flex; flex-wrap: wrap; gap: .8rem; align-items: center; }
+    .note { font-size: .8rem; opacity: .7; margin-top: 1rem; }
+
+    /* アプリ画面のイメージ（CSS で描いた図解。実画面ではない） */
+    .phone {
+      background: #fff; color: var(--ink);
+      border-radius: 28px; padding: 1.1rem 1.1rem 1.3rem;
+      box-shadow: 0 30px 60px rgba(0,10,80,.45);
+      max-width: 22rem; margin-left: auto;
     }
-    h2 {
-      font-size: 1.15rem;
-      margin: 2rem 0 0.6rem;
+    .phone .co { display: flex; align-items: center; gap: .6rem; font-weight: 700; }
+    .phone .co span.ic { width: 34px; height: 34px; border-radius: 9px; background: var(--bg); display: grid; place-items: center; font-size: .8rem; color: var(--blue); }
+    .phone .co small { display: block; font-weight: 400; color: var(--muted); font-size: .72rem; line-height: 1.2; }
+    .phone h3 { font-size: .85rem; margin: 1.1rem 0 .5rem; color: var(--muted); font-weight: 600; }
+    .bar { display: grid; grid-template-columns: 6.2rem 1fr 3.4rem; gap: .5rem; align-items: center; font-size: .78rem; margin: .35rem 0; }
+    .bar .track { height: 12px; background: var(--bg); border-radius: 6px; position: relative; }
+    .bar .fill { position: absolute; top: 0; bottom: 0; border-radius: 6px; }
+    .bar .fill.pos { left: 50%; background: var(--green); }
+    .bar .fill.neg { right: 50%; background: var(--red); }
+    .bar b.pos { color: var(--green); text-align: right; }
+    .bar b.neg { color: var(--red); text-align: right; }
+    .phone p.say { font-size: .78rem; background: var(--bg); border-radius: 10px; padding: .6rem .75rem; margin: .9rem 0 0; color: #333; line-height: 1.55; }
+
+    section { padding: 4.5rem 0; }
+    section.alt { background: var(--bg); }
+    h2 { font-size: clamp(1.5rem, 3.6vw, 2.1rem); line-height: 1.35; margin: 0 0 .8rem; }
+    .sub { color: var(--muted); max-width: 40rem; margin: 0 0 2.5rem; }
+    .eyebrow { color: var(--blue); font-weight: 700; font-size: .85rem; letter-spacing: .08em; margin-bottom: .4rem; }
+
+    .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); gap: 1.1rem; }
+    .card { background: #fff; border: 1px solid var(--line); border-radius: 16px; padding: 1.4rem; }
+    section.alt .card { border-color: transparent; }
+    .card h3 { margin: 0 0 .4rem; font-size: 1.05rem; }
+    .card p { margin: 0; color: var(--muted); font-size: .93rem; }
+    .tag { display: inline-block; font-size: .72rem; font-weight: 700; padding: .1rem .6rem; border-radius: 999px; color: #fff; margin-bottom: .6rem; }
+
+    .presets { display: flex; flex-wrap: wrap; gap: .6rem; margin-top: 1.4rem; }
+    .presets span { font-weight: 700; font-size: .85rem; padding: .35rem .95rem; border-radius: 999px; color: #fff; }
+
+    .two { display: grid; grid-template-columns: 1fr 1fr; gap: 2.5rem; align-items: center; }
+    .chat { background: #fff; border: 1px solid var(--line); border-radius: 18px; padding: 1.2rem; font-size: .92rem; }
+    .chat .q { background: var(--blue); color: #fff; border-radius: 14px 14px 4px 14px; padding: .7rem 1rem; margin-left: 15%; }
+    .chat .a { background: var(--bg); border-radius: 14px 14px 14px 4px; padding: .8rem 1rem; margin: .8rem 15% 0 0; color: #333; }
+    .chat-pair { min-height: 11.5rem; opacity: 1; transition: opacity .7s ease; }
+    .chat-pair.out { opacity: 0; }
+    .chat-note { display: block; margin-top: .8rem; color: var(--muted); font-size: .75rem; }
+    @media (prefers-reduced-motion: reduce) { .chat-pair { transition: none; } }
+    code { background: #eceefb; padding: .1rem .4rem; border-radius: 6px; font-size: .85em; word-break: break-all; }
+    ul.plain { padding-left: 1.2rem; }
+    ul.plain li { margin: .35rem 0; }
+    ul.benefits { list-style: none; padding-left: 0; margin: 0 0 1.2rem; }
+    ul.benefits li { margin: .7rem 0; padding-left: 1.4rem; position: relative; }
+    ul.benefits li::before { content: "✓"; position: absolute; left: 0; color: var(--green); font-weight: 700; }
+    ul.benefits strong { display: block; }
+
+    .trust { display: grid; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); gap: 1.1rem; }
+    .trust .card h3::before { content: "✓ "; color: var(--green); }
+
+    .final {
+      background:
+        linear-gradient(rgba(14,116,222,.74), rgba(10,70,170,.68)),
+        url("/img/cta.avif") center / cover no-repeat,
+        #1479d8;
+      color: #fff; text-align: center;
     }
-    h3 {
-      font-size: 1rem;
-      margin: 1.4rem 0 0.4rem;
+    .band {
+      background:
+        linear-gradient(90deg, rgba(10,14,40,.88) 0%, rgba(10,14,40,.55) 100%),
+        url("/img/band.avif") center / cover no-repeat,
+        #1b2040;
+      color: #fff; padding: 3.2rem 0;
     }
-    p {
-      margin: 0.6rem 0;
-    }
-    ul {
-      margin: 0.4rem 0 0.8rem;
-      padding-left: 1.3rem;
-    }
-    li {
-      margin: 0.25rem 0;
-    }
-    blockquote {
-      margin: 0.8rem 0;
-      padding: 0.6rem 0.9rem;
-      background: #f7f7f8;
-      border-left: 3px solid #ccc;
-      color: #444;
-      font-size: 0.92rem;
-    }
-    blockquote p {
-      margin: 0;
-    }
-    a {
-      color: #0b63ce;
+    .band p { margin: 0; font-size: clamp(1.15rem, 2.8vw, 1.6rem); font-weight: 700; line-height: 1.6; max-width: 40rem; }
+    .band p span { color: var(--yellow); }
+    .final p { opacity: .9; margin: 0 0 1.6rem; }
+
+    footer { background: #0b0e1d; color: #b9bed2; padding: 2.5rem 0; font-size: .88rem; }
+    footer a { color: #fff; }
+    footer .links { display: flex; flex-wrap: wrap; gap: 1.2rem; margin-bottom: 1rem; }
+    footer p { margin: .4rem 0; line-height: 1.7; }
+
+    @media (max-width: 760px) {
+      .hero-grid, .two { grid-template-columns: 1fr; }
+      .phone { margin: 0 auto; }
+      section { padding: 3.2rem 0; }
     }
   </style>
 </head>
 <body>
+  <header class="hero">
+    <div class="wrap">
+      <nav class="nav" aria-label="メイン">
+        <img src="/logo-white.svg" alt="有報LAB" width="121" height="34">
+        <a class="link" href="#connector">AIアシスタントから使う</a>
+      </nav>
+      <div class="hero-grid">
+        <div>
+          <h1>日本企業の財務データを、<br><em>分かりやすく分析</em>できる！</h1>
+          <p class="lead">上場企業が提出する有価証券報告書から財務の数字を抜き出し、「利益が増えたのか、減ったのか」を分かりやすく見せるサービスです。<br>専門用語に詳しくなくても、決算の中身をつかめます。</p>
+          <div class="cta">
+            <a class="badge" href="https://apps.apple.com/jp/app/id6807425773"><img src="/img/app-store-badge.svg" alt="App Storeからダウンロード" width="163" height="60"></a>
+            <a class="btn ghost" href="#connector">Claudeで使う</a>
+          </div>
+          <p class="note">iPhone向け。Claude などのAIアシスタントからも使えます。</p>
+        </div>
+        <div class="phone" role="img" aria-label="利益の増減を要因ごとに棒で示すアプリ画面のイメージ">
+          <div class="co"><span class="ic">LAB</span><div>サンプル株式会社<small>利益の増減（前年差）</small></div></div>
+          <h3>事業利益の要因</h3>
+          <div class="bar"><span>売上要因</span><span class="track"><i class="fill pos" style="width:38%"></i></span><b class="pos">+</b></div>
+          <div class="bar"><span>利益率要因</span><span class="track"><i class="fill pos" style="width:22%"></i></span><b class="pos">+</b></div>
+          <div class="bar"><span>販管費要因</span><span class="track"><i class="fill neg" style="width:30%"></i></span><b class="neg">−</b></div>
+          <p class="say">前年に比べて、売上が増えて利益を押し上げました。経費は増え、利益を押し下げました。</p>
+          <p style="font-size:.66rem;color:#8a8fa3;margin:.7rem 0 0">※イメージ図です。実際の画面・数値ではありません。</p>
+        </div>
+      </div>
+    </div>
+  </header>
+
   <main>
-    <h1>有報LAB 免責事項およびプライバシーポリシー</h1>
-    <p class="meta">最終更新: 2026-11-07<br>運営: Sorahiro Shuto<br><a href="/en/privacy">English</a></p>
+    <section id="features">
+      <div class="wrap">
+        <div class="eyebrow">できること</div>
+        <h2>決算を「読む」から「つかむ」へ</h2>
+        <p class="sub">有報の数字を並べるだけでなく、変化の理由まで一画面でたどれます。</p>
+        <div class="cards">
+          <div class="card"><h3>概要</h3><p>売上・営業利益・純利益など、年次の主要な数字を一覧。まず会社の輪郭をつかめます。</p></div>
+          <div class="card"><h3>分解（増減の要因）</h3><p>利益の増減を売上・利益率・販管費などの要因に分け、プラスかマイナスかを色で表示。ROIC・ROEの変化も追えます。</p></div>
+          <div class="card"><h3>内訳</h3><p>事業別・地域別の売上など、有報の注記にある内訳を見やすく整理します。</p></div>
+          <div class="card"><h3>条件で探す</h3><p>6つのプリセットから、気になる切り口で企業を絞り込めます。業種の指定もできます。</p></div>
+          <div class="card"><h3>最近有報を出した企業</h3><p>ホームに、直近で有価証券報告書を提出した企業を表示。決算の動きを見逃しません。</p></div>
+          <div class="card"><h3>リスト・Siri</h3><p>気になる企業をリストに追加。Siriやショートカットから、銘柄を呼び出せます。</p></div>
+        </div>
+        <div class="presets" aria-label="条件検索のプリセット">
+          <span style="background:#2b6fe0">優良</span>
+          <span style="background:#e8892b">成長</span>
+          <span style="background:#2fa05a">安定</span>
+          <span style="background:#1b9aa6">高CF</span>
+          <span style="background:#c99a1a">改善</span>
+          <span style="background:#8a4fd1">高還元</span>
+        </div>
+      </div>
+    </section>
 
-    <h2>1. 免責事項</h2>
-    <p>有報LAB は、金融庁の開示システム（EDINET）などに公開されている有価証券報告書などから、財務の数字や会社の説明を抽出・加工・再構成して表示する閲覧補助サービスです。iOS アプリと、Claude などの AI アシスタントから使うコネクタ（「3. 有報LAB コネクタ」）があります。表示するデータは、運営者が運営する有報LAB API（YuhoLAB API）から取得します。会社の説明には、自動処理や生成AI等による要約・再構成が含まれています。</p>
-    <ul>
-      <li><strong>投資勧誘ではありません:</strong> 表示する情報は、投資の勧誘、投資助言、特定の金融商品の売買の推奨ではありません。運営者は、金融商品取引法上の金融商品取引業者（投資助言・代理業者等）の登録を受けていません。</li>
-      <li><strong>情報の正確性:</strong> 抽出・加工・正規化・自動再構成の過程や、訂正報告書の反映タイミングにより、表示が EDINET の原本や企業の公式開示と一致しないことがあります。完全性、正確性、適時性は保証しません。</li>
-      <li><strong>判断はご自身で:</strong> 投資その他の金融上の判断は、金融庁の EDINET や各企業の公式情報・原本を確認したうえで、ご自身の責任で行ってください。利用に伴う責任の範囲は利用規約の定めに従います。</li>
-    </ul>
+    <div class="band" role="presentation">
+      <div class="wrap"><p>分厚い有報の中から、<span>いま知りたい数字</span>だけを。<br>変化の理由まで、一画面で。</p></div>
+    </div>
 
-    <h2>2. プライバシーポリシー（iOS アプリ）</h2>
-    <p>この章は iOS アプリについて定めます。コネクタについては「3. 有報LAB コネクタ」をご覧ください。iOS アプリには、アカウント作成やログインはありません。広告配信 SDK や、利用者の行動追跡を目的としたサードパーティ製 SDK、解析・クラッシュ報告サービスは使っていません。</p>
+    <section class="alt" id="connector">
+      <div class="wrap two">
+        <div>
+          <div class="eyebrow">AIアシスタント向けコネクタ</div>
+          <h2>Claudeに、有報のデータを渡す。</h2>
+          <p class="sub" style="margin-bottom:1.2rem">有報LABコネクタをつなぐと、AIアシスタントが有報LABのデータを読み出して答えます。銘柄の検索、財務サマリ、利益の増減要因、有報の本文まで。読み取り専用です。</p>
+          <ul class="plain benefits">
+            <li><strong>文章と数字を、まとめて読み解く。</strong>事業の説明や経営方針といった言葉の情報と、何年分もの財務の数字を、AIがひとつの流れで結びつけて整理します。</li>
+            <li><strong>気になったところを、そのまま掘り下げる。</strong>「なぜ減った？」「内訳は？」と会話を重ねるだけで、全体から細部へと分析を進められます。</li>
+            <li><strong>数字の山から、傾向が見えてくる。</strong>大量のデータを一つずつ追わなくても、変化の大きいところや、年ごとの動きを拾い上げてくれます。</li>
+          </ul>
+        </div>
+        <div class="chat" id="chat" role="img" aria-label="AIアシスタントとの会話イメージ（数パターンが切り替わります）">
+          <div class="chat-pair">
+            <div class="q"></div>
+            <div class="a"></div>
+          </div>
+          <small class="chat-note">※有報LABの2026年3月期のデータをもとにした会話のイメージです。回答の文面はAIアシスタントによって異なります。</small>
+        </div>
+        <script>
+          (function () {
+            var pairs = [
+              ["トヨタの直近の売上と営業利益は？", "2026年3月期は、売上収益が50兆6,850億円、営業利益が3兆7,662億円でした。売上は増えましたが、営業利益は前期の4兆7,956億円から減っています。（有報LABのデータより）"],
+              ["トヨタの営業利益が減った理由は？", "売上の増加が約6,906億円のプラスに働いた一方、粗利率の低下が約1兆6,736億円のマイナスに。販管費の減少は約849億円のプラスで、事業利益は約8,981億円減りました。（有報LABのデータより）"],
+              ["任天堂の売上は、地域別にどう分かれている？", "2026年3月期の売上2兆3,131億円のうち、米大陸が約40%、欧州が約24%、日本が約23%、その他が約13%です。（有報LABのデータより）"],
+              ["任天堂の営業利益とROEの推移は？", "営業利益は、2024年3月期が5,289億円、2025年3月期が2,826億円、2026年3月期が3,601億円。ROEは18.8%、10.2%、14.4%と動いています。（有報LABのデータより）"]
+            ];
+            var box = document.getElementById("chat");
+            var pair = box.querySelector(".chat-pair");
+            var q = pair.querySelector(".q"), a = pair.querySelector(".a");
+            var i = 0;
+            function show(n) { q.textContent = pairs[n][0]; a.textContent = pairs[n][1]; }
+            show(0);
+            if (window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+            setInterval(function () {
+              pair.classList.add("out");
+              setTimeout(function () {
+                i = (i + 1) % pairs.length;
+                show(i);
+                pair.classList.remove("out");
+              }, 700);
+            }, 5000);
+          })();
+        </script>
+      </div>
+    </section>
 
-    <h3>2.1 端末内および iCloud でのデータ保存</h3>
-    <p>次のデータは、機能のために端末内へ保存します。同じ Apple ID でサインインしている端末のあいだで同期するため、Apple の iCloud（CloudKit）も使います。運営者のサーバーへ送ったり、保存したりすることはありません。</p>
-    <ul>
-      <li>リストに追加した銘柄情報</li>
-      <li>保有株数、取得単価、利用証券会社、口座区分</li>
-    </ul>
-    <blockquote>
-      <p><strong>注意:</strong> iCloud にサインインしていない場合、データは端末内だけに残ります。アプリを削除しても iCloud 上のデータが残ることがあります。消したいときは、アプリ内でリストを空にするか、iOS の「設定」&gt; [Apple ID] &gt;「iCloud」&gt;「アカウントのストレージを管理」から有報LAB のデータを削除してください。</p>
-    </blockquote>
+    <section id="trust">
+      <div class="wrap">
+        <div class="eyebrow">データについて</div>
+        <h2>出典は、EDINET。</h2>
+        <p class="sub">有報LABは原本を補う閲覧補助ツールです。投資判断の前には、必ず原本をご確認ください。</p>
+        <div class="trust">
+          <div class="card"><h3>公的な開示が出典</h3><p>金融庁のEDINETで公開されている有価証券報告書などをもとにしています。出典：<a href="https://disclosure2.edinet-fsa.go.jp/">EDINET閲覧（提出）サイト</a>。</p></div>
+          <div class="card"><h3>加工・再構成あり</h3><p>数字は抽出・正規化しており、原本や企業の公式科目名と一致しないことがあります。最終確認は原本で。</p></div>
+          <div class="card"><h3>投資助言ではありません</h3><p>投資の勧誘・助言を目的としたものではありません。運営者は金融商品取引業者の登録を受けていません。</p></div>
+        </div>
+      </div>
+    </section>
 
-    <h3>2.2 運営サーバーへの通信</h3>
-    <p>検索や銘柄・財務情報の表示のため、運営者のサーバーへ HTTPS（暗号化）で通信します。リクエストに載せるのは、検索キーワード、銘柄コード、スクリーニング条件など、画面表示に必要な情報です。</p>
-    <ul>
-      <li><strong>送らないもの:</strong> リスト内の保有株数、取得単価、証券会社、口座区分などの個人設定・資産データは、この通信に含めません。</li>
-      <li><strong>正規利用の確認:</strong> 不正利用を防ぎ、正規アプリからのアクセスであることを確認するため、Apple の App Attest と、有効期限の短い匿名トークンを使います。広告配信や行動追跡には使いません。</li>
-      <li><strong>IP アドレス:</strong> 通信の過程で、接続元の IP アドレスなどがサーバー側に一時的に届きます。運営者のデータベースにIPアドレスを永続的に保存することはありません。</li>
-    </ul>
-
-    <h3>2.3 サーバー上のログおよび識別子の保持</h3>
-    <ul>
-      <li><strong>認証用識別子:</strong> App Attest で使う鍵の識別子と公開鍵は、不正利用防止のためサーバー上に保持します。氏名や Apple ID などの個人情報には結び付けておらず、アカウントもありません。広告用識別子ではなく、解析・クラッシュ報告 SDK による追跡にも使いません。サーバー上の識別子は自動では削除されません。氏名やアカウントが無いため、個別の削除請求には原則として応じられません。</li>
-      <li><strong>アクセスログ:</strong> 安定運用とセキュリティのため、ホスティング（Cloudflare）でアクセスログが一時的に残ることがあります。ログにはアクセス日時、リクエスト内容（検索語や銘柄コードを含むことがあります）、レスポンス状態、通信接続情報が入ります。Cloudflare の仕様に基づき、最大 7 日間保持したあと自動で消えます。</li>
-    </ul>
-
-    <h3>2.4 第三者サービスの利用</h3>
-    <p>機能のために、次の外部サービスを使っています。渡すデータは、それぞれの機能に必要な範囲に限ります。</p>
-    <ul>
-      <li><strong>Cloudflare:</strong> ホスティングと通信セキュリティ</li>
-      <li><strong>Fly.io および Neon:</strong> 有報LAB API のサーバーとデータベースのホスティング（保存するのは開示書類から作ったデータで、利用者のデータではありません）</li>
-      <li><strong>Apple（App Attest / iCloud）:</strong> アプリの正規利用の確認、および端末間でのデータ同期</li>
-    </ul>
-
-    <h3>2.5 データの削除について</h3>
-    <ul>
-      <li>アプリをアンインストールすると、端末内のアプリ領域に保存されたデータ（リストや保有情報など）は消えます。一方、iOSのKeychainに保存された匿名トークンやApp Attestの記録は、アプリ削除だけでは消えない場合があります。OS または利用者の操作で消えるまで残ることがあります。</li>
-      <li>iCloud 上に残ったデータは、「2.1 端末内および iCloud でのデータ保存」の手順で削除してください。</li>
-      <li>通信ログは、保持期間（最大 7 日間）が過ぎると自動で消えます。</li>
-    </ul>
-
-    <h3>2.6 方針の変更</h3>
-    <p>サービス内容の変更や法改正などに合わせて、この方針を改定することがあります。重要な変更がある場合は、このページの「最終更新」を更新します。</p>
-
-    <h2>3. 有報LAB コネクタ（AI アシスタント向け）</h2>
-    <p>有報LAB コネクタ（以下「コネクタ」）は、Claude などの AI アシスタントから有報LAB のデータを読み出すための接続先です（<code>https://mcp.yuholab.com/mcp</code>、Model Context Protocol）。この章は、コネクタでの個人情報の扱いを定めます。</p>
-
-    <h3>3.1 接続時のサインイン</h3>
-    <p>コネクタを AI アシスタントに接続するとき、Google のアカウントでサインインします。</p>
-    <ul>
-      <li><strong>受け取るもの:</strong> サインインの結果として Google が発行する、Google の中での利用者識別子です。メールアドレス、氏名、プロフィール画像は求めておらず、保存しません。</li>
-      <li><strong>保存するもの:</strong> 利用者識別子そのものは保存せず、運営者の秘密鍵で計算した一方向のハッシュ値だけを保存します。あわせて、運営者が割り当てる内部 ID（利用者・アカウント）、接続の記録（接続した AI アシスタント、作成日時、有効期限）、再接続に使うトークンのハッシュ値を保存します。</li>
-      <li><strong>サインインを求める理由:</strong> iOS アプリでは、端末の正規アプリであることを Apple の App Attest で確認しています。AI アシスタントから使うコネクタでは、この端末の確認ができません。そのため、過剰なアクセスを制限し、不正な利用を防ぐために、接続する人ごとにサインインを求め、同じ人かどうかを見分けます。</li>
-      <li><strong>使う目的:</strong> 同じ人からの接続を同じ利用者として扱うこと、接続の取り消し、利用回数の上限の適用、不正利用の防止に限って使います。</li>
-    </ul>
-
-    <h3>3.2 AI アシスタントから届く情報</h3>
-    <ul>
-      <li><strong>受け取るもの:</strong> AI アシスタントがコネクタのツールを呼び出すときの、ツール名と引数（銘柄コード、会社名などの検索語、年数、内訳の種類など）です。</li>
-      <li><strong>受け取らないもの:</strong> 会話の本文、ファイル、AI アシスタントに登録した利用者の情報は、コネクタには届きません。ただし、AI アシスタントが会話の内容を検索語などの引数に入れることがあります。引数に個人を特定できる情報を含めないようお願いします。</li>
-      <li><strong>AI アシスタントでの扱い:</strong> 会話やコネクタからの応答が AI アシスタントの中でどう扱われるかは、その提供元（Claude の場合は Anthropic）の方針に従います。</li>
-    </ul>
-
-    <h3>3.3 ログと利用回数</h3>
-    <ul>
-      <li><strong>利用回数:</strong> 利用回数の上限を守るため、内部 ID ごと・ツールごとの回数を記録します。</li>
-      <li><strong>ログ:</strong> 安定運用とセキュリティのため、ホスティング（Cloudflare）に処理のログが残ります。ログには日時、内部 ID、ツール名、リクエスト内容（銘柄コードや検索語を含むことがあります）、応答の状態が入ります。最大 7 日間保持したあと自動で消えます。</li>
-      <li><strong>使わない目的:</strong> 広告配信、行動追跡、第三者への販売には使いません。</li>
-    </ul>
-
-    <h3>3.4 第三者サービスの利用</h3>
-    <ul>
-      <li><strong>Google:</strong> 接続時のサインイン</li>
-      <li><strong>Cloudflare:</strong> コネクタと認証サーバーのホスティング、3.1 のデータの保存</li>
-      <li><strong>Fly.io および Neon:</strong> 有報LAB API のサーバーとデータベースのホスティング（ツールの引数を処理します）</li>
-    </ul>
-    <p>これらの事業者の一部は日本国外のサーバーで処理を行います。運営者がこれらの事業者に 3.1 や 3.2 のデータを提供・販売することはありません。</p>
-
-    <h3>3.5 接続の解除と削除</h3>
-    <ul>
-      <li><strong>接続の解除:</strong> AI アシスタントの設定からコネクタを外してください。90 日間使われなかった接続は自動で失効します。</li>
-      <li><strong>削除の依頼:</strong> 3.1 で保存したデータは、メールアドレスや氏名に結び付けておらず、運営者の側から特定の個人のデータを見つけ出すことができません。そのため、個別の削除の依頼には原則として応じられません。接続を解除すると、その接続は使えなくなり、再接続のためのトークンも無効になります。ご不明な点は <a href="mailto:support@yuholab.com">support@yuholab.com</a> へご連絡ください。</li>
-      <li><strong>ログ:</strong> 保持期間（最大 7 日間）が過ぎると自動で消えます。</li>
-    </ul>
-
-    <h2>4. データの出所</h2>
-    <p>有報LAB が表示・提供するデータは、EDINET（金融庁）で公開されている開示書類をもとに、運営者が抽出・加工・再構成して作成したものです。EDINET の原本そのものではありません。</p>
-    <p>出典：<a href="https://disclosure2.edinet-fsa.go.jp/">EDINET閲覧（提出）サイト</a>、<a href="https://www.digital.go.jp/resources/open_data/public_data_license_v1.0">公共データ利用規約（第1.0版）</a>（PDL1.0）</p>
-    <p>上記をもとに、運営者が編集・加工して作成しています。編集・加工した内容は、国（金融庁）が作成した未加工の情報ではありません。</p>
-
-    <h2>5. お問い合わせ</h2>
-    <p>この方針や有報LAB についてのご質問は、次の連絡先へどうぞ。</p>
-    <ul>
-      <li><strong>メール:</strong> <a href="mailto:support@yuholab.com">support@yuholab.com</a></li>
-      <li><strong>App Store:</strong> アプリページ内のサポートリンク</li>
-      <li><strong>利用規約:</strong> <a href="/terms">有報LAB 利用規約</a></li>
-    </ul>
+    <section class="final">
+      <div class="wrap">
+        <h2>日本企業の財務を、もっと身近に。</h2>
+        <p>まずはアプリで、気になる企業を開いてみてください。</p>
+        <a class="badge" href="https://apps.apple.com/jp/app/id6807425773"><img src="/img/app-store-badge.svg" alt="App Storeからダウンロード" width="163" height="60"></a>
+      </div>
+    </section>
   </main>
+
+  <footer>
+    <div class="wrap">
+      <div class="links">
+        <a href="/privacy">免責事項・プライバシーポリシー</a>
+        <a href="/terms">利用規約</a>
+        <a href="/en/privacy">Privacy (English)</a>
+        <a href="/en/terms">Terms (English)</a>
+        <a href="mailto:support@yuholab.com">お問い合わせ: support@yuholab.com</a>
+      </div>
+      <p>有報LAB（YuhoLAB）は、EDINETの開示書類をもとにした閲覧補助サービスです。表示内容は投資の勧誘や助言ではなく、完全性・正確性を保証するものではありません。投資判断はご自身の責任で行ってください。</p>
+      <p>運営: Sorahiro Shuto　© 2026 有報LAB　App Store は Apple Inc. のサービスマークです。</p>
+    </div>
+  </footer>
 </body>
 </html>
