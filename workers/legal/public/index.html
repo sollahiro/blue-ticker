@@ -41,8 +41,10 @@
       background: var(--yellow);
       color: #1a1a1a;
     }
+    .badge { display: inline-block; line-height: 0; border-radius: 10px; }
+    .badge img { height: 60px; width: auto; display: block; }
     .btn.ghost { background: transparent; color: #fff; border: 1.5px solid rgba(255,255,255,.55); }
-    .btn:focus-visible, a:focus-visible { outline: 3px solid var(--yellow); outline-offset: 3px; }
+    .badge:focus-visible, .btn:focus-visible, a:focus-visible { outline: 3px solid var(--yellow); outline-offset: 3px; }
 
     header.hero {
       background:
@@ -60,7 +62,7 @@
     h1 { font-size: clamp(1.6rem, 4vw, 2.5rem); word-break: auto-phrase; text-wrap: balance; line-height: 1.25; margin: 0 0 1rem; font-weight: 800; letter-spacing: .01em; }
     h1 em { font-style: normal; color: var(--yellow); }
     .lead { font-size: 1.05rem; opacity: .95; margin: 0 0 1.8rem; max-width: 34rem; text-shadow: 0 1px 8px rgba(0,60,120,.35); }
-    .cta { display: flex; flex-wrap: wrap; gap: .8rem; }
+    .cta { display: flex; flex-wrap: wrap; gap: .8rem; align-items: center; }
     .note { font-size: .8rem; opacity: .7; margin-top: 1rem; }
 
     /* アプリ画面のイメージ（CSS で描いた図解。実画面ではない） */
@@ -153,7 +155,7 @@
           <h1>日本企業の財務データを、<br><em>分かりやすく分析</em>できる！</h1>
           <p class="lead">上場企業が提出する有価証券報告書から財務の数字を抜き出し、「利益が増えたのか、減ったのか」を分かりやすく見せるサービスです。<br>専門用語に詳しくなくても、決算の中身をつかめます。</p>
           <div class="cta">
-            <a class="btn" href="https://apps.apple.com/jp/app/id6807425773">App Storeで入手</a>
+            <a class="badge" href="https://apps.apple.com/jp/app/id6807425773"><img src="/img/app-store-badge.svg" alt="App Storeからダウンロード" width="163" height="60"></a>
             <a class="btn ghost" href="#connector">Claudeで使う</a>
           </div>
           <p class="note">iPhone向け。Claude などのAIアシスタントからも使えます。</p>
@@ -236,7 +238,7 @@
       <div class="wrap">
         <h2>日本企業の財務を、もっと身近に。</h2>
         <p>まずはアプリで、気になる企業を開いてみてください。</p>
-        <a class="btn" href="https://apps.apple.com/jp/app/id6807425773">App Storeで入手</a>
+        <a class="badge" href="https://apps.apple.com/jp/app/id6807425773"><img src="/img/app-store-badge.svg" alt="App Storeからダウンロード" width="163" height="60"></a>
       </div>
     </section>
   </main>
