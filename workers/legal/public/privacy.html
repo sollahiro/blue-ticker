@@ -62,12 +62,35 @@
     a {
       color: #0b63ce;
     }
+    .site-header {
+      background: linear-gradient(160deg, #1479d8 0%, #0a46aa 100%);
+    }
+    .site-header .bar {
+      max-width: 40rem;
+      margin: 0 auto;
+      padding: 0.8rem 1.25rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+    }
+    .site-header img { height: 30px; width: auto; display: block; }
+    .site-header nav { display: flex; flex-wrap: wrap; gap: 0.3rem 1.1rem; font-size: 0.85rem; }
+    .site-header nav a { color: #fff; text-decoration: none; opacity: 0.85; }
+    .site-header nav a:hover, .site-header nav a[aria-current="page"] { opacity: 1; text-decoration: underline; text-underline-offset: 4px; }
+    .site-header a:focus-visible { outline: 3px solid #ffd23f; outline-offset: 3px; }
   </style>
 </head>
 <body>
+  <header class="site-header">
+    <div class="bar">
+      <a href="/"><img src="/logo-white.svg" alt="有報LAB" width="107" height="30"></a>
+      <nav aria-label="Pages"><a href="/privacy" aria-current="page">プライバシー</a><a href="/terms">利用規約</a><a href="/en/privacy">English</a></nav>
+    </div>
+  </header>
   <main>
     <h1>有報LAB 免責事項およびプライバシーポリシー</h1>
-    <p class="meta">最終更新: 2026-11-07<br>運営: Sorahiro Shuto<br><a href="/en/privacy">English</a></p>
+    <p class="meta">最終更新: 2026-11-07<br>運営: Sorahiro Shuto</p>
 
     <h2>1. 免責事項</h2>
     <p>有報LAB は、金融庁の開示システム（EDINET）などに公開されている有価証券報告書などから、財務の数字や会社の説明を抽出・加工・再構成して表示する閲覧補助サービスです。iOS アプリと、Claude などの AI アシスタントから使うコネクタ（「3. 有報LAB コネクタ」）があります。表示するデータは、運営者が運営する有報LAB API（YuhoLAB API）から取得します。会社の説明には、自動処理や生成AI等による要約・再構成が含まれています。</p>
