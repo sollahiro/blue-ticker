@@ -349,25 +349,59 @@ enum BreakdownProseToolkit {
 
     static func positiveYenAmounts(in sentence: String) -> [Double] {
         let normalized = normalizeAmountText(sentence)
-        guard let regex = try? NSRegularExpression(
-            pattern: #"([0-9]{1,3}(?:,[0-9]{3})+|[0-9]+)(?:\.([0-9]+))?\s*(億円|百万円|千円)"#)
-        else { return [] }
+        var found: [(location: Int, yen: Double)] = []
         let range = NSRange(normalized.startIndex..., in: normalized)
-        return regex.matches(in: normalized, range: range).compactMap { match in
-            guard match.numberOfRanges >= 4, !hasNegativePrefix(in: normalized, match: match.range)
-            else { return nil }
-            guard let wholeRange = Range(match.range(at: 1), in: normalized),
-                let unitRange = Range(match.range(at: 3), in: normalized)
-            else { return nil }
-            var digits = String(normalized[wholeRange]).replacingOccurrences(of: ",", with: "")
-            if match.range(at: 2).location != NSNotFound,
-                let fractionRange = Range(match.range(at: 2), in: normalized)
+
+        func digits(_ match: NSTextCheckingResult, whole: Int, fraction: Int?) -> Double? {
+            guard let wholeRange = Range(match.range(at: whole), in: normalized) else { return nil }
+            var text = String(normalized[wholeRange]).replacingOccurrences(of: ",", with: "")
+            if let fraction, match.range(at: fraction).location != NSNotFound,
+                let fractionRange = Range(match.range(at: fraction), in: normalized)
             {
-                digits += "." + String(normalized[fractionRange])
+                text += "." + String(normalized[fractionRange])
             }
-            guard let magnitude = Double(digits) else { return nil }
-            return yen(magnitude: magnitude, unit: String(normalized[unitRange]))
+            return Double(text)
         }
+
+        // 億円 / 百万円 / 千円
+        if let regex = try? NSRegularExpression(
+            pattern: #"([0-9]{1,3}(?:,[0-9]{3})+|[0-9]+)(?:\.([0-9]+))?\s*(億円|百万円|千円)"#)
+        {
+            for match in regex.matches(in: normalized, range: range) {
+                guard match.numberOfRanges >= 4, !hasNegativePrefix(in: normalized, match: match.range),
+                    let magnitude = digits(match, whole: 1, fraction: 2),
+                    let unitRange = Range(match.range(at: 3), in: normalized),
+                    let yen = yen(magnitude: magnitude, unit: String(normalized[unitRange]))
+                else { continue }
+                found.append((match.range.location, yen))
+            }
+        }
+        // 「6億8,006万円」(億と万円の併記)。
+        if let regex = try? NSRegularExpression(
+            pattern: #"([0-9]{1,3}(?:,[0-9]{3})+|[0-9]+)億\s*([0-9]{1,3}(?:,[0-9]{3})+|[0-9]+)万円"#)
+        {
+            for match in regex.matches(in: normalized, range: range) {
+                guard !hasNegativePrefix(in: normalized, match: match.range),
+                    let oku = digits(match, whole: 1, fraction: nil),
+                    let man = digits(match, whole: 2, fraction: nil)
+                else { continue }
+                let yen = oku * 100_000_000 + man * 10_000
+                if yen.isFinite, yen > 0 { found.append((match.range.location, yen)) }
+            }
+        }
+        // 「5,256万円」(万円だけ)。億の直後の数字は上の併記で拾うので除く。百万円・千万円は別単位。
+        if let regex = try? NSRegularExpression(
+            pattern: #"(?<![0-9,億])([0-9]{1,3}(?:,[0-9]{3})+|[0-9]+)(?:\.([0-9]+))?\s*万円"#)
+        {
+            for match in regex.matches(in: normalized, range: range) {
+                guard !hasNegativePrefix(in: normalized, match: match.range),
+                    let magnitude = digits(match, whole: 1, fraction: 2)
+                else { continue }
+                let yen = magnitude * 10_000
+                if yen.isFinite, yen > 0 { found.append((match.range.location, yen)) }
+            }
+        }
+        return found.sorted { $0.location < $1.location }.map(\.yen)
     }
 
     /// 文中の単位語（億円 / 百万円 / 千円）だけ。表キャプションの contains 判定とは別。
