@@ -101,7 +101,35 @@ enum BreakdownFinancialsResolver {
         {
             return CanonicalValue(value: note, tag: noteTag)
         }
+        if let activity = result.current, let tag = result.tag,
+            Xbrl.rdExpenseCommonTags.contains(tag),
+            let exact = exactSgaRd(fieldSet: fieldSet, matchingRoundedActivity: activity)
+        {
+            return exact
+        }
         return CanonicalValue(value: result.current, tag: result.tag)
+    }
+
+    /// 活動タグが百万円に丸めた値（環境管理センター 19,000,000 ↔ 19,470,000）、または百万円の値を
+    /// 千円スケールで付けた誤り（ユビテック 17,000 ↔ 17,723,000）のとき、連結損益計算書の
+    /// 販管費の研究開発費タグ（千円開示の正確値）を使う。百万円へ丸めて一致しなければ替えない
+    /// （製造費用込みの活動タグが販管費より大きい書類は対象外）。
+    private static func exactSgaRd(
+        fieldSet: FieldSet, matchingRoundedActivity activity: Double
+    ) -> CanonicalValue? {
+        let million = 1_000_000.0
+        for tag in Xbrl.rdExpenseJGAAPTags {
+            guard let sga = fieldSet[tag]?.current, sga > 0, sga != activity else { continue }
+            // 切り捨て・四捨五入のどちらの百万円表記でも、差は1百万円未満。
+            func sameMillion(_ yen: Double) -> Bool {
+                yen > 0 && yen.truncatingRemainder(dividingBy: million) == 0
+                    && abs(yen - sga) < million
+            }
+            if sameMillion(activity) || sameMillion(activity * 1_000) {
+                return CanonicalValue(value: sga, tag: tag)
+            }
+        }
+        return nil
     }
 
     /// 活動タグの当期 fact が member 付き（報告セグメント・報告セグメント計）だけにあり、

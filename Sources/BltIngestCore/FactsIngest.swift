@@ -190,7 +190,9 @@ public func runFactsIngestCommand(
                 let matched = activeOverrides.filter {
                     $0.edinetCode == edinet && $0.item == .capex
                 }
-                return applyingManualCapexOverrides(to: computed, overrides: matched)
+                let withStored = await applyingStoredCapexProseOverview(
+                    to: computed, code: code, db: app.db)
+                return applyingManualCapexOverrides(to: withStored, overrides: matched)
             }
             let coverage = try? await withDbRetry(logger: app.logger, context: "company_financials 集計") {
                 try await countServableCompanyFinancials(db: app.db)

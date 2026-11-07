@@ -227,3 +227,42 @@ private func fakeSnapshot(
         }
     }
 }
+
+// 2172 インサイト S100Z4PA: 設備投資の概要はタグが無く本文のみ（capex_prose 7,350,000）。
+// source: code=2172 fy_end=2026-06-30 doc_id=S100Z4PA page=21 field=capex
+@Suite struct CapexProseOverviewLookupTests {
+    private func capexRow(
+        docID: String, tag: String, source: String, cacheVersion: String
+    ) -> CompanyBreakdown {
+        let row = CompanyBreakdown(docID: docID, axis: breakdownAxisCapex)
+        row.code = "2172"
+        row.submitDateTime = "2026-09-28 00:00"
+        row.payload = BreakdownSnapshotPayload(
+            axis: breakdownAxisCapex, denominator: 0, denominatorTag: tag, rows: [],
+            sourceKind: source, needsReview: true, warnings: [],
+            capitalExpendituresOverview: CapexMetricTotalsPayload(
+                denominator: 7_350_000, denominatorTag: tag))
+        row.needsReview = true
+        row.source = source
+        row.contentHash = "h"
+        row.cacheVersion = cacheVersion
+        return row
+    }
+
+    @Test func readsOnlyProseOverviewFromCurrentCapexRows() async throws {
+        try await withMigratedApp { app in
+            try await capexRow(
+                docID: "S100Z4PA", tag: breakdownDenominatorTagCapexProse,
+                source: breakdownSourceCapexProse, cacheVersion: capexBreakdownCacheVersion
+            ).create(on: app.db)
+            try await capexRow(
+                docID: "S100WRCI", tag: "OverviewTag",
+                source: breakdownSourceXbrlFacts, cacheVersion: capexBreakdownCacheVersion
+            ).create(on: app.db)
+
+            let out = try await loadCapexProseOverviewYenByDocID(
+                db: app.db, code: "2172", docIDs: ["S100Z4PA", "S100WRCI"])
+            #expect(out == ["S100Z4PA": 7_350_000])
+        }
+    }
+}

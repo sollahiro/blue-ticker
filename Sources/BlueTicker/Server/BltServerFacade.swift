@@ -345,12 +345,9 @@ public extension BltServerContext {
             docID: docID, correctionDocIDs: correctionDocIDs
         ) else { return nil }
 
-        // honbun HTML 系は1回パースでまとめて抽出（セクション数ぶん再パースしない＝メモリ節約）。
-        let parser = XBRLParser()
-        let titlesByKey = Dictionary(
-            xbrlSections.map { ($0.key, $0.value.title) },
-            uniquingKeysWith: { first, _ in first })
-        let found = parser.extractSections(in: xbrlDir, titlesByKey: titlesByKey)
+        // 節ごとの XBRL TextBlock を正本にし、無い節だけ honbun HTML を1回パースして見出しで探す。
+        let found = XBRLParser().extractSectionsPreferringTextBlocks(
+            in: xbrlDir, sections: xbrlSections)
         var texts: [String: String] = [:]
         for key in xbrlSections.keys { texts[key] = found[key] ?? "" }  // 全 key 存在を維持
 
