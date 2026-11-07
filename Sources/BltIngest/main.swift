@@ -10,6 +10,7 @@
 //                     relations,industry-kpis]
 //                     [--codes 7203,6758] [--doc-ids S100W0S7]
 //                     [--note-types per_share_information,property_plant_equipment_schedule,...]
+//                     [--axes capex,research_and_development]
 //                                                            対象を DB へ取り込み（--stages で選択、既定は relations と industry-kpis 以外の全て）。
 //                                                            breakdowns: product_service/geography は上場全体（--limit 適用）、
 //                                                            employees/rd/goodwill 等の決定論指標軸も上場全体
@@ -24,6 +25,7 @@
 //                                                            cache_version / needs_review でも skip しない。
 //                                                            statements/statement-notes では --codes を対象母集団にも使う
 //                                                            （nikkei225.csv 未配置でも手動再ingest可能）。
+//                                                            --axes は breakdowns ステージを指定した軸だけに絞る（未指定は全軸）。
 //                                                            --note-types は statement-notes ステージで ingest する
 //                                                            note_type を絞る（未指定時は公開全4種）。
 //                                                            バグ修正確認後の手動・単発再計算向け。定期実行では使わない）
@@ -97,12 +99,20 @@ do {
                 "blt-ingest error: --note-types は note_type のカンマ区切りで指定してください（例: per_share_information,issued_shares_and_capital）\n")
             exit(1)
         }
+        let axesPresent = argv.contains("--axes")
+        let axes = parseIngestAxes(optionValue("--axes", in: argv))
+        if axesPresent, axes == nil {
+            printError(
+                "blt-ingest error: --axes は内訳の軸のカンマ区切りで指定してください（例: capex,research_and_development）\n")
+            exit(1)
+        }
         try await runFactsIngestCommand(
             limit: optionValue("--limit", in: argv).flatMap(Int.init),
             targets: targets,
             codes: codes,
             docIDs: docIDs,
-            noteTypes: noteTypes
+            noteTypes: noteTypes,
+            axes: axes
         )
     } else if argv.count > 1, argv[1] == "master-data-upload" {
         guard argv.count > 2 else {
