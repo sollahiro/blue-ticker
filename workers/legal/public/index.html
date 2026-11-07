@@ -105,7 +105,7 @@
     .chat { background: #fff; border: 1px solid var(--line); border-radius: 18px; padding: 1.2rem; font-size: .92rem; }
     .chat .q { background: var(--blue); color: #fff; border-radius: 14px 14px 4px 14px; padding: .7rem 1rem; margin-left: 15%; }
     .chat .a { background: var(--bg); border-radius: 14px 14px 14px 4px; padding: .8rem 1rem; margin: .8rem 15% 0 0; color: #333; }
-    .chat-pair { min-height: 9.5rem; opacity: 1; transition: opacity .7s ease; }
+    .chat-pair { min-height: 11.5rem; opacity: 1; transition: opacity .7s ease; }
     .chat-pair.out { opacity: 0; }
     .chat-note { display: block; margin-top: .8rem; color: var(--muted); font-size: .75rem; }
     @media (prefers-reduced-motion: reduce) { .chat-pair { transition: none; } }
@@ -222,15 +222,15 @@
             <div class="q"></div>
             <div class="a"></div>
           </div>
-          <small class="chat-note">※会話のイメージです。実際の回答とは異なります。</small>
+          <small class="chat-note">※有報LABの2026年3月期のデータをもとにした会話のイメージです。回答の文面はAIアシスタントによって異なります。</small>
         </div>
         <script>
           (function () {
             var pairs = [
-              ["この会社の営業利益が増えた理由は？", "売上の増加が最も効いています。一方で販管費の増加が利益を押し下げています。（有報LABのデータをもとに回答）"],
-              ["直近5年の売上の推移を教えて", "年次の売上高を並べて、前の年との増減を整理します。（有報LABのデータをもとに回答）"],
-              ["ROEが上がったのは、何が効いた？", "利益率、資産の回転、借入の比率に分けて、どれが効いたかを説明します。（有報LABのデータをもとに回答）"],
-              ["事業別の売上の内訳は？", "有報の注記にある事業別・地域別の売上を、割合といっしょに整理します。（有報LABのデータをもとに回答）"]
+              ["トヨタの直近の売上と営業利益は？", "2026年3月期は、売上収益が50兆6,850億円、営業利益が3兆7,662億円でした。売上は増えましたが、営業利益は前期の4兆7,956億円から減っています。（有報LABのデータより）"],
+              ["トヨタの営業利益が減った理由は？", "売上の増加が約6,906億円のプラスに働いた一方、粗利率の低下が約1兆6,736億円のマイナスに。販管費の減少は約849億円のプラスで、事業利益は約8,981億円減りました。（有報LABのデータより）"],
+              ["任天堂の売上は、地域別にどう分かれている？", "2026年3月期の売上2兆3,131億円のうち、米大陸が約40%、欧州が約24%、日本が約23%、その他が約13%です。（有報LABのデータより）"],
+              ["任天堂の営業利益とROEの推移は？", "営業利益は、2024年3月期が5,289億円、2025年3月期が2,826億円、2026年3月期が3,601億円。ROEは18.8%、10.2%、14.4%と動いています。（有報LABのデータより）"]
             ];
             var box = document.getElementById("chat");
             var pair = box.querySelector(".chat-pair");
