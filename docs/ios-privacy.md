@@ -4,8 +4,8 @@ App Store 用の公開ページは Cloudflare Worker `workers/legal/`（静的 H
 
 公開 URL（`blt-legal` の Custom Domain `yuholab.com`）:
 
-- 免責事項およびプライバシーポリシー（問い合わせ欄あり）: https://yuholab.com
-- プライバシーポリシー: https://yuholab.com/privacy
+- ランディングページ（問い合わせ先あり。サポート URL の先）: https://yuholab.com
+- 免責事項およびプライバシーポリシー: https://yuholab.com/privacy
 - 利用規約: https://yuholab.com/terms
 
 問い合わせ先は `support@yuholab.com`（iCloud+）。旧 `blueticker@sollahiro.com` は有報LAB 1.2.0 のリリースまで受信し、リリース後に止める。

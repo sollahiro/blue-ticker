@@ -7,9 +7,9 @@ import worker, { assetPathFor, redirectLocationFor } from "./index.js";
 
 const publicDir = join(dirname(fileURLToPath(import.meta.url)), "../public");
 
-test("privacy aliases rewrite to /", () => {
-  assert.equal(assetPathFor("/privacy"), "/");
-  assert.equal(assetPathFor("/privacy/"), "/");
+test("privacy aliases rewrite to /privacy", () => {
+  assert.equal(assetPathFor("/privacy"), "/privacy");
+  assert.equal(assetPathFor("/privacy/"), "/privacy");
 });
 
 test("terms aliases rewrite to /terms", () => {
@@ -76,7 +76,7 @@ test("sollahiro.com old URLs answer one 301 straight to yuholab.com", async () =
 test("yuholab.com serves /, /privacy and /terms from assets", async () => {
   const cases = [
     ["/", "/"],
-    ["/privacy", "/"],
+    ["/privacy", "/privacy"],
     ["/terms", "/terms"],
   ];
   for (const [path, assetPath] of cases) {
@@ -93,16 +93,27 @@ test("root and unknown paths pass through", () => {
   assert.equal(assetPathFor("/no-such-page"), "/no-such-page");
 });
 
-test("privacy pages name the operator Sorahiro Shuto", () => {
-  const index = readFileSync(join(publicDir, "index.html"), "utf8");
+test("privacy page names the operator Sorahiro Shuto", () => {
   const privacy = readFileSync(join(publicDir, "privacy.html"), "utf8");
-  assert.equal(index, privacy);
-  assert.match(index, /運営: Sorahiro Shuto/);
-  assert.doesNotMatch(index, /個人開発/);
+  assert.match(privacy, /運営: Sorahiro Shuto/);
+  assert.doesNotMatch(privacy, /個人開発/);
+});
+
+test("landing page links legal pages and avoids advice or old names", () => {
+  const html = readFileSync(join(publicDir, "index.html"), "utf8");
+  assert.match(html, /<title>有報LAB/);
+  assert.match(html, /href="\/privacy"/);
+  assert.match(html, /href="\/terms"/);
+  assert.match(html, /href="mailto:support@yuholab\.com"/);
+  assert.match(html, /EDINET閲覧（提出）サイト/);
+  assert.match(html, /投資の勧誘・助言を目的としたものではありません/);
+  assert.match(html, /運営: Sorahiro Shuto/);
+  assert.doesNotMatch(html, /Blue Ticker|ブルーティッカー|ChatGPT|TestFlight/);
+  assert.doesNotMatch(html, /\/blue-ticker\//);
 });
 
 test("privacy disclaimer matches product facts without overbroad liability", () => {
-  const html = readFileSync(join(publicDir, "index.html"), "utf8");
+  const html = readFileSync(join(publicDir, "privacy.html"), "utf8");
   assert.match(html, /閲覧補助サービス/);
   // 公開コネクタ（HAPIS mcp/）の章: 識別子はハッシュのみ、会話本文は届かない、出典表示。
   assert.match(html, /<h2>3\. 有報LAB コネクタ（AI アシスタント向け）<\/h2>/);
