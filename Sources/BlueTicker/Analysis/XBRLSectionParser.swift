@@ -81,6 +81,49 @@ struct XBRLParser {
         return result
     }
 
+    /// 有報セクションの本命。節ごとの XBRL TextBlock（`xbrlSections[key].xbrlElements`）を正本にして、
+    /// 見出し文字列での HTML 探索（`extractSections`）は TextBlock が無い節だけの代替にする。
+    /// 見出し探索は「研究開発活動」を MD&A の見出しに取り違える、「事業等のリスク」を最初の小見出しで
+    /// 打ち切る（トヨタ S100Y8NY）ため。TextBlock は提出者が節として切った範囲そのもの。
+    func extractSectionsPreferringTextBlocks(
+        in xbrlDir: URL, sections: [String: XBRLSectionDef]
+    ) -> [String: String] {
+        var result: [String: String] = [:]
+        var missing: [String: String] = [:]
+        for (key, def) in sections {
+            let html = def.xbrlElements.lazy
+                .compactMap { XBRLUtils.extractTextblockHtml(in: xbrlDir, textblockTag: $0) }
+                .first
+            if let html, case let text = cleanText(Self.plainTextKeepingBreaks(fromHTML: html)),
+                !text.isEmpty
+            {
+                result[key] = text
+            } else {
+                missing[key] = def.title
+            }
+        }
+        guard !missing.isEmpty else { return result }
+        for (key, text) in extractSections(in: xbrlDir, titlesByKey: missing) { result[key] = text }
+        return result
+    }
+
+    /// HTML を段落・行・表の行ごとの改行を残したプレーンテキストにする（セルは空白区切り）。
+    static func plainTextKeepingBreaks(fromHTML html: String) -> String {
+        guard let doc = try? SwiftSoup.parse(html) else { return "" }
+        let lineBreak = "\u{E000}"
+        let cellBreak = "\u{E001}"
+        _ = try? doc.select("br").after(lineBreak)
+        _ = try? doc.select("p, div, li, tr, h1, h2, h3, h4, h5, h6, table").append(lineBreak)
+        _ = try? doc.select("td, th").append(cellBreak)
+        let flat = (try? doc.text()) ?? ""
+        return flat.replacingOccurrences(of: lineBreak, with: "\n")
+            .replacingOccurrences(of: cellBreak, with: " ")
+            .split(separator: "\n", omittingEmptySubsequences: true)
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+            .joined(separator: "\n")
+    }
+
     // MARK: - Sections by Type (TextBlock-based)
 
     /// XBRLディレクトリから全セクションを XBRL TextBlock 経由で抽出する。
