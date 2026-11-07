@@ -16,10 +16,10 @@
 
 別エンドポイント・別テーブル（バージョニング独立）。
 
-| 機能 | REST | 開発用 MCP |
-|---|---|---|
-| Statement | `GET /v1/companies/{code}/statement` | `get_statement` |
-| Shares | `GET /v1/companies/{code}/shares` | `get_shares` |
+| 機能 | REST |
+|---|---|
+| Statement | `GET /v1/companies/{code}/statement` |
+| Shares | `GET /v1/companies/{code}/shares` |
 
 対象母集団は上場全体（Statement / Shares とも。日経225は処理順の優先のみ）。1書類=1行（ingest が候補 docID を反復）。通期のみ。
 

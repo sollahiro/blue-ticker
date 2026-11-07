@@ -10,6 +10,6 @@
 - iOS（`Apps/BlueTicker`）の型検査・ビルドは GitHub Actions の `ios` ジョブ（`macos-26` / `xcodebuild`）で行う。`Apps/BlueTicker/` または `.github/workflows/ci.yml` に差分があるときだけ走る。Cloud Agent の Linux VM ではシミュレータも Xcode も無い。TestFlight / Archive は Xcode Cloud（配布専用）。GHA に Archive を足さず、Xcode Cloud をマージ品質ゲートにもしない。詳細は `docs/ios-client.md`。
 - 新機能・XBRL・本番 ingest・release・tracker・デプロイは対応する `.agents/skills/` に従う。会社アイコンの品質基準は `.agents/skills/company-icon-quality/SKILL.md`（R2 手置き。fetch / ingest パイプラインは無い）。
 - 外部 API・CLI・DB schema・設定・公開契約の変更と、本番 write / 公開範囲の拡張はユーザー確認なしに行わない。
-- 製品面は REST・iOS・公開 MCP コネクタ。公開 MCP は HAPIS の `mcp/`（公開コネクタ。Claude の Connectors Directory を先に、次に ChatGPT）で、HAPIS ゲートウェイ経由で REST を呼ぶ。`BltMcpServerCore` は開発時（Cursor / 手元）専用のまま残し、公開コネクタの土台にしない。コネクタに出すツールと引数の範囲は `hapis/catalog.json` が正本で、`scripts/hapis-sync-catalog.sh` で HAPIS へ同期する（依存は blue-ticker → HAPIS の一方向。`hapis/README.md`）。
+- 製品面は REST・iOS・公開 MCP コネクタ。公開 MCP は HAPIS の `mcp/`（公開コネクタ。Claude の Connectors Directory を先に、次に ChatGPT）で、HAPIS ゲートウェイ経由で REST を呼ぶ。コネクタに出すツールと引数の範囲は `hapis/catalog.json` が正本で、`scripts/hapis-sync-catalog.sh` で HAPIS へ同期する（依存は blue-ticker → HAPIS の一方向。`hapis/README.md`）。
 - クラウドセッションから REST を叩くときは `https://api.yuholab.com/v1/` を使う（認証はプロキシが注入。API キー不要）。まず `GET /v1/skills` で能力カタログ、`GET /v1/skills/{id}` で各エンドポイントの詳細を見る。銘柄コード不明なら `GET /v1/companies?q=` で検索し、`code` を `/v1/companies/{code}/overview|filings|financials` 等に渡す。未集計は 404、DB 非接続は 503。
 - Contract `cache_version` / `fin-vN` / `screen-vN` は**破壊的変更**のときだけバンプする。細粒度・非破壊の修正はバンプせず、対象行・コードの削除または再指定と `--codes` で直す。正本は `.agents/rules/versioning.md`。
