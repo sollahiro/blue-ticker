@@ -105,7 +105,10 @@
     .chat { background: #fff; border: 1px solid var(--line); border-radius: 18px; padding: 1.2rem; font-size: .92rem; }
     .chat .q { background: var(--blue); color: #fff; border-radius: 14px 14px 4px 14px; padding: .7rem 1rem; margin-left: 15%; }
     .chat .a { background: var(--bg); border-radius: 14px 14px 14px 4px; padding: .8rem 1rem; margin: .8rem 15% 0 0; color: #333; }
-    .chat .a small { display: block; margin-top: .4rem; color: var(--muted); }
+    .chat-pair { min-height: 9.5rem; opacity: 1; transition: opacity .7s ease; }
+    .chat-pair.out { opacity: 0; }
+    .chat-note { display: block; margin-top: .8rem; color: var(--muted); font-size: .75rem; }
+    @media (prefers-reduced-motion: reduce) { .chat-pair { transition: none; } }
     code { background: #eceefb; padding: .1rem .4rem; border-radius: 6px; font-size: .85em; word-break: break-all; }
     ul.plain { padding-left: 1.2rem; }
     ul.plain li { margin: .35rem 0; }
@@ -214,10 +217,38 @@
             <li>扱いは<a href="/privacy">プライバシーポリシー</a>の「有報LAB コネクタ」に記載しています</li>
           </ul>
         </div>
-        <div class="chat" role="img" aria-label="AIアシスタントとの会話イメージ">
-          <div class="q">この会社の営業利益が増えた理由は？</div>
-          <div class="a">売上の増加が最も効いています。一方で販管費の増加が利益を押し下げています。（有報LABのデータをもとに回答）<small>※会話のイメージです。</small></div>
+        <div class="chat" id="chat" role="img" aria-label="AIアシスタントとの会話イメージ（数パターンが切り替わります）">
+          <div class="chat-pair">
+            <div class="q"></div>
+            <div class="a"></div>
+          </div>
+          <small class="chat-note">※会話のイメージです。実際の回答とは異なります。</small>
         </div>
+        <script>
+          (function () {
+            var pairs = [
+              ["この会社の営業利益が増えた理由は？", "売上の増加が最も効いています。一方で販管費の増加が利益を押し下げています。（有報LABのデータをもとに回答）"],
+              ["直近5年の売上の推移を教えて", "年次の売上高を並べて、前の年との増減を整理します。（有報LABのデータをもとに回答）"],
+              ["ROEが上がったのは、何が効いた？", "利益率、資産の回転、借入の比率に分けて、どれが効いたかを説明します。（有報LABのデータをもとに回答）"],
+              ["事業別の売上の内訳は？", "有報の注記にある事業別・地域別の売上を、割合といっしょに整理します。（有報LABのデータをもとに回答）"]
+            ];
+            var box = document.getElementById("chat");
+            var pair = box.querySelector(".chat-pair");
+            var q = pair.querySelector(".q"), a = pair.querySelector(".a");
+            var i = 0;
+            function show(n) { q.textContent = pairs[n][0]; a.textContent = pairs[n][1]; }
+            show(0);
+            if (window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+            setInterval(function () {
+              pair.classList.add("out");
+              setTimeout(function () {
+                i = (i + 1) % pairs.length;
+                show(i);
+                pair.classList.remove("out");
+              }, 700);
+            }, 5000);
+          })();
+        </script>
       </div>
     </section>
 
