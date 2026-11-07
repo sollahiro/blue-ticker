@@ -52,6 +52,19 @@ private struct ScriptedCapexDecider: CapexProseDeciding {
                 in: "ヘルスケア事業の設備投資は10百万円、イメージングは20百万円であります。").isEmpty)
     }
 
+    /// 総額判定の基準文が、「総額」の語が無い取得文(「…を取得いたしました」)と、一部を示す語(「うち」「主な」
+    /// 「〜事業において」)の両方を、Jev に明示している。8928 S100WQZC の確信度は旧文面で 0.84〜0.87(しきい値
+    /// 0.9 未満で採用されない)、新文面で 0.99 だった。実際の判定は Jev なので、ここでは文面だけを固定する。
+    @Test func totalCriteriaNamesAcquisitionSentencesAndPartialMarkers() throws {
+        let body = try #require(
+            OpenRouterCapexProseDecider.requestJSON(model: "m", sentence: "文"))
+        let json = try #require(String(data: body, encoding: .utf8))
+        #expect(json.contains("取得いたしました"))
+        #expect(json.contains("総額」の語が無くても"))
+        #expect(json.contains("うち"))
+        #expect(json.contains("特定の事業"))
+    }
+
     @Test func appliesCompanyTotalToOverviewCellOnly() async throws {
         let text = "当連結会計年度の設備投資は4,409百万円であります。"
         let applied = await CapexProseTotalDecision.decide(
