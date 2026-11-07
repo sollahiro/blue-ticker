@@ -3,10 +3,11 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>有報LAB｜有価証券報告書を、読める数字に。</title>
-  <meta name="description" content="有報LABは、EDINETの有価証券報告書から財務の数字を抜き出し、利益の増減を要因に分けて見せる閲覧補助サービス。iOSアプリと、ClaudeなどのAIアシスタント向けコネクタで使えます。">
-  <meta property="og:title" content="有報LAB｜有価証券報告書を、読める数字に。">
+  <title>有報LAB｜日本企業の財務データを、分かりやすく分析できる！</title>
+  <meta name="description" content="日本企業の財務データを、分かりやすく分析できる！有報LABは、EDINETの有価証券報告書から数字を抜き出し、利益の増減を要因に分けて見せる閲覧補助サービス。iOSアプリと、ClaudeなどのAIアシスタント向けコネクタで使えます。">
+  <meta property="og:title" content="有報LAB｜日本企業の財務データを、分かりやすく分析できる！">
   <meta property="og:description" content="利益が増えた理由、減った理由が、有報から一目でわかる。iOSアプリとAIアシスタント向けコネクタ。">
+  <meta property="og:image" content="https://yuholab.com/img/hero.avif">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://yuholab.com/">
   <style>
@@ -44,7 +45,10 @@
     .btn:focus-visible, a:focus-visible { outline: 3px solid var(--yellow); outline-offset: 3px; }
 
     header.hero {
-      background: linear-gradient(160deg, var(--blue) 0%, var(--blue-dark) 100%);
+      background:
+        linear-gradient(160deg, rgba(0,35,220,.93) 0%, rgba(0,21,127,.9) 100%),
+        url("/img/hero.avif") center / cover no-repeat,
+        var(--blue);
       color: #fff;
       padding: 1.25rem 0 4.5rem;
       overflow: hidden;
@@ -52,8 +56,8 @@
     .nav { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
     .nav img { height: 34px; width: auto; display: block; }
     .nav a.link { color: #fff; text-decoration: none; font-size: 0.9rem; opacity: .85; }
-    .hero-grid { display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 2.5rem; align-items: center; margin-top: 3rem; }
-    h1 { font-size: clamp(2rem, 5.2vw, 3.2rem); line-height: 1.25; margin: 0 0 1rem; font-weight: 800; letter-spacing: .01em; }
+    .hero-grid { display: grid; grid-template-columns: 1.25fr 0.75fr; gap: 2.5rem; align-items: center; margin-top: 3rem; }
+    h1 { font-size: clamp(1.6rem, 4vw, 2.5rem); word-break: auto-phrase; text-wrap: balance; line-height: 1.25; margin: 0 0 1rem; font-weight: 800; letter-spacing: .01em; }
     h1 em { font-style: normal; color: var(--yellow); }
     .lead { font-size: 1.05rem; opacity: .92; margin: 0 0 1.8rem; max-width: 32rem; }
     .cta { display: flex; flex-wrap: wrap; gap: .8rem; }
@@ -107,7 +111,22 @@
     .trust { display: grid; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); gap: 1.1rem; }
     .trust .card h3::before { content: "✓ "; color: var(--green); }
 
-    .final { background: var(--blue); color: #fff; text-align: center; }
+    .final {
+      background:
+        linear-gradient(rgba(0,35,220,.9), rgba(0,21,127,.92)),
+        url("/img/cta.avif") center / cover no-repeat,
+        var(--blue);
+      color: #fff; text-align: center;
+    }
+    .band {
+      background:
+        linear-gradient(90deg, rgba(10,14,40,.88) 0%, rgba(10,14,40,.55) 100%),
+        url("/img/band.avif") center / cover no-repeat,
+        #1b2040;
+      color: #fff; padding: 3.2rem 0;
+    }
+    .band p { margin: 0; font-size: clamp(1.15rem, 2.8vw, 1.6rem); font-weight: 700; line-height: 1.6; max-width: 40rem; }
+    .band p span { color: var(--yellow); }
     .final p { opacity: .9; margin: 0 0 1.6rem; }
 
     footer { background: #0b0e1d; color: #b9bed2; padding: 2.5rem 0; font-size: .88rem; }
@@ -131,8 +150,8 @@
       </nav>
       <div class="hero-grid">
         <div>
-          <h1>有報を、<br><em>読める数字</em>に。</h1>
-          <p class="lead">有報LABは、EDINETの有価証券報告書から財務の数字を抜き出し、「なぜ利益が増えたのか、減ったのか」を要因に分けて見せる閲覧補助サービスです。専門用語に詳しくなくても、決算の中身をつかめます。</p>
+          <h1>日本企業の財務データを、<br><em>分かりやすく分析</em>できる！</h1>
+          <p class="lead">EDINETの有価証券報告書から財務の数字を抜き出し、「なぜ利益が増えたのか、減ったのか」を要因に分けて見せる閲覧補助サービスです。専門用語に詳しくなくても、決算の中身をつかめます。</p>
           <div class="cta">
             <a class="btn" href="https://apps.apple.com/jp/app/id6807425773">App Storeで入手</a>
             <a class="btn ghost" href="#connector">Claudeで使う</a>
@@ -177,6 +196,10 @@
       </div>
     </section>
 
+    <div class="band" role="presentation">
+      <div class="wrap"><p>分厚い有報の中から、<span>いま知りたい数字</span>だけを。<br>変化の理由まで、一画面で。</p></div>
+    </div>
+
     <section class="alt" id="connector">
       <div class="wrap two">
         <div>
@@ -211,7 +234,7 @@
 
     <section class="final">
       <div class="wrap">
-        <h2>有報を、もっと身近に。</h2>
+        <h2>日本企業の財務を、もっと身近に。</h2>
         <p>まずはアプリで、気になる企業を開いてみてください。</p>
         <a class="btn" href="https://apps.apple.com/jp/app/id6807425773">App Storeで入手</a>
       </div>
