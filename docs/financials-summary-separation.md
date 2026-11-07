@@ -1,6 +1,6 @@
 # financials（Summary）と正本の分離
 
-`company_financials`（公開面は Summary / Waterfall）を、正本（statement / notes / breakdown）からの組立ビューへ寄せる**現行の設計**。ドメイン個別の仕様は `statement.md` / `breakdown.md`。`fin-vN` のバンプ規則は `.agents/rules/versioning.md`。
+`company_financials`（公開面は Summary / Waterfall）を、正本（statement / breakdown）からの組立ビューへ寄せる**現行の設計**。ドメイン個別の仕様は `statement.md` / `breakdown.md`。`fin-vN` のバンプ規則は `.agents/rules/versioning.md`。
 
 ## 用語
 
@@ -17,7 +17,7 @@
 同一 XBRL パスで resolver 直呼び:
 
 ```
-XBRL → statement / notes / breakdown（正本）
+XBRL → statement / breakdown（正本）
          ↓
       IndividualAnalyzer（組立スナップショット）
          ↓
@@ -25,8 +25,8 @@ XBRL → statement / notes / breakdown（正本）
 ```
 
 - 正本 API も直接公開。`company_financials` は materialized view（read 時 join は採らない）。
-- 生値の正本は **statement / notes / breakdown のみ**（Filing は本文ではない）。
-- **組立**: そのフィールドを計算できることが前提。statement で取れたらそれ。取れなければ notes、それも無ければ breakdown。**employees / rd は breakdown 分母が正本**（statement PL の研究開発行は使わない）。1 値を複数源の**合計同士**から足し合わせない。IBD は下表（項目タグの合算。notes 合計での代用ではない）。`available_via_*` は notes の 404 理由であり組立の分岐ではない。
+- 生値の正本は **statement / breakdown のみ**（Filing は本文ではない）。
+- **組立**: そのフィールドを計算できることが前提。statement で取れたらそれ。取れなければ breakdown。**employees / rd は breakdown 分母が正本**（statement PL の研究開発行は使わない）。**capex は breakdown `capex` 軸の `capital_expenditures_overview` 分母が正本**（概要に XBRL タグが無く本文総額 `capex_prose` だけの書類は、ingest が格納済みの軸の分母で置き換える。タグ由来は financials が同じ XBRL から既に同じ値を解決しており、無ければ CF 支出額）。1 値を複数源の**合計同士**から足し合わせない。IBD は下表（項目タグの合算。notes 合計での代用ではない）。
 - 派生は組立層。financials 層で XBRL を再解釈しない。
 
 ## 設計方針（確定）
@@ -36,7 +36,7 @@ XBRL → statement / notes / breakdown（正本）
 | 格納 | `company_financials` 維持 |
 | `fin-vN` | 存続。破壊的変更だけバンプ（`.agents/rules/versioning.md`）。IA 切替や既存の正しい値を保つ細粒度修正では上げない |
 | 新規生値 | まず正本へ。financials に足さない |
-| 組立 | statement → notes → breakdown。取れた源を1つ採用。**employees / rd は breakdown のみ** |
+| 組立 | statement → breakdown。取れた源を1つ採用。**employees / rd は breakdown のみ**。capex は概要タグ → （本文由来のみ格納済み軸で置換）→ CF |
 | IBD | breakdown `interest_bearing_debt` 軸の合計行（= `in_total=true` の行の和。全行の和ではない。decider 無し）。銀行は bank components 行の合計。軸が `needs_review`（公開保留）・`not_found`・解決不能のときは既存の `IBDExtractor.extractCanonical` 値をそのまま使い、内部の method `legacy_ibd_extractor_fallback` と warnings に理由（未確認の Jev 分類行など）を残す（公開フィールドは増やさない）。無借金の 0 は旧 Extractor の `zero_debt` のまま |
 | 銀行業の比率 | 銀行（IBD の銀行判定 `isBank` = statement Instant に `DepositsLiabilitiesBNK`、または EDINET コードリストの提出者業種が銀行業（ゆうちょ 7182）。bank components と同じ判定。保険・証券は対象外）は `net_cash` / `net_de` / `roic` / `nopat_margin` / `invested_capital_turnover` を null。預金を IBD に含めないため有利子負債ベースの比率は意味を持たない（2026-10-12 決定）。`interest_bearing_debt`（預金を除く）は残す。Waterfall の `net_cash_change` / `debt_change_impact` も null（`cash_change_impact` は残す）。キーは増やさない |
 | employees / rd | breakdown 軸の分母。financials はパススルー。PL 行は使わない |
