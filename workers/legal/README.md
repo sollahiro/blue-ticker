@@ -9,6 +9,7 @@ iOS アプリ「有報LAB」と公開 MCP コネクタ（HAPIS `mcp/`、`https:/
 - https://yuholab.com （ランディングページ。サポート URL の先でもあり、問い合わせ先を載せる）
 - https://yuholab.com/privacy （免責・プライバシー）
 - https://yuholab.com/terms
+- https://yuholab.com/en/privacy ・ https://yuholab.com/en/terms （英語版。日本語版の翻訳で、食い違うときは日本語版が優先。Assets がそのまま配信するので Worker の書き換えは要らない。日本語版を変えたら英語版も合わせる）
 - https://blt-legal.sollahiro.workers.dev/
 
 問い合わせ先は `support@yuholab.com`（iCloud+）。

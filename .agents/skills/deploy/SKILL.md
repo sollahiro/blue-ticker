@@ -27,7 +27,7 @@ Neon write・訂正有報は `.agents/skills/production-ingest/SKILL.md`。リ�
 
 `/healthz` は認証不要。`cache_versions` でイメージの版を確認。
 
-認証: `CF_ACCESS_TEAM_DOMAIN` あり → Access（エッジ信頼） / なし → 無認証（loopback、または `BLT_ALLOW_UNAUTHENTICATED=1`）。非 loopback でどちらも無いと起動拒否。Bearer は廃止済み。
+認証: `CF_ACCESS_TEAM_DOMAIN` あり → Access（エッジ信頼） / なし → 無認証（loopback、または `BLT_ALLOW_UNAUTHENTICATED=1`）。非 loopback でどちらも無いと起動拒否。
 
 ## Fly.io
 
@@ -79,7 +79,7 @@ container exec blt-server /app/blt-ingest ingest --limit 50
 
 ### Feed Trend Worker
 
-匿名カウンターは Cloudflare Worker + Analytics Engine（`workers/feed-trend/`）。origin は URL + Bearer で POST するだけ（Fly 固有 API は使わない）。**この Worker を Tunnel の `api.*` / `mcp.*` に差し込まない。**
+匿名カウンターは Cloudflare Worker + Analytics Engine（`workers/feed-trend/`）。origin は URL + Bearer で POST するだけ（Fly 固有 API は使わない）。**この Worker を Tunnel の `api.*` に差し込まない。`mcp.yuholab.com` は公開コネクタ（HAPIS `mcp/`）のカスタムドメイン。**
 
 初回（手元 Mac。`.env` の `BLT_R2_ACCOUNT_ID` を流用可）:
 
@@ -106,7 +106,7 @@ fly secrets set BLT_FEED_TREND_URL='https://blt-feed-trend.<account>.workers.dev
 
 ### Legal page Worker
 
-有報LAB（iOS アプリ）の免責・プライバシー・利用規約は静的 HTML（`workers/legal/`）。トークンは無い。**この Worker を Tunnel の `api.*` / `mcp.*` に差し込まない。**
+有報LAB（iOS アプリ）の免責・プライバシー・利用規約は静的 HTML（`workers/legal/`）。トークンは無い。**この Worker を Tunnel の `api.*` に差し込まない。`mcp.yuholab.com` は公開コネクタ（HAPIS `mcp/`）のカスタムドメイン。**
 
 ```bash
 cd workers/legal
@@ -126,17 +126,6 @@ curl -s "https://api.<domain>/v1/companies/7203/financials?years=1" \
 SSO は `Cookie: CF_Authorization=<jwt>`（`Cf-Access-Jwt-Assertion` だけでは通らない）。
 
 レート制限はゾーン Free の短い period のみ。悪用が観測されたらプラン検討。
-
-## MCP（Managed OAuth・開発用）
-
-製品面ではない。ChatGPT Apps は凍結。ホストは解体しない。Cursor / 手元検証で使うときだけ触る。
-
-`POST /`。Managed OAuth は**パス付きホスト不可** → 専用 `mcp.<domain>`。
-
-1. Tunnel に `mcp.<domain>` → 同 origin
-2. Access アプリ（パスなし）＋ Managed OAuth ON
-3. 許可 IdP と redirect URI（`http://localhost/callback`・`http://127.0.0.1/callback` — ポートなしで登録）
-4. discovery が 200、未認証 `tools/list` が 401 であることを確認
 
 ## 定期同期（ローカル）
 
@@ -189,7 +178,7 @@ Neon / Fly Volume の内容は EDINET から `sync`→`ingest` で再導出可�
 
 ### Cloudflare（撤退経路なし・SSO）
 
-Tunnel + Access（SSO / Service Token / MCP OAuth。MCP は開発用）。Bearer は廃止済み。安全性は **Tunnel ＋ 公開ポート閉鎖 ＋ Access** の3点セット。どれか欠けると無認証素通り。R2 バケット分離は `.agents/rules/caching.md`。
+Tunnel + Access（SSO / Service Token）。安全性は **Tunnel ＋ 公開ポート閉鎖 ＋ Access** の3点セット。どれか欠けると無認証素通り。R2 バケット分離は `.agents/rules/caching.md`。
 
 ## 定常運用
 
