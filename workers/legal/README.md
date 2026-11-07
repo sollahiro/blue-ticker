@@ -1,6 +1,6 @@
 # Legal page Worker
 
-iOS アプリ「有報LAB」の免責・プライバシー方針および利用規約（App Store のプライバシーポリシー URL・サポート URL の先）。静的 HTML だけ。認証もトークンも無い。有報LAB API 自体の規約ページが要るときは、別ページとして `sollahiro.com/blue-ticker/...` に置く。
+iOS アプリ「有報LAB」と公開 MCP コネクタ（HAPIS `mcp/`、`https://mcp.yuholab.com/mcp`）の免責・プライバシー方針および利用規約（App Store と Claude の Connectors Directory のプライバシーポリシー URL・サポート URL の先）。静的 HTML だけ。認証もトークンも無い。有報LAB API 自体の規約ページが要るときは、別ページとして `sollahiro.com/blue-ticker/...` に置く。
 
 **この Worker を `api.*` / `mcp.*` の前段に置かない。** Tunnel + Access はそのまま。
 
