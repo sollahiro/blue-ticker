@@ -28,24 +28,14 @@ struct CapexResult {
     var tag: String?
 }
 
+/// 設備投資額（設備投資等の概要の総額）。CF の取得支出は使わない。
+/// 概要の XBRL タグが無いときは null（本文のみの書類は ingest が格納済み capex 軸の総額で置き換える）。
 enum CapexExtractor {
 
     static func extract(fieldSet: FieldSet, accountingStandard: String) -> CapexResult {
-        // 設備投資等の概要タグを優先（正値）
         let overview = resolveItem(fieldSet, tags: Xbrl.capexOverviewTags)
         if let v = overview.current {
             return CapexResult(current: v, method: "overview", tag: overview.tag)
-        }
-        // CF計算書フォールバック（負値を正値へ変換）
-        let cfTags = accountingStandard == "IFRS" ? Xbrl.capexCFIFRSTags : Xbrl.capexCFJGAAPTags
-        let item = resolveItem(fieldSet, tags: cfTags)
-        if let v = item.current {
-            return CapexResult(current: abs(v), method: "cf_investing", tag: item.tag)
-        }
-        let fallbackTags = accountingStandard == "IFRS" ? Xbrl.capexCFJGAAPTags : Xbrl.capexCFIFRSTags
-        let fallback = resolveItem(fieldSet, tags: fallbackTags)
-        if let v = fallback.current {
-            return CapexResult(current: abs(v), method: "cf_investing_fallback", tag: fallback.tag)
         }
         return CapexResult(current: nil, method: "not_found", tag: nil)
     }

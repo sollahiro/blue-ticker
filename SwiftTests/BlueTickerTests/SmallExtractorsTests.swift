@@ -57,19 +57,28 @@ import Foundation
         #expect(result.method == "overview")
     }
 
-    @Test func testCapexCfInvestingJgaapNegatesValue() {
-        // J-GAAP CF は負値で記録 → 正値に変換
+    @Test func testCapexIgnoresCashFlowAcquisitionJgaap() {
+        // CF の取得支出は設備投資総額ではないので使わない（概要タグが無ければ null）。
         let fs = makeFieldSet(("PurchaseOfPropertyPlantAndEquipmentInvCF", -3_000_000.0, -2_500_000.0))
         let result = CapexExtractor.extract(fieldSet: fs, accountingStandard: "J-GAAP")
-        #expect(result.current == 3_000_000.0)
-        #expect(result.method == "cf_investing")
+        #expect(result.current == nil)
+        #expect(result.method == "not_found")
     }
 
-    @Test func testCapexCfInvestingIfrsNegatesValue() {
+    @Test func testCapexIgnoresCashFlowAcquisitionIfrs() {
         let fs = makeFieldSet(("AcquisitionOfPropertyPlantAndEquipmentInvCFIFRS", -4_000_000.0, nil))
         let result = CapexExtractor.extract(fieldSet: fs, accountingStandard: "IFRS")
-        #expect(result.current == 4_000_000.0)
-        #expect(result.method == "cf_investing")
+        #expect(result.current == nil)
+        #expect(result.method == "not_found")
+    }
+
+    @Test func testCapexOverviewWinsOverCashFlowWhenBothExist() {
+        let fs = makeFieldSet(
+            ("CapitalExpendituresOverviewOfCapitalExpendituresEtc", 7_350_000.0, nil),
+            ("PurchaseOfPropertyPlantAndEquipmentInvCF", -6_015_000.0, nil))
+        let result = CapexExtractor.extract(fieldSet: fs, accountingStandard: "J-GAAP")
+        #expect(result.current == 7_350_000.0)
+        #expect(result.method == "overview")
     }
 
     @Test func testCapexNotFound() {

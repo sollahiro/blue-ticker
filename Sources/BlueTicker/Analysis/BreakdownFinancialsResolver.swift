@@ -224,8 +224,9 @@ enum BreakdownFinancialsResolver {
         }
     }
 
-    /// financials の `capex`。正本は breakdown の
-    /// `capital_expenditures_overview` と同じ Overview XBRL タグ→CFタグフォールバック。
+    /// financials の `capex`。正本は breakdown の `capital_expenditures_overview`（設備投資の総額）。
+    /// 同じ Overview XBRL タグだけを解決する。CF の取得支出は使わず、タグが無ければ null。
+    /// 概要が本文のみの書類は、ingest が格納済み capex 軸の本文由来の総額で置き換える。
     /// company_breakdowns の格納順には依存せず、financials と breakdown が同じ低レベル
     /// XBRL解決経路を共有する。
     static func financialsCanonicalCapex(
@@ -237,7 +238,7 @@ enum BreakdownFinancialsResolver {
         return CanonicalValue(value: result.current, tag: result.tag)
     }
 
-    /// breakdown `capital_expenditures_overview` の会社全体総額。CF fallbackは使わず、
+    /// breakdown `capital_expenditures_overview` の会社全体総額。
     /// Overviewタグだけを解決する（セグメントdimensionが無い企業のdenominator-only用）。
     static func breakdownCanonicalCapexOverviewItem(xbrlDir: URL) -> CanonicalValue {
         let allTags = XBRLUtils.collectAllNumericElements(in: xbrlDir, nilAsZero: false)
