@@ -27,7 +27,7 @@ Neon write・訂正有報は `.agents/skills/production-ingest/SKILL.md`。リ�
 
 `/healthz` は認証不要。`cache_versions` でイメージの版を確認。
 
-認証: `CF_ACCESS_TEAM_DOMAIN` あり → Access（エッジ信頼） / なし → 無認証（loopback、または `BLT_ALLOW_UNAUTHENTICATED=1`）。非 loopback でどちらも無いと起動拒否。Bearer は廃止済み。
+認証: `CF_ACCESS_TEAM_DOMAIN` あり → Access（エッジ信頼） / なし → 無認証（loopback、または `BLT_ALLOW_UNAUTHENTICATED=1`）。非 loopback でどちらも無いと起動拒否。
 
 ## Fly.io
 
@@ -127,10 +127,6 @@ SSO は `Cookie: CF_Authorization=<jwt>`（`Cf-Access-Jwt-Assertion` だけで�
 
 レート制限はゾーン Free の短い period のみ。悪用が観測されたらプラン検討。
 
-## MCP（開発用）
-
-製品面ではない。公開ホストは持たない（Tunnel の `mcp.*` と Access アプリ「有報LAB_MCP」は 2026-11-07 に外した。`mcp.yuholab.com` は公開コネクタ＝HAPIS `mcp/` のカスタムドメイン）。Cursor / 手元検証は loopback の `POST /` を使う。外部から開発用 MCP を使う必要が出たら、`mcp.yuholab.com` 以外のホスト（例: `mcp-dev.<domain>`）で Tunnel と Access アプリ（パスなし・Managed OAuth はパス付きホスト不可）を作り直す。
-
 ## 定期同期（ローカル）
 
 重い ingest はローカル。スケジュール（launchd 等）はマシン固有のためリポジトリに置かない。**ジョブ編成・実行順**は `docs/ingest-policy.md`。本番 write は `.agents/skills/production-ingest/SKILL.md`。**limit / skip / write** は `scripts/jp/edinet/ingest.local.env`（gitignore。PR 不要）。
@@ -182,7 +178,7 @@ Neon / Fly Volume の内容は EDINET から `sync`→`ingest` で再導出可�
 
 ### Cloudflare（撤退経路なし・SSO）
 
-Tunnel + Access（SSO / Service Token / MCP OAuth。MCP は開発用）。Bearer は廃止済み。安全性は **Tunnel ＋ 公開ポート閉鎖 ＋ Access** の3点セット。どれか欠けると無認証素通り。R2 バケット分離は `.agents/rules/caching.md`。
+Tunnel + Access（SSO / Service Token）。安全性は **Tunnel ＋ 公開ポート閉鎖 ＋ Access** の3点セット。どれか欠けると無認証素通り。R2 バケット分離は `.agents/rules/caching.md`。
 
 ## 定常運用
 

@@ -6,7 +6,7 @@
 
 ## 方針
 
-- **REST `/v1` が契約の正**。製品面は REST・iOS・公開 MCP コネクタ（HAPIS `mcp/` が HAPIS ゲートウェイ経由で REST を呼ぶ。Claude を先に、次に ChatGPT）。`BltMcpServerCore` は開発専用のまま。
+- **REST `/v1` が契約の正**。製品面は REST・iOS・公開 MCP コネクタ（HAPIS `mcp/` が HAPIS ゲートウェイ経由で REST を呼ぶ。Claude を先に、次に ChatGPT）。
 - Core はサーバー専用にしない（テスト・ingest 計算と共有）。
 - 第三者公開（段階 B）の公開入口は HAPIS。機械 REST は x402。詳細は `public-api.md`。機能単位の有料マスクは採らない。
 - Summary の水準値は **Statement / Note / Breakdown → financials** 組立（`financials-summary-separation.md`）。Waterfall も同行走査のため同じ切替に乗る。

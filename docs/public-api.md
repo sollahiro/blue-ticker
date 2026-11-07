@@ -1,6 +1,6 @@
 # REST 第三者公開（段階 B）
 
-段階 A（自社向け REST 本線・Service Token・配布 CLI 廃止）は達成済み。達成済みの契約は次に委譲する（本ファイルに再叙述しない）:
+段階 A（自社向け REST 本線・Service Token）は達成済み。達成済みの契約は次に委譲する（本ファイルに再叙述しない）:
 
 - 認証の住み分け → `api-auth.md`
 - 互換ポリシー → `api-compatibility.md`
