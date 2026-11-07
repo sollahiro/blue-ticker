@@ -199,3 +199,27 @@ test("terms page is auxiliary to the original filing", () => {
   assert.doesNotMatch(html, /TestFlight/);
   assert.doesNotMatch(html, /必要と判断したした場合/);
 });
+
+test("English pages are translations of the Japanese pages", () => {
+  const privacy = readFileSync(join(publicDir, "en/privacy.html"), "utf8");
+  const terms = readFileSync(join(publicDir, "en/terms.html"), "utf8");
+  assert.match(privacy, /<html lang="en">/);
+  assert.match(terms, /<html lang="en">/);
+  assert.match(privacy, /<h1>YuhoLAB Disclaimer and Privacy Policy<\/h1>/);
+  assert.match(terms, /<h1>YuhoLAB Terms of Use<\/h1>/);
+  // 日本語版との相互リンクと、事実の記述が同じであること。
+  assert.match(privacy, /href="\/privacy">日本語</);
+  assert.match(terms, /href="\/terms">日本語</);
+  assert.match(privacy, /Individual deletion requests therefore cannot, in principle, be accommodated/);
+  assert.match(privacy, /Source: <a href="https:\/\/disclosure2\.edinet-fsa\.go\.jp\//);
+  assert.match(privacy, /Public Data License \(Version 1\.0\)/);
+  assert.match(privacy, /you sign in with a Google account/);
+  assert.match(terms, /Osaka District Court/);
+  assert.match(terms, /support@yuholab\.com/);
+  assert.doesNotMatch(privacy, /OpenRouter|Sign in with Apple/);
+  for (const html of [privacy, terms]) {
+    assert.doesNotMatch(html, /[ぁ-んァ-ヶ]/, "no kana in the English page");
+  }
+  const ja = readFileSync(join(publicDir, "privacy.html"), "utf8");
+  assert.match(ja, /href="\/en\/privacy">English</);
+});
