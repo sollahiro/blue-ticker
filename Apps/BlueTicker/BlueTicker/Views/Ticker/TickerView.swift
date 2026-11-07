@@ -158,7 +158,6 @@ struct TickerView: View {
             for item in matching {
                 modelContext.delete(item)
             }
-            Task { await APIClient.shared.unpinCode(company.code) }
             toast = WatchToast(added: false)
         }
         withAnimation(.spring(duration: 0.35)) { watchToast = toast }
@@ -174,7 +173,6 @@ struct TickerView: View {
             sortOrder: WatchedCompany.nextSortOrder(among: watched)
         )
         modelContext.insert(row)
-        Task { await APIClient.shared.pinCode(company.code) }
     }
 
     /// Feed から先に追加しても、後から取れた業種でウォッチ行を埋める。

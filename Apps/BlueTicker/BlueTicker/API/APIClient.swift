@@ -8,7 +8,6 @@ actor APIClient {
     private let cache: ResponseCache
     private let hapis: HAPISConsumerClient
     private let originGate: HAPISOriginGate
-    private var pinnedCodes: Set<String> = []
     private var inFlightGets: [String: InFlightGet] = [:]
 
     private struct InFlightGet {
@@ -54,18 +53,6 @@ actor APIClient {
         #else
             return InMemoryHAPISTokenStore()
         #endif
-    }
-
-    func setPinnedCodes(_ codes: Set<String>) {
-        pinnedCodes = codes
-    }
-
-    func pinCode(_ code: String) {
-        pinnedCodes.insert(code)
-    }
-
-    func unpinCode(_ code: String) {
-        pinnedCodes.remove(code)
     }
 
     func searchCompanies(query: String) async throws -> [CompanyHit] {
@@ -203,7 +190,7 @@ actor APIClient {
     }
 
     private func ttl(for code: String) -> TimeInterval {
-        pinnedCodes.contains(code) ? ResponseCache.watchlistTTL : ResponseCache.analysisTTL
+        ResponseCache.analysisTTL
     }
 
     private func path(_ suffix: String) -> URL {
@@ -253,7 +240,9 @@ actor APIClient {
                     throw clientError
                 }
             }
-            if cacheTTL != nil, let data = await cache.load(key: key, maxAge: nil),
+            // 取り直しに失敗したときだけ古い応答を返す。上限は 7 日（それより古ければエラーにする）。
+            if cacheTTL != nil,
+                let data = await cache.load(key: key, maxAge: ResponseCache.staleFallbackLimit),
                 let decoded = try? decoder.decode(T.self, from: data)
             {
                 return decoded
