@@ -1334,7 +1334,7 @@ private extension BltServerContext {
 
     /// 本文総額と remainder / exclusion。タグが無い書類で応答が無いときは行を作らず failed。
     /// 決定論のマトリクスがあるときは、Overview 本文の応答無しで既存セルを捨てない。
-    func fillCapexProse(
+    internal func fillCapexProse(
         payload: BreakdownSnapshotPayload?, xbrlDir: URL, docID: String
     ) async -> CapexProseFillResult {
         if var payload {
@@ -1353,7 +1353,9 @@ private extension BltServerContext {
                     let audit = filled.audit ?? .segmentNoteJev(total.audit)
                     return .resolved((payload, payload.sourceKind, audit))
                 case .unavailable:
-                    break
+                    // Jev が不達のまま概要なしの行を確定すると、現行版の決定論の行として以後 skip され、
+                    // 本文の総額が入らない。確定せず再試行する(既存の行は変えない)。
+                    return .failed
                 case .notApplied:
                     break
                 }
