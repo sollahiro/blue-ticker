@@ -468,3 +468,31 @@ import Testing
             ]?.value == 370_500_000_000)
     }
 }
+
+/// capex 軸の回帰判定は、capex が実際に読むタグとの完全一致だけにする。
+/// 4751 S100UXZA: 営業CFの `DecreaseIncreaseInAccountsReceivableTradeAndContractAssetsOpeCF` が
+/// 部分一致("Assets")で capex を要確認にしていた。
+@Suite struct CapexOverlayRegressionTagMatchTests {
+    private func regression(_ tag: String) -> XbrlOverlayRegression {
+        XbrlOverlayRegression(
+            originalDocID: "S100UXZA", correctionDocID: "S100VRC4",
+            kind: xbrlOverlayRegressionKindScaleJump, tag: tag)
+    }
+
+    private let capexPayload = BreakdownSnapshotPayload(
+        axis: breakdownAxisCapex, denominator: 0, denominatorTag: "CapitalExpendituresIFRS",
+        rows: [], sourceKind: breakdownSourceXbrlFacts, needsReview: false, warnings: [])
+
+    @Test func unrelatedOperatingCashFlowTagDoesNotAffectCapex() {
+        let tag = "DecreaseIncreaseInAccountsReceivableTradeAndContractAssetsOpeCF"
+        #expect(!overlayRegressionAffectsBreakdown(regression(tag), payload: capexPayload))
+    }
+
+    @Test func tagsCapexReadsStillAffectCapex() {
+        for tag in Xbrl.segmentAssetsTags + Xbrl.segmentCapitalExpenditureTags
+            + Xbrl.segmentNoncurrentAssetAdditionTags + Xbrl.capexOverviewTags
+        {
+            #expect(overlayRegressionAffectsBreakdown(regression(tag), payload: capexPayload), "\(tag)")
+        }
+    }
+}

@@ -226,9 +226,9 @@ func overlayRegressionAffectsBreakdown(
             payload.capitalExpendituresOverview?.denominatorTag,
         ].compactMap { $0 }
         if tags.contains(regression.tag) { return true }
-        return isCapitalExpenditureOverlayTag(regression.tag)
-            || regression.tag.contains("Assets")
-            || regression.tag.contains("Addition")
+        // capex が実際に読むタグとの完全一致だけ。部分一致は営業CFの `...ContractAssets...` 等の
+        // 無関係なタグまで拾って要確認にする。
+        return capexOverlayRegressionTags.contains(regression.tag)
     case breakdownAxisInterestBearingDebt:
         return regression.tag.contains("Borrow") || regression.tag.contains("Loan")
             || regression.tag.contains("Bond") || regression.tag.contains("Debt")
@@ -240,6 +240,10 @@ func overlayRegressionAffectsBreakdown(
         return false
     }
 }
+
+private let capexOverlayRegressionTags: Set<String> = Set(
+    Xbrl.segmentAssetsTags + Xbrl.segmentCapitalExpenditureTags
+        + Xbrl.segmentNoncurrentAssetAdditionTags + Xbrl.capexOverviewTags)
 
 func isCapitalExpenditureOverlayTag(_ tag: String) -> Bool {
     tag.contains("CapitalExpenditure") || tag.contains("CapitalInvestment")
