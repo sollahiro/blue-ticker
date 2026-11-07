@@ -145,6 +145,8 @@ test("privacy disclaimer matches product facts without overbroad liability", () 
     html,
     /App Attestの鍵は、正規アプリからのアクセス確認と不正利用防止のための証明用であり、広告識別子ではありません/,
   );
+  // チャット機能は削除済み。質問をサーバー・外部 AI へ送る記述を戻さない。
+  assert.doesNotMatch(html, /チャットで送る質問|OpenRouter/);
   assert.doesNotMatch(html, /Crashlytics/);
   assert.doesNotMatch(html, /Firebase/);
   assert.doesNotMatch(html, /Sentry/);
