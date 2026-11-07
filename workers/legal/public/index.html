@@ -112,6 +112,10 @@
     code { background: #eceefb; padding: .1rem .4rem; border-radius: 6px; font-size: .85em; word-break: break-all; }
     ul.plain { padding-left: 1.2rem; }
     ul.plain li { margin: .35rem 0; }
+    ul.benefits { list-style: none; padding-left: 0; margin: 0 0 1.2rem; }
+    ul.benefits li { margin: .7rem 0; padding-left: 1.4rem; position: relative; }
+    ul.benefits li::before { content: "✓"; position: absolute; left: 0; color: var(--green); font-weight: 700; }
+    ul.benefits strong { display: block; }
 
     .trust { display: grid; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); gap: 1.1rem; }
     .trust .card h3::before { content: "✓ "; color: var(--green); }
@@ -211,6 +215,11 @@
           <div class="eyebrow">AIアシスタント向けコネクタ</div>
           <h2>Claudeに、有報のデータを渡す。</h2>
           <p class="sub" style="margin-bottom:1.2rem">有報LABコネクタをつなぐと、AIアシスタントが有報LABのデータを読み出して答えます。銘柄の検索、財務サマリ、利益の増減要因、有報の本文まで。読み取り専用です。</p>
+          <ul class="plain benefits">
+            <li><strong>文章と数字を、まとめて読み解く。</strong>事業の説明や経営方針といった言葉の情報と、何年分もの財務の数字を、AIがひとつの流れで結びつけて整理します。</li>
+            <li><strong>気になったところを、そのまま掘り下げる。</strong>「なぜ減った？」「内訳は？」と会話を重ねるだけで、全体から細部へと分析を進められます。</li>
+            <li><strong>数字の山から、傾向が見えてくる。</strong>大量のデータを一つずつ追わなくても、変化の大きいところや、年ごとの動きを拾い上げてくれます。</li>
+          </ul>
           <ul class="plain">
             <li>接続先: <code>https://mcp.yuholab.com/mcp</code>（MCP）</li>
             <li>接続時にGoogleアカウントでサインインします（メールアドレスは保存しません）</li>
