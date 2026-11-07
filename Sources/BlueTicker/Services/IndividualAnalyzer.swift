@@ -160,7 +160,7 @@ struct IndividualAnalyzer {
         raw.parentEquity = statementMain?.parentEquity.map { $0 / millionYen }
         raw.cfo = statementMain?.cfo.map { $0 / millionYen }
         raw.cfi = statementMain?.cfi.map { $0 / millionYen }
-        // 設備投資: breakdown overview source → CF（#6）
+        // 設備投資: 設備投資等の概要の総額。CF の取得支出は使わず、タグが無ければ nil
         raw.capex = BreakdownFinancialsResolver.financialsCanonicalCapex(
             xbrlDir: xbrlDir, accountingStandard: accountingStandard
         ).value.map { $0 / millionYen }

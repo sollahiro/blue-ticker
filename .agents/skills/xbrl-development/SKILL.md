@@ -171,7 +171,7 @@ PublicDoc/
 | `RDExtractor` | 研究開発費 |
 | `NetRevenueExtractor` | IFRS金融会社向け純収益・事業利益 |
 | `CashFlowExtractor` | 営業CF・投資CF |
-| `CapexExtractor` | 設備投資額（設備投資等概要→CF順） |
+| `CapexExtractor` | 設備投資額（設備投資等概要の総額のみ。CF の取得支出は使わず、無ければ null） |
 | `ShareBuybackExtractor` | 自己株式取得額（株主資本変動計算書→CF順） |
 | `BalanceSheetExtractor` | 総資産・流動/固定資産・流動/固定負債・純資産 |
 | `InterestBearingDebtBreakdown` | 有利子負債の内訳と /financials 合計（明細表優先、帯外は BS。銀行は bank components） |

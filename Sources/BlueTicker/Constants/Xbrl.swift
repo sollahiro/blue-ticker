@@ -1048,11 +1048,6 @@ enum Xbrl {
     static let capexOverviewTags: [String] = [
         "CapitalExpendituresOverviewOfCapitalExpendituresEtc",
     ]
-    static let capexCFJGAAPTags: [String] = ["PurchaseOfPropertyPlantAndEquipmentInvCF"]
-    static let capexCFIFRSTags: [String] = [
-        "AcquisitionOfPropertyPlantAndEquipmentInvCFIFRS",
-        "PurchaseOfPropertyPlantAndEquipmentInvCFIFRS",
-    ]
 
     // MARK: - 現金タグ
 
