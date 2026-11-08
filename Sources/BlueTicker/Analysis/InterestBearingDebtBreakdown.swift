@@ -139,7 +139,7 @@ enum InterestBearingDebtBreakdown {
     ]
     /// 未知タグ行を候補に挙げるラベルキーワード。
     private static let debtLabelKeywords = [
-        "借入", "社債", "コマーシャル", "有利子", "リース", "借用", "債務",
+        "借入", "社債", "コマーシャル", "有利子", "リース", "借用", "短期債務", "長期債務",
     ]
 
     // MARK: - inputs
@@ -494,13 +494,6 @@ enum InterestBearingDebtBreakdown {
         "有利子負債", "長期債務", "短期債務",
     ]
 
-    private static let bsNonInterestBearingDebtWords = [
-        "退職給付", "資産除去", "営業債務", "買掛", "支払債務", "年金", "繰延",
-    ]
-    private static let bsDebtLabelVetoWords = [
-        "デリバティブ", "和解", "預り", "預金", "保証", "未払", "先渡", "引当", "その他",
-    ]
-
     /// 証券業の営業上の借入（信用取引・有価証券担保・現先）のラベルか。
     static func isSecuritiesBusinessBorrowingLabel(_ label: String) -> Bool {
         let cleaned = cleanedLabel(label)
@@ -514,18 +507,7 @@ enum InterestBearingDebtBreakdown {
         if isSecuritiesBusinessBorrowingLabel(label) {
             return (.notInterestBearing, ibdExcludedReasonScopeDiffers)
         }
-        // 利息の付かない「〜債務」（退職給付・資産除去・営業債務）はコードで非有利子に確定する。
-        if bsNonInterestBearingDebtWords.contains(where: { label.contains($0) }) {
-            return (.notInterestBearing, nil)
-        }
-        var preset = scheduleRowPreset(label)
-        // 「債務」を含み、他の規則で決まらず、非有利子の語（未払・預り・保証・引当など）も無い行は債務。
-        // US-GAAP の「短期債務」「長期債務 －１年以内期限到来分」（小松 6301）を拾う。
-        if preset == nil, label.contains("債務"),
-            !bsDebtLabelVetoWords.contains(where: { label.contains($0) })
-        {
-            preset = .interestBearingDebt
-        }
+        let preset = scheduleRowPreset(label)
         if preset == .leaseLiability {
             let cleaned = cleanedLabel(label)
             if scheduleDebtWords.contains(where: { cleaned.contains($0) }) { return (.interestBearingDebt, nil) }
