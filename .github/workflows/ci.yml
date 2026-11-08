@@ -18,7 +18,7 @@ name: CI
 #   unit-tests                 Linux で全ターゲットとテストのコンパイル（Build ステップ）と、
 #                              golden 以外の Swift テスト（実 Postgres・読み取り専用ロールを含む）
 #   golden-suite               golden と実 XBRL のスイート
-#   build-macos                Mac で動く blt-ingest のビルドと、Vapor / MCP を含まないことの確認
+#   build-macos                Mac で動く blt-ingest のビルドと、Vapor を含まないことの確認
 #   ios / ios-packages         iOS アプリ本体と iOS 補助パッケージ
 #   static-checks              scripts/ci の検査とリポジトリ不変条件（常に実行）
 
@@ -67,13 +67,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: blt-ingest のビルドと、Vapor / MCP をリンクしないこと
-        # 空のビルドディレクトリで blt-ingest だけをビルドし、Vapor と MCP（swift-sdk）の
+      - name: blt-ingest のビルドと、Vapor をリンクしないこと
+        # 空のビルドディレクトリで blt-ingest だけをビルドし、Vapor の
         # モジュールがコンパイルされていないことを確かめる。
         # SwiftPM は全ターゲットの <Target>.build ディレクトリ（output-file-map だけ）を作るため、
         # ディレクトリではなく .swiftmodule の有無で判定する。判定を確実にするため専用の --scratch-path を使う。
         # swift-nio 2.101.x が upcoming feature MemberImportVisibility を有効化する。
-        # macOS では MCP 経由の EventSource が `_NumericsShims` を見失う（run 35600861476）。
         # swift-nio 修正までの一時措置。詳細: .agents/rules/architecture.md / .agents/skills/deploy/SKILL.md
         run: |
           swift build --product blt-ingest --scratch-path .build-ingest \
@@ -82,13 +81,13 @@ jobs:
             echo "::error::BltIngestCore.swiftmodule が見つかりません（判定の前提が崩れています）"
             exit 1
           fi
-          leaked=$(find .build-ingest \( -name 'Vapor.swiftmodule' -o -name 'MCP.swiftmodule' \) -print)
+          leaked=$(find .build-ingest -name 'Vapor.swiftmodule' -print)
           if [ -n "$leaked" ]; then
-            echo "::error::blt-ingest のビルドに Vapor / MCP が含まれています（BltStoreCore / BltIngestCore の依存を確認してください）"
+            echo "::error::blt-ingest のビルドに Vapor が含まれています（BltStoreCore / BltIngestCore の依存を確認してください）"
             echo "$leaked"
             exit 1
           fi
-          echo "OK: blt-ingest は Vapor / MCP をリンクしていません"
+          echo "OK: blt-ingest は Vapor をリンクしていません"
 
   ios:
     # Apps/BlueTicker は SwiftPM 外。Cloud Agent の Linux VM では xcodebuild が無い。
@@ -171,14 +170,8 @@ jobs:
           BLT_TEST_POSTGRES_URL: postgres://postgres:blt@postgres:5432/blt?sslmode=disable
         # swift-nio 2.101.x の _NIOFileSystem が Linux で `import CSystem` を欠くため、
         # swift-nio が有効化する upcoming feature MemberImportVisibility (Swift 6.1+) 下で
-        # st_ctim 等がエラー化する。macOS も同フラグが無いと EventSource が
-        # `_NumericsShims` を見失う（Build ステップ / build-macos と同じ一時措置）。
+        # st_ctim 等がエラー化する（Build ステップ / build-macos と同じ一時措置）。
         # 詳細: .agents/rules/architecture.md / .agents/skills/deploy/SKILL.md
-        #
-        # 数分かかる XBRL スイートとハング緩和テストは同一プロセス並列だと
-        # タイムアウト用 Task が遅延し、elapsed < 45 が Linux でも flake する
-        # （run 32031247211: elapsed 160s）。加えて MCP の 200 秒打ち切りと
-        # in-memory SQLite の接続分裂が起きる（run 32125967324）。テスト内容は維持する。
         #
         # ゴールデンスイート（SmokeTests / SegmentParityTests / *GoldenTests / Spec/Oracle/**）と
         # 実 XBRL を取得するスイート（SmokeCacheSupport.ensureCached を使うもの）は、必須チェック
@@ -188,8 +181,7 @@ jobs:
           command -v python3 >/dev/null || (apt-get update -qq && apt-get install -y -qq python3 >/dev/null)
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
           GOLDEN_FILTER="$(scripts/ci/golden-suite.sh --print-filter)"
-          swift test -Xswiftc -disable-upcoming-feature -Xswiftc MemberImportVisibility --skip StatelessTransportHangMitigationTests --skip "$GOLDEN_FILTER"
-          swift test -Xswiftc -disable-upcoming-feature -Xswiftc MemberImportVisibility --filter StatelessTransportHangMitigationTests
+          swift test -Xswiftc -disable-upcoming-feature -Xswiftc MemberImportVisibility --skip "$GOLDEN_FILTER"
 
   ios-packages:
     # iOS アプリの Foundation 単体（Apps/BlueTicker 配下の独立 SwiftPM パッケージ）のテスト。
@@ -368,10 +360,6 @@ jobs:
           PYEOF
 
       # Worker のデプロイ workflow も、デプロイ前に同じスクリプトで同じコミットを検証する。
-      - name: Feed Trend Worker の入力正規化
-        if: ${{ !cancelled() }}
-        run: scripts/ci/worker-tests.sh feed-trend
-
       - name: Feed RSS Worker の組み立てと fail closed
         if: ${{ !cancelled() }}
         run: scripts/ci/worker-tests.sh feed-rss

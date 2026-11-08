@@ -27,7 +27,7 @@ Meta → Struct → Norm → Viz
 | Struct | 開示の構造化（**正本**） | Filing, Statement, Statement-Notes |
 | Norm | 正規化・組立 | Breakdown（内訳正本）, Summary（組立スナップショット） |
 | Viz | 正規化値の分解・配分 | Waterfall |
-| Feed | 縦依存の外 | Trend, Update, Status, Report |
+| Feed | 縦依存の外 | Update, Status, Report |
 
 **Summary** は Statement / Statement-Notes / Breakdown 経路の組立（Filing は本文。`financials-summary-separation.md`）。
 
@@ -53,7 +53,7 @@ EU / ESEF 製品トラックは中止。
 
 ## ターゲット構成と依存方向
 
-Core に Vapor/Fluent をリンクさせない。実行バイナリは薄い。取り込み（書き込み・マイグレーション）は Mac 専用の `blt-ingest`、配信（REST / MCP。DB は読み取りのみ）は Fly の `blt-server` に分け、両者が共有する Models・格納済みデータの読み取り・DB 接続は Vapor なしの `BltStoreCore` に置く。`blt-ingest` は Vapor / MCP をリンクしない（CI の build-macos で検査）。
+Core に Vapor/Fluent をリンクさせない。実行バイナリは薄い。取り込み（書き込み・マイグレーション）は Mac 専用の `blt-ingest`、配信（REST。DB は読み取りのみ）は Fly の `blt-server` に分け、両者が共有する Models・格納済みデータの読み取り・DB 接続は Vapor なしの `BltStoreCore` に置く。`blt-ingest` は Vapor をリンクしない（CI の build-macos で検査）。MCP は HAPIS の公開コネクタだけで、blt-server は MCP を話さない。
 
 外部パッケージの一覧・用途・リンク先は **`Package.swift` 先頭コメントが正本**（`.agents/rules/architecture.md`）。
 
@@ -62,9 +62,6 @@ graph TD
     subgraph exe["実行ターゲット"]
         ing["BltIngest（blt-ingest・Mac）"]
         blt["BltServer（blt-server・Fly）"]
-    end
-    subgraph mcp["BltMcpServerCore"]
-        MCP["MCP.Server / Tools"]
     end
     subgraph core["BlueTickerCore"]
         Server["Server/（REST ファサード）"]
@@ -80,15 +77,13 @@ graph TD
         Ingest["*Ingest / DocumentSync / Migrations"]
     end
     subgraph servercore["BltServerCore（Vapor）"]
-        Transport["Routes / MCPRoute / Entry"]
+        Transport["Routes / Entry"]
     end
     ing --> ingestcore
     ingestcore --> storecore
     blt --> servercore
     servercore --> storecore
-    servercore --> mcp
     storecore --> core
-    mcp --> core
     Server --> Services
     Services --> Analysis
     Transport --> Server
@@ -108,12 +103,11 @@ products は `blt-ingest` と `blt-server` の 2 つ。同一モジュール内�
 ```mermaid
 flowchart LR
     user(["クライアント"]) -->|"HTTPS /v1"| server["blt-server"]
-    dev(["開発者"]) -->|"swift test / ingest+curl / MCP"| server
+    dev(["開発者"]) -->|"swift test / ingest+curl"| server
     server --> facade["BltServerContext"]
     facade --> svc["Services / Analysis"]
     svc --> edinet[("EDINET")]
     server -.->|DB read| pg[("Neon")]
-    server -.->|"fire-and-forget POST"| trend["Feed Trend Worker / Analytics Engine"]
     rss["Feed RSS Worker（cron 19:15 JST）"] -.->|"Neon read-only → R2"| r2[("feed.sollahiro.com")]
 ```
 
@@ -128,16 +122,15 @@ flowchart LR
 | `GET /v1/companies?q=` | 企業検索（JP / EDINET） |
 | `GET /v1/companies/{code}/filings` | 提出書類一覧 |
 | `GET /v1/companies/{code}/overview` | 短い会社説明（格納済み。公開コネクタに出す） |
-| `GET /v1/companies/{code}/relations?type=` | 取引先・関係会社（有報の記載のみ。顧客・関係会社・出資先・大株主と、他社の有報からの逆引き＝仕入先・親会社・大株主になっている会社。格納済み。MCP には出さない。`docs/public-api.md`） |
+| `GET /v1/companies/{code}/relations?type=` | 取引先・関係会社（有報の記載のみ。顧客・関係会社・出資先・大株主と、他社の有報からの逆引き＝仕入先・親会社・大株主になっている会社。格納済み。公開コネクタには出さない。`docs/public-api.md`） |
 | `GET /v1/companies/{code}/financials` | Summary（床未満・未格納 404）。`?fields=` で `years[]` の公開キーを射影（不明キー 400） |
 | `GET /v1/companies/{code}/waterfall` | Waterfall |
 | `GET /v1/companies/{code}/filing-content` | セクション本文 |
 | `GET /v1/companies/{code}/breakdown?axis=` | breakdowns（上場・格納済み。LLM の `needs_review` / `llm_unit_unresolved` は出さない。`docs/breakdown.md`） |
 | `GET /v1/companies/{code}/statement` · `/shares` | Statement / Shares（上場。日経225は処理順の優先のみ） |
 | `GET /v1/feed/updates` | Feed Update（直近 N 日の提出書類。既定 90 日・10 件。同日過多は安定サンプル。`total.day` / `total.week`） |
-| `GET /v1/feed/trend` | Feed Trend（匿名の検索・ツールヒット件数。書類件数ではない。カウンター未設定は 503） |
-| `GET /v1/screen` | Screen（`screen_index` 横断検索。skills / MCP 未掲載。索引未生成は 404。`sales_cagr_3y` と screen-v3 指標、screen-v4 の配当性向 3 年平均は ingest 時の派生列） |
-| `GET /v1/screen/snapshot` | Screen スナップショット（`screen_index` 全行の列形式。iOS 条件検索が端末内で絞る。本文 SHA-256 の `ETag` / 304。本文は起動時と 1 時間ごとに作り置き。skills / MCP 未掲載。索引未生成は 404。`docs/ios-client.md`） |
+| `GET /v1/screen` | Screen（`screen_index` 横断検索。skills・公開コネクタ未掲載。索引未生成は 404。`sales_cagr_3y` と screen-v3 指標、screen-v4 の配当性向 3 年平均は ingest 時の派生列） |
+| `GET /v1/screen/snapshot` | Screen スナップショット（`screen_index` 全行の列形式。iOS 条件検索が端末内で絞る。本文 SHA-256 の `ETag` / 304。本文は起動時と 1 時間ごとに作り置き。skills・公開コネクタ未掲載。索引未生成は 404。`docs/ios-client.md`） |
 
 エラー封筒: `{"error":...,"status":N}`。
 
@@ -159,7 +152,6 @@ Neon 接続・R2 秘密・LLM キーの正本は `.env.example`。プロセス�
 | `BLT_ALLOW_UNAUTHENTICATED` | `1` のときだけ非 loopback の無認証起動を許可（手元 `0.0.0.0` / 段階 B HAPIS 背後）。詳細は `api-auth.md` |
 | `CLOUDFLARE_TUNNEL_TOKEN` | 設定時のみ cloudflared 起動 |
 | `DATABASE_URL` | プロセス束縛（未設定＝ステートレス）。手元の既定は `BLT_NEON_READ_DATABASE_URL`、Fly では読み取りロール `blt_reader` |
-| `BLT_FEED_TREND_URL` / `BLT_FEED_TREND_TOKEN` | 匿名 Feed Trend カウンター（未設定＝emit なし。`GET /v1/feed/trend` は 503）。Worker は `api.*` の前段に置かない |
 
 `/healthz` は認証不要。`cache_versions` でイメージの版を確認。
 

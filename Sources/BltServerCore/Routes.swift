@@ -4,7 +4,6 @@
 
 import BltStoreCore
 import BlueTickerCore
-import BltMcpServerCore
 import Fluent
 import Foundation
 import Logging
@@ -12,10 +11,9 @@ import Vapor
 
 // MARK: - ルート登録
 
-/// `/v1/` 配下の REST API ルートと MCP プロトコル（ルートパス `POST /`）を Application へ登録する。
+/// `/v1/` 配下の REST API ルートを Application へ登録する。
 /// 認証設定は既定で env（CF_ACCESS_TEAM_DOMAIN）から読む。
 /// テストからは引数で注入する（プロセス環境の書き換えは並列実行と競合するため）。
-/// `/v1` と MCP は同じ認証グループ配下に置く（同一の認証ポリシーを適用する）。
 func registerRoutes(
     _ app: Application,
     context: BltServerContext,
@@ -66,7 +64,7 @@ func registerRoutes(
         app.logger.notice(
             "認証モード: Cloudflare Access（エッジ信頼）。Tunnel 経由・公開ポート閉鎖が前提です。")
     } else {
-        app.logger.warning("認証モード: 無認証。/v1・MCP は保護されていません（ローカル開発専用）。")
+        app.logger.warning("認証モード: 無認証。/v1 は保護されていません（ローカル開発専用）。")
     }
     let v1 = authenticated.grouped("v1")
 
@@ -74,7 +72,6 @@ func registerRoutes(
     // 未接続なら 503・未格納なら 404 とする（ライブ計算へは落とさない＝OOM 回避）。
     // filings は軽量な EDINET 一覧取得のため未格納時のライブ取得を許容する。
     let dbAvailable = !app.databases.ids().isEmpty
-    installFeedTrendDefaults(app)
 
     // GET /v1/companies?q={query}
     // icon_url は company_icons（R2 格納済み）のバッチ lookup で合成する（未格納・R2未設定・
@@ -82,7 +79,6 @@ func registerRoutes(
     // ここ（BltServerCore・DB 接続を持つ層）で合成する。
     v1.get("companies") { req async -> Response in
         let q = req.query[String.self, at: "q"] ?? ""
-        recordFeedTrend(req.application, surface: "rest", tool: "search_companies", q: q)
         let response = await context.searchCompanies(q: q)
         guard case .ok(let results as [[String: Any]]) = response else {
             return makeResponse(response)
@@ -91,8 +87,8 @@ func registerRoutes(
         return jsonResponse(merged, status: .ok)
     }
 
-    // GET /v1/skills: MCP tools/list に相当する「いつ使うか／どう呼ぶか」カタログ（一覧）。
-    // 正本は BlueTickerCore の apiSkillsCatalog（MCP ツール説明と共有）。
+    // GET /v1/skills: 「いつ使うか／どう呼ぶか」カタログ（一覧）。
+    // 正本は BlueTickerCore の apiSkillsCatalog。
     v1.get("skills") { _ async -> Response in
         jsonResponse(apiSkillsListJSON(), status: .ok)
     }
@@ -111,7 +107,6 @@ func registerRoutes(
     // （ライブ EDINET 探索なし＝OOM 回避）。未同期銘柄のみライブ探索へフォールバックする。
     v1.get("companies", ":code", "filings") { req async -> Response in
         let code = req.parameters.get("code") ?? ""
-        recordFeedTrend(req.application, surface: "rest", tool: "get_filings", code: code)
         let maxYears = parseFilingsMaxYears(req.query[Int.self, at: "max_years"])
         return makeResponse(
             await serveFilings(
@@ -126,7 +121,6 @@ func registerRoutes(
     // ライブ計算へはフォールバックしない（1リクエストでサーバー全体を OOM 落ちさせる地雷を断つ）。
     v1.get("companies", ":code", "financials") { req async -> Response in
         let code = req.parameters.get("code") ?? ""
-        recordFeedTrend(req.application, surface: "rest", tool: "get_financial_summary", code: code)
         let years = req.query[Int.self, at: "years"] ?? Api.financialsYearsDefault
         // `?fields=` は years[] 要素の射影のみ（BLT-57）。不明キーは 400。
         let fields: Set<String>?
@@ -152,7 +146,6 @@ func registerRoutes(
     // ネットキャッシュ差分・運転資本/CCC差分）を含めて返す。未格納・古い・年数不足は 404。
     v1.get("companies", ":code", "waterfall") { req async -> Response in
         let code = req.parameters.get("code") ?? ""
-        recordFeedTrend(req.application, surface: "rest", tool: "get_waterfall", code: code)
         let years = req.query[Int.self, at: "years"] ?? Api.financialsYearsDefault
         return makeStoredDataResponse(
             await serveStoredAnalysis(
@@ -162,7 +155,7 @@ func registerRoutes(
 
     // GET /v1/companies/{code}/overview
     // DB（company_overviews）の格納済み短い会社説明のみを返す。ライブ生成へはフォールバックしない。
-    // 未格納・床未満・対象外は 404。MCP には出さない（製品面は REST と iOS）。
+    // 未格納・床未満・対象外は 404。
     v1.get("companies", ":code", "overview") { req async -> Response in
         let code = req.parameters.get("code") ?? ""
         return makeStoredDataResponse(
@@ -172,7 +165,7 @@ func registerRoutes(
 
     // GET /v1/companies/{code}/relations?type=customer,group&limit=200&cursor=...
     // DB（関係取り込み company_relations）の格納行のみを返す。ライブ抽出へはフォールバックしない。
-    // 不正なコード・未知の type は 400、未格納（公開できる行が無い）は 404、DB 非接続は 503。MCP には出さない。
+    // 不正なコード・未知の type は 400、未格納（公開できる行が無い）は 404、DB 非接続は 503。
     v1.get("companies", ":code", "relations") { req async -> Response in
         let code = req.parameters.get("code") ?? ""
         let result = await serveStoredRelations(
@@ -194,7 +187,6 @@ func registerRoutes(
     // ingest（有報セクション取り込み）へ閉じ込めた。未抽出は 404・DB 非接続は 503（financials と同型・フォールバックなし）。
     v1.get("companies", ":code", "filing-content") { req async -> Response in
         let code = req.parameters.get("code") ?? ""
-        recordFeedTrend(req.application, surface: "rest", tool: "get_filing_content", code: code)
         let docId = req.query[String.self, at: "doc_id"]
         let sections = req.query[String.self, at: "sections"]
             .map { $0.split(separator: ",").map(String.init) }
@@ -212,7 +204,6 @@ func registerRoutes(
     // 公開面は needs_review / llm_unit_unresolved の LLM 行を出さない（同 docs）。
     v1.get("companies", ":code", "breakdown") { req async -> Response in
         let code = req.parameters.get("code") ?? ""
-        recordFeedTrend(req.application, surface: "rest", tool: "get_breakdown", code: code)
         let docId = req.query[String.self, at: "doc_id"]
         let axis = req.query[String.self, at: "axis"] ?? breakdownAxisProductService
         return makeReasonedResponse(
@@ -229,7 +220,6 @@ func registerRoutes(
     // ingest 側の制約。docs/statement.md）。
     v1.get("companies", ":code", "statement") { req async -> Response in
         let code = req.parameters.get("code") ?? ""
-        recordFeedTrend(req.application, surface: "rest", tool: "get_statement", code: code)
         let docId = req.query[String.self, at: "doc_id"]
         let years = req.query[Int.self, at: "years"] ?? Api.statementYearsDefault
         return makeStoredDataResponse(
@@ -244,7 +234,6 @@ func registerRoutes(
     // 格納済み2注記を1書類に揃えて返す。ライブ抽出へはフォールバックしない。
     v1.get("companies", ":code", "shares") { req async -> Response in
         let code = req.parameters.get("code") ?? ""
-        recordFeedTrend(req.application, surface: "rest", tool: "get_shares", code: code)
         let docId = req.query[String.self, at: "doc_id"]
         return makeReasonedResponse(
             await serveStoredShares(
@@ -260,7 +249,7 @@ func registerRoutes(
     // GET /v1/screen?sector=電気機器&roic_min=15&sales_cagr_3y_min=10&sort=roic&order=desc&limit=50
     // Summary 横断検索（BLT-49）。DB（screen_index、company_financials の最新 FY 派生）を AND フィルタ +
     // 1 キーソート + LIMIT で読む。数値は `{metric}_min` / `{metric}_max`（許可リストは `ScreenMetric`）。
-    // `sales_cagr_3y` は ingest 時の派生列。不明キー・不正値は 400。REST のみ（skills カタログ・MCP には載せない）。
+    // `sales_cagr_3y` は ingest 時の派生列。不明キー・不正値は 400。REST のみ（skills カタログには載せない）。
     v1.get("screen") { req async -> Response in
         let query: ScreenQuery
         switch parseScreenQuery(rawQueryItems(req)) {
@@ -278,7 +267,7 @@ func registerRoutes(
     // screen_index 全行の列形式スナップショット（iOS 条件検索が端末内で件数・絞り込み・並べ替えをする）。
     // 本文の SHA-256 を強い ETag にし、`If-None-Match` 一致は 304（本文なし）。本文は起動時と 3 日ごとに
     // 裏で作り置きし（`ScreenSnapshotCache.swift`）、リクエストはそれを返すだけ。作り置きが無いときだけ
-    // そのリクエストで作る。REST のみ（skills カタログ・MCP には載せない）。
+    // そのリクエストで作る。REST のみ（skills カタログには載せない）。
     let snapshotCache = ScreenSnapshotCache()
     app.storage[ScreenSnapshotCacheKey.self] = snapshotCache
     v1.get("screen", "snapshot") { req async -> Response in
@@ -311,23 +300,6 @@ func registerRoutes(
                 logger: req.logger),
             db: dbAvailable ? req.db : nil)
     }
-
-    // GET /v1/feed/trend?limit=50&days=7&code=
-    // 匿名の検索・ツールヒット件数ランキング（Cloudflare Analytics Engine）。書類件数ではない。
-    v1.get("feed", "trend") { req async -> Response in
-        let limit = parseFeedTrendLimit(req.query[Int.self, at: "limit"])
-        let days = parseFeedTrendDays(req.query[Int.self, at: "days"])
-        let codeParam = parseFeedTrendCodeParam(req.query[String.self, at: "code"])
-        return await feedTrendJSONResponse(
-            await serveFeedTrend(
-                limit: limit, days: days, codeParam: codeParam,
-                client: feedTrendBox(for: req.application).query, logger: req.logger),
-            db: dbAvailable ? req.db : nil)
-    }
-
-    // POST /（MCP プロトコル。/v1 と同じ認証グループ配下。ルートパスの理由は MCPRoute.swift 参照）
-    try await registerMcpRoute(
-        authenticated, app: app, context: context, dbAvailable: dbAvailable)
 }
 
 /// クエリ文字列をキー→値の辞書へ落とす（同一キー重複はカンマ連結。`sector=A&sector=B` は
@@ -349,7 +321,7 @@ private func rawQueryItems(_ req: Request) -> [String: String] {
     return result
 }
 
-/// Feed 応答に REST 専用の `icon_url` を載せる（companies 検索と同じ合成。MCP には出さない）。
+/// Feed 応答に REST 専用の `icon_url` を載せる（companies 検索と同じ合成）。
 private func feedJSONResponse(_ result: StoredDataServeResult, db: Database?) async -> Response {
     switch result {
     case .ok(var body):
@@ -364,23 +336,9 @@ private func feedJSONResponse(_ result: StoredDataServeResult, db: Database?) as
     }
 }
 
-/// Trend 応答。未設定・Worker 失敗は 503（財務 DB とは別メッセージ）。空ランキングは 200。
-private func feedTrendJSONResponse(_ result: FeedTrendServeResult, db: Database?) async -> Response {
-    switch result {
-    case .ok(var body):
-        if let items = body["items"] as? [[String: Any]] {
-            body["items"] = await attachIconURLs(to: items, db: db)
-        }
-        return jsonResponse(body, status: .ok)
-    case .badRequest(let message):
-        return errorResponse(.badRequest, message: message)
-    case .unavailable:
-        return errorResponse(.serviceUnavailable, message: feedTrendUnavailableMessage)
-    }
-}
 
 /// items（`"code"` を持つ JSON 行）へ `icon_url` を合成して返す。
-/// companies 検索 / feed updates / feed trend の REST 応答で共通利用する（MCP には出さない）。
+/// companies 検索 / feed updates の REST 応答で共通利用する。
 /// `db` が nil のときは全行 `icon_url: null`（companies 検索の従来挙動と同一）。
 private func attachIconURLs(to items: [[String: Any]], db: Database?) async -> [[String: Any]] {
     guard let db else {
@@ -420,7 +378,7 @@ func iconURLs(
     return result
 }
 
-// MARK: - 格納済みデータ提供ロジック（REST ルートと MCP ツールディスパッチの共通処理）
+// MARK: - 格納済みデータ提供ロジック
 
 /// `stored` 系エンドポイントの DB 読み取り共通枠。db ガード（未接続→dbUnavailable）→
 /// `withDbRetry`（読み取りリトライ）→ nil→notFound / throw→dbUnavailable。
@@ -496,7 +454,7 @@ func serveStoredStatement(
 }
 
 /// notApplicable の reason を持つ read 結果の共通形。
-/// `breakdown` / `shares` の応答変換（REST/MCP）を共通化するための型。
+/// `breakdown` / `shares` の応答変換を共通化するための型。
 /// E/F/unknown の reason を 404 応答へ載せるため、他エンドポイントが共有する
 /// `StoredDataServeResult` とは別に持つ（影響範囲を reason 付き応答に限定。issue #132）。
 enum ReasonedServeResult {
@@ -536,7 +494,7 @@ extension StatementNoteLoadResult: ReasonedLoadResult {
     }
 }
 
-/// interest_bearing_debt の公開保留を 404 の reason とメッセージへ写す（REST/MCP 共用）。
+/// interest_bearing_debt の公開保留を 404 の reason とメッセージへ写す。
 /// テスト可能な純関数。他軸はこの case を返さない。
 func mapWithheldBreakdownLoad(_ reason: String) -> ReasonedServeResult {
     if reason == breakdownWithheldNeedsReview {
@@ -569,7 +527,7 @@ private func serveStoredReasoned(
     }
 }
 
-/// `breakdown` 404 応答の軸別メッセージ（REST/MCP 共用）。
+/// `breakdown` 404 応答の軸別メッセージ。
 func breakdownNotFoundMessage(axis: String) -> String {
     switch axis {
     case breakdownAxisSegment: return "報告セグメント別内訳は未算出です"
@@ -597,9 +555,9 @@ func serveStoredBreakdown(
     }
 }
 
-/// `shares` 404 応答のメッセージ（REST/MCP 共用）。
+/// `shares` 404 応答のメッセージ。
 let sharesNotFoundMessage = "株式の情報は未算出です"
-/// 廃止した `statement/notes` の 404 メッセージ（REST/MCP 共用）。
+/// 廃止した `statement/notes` の 404 メッセージ。
 let statementNotesRetiredMessage = "statement/notes は廃止しました。GET /v1/companies/{code}/shares を使ってください"
 
 /// `shares` の DB 読み取り共通ロジック。`db` の扱いは `serveStoredFinancials` 参照。
@@ -617,7 +575,7 @@ func serveFilings(
     code: String, maxYears: Int, db: Database?, logger: Logger,
     context: BltServerContext
 ) async -> BltServerResponse {
-    guard let code = feedTrendTickerCode(code) else {
+    guard let code = normalizedTickerCode(code) else {
         return .badRequest("code は4桁の銘柄コードです")
     }
     let maxYears = parseFilingsMaxYears(maxYears)
@@ -654,7 +612,7 @@ func serveFilings(
 // MARK: - アクセスログミドルウェア
 
 /// リクエストごとの処理時間を構造化ログ（1行）で記録する。Cloudflare Tunnel区間とアプリ処理区間の
-/// 切り分け用（MCP速度実測で個別リクエストのサーバー内訳が取れなかったことへの対応）。
+/// 切り分け用（速度実測で個別リクエストのサーバー内訳が取れなかったことへの対応）。
 /// Authorization・Cookie 等の認証情報はログに含めない（メソッド・パス・ステータス・所要時間のみ）。
 private struct AccessLogMiddleware: AsyncMiddleware {
     func respond(to request: Request, chainingTo next: AsyncResponder) async throws -> Response {

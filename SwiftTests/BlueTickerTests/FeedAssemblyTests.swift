@@ -28,8 +28,6 @@ private func rec(
         #expect(parseFeedLimit(-3) == Api.feedLimitDefault)
         #expect(parseFeedLimit(20) == 20)
         #expect(parseFeedLimit(Api.feedLimitMax + 50) == Api.feedLimitMax)
-        #expect(parseFeedTrendLimit(nil) == Api.feedTrendLimitDefault)
-        #expect(parseFeedTrendLimit(0) == Api.feedTrendLimitDefault)
     }
 
     @Test func parseFilingsMaxYearsClampsAndDefaults() {
@@ -41,15 +39,23 @@ private func rec(
     }
 
     @Test func parseDaysClampsAndDefaults() {
-        #expect(parseFeedDays(nil) == Api.feedTrendDaysDefault)
-        #expect(parseFeedDays(0) == Api.feedTrendDaysDefault)
+        #expect(parseFeedDays(nil) == Api.feedUpdateDaysDefault)
+        #expect(parseFeedDays(0) == Api.feedUpdateDaysDefault)
         #expect(parseFeedDays(30) == 30)
-        #expect(parseFeedDays(Api.feedTrendDaysMax + 1) == Api.feedTrendDaysMax)
+        #expect(parseFeedDays(Api.feedDaysMax + 1) == Api.feedDaysMax)
         #expect(parseFeedUpdateDays(nil) == Api.feedUpdateDaysDefault)
         #expect(parseFeedUpdateDays(0) == Api.feedUpdateDaysDefault)
-        #expect(parseFeedTrendDays(nil) == Api.feedTrendDaysDefault)
-        #expect(parseFeedTrendLimit(nil) == Api.feedTrendLimitDefault)
         #expect(parseFeedLimit(nil) == 10)
+    }
+
+    @Test func normalizedTickerCodeAcceptsFourCharacterJPCodes() {
+        #expect(normalizedTickerCode("7203") == "7203")
+        #expect(normalizedTickerCode("477a") == "477A")
+        #expect(normalizedTickerCode(" 6758 ") == "6758")
+        #expect(normalizedTickerCode("72030") == nil)
+        #expect(normalizedTickerCode("12") == nil)
+        #expect(normalizedTickerCode("7203!") == nil)
+        #expect(normalizedTickerCode(nil) == nil)
     }
 
     @Test func parseDocTypesDropsUnknownAndDefaultsToAnnual() {

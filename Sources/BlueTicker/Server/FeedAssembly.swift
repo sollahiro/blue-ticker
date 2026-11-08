@@ -9,21 +9,16 @@ public func parseFeedLimit(_ raw: Int?, defaultLimit: Int = Api.feedLimitDefault
     return min(raw, Api.feedLimitMax)
 }
 
-/// Feed Trend の `limit`。省略時は Update より広いランキング。
-public func parseFeedTrendLimit(_ raw: Int?) -> Int {
-    parseFeedLimit(raw, defaultLimit: Api.feedTrendLimitDefault)
-}
-
 /// filings の `max_years` を [1, filingsMaxYearsMax] に閉じる。省略・0 以下は既定。
 public func parseFilingsMaxYears(_ raw: Int?) -> Int {
     guard let raw, raw > 0 else { return Api.filingsMaxYearsDefault }
     return min(raw, Api.filingsMaxYearsMax)
 }
 
-/// クエリ `days` を [1, feedTrendDaysMax] に閉じる。省略・0 以下は `defaultDays`。
-public func parseFeedDays(_ raw: Int?, defaultDays: Int = Api.feedTrendDaysDefault) -> Int {
+/// クエリ `days` を [1, feedDaysMax] に閉じる。省略・0 以下は `defaultDays`。
+public func parseFeedDays(_ raw: Int?, defaultDays: Int = Api.feedUpdateDaysDefault) -> Int {
     guard let raw, raw > 0 else { return defaultDays }
-    return min(raw, Api.feedTrendDaysMax)
+    return min(raw, Api.feedDaysMax)
 }
 
 /// Feed Update の `days`。省略時は items を埋めるための長い窓。
@@ -31,10 +26,19 @@ public func parseFeedUpdateDays(_ raw: Int?) -> Int {
     parseFeedDays(raw, defaultDays: Api.feedUpdateDaysDefault)
 }
 
-/// Feed Trend の `days`。省略時は直近 7 日。
-public func parseFeedTrendDays(_ raw: Int?) -> Int {
-    parseFeedDays(raw, defaultDays: Api.feedTrendDaysDefault)
+/// 4 文字の銘柄コード（数字または英数字。例: 7203 / 477A）を大文字へ正規化する。それ以外は nil。
+public func normalizedTickerCode(_ raw: String?) -> String? {
+    guard let raw else { return nil }
+    let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard trimmed.count == 4 else { return nil }
+    let upper = trimmed.uppercased()
+    guard upper.unicodeScalars.allSatisfy({ tickerCodeScalars.contains($0) }) else {
+        return nil
+    }
+    return upper
 }
+
+private let tickerCodeScalars = CharacterSet(charactersIn: "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ")
 
 /// クエリ `doc_type`（カンマ区切り）を許可種別へ正規化する。
 /// 未知・空は落とし、残が無ければ有報(120)。順序は入力順（重複除去）。

@@ -1,4 +1,4 @@
-// ApiSkills カタログの契約: ID 一意・MCP ツール名の対応・REST/MCP パラメータ投影。
+// ApiSkills カタログの契約: ID 一意・REST パラメータ投影。
 
 import Foundation
 import Testing
@@ -14,52 +14,27 @@ import Testing
         #expect(ids.contains("get-breakdown"))
         #expect(ids.contains("get-statement"))
         #expect(ids.contains("get-feed-updates"))
-        #expect(ids.contains("get-feed-trend"))
-        let overview = apiSkillsCatalog().first { $0.id == "get-overview" }
-        #expect(overview?.mcpTool == nil)
-        // 取引先・関係会社は REST だけ（MCP には出さない）。
+        // 検索トレンドは廃止した。
+        #expect(!ids.contains("get-feed-trend"))
         let relations = apiSkillsCatalog().first { $0.id == "get-relations" }
         #expect(relations?.path == "/v1/companies/{code}/relations")
-        #expect(relations?.mcpTool == nil)
-        #expect(!apiSkillsCatalog().compactMap(\.mcpTool).contains { $0.contains("relation") })
     }
 
-    @Test func mcpToolNamesMatchExpectedSet() {
-        let names = Set(apiSkillsCatalog().compactMap(\.mcpTool))
-        #expect(
-            names == [
-                "search_companies", "get_filings",
-                "get_financial_summary",
-                "get_waterfall", "get_filing_content",
-                "get_breakdown", "get_statement", "get_shares",
-                "get_feed_updates", "get_feed_trend",
-            ])
-    }
-
-    @Test func searchCompaniesMapsQueryAliasForMcp() throws {
+    @Test func searchCompaniesQueryIsOptionalOnRest() throws {
         let skill = try #require(apiSkill(id: "search-companies"))
         let q = try #require(skill.parameters.first { $0.name == "q" })
-        #expect(q.mcpName == "query")
-        // REST は省略可、MCP は required（Routes が q 省略を空文字で受ける事実に合わせる）
+        // Routes が q 省略を空文字で受ける事実に合わせる。
         #expect(q.required == false)
-        #expect(q.effectiveMcpRequired == true)
     }
 
-    @Test func filingContentSectionsTypeDiffersBetweenRestAndMcp() throws {
+    @Test func filingContentSectionsIsCommaSeparatedString() throws {
         let skill = try #require(apiSkill(id: "get-filing-content"))
         let sections = try #require(skill.parameters.first { $0.name == "sections" })
         #expect(sections.type == .string)
-        #expect(sections.effectiveMcpType == .stringArray)
         let detail = apiSkillDetailJSON(skill)
         let parameters = try #require(detail["parameters"] as? [[String: Any]])
         let sectionsJSON = try #require(parameters.first { $0["name"] as? String == "sections" })
         #expect(sectionsJSON["type"] as? String == "string")
-    }
-
-    @Test func financialsYearsIsRestOnly() throws {
-        let skill = try #require(apiSkill(id: "get-financials"))
-        let years = try #require(skill.parameters.first { $0.name == "years" })
-        #expect(years.mcpName == nil)
     }
 
     @Test func listAndDetailJSONIncludeSchemaVersion() throws {
@@ -72,13 +47,13 @@ import Testing
         #expect(detail["parameters"] is [[String: Any]])
     }
 
-    /// MCP tools/list と REST /v1/skills が共有する description に、未取り込みと非開示の
+    /// REST /v1/skills の description に、未取り込みと非開示の
     /// 区別（reason 有無とコード意味）が載っていること（チャットボットが読み方を知る契約）。
     @Test func sharesDescriptionDocumentsReasonSemantics() throws {
         let skill = try #require(apiSkill(id: "get-shares"))
         #expect(skill.description.contains("reason"))
         #expect(skill.description.contains("未取り込み"))
-        #expect(skill.description.contains("isError"))
+        #expect(skill.description.contains("404"))
         for reason in allSharesNotApplicableReasons {
             #expect(
                 skill.description.contains(reason) || skill.instructions.contains(reason),
@@ -120,7 +95,7 @@ import Testing
         #expect(!skill.description.contains("axis=business"))
         #expect(skill.description.contains("needs_review"))
         #expect(skill.description.contains("interest_bearing_debt_lease_denominator_from_notes"))
-        #expect(apiSkillsSchemaVersion == 9)
+        #expect(apiSkillsSchemaVersion == 10)
         #expect(!axis.description.contains("goodwill_amortization"))
         #expect(!skill.description.contains("goodwill_amortization"))
         #expect(skill.description.contains("amortization"))

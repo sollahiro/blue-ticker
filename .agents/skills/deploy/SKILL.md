@@ -23,7 +23,6 @@ Neon write・訂正有報は `.agents/skills/production-ingest/SKILL.md`。リ�
 | `BLT_ALLOW_UNAUTHENTICATED` | `1` のときだけ非 loopback の無認証起動を許可（手元 `0.0.0.0` / 段階 B HAPIS 背後）。詳細は `docs/api-auth.md` |
 | `CLOUDFLARE_TUNNEL_TOKEN` | 設定時のみ cloudflared 起動 |
 | `DATABASE_URL` | プロセス束縛（未設定＝ステートレス）。手元の既定は `BLT_NEON_READ_DATABASE_URL`、Fly では読み取りロール `blt_reader` の接続文字列（`BLT_NEON_READ_DATABASE_URL`）。サーバーは起動時に migrate しないので書き込み権限は不要。マイグレーションは Mac から `blt-ingest migrate`（`docs/ingest-policy.md`「出荷順」） |
-| `BLT_FEED_TREND_URL` / `BLT_FEED_TREND_TOKEN` | 匿名 Feed Trend カウンター（未設定＝emit なし。`GET /v1/feed/trend` は 503）。Worker は `api.*` の前段に置かない |
 
 `/healthz` は認証不要。`cache_versions` でイメージの版を確認。
 
@@ -47,11 +46,9 @@ fly deploy
 |---|---|
 | `ci.yml` | 必須チェックは集約ジョブ `ci-ok` だけ。PR は `changes` が変更範囲から必要なジョブを決め、main への push は「直近で CI が緑だった main の commit」からの差分で決める（赤だった commit は次の run の差分に残る。基点が取れないときは全ジョブ。`docs/ci-checks.md`）。macOS は blt-ingest のビルド確認（キャッシュなし）/ Linux の build+test・golden / iOS シミュレータ向けコンパイル（`macos-26`）・product/serviceless ガード。iOS TestFlight / Archive は Xcode Cloud（`docs/ios-client.md`）。この skill の対象外 |
 | `deploy.yml` | CI 成功後の Fly 自動デプロイ（`v*` タグでは起動しない） |
-| `feed-trend-worker.yml` | Feed Trend Worker デプロイ + Fly origin の URL/token。`legal-worker.yml` と同じく、出す前に同じコミットで `scripts/ci/worker-tests.sh` を流し、落ちたら出さない |
 | `edge-security-smoke.yml` | Access / serviceless 外形監視 |
 
 repo secrets: `BLT_EDINET_API_KEY`（CI smoke）· `FLY_API_TOKEN` · `BLT_API_DOMAIN`。
-Feed Trend Worker 追加: `CLOUDFLARE_API_TOKEN` · `CLOUDFLARE_ACCOUNT_ID` · `BLT_FEED_TREND_TOKEN` · `AE_SQL_TOKEN`。
 
 ## self-host
 
@@ -77,33 +74,6 @@ container exec blt-server /app/blt-ingest ingest --limit 50
 4. cloudflared は Dockerfile に同梱（版固定＋sha256）。トークン未設定なら blt-server のみ
 5. `fly.toml` に `[http_service]` を戻さない（直アクセス経路が開く）
 
-### Feed Trend Worker
-
-匿名カウンターは Cloudflare Worker + Analytics Engine（`workers/feed-trend/`）。origin は URL + Bearer で POST するだけ（Fly 固有 API は使わない）。**この Worker を Tunnel の `api.*` に差し込まない。`mcp.yuholab.com` は公開コネクタ（HAPIS `mcp/`）のカスタムドメイン。**
-
-初回（手元 Mac。`.env` の `BLT_R2_ACCOUNT_ID` を流用可）:
-
-```bash
-# Cloudflare API token: Workers Scripts Edit + Account Analytics Read
-export CLOUDFLARE_API_TOKEN=...
-export AE_SQL_TOKEN="$CLOUDFLARE_API_TOKEN"   # 分けるなら Analytics:Read 専用
-./scripts/feed-trend-ship.sh
-```
-
-以降の Worker コード変更は `main` への push で `.github/workflows/feed-trend-worker.yml` がデプロイし、同じ token で Fly secrets も更新する。GitHub secrets は `CLOUDFLARE_API_TOKEN` · `CLOUDFLARE_ACCOUNT_ID` · `BLT_FEED_TREND_TOKEN` · `AE_SQL_TOKEN`（`FLY_API_TOKEN` は既存）。
-
-手動の内訳:
-
-```bash
-cd workers/feed-trend
-npx wrangler@4 deploy
-npx wrangler@4 secret put TOKEN
-npx wrangler@4 secret put ACCOUNT_ID
-npx wrangler@4 secret put AE_SQL_TOKEN
-fly secrets set BLT_FEED_TREND_URL='https://blt-feed-trend.<account>.workers.dev' \
-  BLT_FEED_TREND_TOKEN='...'
-```
-
 ### Legal page Worker
 
 有報LAB（iOS アプリ）の免責・プライバシー・利用規約は静的 HTML（`workers/legal/`）。トークンは無い。**この Worker を Tunnel の `api.*` に差し込まない。`mcp.yuholab.com` は公開コネクタ（HAPIS `mcp/`）のカスタムドメイン。**
@@ -113,7 +83,7 @@ cd workers/legal
 npx wrangler@4 deploy
 ```
 
-`main` への push は `.github/workflows/legal-worker.yml`。GitHub secrets は Feed Trend と同じ `CLOUDFLARE_API_TOKEN` · `CLOUDFLARE_ACCOUNT_ID`。公開 URL は Custom Domain `yuholab.com` の `https://yuholab.com`・`/privacy`・`/terms`。`sollahiro.com` の旧 URL 6 パス（`/blue-ticker`・`/yuholab` とそれぞれの `/privacy`・`/terms`）は 301 で直接 `yuholab.com` へ飛ばす（`workers/legal/README.md`）。workers.dev も残す。
+`main` への push は `.github/workflows/legal-worker.yml`。GitHub secrets は `CLOUDFLARE_API_TOKEN` · `CLOUDFLARE_ACCOUNT_ID`。公開 URL は Custom Domain `yuholab.com` の `https://yuholab.com`・`/privacy`・`/terms`。`sollahiro.com` の旧 URL 6 パス（`/blue-ticker`・`/yuholab` とそれぞれの `/privacy`・`/terms`）は 301 で直接 `yuholab.com` へ飛ばす（`workers/legal/README.md`）。workers.dev も残す。
 
 ### REST Service Token
 
@@ -196,6 +166,6 @@ Tunnel + Access（SSO / Service Token）。安全性は **Tunnel ＋ 公開ポ�
 |---|---|---|
 | Fly secrets | API キー / DB / Access / Tunnel | 再発行・`fly secrets set` |
 | Neon | 全テーブル | dump または再 ingest |
-| Cloudflare | Tunnel / Access / IdP / R2（icons 公開バケット・生 XBRL 私有バケット）/ Workers（Feed Trend・Legal page） | 本 skill で再作成。ZIP は EDINET 再取得可 |
+| Cloudflare | Tunnel / Access / IdP / R2（icons 公開バケット・生 XBRL 私有バケット）/ Workers（Legal page） | 本 skill で再作成。ZIP は EDINET 再取得可 |
 | ローカル Mac | 手元スケジュール・`.env` | 本 skill 定期同期 |
 | Fly Volume `/data` | EDINET キャッシュ（L1） | 再取得または R2 L2 |

@@ -19,7 +19,7 @@ import FluentKit
 import Foundation
 import Logging
 
-/// `withOperationTimeout` が上限超過時に投げるエラー。DB 以外（MCP ルートの HTTP タイムアウト等）
+/// `withOperationTimeout` が上限超過時に投げるエラー。DB 以外（filings のライブ探索のタイムアウト等）
 /// からも再利用するため、対象を表す `label` を持たせている。
 package struct OperationTimeoutError: Error, CustomStringConvertible {
     package let label: String
@@ -85,7 +85,7 @@ private struct UncheckedSendableBox<T>: @unchecked Sendable {
 /// 呼び出し元はリトライ試行ごとに新しい Fluent インスタンスを使うこと（同一インスタンスの再利用は
 /// 遅延完了との競合窓になる）。
 ///
-/// `withDbRetry` 専用ではなく、単発の操作に上限を設けたい他の呼び出し元（MCP ルートの HTTP
+/// `withDbRetry` 専用ではなく、単発の操作に上限を設けたい他の呼び出し元（filings のライブ探索の
 /// タイムアウト等）からも再利用する。`label` はタイムアウト時のエラーメッセージに使う対象名。
 package func withOperationTimeout<T>(
     label: String,

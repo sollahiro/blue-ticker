@@ -1,4 +1,4 @@
-// Feed Update の DB 読み取り。REST と MCP が共有する。
+// Feed Update の DB 読み取り。
 // ライブ EDINET へは落とさない。未接続は 503。0 件は 200（空 items）。
 // items は listed だけ・必要件数だけ読む。total.day / total.week は COUNT。
 // 同一 Fluent 接続へ並列に投げない（SQLite テストとリクエスト単位のプール接続）。

@@ -22,13 +22,6 @@ struct CompanyRef: Hashable, Identifiable, Codable {
         iconURL = hit.iconURL
     }
 
-    init(_ item: FeedTrendItem) {
-        code = item.code
-        name = item.name
-        sector = item.sector ?? ""
-        iconURL = item.iconURL
-    }
-
     /// RSS に業種は無い。銘柄面が `financials` の `sector` で補う。
     init(_ item: FeedRSS.Item) {
         code = item.code

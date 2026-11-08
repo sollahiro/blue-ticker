@@ -285,37 +285,6 @@
     },
     {
       "method": "GET",
-      "path": "/v1/feed/trend",
-      "operation_id": "get-feed-trend",
-      "visibility": "private",
-      "summary": "Search trend feed",
-      "description": "Recently searched or referenced issuers (anonymous counts). Private for now: built from app users' searches, so not published in OpenAPI, skills or MCP tools.",
-      "parameters": [
-        {
-          "name": "limit",
-          "in": "query",
-          "required": false,
-          "description": "Maximum number of items to return.",
-          "schema": { "type": "integer" }
-        },
-        {
-          "name": "days",
-          "in": "query",
-          "required": false,
-          "description": "Lookback window in days.",
-          "schema": { "type": "integer" }
-        },
-        {
-          "name": "code",
-          "in": "query",
-          "required": false,
-          "description": "Optional issuer code for a single-name breakdown.",
-          "schema": { "type": "string" }
-        }
-      ]
-    },
-    {
-      "method": "GET",
       "path": "/v1/screen",
       "operation_id": "get-screen",
       "visibility": "private",

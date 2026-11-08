@@ -16,33 +16,6 @@ struct CompanyHit: Codable, Hashable, Identifiable {
     }
 }
 
-struct FeedTrendResponse: Codable {
-    var schemaVersion: Int
-    var date: String
-    var days: Int
-    var items: [FeedTrendItem]
-
-    enum CodingKeys: String, CodingKey {
-        case schemaVersion = "schema_version"
-        case date, days, items
-    }
-}
-
-struct FeedTrendItem: Codable, Hashable, Identifiable {
-    var code: String
-    var name: String
-    var count: Int
-    var sector: String?
-    var iconURL: String?
-
-    var id: String { code }
-
-    enum CodingKeys: String, CodingKey {
-        case code, name, count, sector
-        case iconURL = "icon_url"
-    }
-}
-
 struct FinancialsResponse: Codable {
     var schemaVersion: Int
     var code: String

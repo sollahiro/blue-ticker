@@ -118,15 +118,6 @@ actor APIClient {
         return String(value)
     }
 
-    /// 未設定・Worker 未到達の 503 は空ランキングとして扱う。
-    func feedTrend() async throws -> FeedTrendResponse {
-        do {
-            return try await get(path("v1/feed/trend"))
-        } catch APIClientError.http(let status, _) where status == 503 {
-            return FeedTrendResponse(schemaVersion: 1, date: "", days: 7, items: [])
-        }
-    }
-
     func cachedFinancials(code: String) async -> FinancialsResponse? {
         await peek(path("v1/companies/\(code)/financials"))
     }
