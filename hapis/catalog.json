@@ -172,6 +172,43 @@
     },
     {
       "method": "GET",
+      "path": "/v1/companies/{code}/relations",
+      "operation_id": "get-relations",
+      "summary": "Customers, group companies and shareholders",
+      "description": "Business relations disclosed in annual reports (stored data only): major customers, group companies (parent / subsidiary / affiliate), strategic shareholdings (investee) and major shareholders, plus reverse lookups from other listed companies' reports (supplier, major_shareholder_of). Each row cites its source filing. Amounts in JPY; voting_ratio in percent.",
+      "parameters": [
+        {
+          "name": "code",
+          "in": "path",
+          "required": true,
+          "description": "Issuer ticker code (e.g. 9409).",
+          "schema": { "type": "string" }
+        },
+        {
+          "name": "type",
+          "in": "query",
+          "required": false,
+          "description": "Comma-separated: customer, supplier, group, parent, subsidiary, affiliate, investee, major_shareholder, major_shareholder_of. Omit for all types.",
+          "schema": { "type": "string" }
+        },
+        {
+          "name": "limit",
+          "in": "query",
+          "required": false,
+          "description": "Page size (default 200, max 1000).",
+          "schema": { "type": "integer" }
+        },
+        {
+          "name": "cursor",
+          "in": "query",
+          "required": false,
+          "description": "next_cursor from the previous response. Only valid with the same type.",
+          "schema": { "type": "string" }
+        }
+      ]
+    },
+    {
+      "method": "GET",
       "path": "/v1/companies/{code}/breakdown",
       "operation_id": "get-breakdown",
       "summary": "Segment breakdown",
