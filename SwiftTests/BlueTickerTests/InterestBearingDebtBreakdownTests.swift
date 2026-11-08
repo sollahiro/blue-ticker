@@ -747,6 +747,29 @@ private struct StubIBDDecider: InterestBearingDebtDeciding {
         #expect(review.warnings.contains("legacy_ibd_extractor_fallback"))
         #expect(review.warnings.contains { $0.contains("unclassified") })
 
+        // 警告が coverage_unavailable だけで債務行が全て BS 本表由来なら breakdown を採用する（オリックス 8591）。
+        let coverageOnly = BreakdownSnapshotPayload(
+            axis: breakdownAxisInterestBearingDebt, denominator: 0, denominatorTag: "",
+            rows: [
+                BreakdownRowPayload(
+                    labelRaw: "長期借入債務", label: "長期借入債務", amount: 100, profit: nil,
+                    rowKind: "debt", opening: 90, closing: 100,
+                    debtSource: ibdRowSourceBalanceSheet),
+                BreakdownRowPayload(
+                    labelRaw: "合計", label: "合計", amount: 100, profit: nil,
+                    rowKind: "subtotal", opening: 90, closing: 100),
+            ],
+            sourceKind: breakdownSourceXbrlFacts, needsReview: true,
+            warnings: [breakdownWarningIBDCoverageUnavailable])
+        let coverage = BreakdownFinancialsResolver.canonicalInterestBearingDebt(
+            resolution: .resolved(payload: coverageOnly, audit: canonicalAudit(needsReview: true)),
+            inputs: IBDInputs(consolidated: true, balanceSheet: [], schedule: [], leaseNote: nil),
+            accountingStandard: "US-GAAP",
+            legacy: { IBDResult(total: 0, priorTotal: 0, components: [], method: "zero_debt", accountingStandard: "US-GAAP") })
+        #expect(coverage.total == 100)
+        #expect(coverage.priorTotal == 90)
+        #expect(coverage.method == "breakdown.interest_bearing_debt")
+
         // 軸 not_found でも旧 Extractor が債務を拾えばその値（0 へ落とさない）。
         let notFound = BreakdownFinancialsResolver.canonicalInterestBearingDebt(
             resolution: .notApplicable(reason: breakdownNotApplicableNotFound),
@@ -824,6 +847,17 @@ private struct StubIBDDecider: InterestBearingDebtDeciding {
         #expect(bank.nopatMargin == nil)
         #expect(bank.investedCapitalTurnover == nil)
         #expect(bank.interestBearingDebt == 40)
+    }
+
+    /// 銀行・証券・保険は会計基準に依らず、EDINET 提出者業種で判定する。
+    @Test func financialIndustriesAreWithheldRegardlessOfAccountingStandard() {
+        for industry in ["銀行業", "証券、商品先物取引業", "保険業"] {
+            #expect(Xbrl.isFinancialEdinetIndustry(industry))
+        }
+        for industry in ["化学", "電気機器", "サービス業", "不動産業", "その他金融業", ""] {
+            #expect(!Xbrl.isFinancialEdinetIndustry(industry))
+        }
+        #expect(!Xbrl.isFinancialEdinetIndustry(nil))
     }
 
     // MARK: - helpers

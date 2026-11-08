@@ -504,9 +504,10 @@ enum Xbrl {
     /// EDINET コードリスト「提出者業種」の銀行業。
     static let bankEdinetIndustry = "銀行業"
 
-    /// 金融業（東証33業種）。US-GAAP の金融会社（オリックス 8591・野村 8604）の資金配分の内訳を出さない判定に使う。
+    /// 銀行・証券・保険（東証33業種）。会計基準に依らず ROIC 系指標と資金配分の内訳を出さない判定に使う。
+    /// その他金融業（オリックス等）は事業会社に近い BS のため対象外。
     static let financialEdinetIndustries: Set<String> = [
-        "銀行業", "証券、商品先物取引業", "保険業", "その他金融業",
+        "銀行業", "証券、商品先物取引業", "保険業",
     ]
 
     static func isFinancialEdinetIndustry(_ industry: String?) -> Bool {

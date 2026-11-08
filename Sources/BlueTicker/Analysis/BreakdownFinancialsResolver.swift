@@ -191,7 +191,13 @@ enum BreakdownFinancialsResolver {
         }
         switch resolution {
         case .resolved(let payload, let audit):
-            guard !payload.needsReview else {
+            // 警告が「網羅性の分母を作れない」だけで、債務行がすべて BS 本表由来なら採用する。
+            // 旧 Extractor は US-GAAP の「短期借入債務 / 長期借入債務」を拾えず 0 になる（オリックス 8591）。
+            let balanceSheetOnly = !payload.rows.isEmpty
+                && payload.warnings == [breakdownWarningIBDCoverageUnavailable]
+                && payload.rows.filter { $0.rowKind != "subtotal" }
+                    .allSatisfy { $0.debtSource == ibdRowSourceBalanceSheet }
+            guard !payload.needsReview || balanceSheetOnly else {
                 let unclassified = audit.sentences.filter { $0.hasPrefix("unclassified ") }
                 return legacyFallback(reason: "needs_review", extra: payload.warnings + unclassified)
             }
