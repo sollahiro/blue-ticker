@@ -560,7 +560,7 @@ public func apiSkillsCatalog() -> [ApiSkill] {
             instructions: """
                 Shares（EPS・希薄化後 EPS・BPS・発行済株式総数、有報の記載そのまま）。格納済みデータのみ。
                 未算出は 404（reason 無し）、非開示は 404 + reason（not_found）、
-                DB 非接続は 503。旧 statement/notes（note_type 指定）は廃止し常に 404。
+                DB 非接続は 503。
                 例: GET /v1/companies/7203/shares
                 """
         ),

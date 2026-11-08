@@ -241,11 +241,6 @@ func registerRoutes(
             notFoundMessage: sharesNotFoundMessage)
     }
 
-    // 旧 GET /v1/companies/{code}/statement/notes は廃止（常に 404。後継は shares）。
-    v1.get("companies", ":code", "statement", "notes") { _ async -> Response in
-        errorResponse(.notFound, message: statementNotesRetiredMessage)
-    }
-
     // GET /v1/screen?sector=電気機器&roic_min=15&sales_cagr_3y_min=10&sort=roic&order=desc&limit=50
     // Summary 横断検索（BLT-49）。DB（screen_index、company_financials の最新 FY 派生）を AND フィルタ +
     // 1 キーソート + LIMIT で読む。数値は `{metric}_min` / `{metric}_max`（許可リストは `ScreenMetric`）。
@@ -557,8 +552,6 @@ func serveStoredBreakdown(
 
 /// `shares` 404 応答のメッセージ。
 let sharesNotFoundMessage = "株式の情報は未算出です"
-/// 廃止した `statement/notes` の 404 メッセージ。
-let statementNotesRetiredMessage = "statement/notes は廃止しました。GET /v1/companies/{code}/shares を使ってください"
 
 /// `shares` の DB 読み取り共通ロジック。`db` の扱いは `serveStoredFinancials` 参照。
 /// ライブ解決へのフォールバックは行わない（有報セクション取り込み・内訳取り込み・Statement取り込み と同型）。
