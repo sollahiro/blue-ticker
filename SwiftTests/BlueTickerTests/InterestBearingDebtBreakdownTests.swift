@@ -888,6 +888,12 @@ private struct StubIBDDecider: InterestBearingDebtDeciding {
             #expect(InterestBearingDebtBreakdown.balanceSheetExtensionPreset(label).0 == .interestBearingDebt)
         }
         #expect(InterestBearingDebtBreakdown.balanceSheetExtensionPreset("短期オペレーティングリース負債").0 == .leaseLiability)
+        for label in ["退職給付債務", "資産除去債務", "営業債務"] {
+            #expect(InterestBearingDebtBreakdown.balanceSheetExtensionPreset(label).0 == .notInterestBearing)
+        }
+        // 規則で決まらない「債務」は Jev に回す。
+        #expect(InterestBearingDebtBreakdown.balanceSheetExtensionPreset("その他の債務").0 == nil)
+        #expect(InterestBearingDebtBreakdown.balanceSheetExtensionPreset("債務保証損失引当金").0 == nil)
     }
 
     // MARK: - helpers
