@@ -882,6 +882,14 @@ private struct StubIBDDecider: InterestBearingDebtDeciding {
         #expect(!Xbrl.isFinancialEdinetIndustry(nil))
     }
 
+    /// 「借入」を含まない US-GAAP の債務科目（小松 6301）もラベル規則で債務に確定する。
+    @Test func usgaapDebtLabelsWithoutBorrowingWordArePresetDebt() {
+        for label in ["短期債務", "長期債務 －１年以内期限到来分", "長期債務"] {
+            #expect(InterestBearingDebtBreakdown.balanceSheetExtensionPreset(label).0 == .interestBearingDebt)
+        }
+        #expect(InterestBearingDebtBreakdown.balanceSheetExtensionPreset("短期オペレーティングリース負債").0 == .leaseLiability)
+    }
+
     // MARK: - helpers
 
     private func bs(
