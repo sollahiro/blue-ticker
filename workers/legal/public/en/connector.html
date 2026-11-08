@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="icon" href="/favicon.ico" sizes="48x48">
+  <link rel="icon" href="/favicon-32.png" type="image/png" sizes="32x32">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+  <meta name="theme-color" content="#1479d8">
+  <title>YuhoLAB Connector</title>
+  <style>
+    :root {
+      color-scheme: light;
+    }
+    body {
+      margin: 0;
+      font: 16px/1.7 -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Hiragino Kaku Gothic ProN", sans-serif;
+      color: #111;
+      background: #fff;
+    }
+    main {
+      max-width: 40rem;
+      margin: 0 auto;
+      padding: 2.5rem 1.25rem 4rem;
+    }
+    h1 {
+      font-size: 1.5rem;
+      font-weight: 650;
+      line-height: 1.35;
+      margin: 0 0 0.4rem;
+    }
+    .meta {
+      color: #555;
+      font-size: 0.9rem;
+      margin-bottom: 2rem;
+    }
+    h2 {
+      font-size: 1.15rem;
+      margin: 2rem 0 0.6rem;
+    }
+    h3 {
+      font-size: 1rem;
+      margin: 1.4rem 0 0.4rem;
+    }
+    p {
+      margin: 0.6rem 0;
+    }
+    ul {
+      margin: 0.4rem 0 0.8rem;
+      padding-left: 1.3rem;
+    }
+    li {
+      margin: 0.25rem 0;
+    }
+    blockquote {
+      margin: 0.8rem 0;
+      padding: 0.6rem 0.9rem;
+      background: #f7f7f8;
+      border-left: 3px solid #ccc;
+      color: #444;
+      font-size: 0.92rem;
+    }
+    blockquote p {
+      margin: 0;
+    }
+    a {
+      color: #0b63ce;
+    }
+    .site-header {
+      background: linear-gradient(160deg, #1479d8 0%, #0a46aa 100%);
+    }
+    .site-header .bar {
+      max-width: 40rem;
+      margin: 0 auto;
+      padding: 0.8rem 1.25rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+    }
+    .site-header img { height: 30px; width: auto; display: block; }
+    .site-header nav { display: flex; flex-wrap: wrap; gap: 0.3rem 1.1rem; font-size: 0.85rem; }
+    .site-header nav a { color: #fff; text-decoration: none; opacity: 0.85; }
+    .site-header nav a:hover, .site-header nav a[aria-current="page"] { opacity: 1; text-decoration: underline; text-underline-offset: 4px; }
+    .site-header a:focus-visible { outline: 3px solid #ffd23f; outline-offset: 3px; }
+  </style>
+</head>
+<body>
+  <header class="site-header">
+    <div class="bar">
+      <a href="/"><img src="/logo-white.svg" alt="YuhoLAB" width="107" height="30"></a>
+      <nav aria-label="Pages"><a href="/en/privacy">Privacy</a><a href="/en/terms">Terms</a><a href="/en/connector" aria-current="page">Connector</a><a href="/connector">日本語</a></nav>
+    </div>
+  </header>
+  <main>
+    <h1>YuhoLAB Connector for AI assistants</h1>
+    <p class="meta">Last updated: 2026-11-08<br>Operator: Sorahiro Shuto<br>Remote MCP server: <code>https://mcp.yuholab.com/mcp</code> · <a href="/connector">日本語</a></p>
+
+    <h2>What it is</h2>
+    <p>The YuhoLAB Connector lets an AI assistant (such as Claude) read data on Japanese listed companies that YuhoLAB extracts from filings published on EDINET, the Financial Services Agency's disclosure system. It is a remote MCP server (Streamable HTTP). Information only, not investment advice.</p>
+
+    <h2>Tools</h2>
+    <p>All tools are read-only. The connector cannot write, change or delete anything, and it does not send data to other services on its own.</p>
+    <ul>
+      <li><code>search_companies</code>: Find listed companies by ticker code or name.</li>
+      <li><code>get_overview</code>: Short company description.</li>
+      <li><code>get_filings</code>: List of EDINET filings for a company.</li>
+      <li><code>get_filing_content</code>: Section text of a filing.</li>
+      <li><code>get_financials</code>: Annual financial summary (sales, operating profit, net profit, etc.).</li>
+      <li><code>get_waterfall</code>: Year-over-year factor decomposition.</li>
+      <li><code>get_statement</code>: Balance sheet, income statement, cash flow and equity statement items.</li>
+      <li><code>get_shares</code>: EPS, diluted EPS, BPS and issued shares.</li>
+      <li><code>get_breakdown</code>: Breakdown by segment, geography or employees.</li>
+      <li><code>get_feed_updates</code>: Recent filings across companies.</li>
+    </ul>
+
+    <h2>Authentication and access</h2>
+    <ul>
+      <li>Users sign in with a Google account (OAuth 2.1 with PKCE). Other sign-in methods are not offered.</li>
+      <li>The purpose of sign-in is to identify each user so that access can be limited to prevent excessive use. Unlike an iOS app, a connector cannot use on-device attestation, so this is the substitute.</li>
+      <li>Access tokens are short-lived and are bound to this server. Disconnecting the connector in the AI service stops access.</li>
+      <li>The connector never receives the user's Google password.</li>
+    </ul>
+
+    <h2>Data handling</h2>
+    <ul>
+      <li>The content of conversations with the AI assistant is not stored. Only the parameters of each request (such as a ticker code) are processed to return a result.</li>
+      <li>Operational logs and usage counts are kept to apply usage limits and to operate the service.</li>
+      <li>Individual deletion requests cannot, in principle, be accommodated. See the <a href="/en/privacy">privacy policy</a> for details.</li>
+      <li>The data is processed from public information. Source: EDINET (Financial Services Agency). It may differ from the original filings; check EDINET for the primary documents.</li>
+    </ul>
+
+    <h2>Terms</h2>
+    <p>Use of the connector is governed by the <a href="/en/terms">Terms of Use</a> and the <a href="/en/privacy">privacy policy</a>, including the usage limits the Operator sets.</p>
+
+    <h2>Support and security contact</h2>
+    <p><a href="mailto:support@yuholab.com">support@yuholab.com</a></p>
+  </main>
+</body>
+</html>

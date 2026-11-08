@@ -253,3 +253,23 @@ test("every page declares the favicon set and the files exist", () => {
     assert.ok(readFileSync(join(publicDir, file)).length > 0, file);
   }
 });
+
+test("connector page lists only public read-only tools", () => {
+  const ja = readFileSync(join(publicDir, "connector.html"), "utf8");
+  const en = readFileSync(join(publicDir, "en/connector.html"), "utf8");
+  assert.equal(assetPathFor("/connector/"), "/connector");
+  for (const html of [ja, en]) {
+    for (const tool of ["search_companies", "get_overview", "get_filings", "get_filing_content", "get_financials", "get_waterfall", "get_statement", "get_shares", "get_breakdown", "get_feed_updates"]) {
+      assert.match(html, new RegExp(`<code>${tool}</code>`));
+    }
+    assert.doesNotMatch(html, /get_screen|get_feed_trend|screen_snapshot/);
+    assert.match(html, /https:\/\/mcp\.yuholab\.com\/mcp/);
+    assert.match(html, /support@yuholab\.com/);
+    assert.doesNotMatch(html, /Apple|OpenRouter|ChatGPT/);
+  }
+  assert.match(en, /Google account/);
+  assert.match(en, /read-only/);
+  assert.doesNotMatch(en, /[ぁ-んァ-ヶ]/, "no kana in the English page");
+  assert.match(ja, /href="\/en\/connector">English</);
+  assert.match(en, /href="\/connector">日本語</);
+});

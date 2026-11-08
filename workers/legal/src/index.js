@@ -25,7 +25,7 @@ export function redirectLocationFor(pathname) {
 
 export function assetPathFor(pathname) {
   const path = trimTrailingSlash(pathname);
-  if (path === "/privacy" || path === "/terms") {
+  if (path === "/privacy" || path === "/terms" || path === "/connector") {
     // Assets は /privacy.html・/terms.html を拡張子なしへ 307 するため、.html に書き換えない。
     return path;
   }

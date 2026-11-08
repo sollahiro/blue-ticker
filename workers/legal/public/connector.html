@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="icon" href="/favicon.ico" sizes="48x48">
+  <link rel="icon" href="/favicon-32.png" type="image/png" sizes="32x32">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+  <meta name="theme-color" content="#1479d8">
+  <title>有報LAB コネクタ</title>
+  <style>
+    :root {
+      color-scheme: light;
+    }
+    body {
+      margin: 0;
+      font: 16px/1.7 -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Hiragino Kaku Gothic ProN", sans-serif;
+      color: #111;
+      background: #fff;
+    }
+    main {
+      max-width: 40rem;
+      margin: 0 auto;
+      padding: 2.5rem 1.25rem 4rem;
+    }
+    h1 {
+      font-size: 1.5rem;
+      font-weight: 650;
+      line-height: 1.35;
+      margin: 0 0 0.4rem;
+    }
+    .meta {
+      color: #555;
+      font-size: 0.9rem;
+      margin-bottom: 2rem;
+    }
+    h2 {
+      font-size: 1.15rem;
+      margin: 2rem 0 0.6rem;
+    }
+    h3 {
+      font-size: 1rem;
+      margin: 1.4rem 0 0.4rem;
+    }
+    p {
+      margin: 0.6rem 0;
+    }
+    ul, ol {
+      margin: 0.4rem 0 0.8rem;
+      padding-left: 1.3rem;
+    }
+    li {
+      margin: 0.25rem 0;
+    }
+    .site-header {
+      background: linear-gradient(160deg, #1479d8 0%, #0a46aa 100%);
+    }
+    .site-header .bar {
+      max-width: 40rem;
+      margin: 0 auto;
+      padding: 0.8rem 1.25rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+    }
+    .site-header img { height: 30px; width: auto; display: block; }
+    .site-header nav { display: flex; flex-wrap: wrap; gap: 0.3rem 1.1rem; font-size: 0.85rem; }
+    .site-header nav a { color: #fff; text-decoration: none; opacity: 0.85; }
+    .site-header nav a:hover, .site-header nav a[aria-current="page"] { opacity: 1; text-decoration: underline; text-underline-offset: 4px; }
+    .site-header a:focus-visible { outline: 3px solid #ffd23f; outline-offset: 3px; }
+  </style>
+</head>
+<body>
+  <header class="site-header">
+    <div class="bar">
+      <a href="/"><img src="/logo-white.svg" alt="有報LAB" width="107" height="30"></a>
+      <nav aria-label="Pages"><a href="/privacy">プライバシー</a><a href="/terms">利用規約</a><a href="/connector" aria-current="page">コネクタ</a><a href="/en/connector">English</a></nav>
+    </div>
+  </header>
+  <main>
+    <h1>有報LAB コネクタ(AI アシスタント向け)</h1>
+    <p class="meta">最終更新: 2026-11-08<br>運営: Sorahiro Shuto<br>リモート MCP サーバー: <code>https://mcp.yuholab.com/mcp</code> · <a href="/en/connector">English</a></p>
+
+    <h2>概要</h2>
+    <p>有報LAB コネクタは、AI アシスタント(Claude など)が、有報LAB が金融庁の EDINET に提出された書類から抽出した上場企業のデータを読み出すための接続先です。リモート MCP サーバー(Streamable HTTP)として提供します。情報提供のみを目的とし、投資助言ではありません。</p>
+
+    <h2>ツール</h2>
+    <p>すべて読み取り専用です。書き込み、変更、削除はできず、他のサービスへ自動でデータを送ることもありません。</p>
+    <ul>
+      <li><code>search_companies</code>: ticker・社名から上場企業を検索</li>
+      <li><code>get_overview</code>: 企業の概要説明</li>
+      <li><code>get_filings</code>: EDINET の提出書類一覧</li>
+      <li><code>get_filing_content</code>: 提出書類の各項目の本文</li>
+      <li><code>get_financials</code>: 年次の財務サマリー(売上高・営業利益・純利益など)</li>
+      <li><code>get_waterfall</code>: 前年比の要因分解</li>
+      <li><code>get_statement</code>: 貸借対照表・損益計算書・キャッシュ・フロー計算書・株主資本等変動計算書の項目</li>
+      <li><code>get_shares</code>: EPS・潜在株式調整後 EPS・BPS・発行済株式数</li>
+      <li><code>get_breakdown</code>: セグメント・地域・従業員の内訳</li>
+      <li><code>get_feed_updates</code>: 直近の提出書類の新着</li>
+    </ul>
+
+    <h2>認証とアクセス</h2>
+    <ul>
+      <li>Google アカウントでサインインします(OAuth 2.1・PKCE)。他のサインイン方法は提供していません。</li>
+      <li>サインインの目的は、利用者を識別して過剰なアクセスを制限することです。iOS アプリのような端末認証をコネクタでは使えないため、その代わりとしています。</li>
+      <li>アクセストークンは有効期間が短く、このサーバー宛てに限定されています。AI サービス側でコネクタを切断すればアクセスは止まります。</li>
+      <li>Google のパスワードを受け取ることはありません。</li>
+    </ul>
+
+    <h2>データの扱い</h2>
+    <ul>
+      <li>AI アシスタントとの会話内容は保存しません。リクエストのパラメーター(証券コードなど)だけを処理して結果を返します。</li>
+      <li>利用回数の制限とサービスの運用のため、運用ログと利用回数を保存します。</li>
+      <li>個別の削除依頼には、原則として対応できません。詳しくは<a href="/privacy">プライバシーポリシー</a>をご覧ください。</li>
+      <li>データは公開情報を加工したものです。出典: EDINET(金融庁)。原本と異なる場合があるため、一次情報は EDINET でご確認ください。</li>
+    </ul>
+
+    <h2>規約</h2>
+    <p>コネクタの利用は、運営者が定める利用回数の上限を含め、<a href="/terms">利用規約</a>と<a href="/privacy">プライバシーポリシー</a>に従います。</p>
+
+    <h2>問い合わせ・セキュリティ連絡先</h2>
+    <p><a href="mailto:support@yuholab.com">support@yuholab.com</a></p>
+  </main>
+</body>
+</html>
