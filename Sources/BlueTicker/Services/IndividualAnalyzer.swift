@@ -237,11 +237,14 @@ struct IndividualAnalyzer {
             calc.operatingMargin = (rawOP / s) * percent
         }
 
+        // 営業利益が調達コスト（営業費用内の金融費用）を引いた後の会社は、足し戻して投下資本
+        // （有利子負債＋純資産）と整合させる。営業外の支払利息は営業利益に影響しないので足さない。
+        let financeCostAddBack = (statementMain?.operatingFinanceCost).map { $0 / millionYen } ?? 0
         if let op_ = raw.op, let taxRate = taxRateFraction {
             let clampedTax = min(max(taxRate, Financial.nopatMinNormalTaxRate), Financial.nopatMaxNormalTaxRate)
-            calc.nopat = op_ * (1.0 - clampedTax)
+            calc.nopat = (op_ + financeCostAddBack) * (1.0 - clampedTax)
         } else if let op_ = raw.op {
-            calc.nopat = op_ * (1.0 - Financial.nopatFallbackTaxRate)
+            calc.nopat = (op_ + financeCostAddBack) * (1.0 - Financial.nopatFallbackTaxRate)
         }
 
         // FCF

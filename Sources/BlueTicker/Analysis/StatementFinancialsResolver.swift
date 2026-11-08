@@ -43,6 +43,9 @@ struct StatementFinancialsValues {
     var dividendSS: Double?
     /// #8: IndividualAnalyzer 切替済。statement 行だけで取れる値。IFRS 支払利息の notes は組立層。
     var interestExpense: Double?
+    /// 営業利益より前（営業費用側）に載る金融費用。リース・信販・消費者金融・オリックス型は
+    /// 営業利益が調達コストを引いた後なので、NOPAT はこれを足し戻す。営業外の支払利息は対象外。
+    var operatingFinanceCost: Double? = nil
     var cfTreasuryStock: Double?
     var buyback: Double?
     /// geography カバー判定に渡すラベル。Summary 組立とは独立。
@@ -147,7 +150,30 @@ enum StatementFinancialsResolver {
                 edinetIndustry: edinetIndustry, sgaTagPolicy: sgaTagPolicy)
         }
         bundle.values.currency = year.currency
+        if let cost = operatingFinanceCost(year.incomeStatement) {
+            bundle.values.operatingFinanceCost = cost
+            // 営業外の支払利息（数百万円）は調達コストの実態を表さない。営業費用内の金融費用を優先する。
+            bundle.values.interestExpense = cost
+        }
         return bundle
+    }
+
+    /// 営業利益より前に載る金融費用（合計行 > 「金融費用」行 > 「支払利息」行の順）。
+    /// 営業利益の行が無い、または該当行が無ければ nil。符号は正（費用）。
+    static func operatingFinanceCost(_ items: [StatementLineItem]) -> Double? {
+        guard let opIndex = items.firstIndex(where: { $0.tag == "OperatingIncome" || ($0.label ?? "") == "営業利益" })
+        else { return nil }
+        let before = items[..<opIndex]
+        let excluded = ["収益", "受取", "未払", "利益", "引当", "損益"]
+        func pick(_ match: (StatementLineItem) -> Bool) -> Double? {
+            before.first { item in
+                let label = item.label ?? ""
+                return item.value != 0 && match(item) && !excluded.contains { label.contains($0) }
+            }.map { abs($0.value) }
+        }
+        return pick { $0.isTotal && ($0.label ?? "").contains("金融費用") }
+            ?? pick { ($0.label ?? "").contains("金融費用") }
+            ?? pick { ($0.label ?? "").contains("支払利息") }
     }
 
     // MARK: - J-GAAP / IFRS（構造化 XBRL タグ）
