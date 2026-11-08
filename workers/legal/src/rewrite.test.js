@@ -278,6 +278,6 @@ test("landing page links to the Claude connector directory page", () => {
   const html = readFileSync(join(publicDir, "index.html"), "utf8");
   const links = html.match(/href="https:\/\/claude\.ai\/directory\/yuholab"/g) || [];
   assert.equal(links.length, 2);
-  assert.match(html, /Claudeで使う/);
+  assert.match(html, /<img class="btn-icon" src="\/favicon\.svg" alt="" width="24" height="24">Claudeで使う/);
   assert.match(html, /Claudeのコネクタを見る/);
 });
