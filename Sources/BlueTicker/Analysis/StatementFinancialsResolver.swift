@@ -129,8 +129,13 @@ enum StatementFinancialsResolver {
 
         var bundle: ResolveBundle
         if accountingStandard == "US-GAAP" {
+            var values = resolveFromUSGAAPStatement(year, tagElements: tagElements)
+            // 資金配分は決定論（標準タグ → ラベル規則）だけで組む。US-GAAP は Jev を呼ばないので、
+            // bundle.cashFlow は渡さない（resolve の Jev 段をスキップする）。
+            values.cashAllocation = CashAllocationResolver.resolve(
+                cashFlow: year.cashFlow, cfo: values.cfo, cfi: values.cfi, isBank: false)
             bundle = ResolveBundle(
-                values: resolveFromUSGAAPStatement(year, tagElements: tagElements),
+                values: values,
                 incomeStatement: year.incomeStatement,
                 skipSgaJev: true)
         } else {
