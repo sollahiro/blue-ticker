@@ -2,7 +2,7 @@
   "api": {
     "slug": "yuholab",
     "name": "有報LAB",
-    "description": "有報LAB (YuhoLAB): data on Japanese listed companies, extracted from annual securities reports (有価証券報告書) and other filings published on EDINET by Japan's Financial Services Agency. Start with search_companies to resolve a 4-digit ticker code (e.g. 7203), then call the per-company tools. Amounts are million JPY and ratios are percent unless a response says otherwise. Figures are processed from the original filings and may differ from them; check EDINET for the source documents. Information only, not investment advice. All tools are read-only."
+    "description": "有報LAB (YuhoLAB): data on Japanese listed companies, extracted from annual securities reports (有価証券報告書) and other filings published on EDINET by Japan's Financial Services Agency. Start with search_companies to resolve a 4-digit ticker code (e.g. 7203), then call the per-company tools. Amounts are in yen (not thousands or millions), per-share values are in yen, share counts are in shares, and ratios are percent unless a response says otherwise. Figures are processed from the original filings and may differ from them; check EDINET for the source documents. Information only, not investment advice. All tools are read-only."
   },
   "endpoints": [
     {
@@ -49,7 +49,7 @@
       "path": "/v1/companies/{code}/financials",
       "operation_id": "get-financials",
       "summary": "Financial summary",
-      "description": "Annual financial summary (levels such as sales, operating_profit and net_profit). Amounts in million JPY; ratios in percent.",
+      "description": "Annual financial summary (levels such as sales, operating_profit and net_profit). Amounts in yen (not thousands or millions); ratios in percent.",
       "parameters": [
         {
           "name": "code",
@@ -84,15 +84,15 @@
                 "properties": {
                   "sales": {
                     "type": "number",
-                    "description": "Sales / revenue. Amount in million JPY. Gateway must not rename this key."
+                    "description": "Sales / revenue. Amount in yen. Gateway must not rename this key."
                   },
                   "operating_profit": {
                     "type": "number",
-                    "description": "Operating profit. Amount in million JPY. Gateway must not rename this key."
+                    "description": "Operating profit. Amount in yen. Gateway must not rename this key."
                   },
                   "net_profit": {
                     "type": "number",
-                    "description": "Net profit. Amount in million JPY. Gateway must not rename this key."
+                    "description": "Net profit. Amount in yen. Gateway must not rename this key."
                   }
                 }
               }
