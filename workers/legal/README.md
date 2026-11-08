@@ -1,6 +1,6 @@
 # Legal page Worker
 
-iOS アプリ「有報LAB」と公開 MCP コネクタ（HAPIS `mcp/`、`https://mcp.yuholab.com/mcp`）の免責・プライバシー方針および利用規約（App Store と Claude の Connectors Directory のプライバシーポリシー URL・サポート URL の先）。静的 HTML だけ。認証もトークンも無い。有報LAB API 自体の規約ページが要るときは、別ページとして `sollahiro.com/blue-ticker/...` に置く。
+iOS アプリ「有報LAB」と公開 MCP コネクタ（HAPIS `mcp/`、`https://mcp.yuholab.com/mcp`）の免責・プライバシー方針および利用規約（App Store と Claude の Connectors Directory のプライバシーポリシー URL・サポート URL の先）。静的 HTML だけ。認証もトークンも無い。有報LAB API 自体の規約ページが要るときは、`yuholab.com` に別ページとして置く。
 
 **この Worker を `api.*` / `mcp.*` の前段に置かない。** Tunnel + Access はそのまま。
 
@@ -16,13 +16,15 @@ iOS アプリ「有報LAB」と公開 MCP コネクタ（HAPIS `mcp/`、`https:/
 
 ## 旧 URL のリダイレクト
 
-Custom Domain `sollahiro.com` も残し、次の 6 パスだけを `yuholab.com` の対応ページへ 301 で直接飛ばす（`src/index.js` の `REDIRECTS`。末尾スラッシュの有無は問わない）。前方一致にはしないので、`sollahiro.com/blue-ticker/...` の他のパスは将来有報LAB API のページに使える。
+`sollahiro.com` はこの Worker に載せない。`sollahiro.com` は個人ページで、別 Worker `sollahiro-home`（リポジトリ外、Git 管理なし）が Custom Domain として持つ。次の 6 パスを `yuholab.com` の対応ページへ 301 で直接飛ばすのも `sollahiro-home` の役目（完全一致・末尾スラッシュの有無は問わない）。公開済み 1.1.x の App Store ページとアプリが参照しているので、`sollahiro-home` からも消さない。
 
 | 旧 URL（sollahiro.com） | 転送先 |
 |---|---|
 | `/blue-ticker`・`/yuholab` | `https://yuholab.com/` |
 | `/blue-ticker/privacy`・`/yuholab/privacy` | `https://yuholab.com/privacy` |
 | `/blue-ticker/terms`・`/yuholab/terms` | `https://yuholab.com/terms` |
+
+`wrangler.jsonc` の `routes` に `sollahiro.com` を戻さない（デプロイで `sollahiro-home` から Custom Domain を奪い、個人ページと 6 パスの転送が消える）。
 
 ランディングページは `workers/legal/public/index.html`（アイコンは `logo-white.svg`）。免責・プライバシーは `privacy.html`。利用規約は `workers/legal/public/terms.html`。AI アシスタント向けコネクタの説明（Connectors Directory の資料リンク用）は `connector.html`（`/connector`、英語は `/en/connector`）。ツール一覧は `hapis/catalog.json` の公開分と揃える。
 ファビコン一式（`favicon.svg` / `favicon.ico` / `favicon-32.png` / `apple-touch-icon.png` / `icon-192.png`）は iOS アプリアイコンの白い字（`Apps/BlueTicker/BlueTicker/AppIcon.icon/Assets/Group 13-2.svg`）を水色のグラデーションの角丸に載せたもの。全ページの `<head>` から読む。
