@@ -826,6 +826,17 @@ private struct StubIBDDecider: InterestBearingDebtDeciding {
         #expect(bank.interestBearingDebt == 40)
     }
 
+    /// 金融 4 業種（銀行・証券・保険・その他金融）は会計基準に依らず、EDINET 提出者業種で判定する。
+    @Test func financialIndustriesAreWithheldRegardlessOfAccountingStandard() {
+        for industry in ["銀行業", "証券、商品先物取引業", "保険業", "その他金融業"] {
+            #expect(Xbrl.isFinancialEdinetIndustry(industry))
+        }
+        for industry in ["化学", "電気機器", "サービス業", "不動産業", ""] {
+            #expect(!Xbrl.isFinancialEdinetIndustry(industry))
+        }
+        #expect(!Xbrl.isFinancialEdinetIndustry(nil))
+    }
+
     // MARK: - helpers
 
     private func bs(
