@@ -240,6 +240,92 @@ import Testing
         #expect(values.cashChange == -1_558 * million)
         #expect(values.otherCashChange == 0)
     }
+
+    @Test func usgaapKomatsuTotalLabelWithoutCashFlowWording() throws {
+        // 小松 6301（US-GAAP、S100YD25）。合計行が「財務活動による現金及び現金同等物の減少（純額）」。
+        let f = StatementLineSection.financing
+        let cashFlow = [
+            row("USGAAP_HTML_CF_30", "満期日が３カ月超の借入債務による調達", 905_072, order: 30, section: f),
+            row("USGAAP_HTML_CF_31", "満期日が３カ月超の借入債務の返済", -884_071, order: 31, section: f),
+            row("USGAAP_HTML_CF_32", "満期日が３カ月以内の借入債務の増減（純額）", 81_214, order: 32, section: f),
+            row("USGAAP_HTML_CF_33", "自己株式の売却及び取得（純額）", -105_720, order: 33, section: f),
+            row("USGAAP_HTML_CF_34", "配当金支払", -185_142, order: 34, section: f),
+            row("USGAAP_HTML_CF_35", "その他（純額）", -19_889, order: 35, section: f),
+            row("USGAAP_HTML_CF_36", "財務活動による現金及び現金同等物の減少（純額）", -208_536, order: 36, section: f, total: true),
+            row("USGAAP_HTML_CF_37", "為替変動による現金及び現金同等物への影響額", 12_937, order: 37),
+            row("USGAAP_HTML_CF_38", "現金及び現金同等物純増加（減少）額", 54_132, order: 38),
+            row("USGAAP_HTML_CF_39", "現金及び現金同等物期首残高", 385_569, order: 39, total: true),
+            row("USGAAP_HTML_CF_40", "現金及び現金同等物期末残高", 439_701, order: 40, total: true),
+        ]
+        let values = CashAllocationResolver.resolve(
+            cashFlow: cashFlow, cfo: 448_963 * million, cfi: -199_232 * million, isBank: false)
+        #expect(values.cff == -208_536 * million)
+        #expect(values.debtChange == (905_072 - 884_071 + 81_214) * million)
+        #expect(values.dividendsParent == -185_142 * million)
+        #expect(values.buyback == -105_720 * million)
+        #expect(values.otherFinancing == -19_889 * million)
+        #expect(values.fxEffect == 12_937 * million)
+        #expect(values.cashChange == 54_132 * million)
+        #expect(values.otherCashChange == 0)
+    }
+
+    @Test func usgaapOmronRowsAfterFinancingTotalAreOutsideRows() throws {
+        // オムロン 6645（US-GAAP、S100YG81）。換算差額・期首期末残高の行が財務区分に入って並ぶ。
+        let f = StatementLineSection.financing
+        let cashFlow = [
+            row("USGAAP_HTML_CF_30", "満期日が3ヶ月以内の短期債務の増加（純額）", 54_262, order: 30, section: f),
+            row("USGAAP_HTML_CF_31", "満期日が3ヶ月超の短期債務による収入", 1_160, order: 31, section: f),
+            row("USGAAP_HTML_CF_32", "満期日が3ヶ月超の短期債務による支出", -1_210, order: 32, section: f),
+            row("USGAAP_HTML_CF_33", "長期債務による収入", 5_745, order: 33, section: f),
+            row("USGAAP_HTML_CF_34", "長期債務による支出", -4_773, order: 34, section: f),
+            row("USGAAP_HTML_CF_35", "親会社の支払配当金", -20_462, order: 35, section: f),
+            row("USGAAP_HTML_CF_36", "非支配株主への支払配当金", -1_268, order: 36, section: f),
+            row("USGAAP_HTML_CF_37", "自己株式の売却による収入", 263, order: 37, section: f),
+            row("USGAAP_HTML_CF_38", "自己株式の取得による支出", -1_322, order: 38, section: f),
+            row("USGAAP_HTML_CF_39", "その他(純額)", -33, order: 39, section: f),
+            row("USGAAP_HTML_CF_40", "財務活動によるキャッシュ・フロー", 32_362, order: 40, section: f, total: true),
+            row("USGAAP_HTML_CF_41", "換算レート変動の影響", 11_106, order: 41, section: f),
+            row("USGAAP_HTML_CF_42", "現金及び現金同等物の増減額", 34_316, order: 42, section: f),
+            row("USGAAP_HTML_CF_43", "期首現金及び現金同等物残高", 149_023, order: 43, section: f),
+            row("USGAAP_HTML_CF_44", "期末現金及び現金同等物残高", 183_339, order: 44, section: f),
+            row("USGAAP_HTML_CF_45", "非継続事業に係る期末現金及び現金同等物残高（控除）", 16_798, order: 45, section: f),
+            row("USGAAP_HTML_CF_46", "継続事業に係る期末現金及び現金同等物残高", 166_541, order: 46, section: f),
+        ]
+        let values = CashAllocationResolver.resolve(
+            cashFlow: cashFlow, cfo: 60_919 * million, cfi: -70_071 * million, isBank: false)
+        #expect(values.cff == 32_362 * million)
+        #expect(values.debtChange == (54_262 + 1_160 - 1_210 + 5_745 - 4_773) * million)
+        #expect(values.dividendsParent == -20_462 * million)
+        // 取得（−1,322）のみ。売却による収入 263 はその他へ。
+        #expect(values.buyback == -1_322 * million)
+        #expect(values.fxEffect == 11_106 * million)
+        #expect(values.cashChange == 34_316 * million)
+        #expect(values.otherCashChange == 0)
+    }
+
+    @Test func usgaapFinancialCompanyKeepsTotalsButNoBreakdown() throws {
+        // オリックス 8591（US-GAAP、S100YG5L）。金融業は有利子負債等の内訳を出さない（銀行と同じ）。
+        let f = StatementLineSection.financing
+        let cashFlow = [
+            row("USGAAP_HTML_CF_30", "満期日が３ヶ月超の借入債務による調達", 1_210_761, order: 30, section: f),
+            row("USGAAP_HTML_CF_31", "預金の受入の増加（純額）", 175_554, order: 31, section: f),
+            row("USGAAP_HTML_CF_32", "財務活動から得た(に使用した)現金（純額）", -160_535, order: 32, section: f, total: true),
+            row("USGAAP_HTML_CF_33", "現金、現金等価物および使途制限付現金に対する 為替相場変動の影響額", 34_755, order: 33, section: f),
+            row("USGAAP_HTML_CF_34", "現金、現金等価物および使途制限付現金増加額（純額）", 129_116, order: 34, section: f),
+            row("USGAAP_HTML_CF_35", "現金、現金等価物および使途制限付現金期首残高", 1_321_983, order: 35, section: f, total: true),
+            row("USGAAP_HTML_CF_36", "現金、現金等価物および使途制限付現金期末残高", 1_451_099, order: 36, section: f, total: true),
+        ]
+        let values = CashAllocationResolver.resolve(
+            cashFlow: cashFlow, cfo: 1_369_567 * million, cfi: -1_114_671 * million, isBank: true)
+        #expect(values.cff == -160_535 * million)
+        #expect(values.fxEffect == 34_755 * million)
+        #expect(values.cashChange == 129_116 * million)
+        #expect(values.otherCashChange == 0)
+        #expect(values.debtChange == nil)
+        #expect(values.dividendsParent == nil)
+        #expect(values.buyback == nil)
+        #expect(values.otherFinancing == nil)
+    }
 }
 
 actor FakeCashFlowFinancingRowDecider: CashFlowFinancingRowDeciding {

@@ -350,7 +350,7 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                 要因（*_impact / *_effect）は和が親の前年差に一致する向きの符号です（買掛金・DPO・有利子負債は前期 − 当期）。
                 銀行業は net_cash / net_de / roic / nopat_margin / invested_capital_turnover と、
                 ネットキャッシュ前年差（net_cash_change / debt_change_impact）と、資金配分の cf_debt_change / cf_dividends_parent / cf_buyback / cf_other_financing が null です。
-                米国基準の会社は資金配分のキーが null です。ROE・ROIC の前年差の要因分解は持ちません。
+                米国基準の金融業（証券・その他金融）は、資金配分のうち cf_debt_change / cf_dividends_parent / cf_buyback / cf_other_financing が null です。ROE・ROIC の前年差の要因分解は持ちません。
                 銀行業の事業利益は業務純益（= operating_profit）で、同じ3項目に 経常収益差 / 業務粗利益率（業務粗利益 ÷ 経常収益）差 /
                 営業経費差 が入り、和が前年差に一致します。両期の経常収益・業務粗利益・営業経費が揃わない年は前年差が null です。
                 """,

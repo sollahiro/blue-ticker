@@ -504,6 +504,16 @@ enum Xbrl {
     /// EDINET コードリスト「提出者業種」の銀行業。
     static let bankEdinetIndustry = "銀行業"
 
+    /// 金融業（東証33業種）。US-GAAP の金融会社（オリックス 8591・野村 8604）の資金配分の内訳を出さない判定に使う。
+    static let financialEdinetIndustries: Set<String> = [
+        "銀行業", "証券、商品先物取引業", "保険業", "その他金融業",
+    ]
+
+    static func isFinancialEdinetIndustry(_ industry: String?) -> Bool {
+        guard let industry else { return false }
+        return financialEdinetIndustries.contains(industry)
+    }
+
     /// 銀行業か。BS 本表 Instant FieldSet に預金 `bankMarkerTag` がある、または EDINET コードリストの
     /// 提出者業種が銀行業（ゆうちょ銀行 7182 は貯金を `DepositsLiabilities` で載せ BNK マーカーが無い）。
     /// IBD（bank components・預金除外）と Summary 業務純益（`StatementFinancialsResolver`）の共通判定。

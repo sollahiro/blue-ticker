@@ -132,8 +132,11 @@ enum StatementFinancialsResolver {
             var values = resolveFromUSGAAPStatement(year, tagElements: tagElements)
             // 資金配分は決定論（標準タグ → ラベル規則）だけで組む。US-GAAP は Jev を呼ばないので、
             // bundle.cashFlow は渡さない（resolve の Jev 段をスキップする）。
+            // 金融業（銀行・証券・保険・その他金融）は預金等を有利子負債に含めない既存の扱いに揃え、
+            // 債務・配当・自己株式・その他の財務CFの内訳は出さない（cff・換算差額・現金増減は出す）。
             values.cashAllocation = CashAllocationResolver.resolve(
-                cashFlow: year.cashFlow, cfo: values.cfo, cfi: values.cfi, isBank: false)
+                cashFlow: year.cashFlow, cfo: values.cfo, cfi: values.cfi,
+                isBank: Xbrl.isFinancialEdinetIndustry(edinetIndustry))
             bundle = ResolveBundle(
                 values: values,
                 incomeStatement: year.incomeStatement,
