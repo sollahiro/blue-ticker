@@ -46,8 +46,6 @@ EPS・希薄化後 EPS・BPS・発行済株式総数を、有報の記載その�
 |---|---|
 | `not_found` | 当該書類に開示・タグが無い（正当欠測） |
 
-旧 `GET /v1/companies/{code}/statement/notes`（note_type 指定）は廃止し、常に 404（後継は shares）。
-
 ### 注記取り込み（内部）
 
 `company_statement_notes` と ingest ステージ `statement-notes` は shares の源泉として残す。決定論の note_type（`allStatementNoteTypes` = `per_share_information` / `issued_shares_and_capital`）。`allStatementNoteNotApplicableReasons` は内部の reason 一覧（`available_via_*` は廃止した note_type 用）。
