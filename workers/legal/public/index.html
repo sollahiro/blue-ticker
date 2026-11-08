@@ -48,6 +48,7 @@
     }
     .badge { display: inline-block; line-height: 0; border-radius: 10px; }
     .badge img { height: 60px; width: auto; display: block; }
+    .btn-icon { width: 24px; height: 24px; vertical-align: -6px; margin-right: .55rem; border-radius: 6px; }
     .btn.ghost { background: transparent; color: #fff; border: 1.5px solid rgba(255,255,255,.55); }
     .badge:focus-visible, .btn:focus-visible, a:focus-visible { outline: 3px solid var(--yellow); outline-offset: 3px; }
 
@@ -121,6 +122,7 @@
     ul.benefits li { margin: .7rem 0; padding-left: 1.4rem; position: relative; }
     ul.benefits li::before { content: "✓"; position: absolute; left: 0; color: var(--green); font-weight: 700; }
     ul.benefits strong { display: block; }
+    .connector-cta { margin: 1.4rem 0 0; }
 
     .trust { display: grid; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); gap: 1.1rem; }
     .trust .card h3::before { content: "✓ "; color: var(--green); }
@@ -168,7 +170,7 @@
           <p class="lead">上場企業が提出する有価証券報告書から財務の数字を抜き出し、「利益が増えたのか、減ったのか」を分かりやすく見せるサービスです。<br>専門用語に詳しくなくても、決算の中身をつかめます。</p>
           <div class="cta">
             <a class="badge" href="https://apps.apple.com/jp/app/id6807425773"><img src="/img/app-store-badge.svg" alt="App Storeからダウンロード" width="163" height="60"></a>
-            <a class="btn ghost" href="#connector">Claudeで使う</a>
+            <a class="btn ghost" href="https://claude.ai/directory/yuholab" target="_blank" rel="noopener"><img class="btn-icon" src="/img/claude-icon.png" alt="" width="24" height="24">Claudeで使う</a>
           </div>
           <p class="note">iPhone向け。Claude などのAIアシスタントからも使えます。</p>
         </div>
@@ -225,6 +227,7 @@
             <li><strong>気になったところを、そのまま掘り下げる。</strong>「なぜ減った？」「内訳は？」と会話を重ねるだけで、全体から細部へと分析を進められます。</li>
             <li><strong>数字の山から、傾向が見えてくる。</strong>大量のデータを一つずつ追わなくても、変化の大きいところや、年ごとの動きを拾い上げてくれます。</li>
           </ul>
+          <p class="connector-cta"><a class="btn" href="https://claude.ai/directory/yuholab" target="_blank" rel="noopener">Claudeのコネクタを見る</a></p>
         </div>
         <div class="chat" id="chat" role="img" aria-label="AIアシスタントとの会話イメージ（数パターンが切り替わります）">
           <div class="chat-pair">

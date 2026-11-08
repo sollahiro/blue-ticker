@@ -273,3 +273,11 @@ test("connector page lists only public read-only tools", () => {
   assert.match(ja, /href="\/en\/connector">English</);
   assert.match(en, /href="\/connector">日本語</);
 });
+
+test("landing page links to the Claude connector directory page", () => {
+  const html = readFileSync(join(publicDir, "index.html"), "utf8");
+  const links = html.match(/href="https:\/\/claude\.ai\/directory\/yuholab"/g) || [];
+  assert.equal(links.length, 2);
+  assert.match(html, /<img class="btn-icon" src="\/img\/claude-icon\.png" alt="" width="24" height="24">Claudeで使う/);
+  assert.match(html, /Claudeのコネクタを見る/);
+});
