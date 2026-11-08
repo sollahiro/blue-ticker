@@ -254,7 +254,7 @@ struct IndividualAnalyzer {
             calc.roe = (np / eq) * percent
         }
 
-        // 銀行に加えて、証券・保険・その他金融（EDINET 提出者業種）も有利子負債ベースの比率を出さない
+        // 銀行に加えて、証券・保険（EDINET 提出者業種）も有利子負債ベースの比率を出さない
         // （金融は預金・受入資金などが事業そのもので、投下資本が意味を持たない。2026-11-08 決定）。
         Self.applyInterestBearingDebtRatios(
             to: &calc, raw: raw,
@@ -329,7 +329,7 @@ extension IndividualAnalyzer {
     ///
     /// 銀行業（`InterestBearingDebtBreakdown.inputs` の `isBank` = 預金の銀行マーカータグあり、または
     /// EDINET 提出者業種が銀行業。
-    /// IBD を bank components で出す判定と同じ）と、証券・保険・その他金融（呼び出し側が `isBank` に
+    /// IBD を bank components で出す判定と同じ）と、証券・保険（呼び出し側が `isBank` に
     /// 含めて渡す）は、これらの比率が意味を持たない。値を出さずに null のままにする（Maintainer 判断 2026-10-12。キーは増やさない）。
     /// `interest_bearing_debt` 自体（預金を除く）は呼び出し側で残す。
     static func applyInterestBearingDebtRatios(to calc: inout CalculatedData, raw: RawData, isBank: Bool) {
