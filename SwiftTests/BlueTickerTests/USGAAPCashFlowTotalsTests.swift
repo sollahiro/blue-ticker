@@ -164,4 +164,21 @@ import Testing
         let rows = [row("投資活動によるキャッシュ・フロー", 0, .investing)]
         #expect(StatementFinancialsResolver.usgaapCashFlowActivityTotal(rows, activity: .investing) == 0)
     }
+
+    /// オムロン 6645: 損益計算書に営業利益の行が無い。売上原価・販管費・研究開発費で事業利益を作る。
+    @Test func businessProfitFromOperatingCostRows() {
+        func pl(_ label: String, _ value: Double) -> StatementLineItem {
+            StatementLineItem(tag: "USGAAP_HTML_PL", label: label, value: value, unit: nil, order: nil)
+        }
+        let rows = [
+            pl("売上高", 767_351), pl("売上原価", 416_350), pl("販売費及び一般管理費", 245_398),
+            pl("試験研究開発費", 45_668), pl("構造改革費用", 2_617), pl("のれんの減損損失", 0),
+            pl("その他費用（△収益）―純額―", 4_747),
+        ]
+        #expect(StatementFinancialsResolver.usgaapBusinessProfit(rows, sales: 767_351) == 59_935)
+        // 売上原価か販管費が無ければ作らない（金融会社など）。
+        let noCost = [pl("売上高", 100), pl("販売費及び一般管理費", 10)]
+        #expect(StatementFinancialsResolver.usgaapBusinessProfit(noCost, sales: 100) == nil)
+        #expect(StatementFinancialsResolver.usgaapBusinessProfit(rows, sales: nil) == nil)
+    }
 }

@@ -441,11 +441,20 @@ enum StatementFinancialsResolver {
         }
 
         let resolvedSalesLabel = salesLabelOverride ?? is_.salesLabel ?? "売上高"
+        var operatingProfit = op.operatingProfit ?? is_.operatingProfit
+        var operatingProfitLabel = op.operatingProfit != nil ? op.label : nil
+        // 米国基準で損益計算書に営業利益の行が無い会社（オムロン 6645）は事業利益で埋める。
+        if operatingProfit == nil,
+           let derived = usgaapBusinessProfit(year.incomeStatement, sales: is_.sales)
+        {
+            operatingProfit = derived
+            operatingProfitLabel = "事業利益"
+        }
         return StatementFinancialsValues(
             sales: is_.sales,
             salesLabel: resolvedSalesLabel,
-            operatingProfit: op.operatingProfit ?? is_.operatingProfit,
-            operatingProfitLabel: op.operatingProfit != nil ? op.label : nil,
+            operatingProfit: operatingProfit,
+            operatingProfitLabel: operatingProfitLabel,
             netProfit: resolveParentAttributableNetProfit(
                 incomeStatement: year.incomeStatement,
                 changesInEquity: year.changesInEquity,
@@ -496,6 +505,23 @@ enum StatementFinancialsResolver {
             geographyCoverageSalesLabel: geographyCoverageSalesLabel(
                 summaryLabel: resolvedSalesLabel, fieldSet: durationFS)
         )
+    }
+
+    /// 米国基準の事業利益 = 売上高 − 売上原価 − 販管費 − 研究開発費。
+    /// 構造改革費用・のれん減損・その他費用は引かない。売上原価と販管費の行が両方あるときだけ。
+    static func usgaapBusinessProfit(_ rows: [StatementLineItem], sales: Double?) -> Double? {
+        guard let sales else { return nil }
+        func value(_ matches: (String) -> Bool) -> Double? {
+            rows.first { item in
+                guard let label = item.label else { return false }
+                return matches(USGAAPHtml.stripSectionPrefix(label))
+            }?.value
+        }
+        guard let cost = value({ $0.hasPrefix("売上原価") }),
+              let sga = value({ $0.contains("販売費及び一般管理費") || $0 == "販売費" })
+        else { return nil }
+        let rd = value({ $0.contains("研究開発費") }) ?? 0
+        return sales - cost - sga - rd
     }
 
     // MARK: - 銀行 業務純益
