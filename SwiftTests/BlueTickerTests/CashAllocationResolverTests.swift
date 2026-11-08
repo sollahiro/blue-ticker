@@ -208,30 +208,6 @@ import Testing
             #expect(financialsUnits[key] == .currencyAmount)
         }
     }
-}
-
-actor FakeCashFlowFinancingRowDecider: CashFlowFinancingRowDeciding {
-    let answer: String
-    let probability: Double
-    private(set) var calls = 0
-
-    init(answer: String, probability: Double) {
-        self.answer = answer
-        self.probability = probability
-    }
-
-    func classifyFinancingRow(
-        row: CashFlowFinancingRowCandidate,
-        financingRows: [CashFlowFinancingRowCandidate],
-        docID: String
-    ) async -> CashFlowFinancingRowChoice {
-        calls += 1
-        return CashFlowFinancingRowChoice(
-            selected: answer, probability: probability,
-            probabilities: [answer: probability],
-            options: CashFlowFinancingRole.allCases.map(\.rawValue),
-            model: "typesafe/jev-1.13")
-    }
 
     @Test func usgaapHtmlRowsResolveByLabel() throws {
         // 富士フイルム 4901（US-GAAP、S100YIBH）の CF 本表（百万円、タグは USGAAP_HTML_CF_n）。
@@ -263,5 +239,29 @@ actor FakeCashFlowFinancingRowDecider: CashFlowFinancingRowDeciding {
         #expect(values.fxEffect == 22_242 * million)
         #expect(values.cashChange == -1_558 * million)
         #expect(values.otherCashChange == 0)
+    }
+}
+
+actor FakeCashFlowFinancingRowDecider: CashFlowFinancingRowDeciding {
+    let answer: String
+    let probability: Double
+    private(set) var calls = 0
+
+    init(answer: String, probability: Double) {
+        self.answer = answer
+        self.probability = probability
+    }
+
+    func classifyFinancingRow(
+        row: CashFlowFinancingRowCandidate,
+        financingRows: [CashFlowFinancingRowCandidate],
+        docID: String
+    ) async -> CashFlowFinancingRowChoice {
+        calls += 1
+        return CashFlowFinancingRowChoice(
+            selected: answer, probability: probability,
+            probabilities: [answer: probability],
+            options: CashFlowFinancingRole.allCases.map(\.rawValue),
+            model: "typesafe/jev-1.13")
     }
 }
