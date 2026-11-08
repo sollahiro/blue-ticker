@@ -326,6 +326,40 @@ import Testing
         #expect(values.buyback == nil)
         #expect(values.otherFinancing == nil)
     }
+
+    @Test func usgaapCanonOtherNetDashLabelIsOther() throws {
+        // キヤノン 7751（US-GAAP、S100XTLJ）。「その他－純額」が「その他」として区分できる。
+        let f = StatementLineSection.financing
+        let cashFlow = [
+            row("USGAAP_HTML_CF_30", "長期債務による調達額", 200_844, order: 30, section: f),
+            row("USGAAP_HTML_CF_31", "長期債務の返済額", -2_469, order: 31, section: f),
+            row("USGAAP_HTML_CF_32", "金融サービスに係る短期借入金の増加 （△減少）－純額", -2_300, order: 32, section: f),
+            row("USGAAP_HTML_CF_33", "その他の短期借入金の増加（△減少） －純額", 95_000, order: 33, section: f),
+            row("USGAAP_HTML_CF_34", "配当金の支払額", -147_644, order: 34, section: f),
+            row("USGAAP_HTML_CF_35", "自己株式取得及び処分", -300_019, order: 35, section: f),
+            row("USGAAP_HTML_CF_36", "その他－純額", -22_633, order: 36, section: f),
+            row("USGAAP_HTML_CF_37", "財務活動によるキャッシュ・フロー", -179_221, order: 37, section: f, total: true),
+            row("USGAAP_HTML_CF_38", "為替変動の現金及び現金同等物への影響額", 25_184, order: 38),
+            row("USGAAP_HTML_CF_39", "現金及び現金同等物の純増減額", 84_416, order: 39, total: true),
+            row("USGAAP_HTML_CF_40", "現金及び現金同等物の期首残高", 501_565, order: 40, total: true),
+            row("USGAAP_HTML_CF_41", "現金及び現金同等物の期末残高", 585_981, order: 41, total: true),
+        ]
+        let values = CashAllocationResolver.resolve(
+            cashFlow: cashFlow, cfo: 475_903 * million, cfi: -237_450 * million, isBank: false)
+        #expect(values.cff == -179_221 * million)
+        #expect(values.debtChange == (200_844 - 2_469 - 2_300 + 95_000) * million)
+        #expect(values.dividendsParent == -147_644 * million)
+        #expect(values.buyback == -300_019 * million)
+        #expect(values.otherFinancing == -22_633 * million)
+        #expect(values.otherCashChange == 0)
+    }
+
+    @Test func otherNetLabelDoesNotSwallowDebtRows() throws {
+        #expect(CashAllocationResolver.isOtherNetLabel("その他－純額"))
+        #expect(CashAllocationResolver.isOtherNetLabel("その他（純額）"))
+        #expect(!CashAllocationResolver.isOtherNetLabel("その他の短期借入金の増加（△減少）－純額"))
+        #expect(!CashAllocationResolver.isOtherNetLabel("その他の投資"))
+    }
 }
 
 actor FakeCashFlowFinancingRowDecider: CashFlowFinancingRowDeciding {
