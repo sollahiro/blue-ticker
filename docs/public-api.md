@@ -21,7 +21,7 @@
 
 ## 取引先・関係会社（`GET /v1/companies/{code}/relations`）
 
-有報の記載だけを返す（`basis` は常に `disclosed`）。推定・競合（`competitor`）は持たない。公開コネクタには出さない。
+有報の記載だけを返す（`basis` は常に `disclosed`）。推定・競合（`competitor`）は持たない。公開コネクタ（HAPIS）にも出す（`hapis/catalog.json` の `get-relations`）。
 
 - `type`（カンマ区切り。省略時は全種類）: `customer`（主要な顧客）· `supplier`（他社の主要な顧客欄に自社が載っている＝逆引き）· `group`（関係会社。`parent` / `subsidiary` / `affiliate` で絞れる。`other_related` は `group` のみ）· `investee`（政策保有株式。逆引きはしない）· `major_shareholder`（大株主）· `major_shareholder_of`（他社の大株主欄に自社が載っている＝逆引き）
 - 逆引きは上場企業どうしだけ。相手側の有報の行で、`reasons` に `disclosed_by_counterparty`、`evidence.from_code` は相手のコード（`code` と違う。記載の主語は相手の会社）
