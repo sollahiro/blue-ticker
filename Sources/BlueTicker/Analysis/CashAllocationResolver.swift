@@ -159,7 +159,7 @@ enum CashAllocationResolver {
     static func classify(label raw: String) -> CashFlowFinancingRole? {
         let label = normalize(raw)
         guard !label.isEmpty else { return nil }
-        if otherExactLabels.contains(label) { return .other }
+        if otherExactLabels.contains(label) || isOtherNetLabel(label) { return .other }
         let ambiguous = ambiguousKeywords.contains { label.contains($0) }
         let debt = debtKeywords.contains { label.contains($0) }
         if debt {
@@ -175,6 +175,14 @@ enum CashAllocationResolver {
         }
         if otherKeywords.contains(where: { label.contains($0) }) { return .other }
         return nil
+    }
+
+    /// 「その他－純額」（キヤノン 7751）など、「その他」に区切りと「純額」だけが続く行。
+    /// 「その他の短期借入金の増加…－純額」のように語が続く行は含めない。
+    static func isOtherNetLabel(_ label: String) -> Bool {
+        guard label.hasPrefix("その他") else { return false }
+        let rest = label.dropFirst("その他".count)
+        return rest.contains("純額") && rest.allSatisfy { "－-―ー、，,（）()純額".contains($0) }
     }
 
     /// 自己株式の取得（または取得と処分の純額）の行。処分・売却だけの行と、子会社・非支配持分の自己株式は含めない。
