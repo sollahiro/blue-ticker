@@ -107,9 +107,20 @@ enum CashAllocationResolver {
         cashFlow: [StatementLineItem], cfo: Double?, cfi: Double?
     ) -> Prepared {
         let ordered = cashFlow.enumerated().map { index, item in (item: item, order: item.order ?? index) }
-        let financing = ordered.filter { $0.item.section == .financing }
-        let cff = financing.first(where: { financingTotalTags.contains($0.item.tag) })?.item.value
-            ?? financing.first(where: { isFinancingTotalLabel($0.item.label) })?.item.value
+        let financingAll = ordered.filter { $0.item.section == .financing }
+        let totalRow = financingAll.first(where: { financingTotalTags.contains($0.item.tag) })
+            ?? financingAll.first(where: { isFinancingTotalLabel($0.item.label) })
+        // 合計行より後ろにあるのに財務区分に入っている行（オムロン 6645: 換算差額・期首期末残高）は、
+        // 財務CFの内訳ではなく 3区分の外の行として扱う。
+        let financing = financingAll.filter { row in
+            guard let total = totalRow else { return true }
+            return row.order <= total.order
+        }
+        let trailing = financingAll.filter { row in
+            guard let total = totalRow else { return false }
+            return row.order > total.order
+        }
+        let cff = totalRow?.item.value
             ?? ordered.first(where: { financingTotalTags.contains($0.item.tag) })?.item.value
         let rows = financing
             .filter { !$0.item.isTotal && !financingTotalTags.contains($0.item.tag)
@@ -119,11 +130,14 @@ enum CashAllocationResolver {
         let outside = ordered.filter { row in
             guard let section = row.item.section else { return true }
             return section != .operating && section != .investing && section != .financing
-        }
+        } + trailing
         let fxRows = outside.filter { isFxEffect($0.item) }
         let fx: Double? = fxRows.isEmpty ? 0 : fxRows.reduce(0) { $0 + $1.item.value }
         let beginning = outside.first(where: { isCashBalance($0.item, marker: "期首") })?.item.value
-        let ending = outside.last(where: { isCashBalance($0.item, marker: "期末") })?.item.value
+        // 非継続事業の残高の注記行（オムロン）より、本表の期末残高の行を優先する。
+        let endings = outside.filter { isCashBalance($0.item, marker: "期末") }
+        let ending = (endings.last(where: { !normalize($0.item.label ?? "").contains("継続事業") })
+            ?? endings.last)?.item.value
         let cashChange: Double? = {
             guard let beginning, let ending else { return nil }
             return ending - beginning
@@ -291,17 +305,26 @@ enum CashAllocationResolver {
     // MARK: - 行の判定
 
     private static func normalize(_ label: String) -> String {
+        // 半角の括弧は全角にそろえる（オムロン「その他(純額)」と「その他（純額）」を同じ行として扱う）。
         label.filter { !$0.isWhitespace }
+            .replacingOccurrences(of: "(", with: "（")
+            .replacingOccurrences(of: ")", with: "）")
     }
 
     private static func isFinancingTotalLabel(_ label: String?) -> Bool {
         let text = normalize(label ?? "")
-        return text.contains("財務活動によるキャッシュ・フロー") || text.contains("財務活動によるキャッシュフロー")
+        if text.contains("財務活動によるキャッシュ・フロー") || text.contains("財務活動によるキャッシュフロー") {
+            return true
+        }
+        // US-GAAP の合計行（小松「財務活動による現金及び現金同等物の減少（純額）」、
+        // オリックス「財務活動から得た(に使用した)現金（純額）」）。
+        return text.hasPrefix("財務活動") && text.contains("現金")
     }
 
     private static func isFxEffect(_ item: StatementLineItem) -> Bool {
         if fxTags.contains(item.tag) { return true }
         let text = normalize(item.label ?? "")
+        if text.contains("換算レート変動") { return true }  // オムロン「換算レート変動の影響」
         return text.contains("現金") && (text.contains("換算差額") || text.contains("為替変動")
             || text.contains("為替相場"))
     }
