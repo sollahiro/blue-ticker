@@ -138,7 +138,9 @@ enum InterestBearingDebtBreakdown {
         "Borrow", "Bond", "Loan", "Debt", "CommercialPaper", "InterestBearing", "Lease",
     ]
     /// 未知タグ行を候補に挙げるラベルキーワード。
-    private static let debtLabelKeywords = ["借入", "社債", "コマーシャル", "有利子", "リース", "借用"]
+    private static let debtLabelKeywords = [
+        "借入", "社債", "コマーシャル", "有利子", "リース", "借用", "短期債務", "長期債務",
+    ]
 
     // MARK: - inputs
 
@@ -374,10 +376,11 @@ enum InterestBearingDebtBreakdown {
             } else if debtTagKeywords.contains(where: { tag.contains($0) })
                 || debtLabelKeywords.contains(where: { label.contains($0) })
             {
-                // US-GAAP の BS は HTML 表の行に仮想タグ（USGAAP_HTML_*）を振っただけで提出要素では
-                // ないので、会社拡張のラベル規則に載せない（キヤノン: 「長期債務」行がキーワードに
-                // 当たらず候補外のため、ラベル規則で残りを確定すると分母が欠けたまま帯内になる）。
-                if standardLabels[tag] == nil, !tag.hasPrefix("USGAAP_HTML_") {
+                // 標準要素は Jev。会社拡張要素と US-GAAP の BS（HTML 表の行に振った仮想タグ
+                // USGAAP_HTML_*）は明細表と同じラベル規則（決まらなければ Jev）。US-GAAP は
+                // 「短期債務」「長期債務 －１年以内期限到来分」（小松 6301）のように「借入」を含まない
+                // 債務科目があるため、ラベル規則で確定させる（financials は decider 無しで Jev に行けない）。
+                if standardLabels[tag] == nil {
                     (preset, excludedReason) = balanceSheetExtensionPreset(label)
                 } else {
                     preset = nil

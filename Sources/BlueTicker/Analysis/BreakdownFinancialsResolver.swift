@@ -197,6 +197,10 @@ enum BreakdownFinancialsResolver {
                 && payload.warnings == [breakdownWarningIBDCoverageUnavailable]
                 && payload.rows.filter { $0.rowKind != "subtotal" }
                     .allSatisfy { $0.debtSource == ibdRowSourceBalanceSheet }
+                // リース負債だけの内訳は借入金・社債の取りこぼしを疑う（小松 6301・オムロン 6645）。
+                && payload.rows.contains {
+                    $0.rowKind != "subtotal" && !$0.label.contains("リース")
+                }
             guard !payload.needsReview || balanceSheetOnly else {
                 let unclassified = audit.sentences.filter { $0.hasPrefix("unclassified ") }
                 return legacyFallback(reason: "needs_review", extra: payload.warnings + unclassified)

@@ -770,6 +770,28 @@ private struct StubIBDDecider: InterestBearingDebtDeciding {
         #expect(coverage.priorTotal == 90)
         #expect(coverage.method == "breakdown.interest_bearing_debt")
 
+        // リース負債だけの内訳（借入金の取りこぼしの疑い）は旧 Extractor にフォールバックする。
+        let leaseOnly = BreakdownSnapshotPayload(
+            axis: breakdownAxisInterestBearingDebt, denominator: 0, denominatorTag: "",
+            rows: [
+                BreakdownRowPayload(
+                    labelRaw: "長期オペレーティングリース負債", label: "長期オペレーティングリース負債",
+                    amount: 50, profit: nil, rowKind: "debt", opening: 40, closing: 50,
+                    debtSource: ibdRowSourceBalanceSheet),
+                BreakdownRowPayload(
+                    labelRaw: "合計", label: "合計", amount: 50, profit: nil,
+                    rowKind: "subtotal", opening: 40, closing: 50),
+            ],
+            sourceKind: breakdownSourceXbrlFacts, needsReview: true,
+            warnings: [breakdownWarningIBDCoverageUnavailable])
+        let leaseOnlyValue = BreakdownFinancialsResolver.canonicalInterestBearingDebt(
+            resolution: .resolved(payload: leaseOnly, audit: canonicalAudit(needsReview: true)),
+            inputs: IBDInputs(consolidated: true, balanceSheet: [], schedule: [], leaseNote: nil),
+            accountingStandard: "US-GAAP",
+            legacy: { IBDResult(total: 700, priorTotal: 600, components: [], method: "field_parser", accountingStandard: "US-GAAP") })
+        #expect(leaseOnlyValue.total == 700)
+        #expect(leaseOnlyValue.method == "legacy_ibd_extractor_fallback")
+
         // 軸 not_found でも旧 Extractor が債務を拾えばその値（0 へ落とさない）。
         let notFound = BreakdownFinancialsResolver.canonicalInterestBearingDebt(
             resolution: .notApplicable(reason: breakdownNotApplicableNotFound),
@@ -858,6 +880,14 @@ private struct StubIBDDecider: InterestBearingDebtDeciding {
             #expect(!Xbrl.isFinancialEdinetIndustry(industry))
         }
         #expect(!Xbrl.isFinancialEdinetIndustry(nil))
+    }
+
+    /// 「借入」を含まない US-GAAP の債務科目（小松 6301）もラベル規則で債務に確定する。
+    @Test func usgaapDebtLabelsWithoutBorrowingWordArePresetDebt() {
+        for label in ["短期債務", "長期債務 －１年以内期限到来分", "長期債務"] {
+            #expect(InterestBearingDebtBreakdown.balanceSheetExtensionPreset(label).0 == .interestBearingDebt)
+        }
+        #expect(InterestBearingDebtBreakdown.balanceSheetExtensionPreset("短期オペレーティングリース負債").0 == .leaseLiability)
     }
 
     // MARK: - helpers
