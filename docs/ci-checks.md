@@ -15,7 +15,7 @@ plan from `changes` (see "Change-based job plan" below).
 | `golden-suite` | `scripts/ci/golden-suite.sh` | checksum mismatch or any failing golden test |
 | `static-checks` | `scripts/ci/tests/selftest.sh`, then on PRs `scripts/ci/flags.sh`, `scripts/ci/golden-suite.sh --checksums-only` + `scripts/ci/golden-rules.sh`, then the repo invariants (Package products, serviceless `fly.toml`, Worker unit tests) | any check misbehaving on crafted bad/clean diffs; new flagged occurrence or baseline growth; golden change rules below; a broken invariant |
 | `unit-tests` | `swift build --build-tests` (Build step), then `swift test` (golden filter skipped) with a Postgres 16 service | the package or its tests do not compile on Linux; any non-golden test, including `PostgresIntegrationTests` and `ReadOnlyRolePostgresTests` |
-| `build-macos` | `swift build --product blt-ingest` | `blt-ingest` does not compile on macOS, or its build contains Vapor / MCP modules |
+| `build-macos` | `swift build --product blt-ingest` | `blt-ingest` does not compile on macOS, or its build contains Vapor modules |
 
 Each job has one responsibility, so a red check (or step) names what broke. `unit-tests`
 compiles everything in its Build step before testing, which replaces a separate Linux build job

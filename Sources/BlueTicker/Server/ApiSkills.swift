@@ -1,6 +1,5 @@
-// REST `/v1/skills` と MCP `tools/list` が共有する能力カタログ。
+// REST `/v1/skills` の能力カタログ。
 // エージェント向けの「いつ使うか / どう呼ぶか」説明の正本。
-// MCP Tool 型は MCP SDK 依存のため、ここはプレーンな契約型のみを置く。
 
 import Foundation
 
@@ -8,7 +7,8 @@ import Foundation
 
 /// REST skills 応答の `schema_version`。形を破壊的に変えたときのみ +1。
 /// v9（2026-10-26）: 金額を基本単位（円・ドル）へ統一し、financials / waterfall に `units` / `currency` を載せた。
-public let apiSkillsSchemaVersion = 9
+/// v10（2026-11-08）: 内蔵 MCP の廃止に合わせ、各 skill の `mcp_tool` と `get-feed-trend` を外した。
+public let apiSkillsSchemaVersion = 10
 
 /// パラメータの置き場所（REST パス変数 / クエリ）。
 public enum ApiSkillParameterLocation: String, Sendable {
@@ -16,14 +16,14 @@ public enum ApiSkillParameterLocation: String, Sendable {
     case query
 }
 
-/// JSON Schema 相当の簡易型（MCP inputSchema へ写す）。
+/// JSON Schema 相当の簡易型。
 public enum ApiSkillParameterType: String, Sendable {
     case string
     case integer
     case stringArray = "array"
 }
 
-/// 省略時デフォルト（MCP schema の `default` と REST 説明用）。
+/// 省略時デフォルト（REST 説明用）。
 public enum ApiSkillParameterDefault: Sendable, Equatable {
     case int(Int)
     case string(String)
@@ -31,7 +31,6 @@ public enum ApiSkillParameterDefault: Sendable, Equatable {
 
 /// 1 パラメータの説明。
 /// `type` / `required` / `name` は REST（`GET /v1/skills`）の契約。
-/// MCP 面だけ違う場合は `mcpName` / `mcpType` / `mcpRequired` で上書きする。
 public struct ApiSkillParameter: Sendable {
     /// REST 上の名前（パス変数・クエリキー）。
     public let name: String
@@ -42,12 +41,6 @@ public struct ApiSkillParameter: Sendable {
     /// REST 上で必須か（サーバーが省略を受け入れるなら false）。
     public let required: Bool
     public let defaultValue: ApiSkillParameterDefault?
-    /// MCP inputSchema 上の名前。nil なら MCP には出さない（REST 専用）。
-    public let mcpName: String?
-    /// MCP 上の型。nil なら `type` を使う。
-    public let mcpType: ApiSkillParameterType?
-    /// MCP 上で必須か。nil なら `required` を使う。
-    public let mcpRequired: Bool?
 
     public init(
         name: String,
@@ -55,11 +48,7 @@ public struct ApiSkillParameter: Sendable {
         type: ApiSkillParameterType,
         description: String,
         required: Bool,
-        defaultValue: ApiSkillParameterDefault? = nil,
-        mcpName: String? = nil,
-        mcpExposed: Bool = true,
-        mcpType: ApiSkillParameterType? = nil,
-        mcpRequired: Bool? = nil
+        defaultValue: ApiSkillParameterDefault? = nil
     ) {
         self.name = name
         self.location = location
@@ -67,22 +56,6 @@ public struct ApiSkillParameter: Sendable {
         self.description = description
         self.required = required
         self.defaultValue = defaultValue
-        // mcpExposed=false で REST 専用。true かつ mcpName=nil なら REST 名をそのまま使う。
-        self.mcpName = mcpExposed ? (mcpName ?? name) : nil
-        self.mcpType = mcpExposed ? mcpType : nil
-        self.mcpRequired = mcpExposed ? mcpRequired : nil
-    }
-
-    /// MCP 生成用の実効型。MCP 非公開なら nil。
-    public var effectiveMcpType: ApiSkillParameterType? {
-        guard mcpName != nil else { return nil }
-        return mcpType ?? type
-    }
-
-    /// MCP 生成用の実効 required。MCP 非公開なら nil。
-    public var effectiveMcpRequired: Bool? {
-        guard mcpName != nil else { return nil }
-        return mcpRequired ?? required
     }
 }
 
@@ -93,34 +66,20 @@ public struct ApiSkill: Sendable {
     public let id: String
     /// 短い表示名。
     public let name: String
-    /// いつ使うか（エージェントが選択するための要約。MCP tool description と同一文面）。
+    /// いつ使うか（エージェントが選択するための要約）。
     public let description: String
     /// HTTP メソッド。
     public let method: String
     /// REST パス（`{code}` 等のプレースホルダ付き）。
     public let path: String
-    /// 対応 MCP ツール名。REST のみの能力は nil。
-    public let mcpTool: String?
     /// REST 能力カタログの機能枠（`docs/architecture.md`）。
     public let feature: String
     public let parameters: [ApiSkillParameter]
     /// 使い方の詳細（エラー意味・関連エンドポイント・単位など）。
     public let instructions: String
-    /// MCP `tools/list` の outputSchema 用 JSON Schema 文字列。REST `/v1/skills` には出さない。
-    public let mcpOutputSchema: String?
 }
 
 // MARK: - カタログ
-
-/// get_financial_summary / get_waterfall の MCP outputSchema（同一 envelope）。
-private let mcpOutputSchemaFinancialEnvelope =
-    """
-    {"type":"object","required":["schema_version","code","name","sector","market","currency","units","years"],\
-    "properties":{"schema_version":{"type":"integer"},"code":{"type":"string"},"name":{"type":"string"},\
-    "sector":{"type":"string"},"market":{"type":"string"},"currency":{"type":["string","null"]},\
-    "units":{"type":"object","additionalProperties":{"type":"string"}},\
-    "years":{"type":"array","items":{"type":"object"}}}}
-    """
 
 /// 公開能力の完全一覧（順序はクライアント向けの推奨探索順）。
 public func apiSkillsCatalog() -> [ApiSkill] {
@@ -131,7 +90,6 @@ public func apiSkillsCatalog() -> [ApiSkill] {
             description: "銘柄コードまたは名称で企業を検索します。",
             method: "GET",
             path: "/v1/companies",
-            mcpTool: "search_companies",
             feature: "discovery",
             parameters: [
                 ApiSkillParameter(
@@ -139,23 +97,14 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                     location: .query,
                     type: .string,
                     description: "検索クエリ（銘柄コードまたは企業名）",
-                    // REST は省略時空文字で受け付ける（400 にはしない）。MCP は required。
-                    required: false,
-                    mcpName: "query",
-                    mcpRequired: true
+                    // REST は省略時空文字で受け付ける（400 にはしない）。
+                    required: false
                 ),
             ],
             instructions: """
                 銘柄コードが未知のときに最初に使う。ヒットした `code` を以降の financials / filings 等に渡す。
                 REST の `q` 省略は空検索になる（必須ではない）。実質的な検索には `q` を付ける。
                 例: GET /v1/companies?q=トヨタ
-                """,
-            mcpOutputSchema:
-                """
-                {"type":"object","required":["results"],"properties":{"results":{"type":"array","items":\
-                {"type":"object","required":["code","name"],"properties":{"code":{"type":"string"},\
-                "name":{"type":"string"},"sector":{"type":"string"},"market":{"type":"string"},\
-                "location":{"type":"string"}}}}}}
                 """
         ),
         ApiSkill(
@@ -164,7 +113,6 @@ public func apiSkillsCatalog() -> [ApiSkill] {
             description: "銘柄の短い会社説明を返します（有報「事業の内容」由来。最大90字。格納済みのみ）。",
             method: "GET",
             path: "/v1/companies/{code}/overview",
-            mcpTool: nil,
             feature: "overview",
             parameters: [
                 ApiSkillParameter(
@@ -178,10 +126,8 @@ public func apiSkillsCatalog() -> [ApiSkill] {
             instructions: """
                 概要カード上部用の短い会社説明。数値・買い推奨は含まない。
                 格納済みデータのみ。未算出・対象外は 404、DB 非接続は 503。ライブ生成へはフォールバックしない。
-                MCP には出さない。
                 例: GET /v1/companies/7203/overview
-                """,
-            mcpOutputSchema: nil
+                """
         ),
         ApiSkill(
             id: "get-relations",
@@ -189,7 +135,6 @@ public func apiSkillsCatalog() -> [ApiSkill] {
             description: "有報に記載された主要な顧客・関係会社・出資先・大株主と、他社の有報からの逆引き（仕入先・親会社・大株主になっている会社）を返します（格納済みのみ）。",
             method: "GET",
             path: "/v1/companies/{code}/relations",
-            mcpTool: nil,
             feature: "relations",
             parameters: [
                 ApiSkillParameter(
@@ -227,10 +172,8 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                 company は上場企業に名寄せできたときだけ付く（それ以外は null で name_raw のみ）。
                 supplier / major_shareholder_of は相手側の有報からの逆引きで、上場企業どうしだけ。
                 omitted は提出会社が記載を省略した type。未知の type・不正なコードは 400、未格納は 404、DB 非接続は 503。
-                MCP には出さない。
                 例: GET /v1/companies/9409/relations?type=customer,group
-                """,
-            mcpOutputSchema: nil
+                """
         ),
         ApiSkill(
             id: "get-filings",
@@ -238,7 +181,6 @@ public func apiSkillsCatalog() -> [ApiSkill] {
             description: "銘柄コードに紐づく EDINET 書類一覧を取得します。",
             method: "GET",
             path: "/v1/companies/{code}/filings",
-            mcpTool: "get_filings",
             feature: "filing",
             parameters: [
                 ApiSkillParameter(
@@ -261,15 +203,6 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                 有報・半期などの doc_id を知るときに使う。filing-content / breakdown の doc_id 指定の前段。
                 DB 同期済みなら DB から返し、未同期銘柄のみライブ EDINET 探索へフォールバックする。
                 例: GET /v1/companies/6103/filings?max_years=5
-                """,
-            mcpOutputSchema:
-                """
-                {"type":"object","required":["code","name","filings"],"properties":{"code":{"type":"string"},\
-                "name":{"type":"string"},"filings":{"type":"array","items":{"type":"object",\
-                "required":["doc_id","doc_type","doc_type_label","fy_end","submitted_at"],\
-                "properties":{"doc_id":{"type":"string"},"doc_type":{"type":"string"},\
-                "doc_type_label":{"type":"string"},"fy_end":{"type":"string"},\
-                "submitted_at":{"type":"string"}}}}}}
                 """
         ),
         ApiSkill(
@@ -278,7 +211,7 @@ public func apiSkillsCatalog() -> [ApiSkill] {
             description: """
                 銘柄コードの財務サマリーを年度別に返します（格納済みデータのみ。未集計の場合は空を返します）。
                 損益・CF・バランスシート・収益性指標（水準値）を含みます。直近\(Api.financialsYearsDefault)年分を返します。
-                前年差・要因分解（増減分析）は get_waterfall を使ってください。
+                前年差・要因分解（増減分析）は get-waterfall を使ってください。
                 単位は応答の units（キー → 単位コード）が正です。currency_amount は通貨の基本単位（円・ドル）の整数で、
                 通貨は years[].currency（ISO 4217。外貨建て開示の会社は USD など）。percent は %（1 = 1%）、
                 percentage_points は % ポイント、times は倍、days は日、currency_per_share は1株当たり、shares は株、persons は人です。
@@ -293,7 +226,6 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                 """,
             method: "GET",
             path: "/v1/companies/{code}/financials",
-            mcpTool: "get_financial_summary",
             feature: "summary",
             parameters: [
                 ApiSkillParameter(
@@ -309,35 +241,31 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                     type: .integer,
                     description: "取得年数",
                     required: false,
-                    defaultValue: .int(Api.financialsYearsDefault),
-                    mcpExposed: false
+                    defaultValue: .int(Api.financialsYearsDefault)
                 ),
                 ApiSkillParameter(
                     name: "fields",
                     location: .query,
                     type: .string,
                     description: "years[] の応答キーを絞るカンマ区切り（例: sales,operating_profit,net_profit）",
-                    required: false,
-                    mcpExposed: false
+                    required: false
                 ),
             ],
             instructions: """
                 Summary（水準値）。増減分解が必要なら get-waterfall。
                 格納済みデータのみ。未集計は 404、DB 非接続は 503。ライブ計算へはフォールバックしない。
                 単位は units、通貨は years[].currency（fields で絞っても currency は常に返る）。
-                MCP は years / fields 固定（既定年数・全キー）。REST のみクエリで調整可。
                 fields は値を変えずキーを絞るだけ。fy_end / financial_period / doc_id は常に返る。
                 不明キーを含むと 400。
                 例: GET /v1/companies/6103/financials?years=5&fields=sales,operating_profit
-                """,
-            mcpOutputSchema: mcpOutputSchemaFinancialEnvelope
+                """
         ),
         ApiSkill(
             id: "get-waterfall",
             name: "通期増減分析",
             description: """
                 銘柄コードの増減分析（前年差分解）を年度別に返します（格納済みデータのみ。未集計の場合は空を返します）。
-                get_financial_summary と同じ水準値に加え、事業利益ウォーターフォール（売上差/粗利率差/販管費差影響）、
+                get-financials と同じ水準値に加え、事業利益ウォーターフォール（売上差/粗利率差/販管費差影響）、
                 ROE のデュポン3要素（net_margin / asset_turnover / financial_leverage。積が roe。いずれも期末）、ネットキャッシュ前年差（現金差/負債差影響）、
                 運転資本・CCC前年差（売掛金/棚卸資産/買掛金差影響、ccc_dso_effect / ccc_dio_effect / ccc_dpo_effect）、
                 資金配分（現金増減の内訳。cff = 財務CF、cf_debt_change = 有利子負債（借入金・社債・CP・リース負債）の増減、cf_dividends_parent = 親会社株主への配当、cf_buyback = 自己株式の取得（処分による収入は含まない）、
@@ -356,7 +284,6 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                 """,
             method: "GET",
             path: "/v1/companies/{code}/waterfall",
-            mcpTool: "get_waterfall",
             feature: "waterfall",
             parameters: [
                 ApiSkillParameter(
@@ -372,17 +299,14 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                     type: .integer,
                     description: "取得年数",
                     required: false,
-                    defaultValue: .int(Api.financialsYearsDefault),
-                    mcpExposed: false
+                    defaultValue: .int(Api.financialsYearsDefault)
                 ),
             ],
             instructions: """
                 Waterfall（Summary + 前年差・要因分解）。水準値だけなら get-financials で足りる。
                 格納済みデータのみ。未集計は 404、DB 非接続は 503。
-                MCP は years 固定（既定年数）。REST のみ years クエリで調整可。
                 例: GET /v1/companies/6103/waterfall?years=5
-                """,
-            mcpOutputSchema: mcpOutputSchemaFinancialEnvelope
+                """
         ),
         ApiSkill(
             id: "get-filing-content",
@@ -395,7 +319,6 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                 """,
             method: "GET",
             path: "/v1/companies/{code}/filing-content",
-            mcpTool: "get_filing_content",
             feature: "filing",
             parameters: [
                 ApiSkillParameter(
@@ -417,21 +340,14 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                     location: .query,
                     type: .string,
                     description: "抽出セクション（カンマ区切り。省略時は全セクション）",
-                    required: false,
-                    // MCP は文字列配列。REST ワイヤはクエリ1文字列。
-                    mcpType: .stringArray
+                    required: false
                 ),
             ],
             instructions: """
                 有報のテキスト抽出（Filing）。事業別売上の構造化数値は get-breakdown。
                 格納済みデータのみ。未抽出は 404、DB 非接続は 503。
-                REST: ?sections=mda,business_risks（カンマ区切り文字列）。MCP: 文字列配列。
+                ?sections=mda,business_risks（カンマ区切り文字列）。
                 例: GET /v1/companies/6103/filing-content?sections=mda,business_risks
-                """,
-            mcpOutputSchema:
-                """
-                {"type":"object","required":["code","doc_id","sections"],"properties":{"code":{"type":"string"},\
-                "doc_id":{"type":"string"},"sections":{"type":"object"}}}
                 """
         ),
         ApiSkill(
@@ -514,7 +430,6 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                 """,
             method: "GET",
             path: "/v1/companies/{code}/breakdown",
-            mcpTool: "get_breakdown",
             feature: "breakdown",
             parameters: [
                 ApiSkillParameter(
@@ -551,12 +466,6 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                 例: GET /v1/companies/6758/breakdown?axis=employees
                 例: GET /v1/companies/6758/breakdown?axis=capex
                 例: GET /v1/companies/6758/breakdown?axis=goodwill_and_intangibles
-                """,
-            mcpOutputSchema:
-                """
-                {"type":"object","required":["code","doc_id","axis","breakdown"],"properties":{"code":\
-                {"type":"string"},"doc_id":{"type":"string"},"axis":{"type":"string"},\
-                "breakdown":{"type":"object"},"llm_audit":{"type":"object"}}}
                 """
         ),
         ApiSkill(
@@ -574,7 +483,6 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                 """,
             method: "GET",
             path: "/v1/companies/{code}/statement",
-            mcpTool: "get_statement",
             feature: "statement",
             parameters: [
                 ApiSkillParameter(
@@ -612,13 +520,6 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                 グランドトータル行も components は取得できる）。US-GAAP 連結は HTML 経路のため
                 is_total はラベル規則、components はキヤノン型（合計直後の内訳が親と一致）のみ。
                 例: GET /v1/companies/7203/statement?years=3
-                """,
-            mcpOutputSchema:
-                """
-                {"type":"object","required":["schema_version","code","name","sector","market","years"],\
-                "properties":{"schema_version":{"type":"integer"},"code":{"type":"string"},\
-                "name":{"type":["string","null"]},"sector":{"type":["string","null"]},\
-                "market":{"type":["string","null"]},"years":{"type":"array","items":{"type":"object"}}}}
                 """
         ),
         ApiSkill(
@@ -634,12 +535,11 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                 diluted_eps など）。continuing_* / discontinued_* は IFRS で継続事業・非継続事業別の EPS を
                 損益計算書に開示している会社だけにあります。
                 取得できない場合はエラー応答とともに reason が返ることがあります
-                （reason 無しは単に未取り込み。REST では 404、MCP では isError）。
+                （reason 無しは単に未取り込み。404）。
                 not_found（当該書類に開示・XBRLタグが見つからない＝正当な欠測）。
                 """,
             method: "GET",
             path: "/v1/companies/{code}/shares",
-            mcpTool: "get_shares",
             feature: "shares",
             parameters: [
                 ApiSkillParameter(
@@ -662,14 +562,6 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                 未算出は 404（reason 無し）、非開示は 404 + reason（not_found）、
                 DB 非接続は 503。旧 statement/notes（note_type 指定）は廃止し常に 404。
                 例: GET /v1/companies/7203/shares
-                """,
-            mcpOutputSchema:
-                """
-                {"type":"object","required":["code","doc_id","currency","items"],"properties":{"code":\
-                {"type":"string"},"doc_id":{"type":"string"},"currency":{"type":"string"},"items":{"type":"array","items":\
-                {"type":"object","required":["key","value"],"properties":{"key":{"type":"string"},\
-                "label":{"type":["string","null"]},"value":{"type":"number"},\
-                "unit":{"type":["string","null"]}}}}}}
                 """
         ),
         ApiSkill(
@@ -678,11 +570,10 @@ public func apiSkillsCatalog() -> [ApiSkill] {
             description: """
                 直近に提出された上場企業の有報などの書類を、提出日時の新しい順で返します（既定は直近90日・最大10件）。
                 件数は当日（total.day）と直近1週間（total.week）。銘柄横断の更新情報です。
-                1 社の書類一覧は get_filings を使ってください。
+                1 社の書類一覧は get-filings を使ってください。
                 """,
             method: "GET",
             path: "/v1/feed/updates",
-            mcpTool: "get_feed_updates",
             feature: "feed",
             parameters: [
                 ApiSkillParameter(
@@ -697,7 +588,7 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                     name: "days",
                     location: .query,
                     type: .integer,
-                    description: "items の窓（日。最大 \(Api.feedTrendDaysMax)。省略時 \(Api.feedUpdateDaysDefault)。total.week は常に直近7日）",
+                    description: "items の窓（日。最大 \(Api.feedDaysMax)。省略時 \(Api.feedUpdateDaysDefault)。total.week は常に直近7日）",
                     required: false,
                     defaultValue: .int(Api.feedUpdateDaysDefault)
                 ),
@@ -715,77 +606,9 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                 items はクエリ days 窓を新しい暦日から limit 件埋める（既定 90 日・10 件）。同日が残り枠を超えるとその日から安定サンプリングする。
                 `date` は集計した UTC 暦日。`total.day` はその日、`total.week` は直近7日の上場提出件数（limit で切る前。days とは独立）。
                 空でも 200（items=[]）。DB 非接続は 503。ライブ EDINET へはフォールバックしない。
-                RSS は静的フィード（https://feed.sollahiro.com/blue-ticker/edinet-filings.xml。日次 19:15 JST・ヘッドラインと会社アイコン URL のみ・有報 120 だけ。直近7日分と最新10件）。REST が契約の正。MCP は追従。
+                RSS は静的フィード（https://feed.sollahiro.com/blue-ticker/edinet-filings.xml。日次 19:15 JST・ヘッドラインと会社アイコン URL のみ・有報 120 だけ。直近7日分と最新10件）。REST が契約の正。
                 例: GET /v1/feed/updates?days=90&limit=10
                 例: GET /v1/feed/updates?doc_type=120,160
-                """,
-            mcpOutputSchema:
-                """
-                {"type":"object","required":["schema_version","date","days","total","items"],"properties":\
-                {"schema_version":{"type":"integer"},"date":{"type":"string"},"days":{"type":"integer"},\
-                "total":{"type":"object","required":["day","week"],"properties":{"day":{"type":"integer"},\
-                "week":{"type":"integer"}}},"doc_types":{"type":"array","items":{"type":"string"}},"items":\
-                {"type":"array","items":{"type":"object","required":["code","name","doc_id","doc_type",\
-                "doc_type_label","fy_end","submitted_at"],"properties":{"code":{"type":"string"},\
-                "name":{"type":"string"},"doc_id":{"type":"string"},"doc_type":{"type":"string"},\
-                "doc_type_label":{"type":"string"},"fy_end":{"type":"string"},\
-                "submitted_at":{"type":"string"}}}}}}
-                """
-        ),
-        ApiSkill(
-            id: "get-feed-trend",
-            name: "検索トレンド",
-            description: """
-                直近に検索・参照された銘柄を件数の多い順で返します（匿名のコマンド回数。提出書類の件数ではありません）。
-                銘柄の直近提出は get_feed_updates、1社の書類一覧は get_filings を使ってください。
-                """,
-            method: "GET",
-            path: "/v1/feed/trend",
-            mcpTool: "get_feed_trend",
-            feature: "feed",
-            parameters: [
-                ApiSkillParameter(
-                    name: "limit",
-                    location: .query,
-                    type: .integer,
-                    description: "返却件数（最大 \(Api.feedLimitMax)）",
-                    required: false,
-                    defaultValue: .int(Api.feedTrendLimitDefault)
-                ),
-                ApiSkillParameter(
-                    name: "days",
-                    location: .query,
-                    type: .integer,
-                    description: "集計窓（日。直近 N×24h。最大 \(Api.feedTrendDaysMax)）",
-                    required: false,
-                    defaultValue: .int(Api.feedTrendDaysDefault)
-                ),
-                ApiSkillParameter(
-                    name: "code",
-                    location: .query,
-                    type: .string,
-                    description: "4桁コード。指定するとその銘柄のツール別・面別・検索クエリ内訳",
-                    required: false
-                ),
-            ],
-            instructions: """
-                Feed Trend。匿名の search_companies および各ツールヒット回数（MCP と REST を区別）。
-                顧客アカウントや IP は持たない。書き込みは origin からカウンターへ fire-and-forget（失敗しても本 API は 200/404/503 のまま）。
-                items は code ごとの件数降順。空でも 200（items=[]）。カウンター未設定・取得失敗は 503。
-                提出件数ランキングは出さない（それは get_feed_updates）。
-                Trend の RSS は未提供（REST が契約の正。MCP は追従）。
-                例: GET /v1/feed/trend?days=7&limit=20
-                例: GET /v1/feed/trend?code=7203
-                """,
-            mcpOutputSchema:
-                """
-                {"type":"object","required":["schema_version","date","days","items"],"properties":\
-                {"schema_version":{"type":"integer"},"date":{"type":"string"},"days":{"type":"integer"},\
-                "code":{"type":"string"},"items":{"type":"array","items":{"type":"object","required":\
-                ["code","name","count"],"properties":{"code":{"type":"string"},"name":{"type":"string"},\
-                "count":{"type":"integer"}}}},"by_tool":{"type":"array","items":{"type":"object"}},\
-                "by_surface":{"type":"array","items":{"type":"object"}},\
-                "by_query":{"type":"array","items":{"type":"object"}}}}
                 """
         ),
     ]
@@ -803,8 +626,8 @@ public func apiSkillsListJSON() -> [String: Any] {
     [
         "schema_version": apiSkillsSchemaVersion,
         "overview": """
-            有報LAB API（REST）の能力カタログ。各 skill は MCP ツール説明に相当する「いつ使うか／どう呼ぶか」の案内。\
-            詳細は GET /v1/skills/{id}。契約の正は REST。MCP は追従面。格納系は未集計 404・DB 非接続 503。
+            有報LAB API（REST）の能力カタログ。各 skill は「いつ使うか／どう呼ぶか」の案内。\
+            詳細は GET /v1/skills/{id}。格納系は未集計 404・DB 非接続 503。
             """,
         "skills": apiSkillsCatalog().map { apiSkillSummaryJSON($0) },
     ]
@@ -828,9 +651,6 @@ private func apiSkillSummaryJSON(_ skill: ApiSkill) -> [String: Any] {
         "path": skill.path,
         "feature": skill.feature,
     ]
-    if let mcpTool = skill.mcpTool {
-        json["mcp_tool"] = mcpTool
-    }
     return json
 }
 

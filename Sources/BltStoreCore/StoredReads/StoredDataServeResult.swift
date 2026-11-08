@@ -4,7 +4,7 @@ import Foundation
 import Logging
 import SQLKit
 
-/// DB 格納済みデータ提供の結果。Vapor に依存しないため MCP ディスパッチからも直接呼べる。
+/// DB 格納済みデータ提供の結果。Vapor に依存しない。
 package enum StoredDataServeResult {
     /// 成功。JSON 値（`[String: Any]`）。
     case ok([String: Any])

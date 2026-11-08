@@ -17,7 +17,7 @@ read 床・バンプ規則は `.agents/rules/versioning.md` のみ（ここへ�
 
 **ゴール**: ユーザー向け実行を blt-server（remote）へ集約（達成）。近傍は REST の安定と iOS。
 
-**非ゴール**: 各サブコマンドへの backend 選択、床の「現行から N つ前」機械オフセット、`CacheManager` と EDINET external の無理な単一抽象化、数値 facts の Neon / R2 永続（生 XBRL L2 から再導出する。進捗は Linear Team `blue-ticker`）。`BltMcpServerCore` を製品面として伸ばすこと（公開コネクタは HAPIS 側）。
+**非ゴール**: 各サブコマンドへの backend 選択、床の「現行から N つ前」機械オフセット、`CacheManager` と EDINET external の無理な単一抽象化、数値 facts の Neon / R2 永続（生 XBRL L2 から再導出する。進捗は Linear Team `blue-ticker`）。blt-server に MCP を持たせること（公開コネクタは HAPIS 側。内蔵 MCP は 2026-11-08 に廃止）。
 
 ## 関連
 

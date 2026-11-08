@@ -240,7 +240,7 @@ private func makeCapturingLogger() -> (Logger, CapturingLogHandler) {
         }
     }
 
-    // MARK: - withOperationTimeout の汎用性（DB 以外の呼び出し元、例: MCP ルート）
+    // MARK: - withOperationTimeout の汎用性（DB 以外の呼び出し元、例: filings のライブ探索）
 
     @Test func withOperationTimeoutReturnsResultWhenOperationCompletesInTime() async throws {
         let value = try await withOperationTimeout(label: "テスト操作", seconds: 5) {
@@ -251,13 +251,13 @@ private func makeCapturingLogger() -> (Logger, CapturingLogHandler) {
 
     @Test func withOperationTimeoutUsesCallerSuppliedLabelInErrorDescription() async {
         do {
-            _ = try await withOperationTimeout(label: "MCPリクエスト処理", seconds: 0.2) {
+            _ = try await withOperationTimeout(label: "ライブ探索", seconds: 0.2) {
                 try await Task.sleep(nanoseconds: 3_600_000_000_000)  // 応答なしハングの模擬
                 return "unreachable"
             }
             Issue.record("タイムアウトが発生するはずだった")
         } catch let error as OperationTimeoutError {
-            #expect(error.description.contains("MCPリクエスト処理"))
+            #expect(error.description.contains("ライブ探索"))
         } catch {
             Issue.record("想定外のエラー: \(error)")
         }

@@ -156,7 +156,7 @@ expect 0 "checksums: intact fixtures pass" scripts/ci/golden-suite.sh --checksum
 git checkout -q -B c-base "$BASE"
 cp "$SRC/../../Package.swift" Package.swift
 for d in Sources/BlueTicker Sources/BltStoreCore Sources/BltIngestCore Sources/BltIngest Sources/BltServerCore \
-         Sources/BltMcpServerCore SwiftTests/BltServerCoreTests Apps/BlueTicker docs workers/x; do
+         SwiftTests/BltServerCoreTests Apps/BlueTicker docs workers/x; do
   mkdir -p "$d" && echo "// seed" > "$d/Seed.swift"
 done
 git add -A && git commit -qm "changes base" && CB=$(git rev-parse HEAD)
@@ -175,7 +175,6 @@ plan ios-only         ffft Apps/BlueTicker/Seed.swift
 plan docs-only        ffff docs/Seed.swift README.md
 plan worker-only      ffff workers/x/Seed.swift
 plan server-only      tfff Sources/BltServerCore/Seed.swift
-plan mcp-only         tfff Sources/BltMcpServerCore/Seed.swift
 plan server-tests     tfff SwiftTests/BltServerCoreTests/Seed.swift
 plan store-core       tftf Sources/BltStoreCore/Seed.swift
 plan ingest-core      tftf Sources/BltIngestCore/Seed.swift

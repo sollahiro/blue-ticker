@@ -42,10 +42,12 @@ struct CompanyEntityQuery: EntityStringQuery {
         return hits.prefix(10).map(CompanyEntity.init(hit:))
     }
 
-    /// 銘柄を含むフレーズを Siri が認識するには候補が要る。注目の銘柄（フィード）を出す。
+    /// 銘柄を含むフレーズを Siri が認識するには候補が要る。端末に保存済みの開示フィード（RSS）で
+    /// 最近有報を出した会社を、重複を除いて新しい順に出す（保存が無ければ候補なし）。
     func suggestedEntities() async throws -> [CompanyEntity] {
-        let items = (try? await APIClient.shared.feedTrend().items) ?? []
-        return items.prefix(10).map {
+        let items = await FeedRSSStore.shared.cachedItems() ?? []
+        var seen = Set<String>()
+        return items.filter { seen.insert($0.code).inserted }.prefix(10).map {
             CompanyEntity(code: $0.code, name: Format.displayName($0.name, fallback: $0.code))
         }
     }

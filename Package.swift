@@ -16,12 +16,11 @@ import PackageDescription
 // | fluent                        | ORM の Vapor 連携            | BltServerCore, BltServerCoreTests           |
 // | fluent-postgres-driver        | Neon / Postgres              | BltStoreCore 以上, BltServerCoreTests       |
 // | fluent-sqlite-driver          | テスト用インメモリ DB        | BltServerCoreTests のみ                     |
-// | swift-sdk (MCP)               | MCP プロトコル               | BltMcpServerCore, BltMcpServerCoreTests     |
 //
 // ターゲット間（取り込みと配信の分離）:
 //   blt-ingest（Mac 専用・書き込み）: BltIngest → BltIngestCore → BltStoreCore → BlueTickerCore
-//   blt-server（Fly 専用・読み取り）: BltServer → BltServerCore → BltStoreCore / BltMcpServerCore
-// BltStoreCore（Models・格納済みデータの読み取り・DB 接続）と BltIngestCore は Vapor / MCP に依存しない。
+//   blt-server（Fly 専用・読み取り）: BltServer → BltServerCore → BltStoreCore
+// BltStoreCore（Models・格納済みデータの読み取り・DB 接続）と BltIngestCore は Vapor に依存しない。
 // マイグレーション（DDL）は BltIngestCore にだけ置く（blt-server は読み取りロールで動く）。
 // Core は Vapor/Fluent を参照しない（AGENTS.md / docs/architecture.md）。
 // 検証: smoke/golden の後、使い捨て Neon へ ingest して /v1 契約を確認する。
@@ -47,7 +46,6 @@ let package = Package(
         .package(url: "https://github.com/apple/swift-nio.git", from: "2.81.0"),
         .package(url: "https://github.com/vapor/fluent-postgres-driver.git", from: "2.8.0"),
         .package(url: "https://github.com/vapor/fluent-sqlite-driver.git", from: "4.6.0"),
-        .package(url: "https://github.com/modelcontextprotocol/swift-sdk.git", from: "0.12.1"),
         .package(url: "https://github.com/apple/swift-crypto.git", from: "4.0.0"),
     ],
     targets: [
@@ -68,17 +66,6 @@ let package = Package(
                 .linkedLibrary("iconv", .when(platforms: [.macOS])),
             ]
         ),
-        .target(
-            name: "BltMcpServerCore",
-            dependencies: [
-                "BlueTickerCore",
-                .product(name: "MCP", package: "swift-sdk"),
-            ],
-            path: "Sources/BltMcpServerCore",
-            swiftSettings: [
-                .swiftLanguageMode(.v6),
-            ]
-        ),
         // Models・格納済みデータの読み取り・DB 接続（Vapor なし）。取り込みと配信の両方が使う。
         .target(
             name: "BltStoreCore",
@@ -97,7 +84,7 @@ let package = Package(
                 .swiftLanguageMode(.v6),
             ]
         ),
-        // 取り込み・書き込み・マイグレーション（Vapor / MCP なし。Mac の blt-ingest だけが使う）。
+        // 取り込み・書き込み・マイグレーション（Vapor なし。Mac の blt-ingest だけが使う）。
         .target(
             name: "BltIngestCore",
             dependencies: [
@@ -114,13 +101,12 @@ let package = Package(
                 .swiftLanguageMode(.v6),
             ]
         ),
-        // 配信（REST・MCP）。DB は読み取りのみ。
+        // 配信（REST）。DB は読み取りのみ。
         .target(
             name: "BltServerCore",
             dependencies: [
                 "BlueTickerCore",
                 "BltStoreCore",
-                "BltMcpServerCore",
                 .product(name: "Vapor", package: "vapor"),
                 .product(name: "Fluent", package: "fluent"),
                 .product(name: "FluentPostgresDriver", package: "fluent-postgres-driver"),
@@ -175,14 +161,6 @@ let package = Package(
                 .product(name: "Vapor", package: "vapor"),
             ],
             path: "SwiftTests/BltServerCoreTests"
-        ),
-        .testTarget(
-            name: "BltMcpServerCoreTests",
-            dependencies: [
-                "BltMcpServerCore",
-                .product(name: "MCP", package: "swift-sdk"),
-            ],
-            path: "SwiftTests/BltMcpServerCoreTests"
         ),
     ]
 )

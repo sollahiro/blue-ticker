@@ -21,7 +21,7 @@
 
 ## 取引先・関係会社（`GET /v1/companies/{code}/relations`）
 
-有報の記載だけを返す（`basis` は常に `disclosed`）。推定・競合（`competitor`）は持たない。MCP（公開コネクタ・開発用とも）には出さない。
+有報の記載だけを返す（`basis` は常に `disclosed`）。推定・競合（`competitor`）は持たない。公開コネクタには出さない。
 
 - `type`（カンマ区切り。省略時は全種類）: `customer`（主要な顧客）· `supplier`（他社の主要な顧客欄に自社が載っている＝逆引き）· `group`（関係会社。`parent` / `subsidiary` / `affiliate` で絞れる。`other_related` は `group` のみ）· `investee`（政策保有株式。逆引きはしない）· `major_shareholder`（大株主）· `major_shareholder_of`（他社の大株主欄に自社が載っている＝逆引き）
 - 逆引きは上場企業どうしだけ。相手側の有報の行で、`reasons` に `disclosed_by_counterparty`、`evidence.from_code` は相手のコード（`code` と違う。記載の主語は相手の会社）
@@ -49,7 +49,7 @@
 | 契約の安定化 | 後方互換の約束を厳格化（段階 B で deprecation 期間等を足す） |
 | 利用制御 | レート制限は HAPIS。機械の従量は x402 |
 
-機能単位の有料マスクは採らない。**段階 B の機械 REST は x402**。公開 MCP コネクタは HAPIS の OAuth（利用者ごとの `end_user` アカウント）で認証し、x402 の対象外。どのツール・引数を出すかは `hapis/catalog.json` で決め、HAPIS へ同期する（プラン別の出し分けは HAPIS で検討中）。開発用の `BltMcpServerCore` は HAPIS に依存させない。
+機能単位の有料マスクは採らない。**段階 B の機械 REST は x402**。公開 MCP コネクタは HAPIS の OAuth（利用者ごとの `end_user` アカウント）で認証し、x402 の対象外。どのツール・引数を出すかは `hapis/catalog.json` で決め、HAPIS へ同期する（プラン別の出し分けは HAPIS で検討中）。blt-server 内蔵の開発用 MCP は 2026-11-08 に廃止した。
 
 iOS のアカウント不要パス（短命匿名トークン + App Attest）はゲートウェイ責務であり、blt-server の責務ではない。
 
@@ -66,7 +66,6 @@ origin API キーは持たない。iOS にトークン / Service Token を埋め
 | 機械 / エンドポイント直叩き | x402 |
 | Web | 当面、アカウント不要の無料枠は出さない |
 | MCP（公開コネクタ） | HAPIS OAuth（Google / Apple サインイン）。HAPIS `mcp/` |
-| MCP（開発用） | Access OTP。HAPIS に依存させない |
 
 ## 具体ロック
 

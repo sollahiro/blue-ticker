@@ -100,7 +100,7 @@ jobs:
           # 実行ステージへ入れるのは scripts/entrypoint.sh と assets/EdinetcodeDlInfo.csv だけ）。
           # 取り込み側（Sources/BltIngest*・scripts/jp/ など）や taxonomy だけの変更ではデプロイしない。
           if printf '%s\n' "$changed_files" | \
-             grep -qE '^(Sources/(BltServer|BltServerCore|BltStoreCore|BltMcpServerCore|BlueTicker)/|scripts/entrypoint\.sh$|assets/EdinetcodeDlInfo\.csv$|Dockerfile$|\.dockerignore$|fly\.toml$|Package\.swift$|Package\.resolved$)'; then
+             grep -qE '^(Sources/(BltServer|BltServerCore|BltStoreCore|BlueTicker)/|scripts/entrypoint\.sh$|assets/EdinetcodeDlInfo\.csv$|Dockerfile$|\.dockerignore$|fly\.toml$|Package\.swift$|Package\.resolved$)'; then
             echo "changed=true" >> "$GITHUB_OUTPUT"
           else
             echo "changed=false" >> "$GITHUB_OUTPUT"

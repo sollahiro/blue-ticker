@@ -1,6 +1,6 @@
 // blt-server エントリポイント。
 // 使い方:
-//   blt-server [--host HOST] [--port PORT]                   REST / MCP サーバーを起動（DB は読み取りのみ。migrate しない）
+//   blt-server [--host HOST] [--port PORT]                   REST サーバーを起動（DB は読み取りのみ。migrate しない）
 //
 // 取り込み・書き込み・マイグレーション・overrides は blt-ingest（Mac 専用）へ移した。
 //

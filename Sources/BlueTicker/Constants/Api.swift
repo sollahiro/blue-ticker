@@ -56,24 +56,16 @@ public enum Api {
     public static let screenSnapshotRetryIntervalSeconds: UInt64 = 600
     /// Feed Update の返却件数省略時。
     public static let feedLimitDefault = 10
-    /// Feed Trend の返却件数省略時。
-    public static let feedTrendLimitDefault = 50
     /// Feed Update の返却件数上限。
     public static let feedLimitMax = 100
     /// Feed Update の items 窓（日）省略時。`total.week` とは独立。
     public static let feedUpdateDaysDefault = 90
-    /// Feed Trend の集計窓（日）省略時。
-    public static let feedTrendDaysDefault = 7
-    /// Feed Update / Trend の `days` 上限。
-    public static let feedTrendDaysMax = 90
+    /// Feed Update の `days` 上限。
+    public static let feedDaysMax = 90
     /// Update の `total.week` 窓（日）。クエリ `days`（items の窓）とは独立。
     public static let feedUpdateWeekDays = 7
     /// Feed Update 応答の公開契約バージョン。形を破壊的に変えたときのみ +1。
     public static let feedSchemaVersion = 2
-    /// Feed Trend 応答の公開契約バージョン（Update とは別リソース）。
-    public static let feedTrendSchemaVersion = 1
-    /// 検索クエリ `q` の蓄積上限（文字）。超えた分は切る。
-    public static let feedTrendQueryMaxLength = 128
 
     /// filings のライブ EDINET 探索フォールバック（DB 未同期銘柄）の応答待ち上限（秒）。
     /// URLSession 既定（60s）より長めに取りつつ、リクエストが無期限に待たないようにする。
@@ -135,17 +127,6 @@ public enum Api {
     static let xbrlZipMaxUncompressedBytes: Int64 = 1_073_741_824
     static let xbrlZipMaxEntryCount = 10_000
 
-    /// MCP ルート（`POST /`）1リクエストあたりの HTTP 応答待ち上限（秒）。
-    /// 依存 `modelcontextprotocol/swift-sdk`（0.12.1）の `StatelessHTTPServerTransport` に
-    /// waiter deadline が実装されておらず、クライアントの `notifications/cancelled`（issue #255）や
-    /// 同一 JSON-RPC id の同時リクエスト（issue #254）で応答待ちの継続（continuation）が永久に
-    /// resume されず、HTTP リクエストが無期限にハングすることがある（upstream 未修正・
-    /// blue-ticker issue #84 で追跡）。
-    /// この上限は「格納データ系ツール（get_waterfall 等）が `withDbRetry` 経由で DB 再接続を
-    /// 最大3回試行し、1回あたり `dbOperationTimeoutSeconds`（60秒）まで正常に待つ」既存仕様上の
-    /// 理論上限（60×3+backoff ≈ 183秒）より長く取り、正常だが遅い応答を誤ってタイムアウト扱い
-    /// しないようにする。
-    public static let mcpRequestTimeoutSeconds: Double = 200
 
     static let xbrlMaxBytes: Int64 = 2 * 1024 * 1024 * 1024 // 2 GB
 
