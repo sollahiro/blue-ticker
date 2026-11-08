@@ -25,6 +25,7 @@ Custom Domain `sollahiro.com` も残し、次の 6 パスだけを `yuholab.com`
 | `/blue-ticker/terms`・`/yuholab/terms` | `https://yuholab.com/terms` |
 
 ランディングページは `workers/legal/public/index.html`（アイコンは `logo-white.svg`）。免責・プライバシーは `privacy.html`。利用規約は `workers/legal/public/terms.html`。
+ファビコン一式（`favicon.svg` / `favicon.ico` / `favicon-32.png` / `apple-touch-icon.png` / `icon-192.png`）は iOS アプリアイコンの白い字（`Apps/BlueTicker/BlueTicker/AppIcon.icon/Assets/Group 13-2.svg`）を水色のグラデーションの角丸に載せたもの。全ページの `<head>` から読む。
 
 ## デプロイ
 
