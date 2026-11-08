@@ -232,4 +232,36 @@ actor FakeCashFlowFinancingRowDecider: CashFlowFinancingRowDeciding {
             options: CashFlowFinancingRole.allCases.map(\.rawValue),
             model: "typesafe/jev-1.13")
     }
+
+    @Test func usgaapHtmlRowsResolveByLabel() throws {
+        // 富士フイルム 4901（US-GAAP、S100YIBH）の CF 本表（百万円、タグは USGAAP_HTML_CF_n）。
+        let f = StatementLineSection.financing
+        let cashFlow = [
+            row("USGAAP_HTML_CF_11", "営業活動によるキャッシュ・フロー", 410_555, order: 11, section: .operating, total: true),
+            row("USGAAP_HTML_CF_22", "投資活動によるキャッシュ・フロー", -554_604, order: 22, section: .investing, total: true),
+            row("USGAAP_HTML_CF_23", "長期債務による調達額", 170_000, order: 23, section: f),
+            row("USGAAP_HTML_CF_24", "長期債務の返済額", -67_602, order: 24, section: f),
+            row("USGAAP_HTML_CF_25", "満期日が3ヶ月以内の短期債務の 増加・減少(△)(純額)", 102_324, order: 25, section: f),
+            row("USGAAP_HTML_CF_26", "親会社による配当金支払額", -84_354, order: 26, section: f),
+            row("USGAAP_HTML_CF_27", "非支配持分への配当金支払額", -332, order: 27, section: f),
+            row("USGAAP_HTML_CF_28", "自己株式の取得及び売却", -12, order: 28, section: f),
+            row("USGAAP_HTML_CF_29", "非支配持分との資本取引", 141, order: 29, section: f),
+            row("USGAAP_HTML_CF_30", "その他", 84, order: 30, section: f),
+            row("USGAAP_HTML_CF_31", "財務活動によるキャッシュ・フロー", 120_249, order: 31, section: f, total: true),
+            row("USGAAP_HTML_CF_32", "為替変動による現金及び現金同等物への影響", 22_242, order: 32),
+            row("USGAAP_HTML_CF_33", "現金及び現金同等物純減少", -1_558, order: 33, total: true),
+            row("USGAAP_HTML_CF_34", "現金及び現金同等物期首残高", 172_111, order: 34, total: true),
+            row("USGAAP_HTML_CF_35", "現金及び現金同等物期末残高", 170_553, order: 35, total: true),
+        ]
+        let values = CashAllocationResolver.resolve(
+            cashFlow: cashFlow, cfo: 410_555 * million, cfi: -554_604 * million, isBank: false)
+        #expect(values.cff == 120_249 * million)
+        #expect(values.debtChange == (170_000 - 67_602 + 102_324) * million)
+        #expect(values.dividendsParent == -84_354 * million)
+        #expect(values.buyback == -12 * million)
+        #expect(values.otherFinancing == (-332 + 141 + 84) * million)
+        #expect(values.fxEffect == 22_242 * million)
+        #expect(values.cashChange == -1_558 * million)
+        #expect(values.otherCashChange == 0)
+    }
 }
