@@ -241,3 +241,15 @@ test("English pages are translations of the Japanese pages", () => {
   const ja = readFileSync(join(publicDir, "privacy.html"), "utf8");
   assert.match(ja, /href="\/en\/privacy">English</);
 });
+
+test("every page declares the favicon set and the files exist", () => {
+  for (const page of ["index.html", "privacy.html", "terms.html", "en/privacy.html", "en/terms.html"]) {
+    const html = readFileSync(join(publicDir, page), "utf8");
+    assert.match(html, /<link rel="icon" href="\/favicon\.svg" type="image\/svg\+xml">/, page);
+    assert.match(html, /<link rel="icon" href="\/favicon\.ico" sizes="48x48">/, page);
+    assert.match(html, /<link rel="apple-touch-icon" href="\/apple-touch-icon\.png">/, page);
+  }
+  for (const file of ["favicon.svg", "favicon.ico", "favicon-32.png", "apple-touch-icon.png", "icon-192.png"]) {
+    assert.ok(readFileSync(join(publicDir, file)).length > 0, file);
+  }
+});
