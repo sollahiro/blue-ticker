@@ -1,4 +1,4 @@
-// financials 組立が読む breakdown 正本（employees / rd の分母）。
+// financials 組立が読む値の解決（employees / rd / capex / interest_bearing_debt）。rd は breakdown 軸ではなく RDExtractor。
 // ingest 順に依存せず、同一 XBRL パスで breakdown が分母に使う値を直接解決する（#10b）。
 // PL の研究開発行や statement マスクは使わない。
 
@@ -71,7 +71,7 @@ enum BreakdownFinancialsResolver {
         return EmployeesExtractor.extract(fieldSet: instantFS, tagElements: allTags).current
     }
 
-    /// financials の `rd`。正本は breakdown `research_and_development` 軸の分母。
+    /// financials の `rd`。breakdown 軸（2026-11 廃止）とは別の `RDExtractor` の値。
     static func financialsCanonicalRd(xbrlDir: URL) -> Double? {
         financialsCanonicalRdItem(xbrlDir: xbrlDir).value
     }

@@ -9,7 +9,7 @@ import Foundation
 /// v9（2026-10-26）: 金額を基本単位（円・ドル）へ統一し、financials / waterfall に `units` / `currency` を載せた。
 /// v10（2026-11-08）: 内蔵 MCP の廃止に合わせ、各 skill の `mcp_tool` と `get-feed-trend` を外した。
 /// v11（2026-11-09）: breakdown の axis `research_and_development` を廃止した（breaking。常に 404）。
-public let apiSkillsSchemaVersion = 12
+public let apiSkillsSchemaVersion = 13
 
 /// パラメータの置き場所（REST パス変数 / クエリ）。
 public enum ApiSkillParameterLocation: String, Sendable {
@@ -359,7 +359,7 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                 設備投資マトリクス（capex）、有利子負債（interest_bearing_debt）、
                 有形固定資産・のれん及び無形資産の種類別（property_plant_equipment / goodwill_and_intangibles）を取得します（格納済みデータのみ）。
                 対象は取り込み済みの上場企業です。doc_id を省略すると最新の有価証券報告書を使用します。
-                axis は segment / product_service（既定）/ geography / employees / goodwill /
+                axis は segment（既定）/ product_service / geography / employees / goodwill /
                 capex / interest_bearing_debt /
                 property_plant_equipment / goodwill_and_intangibles に対応。
                 segment はセグメント情報の報告セグメント表。行に segment_basis（business / geographic）が付きます。
@@ -454,9 +454,9 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                     name: "axis",
                     location: .query,
                     type: .string,
-                    description: "内訳の軸（segment / product_service / geography / employees / goodwill / capex / interest_bearing_debt / property_plant_equipment / goodwill_and_intangibles。省略時 product_service）",
+                    description: "内訳の軸（segment / product_service / geography / employees / goodwill / capex / interest_bearing_debt / property_plant_equipment / goodwill_and_intangibles。省略時 segment）",
                     required: false,
-                    defaultValue: .string(breakdownAxisProductService)
+                    defaultValue: .string(breakdownAxisSegment)
                 ),
             ],
             instructions: """

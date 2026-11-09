@@ -199,13 +199,13 @@ func registerRoutes(
 
     // GET /v1/companies/{code}/breakdown?axis=product_service&doc_id=...
     // DB（内訳取り込み company_breakdowns）の格納済み内訳のみを返す。
-    // axis は product_service / geography / 決定論指標軸（省略時 product_service）。
+    // axis は segment / product_service / geography / 決定論指標軸（省略時 segment）。
     // 内訳取り込み: 全軸とも上場全体（日経225は処理順の先頭寄せのみ。docs/breakdown.md）。
     // 公開面は needs_review / llm_unit_unresolved の LLM 行を出さない（同 docs）。
     v1.get("companies", ":code", "breakdown") { req async -> Response in
         let code = req.parameters.get("code") ?? ""
         let docId = req.query[String.self, at: "doc_id"]
-        let axis = req.query[String.self, at: "axis"] ?? breakdownAxisProductService
+        let axis = req.query[String.self, at: "axis"] ?? breakdownAxisSegment
         return makeReasonedResponse(
             await serveStoredBreakdown(
                 code: code, docId: docId, axis: axis, db: dbAvailable ? req.db : nil,
