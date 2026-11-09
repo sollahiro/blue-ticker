@@ -772,11 +772,13 @@ public extension BltServerContext {
             fiscalYearEnd: BreakdownExtractor.currentFiscalYearEnd(fromXbrlDir: xbrlDir),
             docID: docID, xbrlDir: xbrlDir, pattern: pattern, employeeLabels: employeeLabels)
         if let snapshot = result.snapshot {
+            let payload = await segmentPayloadWithMetricCells(
+                breakdownSnapshotPayload(from: snapshot), docID: docID, xbrlDir: xbrlDir)
             return attachingPattern(
                 pattern,
                 to: breakdownByRecordingOverlayRegressions(
                     .resolved(
-                        payload: breakdownSnapshotPayload(from: snapshot),
+                        payload: payload,
                         source: result.source.rawValue, contentHash: hash,
                         audit: result.audit.map(llmBreakdownAuditPayload(from:))),
                     xbrlDir: xbrlDir))
@@ -788,6 +790,41 @@ public extension BltServerContext {
         return attachingPattern(
             pattern, to: .notApplicable(reason: breakdownNotApplicableUnknown,
                                         audit: result.audit.map(llmBreakdownAuditPayload(from:))))
+    }
+
+    /// segment 行へ報告セグメント表のセル（segment_assets / flow / equity_method_investments）を載せる。
+    /// capex 軸と同じ決定論の正規化を使い、本文からの不足分補完（Jev）はしない。
+    fileprivate func segmentPayloadWithMetricCells(
+        _ payload: BreakdownSnapshotPayload, docID: String, xbrlDir: URL
+    ) async -> BreakdownSnapshotPayload {
+        let cached = await businessSegmentDimensionCache.load(docID: docID, xbrlDir: xbrlDir)
+        let memberParents = XBRLUtils.operatingSegmentMemberParents(in: xbrlDir)
+        let cePresent = CapexNormalizer.filingHasCurrentTags(
+            in: xbrlDir, tags: Xbrl.segmentCapitalExpenditureTags)
+        let naaPresent = CapexNormalizer.filingHasCurrentTags(
+            in: xbrlDir, tags: Xbrl.segmentNoncurrentAssetAdditionTags)
+        let allTags = XBRLUtils.collectAllNumericElements(in: xbrlDir, nilAsZero: false)
+        let flowTags = cePresent
+            ? Xbrl.segmentCapitalExpenditureTags : Xbrl.segmentNoncurrentAssetAdditionTags
+        let flowItem = resolveItem(fieldSetFromDuration(allTags), tags: flowTags)
+        let flowTotal: (value: Double, tag: String)? =
+            flowItem.current.flatMap { value in
+                guard let tag = flowItem.tag, value > 0 else { return nil }
+                return (value, tag)
+            }
+        var assets = BreakdownNormalizer.normalizeSegmentAssets(
+            facts: cached.facts, labelsByTag: cached.labelsByTag, memberParents: memberParents)
+        assets = BreakdownNormalizer.enrichSegmentAssetsWithDifferenceTable(
+            snapshot: assets, xbrlDir: xbrlDir)
+        let capex = CapexNormalizer.normalize(
+            facts: cached.facts, labelsByTag: cached.labelsByTag, memberParents: memberParents,
+            capitalExpendituresPresent: cePresent, noncurrentAssetAdditionsPresent: naaPresent,
+            flowCompanyTotal: flowTotal, prebuiltAssets: assets)
+        let equityMethod = BreakdownNormalizer.normalizeEquityMethodInvestments(
+            facts: cached.facts, labelsByTag: cached.labelsByTag)
+        return SegmentMetricCells.merge(
+            segment: payload, capex: capex,
+            equityMethod: equityMethod.map(breakdownSnapshotPayload(from:)))
     }
 
     /// 内訳取り込み: 書類1件分の product_service 軸内訳を解決する。

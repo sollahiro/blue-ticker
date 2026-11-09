@@ -60,8 +60,11 @@ public let goodwillCellImpairment = "impairment"
 public let goodwillCellStatusDisclosed = "disclosed"
 /// goodwill 軸のセル分母の状態。注記が「該当事項なし」等と書く（分母 0 は合計 0 の意味）。
 public let goodwillCellStatusNoneDisclosed = "none_disclosed"
-/// 報告セグメント別の持分法会計処理される投資（2026-08-20追加）。決定論のみ。
+/// 旧公開軸。報告セグメント別の持分法会計処理される投資（2026-08-20追加）。
+/// 2026-11 に `segment` 行のセル `equity_method_investments` へ統合したため REST / MCP / skills から廃止。
 public let breakdownAxisEquityMethodInvestments = "equity_method_investments"
+/// `segment` 行の名前付きセル。持分法で会計処理される投資（円）。旧軸名と同じ文字列。
+public let segmentCellEquityMethodInvestments = "equity_method_investments"
 /// 設備投資マトリクス（資産 Instant / フロー Duration / Overview Duration）。
 /// 旧 4 軸（`segment_assets` / `capital_expenditures` / `noncurrent_asset_additions` /
 /// `capital_expenditures_overview`）は REST / MCP / skills から廃止。セル名としては残す。
@@ -167,13 +170,13 @@ public let retiredBreakdownAxes = [
     "business",
     breakdownAxisGoodwillAmortization,
     breakdownAxisResearchAndDevelopment,
+    breakdownAxisEquityMethodInvestments,
 ]
 
 /// product_service / geography を除く、報告セグメント別の決定論指標軸。
 public let breakdownSegmentMetricAxes = [
     breakdownAxisEmployees,
     breakdownAxisGoodwill,
-    breakdownAxisEquityMethodInvestments,
     breakdownAxisCapex,
 ]
 
@@ -203,7 +206,8 @@ public func isSupportedBreakdownAxis(_ axis: String) -> Bool {
 /// 製品表だけにする（旧 xbrl_facts 行は segment 軸へ移す）。
 public let productServiceBreakdownCacheVersion = "breakdown-product_service-v2"
 /// 報告セグメント軸。新軸のため v1 から。
-public let segmentBreakdownCacheVersion = "breakdown-segment-v1"
+/// v2: 行に報告セグメント表のセル（segment_assets / flow / equity_method_investments）を足す（互換追加。床は 1 のまま）。
+public let segmentBreakdownCacheVersion = "breakdown-segment-v2"
 /// v11: 単位のみ表を捨てて dedicated contextRef の period を通し、うち列を抽出時に落とす。
 /// v12: うち列ドロップの決定論を精緻化（1段うち豪州、地域コンテキスト、軸ゲート）。
 /// v13: ingest 時に jpcrp 標準 member の日本語ラベルを補完（生 `*Member` 表示の誤表示）。
@@ -633,6 +637,8 @@ public struct BreakdownRowPayload: Codable, Sendable, Equatable {
     public var sourceTag: String?
     /// `segment` 軸の行: `business` / `geographic`。他軸は nil。
     public var segmentBasis: String?
+    /// `segment` 軸の行のセル。持分法で会計処理される投資（円）。他軸は nil。
+    public var equityMethodInvestments: Double?
     /// 90%省略の1行など、正確なセグメント合計ではないときの印。他は nil。
     public var disclosureBasis: String?
 
@@ -650,6 +656,7 @@ public struct BreakdownRowPayload: Codable, Sendable, Equatable {
         case sourceTag = "source_tag"
         case segmentBasis = "segment_basis"
         case disclosureBasis = "disclosure_basis"
+        case equityMethodInvestments = "equity_method_investments"
     }
 
     public init(
@@ -722,6 +729,8 @@ public struct BreakdownRowPayload: Codable, Sendable, Equatable {
         sourceTag = try container.decodeIfPresent(String.self, forKey: .sourceTag)
         segmentBasis = try container.decodeIfPresent(String.self, forKey: .segmentBasis)
         disclosureBasis = try container.decodeIfPresent(String.self, forKey: .disclosureBasis)
+        equityMethodInvestments = try container.decodeIfPresent(
+            Double.self, forKey: .equityMethodInvestments)
         if let categoryGroup {
             label = try container.decodeIfPresent(String.self, forKey: .label)
                 ?? Self.displayLabel(categoryGroup: categoryGroup, category: category)
@@ -758,6 +767,7 @@ public struct BreakdownRowPayload: Codable, Sendable, Equatable {
         try container.encodeIfPresent(sourceTag, forKey: .sourceTag)
         try container.encodeIfPresent(segmentBasis, forKey: .segmentBasis)
         try container.encodeIfPresent(disclosureBasis, forKey: .disclosureBasis)
+        try container.encodeIfPresent(equityMethodInvestments, forKey: .equityMethodInvestments)
     }
 
     public static func displayLabel(categoryGroup: String, category: String?) -> String {
@@ -791,6 +801,9 @@ public struct BreakdownSnapshotPayload: Codable, Sendable, Equatable {
     public var closing: CapexMetricTotalsPayload?
     public var amortization: CapexMetricTotalsPayload?
     public var impairment: CapexMetricTotalsPayload?
+    /// segment 軸のセル分母。持分法で会計処理される投資。無いときは nil。
+    /// segment 軸のセル分母 segment_assets / flow は capex と同じ `segmentAssets` / `flow` を使う。
+    public var equityMethodInvestments: CapexMetricTotalsPayload?
 
     public init(
         axis: String, denominator: Double, denominatorTag: String, rows: [BreakdownRowPayload],
@@ -800,7 +813,8 @@ public struct BreakdownSnapshotPayload: Codable, Sendable, Equatable {
         flow: CapexMetricTotalsPayload? = nil,
         capitalExpendituresOverview: CapexMetricTotalsPayload? = nil,
         opening: CapexMetricTotalsPayload? = nil, closing: CapexMetricTotalsPayload? = nil,
-        amortization: CapexMetricTotalsPayload? = nil, impairment: CapexMetricTotalsPayload? = nil
+        amortization: CapexMetricTotalsPayload? = nil, impairment: CapexMetricTotalsPayload? = nil,
+        equityMethodInvestments: CapexMetricTotalsPayload? = nil
     ) {
         self.axis = axis
         self.denominator = denominator
@@ -820,6 +834,7 @@ public struct BreakdownSnapshotPayload: Codable, Sendable, Equatable {
         self.closing = closing
         self.amortization = amortization
         self.impairment = impairment
+        self.equityMethodInvestments = equityMethodInvestments
     }
 }
 
@@ -1073,7 +1088,34 @@ public extension BreakdownSnapshotPayload {
         if let employeesJoin {
             object[breakdownEmployeesJoinKey] = employeesJoin
         }
+        if axis == breakdownAxisSegment {
+            addSegmentMetricCells(to: &object)
+        }
         return object
+    }
+
+    /// segment 軸の報告セグメント表のセル。書類に開示があるセルだけ、分母（payload）と行の値を出す。
+    /// 行に値が無いセルは null。開示が無いセルはキーごと出さない（v1 行・LLM 行と同じ形）。
+    private func addSegmentMetricCells(to object: inout [String: Any]) {
+        let cells: [(key: String, totals: CapexMetricTotalsPayload?, value: (BreakdownRowPayload) -> Double?)] = [
+            (capexCellSegmentAssets, segmentAssets, { $0.segmentAssets }),
+            (capexCellFlow, flow, { $0.flow }),
+            (segmentCellEquityMethodInvestments, equityMethodInvestments, { $0.equityMethodInvestments }),
+        ]
+        guard cells.contains(where: { $0.totals != nil }),
+            var rowObjects = object["rows"] as? [[String: Any]], rowObjects.count == rows.count
+        else { return }
+        for cell in cells {
+            guard let totals = cell.totals else { continue }
+            object[cell.key] = totals.jsonObject()
+            for index in rows.indices {
+                rowObjects[index][cell.key] = cell.value(rows[index]) ?? NSNull()
+            }
+        }
+        if flow != nil {
+            object["flow_metric"] = flowMetric ?? NSNull()
+        }
+        object["rows"] = rowObjects
     }
 
     /// goodwill 軸の公開形。単一 `amount` / 単一 `denominator` は出さない。

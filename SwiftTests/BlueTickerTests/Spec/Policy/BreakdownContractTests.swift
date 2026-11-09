@@ -11,7 +11,7 @@ import Testing
         #expect(geographyN == 14)
         #expect(try #require(breakdownCacheVersionNumber("breakdown-geography-v12")) < geographyN)
         #expect(productServiceBreakdownCacheVersion == "breakdown-product_service-v2")
-        #expect(segmentBreakdownCacheVersion == "breakdown-segment-v1")
+        #expect(segmentBreakdownCacheVersion == "breakdown-segment-v2")
         #expect(isSupportedBreakdownAxis(breakdownAxisSegment))
         #expect(breakdownCacheVersion(forAxis: breakdownAxisSegment) == segmentBreakdownCacheVersion)
         #expect(breakdownCacheVersionNumber("breakdown-business-v15") == 15)
