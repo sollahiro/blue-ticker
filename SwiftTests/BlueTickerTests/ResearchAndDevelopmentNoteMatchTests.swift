@@ -62,7 +62,7 @@ import Testing
             <p>研究開発費は４，４０９百万円であります。</p>
             <p>前連結会計年度は3,800百万円であります。</p>
             """
-        let text = ResearchAndDevelopmentProseTotalDecision.plainText(from: html)
+        let text = BreakdownProseToolkit.plainText(from: html)
         let found = ResearchAndDevelopmentProseTotalDecision.candidates(in: text)
         #expect(found.map(\.yen) == [4_409_000_000, 3_800_000_000])
 
