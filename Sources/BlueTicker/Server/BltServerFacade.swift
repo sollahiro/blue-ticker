@@ -43,8 +43,6 @@ public struct BltServerContext: Sendable {
     let geographyColumnDecider: (any RevenueRecognitionColumnDeciding)?
     /// セグメント情報 html_table の列・行選択。同じキーが無いときは列デサイダへ落とす。
     let segmentInfoDecider: (any SegmentInfoDeciding)?
-    /// 研究開発費の本文総額。同じキーが無いときは nil（数値タグが無い書類は not_found のまま）。
-    let researchAndDevelopmentProseDecider: (any ResearchAndDevelopmentProseDeciding)?
     /// 設備投資マトリクスの本文総額。同じキーが無いときは nil。
     let capexProseDecider: (any CapexProseDeciding)?
     /// 有利子負債の行分類と近似重複判定。同じキーが無いときは nil（未分類行は needs_review）。
@@ -76,7 +74,6 @@ public struct BltServerContext: Sendable {
         revenueRecognitionColumnDecider: (any RevenueRecognitionColumnDeciding)? = nil,
         geographyColumnDecider: (any RevenueRecognitionColumnDeciding)? = nil,
         segmentInfoDecider: (any SegmentInfoDeciding)? = nil,
-        researchAndDevelopmentProseDecider: (any ResearchAndDevelopmentProseDeciding)? = nil,
         capexProseDecider: (any CapexProseDeciding)? = nil,
         interestBearingDebtDecider: (any InterestBearingDebtDeciding)? = nil,
         sgaLineDecider: (any SgaLineDeciding)? = nil,
@@ -101,7 +98,6 @@ public struct BltServerContext: Sendable {
         self.revenueRecognitionColumnDecider = revenueRecognitionColumnDecider
         self.geographyColumnDecider = geographyColumnDecider
         self.segmentInfoDecider = segmentInfoDecider
-        self.researchAndDevelopmentProseDecider = researchAndDevelopmentProseDecider
         self.capexProseDecider = capexProseDecider
         self.interestBearingDebtDecider = interestBearingDebtDecider
         self.sgaLineDecider = sgaLineDecider
@@ -216,10 +212,6 @@ public func makeBltServerContext() async -> BltServerContext? {
     let segmentInfoDecider: (any SegmentInfoDeciding)? = decisionsClient.map {
         OpenRouterSegmentInfoDecider(client: $0)
     }
-    let researchAndDevelopmentProseDecider: (any ResearchAndDevelopmentProseDeciding)? =
-        decisionsClient.map {
-            OpenRouterResearchAndDevelopmentProseDecider(client: $0)
-        }
     let capexProseDecider: (any CapexProseDeciding)? = decisionsClient.map {
         OpenRouterCapexProseDecider(client: $0)
     }
@@ -257,7 +249,6 @@ public func makeBltServerContext() async -> BltServerContext? {
         revenueRecognitionColumnDecider: revenueRecognitionColumnDecider,
         geographyColumnDecider: geographyColumnDecider,
         segmentInfoDecider: segmentInfoDecider,
-        researchAndDevelopmentProseDecider: researchAndDevelopmentProseDecider,
         capexProseDecider: capexProseDecider,
         interestBearingDebtDecider: interestBearingDebtDecider,
         sgaLineDecider: sgaLineDecider,
@@ -1098,41 +1089,6 @@ public extension BltServerContext {
             xbrlDir: xbrlDir)
     }
 
-    /// 内訳取り込み: 書類1件分の research_and_development 軸を解決する（2026-08-01追加）。
-    /// 全社 R&D 分母は同一 XBRL パスで `BreakdownFinancialsResolver` /
-    /// `financialsCanonicalRd` が直接解決する（#9 / #10b）。セグメント dimension が無くても
-    /// total があれば denominator のみの resolved になる（合計の正本を本軸に寄せる）。
-    /// 数値タグもセグメント fact も無いときだけ、キーがあれば本文の当期総額を補う。
-    /// タグ付き行が全社合計より 5% 以上足りないときは、差額と一致する本文1文を足す。
-    /// タグ付き合計が全社合計を超えるときは、総額の外の金額を負の行で足す。
-    /// 活動タグの全社合計が無く本文総額が製造費用込みの注記と一致するときは、その注記が分母になる。
-    /// 活動・販管費・費用タグの無 dimension 全社合計が無く、member 付き活動タグの当期連結値が
-    /// その注記と一致するときも同じ注記を分母にする。
-    /// Summary の `rd` は本文だけの総額を読まず、この注記へ替わった分母は読む。
-    func resolveResearchAndDevelopmentBreakdown(docID: String, correctionDocIDs: [String] = []) async -> BreakdownResolveResult {
-        guard let xbrlDir = await downloadAnnualFilingXbrl(
-            docID: docID, correctionDocIDs: correctionDocIDs
-        ) else { return .failed }
-        let rd = BreakdownFinancialsResolver.financialsCanonicalRdItem(xbrlDir: xbrlDir)
-        let cached = await businessSegmentDimensionCache.load(docID: docID, xbrlDir: xbrlDir)
-        guard
-            let snapshot = BreakdownNormalizer.normalizeResearchAndDevelopment(
-                facts: cached.facts, total: rd.value, totalTag: rd.tag,
-                axis: breakdownAxisResearchAndDevelopment, labelsByTag: cached.labelsByTag)
-        else {
-            return await resolveResearchAndDevelopmentProseTotal(xbrlDir: xbrlDir, docID: docID)
-        }
-        let filled = await fillResearchAndDevelopmentShortfall(
-            snapshot: snapshot, xbrlDir: xbrlDir, docID: docID)
-        let extracted = ExtractedBreakdown(method: "xbrl_facts", tables: [], facts: cached.facts)
-        let hash = breakdownContentHash(extracted: extracted, consolidatedSales: rd.value)
-        return breakdownByRecordingOverlayRegressions(
-            .resolved(
-                payload: breakdownSnapshotPayload(from: filled.snapshot), source: breakdownSourceXbrlFacts,
-                contentHash: hash, audit: filled.audit),
-            xbrlDir: xbrlDir)
-    }
-
     /// 内訳取り込み: 書類1件分の goodwill 軸内訳を解決する（2026-08-12追加）。決定論のみ、LLMなし。
     /// セルは opening / closing / amortization / impairment。会社合計の Instant のれんは
     /// 期末分母のフォールバック（銀行の Goodwill / GoodwillBeforeOffsetting 分離）にだけ使う。
@@ -1167,58 +1123,6 @@ public extension BltServerContext {
 }
 
 private extension BltServerContext {
-    /// タグ付き行が全社合計より 5% 以上足りないとき、差額と一致する本文1文を足す。
-    /// 億円丸めで差額とずれる配分不能の1文も、足した合計が 5% 以内なら足す。
-    /// タグ付き合計が全社合計を 5% 以上超えるときは、総額の外と分類された金額を負の行で足す。
-    /// キーが無い、一致が1文でない、分類が外れた、応答が無いときは決定論のスナップショットを残す。
-    func fillResearchAndDevelopmentShortfall(
-        snapshot: BreakdownSnapshot, xbrlDir: URL, docID: String
-    ) async -> (snapshot: BreakdownSnapshot, audit: LLMBreakdownAuditPayload?) {
-        guard let decider = researchAndDevelopmentProseDecider,
-            let text = ResearchAndDevelopmentProseTotalDecision.activityPlainText(in: xbrlDir)
-        else { return (snapshot, nil) }
-        let filled = await ResearchAndDevelopmentProseTotalDecision.fillShortfall(
-            snapshot: snapshot, plainText: text, docID: docID, decider: decider)
-        if filled.audit != nil {
-            return (filled.snapshot, filled.audit.map { .segmentNoteJev($0) })
-        }
-        let excluded = await ResearchAndDevelopmentProseTotalDecision.fillExclusion(
-            snapshot: snapshot, plainText: text, docID: docID, decider: decider)
-        return (excluded.snapshot, excluded.audit.map { .segmentNoteJev($0) })
-    }
-
-    /// 数値タグが無い研究開発費。キーが無い、候補が無い、分類が採用条件を外れたときは not_found。
-    /// 応答が無いときは行を作らない。
-    func resolveResearchAndDevelopmentProseTotal(xbrlDir: URL, docID: String) async -> BreakdownResolveResult {
-        guard let decider = researchAndDevelopmentProseDecider else {
-            return .notApplicable(reason: breakdownNotApplicableNotFound)
-        }
-        guard let text = ResearchAndDevelopmentProseTotalDecision.activityPlainText(in: xbrlDir) else {
-            return .notApplicable(reason: breakdownNotApplicableNotFound)
-        }
-        switch await ResearchAndDevelopmentProseTotalDecision.decide(
-            plainText: text, docID: docID, decider: decider)
-        {
-        case .applied(let total):
-            let snapshot = ResearchAndDevelopmentProseTotalDecision.snapshot(
-                axis: breakdownAxisResearchAndDevelopment, total: total)
-            let extracted = ExtractedBreakdown(
-                method: breakdownSourceResearchAndDevelopmentProse, tables: [], facts: [])
-            let hash = breakdownContentHash(extracted: extracted, consolidatedSales: total.yen)
-            return breakdownByRecordingOverlayRegressions(
-                .resolved(
-                    payload: breakdownSnapshotPayload(from: snapshot),
-                    source: breakdownSourceResearchAndDevelopmentProse,
-                    contentHash: hash,
-                    audit: .segmentNoteJev(total.audit)),
-                xbrlDir: xbrlDir)
-        case .notApplied:
-            return .notApplicable(reason: breakdownNotApplicableNotFound)
-        case .unavailable:
-            return .failed
-        }
-    }
-
     /// 報告セグメント別の決定論指標を共通の XBRL fact 経路で解決する。
     func resolveSegmentMetricBreakdown(docID: String, axis: String, correctionDocIDs: [String] = []) async -> BreakdownResolveResult {
         guard let xbrlDir = await downloadAnnualFilingXbrl(

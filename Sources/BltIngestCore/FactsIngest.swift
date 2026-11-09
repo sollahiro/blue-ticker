@@ -289,14 +289,6 @@ public func runFactsIngestCommand(
                         docID: docID, correctionDocIDs: correctionIDsByOriginal[docID] ?? [])
                 },
                 BreakdownStage(
-                    axis: breakdownAxisResearchAndDevelopment, target: "breakdowns-rd",
-                    listedCodes: deterministicMetricsListed, limit: unpublishedLimit,
-                    candidateSets: unpublishedSets
-                ) { docID in
-                    await context.resolveResearchAndDevelopmentBreakdown(
-                        docID: docID, correctionDocIDs: correctionIDsByOriginal[docID] ?? [])
-                },
-                BreakdownStage(
                     axis: breakdownAxisGoodwill, target: "breakdowns-goodwill",
                     listedCodes: deterministicMetricsListed, limit: unpublishedLimit,
                     candidateSets: unpublishedSets

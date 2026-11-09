@@ -96,32 +96,6 @@ import Foundation
         #expect(filled.needsReview == false)
     }
 
-    @Test func kyoceraResearchAndDevelopmentResolvesWithoutWarning() async throws {
-        guard await Self.ensureAvailable("S100TSIJ") else { return }
-        let xbrlDir = Self.xbrlDir("S100TSIJ")
-        let contextMap = BreakdownExtractor.loadDimensionContextMap(xbrlDir: xbrlDir)
-        let facts = BreakdownExtractor.extractFactsByDimension(
-            xbrlDir: xbrlDir, dimensionKeywords: Xbrl.businessSegmentDimensionKeywords,
-            contextMap: contextMap)
-        let labelsByTag = XBRLUtils.breakdownMemberLabels(in: xbrlDir)
-
-        let snapshot = try #require(
-            BreakdownNormalizer.normalizeResearchAndDevelopment(
-                facts: facts, total: 132_502_000_000, axis: "research_and_development",
-                labelsByTag: labelsByTag))
-
-        #expect(snapshot.axis == "research_and_development")
-        #expect(snapshot.needsReview == false)
-        let labels = Set(snapshot.rows.map(\.labelRaw))
-        #expect(labels.contains("ComponentsReportableSegmentsMember"))
-        #expect(labels.contains("DevicesAndModulesReportableSegmentsMember"))
-        #expect(labels.contains("OtherReportableSegmentsMember"))
-
-        let devicesAndModules = try #require(
-            snapshot.rows.first { $0.labelRaw == "DevicesAndModulesReportableSegmentsMember" })
-        #expect(devicesAndModules.label == "デバイス・モジュール")
-    }
-
     @Test func eisaiEmployeesPromotesPharmaceuticalBusinessLabel() async throws {
         guard await Self.ensureAvailable("S100YB05") else { return }
         let (facts, labels) = Self.employeesFactsAndLabels("S100YB05")
@@ -259,26 +233,9 @@ import Foundation
         #expect(ident == 68_631)
     }
 
-    @Test func nttResearchAndDevelopmentSubtractsIntersegmentElimination() async throws {
-        guard await Self.ensureAvailable("S100YCP3") else { return }
-        let (facts, labels) = Self.employeesFactsAndLabels("S100YCP3")
-        let rd = try #require(
-            BreakdownNormalizer.normalizeResearchAndDevelopment(
-                facts: facts, total: 278_649_000_000, axis: "research_and_development",
-                labelsByTag: labels))
-        #expect(rd.needsReview == false)
-        let elim = try #require(
-            rd.rows.first { $0.labelRaw == "UnallocatedAmountsAndEliminationMember" })
-        #expect(elim.rowKind == "reconciling")
-        #expect(elim.amount == -119_217_000_000)
-        let reconciled = rd.rows.filter { $0.rowKind == "segment" || $0.rowKind == "reconciling" }
-            .map(\.amount).reduce(0, +)
-        #expect(reconciled == 278_649_000_000)
-    }
-
-    // MARK: - employees/research_and_development 軸 実データゴールデン（2026-08-03、10社レビュー）
+    // MARK: - employees 軸 実データゴールデン（2026-08-03、10社レビュー）
     //
-    // ユーザーが10社（日経225）のemployees/research_and_development軸抽出結果を実データで
+    // ユーザーが10社（日経225）のemployees軸抽出結果を実データで
     // 目視確認済み（生XBRLと突き合わせ、SCREEN HD「上記セグメント以外9,151」・日東電工
     // 「全社技術部門10,725」等、注記本文にのみ存在しXBRL dimensionタグが無い値の欠測を確認）。
     // needs_review=false の行のみ確認対象とし、正しさが確認できた絶対値をgolden化する
@@ -330,7 +287,7 @@ import Foundation
         #expect(snapshot.needsReview == false)
     }
 
-    @Test func yokogawaEmployeesAndRDMatchDisclosedSegmentTotals() async throws {
+    @Test func yokogawaEmployeesMatchDisclosedSegmentTotals() async throws {
         guard await Self.ensureAvailable("S100VY8X") else { return }
         let (facts, labels) = Self.employeesFactsAndLabels("S100VY8X")
 
@@ -343,16 +300,6 @@ import Foundation
             emp.rows.first { $0.labelRaw == "IndustrialAutomationAndControlReportableSegmentsMember" })
         #expect(empControl.amount == 16_781)
         #expect(empControl.label == "制御")
-
-        let rd = try #require(
-            BreakdownNormalizer.normalizeResearchAndDevelopment(
-                facts: facts, total: 32_061_000_000, axis: "research_and_development",
-                labelsByTag: labels))
-        #expect(rd.needsReview == false)
-        let rdControl = try #require(
-            rd.rows.first { $0.labelRaw == "IndustrialAutomationAndControlReportableSegmentsMember" })
-        #expect(rdControl.amount == 28_835_000_000)
-        #expect(rdControl.label == "制御")
     }
 
     @Test func mitsubishiMotorsEmployeesMatchesDisclosedSegmentTotals() async throws {
@@ -386,7 +333,7 @@ import Foundation
         #expect(food.label == "食料")
     }
 
-    @Test func nittoDenkoEmployeesMatchesDisclosedSegmentTotalsRDStaysNeedsReview() async throws {
+    @Test func nittoDenkoEmployeesMatchesDisclosedSegmentTotals() async throws {
         guard await Self.ensureAvailable("S100VYH3") else { return }
         let (facts, labels) = Self.employeesFactsAndLabels("S100VYH3")
 
@@ -399,19 +346,9 @@ import Foundation
             emp.rows.first { $0.labelRaw == "OptronicsReportableSegmentMember" })
         #expect(optronics.amount == 12_798)
         #expect(optronics.label == "オプトロニクス")
-
-        // R&D は注記本文（HTMLテキストブロック）に「全社技術部門10,725百万円」の内訳が
-        // あるが XBRL dimension タグが無いため未タグ分が残り、needs_review=true が正しい
-        // （2026-08-03 実データ確認。SCREEN HD も同型）。
-        let rd = try #require(
-            BreakdownNormalizer.normalizeResearchAndDevelopment(
-                facts: facts, total: 46_771_000_000, axis: "research_and_development",
-                labelsByTag: labels))
-        #expect(rd.needsReview == true)
-        #expect(rd.warnings.contains("research_and_development_segment_sum_far_from_total"))
     }
 
-    @Test func hondaEmployeesMatchesDisclosedSegmentTotalsRDStaysNeedsReview() async throws {
+    @Test func hondaEmployeesMatchesDisclosedSegmentTotals() async throws {
         guard await Self.ensureAvailable("S100VYOD") else { return }
         let (facts, labels) = Self.employeesFactsAndLabels("S100VYOD")
 
@@ -424,19 +361,9 @@ import Foundation
             emp.rows.first { $0.labelRaw == "AutomobileBusinessReportableSegmentMember" })
         #expect(automobile.amount == 133_665)
         #expect(automobile.label == "四輪事業")
-
-        // R&D 注記21は費用の性質別（発生支出／資産化／償却）の調整であり事業セグメント別の
-        // 内訳ではない。四輪事業のR&D費はこの書類のどこにも（タグにもテキストにも）
-        // セグメント単位で開示されていない正当な欠測（2026-08-03 実データ確認）。
-        let rd = try #require(
-            BreakdownNormalizer.normalizeResearchAndDevelopment(
-                facts: facts, total: 1_099_482_000_000, axis: "research_and_development",
-                labelsByTag: labels))
-        #expect(rd.needsReview == true)
-        #expect(rd.warnings.contains("research_and_development_segment_sum_far_from_total"))
     }
 
-    @Test func nomuraResearchInstituteEmployeesAndRDMatchDisclosedSegmentTotals() async throws {
+    @Test func nomuraResearchInstituteEmployeesMatchDisclosedSegmentTotals() async throws {
         guard await Self.ensureAvailable("S100VZKL") else { return }
         let (facts, labels) = Self.employeesFactsAndLabels("S100VZKL")
 
@@ -449,19 +376,9 @@ import Foundation
             emp.rows.first { $0.labelRaw == "IndustrialITSolutionsReportableSegmentMember" })
         #expect(industrialIT.amount == 6_034)
         #expect(industrialIT.label == "産業ＩＴソリューション")
-
-        let rd = try #require(
-            BreakdownNormalizer.normalizeResearchAndDevelopment(
-                facts: facts, total: 6_114_000_000, axis: "research_and_development",
-                labelsByTag: labels))
-        #expect(rd.needsReview == false)
-        let financialIT = try #require(
-            rd.rows.first { $0.labelRaw == "FinancialITSolutionsReportableSegmentMember" })
-        #expect(financialIT.amount == 2_929_000_000)
-        #expect(financialIT.label == "金融ＩＴソリューション")
     }
 
-    @Test func toyotaEmployeesAndRDMatchDisclosedSegmentTotals() async throws {
+    @Test func toyotaEmployeesMatchDisclosedSegmentTotals() async throws {
         guard await Self.ensureAvailable("S100VWVY") else { return }
         let (facts, labels) = Self.employeesFactsAndLabels("S100VWVY")
 
@@ -474,16 +391,6 @@ import Foundation
             emp.rows.first { $0.labelRaw == "AutomotiveReportableSegmentMember" })
         #expect(automotive.amount == 339_062)
         #expect(automotive.label == "自動車")
-
-        let rd = try #require(
-            BreakdownNormalizer.normalizeResearchAndDevelopment(
-                facts: facts, total: 1_326_496_000_000, axis: "research_and_development",
-                labelsByTag: labels))
-        #expect(rd.needsReview == false)
-        let automotiveRD = try #require(
-            rd.rows.first { $0.labelRaw == "AutomotiveReportableSegmentMember" })
-        #expect(automotiveRD.amount == 1_310_754_000_000)
-        #expect(automotiveRD.label == "自動車")
     }
 
     @Test func sumitomoCorpEmployeesMatchesDisclosedSegmentTotals() async throws {
@@ -501,7 +408,7 @@ import Foundation
         #expect(mediaDigital.label == "メディア・デジタル")
     }
 
-    @Test func ajinomotoEmployeesAndRDMatchDisclosedSegmentTotals() async throws {
+    @Test func ajinomotoEmployeesMatchDisclosedSegmentTotals() async throws {
         guard await Self.ensureAvailable("S100VXJA") else { return }
         let (facts, labels) = Self.employeesFactsAndLabels("S100VXJA")
 
@@ -514,16 +421,6 @@ import Foundation
             emp.rows.first { $0.labelRaw == "SeasoningsAndFoodsReportableSegmentMember" })
         #expect(seasonings.amount == 22_096)
         #expect(seasonings.label == "調味料・食品")
-
-        let rd = try #require(
-            BreakdownNormalizer.normalizeResearchAndDevelopment(
-                facts: facts, total: 30_921_000_000, axis: "research_and_development",
-                labelsByTag: labels))
-        #expect(rd.needsReview == false)
-        let healthcare = try #require(
-            rd.rows.first { $0.labelRaw == "HealthcareAndOthersReportableSegmentMember" })
-        #expect(healthcare.amount == 11_212_000_000)
-        #expect(healthcare.label == "ヘルスケア等")
     }
 
     /// product_service 軸（`normalizeSalesBasis` 経路）でも同じラベル解決が効くこと。
@@ -541,194 +438,6 @@ import Foundation
                 segments, consolidatedSales: 1_069_763_000_000, labelsByTag: labelsByTag))
         #expect(snapshot.axis == breakdownAxisProductService)
         #expect(snapshot.rows.contains { $0.label != nil && $0.label != $0.labelRaw })
-    }
-}
-
-// smoke 固定11社（`SmokeTests.swift`と同じ docID セット）での research_and_development 軸
-// 実データゴールデン（2026-08-11）。キャッシュは `tmp_cache/edinet/`（`SmokeCacheSupport.cacheDir`、
-// 他の smoke オラクル形式テストと同じ場所）。全社とも実タグ
-// `ResearchAndDevelopmentExpensesResearchAndDevelopmentActivities` を確認済みのため denominatorTag
-// もあわせて固定する。ニチレイ・富士フイルム・キヤノンの乖離は開示側が「その他」「基礎研究費」を
-// 地の文（プレーンテキスト）のみで開示しXBRLタグを振っていないための正当な未タグ残差（元のiXBRLを
-// 直接確認して金額まで一致を確認済み。292/9,105/52,971百万円は`ix:nonFraction`化されていない）。
-
-@Suite struct SmokeResearchAndDevelopmentBreakdownTests {
-
-    private static let xbrlRoot = SmokeCacheSupport.cacheDir
-
-    private static func xbrlDir(_ docID: String) -> URL {
-        xbrlRoot.appendingPathComponent("\(docID)_xbrl")
-    }
-
-    private static func cacheAvailable(_ docID: String) -> Bool {
-        FileManager.default.fileExists(atPath: xbrlDir(docID).path)
-    }
-
-    private static func ensureAvailable(_ docID: String) async -> Bool {
-        await SmokeCacheSupport.ensureCached([docID])
-        guard cacheAvailable(docID) else {
-            TestVerboseLog.print("SKIP   \(docID): XBRL キャッシュなし（BLT_EDINET_API_KEY 未設定または取得失敗）")
-            return false
-        }
-        return true
-    }
-
-    private static func factsAndLabels(_ docID: String) -> (facts: [BreakdownFact], labels: [String: String]) {
-        let dir = xbrlDir(docID)
-        let contextMap = BreakdownExtractor.loadDimensionContextMap(xbrlDir: dir)
-        let facts = BreakdownExtractor.extractFactsByDimension(
-            xbrlDir: dir, dimensionKeywords: Xbrl.businessSegmentDimensionKeywords,
-            contextMap: contextMap)
-        return (facts, XBRLUtils.breakdownMemberLabels(in: dir))
-    }
-
-    private static let rdTag = "ResearchAndDevelopmentExpensesResearchAndDevelopmentActivities"
-
-    // MARK: - resolved・needsReview=false
-
-    @Test func ajinomotoResolvesFiveSegmentRows() async throws {
-        guard await Self.ensureAvailable("S100VXJA") else { return }
-        let (facts, labels) = Self.factsAndLabels("S100VXJA")
-        let rd = try #require(
-            BreakdownNormalizer.normalizeResearchAndDevelopment(
-                facts: facts, total: 30_921_000_000, axis: "research_and_development", labelsByTag: labels))
-        #expect(rd.needsReview == false)
-        #expect(rd.denominatorTag == Self.rdTag)
-        #expect(rd.rows.count == 5)
-        let healthcare = try #require(rd.rows.first { $0.labelRaw == "HealthcareAndOthersReportableSegmentMember" })
-        #expect(healthcare.amount == 11_212_000_000)
-        #expect(healthcare.label == "ヘルスケア等")
-        let unallocated = try #require(
-            rd.rows.first { $0.labelRaw == "UnallocatedAmountsAndEliminationMember" })
-        #expect(unallocated.amount == 9_562_000_000)
-        #expect(unallocated.rowKind == "reconciling")
-    }
-
-    @Test func okumaTotalOnlyResolvesWithoutSegmentRowsUsingRealTag() async throws {
-        guard await Self.ensureAvailable("S100W043") else { return }
-        let (facts, labels) = Self.factsAndLabels("S100W043")
-        #expect(facts.filter { $0.tag == Self.rdTag }.isEmpty)  // セグメントdimension開示なし
-        let rd = try #require(
-            BreakdownNormalizer.normalizeResearchAndDevelopment(
-                facts: facts, total: 4_409_000_000, totalTag: Self.rdTag,
-                axis: "research_and_development", labelsByTag: labels))
-        #expect(rd.needsReview == false)
-        #expect(rd.denominator == 4_409_000_000)
-        #expect(rd.denominatorTag == Self.rdTag)
-        #expect(rd.rows.isEmpty)
-    }
-
-    @Test func kubotaResolvesTwoSegmentRowsSummingExactlyToTotal() async throws {
-        guard await Self.ensureAvailable("S100XR0M") else { return }
-        let (facts, labels) = Self.factsAndLabels("S100XR0M")
-        let rd = try #require(
-            BreakdownNormalizer.normalizeResearchAndDevelopment(
-                facts: facts, total: 110_300_000_000, axis: "research_and_development", labelsByTag: labels))
-        #expect(rd.needsReview == false)
-        #expect(rd.denominatorTag == Self.rdTag)
-        #expect(rd.rows.map(\.amount).reduce(0, +) == 110_300_000_000)
-        let machinery = try #require(rd.rows.first { $0.labelRaw == "MachineryReportableSegmentMember" })
-        #expect(machinery.amount == 103_500_000_000)
-        #expect(machinery.label == "機械")
-    }
-
-    @Test func suzukiResolvesFourSegmentRowsSummingExactlyToTotal() async throws {
-        guard await Self.ensureAvailable("S100W4MT") else { return }
-        let (facts, labels) = Self.factsAndLabels("S100W4MT")
-        let rd = try #require(
-            BreakdownNormalizer.normalizeResearchAndDevelopment(
-                facts: facts, total: 265_600_000_000, axis: "research_and_development", labelsByTag: labels))
-        #expect(rd.needsReview == false)
-        #expect(rd.denominatorTag == Self.rdTag)
-        #expect(rd.rows.map(\.amount).reduce(0, +) == 265_600_000_000)
-        let automobile = try #require(
-            rd.rows.first { $0.labelRaw == "AutomobileBusinessReportableSegmentMember" })
-        #expect(automobile.amount == 239_100_000_000)
-        #expect(automobile.label == "四輪事業")
-    }
-
-    // MARK: - resolved・needsReview=true（未タグ残差、実データ確認済み）
-
-    /// 「その他の事業は291百万円となりました」は地の文のみでXBRLタグなし（実データ確認済み）。
-    @Test func nichireiRDStaysNeedsReviewForUntaggedOtherSegment() async throws {
-        guard await Self.ensureAvailable("S100VYA0") else { return }
-        let (facts, labels) = Self.factsAndLabels("S100VYA0")
-        let rd = try #require(
-            BreakdownNormalizer.normalizeResearchAndDevelopment(
-                facts: facts, total: 2_206_000_000, axis: "research_and_development", labelsByTag: labels))
-        #expect(rd.needsReview == true)
-        #expect(rd.warnings.contains("research_and_development_segment_sum_far_from_total"))
-        #expect(rd.rows.map(\.amount).reduce(0, +) == 1_915_000_000)
-        let processedFoods = try #require(
-            rd.rows.first { $0.labelRaw == "ProcessedFoodsReportableSegmentsMember" })
-        #expect(processedFoods.amount == 1_436_000_000)
-        #expect(processedFoods.label == "加工食品")
-    }
-
-    /// 「基礎研究費は9,105百万円です」は地の文のみでXBRLタグなし（実データ確認済み）。
-    @Test func fujifilmRDStaysNeedsReviewForUntaggedBasicResearch() async throws {
-        guard await Self.ensureAvailable("S100W3XJ") else { return }
-        let (facts, labels) = Self.factsAndLabels("S100W3XJ")
-        let rd = try #require(
-            BreakdownNormalizer.normalizeResearchAndDevelopment(
-                facts: facts, total: 163_399_000_000, axis: "research_and_development", labelsByTag: labels))
-        #expect(rd.needsReview == true)
-        #expect(rd.warnings.contains("research_and_development_segment_sum_far_from_total"))
-        #expect(rd.rows.map(\.amount).reduce(0, +) == 154_294_000_000)
-        let healthcare = try #require(rd.rows.first { $0.labelRaw == "HealthcareReportableSegmentsMember" })
-        #expect(healthcare.amount == 60_698_000_000)
-        #expect(healthcare.label == "ヘルスケア")
-    }
-
-    /// 「基礎研究等のその他及び全社に係る研究開発費は52,971百万円」は地の文のみでXBRLタグなし
-    /// （実データ確認済み）。
-    @Test func canonRDStaysNeedsReviewForUntaggedBasicResearchAndCorporate() async throws {
-        guard await Self.ensureAvailable("S100XTLJ") else { return }
-        let (facts, labels) = Self.factsAndLabels("S100XTLJ")
-        let rd = try #require(
-            BreakdownNormalizer.normalizeResearchAndDevelopment(
-                facts: facts, total: 339_288_000_000, axis: "research_and_development", labelsByTag: labels))
-        #expect(rd.needsReview == true)
-        #expect(rd.warnings.contains("research_and_development_segment_sum_far_from_total"))
-        #expect(rd.rows.map(\.amount).reduce(0, +) == 286_317_000_000)
-        let imaging = try #require(
-            rd.rows.first { $0.labelRaw == "ImagingBusinessUnitReportableSegmentsMember" })
-        #expect(imaging.amount == 112_298_000_000)
-        #expect(imaging.label == "イメージングビジネスユニット")
-    }
-
-    // MARK: - nil（RD非開示、正当欠測）
-
-    @Test func azPlanningHasNoResearchAndDevelopmentDisclosure() async throws {
-        guard await Self.ensureAvailable("S100VU4O") else { return }
-        let (facts, labels) = Self.factsAndLabels("S100VU4O")
-        let rd = BreakdownNormalizer.normalizeResearchAndDevelopment(
-            facts: facts, total: nil, axis: "research_and_development", labelsByTag: labels)
-        #expect(rd == nil)
-    }
-
-    @Test func tohoRemacHasNoResearchAndDevelopmentDisclosure() async throws {
-        guard await Self.ensureAvailable("S100XRD8") else { return }
-        let (facts, labels) = Self.factsAndLabels("S100XRD8")
-        let rd = BreakdownNormalizer.normalizeResearchAndDevelopment(
-            facts: facts, total: nil, axis: "research_and_development", labelsByTag: labels)
-        #expect(rd == nil)
-    }
-
-    @Test func mufgBankHasNoResearchAndDevelopmentDisclosure() async throws {
-        guard await Self.ensureAvailable("S100W4FB") else { return }
-        let (facts, labels) = Self.factsAndLabels("S100W4FB")
-        let rd = BreakdownNormalizer.normalizeResearchAndDevelopment(
-            facts: facts, total: nil, axis: "research_and_development", labelsByTag: labels)
-        #expect(rd == nil)
-    }
-
-    @Test func smfgBankHasNoResearchAndDevelopmentDisclosure() async throws {
-        guard await Self.ensureAvailable("S100W0S7") else { return }
-        let (facts, labels) = Self.factsAndLabels("S100W0S7")
-        let rd = BreakdownNormalizer.normalizeResearchAndDevelopment(
-            facts: facts, total: nil, axis: "research_and_development", labelsByTag: labels)
-        #expect(rd == nil)
     }
 }
 
