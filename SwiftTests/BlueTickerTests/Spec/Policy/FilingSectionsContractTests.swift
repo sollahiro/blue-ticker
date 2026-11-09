@@ -38,6 +38,6 @@ import Testing
         // new axis series at v1 after the public axis-key hard cutover.
         #expect(geographyBreakdownCacheVersion == "breakdown-geography-v14")
         #expect(productServiceBreakdownCacheVersion == "breakdown-product_service-v2")
-        #expect(segmentBreakdownCacheVersion == "breakdown-segment-v1")
+        #expect(segmentBreakdownCacheVersion == "breakdown-segment-v2")
     }
 }

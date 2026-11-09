@@ -80,6 +80,7 @@ breaking 再編時は可能な範囲で:
 - blt-server 内蔵の MCP（ルートパス `POST /`）と Feed Trend（`GET /v1/feed/trend`・origin からの匿名カウンター送信・`workers/feed-trend`）を廃止した（breaking。`apiSkillsSchemaVersion` 10）。どちらも 404。`/v1/skills` の各 skill から `mcp_tool` を外し、`get-feed-trend` を消した。公開コネクタ（HAPIS `mcp/`）は REST を呼ぶので影響しない。
 - `GET /v1/companies/{code}/breakdown?axis=research_and_development` を廃止した（breaking。`apiSkillsSchemaVersion` 11）。常に 404。`/v1/skills` の axis 一覧から外し、ingest の `breakdowns-rd` と本文総額の Jev を削除した。`/financials` の `rd` は別の抽出で、そのまま返る。HAPIS では非公開の軸だったので公開コネクタに影響しない。
 - breakdown `axis=geography` の 404 reason に `domestic_dominant_90pct`（本邦の外部顧客への売上高が 90% 超のため省略）と `no_overseas_sales`（海外売上なし）を足した（値の追加なので互換。`apiSkillsSchemaVersion` は 11 のまま）。どちらでもない欠測は従来どおり `not_found`。
+- breakdown `axis=segment` の行に、報告セグメント表のセル `segment_assets` / `flow`（`flow_metric`）/ `equity_method_investments` と、payload のセルごとの分母を足した（互換追加。`breakdown-segment-v2`）。`axis=equity_method_investments` は廃止し常に 404（breaking。`apiSkillsSchemaVersion` 12）。HAPIS では非公開の軸だったので公開コネクタに影響しない。
 
 ## Codable 応答への段階移行
 
