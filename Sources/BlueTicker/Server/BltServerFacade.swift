@@ -982,7 +982,7 @@ public extension BltServerContext {
             {
                 return sameAs
             }
-            return .notApplicable(reason: breakdownNotApplicableNotFound)
+            return .notApplicable(reason: BreakdownExtractor.geographyNotFoundReason(xbrlDir: xbrlDir))
         }
         let labelsByTag = XBRLUtils.loadLabelsByTag(in: xbrlDir)
         // カバー判定と share の分母は PL トップライン（売上高の上の合計行など）。無ければ Summary 売上。
@@ -993,7 +993,7 @@ public extension BltServerContext {
             consolidatedSales: coverageSales, labelsByTag: labelsByTag)
         guard let resolvedGeography = gate.extracted else {
             return .notApplicable(
-                reason: breakdownNotApplicableNotFound,
+                reason: BreakdownExtractor.geographyNotFoundReason(xbrlDir: xbrlDir),
                 audit: gate.outcome.audit.map(LLMBreakdownAuditPayload.segmentNoteJev))
         }
 
@@ -1015,7 +1015,8 @@ public extension BltServerContext {
             var audit: LLMBreakdownAuditPayload?
             if result.source == .notFound {
                 if result.audit != nil || geography.tables.isEmpty {
-                    reason = breakdownNotApplicableNotFound
+                    // 前期の表だけ残る本邦90％省略（6706）もここ。省略文があれば国内中心の reason にする。
+                    reason = BreakdownExtractor.geographyNotFoundReason(xbrlDir: xbrlDir)
                     if result.audit?.notes == GeographyBreakdownLLMNormalizer.priorPeriodTablesOnlyNote {
                         audit = result.audit.map(llmBreakdownAuditPayload(from:))
                     }

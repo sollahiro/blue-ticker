@@ -79,6 +79,7 @@ breaking 再編時は可能な範囲で:
 - waterfall から ROE・ROIC の前年差の要因分解（`roe_delta` / `roe_net_margin_effect` / `roe_asset_turnover_effect` / `roe_leverage_effect` / `roic_delta` / `roic_margin_effect` / `roic_turnover_effect`）を外した（breaking。financials / waterfall `schema_version` 5）。ROE のデュポン3要素 `net_margin` / `asset_turnover` / `financial_leverage`（期末の親会社持分。積が `roe`）は残す。ROE・ROIC は期末値で、マイナスの年もそのまま返す（有報が「−」の年も計算値）。格納行のキーは read 時に落ちるので `fin-vN` は据え置き、再 ingest は不要。
 - blt-server 内蔵の MCP（ルートパス `POST /`）と Feed Trend（`GET /v1/feed/trend`・origin からの匿名カウンター送信・`workers/feed-trend`）を廃止した（breaking。`apiSkillsSchemaVersion` 10）。どちらも 404。`/v1/skills` の各 skill から `mcp_tool` を外し、`get-feed-trend` を消した。公開コネクタ（HAPIS `mcp/`）は REST を呼ぶので影響しない。
 - `GET /v1/companies/{code}/breakdown?axis=research_and_development` を廃止した（breaking。`apiSkillsSchemaVersion` 11）。常に 404。`/v1/skills` の axis 一覧から外し、ingest の `breakdowns-rd` と本文総額の Jev を削除した。`/financials` の `rd` は別の抽出で、そのまま返る。HAPIS では非公開の軸だったので公開コネクタに影響しない。
+- breakdown `axis=geography` の 404 reason に `domestic_dominant_90pct`（本邦の外部顧客への売上高が 90% 超のため省略）と `no_overseas_sales`（海外売上なし）を足した（値の追加なので互換。`apiSkillsSchemaVersion` は 11 のまま）。どちらでもない欠測は従来どおり `not_found`。
 
 ## Codable 応答への段階移行
 
