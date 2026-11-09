@@ -88,6 +88,14 @@ public let breakdownAssetClassKey = "asset_class"
 public let breakdownAssetClassPropertyPlantEquipment = "property_plant_equipment"
 /// fixed_assets の資産区分: 無形固定資産（のれんを含む）。
 public let breakdownAssetClassIntangibleAssets = "intangible_assets"
+/// geography 行のセル。地域ごとの情報の有形固定資産（日本基準）／非流動資産（IFRS）。payload に同名キーで分母。
+public let geographyCellAssets = "assets"
+/// geography payload の `assets` の指標キー。値は `geographyAssetsMetric*`。
+public let geographyAssetsMetricKey = "assets_metric"
+/// `assets_metric`: 有形固定資産。
+public let geographyAssetsMetricPropertyPlantEquipment = "property_plant_equipment"
+/// `assets_metric`: 非流動資産（IFRS。金融商品・繰延税金資産等を除く）。
+public let geographyAssetsMetricNoncurrentAssets = "noncurrent_assets"
 
 /// interest_bearing_debt 行の名前付きセルキー。期首残高（円）。
 public let ibdCellOpening = "opening"
@@ -656,6 +664,8 @@ public struct BreakdownRowPayload: Codable, Sendable, Equatable {
     public var disclosureBasis: String?
     /// fixed_assets 軸の行の資産区分（`breakdownAssetClass*`）。他軸は nil。
     public var assetClass: String?
+    /// geography 軸の行のセル。地域ごとの有形固定資産／非流動資産（円）。他軸は nil。
+    public var assets: Double?
 
     private enum CodingKeys: String, CodingKey {
         case labelRaw, label, amount, profit, rowKind, description
@@ -673,6 +683,7 @@ public struct BreakdownRowPayload: Codable, Sendable, Equatable {
         case disclosureBasis = "disclosure_basis"
         case equityMethodInvestments = "equity_method_investments"
         case assetClass = "asset_class"
+        case assets
     }
 
     public init(
@@ -750,6 +761,7 @@ public struct BreakdownRowPayload: Codable, Sendable, Equatable {
         equityMethodInvestments = try container.decodeIfPresent(
             Double.self, forKey: .equityMethodInvestments)
         assetClass = try container.decodeIfPresent(String.self, forKey: .assetClass)
+        assets = try container.decodeIfPresent(Double.self, forKey: .assets)
         if let categoryGroup {
             label = try container.decodeIfPresent(String.self, forKey: .label)
                 ?? Self.displayLabel(categoryGroup: categoryGroup, category: category)
@@ -788,6 +800,7 @@ public struct BreakdownRowPayload: Codable, Sendable, Equatable {
         try container.encodeIfPresent(disclosureBasis, forKey: .disclosureBasis)
         try container.encodeIfPresent(equityMethodInvestments, forKey: .equityMethodInvestments)
         try container.encodeIfPresent(assetClass, forKey: .assetClass)
+        try container.encodeIfPresent(assets, forKey: .assets)
     }
 
     public static func displayLabel(categoryGroup: String, category: String?) -> String {
@@ -827,6 +840,10 @@ public struct BreakdownSnapshotPayload: Codable, Sendable, Equatable {
     /// fixed_assets 軸の資産区分ごとの合計。区分の開示が無いときは nil。
     public var propertyPlantEquipment: CapexMetricTotalsPayload?
     public var intangibleAssets: CapexMetricTotalsPayload?
+    /// geography 軸のセル `assets` の分母（地域資産の合計）。開示が無いときは nil。
+    public var assets: CapexMetricTotalsPayload?
+    /// geography 軸のセル `assets` の指標（`geographyAssetsMetric*`）。
+    public var assetsMetric: String?
 
     public init(
         axis: String, denominator: Double, denominatorTag: String, rows: [BreakdownRowPayload],
@@ -1120,6 +1137,17 @@ public extension BreakdownSnapshotPayload {
         }
         if axis == breakdownAxisSegment {
             addSegmentMetricCells(to: &object)
+        }
+        if axis == breakdownAxisGeography, let assets {
+            // 地域ごとの有形固定資産／非流動資産。開示がある書類だけキーを出し、行に値が無いところは null。
+            object[geographyCellAssets] = assets.jsonObject()
+            object[geographyAssetsMetricKey] = assetsMetric ?? NSNull()
+            if var rowObjects = object["rows"] as? [[String: Any]], rowObjects.count == rows.count {
+                for index in rows.indices {
+                    rowObjects[index][geographyCellAssets] = rows[index].assets ?? NSNull()
+                }
+                object["rows"] = rowObjects
+            }
         }
         if axis == breakdownAxisFixedAssets {
             // 区分ごとの合計。分母（denominator）は開示された区分合計の和。区分の開示が無ければ null。
