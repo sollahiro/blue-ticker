@@ -78,6 +78,7 @@ breaking 再編時は可能な範囲で:
 - financials / waterfall の `roe` の分母を期末の純資産合計から期末の親会社持分に替えた（意味変更で breaking。`schema_version` 4、`fin-v23`）。親会社持分は本表の親会社の所有者に帰属する持分（IFRS / US-GAAP）、無ければ純資産合計 − 非支配株主持分 − 新株予約権（日本基準）。`financial_leverage` も総資産 ÷ 親会社持分にし、`roe` = `net_margin` × `asset_turnover` × `financial_leverage` を保つ。期末値のまま（有報の期首・期末平均とは揃えない）。screen の `roe` は financials から投影するので同じ定義になる（screen snapshot の版は据え置き）。あわせて、外貨建て開示の邦貨併記（同じタグ・同じ期に USD と JPY の fact）で円の参考値を採っていた誤りを直し、開示通貨の値を採る（6269 の `bps` は 3,327.57 → 21.26 ドル）。
 - waterfall から ROE・ROIC の前年差の要因分解（`roe_delta` / `roe_net_margin_effect` / `roe_asset_turnover_effect` / `roe_leverage_effect` / `roic_delta` / `roic_margin_effect` / `roic_turnover_effect`）を外した（breaking。financials / waterfall `schema_version` 5）。ROE のデュポン3要素 `net_margin` / `asset_turnover` / `financial_leverage`（期末の親会社持分。積が `roe`）は残す。ROE・ROIC は期末値で、マイナスの年もそのまま返す（有報が「−」の年も計算値）。格納行のキーは read 時に落ちるので `fin-vN` は据え置き、再 ingest は不要。
 - blt-server 内蔵の MCP（ルートパス `POST /`）と Feed Trend（`GET /v1/feed/trend`・origin からの匿名カウンター送信・`workers/feed-trend`）を廃止した（breaking。`apiSkillsSchemaVersion` 10）。どちらも 404。`/v1/skills` の各 skill から `mcp_tool` を外し、`get-feed-trend` を消した。公開コネクタ（HAPIS `mcp/`）は REST を呼ぶので影響しない。
+- `GET /v1/companies/{code}/breakdown?axis=research_and_development` を廃止した（breaking。`apiSkillsSchemaVersion` 11）。常に 404。`/v1/skills` の axis 一覧から外し、ingest の `breakdowns-rd` と本文総額の Jev を削除した。`/financials` の `rd` は別の抽出で、そのまま返る。HAPIS では非公開の軸だったので公開コネクタに影響しない。
 
 ## Codable 応答への段階移行
 

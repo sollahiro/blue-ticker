@@ -38,9 +38,8 @@ public let breakdownAxisEmployees = "employees"
 public func breakdownAmountUnit(axis: String) -> AmountUnit.Code {
     axis == breakdownAxisEmployees ? .persons : .currencyAmount
 }
-/// 研究開発費（全社合計）のセグメント別内訳軸（2026-08-01追加）。
-/// 数値タグとセグメント fact は決定論。無いときは Jev が本文の文を分類して当期総額を選ぶ
-/// （金額はコードが円へ換算する。値の生成はしない）。
+/// 研究開発費のセグメント別内訳軸（2026-08-01追加、2026-11 に廃止）。定数だけ残し、
+/// `retiredBreakdownAxes` に入れて 404 にする。
 public let breakdownAxisResearchAndDevelopment = "research_and_development"
 /// 報告セグメント別ののれん（2026-08-12追加、2026-10 に期首/期末/償却/減損の名前付きセルへ統合）。
 /// 決定論のみ（LLMフォールバックなし）。会社合計の種類別のれんは `goodwill_and_intangibles`
@@ -167,12 +166,12 @@ public let retiredBreakdownAxes = [
     breakdownAxisNoncurrentAssetAdditions,
     "business",
     breakdownAxisGoodwillAmortization,
+    breakdownAxisResearchAndDevelopment,
 ]
 
 /// product_service / geography を除く、報告セグメント別の決定論指標軸。
 public let breakdownSegmentMetricAxes = [
     breakdownAxisEmployees,
-    breakdownAxisResearchAndDevelopment,
     breakdownAxisGoodwill,
     breakdownAxisEquityMethodInvestments,
     breakdownAxisCapex,
@@ -275,14 +274,10 @@ public let breakdownSourceGeographyLLM = "geography_llm"
 /// `BreakdownExtractor.classifyNotApplicableReason` による決定的判定のため、xbrl_facts と同様
 /// `cache_version` 世代でゲートする（`isVersionGatedBreakdownSource` 参照）。
 public let breakdownSourceNotApplicable = "not_applicable"
-/// 数値タグが無く、研究開発活動の本文から当期の会社全体の総額だけを採用した行。
-/// Jev は文の分類だけを返し、金額はコードが円へ換算する。`cache_version` は上げない。
-public let breakdownSourceResearchAndDevelopmentProse = "research_and_development_prose"
 /// 数値タグも該当表も無く、設備投資等の概要本文から当期の会社全体の総額だけを採用した行。
 /// Jev は文の Role だけを返し、金額はコードが円へ換算する。公開面は研究開発費本文総額と同じ。
 public let breakdownSourceCapexProse = "capex_prose"
 /// 本文総額の分母出所。数値 fact のタグが無いときの sentinel。
-public let breakdownDenominatorTagResearchAndDevelopmentProse = "research_and_development_prose"
 public let breakdownDenominatorTagCapexProse = "capex_prose"
 /// セグメントへ配分できない、またはセグメント別の記載をしないため総額のみ、という開示。
 /// `not_applicable_reason` にはしない。404 にすると総額が消える。
@@ -291,14 +286,6 @@ public let breakdownWarningNotAllocatableToSegments = "not_allocatable_to_segmen
 /// タグは信じず当期 facts / 表経路で内訳を残し、`needs_review` を立てる。
 public let breakdownWarningSingleSegmentTagDisagreesWithCurrentYearReportableSegments =
     "single_segment_tag_disagrees_with_current_year_reportable_segments"
-/// 全社合計の数値タグがあり、タグ付き行の不足分を本文の1文から足した印。
-/// `needs_review` は合計が再び揃えば外す。404 にはしない。
-public let breakdownWarningResearchAndDevelopmentProseRemainder =
-    "research_and_development_prose_remainder"
-/// 本文が研究開発費の総額の外に置いた金額を、負の reconciling 行として足した印。
-/// `needs_review` は合計が再び揃えば外す。404 にはしない。
-public let breakdownWarningResearchAndDevelopmentProseExclusion =
-    "research_and_development_prose_exclusion"
 public let breakdownWarningCapexProseRemainder = "capex_prose_remainder"
 public let breakdownWarningCapexProseExclusion = "capex_prose_exclusion"
 /// interest_bearing_debt: 行合計が BS 分母の 95–105% 帯の外。`needs_review` とセット（公開しない）。
@@ -485,7 +472,6 @@ public func isVersionGatedBreakdownSource(_ source: String) -> Bool {
         || source == breakdownSourceStackedSegmentPnL
         || source == breakdownSourceSameAs
         || source == breakdownSourceNotApplicable
-        || source == breakdownSourceResearchAndDevelopmentProse
         || source == breakdownSourceCapexProse
         || isLLMBreakdownSource(source)
 }
@@ -534,7 +520,6 @@ public func isPubliclyServableBreakdown(
         || source == breakdownSourceStackedSegmentPnL
         || source == breakdownSourceSameAs
         || source == breakdownSourceNotApplicable
-        || source == breakdownSourceResearchAndDevelopmentProse
         || source == breakdownSourceCapexProse
     {
         return true

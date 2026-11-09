@@ -111,8 +111,9 @@ struct IngestAxesTests {
     func selectsAxes() {
         #expect(parseIngestAxes("capex") == ["capex"])
         #expect(
-            parseIngestAxes("capex, research_and_development")
-                == ["capex", "research_and_development"])
+            parseIngestAxes("capex, goodwill")
+                == ["capex", "goodwill"])
+        #expect(parseIngestAxes("research_and_development") == nil)
     }
 
     @Test("未知の軸・空は nil")

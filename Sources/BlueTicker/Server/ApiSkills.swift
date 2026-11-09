@@ -8,7 +8,8 @@ import Foundation
 /// REST skills 応答の `schema_version`。形を破壊的に変えたときのみ +1。
 /// v9（2026-10-26）: 金額を基本単位（円・ドル）へ統一し、financials / waterfall に `units` / `currency` を載せた。
 /// v10（2026-11-08）: 内蔵 MCP の廃止に合わせ、各 skill の `mcp_tool` と `get-feed-trend` を外した。
-public let apiSkillsSchemaVersion = 10
+/// v11（2026-11-09）: breakdown の axis `research_and_development` を廃止した（breaking。常に 404）。
+public let apiSkillsSchemaVersion = 11
 
 /// パラメータの置き場所（REST パス変数 / クエリ）。
 public enum ApiSkillParameterLocation: String, Sendable {
@@ -354,12 +355,12 @@ public func apiSkillsCatalog() -> [ApiSkill] {
             id: "get-breakdown",
             name: "報告セグメント・製品・サービス別・地域別売上内訳",
             description: """
-                有価証券報告書から報告セグメント別（segment）、製品・サービス別/地域別売上高、従業員数、研究開発費、のれん、
+                有価証券報告書から報告セグメント別（segment）、製品・サービス別/地域別売上高、従業員数、のれん、
                 報告セグメント別の持分法会計処理される投資、
                 設備投資マトリクス（capex）、有利子負債（interest_bearing_debt）、
                 有形固定資産・のれん及び無形資産の種類別（property_plant_equipment / goodwill_and_intangibles）を取得します（格納済みデータのみ）。
                 対象は取り込み済みの上場企業です。doc_id を省略すると最新の有価証券報告書を使用します。
-                axis は segment / product_service（既定）/ geography / employees / research_and_development / goodwill /
+                axis は segment / product_service（既定）/ geography / employees / goodwill /
                 equity_method_investments / capex / interest_bearing_debt /
                 property_plant_equipment / goodwill_and_intangibles に対応。
                 segment はセグメント情報の報告セグメント表。行に segment_basis（business / geographic）が付きます。
@@ -410,14 +411,12 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                 合計に入るのは category_group の無い行と subtotal 行です（内訳行は小計と二重になるので足さないでください）。
                 全体の合計は denominator です（合計科目が無いときは最上位の行の和で、denominator_tag は要素名を + でつなぎます）。
                 goodwill（報告セグメント別ののれん）とは別の軸です。日本基準・米国基準は not_found（区分は get-statement の BS）。
-                research_and_development は、数値タグが無いとき本文の当期の会社全体の総額だけを補うことがあります。
-                capex も Overview 本文から会社全体の総額、またはタグ付き行の不足分を補うことがあります。
+                capex は Overview 本文から会社全体の総額、またはタグ付き行の不足分を補うことがあります。
                 その行の warnings に not_allocatable_to_segments があっても 404 にはしません。
                 全社合計のタグがありセグメント行が足りないときは、差額と一致する本文1文を reconciling 行として足すことがあります。
                 億円単位で差額とずれる配分不能の1文も、足した合計が 5% 以内なら足すことがあります。
                 タグ付き合計が全社合計を超えるときは、総額の外の金額を負の reconciling 行として足すことがあります。
-                warnings の research_and_development_prose_remainder と research_and_development_prose_exclusion、
-                capex_prose_remainder と capex_prose_exclusion は 404 にしません。
+                warnings の capex_prose_remainder と capex_prose_exclusion は 404 にしません。
                 内訳が取得できない場合は 404 とともに reason が返ることがあります（reason 無しの 404 は単に未取り込み）。
                 公開 reason は geography_only / single_segment_disclosed / not_found / unknown のみ。
                 axis=product_service: geography_only（報告セグメントが地域別のみ。地域は geography 軸。日本/アジアを product_service に載せない）、
@@ -450,13 +449,13 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                     name: "axis",
                     location: .query,
                     type: .string,
-                    description: "内訳の軸（segment / product_service / geography / employees / research_and_development / goodwill / equity_method_investments / capex / interest_bearing_debt / property_plant_equipment / goodwill_and_intangibles。省略時 product_service）",
+                    description: "内訳の軸（segment / product_service / geography / employees / goodwill / equity_method_investments / capex / interest_bearing_debt / property_plant_equipment / goodwill_and_intangibles。省略時 product_service）",
                     required: false,
                     defaultValue: .string(breakdownAxisProductService)
                 ),
             ],
             instructions: """
-                Breakdown（報告セグメント/製品・サービス別/地域別売上、従業員数、研究開発費、のれん、報告セグメント別指標、設備投資マトリクス、
+                Breakdown（報告セグメント/製品・サービス別/地域別売上、従業員数、のれん、報告セグメント別指標、設備投資マトリクス、
                 有利子負債、資産の種類別の構造化）。
                 自由テキストのセグメント記述は get-filing-content の segments。
                 格納済みデータのみ。未算出は 404、DB 非接続は 503。

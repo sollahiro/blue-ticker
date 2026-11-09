@@ -17,7 +17,8 @@ import Testing
         #expect(breakdownCacheVersionNumber("breakdown-business-v15") == 15)
         // fact-only axes do not share allTablesFromHtml / keywordTablesFromHtml.
         #expect(employeesBreakdownCacheVersion == "breakdown-employees-v2")
-        #expect(researchAndDevelopmentBreakdownCacheVersion == "breakdown-research-and-development-v2")
+        #expect(retiredBreakdownAxes.contains(breakdownAxisResearchAndDevelopment))
+        #expect(isSupportedBreakdownAxis(breakdownAxisResearchAndDevelopment) == false)
         #expect(goodwillBreakdownCacheVersion == "breakdown-goodwill-v3")
         #expect(goodwillBreakdownMinServableVersion == 3)
         #expect(isServableBreakdown(
@@ -98,27 +99,6 @@ import Testing
                 source: breakdownSourceXbrlFacts, needsReview: true,
                 warnings: [
                     "overlay_regression:row_loss:S100X7DX:orig=S100W0S7:tag=Holding:before=70:after=13"
-                ]) == false)
-    }
-
-    @Test func publicServingKeepsResearchAndDevelopmentProseTotal() {
-        #expect(isVersionGatedBreakdownSource(breakdownSourceResearchAndDevelopmentProse))
-        #expect(isLLMBreakdownSource(breakdownSourceResearchAndDevelopmentProse) == false)
-        #expect(researchAndDevelopmentBreakdownCacheVersion == "breakdown-research-and-development-v2")
-        #expect(
-            isPubliclyServableBreakdown(
-                source: breakdownSourceResearchAndDevelopmentProse, needsReview: false,
-                warnings: [breakdownWarningNotAllocatableToSegments]) == true)
-        #expect(
-            isPubliclyServableBreakdown(
-                source: breakdownSourceResearchAndDevelopmentProse, needsReview: true,
-                warnings: [breakdownWarningNotAllocatableToSegments]) == true)
-        #expect(
-            isPubliclyServableBreakdown(
-                source: breakdownSourceResearchAndDevelopmentProse, needsReview: false,
-                warnings: [
-                    breakdownWarningNotAllocatableToSegments,
-                    "overlay_regression:row_loss:S100X7DX:orig=S100W0S7:tag=Holding:before=70:after=13",
                 ]) == false)
     }
 

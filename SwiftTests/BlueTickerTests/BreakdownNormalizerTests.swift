@@ -1408,39 +1408,6 @@ import Foundation
         #expect(snap.rows.contains { $0.rowKind == "subtotal" && $0.labelRaw.contains("Containerships") })
     }
 
-    /// うち落としは employees 限定。RD に同じ memberParents を渡しても子は segment のまま
-    /// （RD / goodwill では実 XBRL 未検証のため広げない）。
-    @Test func researchAndDevelopmentIgnoresOfWhichNestedChildDemotion() throws {
-        let facts = [
-            Self.rdFact("AssociatedBusinessesReportableSegmentsMember", 483),
-            Self.rdFact("ContainershipsReportableSegmentsMember", 57),
-            Self.rdFact("CorporateSharedMember", 548),
-            Self.rdFact("DryBulkBusinessReportableSegmentsMember", 328),
-            Self.rdFact("EnergyBusinessReportableSegmentsMember", 1_230),
-            Self.rdFact(Self.otherBusinessMember, 989),
-            Self.rdFact("ProductTransportBusinessReportableSegmentsMember", 5_341),
-            Self.rdFact("RealEstateBusinessReportableSegmentsMember", 1_255),
-            Self.rdFact("WellbeingAndLifestyleBusinessReportableSegmentsMember", 2_648),
-        ]
-        let parents = [
-            "ContainershipsReportableSegmentsMember": "ProductTransportBusinessReportableSegmentsMember",
-            "RealEstateBusinessReportableSegmentsMember":
-                "WellbeingAndLifestyleBusinessReportableSegmentsMember",
-        ]
-        let snap = try #require(
-            BreakdownNormalizer.normalizeResearchAndDevelopment(
-                facts: facts, total: 11_567, axis: breakdownAxisResearchAndDevelopment,
-                memberParents: parents))
-        #expect(snap.needsReview == true)
-        #expect(snap.warnings.contains("research_and_development_segment_sum_far_from_total"))
-        let containerships = try #require(
-            snap.rows.first { $0.labelRaw == "ContainershipsReportableSegmentsMember" })
-        #expect(containerships.rowKind == "segment")
-        let realEstate = try #require(
-            snap.rows.first { $0.labelRaw == "RealEstateBusinessReportableSegmentsMember" })
-        #expect(realEstate.rowKind == "segment")
-    }
-
     /// 花王型の親落としは memberParents があっても先に走り、うち落としは分母が既に合うので触らない。
     @Test func employeesKeepsKaoParentDemotionWhenChildrenPartitionParent() throws {
         let snap = try #require(
@@ -1563,87 +1530,6 @@ import Foundation
         let car = try #require(snap.rows.first { $0.labelRaw == "CarSegmentMember" })
         #expect(car.rowKind == "segment")
         #expect(snap.rows.count == 1)
-    }
-
-    /// 消去を足すと分母を超え、引くと一致するときは負の reconciling にする（NTT S100YCP3）。
-    @Test func researchAndDevelopmentSubtractsEliminationWhenThatReconcilesToTotal() throws {
-        let snap = try #require(
-            BreakdownNormalizer.normalizeResearchAndDevelopment(
-                facts: [
-                    Self.rdFact("IntegratedICTBusinessReportableSegmentMember", 123_776_000_000),
-                    Self.rdFact("GlobalSolutionsBusinessReportableSegmentMember", 41_993_000_000),
-                    Self.rdFact("RegionalCommunicationsBusinessReportableSegmentMember", 82_110_000_000),
-                    Self.rdFact("OthersRealEstateEnergyAndOthersReportableSegmentMember", 149_987_000_000),
-                    Self.rdFact("ReportableSegmentsMember", 397_866_000_000),
-                    Self.rdFact("UnallocatedAmountsAndEliminationMember", 119_217_000_000),
-                ],
-                total: 278_649_000_000, axis: breakdownAxisResearchAndDevelopment))
-        #expect(snap.needsReview == false)
-        let elim = try #require(
-            snap.rows.first { $0.labelRaw == "UnallocatedAmountsAndEliminationMember" })
-        #expect(elim.rowKind == "reconciling")
-        #expect(elim.amount == -119_217_000_000)
-        let reconciled = snap.rows.filter { $0.rowKind == "segment" || $0.rowKind == "reconciling" }
-            .map(\.amount).reduce(0, +)
-        #expect(reconciled == 278_649_000_000)
-    }
-
-    /// 未配賦を足すと分母に一致するときは正のまま残す（味の素 S100VXJA）。
-    @Test func researchAndDevelopmentKeepsUnallocatedPositiveWhenAddingReconciles() throws {
-        let snap = try #require(
-            BreakdownNormalizer.normalizeResearchAndDevelopment(
-                facts: [
-                    Self.rdFact("SeasoningsAndFoodsReportableSegmentMember", 10_000_000_000),
-                    Self.rdFact("FrozenFoodsReportableSegmentMember", 5_000_000_000),
-                    Self.rdFact("HealthcareAndOthersReportableSegmentMember", 11_212_000_000),
-                    Self.rdFact("UnallocatedAmountsAndEliminationMember", 9_562_000_000),
-                ],
-                total: 35_774_000_000, axis: breakdownAxisResearchAndDevelopment))
-        #expect(snap.needsReview == false)
-        let unallocated = try #require(
-            snap.rows.first { $0.labelRaw == "UnallocatedAmountsAndEliminationMember" })
-        #expect(unallocated.amount == 9_562_000_000)
-        #expect(unallocated.rowKind == "reconciling")
-    }
-
-    /// 未タグ残差で分母から大きく欠ける場合は needs_review のまま（ホンダ四輪欠落）。
-    @Test func researchAndDevelopmentKeepsNeedsReviewWhenTaggedSegmentsAreFarBelowTotal() throws {
-        let snap = try #require(
-            BreakdownNormalizer.normalizeResearchAndDevelopment(
-                facts: [
-                    Self.rdFact("MotorcycleBusinessReportableSegmentMember", 112_300_000_000),
-                    Self.rdFact("PowerProductAndOtherBusinessesReportableSegmentMember", 33_200_000_000),
-                ],
-                total: 1_540_646_000_000, axis: breakdownAxisResearchAndDevelopment))
-        #expect(snap.needsReview == true)
-        #expect(snap.warnings.contains("research_and_development_segment_sum_far_from_total"))
-        #expect(snap.rows.contains { $0.labelRaw == "MotorcycleBusinessReportableSegmentMember" })
-    }
-
-    /// statement-notes の RD note 廃止後、セグメント dimension が無くても全社合計だけで
-    /// breakdown RD 軸が成立する（オークマ型）。呼び出し側が実タグ名（`totalTag`）を渡せば
-    /// denominatorTag に反映される（実データ: S100W043 で
-    /// `ResearchAndDevelopmentExpensesResearchAndDevelopmentActivities` を確認済み）。
-    @Test func researchAndDevelopmentTotalOnlyWithoutSegmentFactsUsesCallerProvidedTag() throws {
-        let snap = try #require(
-            BreakdownNormalizer.normalizeResearchAndDevelopment(
-                facts: [], total: 4_409_000_000,
-                totalTag: "ResearchAndDevelopmentExpensesResearchAndDevelopmentActivities",
-                axis: breakdownAxisResearchAndDevelopment))
-        #expect(snap.axis == breakdownAxisResearchAndDevelopment)
-        #expect(snap.denominator == 4_409_000_000)
-        #expect(snap.denominatorTag == "ResearchAndDevelopmentExpensesResearchAndDevelopmentActivities")
-        #expect(snap.rows.isEmpty)
-        #expect(snap.needsReview == false)
-    }
-
-    /// `totalTag` が解決できない場合（呼び出し側が渡せなかった等）は従来通り
-    /// `"company_financials"` にフォールバックする。
-    @Test func researchAndDevelopmentTotalOnlyWithoutSegmentFactsFallsBackWhenTagUnresolved() throws {
-        let snap = try #require(
-            BreakdownNormalizer.normalizeResearchAndDevelopment(
-                facts: [], total: 4_409_000_000, axis: breakdownAxisResearchAndDevelopment))
-        #expect(snap.denominatorTag == "company_financials")
     }
 
     /// 報告セグメントごとの指標を、smokeの実抽出factsから軸別に
