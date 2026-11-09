@@ -103,7 +103,8 @@ import Testing
             StatementLineItem(tag: tag, label: label, value: millions * 1_000_000, unit: "yen", order: nil)
         }
         let ppe = try #require(AssetCategoryBreakdown.build(items: [
-            item("LandIFRS", "土地", 100),
+            item("LandIFRS", "土地", 60),
+            item("BuildingsAndStructuresIFRS", "建物及び構築物", 40),
             item("PropertyPlantAndEquipmentIFRS", "有形固定資産", 100),
         ], spec: AssetCategoryBreakdown.propertyPlantEquipment))
         let intangible = try #require(AssetCategoryBreakdown.build(items: [
@@ -118,7 +119,8 @@ import Testing
         #expect(payload.propertyPlantEquipment?.denominator == 100_000_000)
         #expect(payload.intangibleAssets?.denominator == 40_000_000)
         #expect(payload.rows.map(\.assetClass) == [
-            breakdownAssetClassPropertyPlantEquipment, breakdownAssetClassIntangibleAssets,
+            breakdownAssetClassPropertyPlantEquipment, breakdownAssetClassPropertyPlantEquipment,
+            breakdownAssetClassIntangibleAssets,
         ])
     }
 

@@ -309,9 +309,10 @@ private func send(
 
     @Test func breakdownReturns404WhenNotStored() async throws {
         try await withApp(databases: true) { app in
+            // axis 省略時は segment。
             let (status, json) = try await send(app, "/v1/companies/7203/breakdown")
             #expect(status == .notFound)
-            #expect(json?["error"] as? String == "製品・サービス別内訳は未算出です")
+            #expect(json?["error"] as? String == "報告セグメント別内訳は未算出です")
             #expect(json?["reason"] == nil)
         }
     }
@@ -333,7 +334,7 @@ private func send(
             row.notApplicableReason = breakdownNotApplicableGeographyOnly
             try await row.create(on: app.db)
 
-            let (status, json) = try await send(app, "/v1/companies/7203/breakdown")
+            let (status, json) = try await send(app, "/v1/companies/7203/breakdown?axis=product_service")
             #expect(status == .notFound)
             #expect(json?["error"] as? String == "製品・サービス別内訳は未算出です")
             #expect(json?["reason"] as? String == "geography_only")
@@ -447,7 +448,7 @@ private func send(
                 cacheVersion: productServiceBreakdownCacheVersion, needsReview: false, warnings: [])
 
             let (hiddenReviewStatus, hiddenReview) = try await send(
-                app, "/v1/companies/7203/breakdown")
+                app, "/v1/companies/7203/breakdown?axis=product_service")
             #expect(hiddenReviewStatus == .notFound)
             #expect(hiddenReview?["error"] as? String == "製品・サービス別内訳は未算出です")
             #expect(hiddenReview?["reason"] == nil)
@@ -458,7 +459,7 @@ private func send(
             #expect(hiddenUnit?["error"] as? String == "地域別内訳は未算出です")
             #expect(hiddenUnit?["reason"] == nil)
 
-            let (okStatus, okJSON) = try await send(app, "/v1/companies/9984/breakdown")
+            let (okStatus, okJSON) = try await send(app, "/v1/companies/9984/breakdown?axis=product_service")
             #expect(okStatus == .ok)
             #expect(okJSON?["doc_id"] as? String == "S_OK")
             let breakdown = try #require(okJSON?["breakdown"] as? [String: Any])
