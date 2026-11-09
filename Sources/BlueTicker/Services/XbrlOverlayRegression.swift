@@ -234,8 +234,10 @@ func overlayRegressionAffectsBreakdown(
             || regression.tag.contains("Bond") || regression.tag.contains("Debt")
             || regression.tag.contains("Lease") || regression.tag.contains("CommercialPaper")
             || regression.tag.contains("InterestBearing")
-    case breakdownAxisPropertyPlantEquipment, breakdownAxisGoodwillAndIntangibles:
+    case breakdownAxisFixedAssets:
         return payload.rows.contains { $0.sourceTag == regression.tag }
+            || payload.propertyPlantEquipment?.denominatorTag == regression.tag
+            || payload.intangibleAssets?.denominatorTag == regression.tag
     default:
         return false
     }

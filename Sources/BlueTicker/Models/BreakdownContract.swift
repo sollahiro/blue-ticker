@@ -72,17 +72,22 @@ public let breakdownAxisCapex = "capex"
 /// 有利子負債（社債・借入金＋リース負債を1表にした内訳）。報告セグメント指標ではないため
 /// `breakdownSegmentMetricAxes` には入れない。`needs_review` の行は公開しない（fail closed）。
 public let breakdownAxisInterestBearingDebt = "interest_bearing_debt"
-/// 有形固定資産の種類別（土地・建物等の正味帳簿価額）。IFRS 連結の注記だけ。報告セグメント指標ではない。
-/// 旧 notes `property_plant_equipment_schedule` の置き換え。
+/// 旧公開軸。有形固定資産の種類別（IFRS 連結の注記だけ）。2026-11 に `fixed_assets` へ統合して廃止。
 public let breakdownAxisPropertyPlantEquipment = "property_plant_equipment"
-/// のれん及び無形資産の種類別（正味帳簿価額）。IFRS 連結の注記だけ。報告セグメント別の `goodwill` とは別物。
-/// 旧 notes `goodwill_and_intangibles` の置き換え。
+/// 旧公開軸。のれん及び無形資産の種類別（IFRS 連結の注記だけ）。2026-11 に `fixed_assets` へ統合して廃止。
 public let breakdownAxisGoodwillAndIntangibles = "goodwill_and_intangibles"
-/// 資産の種類別の2軸（有形固定資産、のれん及び無形資産）。
-public let breakdownAssetCategoryAxes = [
-    breakdownAxisPropertyPlantEquipment,
-    breakdownAxisGoodwillAndIntangibles,
-]
+/// 固定資産の種類別（土地・建物・ソフトウェア・のれん等の正味帳簿価額）。報告セグメント指標ではない。
+/// IFRS は連結の注記（有形固定資産、のれん及び無形資産）、日本基準は連結 BS の区分科目（計算リンクの内訳）。
+/// 行は `asset_class`（有形 / 無形）で分ける。報告セグメント別の `goodwill` とは別物。
+public let breakdownAxisFixedAssets = "fixed_assets"
+/// 資産の種類別の軸。
+public let breakdownAssetCategoryAxes = [breakdownAxisFixedAssets]
+/// fixed_assets 行の資産区分のキー。payload には区分ごとの合計を同じ名前のキーで載せる。
+public let breakdownAssetClassKey = "asset_class"
+/// fixed_assets の資産区分: 有形固定資産。
+public let breakdownAssetClassPropertyPlantEquipment = "property_plant_equipment"
+/// fixed_assets の資産区分: 無形固定資産（のれんを含む）。
+public let breakdownAssetClassIntangibleAssets = "intangible_assets"
 
 /// interest_bearing_debt 行の名前付きセルキー。期首残高（円）。
 public let ibdCellOpening = "opening"
@@ -171,6 +176,8 @@ public let retiredBreakdownAxes = [
     breakdownAxisGoodwillAmortization,
     breakdownAxisResearchAndDevelopment,
     breakdownAxisEquityMethodInvestments,
+    breakdownAxisPropertyPlantEquipment,
+    breakdownAxisGoodwillAndIntangibles,
 ]
 
 /// product_service / geography を除く、報告セグメント別の決定論指標軸。
@@ -240,6 +247,8 @@ public let interestBearingDebtBreakdownCacheVersion = "breakdown-interest-bearin
 /// 資産の種類別。新軸のため v1 から。
 public let propertyPlantEquipmentBreakdownCacheVersion = "breakdown-property-plant-equipment-v1"
 public let goodwillAndIntangiblesBreakdownCacheVersion = "breakdown-goodwill-and-intangibles-v1"
+/// 固定資産の種類別（旧2軸の統合と日本基準 BS への拡張）。新軸のため v1 から。
+public let fixedAssetsBreakdownCacheVersion = "breakdown-fixed-assets-v1"
 
 /// 軸に対応する現行 cache_version 文字列。未知の軸は product_service 扱い（安全側に決定的バンプ対象へ）。
 public func breakdownCacheVersion(forAxis axis: String) -> String {
@@ -255,6 +264,7 @@ public func breakdownCacheVersion(forAxis axis: String) -> String {
     case breakdownAxisInterestBearingDebt: return interestBearingDebtBreakdownCacheVersion
     case breakdownAxisPropertyPlantEquipment: return propertyPlantEquipmentBreakdownCacheVersion
     case breakdownAxisGoodwillAndIntangibles: return goodwillAndIntangiblesBreakdownCacheVersion
+    case breakdownAxisFixedAssets: return fixedAssetsBreakdownCacheVersion
     default: return productServiceBreakdownCacheVersion
     }
 }
@@ -425,6 +435,7 @@ public let capexBreakdownMinServableVersion = 1
 public let interestBearingDebtBreakdownMinServableVersion = 1
 public let propertyPlantEquipmentBreakdownMinServableVersion = 1
 public let goodwillAndIntangiblesBreakdownMinServableVersion = 1
+public let fixedAssetsBreakdownMinServableVersion = 1
 
 /// 軸に対応する read 床。未知の軸は product_service 床。
 public func breakdownMinServableVersion(forAxis axis: String) -> Int {
@@ -440,6 +451,7 @@ public func breakdownMinServableVersion(forAxis axis: String) -> Int {
     case breakdownAxisInterestBearingDebt: return interestBearingDebtBreakdownMinServableVersion
     case breakdownAxisPropertyPlantEquipment: return propertyPlantEquipmentBreakdownMinServableVersion
     case breakdownAxisGoodwillAndIntangibles: return goodwillAndIntangiblesBreakdownMinServableVersion
+    case breakdownAxisFixedAssets: return fixedAssetsBreakdownMinServableVersion
     default: return productServiceBreakdownMinServableVersion
     }
 }
@@ -460,6 +472,7 @@ public func breakdownCacheVersionNumber(_ version: String) -> Int? {
         "breakdown-capex-v",
         "breakdown-interest-bearing-debt-v",
         "breakdown-property-plant-equipment-v", "breakdown-goodwill-and-intangibles-v",
+        "breakdown-fixed-assets-v",
         "breakdown-v",
     ]
     for prefix in prefixes where version.hasPrefix(prefix) {
@@ -641,6 +654,8 @@ public struct BreakdownRowPayload: Codable, Sendable, Equatable {
     public var equityMethodInvestments: Double?
     /// 90%省略の1行など、正確なセグメント合計ではないときの印。他は nil。
     public var disclosureBasis: String?
+    /// fixed_assets 軸の行の資産区分（`breakdownAssetClass*`）。他軸は nil。
+    public var assetClass: String?
 
     private enum CodingKeys: String, CodingKey {
         case labelRaw, label, amount, profit, rowKind, description
@@ -657,6 +672,7 @@ public struct BreakdownRowPayload: Codable, Sendable, Equatable {
         case segmentBasis = "segment_basis"
         case disclosureBasis = "disclosure_basis"
         case equityMethodInvestments = "equity_method_investments"
+        case assetClass = "asset_class"
     }
 
     public init(
@@ -668,7 +684,8 @@ public struct BreakdownRowPayload: Codable, Sendable, Equatable {
         amortization: Double? = nil, impairment: Double? = nil,
         debtSource: String? = nil, maturityClass: String? = nil,
         inTotal: Bool? = nil, excludedReason: String? = nil, pairedRowIndex: Int? = nil,
-        sourceTag: String? = nil, segmentBasis: String? = nil, disclosureBasis: String? = nil
+        sourceTag: String? = nil, segmentBasis: String? = nil, disclosureBasis: String? = nil,
+        assetClass: String? = nil
     ) {
         self.labelRaw = labelRaw
         self.label = label
@@ -693,6 +710,7 @@ public struct BreakdownRowPayload: Codable, Sendable, Equatable {
         self.sourceTag = sourceTag
         self.segmentBasis = segmentBasis
         self.disclosureBasis = disclosureBasis
+        self.assetClass = assetClass
         if let categoryGroup {
             self.label = Self.displayLabel(categoryGroup: categoryGroup, category: category)
         }
@@ -731,6 +749,7 @@ public struct BreakdownRowPayload: Codable, Sendable, Equatable {
         disclosureBasis = try container.decodeIfPresent(String.self, forKey: .disclosureBasis)
         equityMethodInvestments = try container.decodeIfPresent(
             Double.self, forKey: .equityMethodInvestments)
+        assetClass = try container.decodeIfPresent(String.self, forKey: .assetClass)
         if let categoryGroup {
             label = try container.decodeIfPresent(String.self, forKey: .label)
                 ?? Self.displayLabel(categoryGroup: categoryGroup, category: category)
@@ -768,6 +787,7 @@ public struct BreakdownRowPayload: Codable, Sendable, Equatable {
         try container.encodeIfPresent(segmentBasis, forKey: .segmentBasis)
         try container.encodeIfPresent(disclosureBasis, forKey: .disclosureBasis)
         try container.encodeIfPresent(equityMethodInvestments, forKey: .equityMethodInvestments)
+        try container.encodeIfPresent(assetClass, forKey: .assetClass)
     }
 
     public static func displayLabel(categoryGroup: String, category: String?) -> String {
@@ -804,6 +824,9 @@ public struct BreakdownSnapshotPayload: Codable, Sendable, Equatable {
     /// segment 軸のセル分母。持分法で会計処理される投資。無いときは nil。
     /// segment 軸のセル分母 segment_assets / flow は capex と同じ `segmentAssets` / `flow` を使う。
     public var equityMethodInvestments: CapexMetricTotalsPayload?
+    /// fixed_assets 軸の資産区分ごとの合計。区分の開示が無いときは nil。
+    public var propertyPlantEquipment: CapexMetricTotalsPayload?
+    public var intangibleAssets: CapexMetricTotalsPayload?
 
     public init(
         axis: String, denominator: Double, denominatorTag: String, rows: [BreakdownRowPayload],
@@ -814,7 +837,9 @@ public struct BreakdownSnapshotPayload: Codable, Sendable, Equatable {
         capitalExpendituresOverview: CapexMetricTotalsPayload? = nil,
         opening: CapexMetricTotalsPayload? = nil, closing: CapexMetricTotalsPayload? = nil,
         amortization: CapexMetricTotalsPayload? = nil, impairment: CapexMetricTotalsPayload? = nil,
-        equityMethodInvestments: CapexMetricTotalsPayload? = nil
+        equityMethodInvestments: CapexMetricTotalsPayload? = nil,
+        propertyPlantEquipment: CapexMetricTotalsPayload? = nil,
+        intangibleAssets: CapexMetricTotalsPayload? = nil
     ) {
         self.axis = axis
         self.denominator = denominator
@@ -835,6 +860,8 @@ public struct BreakdownSnapshotPayload: Codable, Sendable, Equatable {
         self.amortization = amortization
         self.impairment = impairment
         self.equityMethodInvestments = equityMethodInvestments
+        self.propertyPlantEquipment = propertyPlantEquipment
+        self.intangibleAssets = intangibleAssets
     }
 }
 
@@ -990,6 +1017,9 @@ public extension BreakdownRowPayload {
         if let disclosureBasis {
             object[breakdownDisclosureBasisKey] = disclosureBasis
         }
+        if let assetClass {
+            object[breakdownAssetClassKey] = assetClass
+        }
         return object
     }
 
@@ -1090,6 +1120,11 @@ public extension BreakdownSnapshotPayload {
         }
         if axis == breakdownAxisSegment {
             addSegmentMetricCells(to: &object)
+        }
+        if axis == breakdownAxisFixedAssets {
+            // 区分ごとの合計。分母（denominator）は開示された区分合計の和。区分の開示が無ければ null。
+            object[breakdownAssetClassPropertyPlantEquipment] = propertyPlantEquipment?.jsonObject() ?? NSNull()
+            object[breakdownAssetClassIntangibleAssets] = intangibleAssets?.jsonObject() ?? NSNull()
         }
         return object
     }

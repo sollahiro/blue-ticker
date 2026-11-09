@@ -14,7 +14,8 @@ import Testing
             item("BuildingsAndStructuresIFRS", "建物及び構築物", 250),
             item("PropertyPlantAndEquipmentIFRS", "有形固定資産", 350),
         ], spec: AssetCategoryBreakdown.propertyPlantEquipment))
-        #expect(payload.axis == breakdownAxisPropertyPlantEquipment)
+        #expect(payload.axis == breakdownAxisFixedAssets)
+        #expect(payload.rows.allSatisfy { $0.assetClass == breakdownAssetClassPropertyPlantEquipment })
         #expect(payload.denominator == 350_000_000)
         #expect(payload.denominatorTag == "PropertyPlantAndEquipmentIFRS")
         #expect(payload.rows.map(\.label) == ["土地", "建物及び構築物"])

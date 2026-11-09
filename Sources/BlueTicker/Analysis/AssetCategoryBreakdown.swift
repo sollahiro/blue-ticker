@@ -1,9 +1,8 @@
-// 資産の種類別の内訳軸（property_plant_equipment / goodwill_and_intangibles）。
-// 旧 notes の `property_plant_equipment_schedule` / `goodwill_and_intangibles` を Breakdown に移したもの。
+// fixed_assets 軸の IFRS 側（有形固定資産、のれん及び無形資産の注記）。資産区分ごとに1つ組み立て、
+// `FixedAssetsBreakdown` が2区分をまとめる。日本基準は BS の区分科目から組み立てる（同ファイル外）。
 // 切り口は報告セグメントではなく資産の種類。のれんのセグメント別軸 `goodwill` とは別物。
 //
 // 対象は IFRS 連結の注記 role（正味帳簿価額の `{資産区分}IFRS` タグ）だけ。取得原価・累計償却は載せない。
-// 日本基準は BS の区分科目がそのまま statement にあるので軸にしない（not_found）。
 // 行の小計（ソニーの「コンテンツ資産」等）は、表示順で直前の連続した行の和に一致する行として決める。
 // 金額の丸め（百万円）で 1 単位ずれる開示があるので、和の比較は行数 × 表示単位まで許す（JT の 1 百万円差）。
 // 丸め差で認めた小計は、合計科目の行がそれを含めて合うときだけ公開する。そうでなく集約科目でもない行が
@@ -13,7 +12,8 @@ import Foundation
 
 enum AssetCategoryBreakdown {
     struct Spec: Sendable {
-        let axis: String
+        /// 行の資産区分（`breakdownAssetClass*`）。
+        let assetClass: String
         /// 注記 role のセクション名（`XBRLUtils.sectionNameFromRole` の値）。
         let roleName: String
         /// 区分行の外にある集約科目。小計にも合計にも当たらず行のまま残ったら要確認にする。
@@ -26,14 +26,14 @@ enum AssetCategoryBreakdown {
     }
 
     static let propertyPlantEquipment = Spec(
-        axis: breakdownAxisPropertyPlantEquipment,
+        assetClass: breakdownAssetClassPropertyPlantEquipment,
         roleName: "NotesPropertyPlantAndEquipmentConsolidatedFinancialStatementsIFRS",
         aggregateTags: ["PropertyPlantAndEquipmentIFRS"],
         standaloneAggregateTags: [],
         totalTagMarkers: ["PropertyPlantAndEquipment", "PropertyAndEquipment", "Total"])
 
     static let goodwillAndIntangibles = Spec(
-        axis: breakdownAxisGoodwillAndIntangibles,
+        assetClass: breakdownAssetClassIntangibleAssets,
         roleName: "NotesGoodwillAndIntangibleAssetsConsolidatedFinancialStatementsIFRS",
         aggregateTags: [
             "GoodwillAndIntangibleAssetsIFRS", "IntangibleAssetsAndGoodwillIFRS",
@@ -196,7 +196,7 @@ enum AssetCategoryBreakdown {
                     rowKind: isSubtotal ? "subtotal" : "segment",
                     categoryGroup: isSubtotal ? label : parent,
                     category: isSubtotal ? nil : (parent == nil ? nil : label),
-                    sourceTag: node.item.tag))
+                    sourceTag: node.item.tag, assetClass: spec.assetClass))
             for child in node.children { emit(child, parent: label) }
         }
         for index in topLevel { emit(index, parent: nil) }
@@ -212,7 +212,7 @@ enum AssetCategoryBreakdown {
             denominatorTag = topLevel.map { nodes[$0].item.tag }.joined(separator: "+")
         }
         return BreakdownSnapshotPayload(
-            axis: spec.axis, denominator: denominator, denominatorTag: denominatorTag, rows: rows,
+            axis: breakdownAxisFixedAssets, denominator: denominator, denominatorTag: denominatorTag, rows: rows,
             sourceKind: breakdownSourceXbrlFacts, needsReview: needsReview, warnings: warnings)
     }
 

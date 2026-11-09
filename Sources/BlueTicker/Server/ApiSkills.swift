@@ -9,7 +9,11 @@ import Foundation
 /// v9（2026-10-26）: 金額を基本単位（円・ドル）へ統一し、financials / waterfall に `units` / `currency` を載せた。
 /// v10（2026-11-08）: 内蔵 MCP の廃止に合わせ、各 skill の `mcp_tool` と `get-feed-trend` を外した。
 /// v11（2026-11-09）: breakdown の axis `research_and_development` を廃止した（breaking。常に 404）。
-public let apiSkillsSchemaVersion = 13
+/// v12（2026-11-09）: breakdown の axis `equity_method_investments` を廃止し、segment 行のセルへ統合した。
+/// v13（2026-11-09）: breakdown の axis 省略時の既定を segment にした。
+/// v14（2026-11-09）: breakdown の axis `property_plant_equipment` / `goodwill_and_intangibles` を廃止し、
+/// 日本基準へ広げた `fixed_assets` に統合した。
+public let apiSkillsSchemaVersion = 14
 
 /// パラメータの置き場所（REST パス変数 / クエリ）。
 public enum ApiSkillParameterLocation: String, Sendable {
@@ -357,11 +361,10 @@ public func apiSkillsCatalog() -> [ApiSkill] {
             description: """
                 有価証券報告書から報告セグメント別（segment）、製品・サービス別/地域別売上高、従業員数、のれん、
                 設備投資マトリクス（capex）、有利子負債（interest_bearing_debt）、
-                有形固定資産・のれん及び無形資産の種類別（property_plant_equipment / goodwill_and_intangibles）を取得します（格納済みデータのみ）。
+                固定資産の種類別（fixed_assets。有形固定資産と無形固定資産・のれん）を取得します（格納済みデータのみ）。
                 対象は取り込み済みの上場企業です。doc_id を省略すると最新の有価証券報告書を使用します。
                 axis は segment（既定）/ product_service / geography / employees / goodwill /
-                capex / interest_bearing_debt /
-                property_plant_equipment / goodwill_and_intangibles に対応。
+                capex / interest_bearing_debt / fixed_assets に対応。
                 segment はセグメント情報の報告セグメント表。行に segment_basis（business / geographic）が付きます。
                 segment の行は同じ表の列をセルに持ちます: segment_assets（セグメント資産）、flow（資本的支出、
                 無ければ非流動資産の増加額。どちらかは flow_metric）、equity_method_investments（持分法投資）。
@@ -408,12 +411,19 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                 404 reason unknown（メッセージは「公開していません」。未算出の reason 無し 404 とは別）です。
                 金額（amount / denominator / 各セル）は基本単位で、応答の unit（currency_amount、employees 軸は persons）と
                 currency（ISO 4217。employees 軸は null）が単位です。
-                property_plant_equipment / goodwill_and_intangibles は報告セグメントではなく資産の種類別で、
-                IFRS 連結の注記の正味帳簿価額（amount、円）です。行の source_tag は値を読んだ XBRL 要素のローカル名です。
-                直前の連続した行の和になる行は row_kind=subtotal で、その内訳行は category_group に小計の名前を持ちます。
-                合計に入るのは category_group の無い行と subtotal 行です（内訳行は小計と二重になるので足さないでください）。
-                全体の合計は denominator です（合計科目が無いときは最上位の行の和で、denominator_tag は要素名を + でつなぎます）。
-                goodwill（報告セグメント別ののれん）とは別の軸です。日本基準・米国基準は not_found（区分は get-statement の BS）。
+                fixed_assets は報告セグメントではなく固定資産の種類別の正味帳簿価額（amount、円）です。
+                IFRS は連結の注記（有形固定資産、のれん及び無形資産）、日本基準は連結 BS の区分科目（建物及び構築物（純額）・土地・
+                ソフトウェア・のれん等）です。米国基準は not_found です。
+                行の asset_class は property_plant_equipment（有形固定資産）/ intangible_assets（無形固定資産。のれんを含む）です。
+                payload の property_plant_equipment / intangible_assets は区分ごとの合計（denominator / denominator_tag。
+                その区分の開示が無ければ null）、denominator は開示された区分合計の和です。
+                行の source_tag は値を読んだ XBRL 要素のローカル名です。
+                小計になる行は row_kind=subtotal で、その内訳行は category_group に小計の名前を持ちます。
+                区分の合計に入るのは category_group の無い行と subtotal 行です（内訳行は小計と二重になるので足さないでください）。
+                日本基準で無形固定資産を1行だけ載せる会社は、その区分合計の1行だけです。
+                IFRS の区分に合計科目が無いときは区分合計が最上位の行の和で、denominator_tag は要素名を + でつなぎます。
+                goodwill（報告セグメント別ののれん）とは別の軸です。
+                旧 axis=property_plant_equipment / goodwill_and_intangibles は廃止（404）。
                 capex は Overview 本文から会社全体の総額、またはタグ付き行の不足分を補うことがあります。
                 その行の warnings に not_allocatable_to_segments があっても 404 にはしません。
                 全社合計のタグがありセグメント行が足りないときは、差額と一致する本文1文を reconciling 行として足すことがあります。
@@ -454,7 +464,7 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                     name: "axis",
                     location: .query,
                     type: .string,
-                    description: "内訳の軸（segment / product_service / geography / employees / goodwill / capex / interest_bearing_debt / property_plant_equipment / goodwill_and_intangibles。省略時 segment）",
+                    description: "内訳の軸（segment / product_service / geography / employees / goodwill / capex / interest_bearing_debt / fixed_assets。省略時 segment）",
                     required: false,
                     defaultValue: .string(breakdownAxisSegment)
                 ),
@@ -469,7 +479,7 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                 例: GET /v1/companies/6758/breakdown?axis=geography
                 例: GET /v1/companies/6758/breakdown?axis=employees
                 例: GET /v1/companies/6758/breakdown?axis=capex
-                例: GET /v1/companies/6758/breakdown?axis=goodwill_and_intangibles
+                例: GET /v1/companies/6758/breakdown?axis=fixed_assets
                 """
         ),
         ApiSkill(

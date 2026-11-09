@@ -155,7 +155,7 @@ import Foundation
 }
 
 /// smoke 床では拾えないエッジケースの golden（Step 2）。`normalizeGoodwill` 決定論検証。
-/// IFRS ののれん及び無形資産の種類別は軸 `goodwill_and_intangibles`（`RealXbrlAssetCategoryBreakdownTests`）。
+/// 会社全体ののれん及び無形資産の種類別は軸 `fixed_assets`（`RealXbrlAssetCategoryBreakdownTests`）。
 
 @Suite struct RealXbrlGoodwillBreakdownTests {
     private static let xbrlRoot: URL = {

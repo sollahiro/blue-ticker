@@ -315,21 +315,12 @@ public func runFactsIngestCommand(
                         docID: docID, correctionDocIDs: correctionIDsByOriginal[docID] ?? [])
                 },
                 BreakdownStage(
-                    axis: breakdownAxisPropertyPlantEquipment,
-                    target: "breakdowns-\(breakdownAxisPropertyPlantEquipment)",
+                    axis: breakdownAxisFixedAssets,
+                    target: "breakdowns-\(breakdownAxisFixedAssets)",
                     listedCodes: deterministicMetricsListed, limit: unpublishedLimit,
                     candidateSets: unpublishedSets
                 ) { docID in
-                    await context.resolvePropertyPlantEquipmentBreakdown(
-                        docID: docID, correctionDocIDs: correctionIDsByOriginal[docID] ?? [])
-                },
-                BreakdownStage(
-                    axis: breakdownAxisGoodwillAndIntangibles,
-                    target: "breakdowns-\(breakdownAxisGoodwillAndIntangibles)",
-                    listedCodes: deterministicMetricsListed, limit: unpublishedLimit,
-                    candidateSets: unpublishedSets
-                ) { docID in
-                    await context.resolveGoodwillAndIntangiblesBreakdown(
+                    await context.resolveFixedAssetsBreakdown(
                         docID: docID, correctionDocIDs: correctionIDsByOriginal[docID] ?? [])
                 },
             ]
@@ -405,7 +396,7 @@ public func runFactsIngestCommand(
             // EPS/発行済株式・資本金は注記からXBRL直接抽出（決定論）。
             // `borrowings_schedule` / `lease_liabilities` は公開面から廃止（パーサは IBD 軸が使う）。
             // `property_plant_equipment_schedule` / `goodwill_and_intangibles` は Breakdown の
-            // `property_plant_equipment` / `goodwill_and_intangibles` 軸へ移した。
+            // `fixed_assets` 軸へ移した。
             // `sga_expense_breakdown` は未公開のためここにも job-03 にも載せない。
             let statementNotesListed = codes ?? listed
             if statementNotesListed.isEmpty {

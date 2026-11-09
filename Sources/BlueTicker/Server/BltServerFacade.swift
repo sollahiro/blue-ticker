@@ -1377,13 +1377,13 @@ private extension BltServerContext {
 }
 
 extension BltServerContext {
-    func resolveAssetCategoryBreakdown(
-        docID: String, spec: AssetCategoryBreakdown.Spec, correctionDocIDs: [String]
+    func resolveFixedAssetsBreakdownImpl(
+        docID: String, correctionDocIDs: [String]
     ) async -> BreakdownResolveResult {
         guard let xbrlDir = await downloadAnnualFilingXbrl(
             docID: docID, correctionDocIDs: correctionDocIDs)
         else { return .failed }
-        guard let payload = AssetCategoryBreakdown.resolve(xbrlDir: xbrlDir, spec: spec) else {
+        guard let payload = FixedAssetsBreakdown.resolve(xbrlDir: xbrlDir) else {
             return .notApplicable(reason: breakdownNotApplicableNotFound)
         }
         return breakdownByRecordingOverlayRegressions(
@@ -1426,18 +1426,9 @@ public extension BltServerContext {
             docID: docID, correctionDocIDs: correctionDocIDs)
     }
 
-    /// 有形固定資産の種類別（IFRS 連結の注記だけ。`AssetCategoryBreakdown`）。
-    func resolvePropertyPlantEquipmentBreakdown(docID: String, correctionDocIDs: [String] = []) async -> BreakdownResolveResult {
-        await resolveAssetCategoryBreakdown(
-            docID: docID, spec: AssetCategoryBreakdown.propertyPlantEquipment,
-            correctionDocIDs: correctionDocIDs)
-    }
-
-    /// のれん及び無形資産の種類別（IFRS 連結の注記だけ。`AssetCategoryBreakdown`）。
-    func resolveGoodwillAndIntangiblesBreakdown(docID: String, correctionDocIDs: [String] = []) async -> BreakdownResolveResult {
-        await resolveAssetCategoryBreakdown(
-            docID: docID, spec: AssetCategoryBreakdown.goodwillAndIntangibles,
-            correctionDocIDs: correctionDocIDs)
+    /// 固定資産の種類別（IFRS は連結の注記、日本基準は連結 BS。`FixedAssetsBreakdown`）。
+    func resolveFixedAssetsBreakdown(docID: String, correctionDocIDs: [String] = []) async -> BreakdownResolveResult {
+        await resolveFixedAssetsBreakdownImpl(docID: docID, correctionDocIDs: correctionDocIDs)
     }
 }
 
