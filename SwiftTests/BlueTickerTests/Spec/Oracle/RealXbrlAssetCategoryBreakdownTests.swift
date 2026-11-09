@@ -63,10 +63,10 @@ import Testing
     ) throws {
         let payload = resolve(docID, spec)
         guard let expected = try oracleItems(file: file, docID: docID) else {
-            #expect(payload == nil, "\(docID) \(spec.axis): 旧 notes は not_found")
+            #expect(payload == nil, "\(docID) \(spec.assetClass): 旧 notes は not_found")
             return
         }
-        let resolved = try #require(payload, "\(docID) \(spec.axis): 旧 notes は resolved")
+        let resolved = try #require(payload, "\(docID) \(spec.assetClass): 旧 notes は resolved")
         #expect(resolved.needsReview == false)
         #expect(Self.axisValues(resolved) == expected)
         // 合計に入る行（最上位）の和が分母
