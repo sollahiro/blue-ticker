@@ -56,7 +56,7 @@ curl -s "https://api.yuholab.com/v1/companies/7203/financials?years=1" \
 - [`docs/architecture.md`](docs/architecture.md) — 構成・提供面・エンドポイント
 - [`AGENTS.md`](AGENTS.md) — エージェント向け常時ガードレール
 - [`.agents/skills/deploy/SKILL.md`](.agents/skills/deploy/SKILL.md) — Fly / Tunnel / Access
-- [`.agents/skills/production-ingest/SKILL.md`](.agents/skills/production-ingest/SKILL.md) — Neon write
+- [`.agents/skills/production-ingest/SKILL.md`](.agents/skills/production-ingest/SKILL.md) — 本番取り込み運用
 
 ## 免責事項
 

@@ -22,7 +22,7 @@ Neon write・訂正有報は `.agents/skills/production-ingest/SKILL.md`。リ�
 | `CF_ACCESS_TEAM_DOMAIN` | 設定時 Access モード（エッジ信頼）。非 loopback ではこれか `BLT_ALLOW_UNAUTHENTICATED=1` が必須 |
 | `BLT_ALLOW_UNAUTHENTICATED` | `1` のときだけ非 loopback の無認証起動を許可（手元 `0.0.0.0` / 段階 B HAPIS 背後）。詳細は `docs/api-auth.md` |
 | `CLOUDFLARE_TUNNEL_TOKEN` | 設定時のみ cloudflared 起動 |
-| `DATABASE_URL` | プロセス束縛（未設定＝ステートレス）。手元の既定は `BLT_NEON_READ_DATABASE_URL`、Fly では読み取りロール `blt_reader` の接続文字列（`BLT_NEON_READ_DATABASE_URL`）。サーバーは起動時に migrate しないので書き込み権限は不要。マイグレーションは Mac から `blt-ingest migrate`（`docs/ingest-policy.md`「出荷順」） |
+| `DATABASE_URL` | プロセス束縛（未設定＝ステートレス）。手元の既定は `BLT_NEON_READ_DATABASE_URL`、Fly では読み取りロール `blt_reader` の接続文字列（`BLT_NEON_READ_DATABASE_URL`）。サーバーは起動時に migrate しないので書き込み権限は不要。マイグレーションは Mac から `blt-ingest migrate`（`.agents/skills/production-ingest/SKILL.md`「出荷順」） |
 
 `/healthz` は認証不要。`cache_versions` でイメージの版を確認。
 
@@ -37,7 +37,7 @@ fly secrets set BLT_EDINET_API_KEY=xxxxx DATABASE_URL='postgres://blt_reader:...
 fly volumes create blt_data --region nrt --size 1
 fly deploy
 # migrate / sync / ingest は Fly では動かない（読み取りロールのため）。Mac から書き込み URL で実行する
-# （docs/ingest-policy.md「出荷順」）
+# （.agents/skills/production-ingest/SKILL.md「出荷順」）
 ```
 
 ### GitHub Actions
@@ -99,19 +99,7 @@ SSO は `Cookie: CF_Authorization=<jwt>`（`Cf-Access-Jwt-Assertion` だけで�
 
 ## 定期同期（ローカル）
 
-重い ingest はローカル。スケジュール（launchd 等）はマシン固有のためリポジトリに置かない。**ジョブ編成・実行順**は `docs/ingest-policy.md`。本番 write は `.agents/skills/production-ingest/SKILL.md`。**limit / skip / write** は `scripts/jp/edinet/ingest.local.env`（gitignore。PR 不要）。
-
-```bash
-swift build -c release --product blt-server
-cp scripts/jp/edinet/ingest.local.env.example scripts/jp/edinet/ingest.local.env
-cp scripts/jp/edinet/ingest-run-cycle.local.example.sh \
-   scripts/jp/edinet/ingest-run-cycle.local.sh
-chmod +x scripts/jp/edinet/ingest-run-cycle.local.sh
-# ingest.local.env で件数・skip を編集 → launchd / 手動
-./scripts/jp/edinet/ingest-run-cycle.local.sh
-```
-
-`.env` は秘密・接続先、`ingest.local.env` は運用チューニング。employees/rd/goodwill および報告セグメント別指標軸は ingest 側で 30/回（母集団は上場全体。日経225は処理順の優先のみ）。
+重い ingest はローカル。スケジュール（launchd 等）はマシン固有のためリポジトリに置かない。ジョブ編成・実行順・write ガード・limit / skip は `.agents/skills/production-ingest/SKILL.md`。決定論指標軸は ingest 側で 30/回（母集団は上場全体。日経225は処理順の優先のみ）。
 
 `assets/nikkei225.csv`（gitignore）: financials / filing-sections / statements / statement-notes / breakdowns 全軸の処理順の優先。未配置なら優先なし（対象母集団は上場全体のまま。0件にはならない）。
 

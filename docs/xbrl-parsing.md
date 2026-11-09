@@ -190,9 +190,9 @@ assets/taxonomy/labels/
 
 | 実行場所 | バイナリ | ラベルファイル |
 |---|---|---|
-| 本番 ingest（手元 Mac、launchd → `scripts/jp/edinet/*.local.sh`） | repo で `swift build -c release --product blt-ingest` | git の `assets/taxonomy/labels/`。`ingest-common.sh` が `BLUE_TICKER_ASSETS_PATH=$REPO/assets` を既定セット |
+| 本番 ingest（手元 Mac。運用正本は `.agents/skills/production-ingest/SKILL.md`） | repo で `swift build -c release --product blt-ingest`（ingest 依存パスが変わったときだけ） | git の `assets/taxonomy/labels/`。`BLUE_TICKER_ASSETS_PATH` 未設定なら `$REPO/assets` |
 | CI `swift test` | テストプロセス | checkout された `assets/taxonomy/labels/`（CWD = パッケージ根） |
 
-`resolveAssetFileURL("taxonomy")` が `BLUE_TICKER_ASSETS_PATH` → CWD `assets/` → 実行ファイル隣接 `assets/` の順で探す。launchd ラッパーは repo 根でビルド・実行する（雛形 `ingest-run-cycle.local.example.sh`）。`assets/taxonomy/labels` が見つからないか読めないときは ingest プロセスあたり 1 回、そのパスと `BLUE_TICKER_ASSETS_PATH` を stderr に警告する（黙ってコード側 sentinel だけに落とさない）。
+`resolveAssetFileURL("taxonomy")` が `BLUE_TICKER_ASSETS_PATH` → CWD `assets/` → 実行ファイル隣接 `assets/` の順で探す。定例ラッパーは repo 根でビルド・実行する（`.agents/skills/production-ingest/SKILL.md`）。`assets/taxonomy/labels` が見つからないか読めないときは ingest プロセスあたり 1 回、そのパスと `BLUE_TICKER_ASSETS_PATH` を stderr に警告する（黙ってコード側 sentinel だけに落とさない）。
 
 ---

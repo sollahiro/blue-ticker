@@ -33,7 +33,7 @@ Meta → Struct → Norm → Viz
 
 ## Region × Source
 
-市場は `JP`、開示 Source は `EDINET`。実装の正は `Sources/BlueTicker/`、探索スクリプトは `scripts/jp/edinet/`、cache は `tmp_cache/edinet/`。規律の短文正本: `.agents/rules/regions.md`。
+市場は `JP`、開示 Source は `EDINET`。実装の正は `Sources/BlueTicker/`、取り込み運用は `.agents/skills/production-ingest/SKILL.md`、探索 cache は `tmp_cache/edinet/`。規律の短文正本: `.agents/rules/regions.md`。
 
 EU / ESEF 製品トラックは中止。
 

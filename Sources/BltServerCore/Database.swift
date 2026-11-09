@@ -3,7 +3,7 @@
 // 未設定なら DB なしで起動する（現行のステートレス EDINET プロキシ動作を維持）。
 //
 // マイグレーション（DDL）は登録も適用もしない。DDL は blt-ingest（Mac の書き込み側）だけが出し、
-// 配信サーバーは読み取りロール（blt_reader）で動く（docs/ingest-policy.md「出荷順」）。
+// 配信サーバーは読み取りロール（blt_reader）で動く（.agents/skills/production-ingest/SKILL.md「出荷順」）。
 
 import BltStoreCore
 import BlueTickerCore

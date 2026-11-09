@@ -81,7 +81,7 @@ jobs:
           # （読み取りロールで動く）ため、Mac で `blt-ingest migrate` を流す前に新しいサーバーが出ると
           # 未作成の列・表を読みに行く。失敗で止めるのは、この run を次回の基準（成功 run）にしないため
           # （成功扱いにすると、次の push でマイグレーションの差分が判定から消えて素通りする）。
-          # 手順: Mac で migrate → Actions から Deploy を workflow_dispatch（docs/ingest-policy.md「出荷順」）。
+          # 手順: Mac で migrate → Actions から Deploy を workflow_dispatch（.agents/skills/production-ingest/SKILL.md「出荷順」）。
           migrations=$(printf '%s\n' "$changed_files" | grep -E '^Sources/[^/]+/Migrations/' || true)
           if [ -n "$migrations" ]; then
             echo "::error::マイグレーションを含むため自動デプロイしません。Mac で blt-ingest migrate を実行してから、Deploy を workflow_dispatch で起動してください。"
@@ -98,7 +98,7 @@ jobs:
           fi
           # blt-server イメージに入るものだけを見る（Dockerfile は blt-server だけをビルドし、
           # 実行ステージへ入れるのは scripts/entrypoint.sh と assets/EdinetcodeDlInfo.csv だけ）。
-          # 取り込み側（Sources/BltIngest*・scripts/jp/ など）や taxonomy だけの変更ではデプロイしない。
+          # 取り込み側（Sources/BltIngest* など）や taxonomy だけの変更ではデプロイしない。
           if printf '%s\n' "$changed_files" | \
              grep -qE '^(Sources/(BltServer|BltServerCore|BltStoreCore|BlueTicker)/|scripts/entrypoint\.sh$|assets/EdinetcodeDlInfo\.csv$|Dockerfile$|\.dockerignore$|fly\.toml$|Package\.swift$|Package\.resolved$)'; then
             echo "changed=true" >> "$GITHUB_OUTPUT"
