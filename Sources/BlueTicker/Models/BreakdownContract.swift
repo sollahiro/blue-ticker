@@ -381,15 +381,22 @@ public let breakdownNotApplicableUnknown = "unknown"
 /// `method == "not_found"`）。正当欠測として `needsReview=false` で永続化し、無駄な再 LLM を止める
 /// （product_service の E/F と同型の決定的 not_applicable。REST/MCP の geography 公開は別途）。
 public let breakdownNotApplicableNotFound = "not_found"
+/// geography 軸: 地域ごとの情報を「本邦の外部顧客への売上高が連結売上高の90％を超えるため」省略している
+/// （国内中心）。関連情報・セグメント注記の地の文から決定論で判定する（`BreakdownExtractor.classifyGeographyOmission`）。
+public let breakdownNotApplicableDomesticDominant90pct = "domestic_dominant_90pct"
+/// geography 軸: 本邦以外の外部顧客への売上高が無い（国内のみ）。判定は上と同じ。
+public let breakdownNotApplicableNoOverseasSales = "no_overseas_sales"
 
 /// not_applicable 行のうち、決定的判定のため `needs_review=false` にする reason か。
-/// E/F（product_service）と geography の正当欠測（`not_found`）が該当。`unknown` は
+/// E/F（product_service）と geography の正当欠測（`not_found` / `domestic_dominant_90pct` / `no_overseas_sales`）が該当。`unknown` は
 /// `needs_review=true` で残すが、決定論のため再計算は `cache_version` バンプ（または行削除）。
 /// LLM 失敗の `needs_review=true` だけが通常巡回の再処理キューに載る。
 public func isDeterministicBreakdownNotApplicableReason(_ reason: String) -> Bool {
     reason == breakdownNotApplicableGeographyOnly
         || reason == breakdownNotApplicableSingleSegmentDisclosed
         || reason == breakdownNotApplicableNotFound
+        || reason == breakdownNotApplicableDomesticDominant90pct
+        || reason == breakdownNotApplicableNoOverseasSales
 }
 
 /// breakdown read（REST/MCP）が適用する最低スキーマバージョン番号（軸別 `…-vN` の N）。

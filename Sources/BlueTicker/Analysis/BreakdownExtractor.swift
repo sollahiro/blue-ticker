@@ -744,6 +744,83 @@ enum BreakdownExtractor {
         return sentences
     }
 
+    /// geography 軸で地域ごとの情報の表が無いときの省略理由（`breakdownNotApplicable*` の公開 reason）。
+    /// 関連情報・セグメント注記の地の文から、国内売上 90% 超による省略と海外売上なしを決定論で拾う。
+    /// どちらでもなければ `not_found`。表があるかどうかは呼び出し側が決める（ここは文だけを見る）。
+    static func geographyNotFoundReason(xbrlDir: URL) -> String {
+        classifyGeographyOmission(sentences: segmentNoteSentences(xbrlDir: xbrlDir))
+            ?? breakdownNotApplicableNotFound
+    }
+
+    /// セグメント注記・関連情報の TextBlock の地の文を「。」で切った全文（表のセルは混ぜない）。
+    /// `segmentNoteOmissionSentences` と違い「記載を省略」を含まない文（「該当事項はありません」）も残す。
+    static func segmentNoteSentences(xbrlDir: URL) -> [String] {
+        var seen = Set<String>()
+        var sentences: [String] = []
+        for root in XBRLUtils.xbrlSearchRoots(in: xbrlDir) {
+            for file in XBRLUtils.findXbrlFiles(in: root) {
+                guard let data = try? Data(contentsOf: file) else { continue }
+                let collector = TextBlockSAXCollector(targetTags: segmentNoteOmissionTextBlockTags)
+                let parser = XMLParser(data: data)
+                parser.delegate = collector
+                parser.parse()
+                for block in collector.blocks {
+                    for source in omissionSentenceSources(in: block.content) {
+                        for sentence in splitSentences(source) where seen.insert(sentence).inserted {
+                            sentences.append(sentence)
+                        }
+                    }
+                }
+            }
+        }
+        return sentences
+    }
+
+    /// 「。」で切る。句点の無い末尾も1文。改行は落とす。800 字を超える文は捨てる（表の崩れ）。
+    static func splitSentences(_ text: String) -> [String] {
+        let flattened = text.replacingOccurrences(of: "\n", with: "")
+        var sentences: [String] = []
+        var current = ""
+        func flush() {
+            let trimmed = current.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !trimmed.isEmpty, trimmed.count <= 800 { sentences.append(trimmed) }
+            current = ""
+        }
+        for character in flattened {
+            current.append(character)
+            if character == "。" { flush() }
+        }
+        flush()
+        return sentences
+    }
+
+    /// 国内売上 90% 超の省略文。「本邦以外」「国内外」は国内側に数えない。
+    /// 売上の語を必須にし、有形固定資産だけの 90% 文（「本邦に所在している有形固定資産の金額が…」）は拾わない。
+    private static let geographyDomesticDominantPattern = try! NSRegularExpression(
+        pattern: "(本邦(?!以外)|日本(?!以外)|国内(?!外))[^。]{0,40}(売上|営業収益|外部顧客からの収益|外部顧客への収益)[^。]{0,80}(90|９０)\\s*(％|%|パーセント)[^。]{0,20}(超|占め)")
+    /// 海外売上なし（「本邦以外の外部顧客への売上高がないため」「外部顧客への売上高は全て本邦」等）。
+    private static let geographyNoOverseasSalesPatterns: [NSRegularExpression] = [
+        "(本邦以外|日本以外|海外|国外)[^。]{0,40}(売上|営業収益|外部顧客からの収益|外部顧客への収益)[^。]{0,20}(が|は)(ない|無い|なく|ありません|存在しない|存在しません|ございません)",
+        "(本邦|日本|国内)(?!以外)[^。]{0,30}顧客[^。]{0,30}(売上|営業収益|収益)[^。]{0,20}(のみ|しかない|100\\s*(％|%))",
+        "(売上|営業収益|収益)[^。]{0,20}(全て|すべて|全額)[^。]{0,10}(本邦|日本|国内)(?!以外)",
+    ].map { try! NSRegularExpression(pattern: $0) }
+
+    /// 省略理由を文だけから分類する（テスト可能な純関数）。海外売上なしを 90% 超より優先する。
+    /// 当てはまらなければ nil。
+    static func classifyGeographyOmission(sentences: [String]) -> String? {
+        func matches(_ regex: NSRegularExpression, _ text: String) -> Bool {
+            regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)) != nil
+        }
+        let normalized = sentences.map { $0.replacingOccurrences(of: " ", with: "").replacingOccurrences(of: "　", with: "") }
+        if normalized.contains(where: { s in geographyNoOverseasSalesPatterns.contains { matches($0, s) } }) {
+            return breakdownNotApplicableNoOverseasSales
+        }
+        if normalized.contains(where: { matches(geographyDomesticDominantPattern, $0) }) {
+            return breakdownNotApplicableDomesticDominant90pct
+        }
+        return nil
+    }
+
     /// 表のセルを地の文に混ぜない。段落が無い TextBlock は本文全体を1つにする。
     private static func omissionSentenceSources(in html: String) -> [String] {
         guard let doc = try? SwiftSoup.parse(html) else { return [html] }

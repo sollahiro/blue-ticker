@@ -418,11 +418,13 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                 タグ付き合計が全社合計を超えるときは、総額の外の金額を負の reconciling 行として足すことがあります。
                 warnings の capex_prose_remainder と capex_prose_exclusion は 404 にしません。
                 内訳が取得できない場合は 404 とともに reason が返ることがあります（reason 無しの 404 は単に未取り込み）。
-                公開 reason は geography_only / single_segment_disclosed / not_found / unknown のみ。
+                公開 reason は geography_only / single_segment_disclosed / domestic_dominant_90pct / no_overseas_sales / not_found / unknown のみ。
                 axis=product_service: geography_only（報告セグメントが地域別のみ。地域は geography 軸。日本/アジアを product_service に載せない）、
                 single_segment_disclosed（単一セグメントのため報告セグメント開示自体を省略）、
                 unknown（原因未特定・要再調査）。
-                axis=geography: not_found（地域別情報の注記自体が存在しない）、unknown（抽出失敗・要再調査）。
+                axis=geography: domestic_dominant_90pct（本邦の外部顧客への売上高が連結売上高の90%超のため省略。国内中心）、
+                no_overseas_sales（本邦以外の外部顧客への売上高が無い。国内のみ）、
+                not_found（地域別情報の開示が無く、上の省略文も無い）、unknown（抽出失敗・要再調査）。
                 決定論軸: not_found（セグメント別内訳が非開示）。
                 axis=interest_bearing_debt: not_found（有利子負債の開示が無い）、
                 unknown（行はあるが公開していない。未算出ではない）。銀行は financials_bank_components 行。
