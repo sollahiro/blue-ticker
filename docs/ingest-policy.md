@@ -80,6 +80,7 @@ set -a; . ./.env; set +a
 | `BLT_INGEST_STATEMENTS_LIMIT` | job-01（既定 80） |
 | `BLT_INGEST_NOTES_LIMIT` | job-02/03（既定 80） |
 | `BLT_INGEST_BREAKDOWN_LIMIT` | job-04 business/geography 用（既定 50。employees/rd/goodwill はコード側 30/回） |
+| `BLT_INGEST_BREAKDOWN_AXES` | job-04 の対象軸をカンマ区切りで絞る（例: `geography,product_service`。未設定なら全軸） |
 | `BLT_INGEST_FINANCIALS_LIMIT` | job-05（既定 80） |
 | `BLT_INGEST_OVERVIEW_LIMIT` | job-06（既定 80） |
 | `BLT_INGEST_RELATIONS_LIMIT` | job-07（既定 100） |

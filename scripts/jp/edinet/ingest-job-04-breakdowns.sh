@@ -9,7 +9,13 @@ export INGEST_JOB_NAME="job-04-breakdowns"
 ingest_require_ready
 
 LIMIT="${BLT_INGEST_BREAKDOWN_LIMIT:-50}"
+# 対象軸をカンマ区切りで絞る（例: geography,product_service）。未設定なら全軸。
+AXES="${BLT_INGEST_BREAKDOWN_AXES:-}"
 
-ingest_run ingest --stages breakdowns --limit "$LIMIT"
+if [[ -n "$AXES" ]]; then
+  ingest_run ingest --stages breakdowns --axes "$AXES" --limit "$LIMIT"
+else
+  ingest_run ingest --stages breakdowns --limit "$LIMIT"
+fi
 
 ingest_post_hooks
