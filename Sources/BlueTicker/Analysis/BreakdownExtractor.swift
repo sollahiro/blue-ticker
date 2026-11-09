@@ -1925,7 +1925,7 @@ enum BreakdownExtractor {
         return parsePeriodCue(trimmed) == nil
     }
 
-    private static func detectPeriod(
+    static func detectPeriod(
         table: Element, grid: [[String]], fiscalYearEnd: String?
     ) -> (String, BreakdownPeriodBasis)? {
         if let period = detectPeriodFromPreceding(table, fiscalYearEnd: fiscalYearEnd) {
@@ -2708,7 +2708,7 @@ enum BreakdownExtractor {
     /// 資産表のあとに売上表が続く開示では、全先行キャプションに非流動資産が残るため
     /// 単純な any-match だと売上表まで落とす（S100W4MT）。
     /// `precedingShortCaptions` は文書順（末尾＝直近）なので末尾から探索する。
-    private static func nearestGeographyMetricCaption(before table: Element) -> String? {
+    static func nearestGeographyMetricCaption(before table: Element) -> String? {
         let captions = precedingShortCaptions(before: table)
         for text in captions.reversed() {
             if isGeographyAssetMetricCaption(text) { return text }
@@ -2719,7 +2719,7 @@ enum BreakdownExtractor {
         return captions.last
     }
 
-    private static func isGeographyAssetMetricCaption(_ text: String) -> Bool {
+    static func isGeographyAssetMetricCaption(_ text: String) -> Bool {
         let isAsset = Xbrl.geographyAssetMetricCaptionKeywords.contains(where: text.contains)
         guard isAsset else { return false }
         // 「売上高と非流動資産」のような併記は売上側として残す
@@ -3365,5 +3365,31 @@ private final class ContextDimensionSAXCollector: NSObject, XMLParserDelegate {
     private func localPart(_ qname: String) -> String {
         guard let idx = qname.lastIndex(of: ":") else { return qname }
         return String(qname[qname.index(after: idx)...])
+    }
+}
+
+extension BreakdownExtractor {
+    /// 指定タグの TextBlock を（訂正の展開ディレクトリを後勝ちで）集める。`GeographyAssetCells` 用。
+    static func textBlocks(
+        xbrlDir: URL, tags: Set<String>
+    ) -> [(tag: String, content: String, contextRef: String?)] {
+        var blocksByTag: [String: [(tag: String, content: String, contextRef: String?)]] = [:]
+        var tagOrder: [String] = []
+        for root in XBRLUtils.xbrlSearchRoots(in: xbrlDir) {
+            var layer: [String: [(tag: String, content: String, contextRef: String?)]] = [:]
+            for file in XBRLUtils.findXbrlFiles(in: root) {
+                guard let data = try? Data(contentsOf: file) else { continue }
+                let collector = TextBlockSAXCollector(targetTags: tags)
+                let parser = XMLParser(data: data)
+                parser.delegate = collector
+                parser.parse()
+                for block in collector.blocks { layer[block.tag, default: []].append(block) }
+            }
+            for (tag, blocks) in layer {
+                if blocksByTag[tag] == nil { tagOrder.append(tag) }
+                blocksByTag[tag] = blocks
+            }
+        }
+        return tagOrder.flatMap { blocksByTag[$0] ?? [] }
     }
 }

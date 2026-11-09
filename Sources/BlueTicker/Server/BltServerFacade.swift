@@ -1066,11 +1066,16 @@ public extension BltServerContext {
             return applyingSegmentNoteDecision(
                 gate.outcome, to: .notApplicable(reason: reason, audit: audit))
         }
+        // 地域ごとの有形固定資産／非流動資産のセル（決定論。表が確定できなければ付けない）。
+        var payload = breakdownSnapshotPayload(from: snapshot)
+        if let assets = GeographyAssetCells.extract(xbrlDir: xbrlDir) {
+            payload = GeographyAssetCells.attach(assets, to: payload)
+        }
         return applyingSegmentNoteDecision(
             gate.outcome,
             to: breakdownByRecordingOverlayRegressions(
                 .resolved(
-                    payload: breakdownSnapshotPayload(from: snapshot), source: result.source.rawValue,
+                    payload: payload, source: result.source.rawValue,
                     contentHash: hash, audit: result.audit.map(llmBreakdownAuditPayload(from:))),
                 xbrlDir: xbrlDir))
     }

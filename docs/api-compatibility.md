@@ -82,6 +82,7 @@ breaking 再編時は可能な範囲で:
 - breakdown `axis=geography` の 404 reason に `domestic_dominant_90pct`（本邦の外部顧客への売上高が 90% 超のため省略）と `no_overseas_sales`（海外売上なし）を足した（値の追加なので互換。`apiSkillsSchemaVersion` は 11 のまま）。どちらでもない欠測は従来どおり `not_found`。
 - breakdown `axis=segment` の行に、報告セグメント表のセル `segment_assets` / `flow`（`flow_metric`）/ `equity_method_investments` と、payload のセルごとの分母を足した（互換追加。`breakdown-segment-v2`）。`axis=equity_method_investments` は廃止し常に 404（breaking。`apiSkillsSchemaVersion` 12）。HAPIS では非公開の軸だったので公開コネクタに影響しない。
 - breakdown の `axis` 省略時の既定を `product_service` から `segment` に変えた（意味の変更なので breaking。`apiSkillsSchemaVersion` 13）。`axis` を明示しているクライアントには影響しない。
+- breakdown `axis=geography` の行にセル `assets`（地域ごとの有形固定資産／非流動資産）と、payload の `assets`（分母）・`assets_metric`（`property_plant_equipment` / `noncurrent_assets`）を足した（互換追加。開示の無い書類はキーを出さない。`apiSkillsSchemaVersion` は 14 のまま）。
 - breakdown `axis=property_plant_equipment` / `goodwill_and_intangibles` を廃止して常に 404 にし、`axis=fixed_assets` に統合した（breaking。`apiSkillsSchemaVersion` 14、`breakdown-fixed-assets-v1`）。行に `asset_class`（`property_plant_equipment` / `intangible_assets`）、payload に同名キーで区分ごとの合計を持つ。日本基準は連結 BS の内訳科目から返す（旧2軸は IFRS だけで日本基準は `not_found` だった）。HAPIS では非公開の軸だったので公開コネクタに影響しない。
 
 ## Codable 応答への段階移行

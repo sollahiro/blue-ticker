@@ -430,6 +430,10 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                 億円単位で差額とずれる配分不能の1文も、足した合計が 5% 以内なら足すことがあります。
                 タグ付き合計が全社合計を超えるときは、総額の外の金額を負の reconciling 行として足すことがあります。
                 warnings の capex_prose_remainder と capex_prose_exclusion は 404 にしません。
+                geography の行は、地域ごとの情報に資産の表があり当期・単位・向きが確定できる書類だけ、セル assets
+                （地域の有形固定資産／非流動資産、円。行に値が無いところは null）を持ちます。payload の assets は分母
+                （denominator / denominator_tag。table_total は表の合計、row_sum は地域の和）、assets_metric は
+                property_plant_equipment（有形固定資産）/ noncurrent_assets（IFRS の非流動資産）です。開示が無ければキーを出しません。
                 内訳が取得できない場合は 404 とともに reason が返ることがあります（reason 無しの 404 は単に未取り込み）。
                 公開 reason は geography_only / single_segment_disclosed / domestic_dominant_90pct / no_overseas_sales / not_found / unknown のみ。
                 axis=product_service: geography_only（報告セグメントが地域別のみ。地域は geography 軸。日本/アジアを product_service に載せない）、
