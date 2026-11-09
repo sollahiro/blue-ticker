@@ -53,7 +53,7 @@ EPS・希薄化後 EPS・BPS・発行済株式総数を、有報の記載その�
 廃止した note_type（公開面から外した）:
 
 - `borrowings_schedule` / `lease_liabilities`: パーサは残し、有利子負債は breakdown 軸 `interest_bearing_debt`。
-- `property_plant_equipment_schedule` / `goodwill_and_intangibles`: breakdown 軸 `property_plant_equipment` / `goodwill_and_intangibles`（資産の種類別。`docs/breakdown.md`）。
+- `property_plant_equipment_schedule` / `goodwill_and_intangibles`: breakdown 軸 `fixed_assets`（固定資産の種類別。`docs/breakdown.md`）。
 
 未公開: `sga_expense_breakdown`（販管費の主要な費目内訳。発生支出の `research_and_development` 軸とは別。US-GAAP 非対応）。ingest の現在地は Linear Team `blue-ticker`。
 

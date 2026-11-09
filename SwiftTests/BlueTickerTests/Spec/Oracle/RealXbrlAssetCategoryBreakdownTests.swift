@@ -1,4 +1,4 @@
-// 実 EDINET XBRL キャッシュでの資産の種類別内訳（property_plant_equipment / goodwill_and_intangibles）の回帰。
+// 実 EDINET XBRL キャッシュでの fixed_assets 軸の IFRS 側（有形固定資産、のれん及び無形資産の注記）の回帰。
 // 旧 notes（`property_plant_equipment_schedule` / `goodwill_and_intangibles`）の外出しオラクル
 // `smoke/statement_notes_*_expected.json` の正味帳簿価額が、軸の行・小計・分母に1つ残らず載ることを見る。
 
@@ -63,10 +63,10 @@ import Testing
     ) throws {
         let payload = resolve(docID, spec)
         guard let expected = try oracleItems(file: file, docID: docID) else {
-            #expect(payload == nil, "\(docID) \(spec.axis): 旧 notes は not_found")
+            #expect(payload == nil, "\(docID) \(spec.assetClass): 旧 notes は not_found")
             return
         }
-        let resolved = try #require(payload, "\(docID) \(spec.axis): 旧 notes は resolved")
+        let resolved = try #require(payload, "\(docID) \(spec.assetClass): 旧 notes は resolved")
         #expect(resolved.needsReview == false)
         #expect(Self.axisValues(resolved) == expected)
         // 合計に入る行（最上位）の和が分母
@@ -152,5 +152,62 @@ import Testing
         let goodwill = try #require(Self.resolve("S100TSIJ", AssetCategoryBreakdown.goodwillAndIntangibles))
         #expect(goodwill.denominatorTag == "GoodwillIFRS+IntangibleAssetsIFRS")
         #expect(goodwill.denominator == 176_193_000_000)
+    }
+}
+
+/// fixed_assets 軸の書類1件分（IFRS の2区分の統合と、日本基準の連結 BS）。
+@Suite struct RealXbrlFixedAssetsBreakdownTests {
+    private static let xbrlRoot: URL = {
+        FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".config/blue-ticker/analysis_cache/external/edinet/xbrl")
+    }()
+
+    private static func resolve(_ docID: String) async -> BreakdownSnapshotPayload?? {
+        await SmokeCacheSupport.ensureCached([docID], cacheDir: xbrlRoot)
+        let dir = xbrlRoot.appendingPathComponent("\(docID)_xbrl")
+        guard FileManager.default.fileExists(atPath: dir.path) else {
+            TestVerboseLog.print("SKIP   \(docID): XBRL キャッシュなし（BLT_EDINET_API_KEY 未設定または取得失敗）")
+            return .none
+        }
+        return .some(FixedAssetsBreakdown.resolve(xbrlDir: dir))
+    }
+
+    /// JT（IFRS）: 有形固定資産とのれん及び無形資産の注記を区分ごとの合計付きで1つにする。
+    /// source: code=2914 fy_end=2025-12-31 doc_id=S100XSSA page=143 field=有形固定資産.帳簿価額.合計
+    /// source: code=2914 fy_end=2025-12-31 doc_id=S100XSSA page=145 field=のれん及び無形資産.帳簿価額.合計
+    @Test func jtCombinesBothIfrsNotes() async throws {
+        guard let resolved = await Self.resolve("S100XSSA") else { return }
+        let payload = try #require(resolved)
+        #expect(payload.axis == breakdownAxisFixedAssets)
+        #expect(payload.needsReview == false)
+        #expect(payload.propertyPlantEquipment?.denominator == 979_800_000_000)
+        #expect(payload.intangibleAssets?.denominator == 3_318_755_000_000)
+        #expect(payload.denominator == 979_800_000_000 + 3_318_755_000_000)
+        #expect(payload.denominatorTag == "PropertyPlantAndEquipmentIFRS+GoodwillAndIntangibleAssetsIFRS")
+        #expect(payload.rows.filter { $0.assetClass == breakdownAssetClassPropertyPlantEquipment }.count == 4)
+        #expect(payload.rows.filter { $0.assetClass == breakdownAssetClassIntangibleAssets }.map(\.sourceTag) == [
+            "GoodwillIFRS", "TrademarksIFRS", "SoftwareIFRS", "OtherComponentsOfIntangibleAssetsIFRS",
+        ])
+    }
+
+    /// ダイキン（日本基準）: 連結 BS の有形固定資産合計・無形固定資産合計の内訳科目。表示順で、純額だけ。
+    /// 有形は区分行の和が合計と 3 百万円ずれる（百万円の丸め）が、行数単位までは合っているとみなす。
+    /// source: code=6367 fy_end=2025-03-31 doc_id=S100W3XO page=連結貸借対照表 field=有形固定資産合計
+    @Test func daikinUsesJapaneseGaapBalanceSheet() async throws {
+        guard let resolved = await Self.resolve("S100W3XO") else { return }
+        let payload = try #require(resolved)
+        #expect(payload.needsReview == false)
+        #expect(payload.propertyPlantEquipment?.denominator == 1_279_327_000_000)
+        #expect(payload.propertyPlantEquipment?.denominatorTag == "PropertyPlantAndEquipment")
+        #expect(payload.intangibleAssets?.denominator == 637_867_000_000)
+        let ppe = payload.rows.filter { $0.assetClass == breakdownAssetClassPropertyPlantEquipment }
+        #expect(Set(ppe.compactMap(\.sourceTag)) == [
+            "BuildingsAndStructuresNet", "MachineryEquipmentAndVehiclesNet", "Land", "LeaseAssetsNetPPE",
+            "ConstructionInProgress", "OtherNetPPE",
+        ])
+        #expect(ppe.first?.sourceTag == "BuildingsAndStructuresNet")
+        let intangible = payload.rows.filter { $0.assetClass == breakdownAssetClassIntangibleAssets }
+        #expect(intangible.map(\.sourceTag) == ["Goodwill", "CustomerRelationshipIA", "OtherIA"])
+        #expect(intangible.first?.amount == 266_337_000_000)
     }
 }

@@ -17,7 +17,7 @@
 | 0 | `scripts/jp/edinet/ingest-job-00-sync-foundation.sh` | `sync` → `filing-sections` | 上場 | 80 | 日次（軽） |
 | 1 | `scripts/jp/edinet/ingest-job-01-statements.sh` | `statements` | 上場（225は処理順） | 80 | 6h |
 | 2 | `scripts/jp/edinet/ingest-job-02-notes-core.sh` | `statement-notes`（per_share, issued_shares） | 上場（225は処理順） | 80 | 6h |
-| 3 | （廃止） | 旧 `statement-notes` の PPE / goodwill は Breakdown の `property_plant_equipment` / `goodwill_and_intangibles` 軸へ移した（job-4） | — | — | — |
+| 3 | （廃止） | 旧 `statement-notes` の PPE / goodwill は Breakdown の `fixed_assets` 軸へ移した（job-4） | — | — | — |
 | 4 | `scripts/jp/edinet/ingest-job-04-breakdowns.sh` | `breakdowns`（全11軸） | 上場（225は処理順） | 50 | 6h |
 | 5 | `scripts/jp/edinet/ingest-job-05-financials.sh` | `financials` | 上場 | 80 | 6h（2の後） |
 | 6 | `scripts/jp/edinet/ingest-job-06-overviews.sh` | `overviews` | 上場（225は処理順） | 80 | 日次 |
