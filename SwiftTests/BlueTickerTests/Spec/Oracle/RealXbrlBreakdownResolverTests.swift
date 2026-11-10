@@ -695,5 +695,30 @@ import Foundation
             Issue.record("geography same_as expected, got failed")
         }
     }
+
+    /// デジタルグリッド: セグメント売上は「外部顧客」ではなくその他収益を含む「計」。
+    /// source: code=350A fy_end=2026-07-31 doc_id=S100ZAEK page=108 field=segment.電力PF事業
+    @Test func digitalGridSegmentSalesUseTotalIncludingOtherRevenue() async throws {
+        guard await Self.ensureAvailable("S100ZAEK") else { return }
+        let dir = Self.xbrlDir("S100ZAEK")
+        let reportable = BreakdownExtractor.extractReportableSegmentInfo(xbrlDir: dir)
+        let sales = BreakdownFinancialsResolver.financialsCanonicalSales(xbrlDir: dir)
+        let (snapshot, source, _) = await SegmentBreakdownResolver.resolve(
+            reportable: reportable, consolidatedSales: sales,
+            labelsByTag: XBRLUtils.loadLabelsByTag(in: dir),
+            fiscalYearEnd: BreakdownExtractor.currentFiscalYearEnd(fromXbrlDir: dir),
+            docID: "S100ZAEK")
+        #expect(source == .xbrlFacts)
+        let snap = try #require(snapshot)
+        #expect(snap.denominator == 7_113_916_000)
+        #expect(snap.denominatorTag == "NetSales")
+        #expect(!snap.warnings.contains("sales_denominator_aligned_to_segment_total"))
+        func amount(containing needle: String) -> Double? {
+            snap.rows.first { ($0.label ?? $0.labelRaw).contains(needle) }?.amount
+        }
+        #expect(amount(containing: "電力") == 5_884_409_000)
+        #expect(amount(containing: "再エネ") == 711_496_000)
+        #expect(amount(containing: "その他") == 518_010_000)
+    }
 }
 

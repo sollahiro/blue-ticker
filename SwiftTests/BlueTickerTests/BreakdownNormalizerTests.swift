@@ -754,6 +754,41 @@ import Foundation
         #expect(snap.denominator == 100_000_000_000)
     }
 
+    /// 外部顧客売上とその他収益の計（NetSales）が両方あるとき、連結売上に合う計を採る。
+    /// source: code=350A fy_end=2026-07-31 doc_id=S100ZAEK page=108 field=segment.電力PF事業
+    @Test func salesBasisPrefersSegmentTotalTagThatMatchesConsolidatedSales() throws {
+        func fact(_ tag: String, _ member: String, _ value: Double) -> BreakdownFact {
+            BreakdownFact(
+                tag: tag, contextRef: "CurrentYearDuration_\(member)",
+                dimensions: ["OperatingSegmentsAxis": member],
+                value: value, label: nil, unitRef: "JPY", decimals: "-3")
+        }
+        let facts = [
+            fact("RevenuesFromExternalCustomers", "ElectricPowerPFReportableSegmentMember", 4_080_731_000),
+            fact("RevenuesFromExternalCustomers", "RenewableEnergyPFReportableSegmentMember", 810_932_000),
+            fact("RevenuesFromExternalCustomers", "OtherReportableSegmentMember", 518_010_000),
+            fact("NetSales", "ElectricPowerPFReportableSegmentMember", 5_884_409_000),
+            fact("NetSales", "RenewableEnergyPFReportableSegmentMember", 711_496_000),
+            fact("NetSales", "OtherReportableSegmentMember", 518_010_000),
+        ]
+        let result = ExtractedBreakdown(method: "xbrl_facts", tables: [], facts: facts)
+        let snap = try #require(
+            BreakdownNormalizer.normalize(
+                result, consolidatedSales: 7_113_916_000, reportableSegmentAxis: true))
+        #expect(snap.denominatorTag == "NetSales")
+        #expect(snap.denominator == 7_113_916_000)
+        #expect(!snap.warnings.contains("sales_denominator_aligned_to_segment_total"))
+        #expect(
+            snap.rows.first { $0.labelRaw == "ElectricPowerPFReportableSegmentMember" }?.amount
+                == 5_884_409_000)
+        #expect(
+            snap.rows.first { $0.labelRaw == "RenewableEnergyPFReportableSegmentMember" }?.amount
+                == 711_496_000)
+        #expect(
+            snap.rows.first { $0.labelRaw == "OtherReportableSegmentMember" }?.amount
+                == 518_010_000)
+    }
+
     @Test func salesBasisAlignsDenominatorWhenFinancialsSalesFarFromSegmentTotal() throws {
         // 高島屋型（S100Y4X5）: 財務取り込み は NetSales（売上高）だが、セグメント注記の
         // RevenuesFromExternalCustomers は営業収益ベース。小計に揃えて分母を差し替える。

@@ -111,19 +111,11 @@ enum BreakdownNormalizer {
         profitTagOverride: String? = nil, reportableSegmentAxis: Bool = false
     ) -> BreakdownSnapshot? {
         var denominatorNeedsReview = false
-        let denominatorTag: String
-        if let whitelisted = Xbrl.segmentExternalRevenueTags.first(where: { tag in
-            facts.contains(where: { $0.tag == tag })
-        }) {
-            denominatorTag = whitelisted
-        } else if let discovered = discoverDenominatorTagByCoverage(
+        guard let picked = pickSalesDenominatorTag(
             facts: facts, consolidatedSales: consolidatedSales)
-        {
-            denominatorTag = discovered.tag
-            denominatorNeedsReview = discovered.needsReview
-        } else {
-            return nil
-        }
+        else { return nil }
+        let denominatorTag = picked.tag
+        denominatorNeedsReview = picked.needsReview
 
         let perMember = withEntityTotal(
             resolvePerMember(facts: facts, tag: denominatorTag), facts: facts, tag: denominatorTag)
@@ -1394,6 +1386,80 @@ enum BreakdownNormalizer {
         var result = perMember
         result[Xbrl.entityTotalMemberName] = entity
         return result
+    }
+
+    /// セグメント dimension 付きの売上タグのうち、報告セグメント和が連結売上の ±5% に入るものを優先する。
+    /// 「外部顧客への売上高」と「計」（その他収益を含む NetSales）が両方ある書類（350A）は計を採る。
+    /// どれも帯に入らなければ従来どおりホワイトリスト先頭、無ければカバレッジ発見。
+    private static func pickSalesDenominatorTag(
+        facts: [BreakdownFact], consolidatedSales: Double
+    ) -> (tag: String, needsReview: Bool)? {
+        func hasSegmentMembers(_ tag: String) -> Bool {
+            facts.contains {
+                $0.tag == tag && XBRLUtils.primaryBreakdownMember($0.dimensions) != nil
+            }
+        }
+
+        var ordered: [String] = []
+        for tag in Xbrl.segmentExternalRevenueTags where hasSegmentMembers(tag) {
+            ordered.append(tag)
+        }
+        let discovered = discoverDenominatorTagByCoverage(
+            facts: facts, consolidatedSales: consolidatedSales)
+        if let discovered, !ordered.contains(discovered.tag) {
+            ordered.append(discovered.tag)
+        }
+        guard !ordered.isEmpty else { return nil }
+
+        let closing: [(tag: String, distance: Double)] = ordered.compactMap { tag in
+            guard let sum = salesTagSegmentSum(
+                facts: facts, tag: tag, consolidatedSales: consolidatedSales),
+                consolidatedSales != 0
+            else { return nil }
+            let ratio = sum / consolidatedSales
+            guard (0.95...1.05).contains(ratio) else { return nil }
+            return (tag, abs(ratio - 1.0))
+        }
+        if let best = closing.min(by: {
+            if $0.distance != $1.distance { return $0.distance < $1.distance }
+            let aWhite = Xbrl.segmentExternalRevenueTags.contains($0.tag)
+            let bWhite = Xbrl.segmentExternalRevenueTags.contains($1.tag)
+            if aWhite != bWhite { return aWhite }
+            return $0.tag < $1.tag
+        }) {
+            let fromDiscovery = discovered?.tag == best.tag && (discovered?.needsReview ?? false)
+                && !Xbrl.segmentExternalRevenueTags.contains(best.tag)
+            return (best.tag, fromDiscovery)
+        }
+        if let first = Xbrl.segmentExternalRevenueTags.first(where: hasSegmentMembers) {
+            return (first, false)
+        }
+        return discovered
+    }
+
+    /// 小計・調整を除いた報告セグメント和。名称未収載の合計行は分母一致で除外する。
+    private static func salesTagSegmentSum(
+        facts: [BreakdownFact], tag: String, consolidatedSales: Double
+    ) -> Double? {
+        let perMember = resolvePerMember(facts: facts, tag: tag)
+        guard !perMember.isEmpty else { return nil }
+        var excluded = Set(perMember.keys.filter { member in
+            Xbrl.segmentSubtotalMemberNames.contains(member)
+                || BreakdownMemberRoles.isReconciling(member)
+        })
+        let unnamed = perMember.keys.filter { !excluded.contains($0) }
+        if unnamed.count > 1, consolidatedSales != 0 {
+            for member in unnamed {
+                let amount = perMember[member]!.value
+                if abs(amount - consolidatedSales) / abs(consolidatedSales) < 0.01 {
+                    excluded.insert(member)
+                }
+            }
+        }
+        let sum = perMember.reduce(0.0) { total, entry in
+            excluded.contains(entry.key) ? total : total + entry.value.value
+        }
+        return sum > 0 ? sum : nil
     }
 
     /// `Xbrl.segmentExternalRevenueTags` ホワイトリストに一致するタグが無い場合の候補発見。
