@@ -139,15 +139,82 @@ import Testing
                 noncurrentAssetAdditionsPresent: false) == nil)
     }
 
-    @Test func companyTotalOnlyFlowLeavesRowsEmpty() throws {
+    @Test func companyTotalOnlyFlowMaterializesEntityTotalRow() throws {
         let snapshot = try #require(
             CapexNormalizer.normalize(
                 facts: [], capitalExpendituresPresent: true,
                 noncurrentAssetAdditionsPresent: false,
                 flowCompanyTotal: (50, "CapitalExpendituresIFRS")))
-        #expect(snapshot.rows.isEmpty)
         #expect(snapshot.flow?.denominator == 50)
         #expect(snapshot.flowMetric == capexFlowMetricCapitalExpenditures)
+        let entity = try #require(
+            snapshot.rows.first { $0.rowKind == breakdownRowKindEntityTotal })
+        #expect(entity.flow == 50)
+        #expect(entity.labelRaw == Xbrl.entityTotalMemberName)
+    }
+
+    @Test func mergesHtmlOverviewRowsThatCloseTheResidual() throws {
+        let facts = [
+            fact(tag: "CapitalExpendituresOverviewOfCapitalExpendituresEtc", member: "SegAMember", value: 80_000_000),
+            fact(tag: "CapitalExpendituresOverviewOfCapitalExpendituresEtc", member: nil, value: 100_000_000),
+        ]
+        let html = try #require(
+            BreakdownNormalizer.normalizeCapitalExpendituresOverview(
+                segments: [
+                    CapexSegmentPayload(
+                        segmentName: "Ａ", investmentAmount: 80_000_000, yoyPercent: nil,
+                        description: nil),
+                    CapexSegmentPayload(
+                        segmentName: "全社（共通）", investmentAmount: 20_000_000, yoyPercent: nil,
+                        description: nil),
+                    CapexSegmentPayload(
+                        segmentName: "合計", investmentAmount: 100_000_000, yoyPercent: nil,
+                        description: nil, isTotal: true),
+                ]))
+        let snapshot = try #require(
+            CapexNormalizer.normalize(
+                facts: facts, capitalExpendituresPresent: false,
+                noncurrentAssetAdditionsPresent: false, overviewHTML: html))
+        #expect(snapshot.capitalExpendituresOverview?.denominator == 100_000_000)
+        #expect(snapshot.rows.contains {
+            $0.rowKind == "reconciling" && $0.capitalExpendituresOverview == 20_000_000
+        })
+        #expect(snapshot.needsReview == false)
+    }
+
+    @Test func remapsConsolidatedTotalLabelToEntityTotal() throws {
+        let facts = [
+            fact(tag: "CapitalExpendituresIFRS", member: "SegAMember", value: 80),
+            fact(tag: "CapitalExpendituresIFRS", member: "CompanyTotalMember", value: 100),
+            fact(tag: "CapitalExpendituresIFRS", member: nil, value: 100),
+        ]
+        let snapshot = try #require(
+            CapexNormalizer.normalize(
+                facts: facts, labelsByTag: ["CompanyTotalMember": "連結合計又は全社合計"],
+                capitalExpendituresPresent: true, noncurrentAssetAdditionsPresent: false))
+        let entity = try #require(
+            snapshot.rows.first { ($0.label ?? "").contains("連結合計") })
+        #expect(entity.rowKind == breakdownRowKindEntityTotal)
+        #expect(entity.flow == 100)
+    }
+
+    @Test func fillsZeroSegmentFlowWhenReconcilingEqualsDenominator() throws {
+        let payload = BreakdownSnapshotPayload(
+            axis: breakdownAxisCapex, denominator: 0, denominatorTag: "",
+            rows: [
+                BreakdownRowPayload(
+                    labelRaw: "CivilMember", label: "土木", amount: 0, profit: nil,
+                    rowKind: "segment", segmentAssets: 1),
+                BreakdownRowPayload(
+                    labelRaw: "Adj", label: "調整額", amount: 0, profit: nil,
+                    rowKind: "reconciling", flow: 407_032_000),
+            ],
+            sourceKind: breakdownSourceXbrlFacts, needsReview: false, warnings: [],
+            flowMetric: capexFlowMetricCapitalExpenditures,
+            flow: CapexMetricTotalsPayload(
+                denominator: 407_032_000, denominatorTag: "CapitalExpenditures"))
+        let filled = CapexNormalizer.fillZeroSegmentFlowWhenReconcilingCoversTotal(payload)
+        #expect(filled.rows.first { $0.rowKind == "segment" }?.flow == 0)
     }
 
     @Test func usesEntityTotalAsFlowDenominatorWhenSegmentSumDiffersByRounding() throws {

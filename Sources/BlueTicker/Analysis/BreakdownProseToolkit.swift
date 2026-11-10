@@ -130,6 +130,14 @@ enum BreakdownProseToolkit {
         notAllocatablePhrases.contains { text.contains($0) }
     }
 
+    /// 全社・共通・本社、または配分不能の文。差額と一致するとき Jev なしで残り行にする。
+    static func looksLikeUnallocatedRemainder(_ sentence: String) -> Bool {
+        mentionsNotAllocatableToSegments(sentence)
+            || sentence.contains("全社")
+            || sentence.contains("共通")
+            || sentence.contains("本社")
+    }
+
     static func matchesShortfall(_ yen: Double, gap: Double) -> Bool {
         abs(yen - gap) <= shortfallToleranceYen
     }

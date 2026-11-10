@@ -1248,7 +1248,7 @@ private extension BltServerContext {
             capitalExpendituresPresent: cePresent, noncurrentAssetAdditionsPresent: naaPresent,
             overviewHTML: overviewHTML, overviewCompanyTotal: overviewTotal,
             flowCompanyTotal: flowTotal, prebuiltAssets: assets,
-            prebuiltOverviewFacts: overviewFacts)
+            prebuiltOverviewFacts: overviewFacts, differenceTableDir: xbrlDir)
 
         let filled = await fillCapexProse(
             payload: payload, xbrlDir: xbrlDir, docID: docID)

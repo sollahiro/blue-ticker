@@ -2,42 +2,69 @@ import Foundation
 import SwiftSoup
 
 /// 報告セグメント合計と連結計上額の差額表（`DescriptionOfNatureAndAmountsOfDifferences…` TextBlock）
-/// から、セグメント資産の非分類行（`row_kind=reconciling`）を読む。別軸ではない。
+/// から、セグメント資産とフロー（増加額）の非分類行と計上額を読む。別軸ではない。
 enum SegmentAssetsDifferenceTable {
     static let textBlockTag =
         "DescriptionOfNatureAndAmountsOfDifferencesBetweenReportableSegmentsTotalAndFinancialStatementsTextBlock"
+
+    struct Parsed: Sendable {
+        var assetReconciling: [(label: String, amountYen: Double)] = []
+        var flowReconciling: [(label: String, amountYen: Double)] = []
+        var assetEntityTotal: Double? = nil
+        var flowEntityTotal: Double? = nil
+    }
 
     private static let reportableTotalLabelKeywords = [
         "報告セグメント合計", "報告セグメント計",
     ]
     private static let consolidatedTotalLabelKeywords = [
-        "連結財務諸表", "連結貸借対照表",
+        "連結財務諸表", "連結貸借対照表", "計上額",
     ]
 
-    /// 当期列の差額内訳（label → 円）。単位は表キャプションから決め、百万円以外は採用しない。
+    /// 当期列の資産差額内訳（label → 円）。既存の呼び出し向け。
     static func parseReconcilingAmountsYen(in xbrlDir: URL) -> [(label: String, amountYen: Double)] {
+        parse(in: xbrlDir).assetReconciling
+    }
+
+    /// 資産・増加額の調整行と連結計上額。単位は表キャプション（百万円・千円）。
+    static func parse(in xbrlDir: URL) -> Parsed {
         guard let html = XBRLUtils.extractTextblockHtml(in: xbrlDir, textblockTag: textBlockTag),
               let soup = try? SwiftSoup.parse(html)
-        else { return [] }
+        else { return Parsed() }
 
-        guard let tables = try? soup.select("table") else { return [] }
-        var candidates: [(rows: [(String, Double)], prefersCurrent: Bool)] = []
+        guard let tables = try? soup.select("table") else { return Parsed() }
+        var merged = Parsed()
         for table in tables {
             guard let rows = try? table.select("tr"), !rows.isEmpty else { continue }
-            guard tableLooksLikeSegmentAssets(rows: rows) else { continue }
-            guard let unitScale = tableUnitScaleYen(table: table, rows: rows),
-                  unitScale == Financial.millionYen
-            else { continue }
-            guard let parsed = parseAssetsTableRows(rows: rows, unitScale: unitScale) else { continue }
-            guard !parsed.isEmpty else { continue }
+            guard let unitScale = tableUnitScaleYen(table: table, rows: rows) else { continue }
             let prefersCurrent = tableHeaderPrefersCurrentPeriod(rows: rows)
-            candidates.append((parsed, prefersCurrent))
+            if tableLooksLikeSegmentMetrics(rows: rows) {
+                let parsed = parseMetricSections(rows: rows, unitScale: unitScale)
+                merge(&merged, parsed, prefer: prefersCurrent)
+            }
+            if let wide = parseWideIncreaseRow(rows: rows, unitScale: unitScale) {
+                if prefersCurrent || merged.flowEntityTotal == nil {
+                    merged.flowReconciling.append(("調整額", wide.adjustmentYen))
+                    merged.flowEntityTotal = wide.entityTotalYen
+                }
+            }
         }
-        guard !candidates.isEmpty else { return [] }
-        if let current = candidates.last(where: { $0.prefersCurrent }) {
-            return current.rows
+        return merged
+    }
+
+    private static func merge(_ dest: inout Parsed, _ src: Parsed, prefer: Bool) {
+        if !src.assetReconciling.isEmpty, prefer || dest.assetReconciling.isEmpty {
+            dest.assetReconciling = src.assetReconciling
+            dest.assetEntityTotal = src.assetEntityTotal ?? dest.assetEntityTotal
+        } else if dest.assetEntityTotal == nil {
+            dest.assetEntityTotal = src.assetEntityTotal
         }
-        return candidates.last!.rows
+        if !src.flowReconciling.isEmpty, prefer || dest.flowReconciling.isEmpty {
+            dest.flowReconciling = src.flowReconciling
+            dest.flowEntityTotal = src.flowEntityTotal ?? dest.flowEntityTotal
+        } else if dest.flowEntityTotal == nil {
+            dest.flowEntityTotal = src.flowEntityTotal
+        }
     }
 
     /// TextBlock 生 HTML（`breakdownContentHash` 用）。
@@ -45,12 +72,12 @@ enum SegmentAssetsDifferenceTable {
         XBRLUtils.extractTextblockHtml(in: xbrlDir, textblockTag: textBlockTag)
     }
 
-    private static func tableLooksLikeSegmentAssets(rows: Elements) -> Bool {
+    private static func tableLooksLikeSegmentMetrics(rows: Elements) -> Bool {
         for row in rows {
             guard let cells = try? row.select("td, th"), !cells.isEmpty(),
                   let label = try? cells.first()?.text(trimAndNormaliseWhitespace: true)
             else { continue }
-            if isAssetsMetricHeader(normalizeLabel(label)) { return true }
+            if metricSection(normalizeLabel(label)) != nil { return true }
         }
         return false
     }
@@ -87,44 +114,115 @@ enum SegmentAssetsDifferenceTable {
             }
         }
         let joined = texts.joined()
-        if joined.contains("千円") && !joined.contains("百万円") { return nil }
-        if joined.contains("億円") && !joined.contains("百万円") { return nil }
-        if joined.contains("百万円") { return Financial.millionYen }
+        return AmountUnit.yenScale(containedIn: joined)?.multiplier
+    }
+
+    private enum Section {
+        case assets, flow, skip
+    }
+
+    /// 表の見出し行がどの指標か。売上・利益・減価償却は読まない。
+    private static func metricSection(_ normalized: String) -> Section? {
+        if normalized == "資産" { return .assets }
+        if normalized.contains("増加額") || normalized.contains("資本的支出") { return .flow }
+        if normalized.contains("減価償却") || normalized.contains("売上") || normalized.contains("利益") {
+            return .skip
+        }
         return nil
     }
 
-    private static func isAssetsMetricHeader(_ normalized: String) -> Bool {
-        normalized == "資産"
-    }
-
-    private static func parseAssetsTableRows(
+    private static func parseMetricSections(
         rows: Elements, unitScale: Double
-    ) -> [(label: String, amountYen: Double)]? {
-        var result: [(String, Double)] = []
-        var pastHeader = false
+    ) -> Parsed {
+        var parsed = Parsed()
+        var section: Section?
         var currentValueColumnOffset: Int?
         for row in rows {
             guard let cells = try? row.select("td"), cells.count >= 2 else { continue }
             guard let label = try? cells.first()?.text(trimAndNormaliseWhitespace: true) else { continue }
             let normalized = normalizeLabel(label)
             let dataCells = Array(cells.dropFirst())
-            if !pastHeader {
-                if isAssetsMetricHeader(normalized) {
-                    pastHeader = true
-                    currentValueColumnOffset = resolveCurrentValueColumnOffset(in: dataCells)
+            let hasNumeric = dataCells.contains {
+                XBRLUtils.parseTextblockCellValue((try? $0.text(trimAndNormaliseWhitespace: true)) ?? "") != nil
+            }
+            if !hasNumeric, let next = metricSection(normalized) {
+                section = next
+                currentValueColumnOffset = resolveCurrentValueColumnOffset(in: dataCells)
+                continue
+            }
+            guard let section, section != .skip else { continue }
+            if reportableTotalLabelKeywords.contains(where: { normalized.contains($0) }) { continue }
+            let valueIndex = currentValueColumnOffset ?? (dataCells.count - 1)
+            guard valueIndex >= 0, valueIndex < dataCells.count else { continue }
+            guard let currentText = try? dataCells[valueIndex].text(trimAndNormaliseWhitespace: true)
+            else { continue }
+            let raw: Double?
+            if let parsedValue = XBRLUtils.parseTextblockCellValue(currentText) {
+                raw = parsedValue
+            } else if section == .flow, isDash(currentText) {
+                raw = 0
+            } else {
+                raw = nil
+            }
+            guard let raw else { continue }
+            let yen = raw * unitScale
+            if consolidatedTotalLabelKeywords.contains(where: { normalized.contains($0) }) {
+                switch section {
+                case .assets: parsed.assetEntityTotal = yen
+                case .flow: parsed.flowEntityTotal = yen
+                case .skip: break
                 }
                 continue
             }
-            if reportableTotalLabelKeywords.contains(where: { normalized.contains($0) }) { continue }
-            if consolidatedTotalLabelKeywords.contains(where: { normalized.contains($0) }) { continue }
-            let valueIndex = currentValueColumnOffset ?? (dataCells.count - 1)
-            guard valueIndex >= 0, valueIndex < dataCells.count else { continue }
-            guard let currentText = try? dataCells[valueIndex].text(trimAndNormaliseWhitespace: true),
-                  let raw = XBRLUtils.parseTextblockCellValue(currentText)
-            else { continue }
-            result.append((label, raw * unitScale))
+            switch section {
+            case .assets: parsed.assetReconciling.append((label, yen))
+            case .flow: parsed.flowReconciling.append((label, yen))
+            case .skip: break
+            }
         }
-        return result.isEmpty ? nil : result
+        return parsed
+    }
+
+    private static func isDash(_ text: String) -> Bool {
+        let s = text.trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: "　", with: "")
+        return ["－", "-", "—", "―"].contains(s)
+    }
+
+    /// 3300 型: 列が 報告セグメント計 / その他 / 調整額 / 計上額、行が増加額。
+    /// 調整額の当期と連結財務諸表計上額の当期を読む。積み上げ差額表（行が調整額）は対象外。
+    private static func parseWideIncreaseRow(
+        rows: Elements, unitScale: Double
+    ) -> (adjustmentYen: Double, entityTotalYen: Double)? {
+        var isWide = false
+        for row in rows.prefix(3) {
+            guard let cells = try? row.select("td, th") else { continue }
+            let joined = cells.array()
+                .compactMap { try? $0.text(trimAndNormaliseWhitespace: true) }
+                .joined()
+            if joined.contains("調整額"), joined.contains("連結財務諸表計上額") {
+                isWide = true
+                break
+            }
+        }
+        guard isWide else { return nil }
+        for row in rows {
+            guard let cells = try? row.select("td"), cells.count >= 5,
+                  let label = try? cells.first()?.text(trimAndNormaliseWhitespace: true)
+            else { continue }
+            let normalized = normalizeLabel(label)
+            guard normalized.contains("増加額") else { continue }
+            let data = Array(cells.dropFirst())
+            let values = data.compactMap {
+                XBRLUtils.parseTextblockCellValue(try? $0.text(trimAndNormaliseWhitespace: true))
+            }
+            // 末尾2列が計上額 前/当、その手前2列が調整額 前/当。
+            guard values.count >= 4 else { continue }
+            let entity = values[values.count - 1]
+            let adjustment = values[values.count - 3]
+            return (adjustment * unitScale, entity * unitScale)
+        }
+        return nil
     }
 
     /// `dataCells` はラベル列を除いた期間列。
@@ -162,8 +260,9 @@ extension BreakdownNormalizer {
             return snapshot
         }
 
-        let parsed = SegmentAssetsDifferenceTable.parseReconcilingAmountsYen(in: xbrlDir)
-        guard !parsed.isEmpty else { return snapshot }
+        let diff = SegmentAssetsDifferenceTable.parse(in: xbrlDir)
+        let parsed = diff.assetReconciling
+        guard !parsed.isEmpty || diff.assetEntityTotal != nil else { return snapshot }
 
         let segmentOnlySum = snapshot.rows.filter { $0.rowKind == "segment" }.map(\.amount).reduce(0, +)
         let segmentAmounts = snapshot.rows.filter { $0.rowKind == "segment" }.map(\.amount)
@@ -171,7 +270,7 @@ extension BreakdownNormalizer {
             !segmentAmounts.contains(where: { BreakdownNormalizer.segmentAssetsAmountsEqual($0, item.amountYen) })
         }
         let parsedSum = parsedNoSegmentDupes.map(\.amountYen).reduce(0, +)
-        if let entity = entityAmount, entity > 0 {
+        if let entity = entityAmount ?? diff.assetEntityTotal, entity > 0, !parsedNoSegmentDupes.isEmpty {
             let gap = entity - segmentOnlySum
             let scale = max(1.0, abs(entity), abs(gap), abs(parsedSum))
             if abs(parsedSum - gap) / scale > 0.05 { return snapshot }
@@ -188,6 +287,17 @@ extension BreakdownNormalizer {
                     labelRaw: labelRaw, label: label, amount: amountYen, share: nil, profit: nil,
                     rowKind: "reconciling", description: nil))
         }
+        if rows.first(where: { $0.labelRaw == Xbrl.entityTotalMemberName }) == nil,
+            let entity = diff.assetEntityTotal, entity > 0
+        {
+            rows.append(
+                BreakdownRow(
+                    labelRaw: Xbrl.entityTotalMemberName,
+                    label: Xbrl.codeSideStandardMemberLabels[Xbrl.entityTotalMemberName]
+                        ?? "連結合計又は会社合計",
+                    amount: entity, share: nil, profit: nil,
+                    rowKind: breakdownRowKindEntityTotal, description: nil))
+        }
         guard rows.count > snapshot.rows.count else { return snapshot }
 
         let merged = BreakdownSnapshot(
@@ -196,6 +306,84 @@ extension BreakdownNormalizer {
             rows: rows.sorted { $0.labelRaw < $1.labelRaw }, sourceKind: snapshot.sourceKind,
             needsReview: snapshot.needsReview, warnings: snapshot.warnings)
         return BreakdownNormalizer.finalizeSegmentAssetsSnapshot(merged)
+    }
+
+    /// 差額表の増加額セクションを flow スナップショットへ足す。XBRL 調整があるときは足さない。
+    static func enrichFlowWithDifferenceTable(
+        snapshot: BreakdownSnapshot?, xbrlDir: URL
+    ) -> BreakdownSnapshot? {
+        let diff = SegmentAssetsDifferenceTable.parse(in: xbrlDir)
+        if snapshot == nil {
+            guard let entity = diff.flowEntityTotal, entity > 0 else { return nil }
+            var rows: [BreakdownRow] = []
+            for (label, amountYen) in diff.flowReconciling {
+                rows.append(
+                    BreakdownRow(
+                        labelRaw: "flowDifference:\(normalizeDifferenceLabel(label))",
+                        label: label, amount: amountYen, share: amountYen / entity, profit: nil,
+                        rowKind: "reconciling"))
+            }
+            rows.append(
+                BreakdownRow(
+                    labelRaw: Xbrl.entityTotalMemberName,
+                    label: Xbrl.codeSideStandardMemberLabels[Xbrl.entityTotalMemberName]
+                        ?? "連結合計又は会社合計",
+                    amount: entity, share: 1, profit: nil,
+                    rowKind: breakdownRowKindEntityTotal))
+            return BreakdownSnapshot(
+                axis: breakdownAxisCapitalExpenditures, denominator: entity,
+                denominatorTag: SegmentAssetsDifferenceTable.textBlockTag,
+                rows: rows, sourceKind: "html_table", needsReview: false, warnings: [])
+        }
+        guard var snapshot else { return nil }
+        let existingReconciling = snapshot.rows.filter { $0.rowKind == "reconciling" }
+        if existingReconciling.isEmpty {
+            let segmentAmounts = snapshot.rows.filter { $0.rowKind == "segment" }.map(\.amount)
+            let extras = diff.flowReconciling.filter { item in
+                !segmentAmounts.contains {
+                    BreakdownNormalizer.segmentAssetsAmountsEqual($0, item.amountYen)
+                }
+            }
+            let existingLabels = Set(snapshot.rows.map { normalizeDifferenceLabel($0.label ?? $0.labelRaw) })
+            for (label, amountYen) in extras {
+                let key = normalizeDifferenceLabel(label)
+                if existingLabels.contains(key) { continue }
+                snapshot.rows.append(
+                    BreakdownRow(
+                        labelRaw: "flowDifference:\(key)", label: label, amount: amountYen,
+                        share: nil, profit: nil, rowKind: "reconciling"))
+            }
+        }
+        if snapshot.denominator <= 0, let entity = diff.flowEntityTotal, entity > 0 {
+            snapshot.denominator = entity
+            snapshot.denominatorTag = SegmentAssetsDifferenceTable.textBlockTag
+            snapshot.rows = snapshot.rows.map { row in
+                var copy = row
+                copy.share = row.amount / entity
+                return copy
+            }
+        }
+        if snapshot.rows.first(where: { $0.labelRaw == Xbrl.entityTotalMemberName }) == nil,
+            let entity = diff.flowEntityTotal, entity > 0
+        {
+            snapshot.rows.append(
+                BreakdownRow(
+                    labelRaw: Xbrl.entityTotalMemberName,
+                    label: Xbrl.codeSideStandardMemberLabels[Xbrl.entityTotalMemberName]
+                        ?? "連結合計又は会社合計",
+                    amount: entity, share: 1, profit: nil,
+                    rowKind: breakdownRowKindEntityTotal))
+        }
+        let additive = snapshot.rows
+            .filter { $0.rowKind == "segment" || $0.rowKind == "reconciling" }
+            .map(\.amount).reduce(0, +)
+        if snapshot.denominator > 0, additive > 0,
+            abs(additive - snapshot.denominator) / snapshot.denominator <= 0.05
+        {
+            snapshot.warnings.removeAll { $0.hasSuffix("_segment_sum_far_from_total") }
+            snapshot.needsReview = !snapshot.warnings.isEmpty
+        }
+        return snapshot
     }
 
     private static func normalizeDifferenceLabel(_ label: String) -> String {

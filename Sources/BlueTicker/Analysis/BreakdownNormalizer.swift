@@ -852,9 +852,7 @@ enum BreakdownNormalizer {
             let rowKind: String
             if segment.isTotal {
                 rowKind = "subtotal"
-            } else if normalized.contains("調整") || normalized == "全社"
-                || normalized == "全社(共通)" || normalized == "全社（共通）"
-            {
+            } else if ["調整", "全社", "本社", "共通", "消去"].contains(where: { normalized.contains($0) }) {
                 rowKind = "reconciling"
             } else {
                 rowKind = "segment"

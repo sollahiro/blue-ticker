@@ -45,15 +45,62 @@ import Testing
         #expect(rows[0].amountYen == 23_310_000_000)
     }
 
-    /// 千円のみの表は採用しない。
-    @Test func refusesThousandYenUnit() throws {
+    /// 千円の表も円に換算する（3300 型）。
+    @Test func acceptsThousandYenUnit() throws {
         let body = """
         <table><tr><td>資産</td><td>（千円）</td></tr>
         <tr><td>全社資産</td><td>12,000</td></tr>
         </table>
         """
         let dir = try writeFixtureHtml(body, unitCaption: nil)
-        #expect(SegmentAssetsDifferenceTable.parseReconcilingAmountsYen(in: dir).isEmpty)
+        let rows = SegmentAssetsDifferenceTable.parseReconcilingAmountsYen(in: dir)
+        #expect(rows.count == 1)
+        #expect(rows[0].amountYen == 12_000_000)
+    }
+
+    /// 増加額セクションの調整と計上額。資産の全社も同時に読む。
+    @Test func parsesFlowIncreaseAndEntityTotalFromStackedTable() throws {
+        let body = """
+        <table>
+        <tr><td></td><td>前連結会計年度</td><td>当連結会計年度</td></tr>
+        <tr><td>資産</td><td></td><td></td></tr>
+        <tr><td>報告セグメント計</td><td>10,000</td><td>11,000</td></tr>
+        <tr><td>全社資産</td><td>2,000</td><td>3,171,816</td></tr>
+        <tr><td>連結財務諸表計上額</td><td>12,000</td><td>45,860,691</td></tr>
+        <tr><td>増加額</td><td></td><td></td></tr>
+        <tr><td>報告セグメント計</td><td>100</td><td>3,550,312</td></tr>
+        <tr><td>調整額</td><td>10</td><td>48,984</td></tr>
+        <tr><td>連結財務諸表計上額</td><td>110</td><td>3,599,296</td></tr>
+        </table>
+        """
+        let dir = try writeFixtureHtml(body, unitCaption: "（単位：千円）")
+        let parsed = SegmentAssetsDifferenceTable.parse(in: dir)
+        #expect(parsed.assetReconciling.contains { $0.label.contains("全社") && $0.amountYen == 3_171_816_000 })
+        #expect(parsed.assetEntityTotal == 45_860_691_000)
+        #expect(parsed.flowReconciling.contains { $0.label.contains("調整") && $0.amountYen == 48_984_000 })
+        #expect(parsed.flowEntityTotal == 3_599_296_000)
+    }
+
+    /// 3300 その他の項目: 列が 調整額 / 計上額、行が増加額。
+    @Test func parsesWideIncreaseRowAdjustmentAndEntityTotal() throws {
+        let body = """
+        <table>
+        <tr><td>その他の項目</td><td colspan="2">報告セグメント計</td>
+        <td colspan="2">その他</td><td colspan="2">調整額</td>
+        <td colspan="2">連結財務諸表計上額</td></tr>
+        <tr><td></td><td>前連結</td><td>当連結</td><td>前連結</td><td>当連結</td>
+        <td>前連結</td><td>当連結</td><td>前連結</td><td>当連結</td></tr>
+        <tr><td>減価償却費</td><td>1</td><td>2</td><td>3</td><td>4</td>
+        <td>5</td><td>6</td><td>7</td><td>8</td></tr>
+        <tr><td>有形固定資産及び無形固定資産の増加額</td>
+        <td>1,456,518</td><td>3,547,370</td><td>5,061</td><td>2,940</td>
+        <td>3,724</td><td>48,984</td><td>1,465,304</td><td>3,599,296</td></tr>
+        </table>
+        """
+        let dir = try writeFixtureHtml(body, unitCaption: "（単位：千円）")
+        let parsed = SegmentAssetsDifferenceTable.parse(in: dir)
+        #expect(parsed.flowReconciling.contains { $0.label.contains("調整") && $0.amountYen == 48_984_000 })
+        #expect(parsed.flowEntityTotal == 3_599_296_000)
     }
 
     /// 二つの資産表があるとき後段（当連結見出し）を採用。

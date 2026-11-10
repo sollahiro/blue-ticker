@@ -71,7 +71,7 @@ import Foundation
                 return (value, tag)
             },
             flowCompanyTotal: flowTotal, prebuiltAssets: assets,
-            prebuiltOverviewFacts: overviewFacts)
+            prebuiltOverviewFacts: overviewFacts, differenceTableDir: dir)
     }
 
     /// facts 経路の Overview スナップショットに未タグ行の補完をかける（本番の resolveCapexBreakdown と同じ順）。
@@ -231,6 +231,71 @@ import Foundation
             #expect(entity.rowKind == breakdownRowKindEntityTotal)
             #expect(entity.capitalExpendituresOverview == 96_439_000_000)
         }
+    }
+
+    /// source: code=3111 fy_end=2026-03-31 doc_id=S100Z4BV page=17 field=capex.overview row=調整（全社）
+    @Test func omiKenshiOverviewCorporateAdjustmentRow() async throws {
+        guard await Self.ensureAvailable("S100Z4BV") else { return }
+        let snapshot = try #require(Self.snapshot("S100Z4BV"))
+        let dir = Self.xbrlDir("S100Z4BV")
+        let text = try #require(CapexProseTotalDecision.overviewPlainText(in: dir))
+        let filled = await CapexProseTotalDecision.fillShortfall(
+            payload: snapshot, cell: .overview, plainText: text,
+            decider: UnavailableCapexProseDecider())
+        #expect(filled.payload.rows.contains {
+            $0.rowKind == "reconciling" && $0.capitalExpendituresOverview == 106_000_000
+        })
+    }
+
+    /// source: code=3300 fy_end=2026-06-30 doc_id=S100Z3CP page=101 field=capex.flow
+    @Test func ambitionDxFlowDenominatorAndCorporateAssetsFromDifferenceTable() async throws {
+        guard await Self.ensureAvailable("S100Z3CP") else { return }
+        let snapshot = try #require(Self.snapshot("S100Z3CP"))
+        #expect(snapshot.flow?.denominator == 3_599_296_000)
+        #expect(snapshot.rows.contains { $0.rowKind == "reconciling" && $0.flow == 48_984_000 })
+        #expect(snapshot.rows.contains {
+            $0.rowKind == "reconciling" && $0.segmentAssets == 3_171_816_000
+        })
+        #expect(snapshot.rows.contains {
+            $0.rowKind == "reconciling" && $0.segmentAssets == -59_621_000
+        })
+    }
+
+    /// source: code=3524 fy_end=2026-04-30 doc_id=S100YQZ2 page=17 field=capex.overview EntityTotal
+    @Test func nittoSeimoEntityTotalOverviewFromCompanyTotal() async throws {
+        guard await Self.ensureAvailable("S100YQZ2") else { return }
+        let snapshot = try #require(Self.snapshot("S100YQZ2"))
+        #expect(snapshot.capitalExpendituresOverview?.denominator == 1_528_000_000)
+        #expect(snapshot.rows.contains {
+            $0.rowKind == breakdownRowKindEntityTotal
+                && $0.capitalExpendituresOverview == 1_528_000_000
+        })
+    }
+
+    /// source: code=5967 fy_end=2026-05-31 doc_id=S100YZDE page=14 field=capex.overview row=全セグメント共通
+    @Test func toneSharedOverviewRemainderFromProse() async throws {
+        guard await Self.ensureAvailable("S100YZDE") else { return }
+        let snapshot = try #require(Self.snapshot("S100YZDE"))
+        let dir = Self.xbrlDir("S100YZDE")
+        let text = try #require(CapexProseTotalDecision.overviewPlainText(in: dir))
+        let filled = await CapexProseTotalDecision.fillShortfall(
+            payload: snapshot, cell: .overview, plainText: text,
+            decider: UnavailableCapexProseDecider())
+        #expect(filled.payload.rows.contains {
+            $0.rowKind == "reconciling" && $0.capitalExpendituresOverview == 26_456_000
+        })
+    }
+}
+
+private struct UnavailableCapexProseDecider: CapexProseDeciding {
+    func classify(sentence: String) async -> CapexProseChoice {
+        CapexProseChoice(sentence: sentence, selected: nil, probability: nil)
+    }
+    func classifyRemainder(sentence: String) async -> CapexProseChoice {
+        CapexProseChoice(sentence: sentence, selected: nil, probability: nil)
+    }
+    func classifyExclusion(sentence: String) async -> CapexProseChoice {
+        CapexProseChoice(sentence: sentence, selected: nil, probability: nil)
     }
 }
 

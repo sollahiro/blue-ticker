@@ -145,29 +145,60 @@ enum CapexProseTotalDecision {
         code: String = "", docID: String = "", decider: any CapexProseDeciding
     ) async -> (payload: BreakdownSnapshotPayload, audit: SegmentNoteJevAuditPayload?) {
         guard let gap = shortfall(in: payload, cell: cell) else { return (payload, nil) }
-        let pool = candidates(in: plainText, limit: nil)
+        var pool = candidates(in: plainText, limit: nil)
+        for sentence in BreakdownProseToolkit.sentences(in: plainText)
+        where BreakdownProseToolkit.looksLikeUnallocatedRemainder(sentence) {
+            for yen in BreakdownProseToolkit.positiveYenAmounts(in: sentence) {
+                // 既存行との一致は円単位。5百万円幅だと千円開示の別金額までタグ済み扱いになる。
+                let tagged = payload.rows
+                    .filter { BreakdownProseToolkit.isAdditiveRowKind($0.rowKind) }
+                    .compactMap { cellAmount($0, cell: cell) }
+                if tagged.contains(where: { abs($0 - yen) < 0.5 }) { continue }
+                if !BreakdownProseToolkit.matchesShortfall(yen, gap: gap) { continue }
+                if !pool.contains(where: { $0.yen == yen && $0.sentence == sentence }) {
+                    pool.append(BreakdownProseCandidate(sentence: sentence, yen: yen))
+                }
+            }
+        }
+        let taggedYen = payload.rows
+            .filter { BreakdownProseToolkit.isAdditiveRowKind($0.rowKind) }
+            .compactMap { cellAmount($0, cell: cell) }
+        let denominatorYen = totals(payload, cell: cell)?.denominator
+        pool.removeAll { candidate in
+            taggedYen.contains(where: { abs($0 - candidate.yen) < 0.5 })
+                || denominatorYen.map { abs(candidate.yen - $0) < 0.5 } == true
+        }
         guard let match = BreakdownProseToolkit.matchRemainderCandidate(
             pool: pool, gap: gap,
             matchesTaggedRow: { matchesTaggedRow($0, payload: payload, cell: cell) })
         else { return (payload, nil) }
-        guard let result = await BreakdownProseToolkit.acceptedClassification(
-            sentence: match.sentence, policy: remainderPolicy,
-            optionKeys: CapexRemainderRole.optionKeys,
-            appliedKey: CapexRemainderRole.unallocatedRemainder,
-            classify: { await decider.classifyRemainder(sentence: match.sentence) })
-        else { return (payload, nil) }
-        let filled = payloadByAddingAdjustment(
-            payload, cell: cell, yen: match.yen, label: remainderLabel(in: match.sentence),
-            warning: breakdownWarningCapexProseRemainder)
+        let filled: BreakdownSnapshotPayload
+        let audit: SegmentNoteJevAuditPayload?
+        if BreakdownProseToolkit.looksLikeUnallocatedRemainder(match.sentence) {
+            filled = payloadByAddingAdjustment(
+                payload, cell: cell, yen: match.yen, label: remainderLabel(in: match.sentence),
+                warning: breakdownWarningCapexProseRemainder)
+            audit = BreakdownProseToolkit.companyTotalAudit(
+                code: code, docID: docID, axis: breakdownAxisCapex,
+                sentences: [match.sentence], calls: [])
+        } else {
+            guard let result = await BreakdownProseToolkit.acceptedClassification(
+                sentence: match.sentence, policy: remainderPolicy,
+                optionKeys: CapexRemainderRole.optionKeys,
+                appliedKey: CapexRemainderRole.unallocatedRemainder,
+                classify: { await decider.classifyRemainder(sentence: match.sentence) })
+            else { return (payload, nil) }
+            filled = payloadByAddingAdjustment(
+                payload, cell: cell, yen: match.yen, label: remainderLabel(in: match.sentence),
+                warning: breakdownWarningCapexProseRemainder)
+            audit = BreakdownProseToolkit.appliedSentenceAudit(
+                code: code, docID: docID, axis: breakdownAxisCapex,
+                result: result, sentence: match.sentence, policy: remainderPolicy)
+        }
         guard !cell.farWarnings(flowMetric: filled.flowMetric).contains(where: {
             filled.warnings.contains($0)
         }) else { return (payload, nil) }
-        return (
-            filled,
-            BreakdownProseToolkit.appliedSentenceAudit(
-                code: code, docID: docID, axis: breakdownAxisCapex,
-                result: result, sentence: match.sentence, policy: remainderPolicy)
-        )
+        return (filled, audit)
     }
 
     static func fillExclusion(

@@ -120,6 +120,61 @@ private struct ScriptedCapexDecider: CapexProseDeciding {
         #expect(filled.audit?.applied == true)
     }
 
+    /// 3111 型: 総額110百万円と全社106百万円がどちらも不足額の5百万円幅に入る。総額は分母なので捨てる。
+    @Test func fillsRemainderWhenCompanyTotalAlsoLiesWithinShortfallTolerance() async {
+        let payload = BreakdownSnapshotPayload(
+            axis: breakdownAxisCapex, denominator: 0, denominatorTag: "",
+            rows: [
+                BreakdownRowPayload(
+                    labelRaw: "RealEstateMember", label: "不動産", amount: 0, profit: nil,
+                    rowKind: "segment", capitalExpendituresOverview: 4_000_000),
+            ],
+            sourceKind: breakdownSourceXbrlFacts, needsReview: true, warnings: [
+                "capital_expenditures_overview_segment_sum_far_from_total"
+            ],
+            capitalExpendituresOverview: CapexMetricTotalsPayload(
+                denominator: 110_000_000, denominatorTag: "CapitalExpendituresOverviewOfCapitalExpendituresEtc"))
+        let text = """
+        当社グループでは、不動産事業及び全社を中心に110百万円の設備投資を実施しました。\
+        不動産においては、飯田工場の設備に4百万円の設備投資を行いました。\
+        全社において、加古川工場外構・構内設備を中心に、106百万円の設備投資を行いました。
+        """
+        let filled = await CapexProseTotalDecision.fillShortfall(
+            payload: payload, cell: .overview, plainText: text,
+            decider: ScriptedCapexDecider(selected: [:], unavailable: true))
+        #expect(filled.payload.rows.contains {
+            $0.rowKind == "reconciling" && $0.capitalExpendituresOverview == 106_000_000
+        })
+    }
+
+    /// 5967 型: 総額・国内・海外・全セグメント共通が同一文。タグ済み金額は捨て、不足額だけを残す。
+    @Test func fillsRemainderFromMultiAmountSharedSentenceWithoutJev() async {
+        let payload = BreakdownSnapshotPayload(
+            axis: breakdownAxisCapex, denominator: 0, denominatorTag: "",
+            rows: [
+                BreakdownRowPayload(
+                    labelRaw: "DomesticMember", label: "国内", amount: 0, profit: nil,
+                    rowKind: "segment", capitalExpendituresOverview: 26_293_000),
+                BreakdownRowPayload(
+                    labelRaw: "OverseasMember", label: "海外", amount: 0, profit: nil,
+                    rowKind: "segment", capitalExpendituresOverview: 4_856_000),
+            ],
+            sourceKind: breakdownSourceXbrlFacts, needsReview: true, warnings: [
+                "capital_expenditures_overview_segment_sum_far_from_total"
+            ],
+            capitalExpendituresOverview: CapexMetricTotalsPayload(
+                denominator: 57_606_000, denominatorTag: "CapitalExpendituresOverviewOfCapitalExpendituresEtc"))
+        let text = "設備投資の総額は57,606千円であり、国内26,293千円、海外4,856千円、全セグメント共通で26,456千円であります。"
+        let filled = await CapexProseTotalDecision.fillShortfall(
+            payload: payload, cell: .overview, plainText: text,
+            decider: ScriptedCapexDecider(selected: [:], unavailable: true))
+        #expect(filled.payload.rows.contains {
+            $0.rowKind == "reconciling" && $0.capitalExpendituresOverview == 26_456_000
+        })
+        #expect(filled.payload.rows.filter { $0.rowKind == "segment" }.count == 2)
+        #expect(filled.audit?.applied == true)
+    }
+
     @Test func doesNotFillWhenResponseIsMissing() async {
         let decided = await CapexProseTotalDecision.decide(
             plainText: "設備投資は4,409百万円であります。",
