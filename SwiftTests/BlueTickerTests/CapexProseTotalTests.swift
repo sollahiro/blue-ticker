@@ -127,6 +127,49 @@ private struct ScriptedCapexDecider: CapexProseDeciding {
         #expect(decided == .unavailable)
     }
 
+    /// 穴吹興産 S100WQZC: 取得いたしましたの1文は Jev 不達でも総額。
+    /// source: code=8928 fy_end=2025-06-30 doc_id=S100WQZC page=31 field=capex
+    @Test func soleAcquisitionSentenceIsCompanyTotalWithoutJev() async {
+        let decided = await CapexProseTotalDecision.decide(
+            plainText: "太陽光発電設備、倉庫及び高圧受電設備等、2,180,870千円を取得いたしました。",
+            decider: ScriptedCapexDecider(selected: [:], unavailable: true))
+        guard case .applied(let total) = decided else {
+            Issue.record("sole acquisition sentence should apply without Jev")
+            return
+        }
+        #expect(total.yen == 2_180_870_000)
+        let snapshot = CapexProseTotalDecision.snapshotFromCompanyTotal(total)
+        #expect(snapshot.capitalExpendituresOverview?.denominator == 2_180_870_000)
+        #expect(snapshot.sourceKind == breakdownSourceCapexProse)
+    }
+
+    /// キングジム: 万円の総額文が工場の一部と並んでも総額を採る。Jev は呼ばない。
+    /// source: code=7962 fy_end=2026-06-20 doc_id=S100Z29T page=23 field=capex
+    @Test func uniqueSogakuOkuManIsCompanyTotalWithoutJev() async {
+        let text = """
+            当連結会計年度において、総額６億8,006万円の設備投資を実施いたしました。\
+            その主なものは、工場生産設備の３億5,256万円であります。
+            """
+        let decided = await CapexProseTotalDecision.decide(
+            plainText: text,
+            decider: ScriptedCapexDecider(selected: [:], unavailable: true))
+        guard case .applied(let total) = decided else {
+            Issue.record("unique 総額 sentence should apply without Jev")
+            return
+        }
+        #expect(total.yen == 680_060_000)
+    }
+
+    /// 7050: 金額が無い「設備投資はありません」から 0 円は作らない（0 と null は未確定）。
+    @Test func noCapitalExpendituresSentenceDoesNotInventZero() async {
+        let text = "当連結会計年度における設備投資はありません。"
+        #expect(CapexProseTotalDecision.mentionsNoCurrentCapitalExpenditures(text))
+        let decided = await CapexProseTotalDecision.decide(
+            plainText: text,
+            decider: ScriptedCapexDecider(selected: [:], unavailable: true))
+        #expect(decided == .notApplied)
+    }
+
     @Test func discardsPartialAmountAndSegmentAmount() async {
         let partial = await CapexProseTotalDecision.decide(
             plainText: "ヘルスケアの設備投資は10百万円であります。",
