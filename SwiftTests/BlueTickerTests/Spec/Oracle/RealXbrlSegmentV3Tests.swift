@@ -85,7 +85,8 @@ import Testing
             labelsByTag: labels)
     }
 
-    /// トヨタ 7203 S100Y8NY: 自動車の設備投資・資産は tagged 円。丸め幅の差額は差額行に出さない。
+    /// トヨタ: 自動車の設備投資・資産は tagged 円。丸め幅の差額は差額行に出さない。
+    // source: code=7203 fy_end=2026-03-31 doc_id=S100Y8NY page=146 field=segment.capital_expenditures
     @Test func toyotaKeepsRawYenAndOmitsRoundingDifference() async throws {
         guard await Self.ensureAvailable("S100Y8NY") else { return }
         let assembled = try #require(Self.assemble("S100Y8NY"))

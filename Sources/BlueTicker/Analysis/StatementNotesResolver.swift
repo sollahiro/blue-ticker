@@ -640,10 +640,6 @@ enum StatementNotesResolver {
                     var found: (idx: Int, value: Double)?
                     // 右端の当期金額列を正とする（JR東海: 左の前期列を取るとカテゴリが欠ける）。
                     for i in primaryAmountCols.reversed() where i < cols.count {
-                        if SegmentExplicitZero.isDashCell(cols[i]) {
-                            found = (i, 0)
-                            break
-                        }
                         if let v = XBRLUtils.parseTextblockCellValue(cols[i]) {
                             found = (i, v)
                             break
@@ -663,11 +659,6 @@ enum StatementNotesResolver {
                     var idx: Int?
                     var parsed: Double?
                     for i in stride(from: cols.count - 1, through: 1, by: -1) {
-                        if SegmentExplicitZero.isDashCell(cols[i]) {
-                            idx = i
-                            parsed = 0
-                            break
-                        }
                         if let v = XBRLUtils.parseTextblockCellValue(cols[i]) {
                             idx = i
                             parsed = v
