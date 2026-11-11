@@ -41,11 +41,11 @@ geography は変えない。本邦90％の `not_found` は既存の Jev ゲー�
 | API キー | 意味 |
 |---|---|
 | `segments` | 報告セグメント（事業とも地域とも限らない）。filing-content の本文キー |
-| `segment` | 報告セグメント別売上（breakdown 軸）。行のセル `segment_assets` / `flow` / `equity_method_investments` に同じ表の列 |
+| `segment` | 報告セグメント別売上（breakdown 軸）。行のセル `external_sales` / `profit` / `segment_assets` / `capital_expenditures` / `noncurrent_asset_additions` / `equity_method_investments` |
 | `geography` | 地域別注記 |
 | `employees` | 従業員数のセグメント別内訳 |
 | `goodwill` | 報告セグメント別ののれん（セル `opening` / `closing` / `amortization` / `impairment`） |
-| `capex` | 設備投資マトリクス（行=セグメント / 調整額 / EntityTotal。セル= `segment_assets` / `flow` / `capital_expenditures_overview`）。`flow` は書類単位で資本的支出があればそれ、無ければ非流動性資産への追加額。旧 4 軸名は廃止 |
+| `capex` | 廃止（REST は 404）。設備投資は `segment` の CE/NAA セルと `overview` ブロック |
 | `interest_bearing_debt` | 有利子負債（社債・借入金＋リース負債）。行=負債の行、セル= `opening` / `closing`、行ごとに `source`・`maturity_class`・`in_total`・`excluded_reason`・`paired_row_index`。合計は `in_total=true` の行だけ |
 | `fixed_assets` | 固定資産の種類別（土地・建物・ソフトウェア・のれん等の正味帳簿価額）。行ごとに `asset_class`・`source_tag`。報告セグメント別の `goodwill` とは別 |
 
@@ -53,12 +53,11 @@ geography は変えない。本邦90％の `not_found` は既存の Jev ゲー�
 
 | axis | 内容 |
 |---|---|
-| `segment` | 報告セグメント別売上（`segment_basis` / `disclosure_basis`）。セル `segment_assets` / `flow` / `equity_method_investments` |
+| `segment` | 報告セグメント（`segment-v3`。`segment_key`、セル `{value,basis,source,decimals?}`、`overview`、`sales_basis`、`rounding_gaps`） |
 | `product_service` | 製品・サービス別売上（関連情報・収益分解。報告セグメント facts は載せない） |
 | `geography` | 地域別売上（関連情報。報告セグメントのコピーはしない。省略は `same_as`）。セル `assets`（地域ごとの有形固定資産／非流動資産） |
 | `employees` | 従業員内訳 |
 | `goodwill` | 報告セグメント別ののれん（`opening` / `closing` / `amortization` / `impairment`） |
-| `capex` | 設備投資マトリクス |
 | `interest_bearing_debt` | 有利子負債内訳 |
 | `fixed_assets` | 固定資産の種類別（有形 / 無形。IFRS 注記・日本基準 BS） |
 
@@ -175,6 +174,7 @@ v2（`breakdown-interest-bearing-debt-v2`）: 行と合計が変わる変更（�
 - 2026-11: REST の `axis` 省略時の既定を `product_service` から `segment` に変えた（breaking。`apiSkillsSchemaVersion` 13）。
 - 2026-11: `segment` 行に報告セグメント表のセル `segment_assets` / `flow` / `equity_method_investments` を足し、軸 `equity_method_investments` を廃止（REST は常に 404、`apiSkillsSchemaVersion` 12、`breakdown-segment-v2`。床は 1 のまま）。値は capex 軸・旧軸と同じ決定論の正規化（`SegmentMetricCells`）で、行は報告セグメント member の `labelRaw` で突き合わせる。segment に無い member の値は捨てて `segment_metric_rows_unmatched`（公開は止めない）。capex 軸の本文からの不足分補完（Jev）は segment のセルには掛けない。capex 軸はそのまま。DB の既存 `equity_method_investments` 行は読まないだけで残る。
 - 2026-11: 軸 `research_and_development` を廃止（breaking。REST は常に 404、`apiSkillsSchemaVersion` 11）。ingest の `breakdowns-rd` と本文総額・不足分補完の Jev を削除。Summary `rd` は軸と別の抽出（`RDExtractor`）で、`fin-vN` と組立指紋は据え置き（定数 `breakdown-research-and-development-v2` は指紋のために残す）。DB の既存行は読まないだけで残る。
+- 2026-11: 軸 `capex` を `segment` に統合（breaking。`apiSkillsSchemaVersion` 15、`breakdown-segment-v3`、read 床 3）。行は `segment_key` とセル `{value,basis,source,decimals?}`。丸め幅の差額は差額行に出さず `rounding_gaps`。年次は `GET /waterfall/segment`、つなぎは `/waterfall/segment/transitions`（同じキーは暗黙の connect）。値は tagged 円のまま丸めない。
 
 ## 非目標
 

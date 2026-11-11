@@ -27,6 +27,13 @@ public func applyingBreakdownCapexProseOverview(
 
 /// 格納済み capex 軸のペイロードから、本文由来（`capex_prose`）の会社全体総額（円）を返す。
 public func capexProseOverviewYen(in payload: BreakdownSnapshotPayload) -> Double? {
+    if let total = payload.overview?.total,
+        (total.source == breakdownDenominatorTagCapexProse
+            || total.basis == breakdownSourceCapexProse),
+        total.value > 0, total.value.isFinite
+    {
+        return total.value
+    }
     guard let overview = payload.capitalExpendituresOverview,
         overview.denominatorTag == breakdownDenominatorTagCapexProse,
         overview.denominator > 0, overview.denominator.isFinite

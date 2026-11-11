@@ -109,16 +109,17 @@ struct IngestAxesTests {
 
     @Test("単一・複数の軸を選択")
     func selectsAxes() {
-        #expect(parseIngestAxes("capex") == ["capex"])
+        #expect(parseIngestAxes("segment") == ["segment"])
         #expect(
-            parseIngestAxes("capex, goodwill")
-                == ["capex", "goodwill"])
+            parseIngestAxes("segment, goodwill")
+                == ["segment", "goodwill"])
+        #expect(parseIngestAxes("capex") == nil)
         #expect(parseIngestAxes("research_and_development") == nil)
     }
 
     @Test("未知の軸・空は nil")
     func rejectsUnknownOrEmpty() {
-        #expect(parseIngestAxes("capex,unknown_axis") == nil)
+        #expect(parseIngestAxes("segment,unknown_axis") == nil)
         #expect(parseIngestAxes("") == nil)
         #expect(parseIngestAxes(",") == nil)
     }

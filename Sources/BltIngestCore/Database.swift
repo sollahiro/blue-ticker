@@ -103,6 +103,7 @@ package func registerBltMigrations(_ migrations: Migrations) {
     migrations.add(DropEdinetXbrlFacts())
     // 業種 KPI（銀行 XBRL 数値。stage は `industry-kpis`。既定 drain には載せない）。
     migrations.add(CreateIndustryKpiFacts())
+    migrations.add(CreateCompanySegmentTransitions())
 }
 
 /// `blt-ingest migrate` エントリ。DATABASE_URL のスキーマへ未適用のマイグレーションだけを適用する。

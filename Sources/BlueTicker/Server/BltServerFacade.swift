@@ -792,39 +792,113 @@ public extension BltServerContext {
                                         audit: result.audit.map(llmBreakdownAuditPayload(from:))))
     }
 
-    /// segment 行へ報告セグメント表のセル（segment_assets / flow / equity_method_investments）を載せる。
-    /// capex 軸と同じ決定論の正規化を使い、本文からの不足分補完（Jev）はしない。
+    /// segment-v3: 売上・利益・資産・CE・NAA を member 和集合の1行に載せ、Overview は別ブロック。
     fileprivate func segmentPayloadWithMetricCells(
         _ payload: BreakdownSnapshotPayload, docID: String, xbrlDir: URL
     ) async -> BreakdownSnapshotPayload {
         let cached = await businessSegmentDimensionCache.load(docID: docID, xbrlDir: xbrlDir)
         let memberParents = XBRLUtils.operatingSegmentMemberParents(in: xbrlDir)
-        let cePresent = CapexNormalizer.filingHasCurrentTags(
-            in: xbrlDir, tags: Xbrl.segmentCapitalExpenditureTags)
-        let naaPresent = CapexNormalizer.filingHasCurrentTags(
-            in: xbrlDir, tags: Xbrl.segmentNoncurrentAssetAdditionTags)
+        let ceTags = SegmentMetricDiscovery.capitalExpenditureTags(in: cached.facts)
+        let naaTags = Xbrl.segmentNoncurrentAssetAdditionTags
+        let cePresent = CapexNormalizer.filingHasCurrentTags(in: xbrlDir, tags: ceTags)
+        let naaPresent = CapexNormalizer.filingHasCurrentTags(in: xbrlDir, tags: naaTags)
         let allTags = XBRLUtils.collectAllNumericElements(in: xbrlDir, nilAsZero: false)
-        let flowTags = cePresent
-            ? Xbrl.segmentCapitalExpenditureTags : Xbrl.segmentNoncurrentAssetAdditionTags
-        let flowItem = resolveItem(fieldSetFromDuration(allTags), tags: flowTags)
-        let flowTotal: (value: Double, tag: String)? =
-            flowItem.current.flatMap { value in
-                guard let tag = flowItem.tag, value > 0 else { return nil }
+        let durationFS = fieldSetFromDuration(allTags)
+        let ceItem = resolveItem(durationFS, tags: ceTags)
+        let naaItem = resolveItem(durationFS, tags: naaTags)
+        let ceTotal: (value: Double, tag: String)? =
+            ceItem.current.flatMap { value in
+                guard let tag = ceItem.tag, value != 0 else { return nil }
+                return (value, tag)
+            }
+        let naaTotal: (value: Double, tag: String)? =
+            naaItem.current.flatMap { value in
+                guard let tag = naaItem.tag, value != 0 else { return nil }
                 return (value, tag)
             }
         var assets = BreakdownNormalizer.normalizeSegmentAssets(
             facts: cached.facts, labelsByTag: cached.labelsByTag, memberParents: memberParents)
         assets = BreakdownNormalizer.enrichSegmentAssetsWithDifferenceTable(
             snapshot: assets, xbrlDir: xbrlDir)
-        let capex = CapexNormalizer.normalize(
-            facts: cached.facts, labelsByTag: cached.labelsByTag, memberParents: memberParents,
-            capitalExpendituresPresent: cePresent, noncurrentAssetAdditionsPresent: naaPresent,
-            flowCompanyTotal: flowTotal, prebuiltAssets: assets)
+        var capitalExpenditures = BreakdownNormalizer.normalizeCapitalExpenditures(
+            facts: cached.facts, labelsByTag: cached.labelsByTag, memberParents: memberParents)
+        capitalExpenditures = CapexNormalizer.withCompanyTotalDenominator(
+            capitalExpenditures, companyTotal: ceTotal, warningPrefix: "capital_expenditures")
+            ?? (cePresent
+                ? CapexNormalizer.companyTotalSnapshot(
+                    axis: breakdownAxisCapitalExpenditures, total: ceTotal,
+                    warningPrefix: "capital_expenditures")
+                : nil)
+        var noncurrent = BreakdownNormalizer.normalizeNoncurrentAssetAdditions(
+            facts: cached.facts, labelsByTag: cached.labelsByTag, memberParents: memberParents)
+        noncurrent = CapexNormalizer.withCompanyTotalDenominator(
+            noncurrent, companyTotal: naaTotal, warningPrefix: "noncurrent_asset_additions")
+            ?? (!cePresent && naaPresent
+                ? CapexNormalizer.companyTotalSnapshot(
+                    axis: breakdownAxisNoncurrentAssetAdditions, total: naaTotal,
+                    warningPrefix: "noncurrent_asset_additions")
+                : nil)
+        var overviewFacts = BreakdownNormalizer.normalizeCapitalExpendituresOverview(
+            facts: cached.facts, labelsByTag: cached.labelsByTag, memberParents: memberParents)
+        if let snapshot = overviewFacts {
+            let filled = await CapexOverviewUntaggedRowFill.fill(
+                snapshot: snapshot, facts: cached.facts, xbrlDir: xbrlDir,
+                decider: capexOverviewRowDecider, docID: docID)
+            overviewFacts = filled.snapshot
+        }
+        var overviewHTML: BreakdownSnapshot?
+        if case .resolved(let note, _, _) =
+            StatementNotesResolver.resolveCapitalExpendituresOverview(xbrlDir: xbrlDir),
+            let segments = note.capexSegments
+        {
+            overviewHTML = BreakdownNormalizer.normalizeCapitalExpendituresOverview(
+                segments: segments)
+        }
+        let overviewItem = BreakdownFinancialsResolver.breakdownCanonicalCapexOverviewItem(
+            xbrlDir: xbrlDir)
+        let overviewTotal: BreakdownMetricCellPayload? =
+            overviewItem.value.flatMap { value in
+                guard let tag = overviewItem.tag, value != 0 else { return nil }
+                return BreakdownMetricCellPayload(
+                    value: value, basis: breakdownSourceXbrlFacts, source: tag)
+            }
+        let overview = overviewHTML ?? overviewFacts
         let equityMethod = BreakdownNormalizer.normalizeEquityMethodInvestments(
             facts: cached.facts, labelsByTag: cached.labelsByTag)
-        return SegmentMetricCells.merge(
-            segment: payload, capex: capex,
-            equityMethod: equityMethod.map(breakdownSnapshotPayload(from:)))
+        let external = SegmentExternalSales.normalize(
+            facts: cached.facts, labelsByTag: cached.labelsByTag, memberParents: memberParents)
+        let edinetCode = XBRLUtils.extractTextblockHtml(
+            in: xbrlDir, textblockTag: Xbrl.edinetCodeDEITag)?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        var memberPrefixes: [String: String] = [:]
+        for fact in cached.facts {
+            guard let member = XBRLUtils.primaryBreakdownMember(fact.dimensions),
+                let prefix = fact.memberPrefix
+            else { continue }
+            if memberPrefixes[member] == nil { memberPrefixes[member] = prefix }
+        }
+        var assembled = SegmentV3.assemble(
+            segment: payload, assets: assets, capitalExpenditures: capitalExpenditures,
+            noncurrentAssetAdditions: noncurrent, overview: overview,
+            overviewTotal: overviewTotal, equityMethod: equityMethod, external: external,
+            edinetCode: edinetCode, memberPrefixes: memberPrefixes,
+            labelsByTag: cached.labelsByTag)
+        if assembled.overview?.total == nil {
+            let filled = await fillCapexProse(
+                payload: BreakdownSnapshotPayload(
+                    axis: breakdownAxisCapex, denominator: 0, denominatorTag: "",
+                    rows: [], sourceKind: assembled.sourceKind, needsReview: false, warnings: []),
+                xbrlDir: xbrlDir, docID: docID)
+            if case .resolved(let result) = filled,
+                let yen = result.payload.capitalExpendituresOverview, yen.denominator > 0
+            {
+                var block = assembled.overview ?? SegmentOverviewPayload(total: nil, categories: [])
+                block.total = BreakdownMetricCellPayload(
+                    value: yen.denominator, basis: result.source, source: yen.denominatorTag)
+                assembled.overview = block
+            }
+        }
+        return assembled
     }
 
     /// 内訳取り込み: 書類1件分の product_service 軸内訳を解決する。
@@ -1443,11 +1517,16 @@ private func breakdownSnapshotPayload(from s: BreakdownSnapshot) -> BreakdownSna
     BreakdownSnapshotPayload(
         axis: s.axis, denominator: s.denominator, denominatorTag: s.denominatorTag,
         rows: s.rows.map {
-            BreakdownRowPayload(
+            var row = BreakdownRowPayload(
                 labelRaw: $0.labelRaw, label: $0.label ?? $0.labelRaw, amount: $0.amount,
                 profit: $0.profit, rowKind: $0.rowKind, description: $0.description,
                 categoryGroup: $0.categoryGroup, category: $0.category,
                 segmentBasis: $0.segmentBasis, disclosureBasis: $0.disclosureBasis)
+            if let profit = $0.profit {
+                row.profitCell = BreakdownMetricCellPayload(
+                    value: profit, basis: s.sourceKind, source: "profit", decimals: $0.decimals)
+            }
+            return row
         },
         sourceKind: s.sourceKind, needsReview: s.needsReview, warnings: s.warnings,
         sameAs: s.sameAs, disclosureBasis: s.disclosureBasis, employeesJoin: s.employeesJoin)

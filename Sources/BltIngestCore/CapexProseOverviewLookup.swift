@@ -14,17 +14,19 @@ func loadCapexProseOverviewYenByDocID(
     guard !ids.isEmpty else { return [:] }
     let rows = try await CompanyBreakdown.query(on: db)
         .filter(\.$code == code)
-        .filter(\.$axis == breakdownAxisCapex)
+        .filter(\.$axis ~~ [breakdownAxisSegment, breakdownAxisCapex])
         .filter(\.$docID ~~ ids)
         .all()
     var out: [String: Double] = [:]
     for row in rows {
         guard isServableBreakdown(
-            source: row.source, cacheVersion: row.cacheVersion, axis: breakdownAxisCapex),
+            source: row.source, cacheVersion: row.cacheVersion, axis: row.axis),
             row.notApplicableReason == nil,
             let yen = capexProseOverviewYen(in: row.payload)
         else { continue }
-        out[row.docID] = yen
+        if row.axis == breakdownAxisSegment || out[row.docID] == nil {
+            out[row.docID] = yen
+        }
     }
     return out
 }

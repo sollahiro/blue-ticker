@@ -164,6 +164,49 @@ public let capexFlowMetricCapitalExpenditures = "capital_expenditures"
 /// フローセルが非流動性資産／固定資産への追加額タグ由来。
 public let capexFlowMetricNoncurrentAssetAdditions = "noncurrent_asset_additions"
 
+/// segment-v3 行の外部売上セル。セグメント member 上の計（NetSalesIFRS 等）は使わない。
+public let segmentCellExternalSales = "external_sales"
+/// segment-v3 行の資本的支出セル（flow に混ぜない）。
+public let segmentCellCapitalExpenditures = capexFlowMetricCapitalExpenditures
+/// segment-v3 行の非流動資産増加額セル（flow に混ぜない）。
+public let segmentCellNoncurrentAssetAdditions = capexFlowMetricNoncurrentAssetAdditions
+public let breakdownRowSegmentKeyKey = "segment_key"
+public let breakdownRowPrefixKey = "prefix"
+public let breakdownMetricCellBasisXbrlFacts = breakdownSourceXbrlFacts
+public let breakdownMetricCellBasisHtmlTable = "html_table"
+public let breakdownMetricCellBasisProse = breakdownSourceCapexProse
+public let breakdownMetricCellBasisExplicitZero = "explicit_zero"
+public let breakdownRowKindDifference = "difference"
+public let segmentWaterfallMetricExternalSales = segmentCellExternalSales
+public let segmentWaterfallMetricProfit = "profit"
+public let segmentWaterfallMetricSegmentAssets = capexCellSegmentAssets
+public let segmentWaterfallMetricCapitalExpenditures = segmentCellCapitalExpenditures
+public let segmentWaterfallMetricNoncurrentAssetAdditions = segmentCellNoncurrentAssetAdditions
+public let segmentTransitionDecisionConnect = "connect"
+public let segmentTransitionDecisionBreak = "break"
+public let segmentTransitionDecisionNeedsReview = "needs_review"
+public let segmentTransitionBasisDeterministic = "deterministic"
+public let segmentTransitionBasisJev = "jev"
+public let segmentTransitionMatchedSameKey = "same_key"
+public let segmentTransitionMatchedLabelAndValue = "label_and_value"
+public let segmentTransitionMatchedPluralOnly = "plural_only"
+public let segmentTransitionMatchedPriorYear = "prior_year"
+public let segmentTransitionMatchedUnmatched = "unmatched"
+public let segmentSalesBasisExternal = "external"
+public let segmentSalesBasisIntersegmentInclusive = "intersegment_inclusive"
+public let segmentSalesBasisBank = "bank"
+public let segmentSalesBasisInsurance = "insurance"
+public let segmentSalesBasisKey = "sales_basis"
+public let segmentRoundingGapsKey = "rounding_gaps"
+
+public let segmentWaterfallMetrics: Set<String> = [
+    segmentWaterfallMetricExternalSales,
+    segmentWaterfallMetricProfit,
+    segmentWaterfallMetricSegmentAssets,
+    segmentWaterfallMetricCapitalExpenditures,
+    segmentWaterfallMetricNoncurrentAssetAdditions,
+]
+
 /// 財務諸表計上額（無 dimension の連結計上額）。他の「計」行（`subtotal`）とは別。
 public let breakdownRowKindEntityTotal = "EntityTotal"
 
@@ -186,13 +229,14 @@ public let retiredBreakdownAxes = [
     breakdownAxisEquityMethodInvestments,
     breakdownAxisPropertyPlantEquipment,
     breakdownAxisGoodwillAndIntangibles,
+    breakdownAxisCapex,
 ]
 
 /// product_service / geography を除く、報告セグメント別の決定論指標軸。
+/// capex は segment-v3 に統合したためここから外す。
 public let breakdownSegmentMetricAxes = [
     breakdownAxisEmployees,
     breakdownAxisGoodwill,
-    breakdownAxisCapex,
 ]
 
 /// `company_breakdowns.axis` として実装済みの軸か。
@@ -222,7 +266,9 @@ public func isSupportedBreakdownAxis(_ axis: String) -> Bool {
 public let productServiceBreakdownCacheVersion = "breakdown-product_service-v2"
 /// 報告セグメント軸。新軸のため v1 から。
 /// v2: 行に報告セグメント表のセル（segment_assets / flow / equity_method_investments）を足す（互換追加。床は 1 のまま）。
-public let segmentBreakdownCacheVersion = "breakdown-segment-v2"
+/// v3: capex 軸を segment に統合。segment_key、セル {value,basis,source}、CE/NAA 分離、
+/// Overview 別ブロック、差額行。旧 v2 の flow / flow_metric とは比較不能。
+public let segmentBreakdownCacheVersion = "breakdown-segment-v3"
 /// v11: 単位のみ表を捨てて dedicated contextRef の period を通し、うち列を抽出時に落とす。
 /// v12: うち列ドロップの決定論を精緻化（1段うち豪州、地域コンテキスト、軸ゲート）。
 /// v13: ingest 時に jpcrp 標準 member の日本語ラベルを補完（生 `*Member` 表示の誤表示）。
@@ -427,7 +473,8 @@ public func isDeterministicBreakdownNotApplicableReason(_ reason: String) -> Boo
 /// product_service は v2 でも床を 1 のまま据え置く。旧 v1 行は再 ingest で v2 に置き換わるまで配信を続ける
 /// （床を上げると既定軸の breakdown が全銘柄で 404 になるため）。
 public let productServiceBreakdownMinServableVersion = 1
-public let segmentBreakdownMinServableVersion = 1
+/// v3 未満の flow / 旧セル行は配信しない（再 ingest まで 404）。
+public let segmentBreakdownMinServableVersion = 3
 public let geographyBreakdownMinServableVersion = 1
 public let employeesBreakdownMinServableVersion = 1
 public let researchAndDevelopmentBreakdownMinServableVersion = 1
@@ -582,18 +629,130 @@ public func isServableBreakdown(
     return n >= breakdownMinServableVersion(forAxis: axis)
 }
 
+/// 円金額の JSON 表現。XBRL の tagged 値（基本単位）をそのまま出す。
+/// 整数目は Int にして小数点を出さない。百万→円変換時の `.rounded()` はしない。
+public func breakdownJSONAmount(_ value: Double) -> Any {
+    guard value.isFinite else { return value }
+    if value == value.rounded(), value >= Double(Int64.min), value <= Double(Int64.max) {
+        return NSNumber(value: Int64(value))
+    }
+    return value
+}
+
+/// XBRL `decimals` 属性。パース不能なら nil。
+public func parseXBRLDecimals(_ raw: String?) -> Int? {
+    guard let raw else { return nil }
+    return Int(raw)
+}
+
+/// 丸め許容: `0.5 * 10^(-decimals) * 加算した行数`。decimals が無いときは 0（隠さない）。
+public func segmentRoundingTolerance(decimals: Int?, summedRowCount: Int) -> Double {
+    guard let decimals, summedRowCount > 0 else { return 0 }
+    return 0.5 * pow(10.0, Double(-decimals)) * Double(summedRowCount)
+}
+
+/// 丸め幅に収まる差額か。収まる差額は差額行に出さない。
+public func isSegmentRoundingGap(gap: Double, decimals: Int?, summedRowCount: Int) -> Bool {
+    let tolerance = segmentRoundingTolerance(decimals: decimals, summedRowCount: summedRowCount)
+    return tolerance > 0 && abs(gap) <= tolerance
+}
+
+/// segment-v3 の指標セル。欠測はキーごと省略（0 は明示証拠があるときだけ）。
+/// `value` は tagged 円そのもの。`decimals` は XBRL の開示精度。
+public struct BreakdownMetricCellPayload: Codable, Sendable, Equatable {
+    public var value: Double
+    public var basis: String
+    public var source: String
+    public var decimals: Int?
+
+    public init(value: Double, basis: String, source: String, decimals: Int? = nil) {
+        self.value = value
+        self.basis = basis
+        self.source = source
+        self.decimals = decimals
+    }
+
+    func jsonObject() -> [String: Any] {
+        var object: [String: Any] = [
+            "value": breakdownJSONAmount(value),
+            "basis": basis,
+            "source": source,
+        ]
+        if let decimals { object["decimals"] = decimals }
+        return object
+    }
+}
+
+/// 設備投資等の概要のカテゴリ。`unassigned` のとき segment_key は無い。
+public struct SegmentOverviewCategoryPayload: Codable, Sendable, Equatable {
+    public var label: String
+    public var segmentKey: String?
+    public var unassigned: Bool
+    public var amount: BreakdownMetricCellPayload
+
+    public init(
+        label: String, segmentKey: String?, unassigned: Bool, amount: BreakdownMetricCellPayload
+    ) {
+        self.label = label
+        self.segmentKey = segmentKey
+        self.unassigned = unassigned
+        self.amount = amount
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case label, unassigned, amount
+        case segmentKey = "segment_key"
+    }
+
+    func jsonObject() -> [String: Any] {
+        var object: [String: Any] = [
+            "label": label,
+            "unassigned": unassigned,
+            "amount": amount.jsonObject(),
+        ]
+        if let segmentKey { object[breakdownRowSegmentKeyKey] = segmentKey }
+        return object
+    }
+}
+
+/// 設備投資等の概要。セグメント行とは別ブロック。
+public struct SegmentOverviewPayload: Codable, Sendable, Equatable {
+    public var total: BreakdownMetricCellPayload?
+    public var categories: [SegmentOverviewCategoryPayload]
+
+    public init(total: BreakdownMetricCellPayload?, categories: [SegmentOverviewCategoryPayload]) {
+        self.total = total
+        self.categories = categories
+    }
+
+    func jsonObject() -> [String: Any] {
+        var object: [String: Any] = [
+            "categories": categories.map { $0.jsonObject() },
+        ]
+        if let total { object["total"] = total.jsonObject() }
+        return object
+    }
+}
+
 /// capex 軸の指標別分母。開示が無いときは null。
 public struct CapexMetricTotalsPayload: Codable, Sendable, Equatable {
     public var denominator: Double
     public var denominatorTag: String
+    public var decimals: Int?
 
-    public init(denominator: Double, denominatorTag: String) {
+    public init(denominator: Double, denominatorTag: String, decimals: Int? = nil) {
         self.denominator = denominator
         self.denominatorTag = denominatorTag
+        self.decimals = decimals
     }
 
     func jsonObject() -> [String: Any] {
-        ["denominator": denominator, "denominator_tag": denominatorTag]
+        var object: [String: Any] = [
+            "denominator": breakdownJSONAmount(denominator),
+            "denominator_tag": denominatorTag,
+        ]
+        if let decimals { object["decimals"] = decimals }
+        return object
     }
 
     /// goodwill 軸のセル分母。`status` で「該当事項なし」の 0 と開示された合計を分ける。
@@ -659,13 +818,22 @@ public struct BreakdownRowPayload: Codable, Sendable, Equatable {
     /// `segment` 軸の行: `business` / `geographic`。他軸は nil。
     public var segmentBasis: String?
     /// `segment` 軸の行のセル。持分法で会計処理される投資（円）。他軸は nil。
-    public var equityMethodInvestments: Double?
+    public var equityMethodInvestments: Double? = nil
     /// 90%省略の1行など、正確なセグメント合計ではないときの印。他は nil。
     public var disclosureBasis: String?
     /// fixed_assets 軸の行の資産区分（`breakdownAssetClass*`）。他軸は nil。
     public var assetClass: String?
     /// geography 軸の行のセル。地域ごとの有形固定資産／非流動資産（円）。他軸は nil。
-    public var assets: Double?
+    public var assets: Double? = nil
+    /// segment-v3 の安定キー。他軸は nil。
+    public var segmentKey: String? = nil
+    /// XBRL member の接頭辞（jpcrp_cor / 提出者拡張）。txt 行は nil。
+    public var prefix: String? = nil
+    public var externalSales: BreakdownMetricCellPayload? = nil
+    public var profitCell: BreakdownMetricCellPayload? = nil
+    public var capitalExpenditures: BreakdownMetricCellPayload? = nil
+    public var noncurrentAssetAdditions: BreakdownMetricCellPayload? = nil
+    public var segmentAssetsCell: BreakdownMetricCellPayload? = nil
 
     private enum CodingKeys: String, CodingKey {
         case labelRaw, label, amount, profit, rowKind, description
@@ -684,6 +852,13 @@ public struct BreakdownRowPayload: Codable, Sendable, Equatable {
         case equityMethodInvestments = "equity_method_investments"
         case assetClass = "asset_class"
         case assets
+        case segmentKey = "segment_key"
+        case prefix
+        case externalSales = "external_sales"
+        case profitCell = "profit_cell"
+        case capitalExpenditures = "capital_expenditures"
+        case noncurrentAssetAdditions = "noncurrent_asset_additions"
+        case segmentAssetsCell = "segment_assets_cell"
     }
 
     public init(
@@ -762,6 +937,18 @@ public struct BreakdownRowPayload: Codable, Sendable, Equatable {
             Double.self, forKey: .equityMethodInvestments)
         assetClass = try container.decodeIfPresent(String.self, forKey: .assetClass)
         assets = try container.decodeIfPresent(Double.self, forKey: .assets)
+        segmentKey = try container.decodeIfPresent(String.self, forKey: .segmentKey)
+        prefix = try container.decodeIfPresent(String.self, forKey: .prefix)
+        externalSales = try container.decodeIfPresent(
+            BreakdownMetricCellPayload.self, forKey: .externalSales)
+        profitCell = try container.decodeIfPresent(
+            BreakdownMetricCellPayload.self, forKey: .profitCell)
+        capitalExpenditures = try container.decodeIfPresent(
+            BreakdownMetricCellPayload.self, forKey: .capitalExpenditures)
+        noncurrentAssetAdditions = try container.decodeIfPresent(
+            BreakdownMetricCellPayload.self, forKey: .noncurrentAssetAdditions)
+        segmentAssetsCell = try container.decodeIfPresent(
+            BreakdownMetricCellPayload.self, forKey: .segmentAssetsCell)
         if let categoryGroup {
             label = try container.decodeIfPresent(String.self, forKey: .label)
                 ?? Self.displayLabel(categoryGroup: categoryGroup, category: category)
@@ -801,6 +988,13 @@ public struct BreakdownRowPayload: Codable, Sendable, Equatable {
         try container.encodeIfPresent(equityMethodInvestments, forKey: .equityMethodInvestments)
         try container.encodeIfPresent(assetClass, forKey: .assetClass)
         try container.encodeIfPresent(assets, forKey: .assets)
+        try container.encodeIfPresent(segmentKey, forKey: .segmentKey)
+        try container.encodeIfPresent(prefix, forKey: .prefix)
+        try container.encodeIfPresent(externalSales, forKey: .externalSales)
+        try container.encodeIfPresent(profitCell, forKey: .profitCell)
+        try container.encodeIfPresent(capitalExpenditures, forKey: .capitalExpenditures)
+        try container.encodeIfPresent(noncurrentAssetAdditions, forKey: .noncurrentAssetAdditions)
+        try container.encodeIfPresent(segmentAssetsCell, forKey: .segmentAssetsCell)
     }
 
     public static func displayLabel(categoryGroup: String, category: String?) -> String {
@@ -844,6 +1038,12 @@ public struct BreakdownSnapshotPayload: Codable, Sendable, Equatable {
     public var assets: CapexMetricTotalsPayload?
     /// geography 軸のセル `assets` の指標（`geographyAssetsMetric*`）。
     public var assetsMetric: String?
+    public var capitalExpendituresTotals: CapexMetricTotalsPayload? = nil
+    public var noncurrentAssetAdditionsTotals: CapexMetricTotalsPayload? = nil
+    public var overview: SegmentOverviewPayload? = nil
+    public var salesBasis: String? = nil
+    /// 丸め幅に収まった差額（指標キー → 生の差額円）。差額行には出さない。
+    public var roundingGaps: [String: Double]? = nil
 
     public init(
         axis: String, denominator: Double, denominatorTag: String, rows: [BreakdownRowPayload],
@@ -1012,10 +1212,12 @@ public extension BreakdownRowPayload {
         var object: [String: Any] = [
             "label_raw": labelRaw,
             "label": resolvedLabel,
-            "amount": amount,
-            "profit": profit ?? NSNull(),
+            "amount": breakdownJSONAmount(amount),
+            "profit": profit.map(breakdownJSONAmount) ?? NSNull(),
             "row_kind": rowKind,
         ]
+        if let segmentKey { object[breakdownRowSegmentKeyKey] = segmentKey }
+        if let prefix { object[breakdownRowPrefixKey] = prefix }
         if let categoryGroup {
             object["category_group"] = categoryGroup
             object["category"] = category ?? NSNull()
@@ -1136,7 +1338,7 @@ public extension BreakdownSnapshotPayload {
             object[breakdownEmployeesJoinKey] = employeesJoin
         }
         if axis == breakdownAxisSegment {
-            addSegmentMetricCells(to: &object)
+            addSegmentV3Cells(to: &object)
         }
         if axis == breakdownAxisGeography, let assets {
             // 地域ごとの有形固定資産／非流動資産。開示がある書類だけキーを出し、行に値が無いところは null。
@@ -1157,28 +1359,60 @@ public extension BreakdownSnapshotPayload {
         return object
     }
 
-    /// segment 軸の報告セグメント表のセル。書類に開示があるセルだけ、分母（payload）と行の値を出す。
-    /// 行に値が無いセルは null。開示が無いセルはキーごと出さない（v1 行・LLM 行と同じ形）。
-    private func addSegmentMetricCells(to object: inout [String: Any]) {
-        let cells: [(key: String, totals: CapexMetricTotalsPayload?, value: (BreakdownRowPayload) -> Double?)] = [
-            (capexCellSegmentAssets, segmentAssets, { $0.segmentAssets }),
-            (capexCellFlow, flow, { $0.flow }),
-            (segmentCellEquityMethodInvestments, equityMethodInvestments, { $0.equityMethodInvestments }),
-        ]
-        guard cells.contains(where: { $0.totals != nil }),
-            var rowObjects = object["rows"] as? [[String: Any]], rowObjects.count == rows.count
-        else { return }
-        for cell in cells {
-            guard let totals = cell.totals else { continue }
-            object[cell.key] = totals.jsonObject()
-            for index in rows.indices {
-                rowObjects[index][cell.key] = cell.value(rows[index]) ?? NSNull()
-            }
+    /// segment-v3 の公開形。amount / profit / flow は出さず、セルは開示があるキーだけ。
+    /// 欠測はキーごと省略。丸め幅の差額は `rounding_gaps` に生値だけ残し、差額行にはしない。
+    private func addSegmentV3Cells(to object: inout [String: Any]) {
+        object.removeValue(forKey: "denominator")
+        object.removeValue(forKey: "denominator_tag")
+        if let salesBasis { object[segmentSalesBasisKey] = salesBasis }
+        if let roundingGaps, !roundingGaps.isEmpty {
+            object[segmentRoundingGapsKey] = roundingGaps.mapValues(breakdownJSONAmount)
         }
-        if flow != nil {
-            object["flow_metric"] = flowMetric ?? NSNull()
+        if let segmentAssets { object[capexCellSegmentAssets] = segmentAssets.jsonObject() }
+        if let capitalExpendituresTotals {
+            object[segmentCellCapitalExpenditures] = capitalExpendituresTotals.jsonObject()
+        }
+        if let noncurrentAssetAdditionsTotals {
+            object[segmentCellNoncurrentAssetAdditions] = noncurrentAssetAdditionsTotals.jsonObject()
+        }
+        if let equityMethodInvestments {
+            object[segmentCellEquityMethodInvestments] = equityMethodInvestments.jsonObject()
+        }
+        if let overview { object["overview"] = overview.jsonObject() }
+        guard var rowObjects = jsonObjectRows(object["rows"]), rowObjects.count == rows.count
+        else { return }
+        for index in rows.indices {
+            var row = rowObjects[index]
+            row.removeValue(forKey: "amount")
+            row.removeValue(forKey: "profit")
+            let source = rows[index]
+            if let key = source.segmentKey { row[breakdownRowSegmentKeyKey] = key }
+            if let prefix = source.prefix { row[breakdownRowPrefixKey] = prefix }
+            if let cell = source.externalSales { row[segmentCellExternalSales] = cell.jsonObject() }
+            if let cell = source.profitCell { row[segmentWaterfallMetricProfit] = cell.jsonObject() }
+            if let cell = source.segmentAssetsCell {
+                row[capexCellSegmentAssets] = cell.jsonObject()
+            }
+            if let cell = source.capitalExpenditures {
+                row[segmentCellCapitalExpenditures] = cell.jsonObject()
+            }
+            if let cell = source.noncurrentAssetAdditions {
+                row[segmentCellNoncurrentAssetAdditions] = cell.jsonObject()
+            }
+            if let equity = source.equityMethodInvestments {
+                row[segmentCellEquityMethodInvestments] = breakdownJSONAmount(equity)
+            }
+            rowObjects[index] = row
         }
         object["rows"] = rowObjects
+    }
+
+    /// `[String: Any]` に入れた `rows` は `[[String: Any]]` に戻せないことがある。
+    private func jsonObjectRows(_ value: Any?) -> [[String: Any]]? {
+        if let rows = value as? [[String: Any]] { return rows }
+        guard let rows = value as? [Any] else { return nil }
+        let mapped = rows.compactMap { $0 as? [String: Any] }
+        return mapped.count == rows.count ? mapped : nil
     }
 
     /// goodwill 軸の公開形。単一 `amount` / 単一 `denominator` は出さない。

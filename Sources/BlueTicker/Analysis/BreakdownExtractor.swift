@@ -58,6 +58,8 @@ struct BreakdownFact: Equatable {
     var label: String?
     var unitRef: String?
     var decimals: String?
+    /// 主 member の XBRL 接頭辞（jpcrp_cor / 提出者拡張）。名前空間 URI は持たない。
+    var memberPrefix: String? = nil
 }
 
 struct ExtractedBreakdown: Equatable {
@@ -87,6 +89,7 @@ struct ExtractedBreakdown: Equatable {
             if let l = f.label { d["label"] = l }
             if let u = f.unitRef { d["unitRef"] = u }
             if let dec = f.decimals { d["decimals"] = dec }
+            if let prefix = f.memberPrefix { d["member_prefix"] = prefix }
             return d
         }
         return ["method": method, "tables": tablesArr, "facts": factsArr]
@@ -3069,7 +3072,14 @@ enum BreakdownExtractor {
 
     /// contextRef → {dimension局所名: member局所名} のマップを作る。
     static func loadDimensionContextMap(xbrlDir: URL) -> [String: [String: String]] {
+        loadDimensionContextMaps(xbrlDir: xbrlDir).dims
+    }
+
+    static func loadDimensionContextMaps(xbrlDir: URL) -> (
+        dims: [String: [String: String]], prefixes: [String: [String: String]]
+    ) {
         var contextMap: [String: [String: String]] = [:]
+        var prefixes: [String: [String: String]] = [:]
         for root in XBRLUtils.xbrlSearchRoots(in: xbrlDir) {
             for file in XBRLUtils.findXbrlFiles(in: root) {
             guard let data = try? Data(contentsOf: file) else { continue }
@@ -3079,9 +3089,10 @@ enum BreakdownExtractor {
             parser.delegate = collector
             parser.parse()
             contextMap.merge(collector.contextMap) { _, new in new }
+            prefixes.merge(collector.memberPrefixByContext) { _, new in new }
             }
         }
-        return contextMap
+        return (contextMap, prefixes)
     }
 
     /// dimension 付き fact を抽出する（売上等への意味づけはしない汎用処理）。
@@ -3098,11 +3109,13 @@ enum BreakdownExtractor {
         contextMap: [String: [String: String]]
     ) -> [BreakdownFact] {
         let allFacts = XBRLUtils.collectAllNumericFacts(in: xbrlDir)
+        let prefixes = loadDimensionContextMaps(xbrlDir: xbrlDir).prefixes
         var results: [BreakdownFact] = []
         for (tag, ctxMap) in allFacts {
             for (ctxID, fact) in ctxMap {
                 guard let dims = contextMap[ctxID], !dims.isEmpty else { continue }
                 guard dims.keys.contains(where: { dim in dimensionKeywords.contains(where: dim.contains) }) else { continue }
+                let member = XBRLUtils.primaryBreakdownMember(dims)
                 results.append(BreakdownFact(
                     tag: tag,
                     contextRef: ctxID,
@@ -3110,7 +3123,8 @@ enum BreakdownExtractor {
                     value: fact.value,
                     label: fact.label,
                     unitRef: fact.unitRef,
-                    decimals: fact.decimals
+                    decimals: fact.decimals,
+                    memberPrefix: member.flatMap { prefixes[ctxID]?[$0] }
                 ))
             }
         }
@@ -3134,7 +3148,8 @@ enum BreakdownExtractor {
                         value: fact.value,
                         label: fact.label,
                         unitRef: fact.unitRef,
-                        decimals: fact.decimals
+                        decimals: fact.decimals,
+                        memberPrefix: nil
                     ))
                 }
             }
@@ -3306,8 +3321,10 @@ private final class ContextDimensionSAXCollector: NSObject, XMLParserDelegate {
     private static let xbrldiNS = "http://xbrl.org/2006/xbrldi"
 
     private(set) var contextMap: [String: [String: String]] = [:]
+    private(set) var memberPrefixByContext: [String: [String: String]] = [:]
     private var currentContextID: String?
     private var currentDims: [String: String] = [:]
+    private var currentPrefixes: [String: String] = [:]
     private var contextDepth = 0
     private var memberDimension: String?
     private var memberText = ""
@@ -3328,6 +3345,7 @@ private final class ContextDimensionSAXCollector: NSObject, XMLParserDelegate {
         } else if elementName == "context", let id = attributeDict["id"] {
             currentContextID = id
             currentDims = [:]
+            currentPrefixes = [:]
             contextDepth = 0
         }
     }
@@ -3343,10 +3361,14 @@ private final class ContextDimensionSAXCollector: NSObject, XMLParserDelegate {
         qualifiedName qName: String?
     ) {
         if let dim = memberDimension, elementName == "explicitMember", namespaceURI == Self.xbrldiNS {
+            let qname = memberText.trimmingCharacters(in: .whitespacesAndNewlines)
             let dimLocal = localPart(dim)
-            let valLocal = localPart(memberText.trimmingCharacters(in: .whitespacesAndNewlines))
+            let valLocal = localPart(qname)
             if !dimLocal.isEmpty && !valLocal.isEmpty {
                 currentDims[dimLocal] = valLocal
+                if let colon = qname.lastIndex(of: ":") {
+                    currentPrefixes[valLocal] = String(qname[..<colon])
+                }
             }
             memberDimension = nil
             memberText = ""
@@ -3355,6 +3377,9 @@ private final class ContextDimensionSAXCollector: NSObject, XMLParserDelegate {
         if contextDepth == 0 {
             if !currentDims.isEmpty {
                 contextMap[currentContextID!] = currentDims
+                if !currentPrefixes.isEmpty {
+                    memberPrefixByContext[currentContextID!] = currentPrefixes
+                }
             }
             currentContextID = nil
         } else {

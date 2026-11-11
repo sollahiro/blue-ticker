@@ -638,13 +638,18 @@ enum StatementNotesResolver {
                 var description: String?
                 if !primaryAmountCols.isEmpty {
                     var found: (idx: Int, value: Double)?
-                    for i in primaryAmountCols where i < cols.count {
+                    // 右端の当期金額列を正とする（JR東海: 左の前期列を取るとカテゴリが欠ける）。
+                    for i in primaryAmountCols.reversed() where i < cols.count {
+                        if SegmentExplicitZero.isDashCell(cols[i]) {
+                            found = (i, 0)
+                            break
+                        }
                         if let v = XBRLUtils.parseTextblockCellValue(cols[i]) {
                             found = (i, v)
                             break
                         }
                     }
-                    guard let f = found else { continue }  // 金額欄が「―」等の行は飛ばす
+                    guard let f = found else { continue }
                     amount = f.value
                     amountIdx = f.idx
                     for i in yoyCols where i < cols.count {
@@ -655,12 +660,23 @@ enum StatementNotesResolver {
                             .first { !$0.isEmpty && XBRLUtils.parseTextblockCellValue($0) == nil }
                     }
                 } else {
-                    guard let idx = cols.firstIndex(where: {
-                        XBRLUtils.parseTextblockCellValue($0) != nil
-                    }), idx > 0
-                    else { continue }
+                    var idx: Int?
+                    var parsed: Double?
+                    for i in stride(from: cols.count - 1, through: 1, by: -1) {
+                        if SegmentExplicitZero.isDashCell(cols[i]) {
+                            idx = i
+                            parsed = 0
+                            break
+                        }
+                        if let v = XBRLUtils.parseTextblockCellValue(cols[i]) {
+                            idx = i
+                            parsed = v
+                            break
+                        }
+                    }
+                    guard let idx, let parsed, idx > 0 else { continue }
                     amountIdx = idx
-                    amount = XBRLUtils.parseTextblockCellValue(cols[idx])!
+                    amount = parsed
                     let after = Array(cols[(idx + 1)...])
                     if let first = after.first, let v = XBRLUtils.parseTextblockCellValue(first) {
                         yoy = v
@@ -705,9 +721,26 @@ enum StatementNotesResolver {
                         segmentName: name, investmentAmount: amount * scale, yoyPercent: yoy,
                         description: description, isTotal: isTotal))
             }
+            demoteParentCapexOverviewRows(&segments)
             if !segments.isEmpty { return segments }
         }
         return nil
+    }
+
+    /// 親ラベルが子行と同居する小計（レスターの事業部合計など）を加算から外す。
+    private static func demoteParentCapexOverviewRows(_ segments: inout [CapexSegmentPayload]) {
+        let names = segments.compactMap(\.segmentName)
+        for index in segments.indices {
+            guard let name = segments[index].segmentName, !segments[index].isTotal else { continue }
+            let compact = SegmentLabelMatch.compact(name)
+            let hasChild = names.contains { other in
+                other != name
+                    && (SegmentLabelMatch.childOfParentSlash(other, parent: name)
+                        || (SegmentLabelMatch.compact(other).hasPrefix(compact)
+                            && SegmentLabelMatch.compact(other) != compact && compact.count >= 2))
+            }
+            if hasChild { segments[index].isTotal = true }
+        }
     }
 
     /// 設備投資表の金額単位。表内のいずれかのセルの単位表記から判定する（大きい単位を優先。

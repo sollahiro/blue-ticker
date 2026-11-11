@@ -297,15 +297,6 @@ public func runFactsIngestCommand(
                         docID: docID, correctionDocIDs: correctionIDsByOriginal[docID] ?? [])
                 },
                 BreakdownStage(
-                    axis: breakdownAxisCapex,
-                    target: "breakdowns-\(breakdownAxisCapex)",
-                    listedCodes: deterministicMetricsListed, limit: unpublishedLimit,
-                    candidateSets: unpublishedSets
-                ) { docID in
-                    await context.resolveCapexBreakdown(
-                        docID: docID, correctionDocIDs: correctionIDsByOriginal[docID] ?? [])
-                },
-                BreakdownStage(
                     axis: breakdownAxisInterestBearingDebt,
                     target: "breakdowns-interest_bearing_debt",
                     listedCodes: deterministicMetricsListed, limit: unpublishedLimit,
@@ -343,6 +334,14 @@ public func runFactsIngestCommand(
                             ) { await stage.resolve(docID) }
                         })
                 summaries.append((stage, summary))
+            }
+            if selectedStages.contains(where: { $0.axis == breakdownAxisSegment }) {
+                try await withDbRetry(
+                    logger: app.logger, context: "company_segment_transitions"
+                ) {
+                    try await runSegmentTransitionIngest(
+                        db: app.db, listedCodes: publicBreakdownListed, logger: app.logger)
+                }
             }
             let coverage = try? await withDbRetry(
                 logger: app.logger, context: "company_breakdowns 集計"

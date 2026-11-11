@@ -13,7 +13,10 @@ import Foundation
 /// v13（2026-11-09）: breakdown の axis 省略時の既定を segment にした。
 /// v14（2026-11-09）: breakdown の axis `property_plant_equipment` / `goodwill_and_intangibles` を廃止し、
 /// 日本基準へ広げた `fixed_assets` に統合した。
-public let apiSkillsSchemaVersion = 14
+/// v15（2026-11-12）: breakdown の axis `capex` を廃止し `segment`（segment-v3）へ統合。
+/// セルは {value,basis,source,decimals?}。丸め幅の差額は差額行に出さない。
+/// `GET /waterfall/segment` と `/waterfall/segment/transitions` を追加。
+public let apiSkillsSchemaVersion = 15
 
 /// パラメータの置き場所（REST パス変数 / クエリ）。
 public enum ApiSkillParameterLocation: String, Sendable {
@@ -360,23 +363,28 @@ public func apiSkillsCatalog() -> [ApiSkill] {
             name: "報告セグメント・製品・サービス別・地域別売上内訳",
             description: """
                 有価証券報告書から報告セグメント別（segment）、製品・サービス別/地域別売上高、従業員数、のれん、
-                設備投資マトリクス（capex）、有利子負債（interest_bearing_debt）、
+                有利子負債（interest_bearing_debt）、
                 固定資産の種類別（fixed_assets。有形固定資産と無形固定資産・のれん）を取得します（格納済みデータのみ）。
                 対象は取り込み済みの上場企業です。doc_id を省略すると最新の有価証券報告書を使用します。
                 axis は segment（既定）/ product_service / geography / employees / goodwill /
-                capex / interest_bearing_debt / fixed_assets に対応。
-                segment はセグメント情報の報告セグメント表。行に segment_basis（business / geographic）が付きます。
-                segment の行は同じ表の列をセルに持ちます: segment_assets（セグメント資産）、flow（資本的支出、
-                無ければ非流動資産の増加額。どちらかは flow_metric）、equity_method_investments（持分法投資）。
-                開示があるセルだけ、payload にそのセルの分母（denominator / denominator_tag）が付き、行の値が無いところは null。
+                interest_bearing_debt / fixed_assets に対応。
+                segment はセグメント情報の報告セグメント表（segment-v3）。行に segment_key・prefix・
+                segment_basis（business / geographic）が付きます。
+                行のセルは開示があるキーだけ出します: external_sales / profit / segment_assets /
+                capital_expenditures / noncurrent_asset_additions / equity_method_investments。
+                各セルは {value, basis, source, decimals?}。value は XBRL の tagged 円そのもので丸めません。
+                行の amount / profit / flow は出しません。旧 axis=capex と flow / flow_metric は廃止（404）。
+                セグメント+調整と連結のずれが丸め幅（0.5×10^(-decimals)×加算行数）以内なら差額行は出さず
+                rounding_gaps に生値だけ残します。幅を超えたずれだけ row_kind=difference です。
+                sales_basis は external / intersegment_inclusive / bank / insurance。
+                設備投資等の概要は overview ブロック（セグメント行とは別）。
+                年次推移は get-segment-waterfall、つなぎは get-segment-transitions。
+                開示があるセルだけ、payload にそのセルの分母（denominator / denominator_tag）が付き、行の値が無いところはキーごと省略。
                 旧 axis=equity_method_investments は廃止（404）。
                 90%省略の1行は disclosure_basis=dominant_90pct。関連情報の省略は same_as=segment（値は複製しません）。
                 従業員表の区分が合わないときは employees_join=unavailable です。
                 product_service は関連情報の製品表または収益分解だけで、報告セグメント facts は含めません。
                 数値タグとセグメント fact から解決します。合計のみの開示は分母だけの行になります。
-                axis=capex は名前付きセル（segment_assets / flow / capital_expenditures_overview）で、
-                行の amount は使いません。flow は書類単位で capital_expenditures があればそれ、
-                無ければ noncurrent_asset_additions です。混ぜず足しません。欠測セルは null です。
                 axis=goodwill は報告セグメント別ののれんです。行は名前付きセル opening（期首未償却残高）/
                 closing（期末未償却残高）/ amortization（当期償却額）/ impairment（のれんの減損損失）で、
                 行の amount は使いません。欠測セルは null です。分母はセルごとに開示された合計です
@@ -424,12 +432,8 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                 IFRS の区分に合計科目が無いときは区分合計が最上位の行の和で、denominator_tag は要素名を + でつなぎます。
                 goodwill（報告セグメント別ののれん）とは別の軸です。
                 旧 axis=property_plant_equipment / goodwill_and_intangibles は廃止（404）。
-                capex は Overview 本文から会社全体の総額、またはタグ付き行の不足分を補うことがあります。
-                その行の warnings に not_allocatable_to_segments があっても 404 にはしません。
-                全社合計のタグがありセグメント行が足りないときは、差額と一致する本文1文を reconciling 行として足すことがあります。
-                億円単位で差額とずれる配分不能の1文も、足した合計が 5% 以内なら足すことがあります。
-                タグ付き合計が全社合計を超えるときは、総額の外の金額を負の reconciling 行として足すことがあります。
-                warnings の capex_prose_remainder と capex_prose_exclusion は 404 にしません。
+                旧 axis=capex は廃止（404）。設備投資は segment の capital_expenditures /
+                noncurrent_asset_additions セルと overview ブロックです。
                 geography の行は、地域ごとの情報に資産の表があり当期・単位・向きが確定できる書類だけ、セル assets
                 （地域の有形固定資産／非流動資産、円。行に値が無いところは null）を持ちます。payload の assets は分母
                 （denominator / denominator_tag。table_total は表の合計、row_sum は地域の和）、assets_metric は
@@ -468,7 +472,7 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                     name: "axis",
                     location: .query,
                     type: .string,
-                    description: "内訳の軸（segment / product_service / geography / employees / goodwill / capex / interest_bearing_debt / fixed_assets。省略時 segment）",
+                    description: "内訳の軸（segment / product_service / geography / employees / goodwill / interest_bearing_debt / fixed_assets。省略時 segment）",
                     required: false,
                     defaultValue: .string(breakdownAxisSegment)
                 ),
@@ -482,8 +486,93 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                 例: GET /v1/companies/6758/breakdown?axis=product_service
                 例: GET /v1/companies/6758/breakdown?axis=geography
                 例: GET /v1/companies/6758/breakdown?axis=employees
-                例: GET /v1/companies/6758/breakdown?axis=capex
                 例: GET /v1/companies/6758/breakdown?axis=fixed_assets
+                """
+        ),
+        ApiSkill(
+            id: "get-segment-waterfall",
+            name: "報告セグメント年次推移",
+            description: """
+                報告セグメントの指標を年度別に並べます（格納済み segment-v3 のみ）。
+                metric は external_sales / profit / segment_assets / capital_expenditures /
+                noncurrent_asset_additions（省略時 external_sales）。
+                key を付けるとその segment_key の行だけです。
+                丸め幅の差額は差額行に出さず、その年の rounding_gaps に生値だけ残します。
+                値は tagged 円そのもので丸めません。
+                """,
+            method: "GET",
+            path: "/v1/companies/{code}/waterfall/segment",
+            feature: "breakdown",
+            parameters: [
+                ApiSkillParameter(
+                    name: "code",
+                    location: .path,
+                    type: .string,
+                    description: "銘柄コード（例: 2802）",
+                    required: true
+                ),
+                ApiSkillParameter(
+                    name: "metric",
+                    location: .query,
+                    type: .string,
+                    description: "指標（external_sales / profit / segment_assets / capital_expenditures / noncurrent_asset_additions。省略時 external_sales）",
+                    required: false,
+                    defaultValue: .string(segmentWaterfallMetricExternalSales)
+                ),
+                ApiSkillParameter(
+                    name: "key",
+                    location: .query,
+                    type: .string,
+                    description: "segment_key（例: E00436:ext:SeasoningsAndFoodsReportableSegmentMember）",
+                    required: false
+                ),
+                ApiSkillParameter(
+                    name: "years",
+                    location: .query,
+                    type: .integer,
+                    description: "取得年数",
+                    required: false,
+                    defaultValue: .int(Api.financialsYearsDefault)
+                ),
+            ],
+            instructions: """
+                単年の表は get-breakdown?axis=segment。つなぎ（connect/break）は get-segment-transitions。
+                格納済みデータのみ。未算出は 404、DB 非接続は 503。
+                例: GET /v1/companies/2802/waterfall/segment?metric=external_sales
+                """
+        ),
+        ApiSkill(
+            id: "get-segment-transitions",
+            name: "報告セグメントつなぎ",
+            description: """
+                隣接年で segment_key が変わった行の connect / break / needs_review です。
+                同じキーの継続は行にしません（暗黙の connect）。
+                basis は deterministic または jev、matched は plural_only / label_and_value / unmatched。
+                判断の訂正に再 ingest は不要です。
+                """,
+            method: "GET",
+            path: "/v1/companies/{code}/waterfall/segment/transitions",
+            feature: "breakdown",
+            parameters: [
+                ApiSkillParameter(
+                    name: "code",
+                    location: .path,
+                    type: .string,
+                    description: "銘柄コード（例: 2802）",
+                    required: true
+                ),
+                ApiSkillParameter(
+                    name: "key",
+                    location: .query,
+                    type: .string,
+                    description: "segment_key（省略時は全件）",
+                    required: false
+                ),
+            ],
+            instructions: """
+                年次の金額は get-segment-waterfall。
+                格納済みデータのみ。未算出は 404、DB 非接続は 503。
+                例: GET /v1/companies/2802/waterfall/segment/transitions
                 """
         ),
         ApiSkill(

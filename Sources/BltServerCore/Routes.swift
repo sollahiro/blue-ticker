@@ -153,6 +153,34 @@ func registerRoutes(
             notFoundMessage: "財務データは未集計です")
     }
 
+    // GET /v1/companies/{code}/waterfall/segment?metric=external_sales&key=...&years=5
+    v1.get("companies", ":code", "waterfall", "segment") { req async -> Response in
+        let code = req.parameters.get("code") ?? ""
+        let metric = req.query[String.self, at: "metric"] ?? segmentWaterfallMetricExternalSales
+        if !segmentWaterfallMetrics.contains(metric) {
+            return errorResponse(
+                .badRequest,
+                message: "metric は \(segmentWaterfallMetrics.sorted().joined(separator: " / ")) です")
+        }
+        let key = req.query[String.self, at: "key"]
+        let years = req.query[Int.self, at: "years"] ?? Api.financialsYearsDefault
+        return makeReasonedResponse(
+            await serveStoredSegmentWaterfall(
+                code: code, metric: metric, key: key, years: years,
+                db: dbAvailable ? req.db : nil, logger: req.logger),
+            notFoundMessage: "報告セグメントの年次推移は未算出です")
+    }
+
+    // GET /v1/companies/{code}/waterfall/segment/transitions?key=...
+    v1.get("companies", ":code", "waterfall", "segment", "transitions") { req async -> Response in
+        let code = req.parameters.get("code") ?? ""
+        let key = req.query[String.self, at: "key"]
+        return makeReasonedResponse(
+            await serveStoredSegmentTransitions(
+                code: code, key: key, db: dbAvailable ? req.db : nil, logger: req.logger),
+            notFoundMessage: "報告セグメントのつなぎは未算出です")
+    }
+
     // GET /v1/companies/{code}/overview
     // DB（company_overviews）の格納済み短い会社説明のみを返す。ライブ生成へはフォールバックしない。
     // 未格納・床未満・対象外は 404。
@@ -545,6 +573,23 @@ func serveStoredBreakdown(
 ) async -> ReasonedServeResult {
     await serveStoredReasoned(db: db, logger: logger) { db in
         try await loadStoredBreakdown(code: code, docId: docId, axis: axis, db: db)
+    }
+}
+
+func serveStoredSegmentWaterfall(
+    code: String, metric: String, key: String?, years: Int, db: Database?, logger: Logger
+) async -> ReasonedServeResult {
+    await serveStoredReasoned(db: db, logger: logger) { db in
+        try await loadStoredSegmentWaterfall(
+            code: code, metric: metric, key: key, years: years, db: db)
+    }
+}
+
+func serveStoredSegmentTransitions(
+    code: String, key: String?, db: Database?, logger: Logger
+) async -> ReasonedServeResult {
+    await serveStoredReasoned(db: db, logger: logger) { db in
+        try await loadStoredSegmentTransitions(code: code, key: key, db: db)
     }
 }
 
