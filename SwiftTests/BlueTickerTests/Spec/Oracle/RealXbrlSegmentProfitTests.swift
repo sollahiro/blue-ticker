@@ -2,7 +2,7 @@
 // 定義した測度（`BreakdownNormalizer.segmentProfitTag`）。値は有報 PDF のセグメント表（当期）を
 // 百万円で読み、円（× 1e6）で照合する。page は EDINET PDF のページ番号（PDF ビューアの通し番号）。
 // 行は segment 軸 snapshot の全行（segment / subtotal / reconciling）の profit。
-// reroute to segment axis, values unchanged, golden review 済み
+// reroute to segment axis, values unchanged, approved by BLT_Tester
 //
 // `BLT_EDINET_API_KEY` があれば不足キャッシュを取得し、無ければ SKIP。
 
