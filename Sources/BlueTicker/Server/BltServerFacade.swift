@@ -1088,12 +1088,18 @@ public extension BltServerContext {
         }
         let geography = BreakdownExtractor.extractGeographyInfo(xbrlDir: xbrlDir)
         if geography.method == "not_found" {
+            // 本邦90%超・海外売上なしは related-info の地域ごとの情報の省略。のれん注記の
+            // 「セグメント情報に同様」より先に採用する（6577 S100Z940）。
+            let omission = BreakdownExtractor.geographyNotFoundReason(xbrlDir: xbrlDir)
+            if BreakdownExtractor.geographyOmissionTakesPriority(overSameAs: omission) {
+                return .notApplicable(reason: omission)
+            }
             if let sameAs = await relatedInfoSameAsResult(
                 axis: .geography, docID: docID, xbrlDir: xbrlDir)
             {
                 return sameAs
             }
-            return .notApplicable(reason: BreakdownExtractor.geographyNotFoundReason(xbrlDir: xbrlDir))
+            return .notApplicable(reason: omission)
         }
         let labelsByTag = XBRLUtils.loadLabelsByTag(in: xbrlDir)
         // カバー判定と share の分母は PL トップライン（売上高の上の合計行など）。無ければ Summary 売上。
@@ -1556,6 +1562,13 @@ extension BltServerContext {
         let dedicated = BreakdownExtractor.dedicatedSingleSegmentDisclosureTexts(xbrlDir: xbrlDir)
         let hasDedicated = dedicated.currentYear != nil
             || (members.count <= 1 && dedicated.any != nil)
+        let prose: [String]
+        if axis == .geography {
+            prose = BreakdownExtractor.geographyDisclosureSentences(
+                from: BreakdownExtractor.segmentNotePatternProse(xbrlDir: xbrlDir))
+        } else {
+            prose = BreakdownExtractor.segmentNotePatternProse(xbrlDir: xbrlDir)
+        }
         return await SegmentNotePatternClassifier.classify(
             axis: axis,
             signals: SegmentNotePatternSignals(
@@ -1565,7 +1578,7 @@ extension BltServerContext {
                     && reportable.tables.contains { !BreakdownExtractor.isProductServiceTable($0) },
                 hasRelatedInfoTable: false,
                 reportableMembersAreGeographic: BreakdownNormalizer.allMembersAreGeography(members),
-                prose: BreakdownExtractor.segmentNotePatternProse(xbrlDir: xbrlDir)
+                prose: prose
             ),
             docID: docID,
             decider: segmentNoteDecider as? any SegmentNotePatternDeciding
