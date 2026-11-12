@@ -10,39 +10,24 @@ import Logging
 func runSegmentTransitionIngest(
     db: Database, listedCodes: Set<String>, logger: Logger? = nil
 ) async throws {
-    let codes = listedCodes.sorted()
-    for code in codes {
-        let rows = try await CompanyBreakdown.query(on: db)
-            .filter(\.$code == code)
-            .filter(\.$axis == breakdownAxisSegment)
-            .sort(\.$submitDateTime, .ascending)
-            .all()
-        let servable = rows.filter {
-            isServableBreakdown(
-                source: $0.source, cacheVersion: $0.cacheVersion, axis: breakdownAxisSegment)
-                && $0.notApplicableReason == nil
-        }
-        guard servable.count >= 2 else { continue }
-        let docIDs = servable.map(\.docID)
-        let documents = try await EdinetDocument.query(on: db)
-            .filter(\.$id ~~ docIDs)
-            .all()
-        let fyEndByDoc = Dictionary(
-            uniqueKeysWithValues: documents.compactMap { doc -> (String, String)? in
-                guard let id = doc.id, let fy = doc.periodEnd, !fy.isEmpty else { return nil }
-                return (id, fy)
-            })
-        var previous: CompanyBreakdown?
-        for current in servable {
-            defer { previous = current }
-            guard let previous else { continue }
-            let fyEnd = fyEndByDoc[current.docID] ?? current.submitDateTime
+    for code in listedCodes.sorted() {
+        // 年次応答（`loadStoredSegmentWaterfall`）と同じ年の並びでつなぐ。決算期ごとに 1 書類、
+        // 公開面に出ない行は飛ばす。書類の提出順で隣を取ると、同じ期の書類が 2 つあるときに
+        // 前年とのつなぎが消える。
+        let years = Array(try await loadServableSegmentYears(code: code, db: db).reversed())
+        guard years.count >= 2 else { continue }
+        var written = 0
+        for index in years.indices.dropFirst() {
+            let previous = years[index - 1]
+            let current = years[index]
             let drafts = SegmentTransitionMatcher.match(
-                oldRows: previous.payload.rows, newRows: current.payload.rows, fyEnd: fyEnd)
+                oldRows: previous.payload.rows, newRows: current.payload.rows,
+                fyEnd: current.fyEnd)
             let existing = try await CompanySegmentTransition.query(on: db)
                 .filter(\.$code == code)
-                .filter(\.$fyEnd == fyEnd)
+                .filter(\.$fyEnd == current.fyEnd)
                 .all()
+            if sameTransitions(existing, drafts) { continue }
             for row in existing {
                 try await row.delete(on: db)
             }
@@ -55,9 +40,30 @@ func runSegmentTransitionIngest(
                 model.needsReview = draft.decision == segmentTransitionDecisionNeedsReview
                 try await model.create(on: db)
             }
+            written += 1
         }
         logger?.info(
             "segment transitions",
-            metadata: ["code": .string(code), "pairs": .stringConvertible(max(0, servable.count - 1))])
+            metadata: [
+                "code": .string(code), "pairs": .stringConvertible(years.count - 1),
+                "rewritten": .stringConvertible(written),
+            ])
     }
+}
+
+/// 格納済みの行と今回の判定が同じか。同じなら書き直さない（毎回の delete / insert を避ける）。
+private func sameTransitions(
+    _ existing: [CompanySegmentTransition], _ drafts: [SegmentTransitionDraft]
+) -> Bool {
+    guard existing.count == drafts.count else { return false }
+    func signature(
+        _ oldKey: String?, _ newKey: String?, _ decision: String, _ basis: String, _ matched: String
+    ) -> String {
+        [oldKey ?? "", newKey ?? "", decision, basis, matched].joined(separator: "\u{1F}")
+    }
+    let stored = existing.map {
+        signature($0.oldKey, $0.newKey, $0.decision, $0.basis, $0.matched)
+    }
+    let fresh = drafts.map { signature($0.oldKey, $0.newKey, $0.decision, $0.basis, $0.matched) }
+    return stored.sorted() == fresh.sorted()
 }
