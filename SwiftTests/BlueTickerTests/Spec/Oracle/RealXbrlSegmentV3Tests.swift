@@ -65,8 +65,11 @@ import Testing
             facts: facts, labelsByTag: labels, memberParents: memberParents)
         let equityMethod = BreakdownNormalizer.normalizeEquityMethodInvestments(
             facts: facts, labelsByTag: labels)
-        let external = SegmentExternalSales.normalize(
-            facts: facts, labelsByTag: labels, memberParents: memberParents)
+        let externalResolution = SegmentExternalSales.resolve(
+            facts: facts,
+            consolidatedSales: BreakdownFinancialsResolver.financialsCanonicalSales(xbrlDir: dir),
+            labelsByTag: labels, memberParents: memberParents)
+        let external = externalResolution?.snapshot
         var memberPrefixes: [String: String] = [:]
         for fact in facts {
             guard let member = XBRLUtils.primaryBreakdownMember(fact.dimensions),
@@ -81,8 +84,58 @@ import Testing
             segment: payload(from: segment), assets: assets,
             capitalExpenditures: capitalExpenditures, noncurrentAssetAdditions: noncurrent,
             overview: overview, overviewTotal: nil, equityMethod: equityMethod,
-            external: external, edinetCode: edinetCode, memberPrefixes: memberPrefixes,
+            external: external, externalSalesBasis: externalResolution?.salesBasis,
+            edinetCode: edinetCode, memberPrefixes: memberPrefixes,
             labelsByTag: labels)
+    }
+
+    private static func externalSales(
+        _ payload: BreakdownSnapshotPayload, member: String
+    ) -> Double? {
+        payload.rows.first { $0.labelRaw == member }?.externalSales?.value
+    }
+
+    /// デジタルグリッド: セグメント表に「外部顧客への売上高」と、その他の収益を含む「計」がある。
+    /// 連結売上高 7,113,916千円に一致するのは計なので、external_sales は計を採る。
+    // source: code=350A fy_end=2026-07-31 doc_id=S100ZAEK page=108 field=segment.external_sales
+    @Test func digitalGridUsesSegmentTotalIncludingOtherRevenue() async throws {
+        guard await Self.ensureAvailable("S100ZAEK") else { return }
+        let assembled = try #require(Self.assemble("S100ZAEK"))
+        #expect(assembled.salesBasis == segmentSalesBasisExternalIncludingOtherRevenue)
+        #expect(
+            Self.externalSales(assembled, member: "PowerPFBusinessReportableSegmentMember")
+                == 5_884_409_000)
+        #expect(
+            Self.externalSales(assembled, member: "REPFBusinessReportableSegmentMember")
+                == 711_496_000)
+        #expect(
+            Self.externalSales(assembled, member: "OtherReportableSegmentsMember") == 518_010_000)
+        #expect(Self.externalSales(assembled, member: Xbrl.entityTotalMemberName) == 7_113_916_000)
+        #expect(assembled.rows.contains { $0.rowKind == breakdownRowKindDifference } == false
+            || assembled.rows.first { $0.rowKind == breakdownRowKindDifference }?.externalSales == nil)
+    }
+
+    /// インテグラル（IFRS）: セグメント表は「投資収益総額」+「顧客との契約から生じる収益」= 合計。
+    /// 連結の収益 13,655百万円に一致するのは合計なので、external_sales は合計を採る。
+    // source: code=5842 fy_end=2025-12-31 doc_id=S100XOZ3 page=122 field=segment.external_sales
+    @Test func integralUsesSegmentTotalIncludingInvestmentIncome() async throws {
+        guard await Self.ensureAvailable("S100XOZ3") else { return }
+        let assembled = try #require(Self.assemble("S100XOZ3"))
+        #expect(assembled.salesBasis == segmentSalesBasisExternalIncludingOtherRevenue)
+        #expect(
+            Self.externalSales(assembled, member: "PEInvestmentBusinessReportableSegmentMember")
+                == 13_335_000_000)
+        #expect(
+            Self.externalSales(
+                assembled, member: "RealEstateInvestmentBusinessReportableSegmentMember")
+                == 258_000_000)
+        #expect(
+            Self.externalSales(
+                assembled,
+                member:
+                    "OperatingSegmentsNotIncludedInReportableSegmentsAndOtherRevenueGeneratingBusinessActivitiesMember"
+            ) == 62_000_000)
+        #expect(Self.externalSales(assembled, member: Xbrl.entityTotalMemberName) == 13_655_000_000)
     }
 
     /// トヨタ: 自動車の設備投資・資産は tagged 円。丸め幅の差額は差額行に出さない。

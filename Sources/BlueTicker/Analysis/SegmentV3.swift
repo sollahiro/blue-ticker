@@ -17,6 +17,7 @@ enum SegmentV3 {
         overviewTotal: BreakdownMetricCellPayload?,
         equityMethod: BreakdownSnapshot?,
         external: BreakdownSnapshot?,
+        externalSalesBasis: String? = nil,
         edinetCode: String,
         memberPrefixes: [String: String],
         labelsByTag: [String: String]
@@ -44,7 +45,12 @@ enum SegmentV3 {
             return rows.count - 1
         }
 
-        let salesBasis = salesBasis(of: segment, external: external)
+        let salesBasis: String
+        if let externalSalesBasis, let external, !external.rows.isEmpty {
+            salesBasis = externalSalesBasis
+        } else {
+            salesBasis = Self.salesBasis(of: segment, external: external)
+        }
         let externalSource = external ?? (
             salesBasis == segmentSalesBasisExternal ? snapshotFromPayload(segment) : nil)
 
@@ -180,6 +186,16 @@ enum SegmentV3 {
         return out
     }
 
+    /// 設備投資等の概要の出どころ。HTML 表にカテゴリ行があるときだけ HTML、無ければタグ付き fact。
+    /// HTML が総額 1 行だけのとき（5283 / 4680 / 3199）に fact のカテゴリ行を捨てない。
+    static func pickOverview(html: BreakdownSnapshot?, facts: BreakdownSnapshot?) -> BreakdownSnapshot? {
+        func hasCategories(_ snapshot: BreakdownSnapshot?) -> Bool {
+            snapshot?.rows.contains { $0.rowKind == "segment" || $0.rowKind == "reconciling" } ?? false
+        }
+        if hasCategories(html) { return html }
+        return facts ?? html
+    }
+
     static func salesBasis(of segment: BreakdownSnapshotPayload, external: BreakdownSnapshot?)
         -> String
     {
@@ -243,6 +259,21 @@ enum SegmentV3 {
             let position: Int
             if let existing = index[source.labelRaw] {
                 position = existing
+            } else if let matched = rows.firstIndex(where: { row in
+                // 骨格が本文・Jev 由来（labelRaw が日本語ラベル）のとき、同じ表示名の member を
+                // 別の行にしない（3909: 同じセグメントが 2 行になり、和が連結の 2 倍近くになる）。
+                row.prefix == nil && row.rowKind == SegmentMemberKind.rowKind(kind)
+                    && SegmentLabelMatch.compact(row.label) == SegmentLabelMatch.compact(label)
+                    && !SegmentLabelMatch.compact(label).isEmpty
+            }) {
+                position = matched
+                index[source.labelRaw] = matched
+                if let prefix = memberPrefixes[source.labelRaw] {
+                    rows[matched].prefix = prefix
+                    rows[matched].segmentKey = SegmentKey.make(
+                        edinetCode: edinetCode, localName: source.labelRaw, prefix: prefix
+                    ).description
+                }
             } else {
                 let prefix = memberPrefixes[source.labelRaw]
                 var row = BreakdownRowPayload(

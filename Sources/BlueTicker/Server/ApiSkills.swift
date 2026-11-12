@@ -378,7 +378,9 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                 行の amount / profit / flow は出しません。旧 axis=capex と flow / flow_metric は廃止（404）。
                 セグメント+調整と連結のずれが丸め幅（0.5×10^(-decimals)×加算行数）以内なら差額行は出さず
                 rounding_gaps に生値だけ残します。幅を超えたずれだけ row_kind=difference です。
-                sales_basis は external / intersegment_inclusive / bank / insurance。
+                sales_basis は external / external_including_other_revenue / intersegment_inclusive / bank / insurance。
+                external_including_other_revenue は、外部顧客への売上高にその他の収益（顧客との契約以外の源泉）を
+                足した計を external_sales に載せた書類です（計の連結値が連結売上高に一致するときだけ）。
                 設備投資等の概要は overview ブロック（セグメント行とは別）。
                 年次推移とつなぎは get-segment-waterfall（years[] に prior / line_cut）。
                 開示があるセルだけ、payload にそのセルの分母（denominator / denominator_tag）が付き、行の値が無いところはキーごと省略。

@@ -149,6 +149,169 @@ import Testing
     }
 }
 
+@Suite struct SegmentV3AssemblyRegressionTests {
+    private func snapshot(_ rows: [BreakdownRow], denominator: Double, tag: String) -> BreakdownSnapshot {
+        BreakdownSnapshot(
+            axis: breakdownAxisSegment, denominator: denominator, denominatorTag: tag, rows: rows,
+            sourceKind: breakdownSourceXbrlFacts, needsReview: false, warnings: [])
+    }
+
+    /// HTML が総額 1 行だけ（カテゴリ行なし）のときは、タグ付き fact のカテゴリ行を使う
+    /// （5283 / 4680 / 3199: HTML を先に採ると概要のカテゴリが全部消える）。
+    @Test func overviewKeepsFactCategoriesWhenHtmlHasOnlyATotal() {
+        let html = snapshot([], denominator: 1_621_000_000, tag: "html")
+        let facts = snapshot(
+            [
+                BreakdownRow(
+                    labelRaw: "AMember", label: "建設関連", amount: 227_000_000, share: nil,
+                    profit: nil, rowKind: "segment")
+            ], denominator: 1_621_000_000, tag: "CapitalExpendituresOverviewOfCapitalExpendituresEtc")
+        #expect(SegmentV3.pickOverview(html: html, facts: facts)?.denominatorTag == facts.denominatorTag)
+        #expect(SegmentV3.pickOverview(html: html, facts: nil)?.denominatorTag == "html")
+        let htmlWithRows = snapshot(
+            [
+                BreakdownRow(
+                    labelRaw: "全社", label: "全社", amount: 1, share: nil, profit: nil,
+                    rowKind: "reconciling")
+            ], denominator: 1, tag: "html")
+        #expect(SegmentV3.pickOverview(html: htmlWithRows, facts: facts)?.denominatorTag == "html")
+    }
+
+    /// 骨格が本文・Jev 由来（labelRaw が日本語ラベル）でも、同じ表示名の member を別の行にしない。
+    @Test func memberCellsMergeIntoProseRowsByLabel() {
+        let segment = BreakdownSnapshotPayload(
+            axis: breakdownAxisSegment, denominator: 300, denominatorTag: "llm",
+            rows: [
+                BreakdownRowPayload(
+                    labelRaw: "DXクラウド事業", label: "DXクラウド事業", amount: 100, profit: 10,
+                    rowKind: "segment"),
+                BreakdownRowPayload(
+                    labelRaw: "広告・メディア事業", label: "広告・メディア事業", amount: 200, profit: 20,
+                    rowKind: "segment"),
+            ],
+            sourceKind: breakdownSourceSegmentInfoLLM, needsReview: false, warnings: [])
+        let external = snapshot(
+            [
+                BreakdownRow(
+                    labelRaw: "DXcloudReportableSegmentMember", label: "DXクラウド事業", amount: 100,
+                    share: nil, profit: nil, rowKind: "segment"),
+                BreakdownRow(
+                    labelRaw: "AdMediaReportableSegmentMember", label: "広告・メディア 事業", amount: 200,
+                    share: nil, profit: nil, rowKind: "segment"),
+                BreakdownRow(
+                    labelRaw: Xbrl.entityTotalMemberName, label: "連結", amount: 300, share: nil,
+                    profit: nil, rowKind: breakdownRowKindEntityTotal),
+            ], denominator: 300, tag: "RevenuesFromExternalCustomers")
+        let assembled = SegmentV3.assemble(
+            segment: segment, assets: nil, capitalExpenditures: nil,
+            noncurrentAssetAdditions: nil, overview: nil, overviewTotal: nil, equityMethod: nil,
+            external: external, edinetCode: "E27894",
+            memberPrefixes: [
+                "DXcloudReportableSegmentMember": "jpcrp030000-asr_E27894-000",
+                "AdMediaReportableSegmentMember": "jpcrp030000-asr_E27894-000",
+            ], labelsByTag: [:])
+        let segments = assembled.rows.filter { $0.rowKind == "segment" }
+        #expect(segments.count == 2)
+        #expect(segments.map { $0.externalSales?.value } == [100, 200])
+        #expect(segments.map(\.profit) == [10, 20])
+        #expect(segments[0].segmentKey == "E27894:ext:DXcloudReportableSegmentMember")
+        #expect(assembled.rows.contains { $0.rowKind == breakdownRowKindDifference } == false)
+    }
+}
+
+@Suite struct SegmentExternalSalesResolveTests {
+    private func fact(_ tag: String, _ member: String?, _ value: Double) -> BreakdownFact {
+        BreakdownFact(
+            tag: tag,
+            contextRef: member.map { "CurrentYearDuration_\($0)" } ?? "CurrentYearDuration",
+            dimensions: member.map { ["OperatingSegmentsAxis": $0] } ?? [:],
+            value: value, label: nil, unitRef: "JPY", decimals: "-3")
+    }
+
+    /// 350A 型: 外部顧客 5,409,674、その他の収益を含む計 7,113,916 = 連結売上高。計を採る。
+    @Test func totalMatchingConsolidatedSalesWinsOverExternalRow() throws {
+        let facts = [
+            fact("RevenuesFromExternalCustomers", "AReportableSegmentMember", 4_080_731_000),
+            fact("RevenuesFromExternalCustomers", "BReportableSegmentMember", 810_932_000),
+            fact("RevenuesFromExternalCustomers", "OtherReportableSegmentsMember", 518_010_000),
+            fact("RevenuesFromExternalCustomers", nil, 5_409_674_000),
+            fact("OtherRevenueSegmentInformation", "AReportableSegmentMember", 1_803_678_000),
+            fact("OtherRevenueSegmentInformation", "BReportableSegmentMember", -99_435_000),
+            fact("NetSales", "AReportableSegmentMember", 5_884_409_000),
+            fact("NetSales", "BReportableSegmentMember", 711_496_000),
+            fact("NetSales", "OtherReportableSegmentsMember", 518_010_000),
+            fact("NetSales", nil, 7_113_916_000),
+        ]
+        let resolved = try #require(
+            SegmentExternalSales.resolve(facts: facts, consolidatedSales: 7_113_916_000))
+        #expect(resolved.salesBasis == segmentSalesBasisExternalIncludingOtherRevenue)
+        #expect(resolved.snapshot.denominatorTag == "NetSales")
+        #expect(
+            resolved.snapshot.rows.first { $0.labelRaw == "AReportableSegmentMember" }?.amount
+                == 5_884_409_000)
+    }
+
+    /// 6349 型: 計はセグメント間を含み、連結売上高（= 外部顧客の合計）に一致しない。外部顧客のまま。
+    @Test func intersegmentInclusiveTotalIsNotUsed() throws {
+        let facts = [
+            fact("RevenuesFromExternalCustomers", "JapanReportableSegmentsMember", 55_271_000_000),
+            fact("RevenuesFromExternalCustomers", "EuropeReportableSegmentsMember", 63_340_000_000),
+            fact("RevenuesFromExternalCustomers", nil, 118_611_000_000),
+            fact("NetSales", "JapanReportableSegmentsMember", 87_044_000_000),
+            fact("NetSales", "EuropeReportableSegmentsMember", 65_825_000_000),
+            fact("NetSales", nil, 152_869_000_000),
+        ]
+        let resolved = try #require(
+            SegmentExternalSales.resolve(facts: facts, consolidatedSales: 118_611_000_000))
+        #expect(resolved.salesBasis == segmentSalesBasisExternal)
+        #expect(resolved.snapshot.denominatorTag == "RevenuesFromExternalCustomers")
+    }
+
+    /// 4097 型: 計は連結売上高と 0.7% ずれ、連結売上高は外部顧客に一致する。近いだけでは採らない。
+    @Test func nearbyTotalIsNotUsedWhenExternalMatchesConsolidatedSales() throws {
+        let facts = [
+            fact("RevenuesFromExternalCustomers", "GasReportableSegmentsMember", 72_797_000_000),
+            fact("RevenuesFromExternalCustomers", "ChemReportableSegmentsMember", 25_204_000_000),
+            fact("RevenuesFromExternalCustomers", nil, 98_001_000_000),
+            fact("NetSalesAndOperatingRevenue", "GasReportableSegmentsMember", 73_470_000_000),
+            fact("NetSalesAndOperatingRevenue", "ChemReportableSegmentsMember", 25_208_000_000),
+            fact("NetSalesAndOperatingRevenue", nil, 98_678_000_000),
+        ]
+        let resolved = try #require(
+            SegmentExternalSales.resolve(facts: facts, consolidatedSales: 98_001_000_000))
+        #expect(resolved.salesBasis == segmentSalesBasisExternal)
+    }
+
+    /// 3199 型: 外部顧客売上に連結値のタグが無い。計の連結値が連結売上高に一致しても、
+    /// セグメントの和（セグメント間を含む）が連結値に合わないので採らない。
+    @Test func totalIsNotUsedWhenExternalHasNoConsolidatedFact() throws {
+        let facts = [
+            fact("RevenuesFromExternalCustomers", "RetailReportableSegmentMember", 77_034_000_000),
+            fact("RevenuesFromExternalCustomers", "ConstructionReportableSegmentMember", 58_417_000_000),
+            fact("NetSales", "RetailReportableSegmentMember", 77_277_000_000),
+            fact("NetSales", "ConstructionReportableSegmentMember", 58_636_000_000),
+            fact("NetSales", nil, 135_451_000_000),
+        ]
+        let resolved = try #require(
+            SegmentExternalSales.resolve(facts: facts, consolidatedSales: 135_451_000_000))
+        #expect(resolved.salesBasis == segmentSalesBasisExternal)
+        #expect(resolved.snapshot.denominatorTag == "RevenuesFromExternalCustomers")
+    }
+
+    /// 連結売上高が分からないときは外部顧客のまま。
+    @Test func unknownConsolidatedSalesKeepsExternal() throws {
+        let facts = [
+            fact("RevenuesFromExternalCustomers", "AReportableSegmentMember", 10),
+            fact("RevenuesFromExternalCustomers", nil, 10),
+            fact("NetSales", "AReportableSegmentMember", 30),
+            fact("NetSales", nil, 30),
+        ]
+        let resolved = try #require(
+            SegmentExternalSales.resolve(facts: facts, consolidatedSales: nil))
+        #expect(resolved.salesBasis == segmentSalesBasisExternal)
+    }
+}
+
 @Suite struct SegmentTransitionMatcherTests {
     @Test func sameKeyIsImplicitAndNotEmitted() {
         let old = [

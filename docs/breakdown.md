@@ -176,6 +176,8 @@ v2（`breakdown-interest-bearing-debt-v2`）: 行と合計が変わる変更（�
 - 2026-11: 軸 `research_and_development` を廃止（breaking。REST は常に 404、`apiSkillsSchemaVersion` 11）。ingest の `breakdowns-rd` と本文総額・不足分補完の Jev を削除。Summary `rd` は軸と別の抽出（`RDExtractor`）で、`fin-vN` と組立指紋は据え置き（定数 `breakdown-research-and-development-v2` は指紋のために残す）。DB の既存行は読まないだけで残る。
 - 2026-11: 軸 `capex` を `segment` に統合（breaking。`apiSkillsSchemaVersion` 16、`breakdown-segment-v3`、read 床 3）。行は `segment_key` とセル `{value,basis,source,decimals?}`。丸め幅の差額は差額行に出さず `rounding_gaps`。年次は `GET /waterfall/segment` 1 本（`years` 既定 5、`fiscal_year` で単年。つなぎは `years[].segments[].prior` と年の `line_cut`。`/waterfall/segment/transitions` は置かない）。値は tagged 円のまま丸めない。
 
+- 2026-11: `segment` の `sales_basis` に `external_including_other_revenue` を足した（互換追加。`cache_version` / `apiSkillsSchemaVersion` は据え置き）。セグメント表に「外部顧客への売上高」と「その他の収益を含む計」の両方があり、外部顧客の連結値が連結売上高（Summary sales）に合わず、計の連結値が一致する書類（350A `S100ZAEK`、5842 `S100XOZ3`）は、`external_sales` に計を載せる。見分けは金額の近さではなく連結売上高との一致（0.1% 以内）で、セグメント間を含む計（6349）は連結売上高に一致しないので採らない。候補のタグが 1 つに決まらないときは外部顧客のまま（`SegmentExternalSales.resolve`）。
+
 ## 非目標
 
 過去セグメント遡及組替、会社間ラベル統一、全期の事業×地域完全充足、生 XBRL 一発 LLM 抽出。
