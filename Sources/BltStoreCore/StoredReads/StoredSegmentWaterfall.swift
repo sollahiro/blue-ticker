@@ -35,7 +35,9 @@ private func loadSegmentTransitionDrafts(
     }
 }
 
-private func loadServableSegmentYears(
+/// 年次応答に載る segment-v3 スナップショット（新しい順）。同じ決算期の書類が複数あれば提出の新しい方。
+/// つなぎの ingest も同じ並びを使う（読む側と書く側で「前年」がずれないように）。
+package func loadServableSegmentYears(
     code: String, db: Database
 ) async throws -> [(fyEnd: String, docID: String, payload: BreakdownSnapshotPayload)] {
     let candidates = try await CompanyBreakdown.query(on: db)

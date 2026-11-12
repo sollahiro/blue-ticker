@@ -32,16 +32,10 @@ public enum SegmentTransitionMatcher {
         fyEnd: String,
         priorYearAmountByNewKey: [String: Double] = [:]
     ) -> [SegmentTransitionDraft] {
-        let oldKeys = Dictionary(
-            uniqueKeysWithValues: oldRows.compactMap { row -> (String, BreakdownRowPayload)? in
-                guard let key = row.segmentKey else { return nil }
-                return (key, row)
-            })
-        let newKeys = Dictionary(
-            uniqueKeysWithValues: newRows.compactMap { row -> (String, BreakdownRowPayload)? in
-                guard let key = row.segmentKey else { return nil }
-                return (key, row)
-            })
+        // つなぐのは報告セグメント行だけ。調整・連結・差額行は年ごとに出たり消えたりするので、
+        // 混ぜると差額行が出ただけの年に break が付き、折れ線が切れる。
+        let oldKeys = segmentRowsByKey(oldRows)
+        let newKeys = segmentRowsByKey(newRows)
         let shared = Set(oldKeys.keys).intersection(newKeys.keys)
         var leftoverOld = Set(oldKeys.keys).subtracting(shared)
         var leftoverNew = Set(newKeys.keys).subtracting(shared)
@@ -104,6 +98,16 @@ public enum SegmentTransitionMatcher {
                     matched: segmentTransitionMatchedUnmatched))
         }
         return out
+    }
+
+    /// 同じキーが 2 行あっても落とさない（先の行を採る）。
+    private static func segmentRowsByKey(_ rows: [BreakdownRowPayload]) -> [String: BreakdownRowPayload] {
+        Dictionary(
+            rows.compactMap { row -> (String, BreakdownRowPayload)? in
+                guard row.rowKind == "segment", let key = row.segmentKey else { return nil }
+                return (key, row)
+            },
+            uniquingKeysWith: { first, _ in first })
     }
 
     /// Jev の閉じた集合。connect は閾値を満たしたときだけ。それ以外は needs_review。

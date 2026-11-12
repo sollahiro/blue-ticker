@@ -164,6 +164,42 @@ import Testing
         #expect(drafts.isEmpty)
     }
 
+    /// 差額行・調整行・連結行は年によって出たり消えたりする。つなぎの対象にしない
+    /// （対象にすると、差額行が出ただけの年に break が付いて折れ線が切れる）。
+    @Test func nonSegmentRowsAreNotMatched() {
+        func row(_ local: String, kind: String, key: String) -> BreakdownRowPayload {
+            var row = BreakdownRowPayload(
+                labelRaw: local, label: local, amount: 1, profit: nil, rowKind: kind)
+            row.segmentKey = key
+            return row
+        }
+        let segment = row("AMember", kind: "segment", key: "E1:ext:AMember")
+        let drafts = SegmentTransitionMatcher.match(
+            oldRows: [
+                segment,
+                row("ReconcilingItemsMember", kind: "reconciling", key: "E1:std:ReconcilingItemsMember"),
+            ],
+            newRows: [
+                segment,
+                row("EliminationMember", kind: "reconciling", key: "E1:std:EliminationMember"),
+                row("差額", kind: breakdownRowKindDifference, key: "E1:txt:差額"),
+                row(
+                    Xbrl.entityTotalMemberName, kind: breakdownRowKindEntityTotal,
+                    key: "E1:std:\(Xbrl.entityTotalMemberName)"),
+            ],
+            fyEnd: "2026-03-31")
+        #expect(drafts.isEmpty)
+    }
+
+    @Test func duplicateKeysDoNotCrash() {
+        var a = BreakdownRowPayload(
+            labelRaw: "AMember", label: "A", amount: 1, profit: nil, rowKind: "segment")
+        a.segmentKey = "E1:ext:AMember"
+        let drafts = SegmentTransitionMatcher.match(
+            oldRows: [a, a], newRows: [a], fyEnd: "2026-03-31")
+        #expect(drafts.isEmpty)
+    }
+
     @Test func valueOnlyDifferentLabelIsNeedsReviewNotConnect() {
         var oldRow = BreakdownRowPayload(
             labelRaw: "OldMember", label: "旧", amount: 100, profit: nil, rowKind: "segment")
