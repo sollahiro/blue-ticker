@@ -215,4 +215,27 @@ import Testing
         #expect(added?.rowKind == "segment")
         #expect(filled.rows.map(\.amount).reduce(0, +) == 50)
     }
+
+    /// タグの無い事業部門表。既存の全社（共通）と同じ人数の行は足さず、部門だけ足す。
+    /// source: code=2303 fy_end=2026-05-31 doc_id=S100YXLE page=43 field=employees.営業部門
+    @Test func departmentTableAddsUntaggedDepartmentRowsBesideCorporateShared() {
+        let html = """
+            <table><tr><td>事業部門の名称</td><td>従業員数（人）</td></tr>
+            <tr><td>営業部門</td><td>12</td></tr>
+            <tr><td>サービス推進部門</td><td>13</td></tr>
+            <tr><td>開発部門</td><td>34</td></tr>
+            <tr><td>全社（共通）</td><td>7</td></tr>
+            <tr><td>合計</td><td>66</td></tr></table>
+            """
+        let rows = EmployeesUntaggedRowFill.departmentRows(in: html)
+        #expect(rows.map(\.label) == ["営業部門", "サービス推進部門", "開発部門", "全社（共通）"])
+        let base = snapshot(rows: [("CorporateSharedMember", 7, "reconciling")], denominator: 66)
+        let filled = EmployeesUntaggedRowFill.applyDepartmentRows(snapshot: base, rows: rows)
+        #expect(filled.rows.contains { $0.label == "営業部門" && $0.amount == 12 && $0.rowKind == "segment" })
+        #expect(filled.rows.contains { $0.label == "サービス推進部門" && $0.amount == 13 })
+        #expect(filled.rows.contains { $0.label == "開発部門" && $0.amount == 34 })
+        #expect(filled.rows.filter { $0.rowKind == "reconciling" }.map(\.amount) == [7])
+        #expect(filled.rows.map(\.amount).reduce(0, +) == 66)
+        #expect(filled.needsReview == false)
+    }
 }
