@@ -237,11 +237,51 @@ enum BreakdownProseToolkit {
         return (warnings, needsReview)
     }
 
+    /// Jev なしで会社全体の総額と決まる文。
+    /// 候補が1文で、総額または「取得／実施いたしました」があり、一部を示す語が無いとき。
+    /// または「総額」を含む文が候補のうち1つだけのとき（キングジムの工場一部と並ぶ総額）。
+    static func deterministicCompanyTotal(
+        in candidates: [BreakdownProseCandidate]
+    ) -> BreakdownProseCandidate? {
+        if candidates.count == 1, let only = candidates.first,
+            looksLikeCompanyTotalCue(only.sentence), !looksLikePartialAmount(only.sentence)
+        {
+            return only
+        }
+        let totals = candidates.filter {
+            $0.sentence.contains("総額") && !looksLikePartialAmount($0.sentence)
+        }
+        if totals.count == 1 { return totals[0] }
+        return nil
+    }
+
+    /// 「総額」または当期の実施・取得を述べる締め。金額の意味は見ない。
+    static func looksLikeCompanyTotalCue(_ sentence: String) -> Bool {
+        sentence.contains("総額")
+            || sentence.contains("取得いたしました")
+            || sentence.contains("実施いたしました")
+            || sentence.contains("行いました")
+    }
+
+    /// 「うち」「主な」「〜事業において」など、会社全体ではない金額の目印。
+    /// 「当連結会計年度において」は時期の話なので含めない。
+    static func looksLikePartialAmount(_ sentence: String) -> Bool {
+        sentence.contains("うち")
+            || sentence.contains("内訳")
+            || sentence.contains("主な")
+            || sentence.contains("事業において")
+            || sentence.contains("セグメントにおいて")
+            || sentence.contains("事業所において")
+    }
+
     static func classifyCurrentCompanyTotal(
         candidates: [BreakdownProseCandidate], policy: JevDecisionPolicy,
         decider: any BreakdownProseDeciding
     ) async -> CompanyTotalOutcome {
         guard !candidates.isEmpty else { return .notApplied }
+        if let winner = deterministicCompanyTotal(in: candidates) {
+            return .applied(winner: winner, calls: [])
+        }
         var calls: [SegmentNoteJevCallPayload] = []
         var winners: [BreakdownProseCandidate] = []
         for candidate in candidates {
