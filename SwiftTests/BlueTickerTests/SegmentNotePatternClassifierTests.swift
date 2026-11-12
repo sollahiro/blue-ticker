@@ -95,6 +95,30 @@ import Testing
             == "食品事業")
     }
 
+    /// のれん注記の「同様の情報」だけを渡すと Jev は same_as にするが、geography 入力からは落とす。
+    /// source: code=6577 fy_end=2026-07-31 doc_id=S100Z940 page=77 field=geography
+    @Test func geographyAxisDoesNotTreatGoodwillOmissionAsSameAs() async {
+        let goodwill =
+            "（注）のれん償却額に関しては、セグメント情報に同様の情報を開示しているため、記載を省略しております。"
+        let ninety =
+            "本邦の外部顧客への売上高が連結損益計算書の売上高の90％を超えるため、記載を省略しております。"
+        let prose = BreakdownExtractor.geographyDisclosureSentences(from: [goodwill, ninety])
+        #expect(prose == [ninety])
+        let decider = FakeSegmentNotePatternDecider(selected: "omitted_same_as_segment")
+        let outcome = await SegmentNotePatternClassifier.classify(
+            axis: .geography,
+            signals: SegmentNotePatternSignals(
+                reportableMemberCount: 2, hasDedicatedSingleSegmentTag: false,
+                hasReportableSegmentTable: true, hasRelatedInfoTable: false,
+                reportableMembersAreGeographic: false, prose: prose),
+            docID: "S100Z940",
+            decider: decider)
+        // 残った本邦90%文を same_as と誤分類しても、呼び出し側が 90% 省略を先に採用する。
+        #expect(BreakdownExtractor.geographyOmissionTakesPriority(
+            overSameAs: breakdownNotApplicableDomesticDominant90pct))
+        #expect(outcome.evidenceSentence != goodwill)
+    }
+
     @Test func relatedInfoSameAsSegmentUsesJevOnGeographyAxis() async {
         let decider = FakeSegmentNotePatternDecider(selected: "omitted_same_as_segment")
         let outcome = await SegmentNotePatternClassifier.classify(

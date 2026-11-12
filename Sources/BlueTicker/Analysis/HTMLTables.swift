@@ -31,6 +31,20 @@ enum HTMLTables {
         return ranges
     }
 
+    /// 入れ子の葉（中に表を持たない表）。タグの有無は見ない。
+    static func leafTables(in html: String) -> [String] {
+        let ns = html as NSString
+        return topLevelRanges(in: html).flatMap { explode($0, in: ns) }
+    }
+
+    private static func explode(_ range: NSRange, in ns: NSString) -> [String] {
+        let table = ns.substring(with: range)
+        let nested = nestedRanges(in: table)
+        if nested.isEmpty { return [flattenNested(table)] }
+        let inner = table as NSString
+        return nested.flatMap { explode($0, in: inner) }
+    }
+
     /// `tag` を自身のセルに含む表（出現順。中の表は `flattenNested` 済み）。外側の表が中の表を
     /// 包むだけのとき（日立 S100YGBO の従業員表は 1 セルの枠の表の中）は、外側でなく中の表を返す。
     static func tables(in html: String, containing tag: String) -> [String] {

@@ -808,6 +808,29 @@ enum BreakdownExtractor {
         "(売上|営業収益|収益)[^。]{0,20}(全て|すべて|全額)[^。]{0,10}(本邦|日本|国内)(?!以外)",
     ].map { try! NSRegularExpression(pattern: $0) }
 
+    /// geography の same_as 判定に使う文。のれん・減損注記の「セグメント情報に同様」は
+    /// 地域ごとの情報ではないので落とす。本邦90%・海外なし・地域別の省略文だけ残す。
+    static func geographyDisclosureSentences(from sentences: [String]) -> [String] {
+        sentences.filter(isGeographyDisclosureSentence)
+    }
+
+    /// 地域ごとの情報の省略・非開示の文か。のれん償却の「同様の情報」は含めない。
+    static func isGeographyDisclosureSentence(_ sentence: String) -> Bool {
+        let s = sentence.replacingOccurrences(of: " ", with: "").replacingOccurrences(of: "　", with: "")
+        if s.contains("のれん") || s.contains("減損") {
+            return s.contains("地域")
+        }
+        let markers = ["地域ごとの", "地域別", "所在地別", "本邦", "日本以外", "海外売上", "国外"]
+        return markers.contains(where: s.contains)
+    }
+
+    /// 本邦90%超・海外売上なしの決定論省略は、Jev の same_as より先に採用する
+    /// （6577: のれん注記の「セグメント情報に同様」を地域省略と誤認しない）。
+    static func geographyOmissionTakesPriority(overSameAs reason: String) -> Bool {
+        reason == breakdownNotApplicableDomesticDominant90pct
+            || reason == breakdownNotApplicableNoOverseasSales
+    }
+
     /// 省略理由を文だけから分類する（テスト可能な純関数）。海外売上なしを 90% 超より優先する。
     /// 当てはまらなければ nil。
     static func classifyGeographyOmission(sentences: [String]) -> String? {

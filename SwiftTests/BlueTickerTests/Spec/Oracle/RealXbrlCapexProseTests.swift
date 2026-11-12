@@ -17,6 +17,8 @@ import Foundation
         let yens = CapexProseTotalDecision.candidates(in: text, limit: nil).map(\.yen)
         #expect(yens.contains(680_060_000))
         #expect(yens.contains(352_560_000))
+        #expect(BreakdownProseToolkit.deterministicCompanyTotal(in:
+            CapexProseTotalDecision.candidates(in: text, limit: nil))?.yen == 680_060_000)
     }
 
     /// 穴吹興産。「2,180,870千円を取得いたしました」だけが候補(概要タグは無い書類)。
@@ -31,9 +33,8 @@ import Foundation
     }
 }
 
-/// 決定論の capex 行があり概要が無いとき、Jev が不達なら行を確定しない(.failed)。
-/// 確定すると「現行版の決定論の行」として以後 skip され、本文の総額が永久に入らない(Jev 402 の間に
-/// 作られた行が残った)。Jev が総額でないと答えたときは、概要なしの行を確定する。
+/// 決定論の capex 行があり概要が無いとき、総額と決まる文が無いと Jev 不達なら行を確定しない。
+/// 穴吹興産は取得いたしましたの1文だけなので、Jev なしで Overview 総額を載せる。
 /// source: code=8928 fy_end=2025-06-30 doc_id=S100WQZC page=31 field=capex_overview
 @Suite struct RealXbrlCapexProseFillTests {
     private struct FixedDecider: CapexProseDeciding {
@@ -68,12 +69,18 @@ import Foundation
         return await context.fillCapexProse(payload: deterministicPayload, xbrlDir: dir, docID: docID)
     }
 
-    @Test func unavailableJevDoesNotFinalizeARowWithoutOverview() async throws {
+    /// 穴吹興産: 取得額の1文だけで、Jev 不達でも Overview 総額 2,180,870,000 円。
+    /// source: code=8928 fy_end=2025-06-30 doc_id=S100WQZC page=31 field=capex
+    @Test func soleAcquisitionSentenceFillsOverviewWithoutJev() async throws {
         guard let result = try await fill(FixedDecider(selected: nil, probability: nil)) else { return }
-        guard case .failed = result else {
-            Issue.record("Jev 不達のとき概要なしの行を確定している")
+        guard case .resolved(let filled) = result else {
+            Issue.record("唯一の取得文があるのに Jev 不達で行を確定していない")
             return
         }
+        #expect(filled.payload.capitalExpendituresOverview?.denominator == 2_180_870_000)
+        #expect(
+            filled.payload.capitalExpendituresOverview?.denominatorTag
+                == breakdownDenominatorTagCapexProse)
     }
 
     @Test func companyTotalFillsTheOverview() async throws {
@@ -90,14 +97,15 @@ import Foundation
                 == breakdownDenominatorTagCapexProse)
     }
 
-    @Test func nonTotalAnswerKeepsTheDeterministicRowWithoutOverview() async throws {
+    /// 取得いたしましたの1文は Jev が前期と答えても総額（閾値未満で落ちていた経路の回帰）。
+    @Test func nonTotalAnswerDoesNotOverrideSoleAcquisitionSentence() async throws {
         guard let result = try await fill(
             FixedDecider(selected: CapexProseRole.priorPeriod, probability: 0.95))
         else { return }
         guard case .resolved(let filled) = result else {
-            Issue.record("総額でないと判定されたのに resolved でない")
+            Issue.record("唯一の取得文があるのに resolved でない")
             return
         }
-        #expect(filled.payload.capitalExpendituresOverview == nil)
+        #expect(filled.payload.capitalExpendituresOverview?.denominator == 2_180_870_000)
     }
 }

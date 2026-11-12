@@ -37,6 +37,30 @@ import Testing
         ]) == breakdownNotApplicableNoOverseasSales)
     }
 
+    /// のれん注記の「セグメント情報に同様」は地域ごとの情報ではない。本邦90%文だけを残す。
+    /// source: code=6577 fy_end=2026-07-31 doc_id=S100Z940 page=77 field=geography
+    @Test func goodwillSameAsSentenceIsNotGeographyDisclosure() {
+        let ninety =
+            "本邦の外部顧客への売上高が連結損益計算書の売上高の90％を超えるため、記載を省略しております。"
+        let goodwill =
+            "（注）のれん償却額に関しては、セグメント情報に同様の情報を開示しているため、記載を省略しております。"
+        #expect(!BreakdownExtractor.isGeographyDisclosureSentence(goodwill))
+        #expect(BreakdownExtractor.isGeographyDisclosureSentence(ninety))
+        #expect(
+            BreakdownExtractor.geographyDisclosureSentences(from: [goodwill, ninety]) == [ninety])
+        #expect(
+            classify([goodwill, ninety]) == breakdownNotApplicableDomesticDominant90pct)
+        #expect(
+            BreakdownExtractor.geographyOmissionTakesPriority(
+                overSameAs: breakdownNotApplicableDomesticDominant90pct))
+        #expect(
+            BreakdownExtractor.geographyOmissionTakesPriority(
+                overSameAs: breakdownNotApplicableNoOverseasSales))
+        #expect(
+            !BreakdownExtractor.geographyOmissionTakesPriority(
+                overSameAs: breakdownNotApplicableNotFound))
+    }
+
     @Test func unrelatedNinetyPercentSentencesStayNil() {
         // 有形固定資産だけの 90% 文
         #expect(classify(["本邦に所在している有形固定資産の金額が連結貸借対照表の有形固定資産の金額の90％を超えるため、記載を省略しております。"]) == nil)
