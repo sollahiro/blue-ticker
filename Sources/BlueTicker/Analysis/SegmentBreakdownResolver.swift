@@ -187,6 +187,10 @@ enum SegmentBreakdownResolver {
         {
             member = nil
             label = named
+        } else if classification == .singleSegment {
+            // 単一セグメントと分かるが事業名が取れない（「当社グループは単一セグメントであるため…」）。
+            // セグメント行は作らず、会社全体の行だけを返す。名前は作らない。
+            return consolidatedOnlySnapshot(sales: amount)
         } else {
             return nil
         }
@@ -213,6 +217,23 @@ enum SegmentBreakdownResolver {
             needsReview: false,
             warnings: [],
             disclosureBasis: disclosure)
+    }
+
+    /// 単一セグメントで事業名が無いときの骨格。売上があれば「連結合計又は会社合計」の 1 行、無ければ行なし。
+    static func consolidatedOnlySnapshot(sales: Double) -> BreakdownSnapshot {
+        var rows: [BreakdownRow] = []
+        if sales != 0 {
+            rows.append(
+                BreakdownRow(
+                    labelRaw: Xbrl.entityTotalMemberName,
+                    label: Xbrl.codeSideStandardMemberLabels[Xbrl.entityTotalMemberName],
+                    amount: sales, share: 1, profit: nil,
+                    rowKind: breakdownRowKindEntityTotal))
+        }
+        return BreakdownSnapshot(
+            axis: breakdownAxisSegment, denominator: sales,
+            denominatorTag: "income_statement.sales", rows: rows,
+            sourceKind: breakdownSourceXbrlFacts, needsReview: false, warnings: [])
     }
 
     static func applyingPatternAndJoin(

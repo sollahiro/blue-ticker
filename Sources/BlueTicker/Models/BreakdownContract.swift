@@ -209,6 +209,10 @@ public let segmentSalesBasisIntersegmentInclusive = "intersegment_inclusive"
 public let segmentSalesBasisBank = "bank"
 public let segmentSalesBasisInsurance = "insurance"
 public let segmentSalesBasisKey = "sales_basis"
+/// 報告セグメントが 1 つか複数か。単一のときは行が事業名の 1 行、または会社全体の行だけになる。
+public let segmentStructureKey = "segment_structure"
+public let segmentStructureSingle = "single"
+public let segmentStructureMultiple = "multiple"
 public let segmentRoundingGapsKey = "rounding_gaps"
 
 public let segmentWaterfallMetrics: Set<String> = [
@@ -1054,6 +1058,8 @@ public struct BreakdownSnapshotPayload: Codable, Sendable, Equatable {
     public var noncurrentAssetAdditionsTotals: CapexMetricTotalsPayload? = nil
     public var overview: SegmentOverviewPayload? = nil
     public var salesBasis: String? = nil
+    /// `segmentStructureSingle` / `segmentStructureMultiple`。判定できないときは nil。
+    public var segmentStructure: String? = nil
     /// 丸め幅に収まった差額（指標キー → 生の差額円）。差額行には出さない。
     public var roundingGaps: [String: Double]? = nil
 
@@ -1377,6 +1383,7 @@ public extension BreakdownSnapshotPayload {
         object.removeValue(forKey: "denominator")
         object.removeValue(forKey: "denominator_tag")
         if let salesBasis { object[segmentSalesBasisKey] = salesBasis }
+        if let segmentStructure { object[segmentStructureKey] = segmentStructure }
         if let roundingGaps, !roundingGaps.isEmpty {
             object[segmentRoundingGapsKey] = roundingGaps.mapValues(breakdownJSONAmount)
         }

@@ -755,6 +755,22 @@ enum BreakdownExtractor {
             ?? breakdownNotApplicableNotFound
     }
 
+    /// セグメント注記の地の文が「単一セグメント」と言っている文。否定（単一セグメントではない）は除く。
+    /// 専用タグが無くても、報告セグメントの member が 1 つも無い書類ではこの文で単一と決める
+    /// （2764 S100YL5S「レストラン事業のみの単一セグメントであり…記載を省略」）。
+    static func singleSegmentStatement(in sentences: [String]) -> String? {
+        sentences.first { sentence in
+            let s = sentence.replacingOccurrences(of: " ", with: "")
+                .replacingOccurrences(of: "　", with: "")
+            let states = s.contains("単一セグメント") || s.contains("単一の報告セグメント")
+                || s.contains("単一の事業セグメント") || s.contains("報告セグメントは単一")
+                || s.contains("事業セグメントは単一")
+            guard states else { return false }
+            return !s.contains("単一セグメントではな") && !s.contains("単一ではな")
+                && !s.contains("単一セグメントから") && !s.contains("単一セグメントでした")
+        }
+    }
+
     /// セグメント注記・関連情報の TextBlock の地の文を「。」で切った全文（表のセルは混ぜない）。
     /// `segmentNoteOmissionSentences` と違い「記載を省略」を含まない文（「該当事項はありません」）も残す。
     static func segmentNoteSentences(xbrlDir: URL) -> [String] {

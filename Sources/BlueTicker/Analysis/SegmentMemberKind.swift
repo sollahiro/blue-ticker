@@ -19,6 +19,9 @@ enum SegmentMemberKind {
             return .corporate
         }
         if BreakdownMemberRoles.isReconciling(localName) { return .reconciling }
+        // 「消去又は全社」「全社・消去」は消去と全社を 1 行にまとめた調整行（7203 の提出者拡張 member）。
+        let compactLabel = SegmentLabelMatch.compact(label ?? "")
+        if compactLabel.contains("消去"), compactLabel.contains("全社") { return .reconciling }
         if Xbrl.segmentSubtotalMemberNames.contains(localName) {
             if localName == "CorporateSharedMember" { return .corporate }
             if localName == "UnallocatedAmountsAndEliminationMember" { return .reconciling }

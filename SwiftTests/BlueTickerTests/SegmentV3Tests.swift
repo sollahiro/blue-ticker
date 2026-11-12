@@ -219,6 +219,103 @@ import Testing
     }
 }
 
+@Suite struct SingleSegmentTests {
+    /// 専用タグが無くても、注記の地の文が単一セグメントと言っていれば単一と決める。否定文は除く。
+    @Test func singleSegmentStatementIsFoundInProse() {
+        #expect(
+            BreakdownExtractor.singleSegmentStatement(in: [
+                "【セグメント情報】",
+                "当社グループの報告セグメントは、レストラン事業のみの単一セグメントであり重要性が乏しいため、セグメント情報の記載を省略しております。",
+            ])?.contains("レストラン事業") == true)
+        #expect(
+            BreakdownExtractor.singleSegmentStatement(in: ["当社グループの報告セグメントは単一であるため、記載を省略しております。"])
+                != nil)
+        #expect(
+            BreakdownExtractor.singleSegmentStatement(in: ["当社グループは単一セグメントではなく、2つの報告セグメントを有しております。"])
+                == nil)
+        #expect(
+            BreakdownExtractor.singleSegmentStatement(in: ["セグメント情報に同様の情報を開示しているため、記載を省略しております。"])
+                == nil)
+    }
+
+    /// 単一セグメントで事業名が取れないときは、セグメント行を作らず会社全体の行だけにする。
+    @Test func unnamedSingleSegmentReturnsConsolidatedRowOnly() throws {
+        let pattern = SegmentNotePatternOutcome.deterministic(
+            .singleSegment, evidence: "当社グループは単一セグメントであるため、記載を省略しております。")
+        let snapshot = try #require(
+            SegmentBreakdownResolver.oneRowSnapshot(
+                reportable: ExtractedBreakdown(method: "not_found", tables: [], facts: []),
+                consolidatedSales: 9_881_044_000, labelsByTag: [:], pattern: pattern))
+        #expect(snapshot.rows.count == 1)
+        #expect(snapshot.rows[0].rowKind == breakdownRowKindEntityTotal)
+        #expect(snapshot.rows[0].amount == 9_881_044_000)
+        #expect(snapshot.rows.contains { $0.rowKind == "segment" } == false)
+    }
+
+    /// 事業名が取れるときは従来どおり事業名の 1 行。
+    @Test func namedSingleSegmentKeepsTheBusinessRow() throws {
+        let pattern = SegmentNotePatternOutcome.deterministic(
+            .singleSegment,
+            evidence: "当社グループの報告セグメントは、レストラン事業のみの単一セグメントであり重要性が乏しいため、セグメント情報の記載を省略しております。")
+        let snapshot = try #require(
+            SegmentBreakdownResolver.oneRowSnapshot(
+                reportable: ExtractedBreakdown(method: "not_found", tables: [], facts: []),
+                consolidatedSales: 9_881_044_000, labelsByTag: [:], pattern: pattern))
+        #expect(snapshot.rows.map(\.label) == ["レストラン事業"])
+        #expect(snapshot.rows[0].rowKind == "segment")
+    }
+
+    @Test func structureMarker() {
+        #expect(SegmentV3.segmentStructure(classification: .singleSegment, rows: []) == "single")
+        #expect(SegmentV3.segmentStructure(classification: .multipleSegments, rows: []) == "multiple")
+        #expect(SegmentV3.segmentStructure(classification: .omittedDominant90pct, rows: []) == nil)
+        let two = ["A", "B"].map {
+            BreakdownRowPayload(labelRaw: $0, label: $0, amount: 1, profit: nil, rowKind: "segment")
+        }
+        #expect(SegmentV3.segmentStructure(classification: nil, rows: two) == "multiple")
+        #expect(SegmentV3.segmentStructure(classification: nil, rows: []) == nil)
+    }
+
+    /// 概要のカテゴリ（報告セグメントではない member や「新設によるもの」）で行を増やさない。
+    @Test func overviewCategoriesDoNotCreateSegmentRows() {
+        let segment = BreakdownSnapshotPayload(
+            axis: breakdownAxisSegment, denominator: 100, denominatorTag: "income_statement.sales",
+            rows: [
+                BreakdownRowPayload(
+                    labelRaw: "AMember", label: "A事業", amount: 100, profit: nil, rowKind: "segment")
+            ],
+            sourceKind: breakdownSourceXbrlFacts, needsReview: false, warnings: [])
+        let overview = BreakdownSnapshot(
+            axis: breakdownAxisSegment, denominator: 30, denominatorTag: "overview",
+            rows: [
+                BreakdownRow(
+                    labelRaw: "AMember", label: "A事業", amount: 10, share: nil, profit: nil,
+                    rowKind: "segment"),
+                BreakdownRow(
+                    labelRaw: "OverviewOnlyMember", label: "概要だけの事業", amount: 20, share: nil,
+                    profit: nil, rowKind: "segment"),
+            ],
+            sourceKind: breakdownSourceXbrlFacts, needsReview: false, warnings: [])
+        let assembled = SegmentV3.assemble(
+            segment: segment, assets: nil, capitalExpenditures: nil,
+            noncurrentAssetAdditions: nil, overview: overview, overviewTotal: nil,
+            equityMethod: nil, external: nil, edinetCode: "E1", memberPrefixes: [:],
+            labelsByTag: [:])
+        #expect(assembled.rows.filter { $0.rowKind == "segment" }.map(\.labelRaw) == ["AMember"])
+        #expect(assembled.rows[0].capitalExpenditures?.value == 10)
+        let categories = assembled.overview?.categories ?? []
+        #expect(categories.count == 2)
+        #expect(categories.first { $0.label == "概要だけの事業" }?.unassigned == true)
+    }
+
+    @Test func combinedEliminationAndCorporateIsReconciling() {
+        #expect(
+            SegmentMemberKind.rowKind(
+                SegmentMemberKind.classify(localName: "XReportableSegmentMember", label: "消去又は全社"))
+                == "reconciling")
+    }
+}
+
 @Suite struct SegmentExternalSalesResolveTests {
     private func fact(_ tag: String, _ member: String?, _ value: Double) -> BreakdownFact {
         BreakdownFact(
