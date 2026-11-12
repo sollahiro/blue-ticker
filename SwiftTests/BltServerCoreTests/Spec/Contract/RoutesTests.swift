@@ -142,7 +142,6 @@ private func send(
                 "/v1/companies/7203/financials",
                 "/v1/companies/7203/waterfall",
                 "/v1/companies/7203/waterfall/segment",
-                "/v1/companies/7203/waterfall/segment/transitions",
                 "/v1/companies/7203/filing-content",
             ] {
                 let (status, json) = try await send(app, path)

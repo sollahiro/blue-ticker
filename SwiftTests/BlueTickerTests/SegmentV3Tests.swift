@@ -107,13 +107,16 @@ import Testing
         let year = SegmentWaterfall.yearObject(
             fyEnd: "2026-03-31", docID: "S100Y992", payload: assembled,
             metric: segmentWaterfallMetricExternalSales, key: nil)
-        let rows = try #require(year["rows"] as? [[String: Any]])
-        #expect(rows.contains { $0["row_kind"] as? String == breakdownRowKindDifference } == false)
+        let segments = try #require(year[segmentWaterfallSegmentsKey] as? [[String: Any]])
+        #expect(year[breakdownRowKindDifference] == nil)
         let gaps = try #require(year[segmentRoundingGapsKey] as? [String: Any])
         #expect((gaps[segmentCellExternalSales] as? NSNumber)?.int64Value == 2_000_000)
-        let first = try #require(rows[0]["value"] as? NSNumber)
+        let first = try #require(segments[0]["value"] as? NSNumber)
         #expect(first.int64Value == 936_926_000_000)
-        #expect(rows[0]["decimals"] as? Int == -6)
+        #expect(segments[0]["decimals"] as? Int == -6)
+        #expect(year["fiscal_year"] as? Int == 2026)
+        let consolidated = try #require(year[segmentWaterfallConsolidatedKey] as? [String: Any])
+        #expect((consolidated["value"] as? NSNumber)?.int64Value == 1_583_719_000_000)
     }
 
     @Test func inclusiveRevenueIsNotLabeledExternal() {
@@ -187,5 +190,144 @@ import Testing
         let low = SegmentTransitionMatcher.applyJev(
             draft, decision: segmentTransitionDecisionConnect, confident: false)
         #expect(low.decision == segmentTransitionDecisionNeedsReview)
+    }
+}
+
+@Suite struct SegmentWaterfallAPITests {
+    private func cellRow(
+        _ local: String, kind: String, value: Double, key: String
+    ) -> BreakdownRowPayload {
+        var row = BreakdownRowPayload(
+            labelRaw: local, label: local, amount: value, profit: nil, rowKind: kind)
+        row.segmentKey = key
+        row.externalSales = BreakdownMetricCellPayload(
+            value: value, basis: breakdownSourceXbrlFacts, source: local, decimals: -6)
+        return row
+    }
+
+    private func yearPayload(_ rows: [BreakdownRowPayload]) -> BreakdownSnapshotPayload {
+        var payload = BreakdownSnapshotPayload(
+            axis: breakdownAxisSegment, denominator: 1, denominatorTag: "Sales",
+            rows: rows, sourceKind: breakdownSourceXbrlFacts, needsReview: false, warnings: [])
+        payload.salesBasis = segmentSalesBasisExternal
+        return payload
+    }
+
+    @Test func yearsAreNewestFirstAndSkipMissingYears() throws {
+        let a = cellRow("A", kind: "segment", value: 1, key: "E1:ext:A")
+        let object = SegmentWaterfall.jsonObject(
+            code: "2802",
+            metric: segmentWaterfallMetricExternalSales,
+            years: [
+                (fyEnd: "2024-03-31", docID: "S1", payload: yearPayload([a])),
+                (fyEnd: "2026-03-31", docID: "S3", payload: yearPayload([a])),
+            ],
+            limit: 5)
+        let years = try #require(object["years"] as? [[String: Any]])
+        #expect(years.map { $0["fy_end"] as? String } == ["2026-03-31", "2024-03-31"])
+        #expect(years.count == 2)
+        #expect(years[0][segmentWaterfallLineCutKey] as? Bool == true)
+    }
+
+    @Test func fiscalYearSelectsOneYear() throws {
+        let a = cellRow("A", kind: "segment", value: 1, key: "E1:ext:A")
+        let object = SegmentWaterfall.jsonObject(
+            code: "2802",
+            metric: segmentWaterfallMetricExternalSales,
+            years: [
+                (fyEnd: "2025-03-31", docID: "S2", payload: yearPayload([a])),
+                (fyEnd: "2026-03-31", docID: "S3", payload: yearPayload([a])),
+            ],
+            fiscalYear: "2025")
+        let years = try #require(object["years"] as? [[String: Any]])
+        #expect(years.count == 1)
+        #expect(years[0]["fy_end"] as? String == "2025-03-31")
+        #expect(years[0]["fiscal_year"] as? Int == 2025)
+    }
+
+    @Test func sameKeyIsConnectWithoutLineCut() throws {
+        let old = cellRow("A", kind: "segment", value: 10, key: "E1:ext:A")
+        let new = cellRow("A", kind: "segment", value: 12, key: "E1:ext:A")
+        let object = SegmentWaterfall.jsonObject(
+            code: "2802",
+            metric: segmentWaterfallMetricExternalSales,
+            years: [
+                (fyEnd: "2025-03-31", docID: "S2", payload: yearPayload([old])),
+                (fyEnd: "2026-03-31", docID: "S3", payload: yearPayload([new])),
+            ])
+        let years = try #require(object["years"] as? [[String: Any]])
+        #expect(years[0][segmentWaterfallLineCutKey] as? Bool == false)
+        let segments = try #require(years[0][segmentWaterfallSegmentsKey] as? [[String: Any]])
+        let prior = try #require(segments[0][segmentWaterfallPriorKey] as? [String: Any])
+        #expect(prior[breakdownRowSegmentKeyKey] as? String == "E1:ext:A")
+        #expect(prior["decision"] as? String == segmentTransitionDecisionConnect)
+        #expect(prior["basis"] as? String == segmentTransitionMatchedSameKey)
+    }
+
+    @Test func storedConnectDifferentKeysIsRename() throws {
+        let old = cellRow("A", kind: "segment", value: 10, key: "E1:ext:A")
+        let new = cellRow("B", kind: "segment", value: 12, key: "E1:ext:B")
+        let object = SegmentWaterfall.jsonObject(
+            code: "2802",
+            metric: segmentWaterfallMetricExternalSales,
+            years: [
+                (fyEnd: "2025-03-31", docID: "S2", payload: yearPayload([old])),
+                (fyEnd: "2026-03-31", docID: "S3", payload: yearPayload([new])),
+            ],
+            transitions: [
+                SegmentTransitionDraft(
+                    oldKey: "E1:ext:A", newKey: "E1:ext:B", fyEnd: "2026-03-31",
+                    decision: segmentTransitionDecisionConnect,
+                    basis: segmentTransitionBasisDeterministic,
+                    matched: segmentTransitionMatchedPluralOnly)
+            ],
+            key: "E1:ext:A")
+        let years = try #require(object["years"] as? [[String: Any]])
+        #expect(years.count == 2)
+        #expect(years[0][segmentWaterfallLineCutKey] as? Bool == false)
+        let segments = try #require(years[0][segmentWaterfallSegmentsKey] as? [[String: Any]])
+        let prior = try #require(segments[0][segmentWaterfallPriorKey] as? [String: Any])
+        #expect(prior[breakdownRowSegmentKeyKey] as? String == "E1:ext:A")
+        #expect(prior["decision"] as? String == segmentWaterfallDecisionRename)
+    }
+
+    @Test func needsReviewIsReorgAndCutsTheLine() throws {
+        let old = cellRow("A", kind: "segment", value: 10, key: "E1:ext:A")
+        let new = cellRow("B", kind: "segment", value: 10, key: "E1:ext:B")
+        let object = SegmentWaterfall.jsonObject(
+            code: "2802",
+            metric: segmentWaterfallMetricExternalSales,
+            years: [
+                (fyEnd: "2025-03-31", docID: "S2", payload: yearPayload([old])),
+                (fyEnd: "2026-03-31", docID: "S3", payload: yearPayload([new])),
+            ],
+            transitions: [
+                SegmentTransitionDraft(
+                    oldKey: "E1:ext:A", newKey: "E1:ext:B", fyEnd: "2026-03-31",
+                    decision: segmentTransitionDecisionNeedsReview,
+                    basis: segmentTransitionBasisDeterministic,
+                    matched: segmentTransitionMatchedUnmatched)
+            ])
+        let years = try #require(object["years"] as? [[String: Any]])
+        #expect(years[0][segmentWaterfallLineCutKey] as? Bool == true)
+        let segments = try #require(years[0][segmentWaterfallSegmentsKey] as? [[String: Any]])
+        let prior = try #require(segments[0][segmentWaterfallPriorKey] as? [String: Any])
+        #expect(prior["decision"] as? String == segmentWaterfallDecisionReorg)
+    }
+
+    @Test func yearsLimitDropsOlderIngestedYears() throws {
+        let a = cellRow("A", kind: "segment", value: 1, key: "E1:ext:A")
+        let years = (2021...2026).map { year in
+            (fyEnd: "\(year)-03-31", docID: "S\(year)", payload: yearPayload([a]))
+        }
+        let object = SegmentWaterfall.jsonObject(
+            code: "2802",
+            metric: segmentWaterfallMetricExternalSales,
+            years: years,
+            limit: 5)
+        let returned = try #require(object["years"] as? [[String: Any]])
+        #expect(returned.count == 5)
+        #expect(returned.first?["fy_end"] as? String == "2026-03-31")
+        #expect(returned.last?["fy_end"] as? String == "2022-03-31")
     }
 }

@@ -15,8 +15,10 @@ import Foundation
 /// 日本基準へ広げた `fixed_assets` に統合した。
 /// v15（2026-11-12）: breakdown の axis `capex` を廃止し `segment`（segment-v3）へ統合。
 /// セルは {value,basis,source,decimals?}。丸め幅の差額は差額行に出さない。
-/// `GET /waterfall/segment` と `/waterfall/segment/transitions` を追加。
-public let apiSkillsSchemaVersion = 15
+/// `GET /waterfall/segment` を追加。
+/// v16（2026-11-12）: 報告セグメント年次は `GET /waterfall/segment` 1 本。つなぎは years[] に載せ、
+/// `/waterfall/segment/transitions` は置かない。years（既定 5）と fiscal_year（単年）。
+public let apiSkillsSchemaVersion = 16
 
 /// パラメータの置き場所（REST パス変数 / クエリ）。
 public enum ApiSkillParameterLocation: String, Sendable {
@@ -378,7 +380,7 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                 rounding_gaps に生値だけ残します。幅を超えたずれだけ row_kind=difference です。
                 sales_basis は external / intersegment_inclusive / bank / insurance。
                 設備投資等の概要は overview ブロック（セグメント行とは別）。
-                年次推移は get-segment-waterfall、つなぎは get-segment-transitions。
+                年次推移とつなぎは get-segment-waterfall（years[] に prior / line_cut）。
                 開示があるセルだけ、payload にそのセルの分母（denominator / denominator_tag）が付き、行の値が無いところはキーごと省略。
                 旧 axis=equity_method_investments は廃止（404）。
                 90%省略の1行は disclosure_basis=dominant_90pct。関連情報の省略は same_as=segment（値は複製しません）。
@@ -493,11 +495,15 @@ public func apiSkillsCatalog() -> [ApiSkill] {
             id: "get-segment-waterfall",
             name: "報告セグメント年次推移",
             description: """
-                報告セグメントの指標を年度別に並べます（格納済み segment-v3 のみ）。
+                報告セグメントの指標を年度別に並べます（格納済み segment-v3 のみ。financials / waterfall と同じ years 窓）。
+                years は直近 N 年（省略時 \(Api.financialsYearsDefault)）。fiscal_year を付けるとその年だけ
+                （YYYY または fy_end）。応答に無い年はサーバ側で補完しません。years[] は新しい順です。
+                各年は segments / adjustment / consolidated / difference（丸め幅なら difference は出さず rounding_gaps）。
+                行の prior は前年の segment_key と decision（connect / rename / reorg / break）と basis
+                （same_key / deterministic / jev）。年の line_cut が true なら折れ線を切ってください。
                 metric は external_sales / profit / segment_assets / capital_expenditures /
                 noncurrent_asset_additions（省略時 external_sales）。
-                key を付けるとその segment_key の行だけです。
-                丸め幅の差額は差額行に出さず、その年の rounding_gaps に生値だけ残します。
+                key または segment_key を付けるとそのキーの系列（rename でキーが変わった年も含む）。
                 値は tagged 円そのもので丸めません。
                 """,
             method: "GET",
@@ -523,7 +529,7 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                     name: "key",
                     location: .query,
                     type: .string,
-                    description: "segment_key（例: E00436:ext:SeasoningsAndFoodsReportableSegmentMember）",
+                    description: "segment_key（例: E00436:ext:SeasoningsAndFoodsReportableSegmentMember）。segment_key クエリでも同じ",
                     required: false
                 ),
                 ApiSkillParameter(
@@ -534,45 +540,20 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                     required: false,
                     defaultValue: .int(Api.financialsYearsDefault)
                 ),
-            ],
-            instructions: """
-                単年の表は get-breakdown?axis=segment。つなぎ（connect/break）は get-segment-transitions。
-                格納済みデータのみ。未算出は 404、DB 非接続は 503。
-                例: GET /v1/companies/2802/waterfall/segment?metric=external_sales
-                """
-        ),
-        ApiSkill(
-            id: "get-segment-transitions",
-            name: "報告セグメントつなぎ",
-            description: """
-                隣接年で segment_key が変わった行の connect / break / needs_review です。
-                同じキーの継続は行にしません（暗黙の connect）。
-                basis は deterministic または jev、matched は plural_only / label_and_value / unmatched。
-                判断の訂正に再 ingest は不要です。
-                """,
-            method: "GET",
-            path: "/v1/companies/{code}/waterfall/segment/transitions",
-            feature: "breakdown",
-            parameters: [
                 ApiSkillParameter(
-                    name: "code",
-                    location: .path,
-                    type: .string,
-                    description: "銘柄コード（例: 2802）",
-                    required: true
-                ),
-                ApiSkillParameter(
-                    name: "key",
+                    name: "fiscal_year",
                     location: .query,
                     type: .string,
-                    description: "segment_key（省略時は全件）",
+                    description: "単年（YYYY または fy_end。付けると years より優先。未取り込みなら 404）",
                     required: false
                 ),
             ],
             instructions: """
-                年次の金額は get-segment-waterfall。
+                単年の表は get-breakdown?axis=segment。グラフは本エンドポイント 1 本（つなぎ専用ルートは無い）。
                 格納済みデータのみ。未算出は 404、DB 非接続は 503。
-                例: GET /v1/companies/2802/waterfall/segment/transitions
+                例: GET /v1/companies/2802/waterfall/segment?metric=external_sales
+                例: GET /v1/companies/2802/waterfall/segment?fiscal_year=2026
+                例: GET /v1/companies/2802/waterfall/segment?key=E00436:ext:SeasoningsAndFoodsReportableSegmentMember
                 """
         ),
         ApiSkill(

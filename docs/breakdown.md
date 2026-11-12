@@ -174,7 +174,7 @@ v2（`breakdown-interest-bearing-debt-v2`）: 行と合計が変わる変更（�
 - 2026-11: REST の `axis` 省略時の既定を `product_service` から `segment` に変えた（breaking。`apiSkillsSchemaVersion` 13）。
 - 2026-11: `segment` 行に報告セグメント表のセル `segment_assets` / `flow` / `equity_method_investments` を足し、軸 `equity_method_investments` を廃止（REST は常に 404、`apiSkillsSchemaVersion` 12、`breakdown-segment-v2`。床は 1 のまま）。値は capex 軸・旧軸と同じ決定論の正規化（`SegmentMetricCells`）で、行は報告セグメント member の `labelRaw` で突き合わせる。segment に無い member の値は捨てて `segment_metric_rows_unmatched`（公開は止めない）。capex 軸の本文からの不足分補完（Jev）は segment のセルには掛けない。capex 軸はそのまま。DB の既存 `equity_method_investments` 行は読まないだけで残る。
 - 2026-11: 軸 `research_and_development` を廃止（breaking。REST は常に 404、`apiSkillsSchemaVersion` 11）。ingest の `breakdowns-rd` と本文総額・不足分補完の Jev を削除。Summary `rd` は軸と別の抽出（`RDExtractor`）で、`fin-vN` と組立指紋は据え置き（定数 `breakdown-research-and-development-v2` は指紋のために残す）。DB の既存行は読まないだけで残る。
-- 2026-11: 軸 `capex` を `segment` に統合（breaking。`apiSkillsSchemaVersion` 15、`breakdown-segment-v3`、read 床 3）。行は `segment_key` とセル `{value,basis,source,decimals?}`。丸め幅の差額は差額行に出さず `rounding_gaps`。年次は `GET /waterfall/segment`、つなぎは `/waterfall/segment/transitions`（同じキーは暗黙の connect）。値は tagged 円のまま丸めない。
+- 2026-11: 軸 `capex` を `segment` に統合（breaking。`apiSkillsSchemaVersion` 16、`breakdown-segment-v3`、read 床 3）。行は `segment_key` とセル `{value,basis,source,decimals?}`。丸め幅の差額は差額行に出さず `rounding_gaps`。年次は `GET /waterfall/segment` 1 本（`years` 既定 5、`fiscal_year` で単年。つなぎは `years[].segments[].prior` と年の `line_cut`。`/waterfall/segment/transitions` は置かない）。値は tagged 円のまま丸めない。
 
 ## 非目標
 

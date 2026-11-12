@@ -242,7 +242,7 @@
       "path": "/v1/companies/{code}/waterfall/segment",
       "operation_id": "get-segment-waterfall",
       "summary": "Reportable-segment yearly series",
-      "description": "Yearly series of one reportable-segment metric (external_sales, profit, segment_assets, capital_expenditures, noncurrent_asset_additions). Amounts in raw tagged yen. Rounding-level gaps are not shown as a difference row.",
+      "description": "Multi-year series of one reportable-segment metric, newest first, default 5 years. Each year has segments, adjustment, consolidated, and a difference row only beyond rounding tolerance. Row prior links use connect/rename/reorg/break with basis; year line_cut tells iOS to break the line. Amounts in raw tagged yen. Missing years are omitted, not filled.",
       "parameters": [
         {
           "name": "code",
@@ -262,37 +262,21 @@
           "name": "key",
           "in": "query",
           "required": false,
-          "description": "segment_key to keep a single line.",
+          "description": "segment_key to keep that line across years (rename chain included). Alias: segment_key.",
           "schema": { "type": "string" }
         },
         {
           "name": "years",
           "in": "query",
           "required": false,
-          "description": "How many years to return.",
+          "description": "How many years to return. Default 5.",
           "schema": { "type": "integer" }
-        }
-      ]
-    },
-    {
-      "method": "GET",
-      "path": "/v1/companies/{code}/waterfall/segment/transitions",
-      "operation_id": "get-segment-transitions",
-      "summary": "Reportable-segment year-to-year links",
-      "description": "Connect/break/needs_review judgements where a segment_key appeared, disappeared, or renamed. Same-key continuation is implicit and not listed.",
-      "parameters": [
-        {
-          "name": "code",
-          "in": "path",
-          "required": true,
-          "description": "Issuer ticker code (e.g. 2802).",
-          "schema": { "type": "string" }
         },
         {
-          "name": "key",
+          "name": "fiscal_year",
           "in": "query",
           "required": false,
-          "description": "segment_key to filter.",
+          "description": "Single year (YYYY or fy_end). Overrides years. Missing year is omitted (404 if none).",
           "schema": { "type": "string" }
         }
       ]

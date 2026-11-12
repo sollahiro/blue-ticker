@@ -4,46 +4,35 @@ import Foundation
 import Logging
 
 package func loadStoredSegmentWaterfall(
-    code: String, metric: String, key: String?, years: Int, db: Database
+    code: String, metric: String, key: String?, years: Int, fiscalYear: String?, db: Database
 ) async throws -> BreakdownLoadResult {
     let code4 = String(code.prefix(4))
     guard !code4.isEmpty, code4.allSatisfy({ $0.isLetter || $0.isNumber }) else { return .absent }
     guard segmentWaterfallMetrics.contains(metric) else { return .absent }
+    if fiscalYear == nil, years <= 0 { return .absent }
     let snapshots = try await loadServableSegmentYears(code: code4, db: db)
     guard !snapshots.isEmpty else { return .absent }
-    let limited = Array(snapshots.suffix(max(1, years)))
-    return .found(
-        SegmentWaterfall.jsonObject(code: code4, metric: metric, years: limited, key: key))
+    let transitions = try await loadSegmentTransitionDrafts(code: code4, db: db)
+    let object = SegmentWaterfall.jsonObject(
+        code: code4, metric: metric, years: snapshots, transitions: transitions,
+        key: key, fiscalYear: fiscalYear, limit: max(1, years))
+    let returned = object["years"] as? [[String: Any]] ?? []
+    guard !returned.isEmpty else { return .absent }
+    return .found(object)
 }
 
-package func loadStoredSegmentTransitions(
-    code: String, key: String?, db: Database
-) async throws -> BreakdownLoadResult {
-    let code4 = String(code.prefix(4))
-    guard !code4.isEmpty, code4.allSatisfy({ $0.isLetter || $0.isNumber }) else { return .absent }
+private func loadSegmentTransitionDrafts(
+    code: String, db: Database
+) async throws -> [SegmentTransitionDraft] {
     let rows = try await CompanySegmentTransition.query(on: db)
-        .filter(\.$code == code4)
+        .filter(\.$code == code)
         .sort(\.$fyEnd, .ascending)
         .all()
-    let filtered = rows.filter { row in
-        guard let key else { return true }
-        return row.oldKey == key || row.newKey == key
+    return rows.map {
+        SegmentTransitionDraft(
+            oldKey: $0.oldKey, newKey: $0.newKey, fyEnd: $0.fyEnd,
+            decision: $0.decision, basis: $0.basis, matched: $0.matched)
     }
-    guard !filtered.isEmpty else { return .absent }
-    return .found([
-        "code": code4,
-        "transitions": filtered.map { row -> [String: Any] in
-            var object: [String: Any] = [
-                "fy_end": row.fyEnd,
-                "decision": row.decision,
-                "basis": row.basis,
-                "matched": row.matched,
-            ]
-            if let oldKey = row.oldKey { object["old_key"] = oldKey }
-            if let newKey = row.newKey { object["new_key"] = newKey }
-            return object
-        },
-    ])
 }
 
 private func loadServableSegmentYears(
@@ -73,7 +62,13 @@ private func loadServableSegmentYears(
             guard let id = doc.id, let fy = doc.periodEnd, !fy.isEmpty else { return nil }
             return (id, fy)
         })
-    return servable.map {
-        (fyEnd: fyEndByDoc[$0.docID] ?? $0.submitDateTime, docID: $0.docID, payload: $0.payload)
+    var unique: [String: (fyEnd: String, docID: String, payload: BreakdownSnapshotPayload, submit: String)] = [:]
+    for row in servable {
+        let fyEnd = fyEndByDoc[row.docID] ?? row.submitDateTime
+        if let existing = unique[fyEnd], existing.submit > row.submitDateTime { continue }
+        unique[fyEnd] = (fyEnd: fyEnd, docID: row.docID, payload: row.payload, submit: row.submitDateTime)
     }
+    return unique.values
+        .sorted { $0.fyEnd > $1.fyEnd }
+        .map { (fyEnd: $0.fyEnd, docID: $0.docID, payload: $0.payload) }
 }
