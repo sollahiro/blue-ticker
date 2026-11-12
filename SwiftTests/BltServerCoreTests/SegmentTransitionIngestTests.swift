@@ -85,7 +85,9 @@ private func seedYear(
 
             try await runSegmentTransitionIngest(db: db, listedCodes: ["1234"])
 
-            let stored = try await CompanySegmentTransition.query(on: db).all()
+            let stored = try await CompanySegmentTransition.query(on: db)
+                .filter(\.$code == "1234")
+                .all()
             #expect(Set(stored.map(\.fyEnd)) == ["2026-03-31"])
             #expect(
                 Set(stored.map { "\($0.oldKey ?? "-")>\($0.newKey ?? "-")" }) == [
@@ -107,7 +109,9 @@ private func seedYear(
 
             // 同じ内容でもう一度回しても行は書き直さない（id と件数が同じ）。
             try await runSegmentTransitionIngest(db: db, listedCodes: ["1234"])
-            let again = try await CompanySegmentTransition.query(on: db).all()
+            let again = try await CompanySegmentTransition.query(on: db)
+                .filter(\.$code == "1234")
+                .all()
             #expect(again.count == stored.count)
         }
     }
