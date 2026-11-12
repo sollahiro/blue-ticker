@@ -865,8 +865,12 @@ public extension BltServerContext {
         let overview = overviewHTML ?? overviewFacts
         let equityMethod = BreakdownNormalizer.normalizeEquityMethodInvestments(
             facts: cached.facts, labelsByTag: cached.labelsByTag)
-        let external = SegmentExternalSales.normalize(
-            facts: cached.facts, labelsByTag: cached.labelsByTag, memberParents: memberParents)
+        // 「外部顧客への売上高」と「その他の収益を含む計」が両方あるときは、連結売上高に一致する計を採る。
+        let externalResolution = SegmentExternalSales.resolve(
+            facts: cached.facts,
+            consolidatedSales: BreakdownFinancialsResolver.financialsCanonicalSales(xbrlDir: xbrlDir),
+            labelsByTag: cached.labelsByTag, memberParents: memberParents)
+        let external = externalResolution?.snapshot
         let edinetCode = XBRLUtils.extractTextblockHtml(
             in: xbrlDir, textblockTag: Xbrl.edinetCodeDEITag)?
             .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
@@ -881,6 +885,7 @@ public extension BltServerContext {
             segment: payload, assets: assets, capitalExpenditures: capitalExpenditures,
             noncurrentAssetAdditions: noncurrent, overview: overview,
             overviewTotal: overviewTotal, equityMethod: equityMethod, external: external,
+            externalSalesBasis: externalResolution?.salesBasis,
             edinetCode: edinetCode, memberPrefixes: memberPrefixes,
             labelsByTag: cached.labelsByTag)
         if assembled.overview?.total == nil {

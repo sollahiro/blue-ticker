@@ -149,6 +149,83 @@ import Testing
     }
 }
 
+@Suite struct SegmentExternalSalesResolveTests {
+    private func fact(_ tag: String, _ member: String?, _ value: Double) -> BreakdownFact {
+        BreakdownFact(
+            tag: tag,
+            contextRef: member.map { "CurrentYearDuration_\($0)" } ?? "CurrentYearDuration",
+            dimensions: member.map { ["OperatingSegmentsAxis": $0] } ?? [:],
+            value: value, label: nil, unitRef: "JPY", decimals: "-3")
+    }
+
+    /// 350A 型: 外部顧客 5,409,674、その他の収益を含む計 7,113,916 = 連結売上高。計を採る。
+    @Test func totalMatchingConsolidatedSalesWinsOverExternalRow() throws {
+        let facts = [
+            fact("RevenuesFromExternalCustomers", "AReportableSegmentMember", 4_080_731_000),
+            fact("RevenuesFromExternalCustomers", "BReportableSegmentMember", 810_932_000),
+            fact("RevenuesFromExternalCustomers", "OtherReportableSegmentsMember", 518_010_000),
+            fact("RevenuesFromExternalCustomers", nil, 5_409_674_000),
+            fact("OtherRevenueSegmentInformation", "AReportableSegmentMember", 1_803_678_000),
+            fact("OtherRevenueSegmentInformation", "BReportableSegmentMember", -99_435_000),
+            fact("NetSales", "AReportableSegmentMember", 5_884_409_000),
+            fact("NetSales", "BReportableSegmentMember", 711_496_000),
+            fact("NetSales", "OtherReportableSegmentsMember", 518_010_000),
+            fact("NetSales", nil, 7_113_916_000),
+        ]
+        let resolved = try #require(
+            SegmentExternalSales.resolve(facts: facts, consolidatedSales: 7_113_916_000))
+        #expect(resolved.salesBasis == segmentSalesBasisExternalIncludingOtherRevenue)
+        #expect(resolved.snapshot.denominatorTag == "NetSales")
+        #expect(
+            resolved.snapshot.rows.first { $0.labelRaw == "AReportableSegmentMember" }?.amount
+                == 5_884_409_000)
+    }
+
+    /// 6349 型: 計はセグメント間を含み、連結売上高（= 外部顧客の合計）に一致しない。外部顧客のまま。
+    @Test func intersegmentInclusiveTotalIsNotUsed() throws {
+        let facts = [
+            fact("RevenuesFromExternalCustomers", "JapanReportableSegmentsMember", 55_271_000_000),
+            fact("RevenuesFromExternalCustomers", "EuropeReportableSegmentsMember", 63_340_000_000),
+            fact("RevenuesFromExternalCustomers", nil, 118_611_000_000),
+            fact("NetSales", "JapanReportableSegmentsMember", 87_044_000_000),
+            fact("NetSales", "EuropeReportableSegmentsMember", 65_825_000_000),
+            fact("NetSales", nil, 152_869_000_000),
+        ]
+        let resolved = try #require(
+            SegmentExternalSales.resolve(facts: facts, consolidatedSales: 118_611_000_000))
+        #expect(resolved.salesBasis == segmentSalesBasisExternal)
+        #expect(resolved.snapshot.denominatorTag == "RevenuesFromExternalCustomers")
+    }
+
+    /// 4097 型: 計は連結売上高と 0.7% ずれ、連結売上高は外部顧客に一致する。近いだけでは採らない。
+    @Test func nearbyTotalIsNotUsedWhenExternalMatchesConsolidatedSales() throws {
+        let facts = [
+            fact("RevenuesFromExternalCustomers", "GasReportableSegmentsMember", 72_797_000_000),
+            fact("RevenuesFromExternalCustomers", "ChemReportableSegmentsMember", 25_204_000_000),
+            fact("RevenuesFromExternalCustomers", nil, 98_001_000_000),
+            fact("NetSalesAndOperatingRevenue", "GasReportableSegmentsMember", 73_470_000_000),
+            fact("NetSalesAndOperatingRevenue", "ChemReportableSegmentsMember", 25_208_000_000),
+            fact("NetSalesAndOperatingRevenue", nil, 98_678_000_000),
+        ]
+        let resolved = try #require(
+            SegmentExternalSales.resolve(facts: facts, consolidatedSales: 98_001_000_000))
+        #expect(resolved.salesBasis == segmentSalesBasisExternal)
+    }
+
+    /// 連結売上高が分からないときは外部顧客のまま。
+    @Test func unknownConsolidatedSalesKeepsExternal() throws {
+        let facts = [
+            fact("RevenuesFromExternalCustomers", "AReportableSegmentMember", 10),
+            fact("RevenuesFromExternalCustomers", nil, 10),
+            fact("NetSales", "AReportableSegmentMember", 30),
+            fact("NetSales", nil, 30),
+        ]
+        let resolved = try #require(
+            SegmentExternalSales.resolve(facts: facts, consolidatedSales: nil))
+        #expect(resolved.salesBasis == segmentSalesBasisExternal)
+    }
+}
+
 @Suite struct SegmentTransitionMatcherTests {
     @Test func sameKeyIsImplicitAndNotEmitted() {
         let old = [

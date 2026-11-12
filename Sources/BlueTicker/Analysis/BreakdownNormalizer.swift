@@ -748,6 +748,20 @@ enum BreakdownNormalizer {
             allowDerivedSumAsDenominator: false)
     }
 
+    /// セグメント member に付いた売上の計（その他の収益を含む）。採否は `SegmentExternalSales.resolve`。
+    static func normalizeSegmentSalesTotal(
+        facts: [BreakdownFact], tag: String, labelsByTag: [String: String] = [:],
+        memberParents: [String: String] = [:]
+    ) -> BreakdownSnapshot? {
+        normalizeSegmentMetric(
+            facts: facts, amountTags: [tag],
+            axis: breakdownAxisSegment, warningPrefix: "external_sales",
+            labelsByTag: labelsByTag, memberParents: memberParents,
+            allowNonConsolidatedEntityTotal: false,
+            useConsolidatedEntityTotalAsDenominatorWhenPresent: true,
+            allowDerivedSumAsDenominator: false)
+    }
+
     /// セグメント資産。
     static func normalizeSegmentAssets(
         facts: [BreakdownFact], axis: String = breakdownAxisSegmentAssets,

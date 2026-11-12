@@ -17,6 +17,7 @@ enum SegmentV3 {
         overviewTotal: BreakdownMetricCellPayload?,
         equityMethod: BreakdownSnapshot?,
         external: BreakdownSnapshot?,
+        externalSalesBasis: String? = nil,
         edinetCode: String,
         memberPrefixes: [String: String],
         labelsByTag: [String: String]
@@ -44,7 +45,12 @@ enum SegmentV3 {
             return rows.count - 1
         }
 
-        let salesBasis = salesBasis(of: segment, external: external)
+        let salesBasis: String
+        if let externalSalesBasis, let external, !external.rows.isEmpty {
+            salesBasis = externalSalesBasis
+        } else {
+            salesBasis = Self.salesBasis(of: segment, external: external)
+        }
         let externalSource = external ?? (
             salesBasis == segmentSalesBasisExternal ? snapshotFromPayload(segment) : nil)
 

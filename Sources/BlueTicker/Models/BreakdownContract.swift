@@ -203,6 +203,8 @@ public let segmentWaterfallAdjustmentKey = "adjustment"
 public let segmentWaterfallAdjustmentsKey = "adjustments"
 public let segmentWaterfallConsolidatedKey = "consolidated"
 public let segmentSalesBasisExternal = "external"
+/// 外部顧客への売上高に、顧客との契約以外の源泉（その他の収益）を足した計。連結売上高に一致する。
+public let segmentSalesBasisExternalIncludingOtherRevenue = "external_including_other_revenue"
 public let segmentSalesBasisIntersegmentInclusive = "intersegment_inclusive"
 public let segmentSalesBasisBank = "bank"
 public let segmentSalesBasisInsurance = "insurance"
