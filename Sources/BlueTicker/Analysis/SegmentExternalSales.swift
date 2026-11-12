@@ -29,7 +29,8 @@ enum SegmentExternalSales {
         let external = normalize(facts: facts, labelsByTag: labelsByTag, memberParents: memberParents)
         guard let external else { return nil }
         let plain = Resolution(snapshot: external, salesBasis: segmentSalesBasisExternal)
-        guard let consolidatedSales, consolidatedSales > 0,
+        // 外部顧客売上に連結値のタグが無い書類（3199）は比べられないので、外部顧客のまま。
+        guard let consolidatedSales, consolidatedSales > 0, external.denominator > 0,
             !matches(external.denominator, consolidatedSales)
         else { return plain }
         let candidates = totalTagCandidates(
@@ -59,8 +60,7 @@ enum SegmentExternalSales {
             .filter { $0.rowKind == "segment" || $0.rowKind == "reconciling" }
             .map(\.amount)
         guard !additive.isEmpty else { return false }
-        return abs(additive.reduce(0, +) - snapshot.denominator)
-            <= max(1.0, abs(snapshot.denominator) * 0.005)
+        return matches(additive.reduce(0, +), snapshot.denominator)
     }
 
     /// セグメント member に付いた売上系タグ。外部顧客・セグメント間・その他の収益単独・

@@ -862,7 +862,7 @@ public extension BltServerContext {
                 return BreakdownMetricCellPayload(
                     value: value, basis: breakdownSourceXbrlFacts, source: tag)
             }
-        let overview = overviewHTML ?? overviewFacts
+        let overview = SegmentV3.pickOverview(html: overviewHTML, facts: overviewFacts)
         let equityMethod = BreakdownNormalizer.normalizeEquityMethodInvestments(
             facts: cached.facts, labelsByTag: cached.labelsByTag)
         // 「外部顧客への売上高」と「その他の収益を含む計」が両方あるときは、連結売上高に一致する計を採る。
