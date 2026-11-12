@@ -1404,12 +1404,7 @@ extension BreakdownLoadResult {
 
             let result = try await loadStoredBreakdown(
                 code: "7203", docId: nil, axis: breakdownAxisCapex, db: app.db)
-            let json = try #require(result.foundJSON)
-            #expect(json["axis"] as? String == breakdownAxisCapex)
-            let breakdown = try #require(json["breakdown"] as? [String: Any])
-            #expect(breakdown["amount"] == nil)
-            #expect(breakdown["denominator"] == nil)
-            #expect(breakdown["axis"] as? String == breakdownAxisCapex)
+            #expect(result.isAbsent)
         }
     }
 

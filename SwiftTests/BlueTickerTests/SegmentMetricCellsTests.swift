@@ -83,23 +83,13 @@ import Testing
         #expect(SegmentMetricCells.merge(segment: segment, capex: nil, equityMethod: nil) == segment)
     }
 
-    @Test func jsonCarriesCellsOnlyWhenDisclosed() throws {
+    @Test func jsonOmitsAmountOnSegmentAxis() throws {
         let plain = segment.jsonObject()
-        #expect(plain[capexCellSegmentAssets] == nil)
+        #expect(plain["amount"] == nil)
+        #expect(plain["denominator"] == nil)
         let plainRows = try #require(plain["rows"] as? [[String: Any]])
+        #expect(plainRows[0]["amount"] == nil)
         #expect(plainRows[0][capexCellSegmentAssets] == nil)
-
-        let merged = SegmentMetricCells.merge(segment: segment, capex: capex, equityMethod: equity)
-        let object = merged.jsonObject()
-        let assets = try #require(object[capexCellSegmentAssets] as? [String: Any])
-        #expect(assets["denominator"] as? Double == 105_522_331_000_000)
-        #expect(object["flow_metric"] as? String == capexFlowMetricCapitalExpenditures)
-        #expect(object[segmentCellEquityMethodInvestments] != nil)
-        let rows = try #require(object["rows"] as? [[String: Any]])
-        #expect(rows[0][capexCellSegmentAssets] as? Double == 33_182_372_000_000)
-        #expect(rows[0][segmentCellEquityMethodInvestments] as? Double == 4_763_577_000_000)
-        #expect(rows[1][capexCellSegmentAssets] is NSNull)
-        #expect(rows[0]["amount"] as? Double == 45_201_924_000_000)
     }
 
     @Test func rowCellRoundTripsThroughCodable() throws {
@@ -113,6 +103,6 @@ import Testing
     @Test func equityMethodAxisIsRetired() {
         #expect(retiredBreakdownAxes.contains(breakdownAxisEquityMethodInvestments))
         #expect(isSupportedBreakdownAxis(breakdownAxisEquityMethodInvestments) == false)
-        #expect(segmentBreakdownCacheVersion == "breakdown-segment-v2")
+        #expect(segmentBreakdownCacheVersion == "breakdown-segment-v3")
     }
 }

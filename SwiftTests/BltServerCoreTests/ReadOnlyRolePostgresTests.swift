@@ -135,6 +135,7 @@ import Vapor
             let paths = [
                 "/v1/companies/7203/financials",
                 "/v1/companies/7203/waterfall",
+                "/v1/companies/7203/waterfall/segment",
                 "/v1/companies/7203/overview",
                 "/v1/companies/7203/relations",
                 "/v1/companies/7203/filing-content",

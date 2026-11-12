@@ -212,7 +212,7 @@
       "path": "/v1/companies/{code}/breakdown",
       "operation_id": "get-breakdown",
       "summary": "Segment breakdown",
-      "description": "Structured breakdown from an annual report, by axis: segment (reportable segments: sales, segment profit and more), geography (sales by region) or employees (headcount by segment). Amounts in JPY; employees in persons.",
+      "description": "Structured breakdown from an annual report, by axis: segment (reportable segments: external sales, profit, assets, capital expenditures), geography (sales by region) or employees (headcount by segment). Amounts in JPY (raw tagged values, not rounded); employees in persons. Rounding-level gaps are omitted from the difference row.",
       "parameters": [
         {
           "name": "code",
@@ -234,6 +234,50 @@
           "required": true,
           "description": "Breakdown axis: segment, geography or employees.",
           "schema": { "type": "string", "enum": ["segment", "geography", "employees"] }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/v1/companies/{code}/waterfall/segment",
+      "operation_id": "get-segment-waterfall",
+      "summary": "Reportable-segment yearly series",
+      "description": "Multi-year series of one reportable-segment metric, newest first, default 5 years. Each year has segments, adjustment, consolidated, and a difference row only beyond rounding tolerance. Row prior links use connect/rename/reorg/break with basis; year line_cut tells iOS to break the line. Amounts in raw tagged yen. Missing years are omitted, not filled.",
+      "parameters": [
+        {
+          "name": "code",
+          "in": "path",
+          "required": true,
+          "description": "Issuer ticker code (e.g. 2802).",
+          "schema": { "type": "string" }
+        },
+        {
+          "name": "metric",
+          "in": "query",
+          "required": false,
+          "description": "Metric key. Default external_sales.",
+          "schema": { "type": "string", "enum": ["external_sales", "profit", "segment_assets", "capital_expenditures", "noncurrent_asset_additions"] }
+        },
+        {
+          "name": "key",
+          "in": "query",
+          "required": false,
+          "description": "segment_key to keep that line across years (rename chain included). Alias: segment_key.",
+          "schema": { "type": "string" }
+        },
+        {
+          "name": "years",
+          "in": "query",
+          "required": false,
+          "description": "How many years to return. Default 5.",
+          "schema": { "type": "integer" }
+        },
+        {
+          "name": "fiscal_year",
+          "in": "query",
+          "required": false,
+          "description": "Single year (YYYY or fy_end). Overrides years. Missing year is omitted (404 if none).",
+          "schema": { "type": "string" }
         }
       ]
     },

@@ -210,13 +210,20 @@ enum CapexNormalizer {
         return snapshot
     }
 
-    private static func companyTotalSnapshot(
+    static func companyTotalSnapshot(
         axis: String, total: (value: Double, tag: String)?, warningPrefix: String
     ) -> BreakdownSnapshot? {
         guard let total, total.value > 0 else { return nil }
         _ = warningPrefix
         return BreakdownSnapshot(
             axis: axis, denominator: total.value, denominatorTag: total.tag,
-            rows: [], sourceKind: breakdownSourceXbrlFacts, needsReview: false, warnings: [])
+            rows: [
+                BreakdownRow(
+                    labelRaw: Xbrl.entityTotalMemberName,
+                    label: Xbrl.codeSideStandardMemberLabels[Xbrl.entityTotalMemberName],
+                    amount: total.value, share: 1, profit: nil,
+                    rowKind: breakdownRowKindEntityTotal)
+            ],
+            sourceKind: breakdownSourceXbrlFacts, needsReview: false, warnings: [])
     }
 }

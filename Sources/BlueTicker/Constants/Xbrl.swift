@@ -1363,6 +1363,18 @@ enum Xbrl {
         "SalesAndFinancialServicesRevenueToCustomersIFRS",  // ソニーなど売上高及び金融ビジネス収入（外部顧客）
     ]
 
+    /// 外部売上タグが無く、セグメント間含む計だけを tag する会社（Fast Retailing の RevenueIFRS、
+    /// 商社の Revenue2IFRS）。external_sales には載せない。
+    static let segmentIntersegmentInclusiveRevenueTags: [String] = [
+        "RevenueIFRS",
+        "Revenue2IFRS",
+    ]
+
+    /// セグメント member 上の外部顧客売上だけ。セグメント間含む計は入れない。
+    static var segmentTrueExternalRevenueTags: [String] {
+        segmentExternalRevenueTags.filter { !segmentIntersegmentInclusiveRevenueTags.contains($0) }
+    }
+
     /// 本リストに一致するタグが無い場合の候補発見（`BreakdownNormalizer` のカバレッジ/金額整合性
     /// ヒューリスティック）で、明らかに売上ではない概念を除外するための部分文字列ブラックリスト。
     /// 個別タグ名を都度追加するホワイトリストの Whac-A-Mole を避けつつ、銀行の NetRevenue 系や

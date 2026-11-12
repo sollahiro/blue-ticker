@@ -139,13 +139,16 @@ import Testing
                 noncurrentAssetAdditionsPresent: false) == nil)
     }
 
-    @Test func companyTotalOnlyFlowLeavesRowsEmpty() throws {
+    @Test func companyTotalOnlyFlowKeepsEntityTotalRow() throws {
         let snapshot = try #require(
             CapexNormalizer.normalize(
                 facts: [], capitalExpendituresPresent: true,
                 noncurrentAssetAdditionsPresent: false,
                 flowCompanyTotal: (50, "CapitalExpendituresIFRS")))
-        #expect(snapshot.rows.isEmpty)
+        let entity = try #require(
+            snapshot.rows.first { $0.labelRaw == Xbrl.entityTotalMemberName })
+        #expect(entity.rowKind == breakdownRowKindEntityTotal)
+        #expect(entity.flow == 50)
         #expect(snapshot.flow?.denominator == 50)
         #expect(snapshot.flowMetric == capexFlowMetricCapitalExpenditures)
     }
