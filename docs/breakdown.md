@@ -178,6 +178,9 @@ v2（`breakdown-interest-bearing-debt-v2`）: 行と合計が変わる変更（�
 
 - 2026-11: `segment` の `sales_basis` に `external_including_other_revenue` を足した（互換追加。`cache_version` / `apiSkillsSchemaVersion` は据え置き）。セグメント表に「外部顧客への売上高」と「その他の収益を含む計」の両方があり、外部顧客の連結値が連結売上高（Summary sales）に合わず、計の連結値が一致する書類（350A `S100ZAEK`、5842 `S100XOZ3`）は、`external_sales` に計を載せる。見分けは金額の近さではなく連結売上高との一致（0.1% 以内）で、セグメント間を含む計（6349）は連結売上高に一致しないので採らない。候補のタグが 1 つに決まらないときは外部顧客のまま（`SegmentExternalSales.resolve`）。
 
+- 2026-11: `segment` の単一セグメントを 404 にしない（公開面の変更。`cache_version` / `apiSkillsSchemaVersion` は据え置き）。payload に `segment_structure`（`single` / `multiple`。判定できないときは出さない。90%省略の 1 行は `disclosure_basis` が言うので付けない）。単一セグメントで事業名が取れる書類は従来どおり事業名の 1 行。取れない書類（「当社グループは単一セグメントであるため…」）は、セグメント行を作らず「連結合計又は会社合計」（`row_kind=EntityTotal`）の行だけを返し、設備投資の総額は `overview.total` に載る。単体のみの会社は個別の値。専用タグが無くても、報告セグメントの member が 1 つも無く注記の地の文が単一セグメントと言っていれば単一と決める（2764 `S100YL5S`）。最新有報で 404 だった 200 社のうち 192 社が返るようになる。残りは複数セグメントの抽出失敗などで、引き続き 404。
+- 2026-11: 設備投資等の概要のカテゴリで報告セグメントの行を増やさない。概要だけの member（3538 / 5283）や「新設によるもの」のような区分は `overview.categories` に残し、`rows` には出さない。「消去又は全社」は調整行（`reconciling`）。
+
 ## 非目標
 
 過去セグメント遡及組替、会社間ラベル統一、全期の事業×地域完全充足、生 XBRL 一発 LLM 抽出。
