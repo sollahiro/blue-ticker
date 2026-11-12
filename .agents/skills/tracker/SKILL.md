@@ -5,18 +5,20 @@ description: 次の作業選定、コード欠陥、PR、ingest進捗、公開�
 
 # トラッカー
 
+置き場所の正本は `docs/process/tracker-placement.md`。URL はそこにだけ置く。
+
 | 対象 | 正本 |
 |---|---|
 | 抽出・契約・テスト等のコード欠陥 | GitHub Issue |
 | コード変更 | GitHub PR |
-| 実装サイクル、本番 ingest、件数、公開ゲート、`needs_review`、訂正有報 | Linear Team `blue-ticker` |
+| 実装サイクル、本番 ingest、件数、公開ゲート、`needs_review`、訂正有報、生きている進捗 | オーナー管理のトラッカー Sheet |
 
 ## 次の作業
 
-Linear の依存関係を取得し、親 Feature や後続領域ではなく `Blocked by` の先頭を選ぶ。現在の先頭 Issue ID を作業規則として Git に固定しない。
+オーナー管理のトラッカー Sheet の着手順（依存・ブロック）を見て、親 Feature や後続領域ではなく、いま着手できる先頭を選ぶ。現在の先頭 Issue ID を作業規則として Git に固定しない。
 
 ## 更新
 
-- 仕様・Contract・ジョブ編成は Git、変動する進捗・件数・ゲートは Linear に置く。
+- 仕様・Contract・ジョブ編成は Git、変動する進捗・件数・ゲートはオーナー管理のトラッカー Sheet に置く。
 - 本番 ingest の件数は `workers/status-rss` の RSS（`feed.sollahiro.com/blue-ticker/ingest-status.xml`）か、各テーブルの `cache_version` 別の件数で都度見る。Issue コメントや日付付き snapshot を増やさない。
 - コード欠陥と運用進捗を同じ tracker に重複登録しない。

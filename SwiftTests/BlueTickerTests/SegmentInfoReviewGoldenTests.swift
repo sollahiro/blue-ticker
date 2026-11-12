@@ -100,7 +100,7 @@ import Testing
         let extracted = ExtractedBreakdown(
             method: "html_table", tables: [emptyMatrix], facts: facts)
         // source: code=7273 fy_end=2026-03-31 doc_id=S100YLTN page=0 field=segment.xbrl_facts
-        // reroute to segment axis, values unchanged, approved by BLT_Tester
+        // reroute to segment axis, values unchanged, golden review 済み
         let (snapshot, source, _) = await BusinessBreakdownResolver.resolve(
             segments: extracted,
             consolidatedSales: 100 * Financial.millionYen,
@@ -172,7 +172,7 @@ import Testing
         let sales = 1_243 * Financial.millionYen
         // source: code=4324 fy_end=2026-03-31 doc_id=S100QHOJ page=0 field=product_service.広告業
         // source: code=3600 fy_end=2026-03-31 doc_id=S100YHMW page=0 field=segment.日本
-        // reroute to segment axis, values unchanged, approved by BLT_Tester
+        // reroute to segment axis, values unchanged, golden review 済み
         let (snapshotOrNil, _) = await SegmentInfoLLMNormalizer.normalize(
             ExtractedBreakdown(method: "html_table", tables: [junk, product, geography], facts: []),
             consolidatedSales: sales,

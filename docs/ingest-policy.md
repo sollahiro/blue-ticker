@@ -102,12 +102,12 @@ overviews                … 銘柄の短い会社説明（LLM。最新有報1�
         ↓
 relations                … 取引先・関係会社（最新有報1件。区分の決まらない関係会社表だけ Jev。名前解決は決定論）
         ↓
-（任意）Linear 投稿
+（任意）オーナー管理のトラッカー Sheet へ件数を転記
 ```
 
 `breakdowns` は依存が無ければ cron 上は別スロットでもよい。`financials` だけは **notes-core 以降**に置く。`overviews` は他 stage に依存しない（XBRL ダウンロードは自前）。`relations` も他 stage に依存しない。名前解決（上場企業への名寄せ）は書き込み時に決定論で行い、各回の最後に、解いたときの名簿（EDINET コードリスト）が今と違う行と、この回で子会社索引の親が変わった名前の行だけを解き直す（最終状態は処理順に依らない）。`--stages` 省略時の `ingest` には入らない（`--stages relations` の明示指定だけ）。Jev 保留の書類の再試行はキーがあるときだけ、新しい書類の後に回す。
 
-サイクル段階・最新年度 100%・stale・公開ゲートの現在地は Linear Team `blue-ticker` の document「JP 現在地」に置く。Git に件数や段階番号を書かない。
+サイクル段階・最新年度 100%・stale・公開ゲートの現在地はオーナー管理のトラッカー Sheet「現在地」に置く（`docs/process/tracker-placement.md`）。Git に件数や段階番号を書かない。カバレッジは financials と statements を分けて書く（`docs/process/coverage-reporting.md`）。
 
 コード変更後は `swift build -c release --product blt-server` を先に実行（旧バイナリは新 stage を黙って飛ばす）。
 

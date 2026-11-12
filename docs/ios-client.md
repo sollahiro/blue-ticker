@@ -2,7 +2,7 @@
 
 ネイティブ iOS の IA・画面対応。実装は `Apps/BlueTicker`（`open Apps/BlueTicker/BlueTicker.xcodeproj`）。REST `/v1` の HTTP クライアント。サーバー契約の正本は REST（`architecture.md`）。見た目は iOS SDK 標準コンポーネント。Figma の長方形はプレースホルダ。
 
-ポンチ絵: [BLUE_TICKER / iOS](https://www.figma.com/design/sSGBrNMRkBLEgJOA43yIYc/BLUE_TICKER?node-id=67-30)。変動する進捗は Linear Team `blue-ticker`（[JP 現在地](https://linear.app/sollahiro/document/jp-現在地-af2abd076034) / [公開と基盤 現在地](https://linear.app/sollahiro/document/公開と基盤-現在地-3bd56370454b)）。いまの床は Summary / Statement-Notes / Breakdown。条件面（Screen）は実装済み。
+ポンチ絵: [BLUE_TICKER / iOS](https://www.figma.com/design/sSGBrNMRkBLEgJOA43yIYc/BLUE_TICKER?node-id=67-30)。変動する進捗はオーナー管理のトラッカー Sheet（`docs/process/tracker-placement.md`）。いまの床は Summary / Statement-Notes / Breakdown。条件面（Screen）は実装済み。
 
 `BlueTickerCore` をリンクしない。iOS 専用の非公開エンドポイントを足さない。DTO は公開 JSON の手書き。Core の内部型をコピーしない。
 
@@ -26,18 +26,18 @@
 - ターゲット／スキーム `BlueTicker`、`PRODUCT_NAME`、型名 `BlueTickerApp`、置き場 `Apps/BlueTicker`
 - Xcode Cloud ワークフロー（下の「配布」）
 
-文書やコードの文言でアプリを指すときは有報LAB、外向きの API を指すときは有報LAB API、内部の抽出・解析ロジックを指すときは BLT と書き分ける。リポジトリ名 `sollahiro/blue-ticker`・Swift モジュール `BlueTicker` / `BlueTickerCore`・R2 バケットなど「blue-ticker」と綴った識別子は、移行を決めるまで旧名のまま残る（Linear の有報LAB リブランディング計画で判断）。
+文書やコードの文言でアプリを指すときは有報LAB、外向きの API を指すときは有報LAB API、内部の抽出・解析ロジックを指すときは BLT と書き分ける。リポジトリ名 `sollahiro/blue-ticker`・Swift モジュール `BlueTicker` / `BlueTickerCore`・R2 バケットなど「blue-ticker」と綴った識別子は、移行を決めるまで旧名のまま残る（`docs/decisions/yuholab-rebrand.md`）。
 
 ## 置き場
 
-`Apps/BlueTicker`。`Package.swift` の platforms は macOS のまま。Xcode プロジェクトは `Apps/` に閉じる。シミュレータ不要の計算は `HAPISConsumer` / `ZeroAxisFill` / `FeedRSS` / `ScreenSnapshot` を `swift test` する。Cloud Agent の Linux VM では `xcodebuild` が無い。
+`Apps/BlueTicker`。`Package.swift` の platforms は macOS のまま。Xcode プロジェクトは `Apps/` に閉じる。シミュレータ不要の計算は `HAPISConsumer` / `ZeroAxisFill` / `FeedRSS` / `ScreenSnapshot` を `swift test` する。非 macOS 環境では `xcodebuild` が無い。型検査は GitHub Actions の `ios` ジョブ。
 
 マージ品質と配布は分け、同じ検証を二箇所で走らせない。
 
 | 経路 | 役割 |
 |---|---|
 | GitHub Actions `.github/workflows/ci.yml` | マージ品質。`ios` ジョブは `macos-26`、シミュレータ SDK 向け `xcodebuild build`、署名なし。`changes` ジョブが `Apps/BlueTicker/`・`ci.yml`・`Package.swift`/`Package.resolved` の差分を見たとき（と main への push）だけ走る。サーバーの `swift test` とはジョブを分けて並列 |
-| Xcode Cloud | 配布のみ。Release Archive → TestFlight Internal。ワークフローは App Store Connect が正本 |
+| App Store Connect の Archive（現在の実装は Xcode Cloud） | 配布のみ。Release Archive → TestFlight Internal。ワークフローは App Store Connect が正本 |
 
 Xcode Cloud を GitHub の required check にしない。PR Changes も、Archive ワークフローへの Test / Analyze も足さない。GHA に Archive や TestFlight アップロードを足さない。証明書と ASC API キーは GitHub secrets に置かない。
 
@@ -47,7 +47,7 @@ Xcode Cloud を GitHub の required check にしない。PR Changes も、Archiv
 
 ## 配布（TestFlight）
 
-導入範囲は Internal TestFlight まで。External と App Store Submit は公開範囲の拡張なので別判断。`v*` サーバー tag とは連動しない。チーム向け要約は Linear [Xcode Cloud（TestFlight 配布専用）](https://linear.app/sollahiro/document/xcode-cloudtestflight-配布専用-1f8cd760dc6f)（正本はこの節）。
+導入範囲は Internal TestFlight まで。External と App Store Submit は公開範囲の拡張なので別判断。`v*` サーバー tag とは連動しない。配布手順の正本はこの節。
 
 ### ワークフロー（ASC に 1 本）
 
@@ -251,7 +251,7 @@ HAPIS の制限は 60/分のレートで同時数ではない。interactive（�
 
 ### Mac / Simulator 手動スモーク（この PR では必須にしない）
 
-Cloud Agent の Linux VM と、手元に Mac が無いラウンドではシミュレータ E2E を要求しない。単体は `Apps/BlueTicker/HAPISConsumer` の URLProtocol / HTTP mock（DeviceCheck は mock）。アプリの型検査は GitHub Actions `ios` ジョブ。Mac があるときの確認:
+非 macOS 環境と、手元に Mac が無いラウンドではシミュレータ E2E を要求しない。単体は `Apps/BlueTicker/HAPISConsumer` の URLProtocol / HTTP mock（DeviceCheck は mock）。アプリの型検査は GitHub Actions `ios` ジョブ。Mac があるときの確認:
 
 1. Debug → リスト → 開発ラボ → ローカル（`http://127.0.0.1:3000` または LAN `http`）で検索できること（Bearer が付かない）
 2. Debug → リスト → 開発ラボ → トヨタ自動車。通信不要。右上が星 1 つで、社名ピルが戻ると星のあいだに出ること。隣の社名はピル幅の確認用（リストには入らない）

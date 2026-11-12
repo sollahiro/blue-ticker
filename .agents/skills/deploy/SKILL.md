@@ -9,7 +9,7 @@ Neon write・訂正有報は `.agents/skills/production-ingest/SKILL.md`。リ�
 
 # blt-server デプロイ手順
 
-同一 OCI イメージを Fly と self-host で使う。手元のビルド・実行は Apple `container`。構成は `docs/architecture.md`、認証方針は `docs/api-auth.md`。環境変数の薄い表も architecture。Neon 接続の正本は `.env.example`。
+同一 OCI イメージを Fly と self-host で使う。手元のビルド・実行の現行標準は Apple `container`（同等の Docker / OCI でも可）。構成は `docs/architecture.md`、認証方針は `docs/api-auth.md`。環境変数の薄い表も architecture。Neon 接続の正本は `.env.example`。子ブランチは使わない（`docs/process/neon-branches.md`）。
 
 ## 環境変数
 
@@ -44,7 +44,7 @@ fly deploy
 
 | ワークフロー | 役割 |
 |---|---|
-| `ci.yml` | 必須チェックは集約ジョブ `ci-ok` だけ。PR は `changes` が変更範囲から必要なジョブを決め、main への push は「直近で CI が緑だった main の commit」からの差分で決める（赤だった commit は次の run の差分に残る。基点が取れないときは全ジョブ。`docs/ci-checks.md`）。macOS は blt-ingest のビルド確認（キャッシュなし）/ Linux の build+test・golden / iOS シミュレータ向けコンパイル（`macos-26`）・product/serviceless ガード。iOS TestFlight / Archive は Xcode Cloud（`docs/ios-client.md`）。この skill の対象外 |
+| `ci.yml` | 必須チェックは集約ジョブ `ci-ok` だけ。PR は `changes` が変更範囲から必要なジョブを決め、main への push は「直近で CI が緑だった main の commit」からの差分で決める（赤だった commit は次の run の差分に残る。基点が取れないときは全ジョブ。`docs/ci-checks.md`）。macOS は blt-ingest のビルド確認（キャッシュなし）/ Linux の build+test・golden / iOS シミュレータ向けコンパイル（`macos-26`）・product/serviceless ガード。iOS TestFlight / Archive は App Store Connect の Archive（現在の実装は Xcode Cloud。`docs/ios-client.md`）。この skill の対象外 |
 | `deploy.yml` | CI 成功後の Fly 自動デプロイ（`v*` タグでは起動しない） |
 | `edge-security-smoke.yml` | Access / serviceless 外形監視 |
 

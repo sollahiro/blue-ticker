@@ -186,11 +186,11 @@ assets/taxonomy/labels/
 
 ### 4.2 ingest ホストがファイルを得る経路
 
-本番 ingest は Sorahiro 手元 Mac のみ（launchd が repo checkout から `blt-ingest` をビルド。Vapor / MCP を含まず、依存範囲が変わったときだけ再ビルドする）。Docker / Fly では ingest しない。ラベルファイルは repo の `assets/taxonomy/labels/` に置き、実行時は checkout から読む。
+本番 ingest は ingest ホスト（現在はオーナーの Mac + launchd）だけが repo checkout から `blt-ingest` をビルドする。Vapor / MCP を含まず、依存範囲が変わったときだけ再ビルドする。Fly では ingest しない。ラベルファイルは repo の `assets/taxonomy/labels/` に置き、実行時は checkout から読む。
 
 | 実行場所 | バイナリ | ラベルファイル |
 |---|---|---|
-| 本番 ingest（手元 Mac、launchd → `scripts/jp/edinet/*.local.sh`） | repo で `swift build -c release --product blt-ingest` | git の `assets/taxonomy/labels/`。`ingest-common.sh` が `BLUE_TICKER_ASSETS_PATH=$REPO/assets` を既定セット |
+| 本番 ingest（ingest ホスト。現在はオーナーの Mac + launchd → `scripts/jp/edinet/*.local.sh`） | repo で `swift build -c release --product blt-ingest` | git の `assets/taxonomy/labels/`。`ingest-common.sh` が `BLUE_TICKER_ASSETS_PATH=$REPO/assets` を既定セット |
 | CI `swift test` | テストプロセス | checkout された `assets/taxonomy/labels/`（CWD = パッケージ根） |
 
 `resolveAssetFileURL("taxonomy")` が `BLUE_TICKER_ASSETS_PATH` → CWD `assets/` → 実行ファイル隣接 `assets/` の順で探す。launchd ラッパーは repo 根でビルド・実行する（雛形 `ingest-run-cycle.local.example.sh`）。`assets/taxonomy/labels` が見つからないか読めないときは ingest プロセスあたり 1 回、そのパスと `BLUE_TICKER_ASSETS_PATH` を stderr に警告する（黙ってコード側 sentinel だけに落とさない）。

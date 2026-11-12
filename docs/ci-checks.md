@@ -124,8 +124,10 @@ The check scans only added lines (with rename detection) and the commit messages
   `listedCodes.contains(code)`, XBRL member names, and comments do not match.
 - **full-table-all**: a Fluent chain `X.query(on:)…​.all()` with no
   `filter/limit/range/first/group/join` between them, followed across up to 12 lines. Raw SQL is not matched.
-- **tracker-ref**: tracker issue ids (team prefix, dash, number) and tracker URLs, in
-  any text file (code, docs, fixtures) and in commit messages.
+- **tracker-ref**: leftover ticket ids (team prefix, dash, number) and former tracker
+  hostnames, in any text file (code, docs, fixtures) and in commit messages. Do not
+  newly embed them; historical rows may stay until that line is rewritten. CI triage
+  (name the failing job before blaming the diff) is `docs/process/ci-triage.md`.
 
 **Baseline**: `scripts/ci/flags-baseline.tsv` lists pre-existing occurrences as
 `flag, path, sha256(line)[:16]`. It stores hashes, never text, so it cannot leak tracker ids.

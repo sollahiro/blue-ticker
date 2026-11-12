@@ -33,7 +33,7 @@ import Foundation
 
     /// FY2025-03。格納済み profit は営業利益ブロック（HC 77,635 等）と一致する。
     // source: code=4901 fy_end=2025-03-31 doc_id=S100W3XJ page=0 field=segment.ヘルスケア.profit
-    // reroute to segment axis, values unchanged, approved by BLT_Tester
+    // reroute to segment axis, values unchanged, golden review 済み
     @Test func s100W3XJProfitIsSegmentOperatingProfitNotRD() async throws {
         guard await Self.ensureAvailable("S100W3XJ") else { return }
 
@@ -69,7 +69,7 @@ import Foundation
 
     /// FY2026-03。誤寄せ時は研究開発費（HC 53,346 等）を segment profit に載せる。
     // source: code=4901 fy_end=2026-03-31 doc_id=S100YIBH page=0 field=segment.ヘルスケア.profit
-    // reroute to segment axis, values unchanged, approved by BLT_Tester
+    // reroute to segment axis, values unchanged, golden review 済み
     @Test func s100YIBHProfitIsSegmentOperatingProfitNotRD() async throws {
         guard await Self.ensureAvailable("S100YIBH") else { return }
 

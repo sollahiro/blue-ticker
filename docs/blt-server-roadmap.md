@@ -2,7 +2,7 @@
 
 **方針・ゴール・非ゴールの索引**。構成は `docs/architecture.md`、手順は `.agents/skills/deploy/SKILL.md`、cache 床は各 Contract 定数（バンプ規則は `.agents/rules/versioning.md`）、経緯は Git。
 
-サイクル段階・本番件数・公開ゲート・残作業の現在地は Linear（[JP 現在地](https://linear.app/sollahiro/document/jp-現在地-af2abd076034) / [公開と基盤 現在地](https://linear.app/sollahiro/document/公開と基盤-現在地-3bd56370454b)）。Git に件数や TODO チェックリストを置かない。
+サイクル段階・本番件数・公開ゲート・残作業の現在地はオーナー管理のトラッカー Sheet（`docs/process/tracker-placement.md`）。Git に件数や TODO チェックリストを置かない。
 
 ## 方針
 
@@ -17,7 +17,7 @@ read 床・バンプ規則は `.agents/rules/versioning.md` のみ（ここへ�
 
 **ゴール**: ユーザー向け実行を blt-server（remote）へ集約（達成）。近傍は REST の安定と iOS。
 
-**非ゴール**: 各サブコマンドへの backend 選択、床の「現行から N つ前」機械オフセット、`CacheManager` と EDINET external の無理な単一抽象化、数値 facts の Neon / R2 永続（生 XBRL L2 から再導出する。進捗は Linear Team `blue-ticker`）。blt-server に MCP を持たせること（公開コネクタは HAPIS 側。内蔵 MCP は 2026-11-08 に廃止）。
+**非ゴール**: 各サブコマンドへの backend 選択、床の「現行から N つ前」機械オフセット、`CacheManager` と EDINET external の無理な単一抽象化、数値 facts の Neon / R2 永続（生 XBRL L2 から再導出する。進捗はオーナー管理のトラッカー Sheet）。blt-server に MCP を持たせること（公開コネクタは HAPIS 側。内蔵 MCP は 2026-11-08 に廃止）。
 
 ## 関連
 
