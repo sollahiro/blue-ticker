@@ -755,6 +755,43 @@ enum BreakdownExtractor {
             ?? breakdownNotApplicableNotFound
     }
 
+    /// 報告セグメント以外の事業を「重要性が乏しい」として省略している文
+    /// （4694「報告セグメントである「検査事業」以外の事業に関しては、重要性が乏しいと考えられるため、
+    /// 記載を省略しております。」）。のれん・減損の注記の省略文は含めない。
+    static func otherSegmentsOmittedStatement(in sentences: [String]) -> String? {
+        sentences.first { sentence in
+            let s = sentence.replacingOccurrences(of: " ", with: "")
+                .replacingOccurrences(of: "　", with: "")
+            guard s.contains("重要性が乏しい"), s.contains("省略") else { return false }
+            // 他の事業があると言っている文だけ。「〜のみの単一セグメントであり重要性が乏しいため省略」
+            // （2764 / 343A）や「報告セグメントは「建設工事」のみ」（1914）は他の事業の省略ではない。
+            guard s.contains("以外の事業") || s.contains("その他の事業")
+                || s.contains("他の事業セグメント")
+            else { return false }
+            return !s.contains("単一セグメント") && !s.contains("のれん") && !s.contains("減損")
+        }
+    }
+
+    /// 省略文から、開示されている報告セグメントの名前を取る。取れなければ nil（名前は作らない）。
+    static func reportableSegmentName(inOmittedStatement sentence: String) -> String? {
+        let s = sentence.replacingOccurrences(of: " ", with: "")
+            .replacingOccurrences(of: "　", with: "")
+        for pattern in [
+            "「([^」]{1,40})」以外の事業",
+            "([^。、「」のはがをにとで]{2,30})以外の事業",
+        ] {
+            guard let regex = try? NSRegularExpression(pattern: pattern) else { continue }
+            let ns = s as NSString
+            if let match = regex.firstMatch(in: s, range: NSRange(location: 0, length: ns.length)),
+                match.numberOfRanges > 1
+            {
+                let name = ns.substring(with: match.range(at: 1))
+                if !name.isEmpty { return name }
+            }
+        }
+        return nil
+    }
+
     /// セグメント注記の地の文が「単一セグメント」と言っている文。否定（単一セグメントではない）は除く。
     /// 専用タグが無くても、報告セグメントの member が 1 つも無い書類ではこの文で単一と決める
     /// （2764 S100YL5S「レストラン事業のみの単一セグメントであり…記載を省略」）。
