@@ -18,6 +18,8 @@ enum SegmentV3 {
         equityMethod: BreakdownSnapshot?,
         external: BreakdownSnapshot?,
         externalSalesBasis: String? = nil,
+        employees: BreakdownSnapshot? = nil,
+        allowEmployeeOnlyRows: Bool = false,
         edinetCode: String,
         memberPrefixes: [String: String],
         labelsByTag: [String: String]
@@ -131,6 +133,11 @@ enum SegmentV3 {
             }
         }
 
+        let employeesBlock = mergeEmployees(
+            employees, into: &rows, index: &index, edinetCode: edinetCode,
+            memberPrefixes: memberPrefixes, labelsByTag: labelsByTag,
+            createMissingRows: allowEmployeeOnlyRows)
+
         applyExplicitZeros(&rows)
         let differenced = addDifferenceRows(
             rows, edinetCode: edinetCode,
@@ -183,6 +190,7 @@ enum SegmentV3 {
         out.overview = SegmentOverviewPayload(
             total: assignment.total, categories: assignment.categories)
         out.capitalExpendituresOverview = nil
+        out.employeesBlock = employeesBlock
         return out
     }
 
@@ -198,6 +206,86 @@ enum SegmentV3 {
             let segments = rows.filter { $0.rowKind == "segment" }.count
             return segments >= 2 ? segmentStructureMultiple : nil
         }
+    }
+
+    /// 従業員の状況のセグメント別人数を行のセルに載せ、表の行は `employees.categories` に全部残す。
+    /// 行の突き合わせは member 名、合わなければ同じ種類の行の表示名（7203: 注記は
+    /// OtherReportableSegmentsMember、従業員の状況は AllOtherReportableSegmentMember で、どちらも「その他」）。
+    /// 報告セグメントに無い行（単一セグメント会社の事業部門など）は、`createMissingRows` が false なら
+    /// 行を増やさず未割当のカテゴリにする。
+    static func mergeEmployees(
+        _ snapshot: BreakdownSnapshot?,
+        into rows: inout [BreakdownRowPayload],
+        index: inout [String: Int],
+        edinetCode: String,
+        memberPrefixes: [String: String],
+        labelsByTag: [String: String],
+        createMissingRows: Bool
+    ) -> SegmentOverviewPayload? {
+        guard let snapshot else { return nil }
+        func cell(_ value: Double) -> BreakdownMetricCellPayload {
+            BreakdownMetricCellPayload(
+                value: value, basis: snapshot.sourceKind, source: snapshot.denominatorTag, decimals: 0)
+        }
+        var categories: [SegmentOverviewCategoryPayload] = []
+        func kindOf(_ source: BreakdownRow) -> String {
+            SegmentMemberKind.rowKind(
+                SegmentMemberKind.classify(
+                    localName: source.labelRaw,
+                    label: source.label ?? labelsByTag[source.labelRaw] ?? source.labelRaw))
+        }
+        // 報告セグメントが 1 行で、従業員の状況が複数の区分（事業部門）に分かれているときは、
+        // どの区分もその 1 行に載せない（7953: 部門の人数を単一セグメントの人数にしない）。
+        let departmentsUnderSingleSegment =
+            !createMissingRows
+            && rows.filter { $0.rowKind == "segment" }.count == 1
+            && snapshot.rows.filter { kindOf($0) == "segment" }.count > 1
+        for source in snapshot.rows {
+            let label = source.label ?? labelsByTag[source.labelRaw] ?? source.labelRaw
+            let kind = kindOf(source)
+            guard kind == "segment" || kind == "reconciling" else { continue }
+            if departmentsUnderSingleSegment, kind == "segment" {
+                categories.append(
+                    SegmentOverviewCategoryPayload(
+                        label: label, segmentKey: nil, unassigned: true, amount: cell(source.amount)))
+                continue
+            }
+            var position = index[source.labelRaw]
+            if position == nil {
+                let wanted = SegmentLabelMatch.compact(label)
+                let matches = rows.indices.filter {
+                    rows[$0].rowKind == kind && !wanted.isEmpty
+                        && SegmentLabelMatch.compact(rows[$0].label) == wanted
+                }
+                if matches.count == 1 { position = matches[0] }
+            }
+            if position == nil, createMissingRows {
+                let prefix = memberPrefixes[source.labelRaw]
+                var row = BreakdownRowPayload(
+                    labelRaw: source.labelRaw, label: label, amount: 0, profit: nil, rowKind: kind)
+                row.segmentKey = SegmentKey.make(
+                    edinetCode: edinetCode, localName: source.labelRaw, prefix: prefix).description
+                row.prefix = prefix
+                rows.append(row)
+                index[source.labelRaw] = rows.count - 1
+                position = rows.count - 1
+            }
+            if let position {
+                rows[position].employeesCell = cell(source.amount)
+            }
+            categories.append(
+                SegmentOverviewCategoryPayload(
+                    label: label, segmentKey: position.flatMap { rows[$0].segmentKey },
+                    unassigned: position == nil, amount: cell(source.amount)))
+        }
+        let total = snapshot.denominator != 0 ? cell(snapshot.denominator) : nil
+        if let total,
+            let entity = rows.firstIndex(where: { $0.rowKind == breakdownRowKindEntityTotal })
+        {
+            rows[entity].employeesCell = total
+        }
+        guard total != nil || !categories.isEmpty else { return nil }
+        return SegmentOverviewPayload(total: total, categories: categories)
     }
 
     /// 設備投資等の概要の出どころ。HTML 表にカテゴリ行があるときだけ HTML、無ければタグ付き fact。

@@ -170,6 +170,8 @@ public let segmentCellExternalSales = "external_sales"
 public let segmentCellCapitalExpenditures = capexFlowMetricCapitalExpenditures
 /// segment-v3 行の非流動資産増加額セル（flow に混ぜない）。
 public let segmentCellNoncurrentAssetAdditions = capexFlowMetricNoncurrentAssetAdditions
+/// segment 行の従業員数セル（人）。従業員の状況のセグメント別人数。旧 employees 軸を統合した。
+public let segmentCellEmployees = "employees"
 public let breakdownRowSegmentKeyKey = "segment_key"
 public let breakdownRowPrefixKey = "prefix"
 public let breakdownMetricCellBasisXbrlFacts = breakdownSourceXbrlFacts
@@ -182,6 +184,7 @@ public let segmentWaterfallMetricProfit = "profit"
 public let segmentWaterfallMetricSegmentAssets = capexCellSegmentAssets
 public let segmentWaterfallMetricCapitalExpenditures = segmentCellCapitalExpenditures
 public let segmentWaterfallMetricNoncurrentAssetAdditions = segmentCellNoncurrentAssetAdditions
+public let segmentWaterfallMetricEmployees = segmentCellEmployees
 public let segmentTransitionDecisionConnect = "connect"
 public let segmentTransitionDecisionBreak = "break"
 public let segmentTransitionDecisionNeedsReview = "needs_review"
@@ -221,6 +224,7 @@ public let segmentWaterfallMetrics: Set<String> = [
     segmentWaterfallMetricSegmentAssets,
     segmentWaterfallMetricCapitalExpenditures,
     segmentWaterfallMetricNoncurrentAssetAdditions,
+    segmentWaterfallMetricEmployees,
 ]
 
 /// 財務諸表計上額（無 dimension の連結計上額）。他の「計」行（`subtotal`）とは別。
@@ -246,12 +250,12 @@ public let retiredBreakdownAxes = [
     breakdownAxisPropertyPlantEquipment,
     breakdownAxisGoodwillAndIntangibles,
     breakdownAxisCapex,
+    breakdownAxisEmployees,
 ]
 
 /// product_service / geography を除く、報告セグメント別の決定論指標軸。
 /// capex は segment-v3 に統合したためここから外す。
 public let breakdownSegmentMetricAxes = [
-    breakdownAxisEmployees,
     breakdownAxisGoodwill,
 ]
 
@@ -850,6 +854,8 @@ public struct BreakdownRowPayload: Codable, Sendable, Equatable {
     public var capitalExpenditures: BreakdownMetricCellPayload? = nil
     public var noncurrentAssetAdditions: BreakdownMetricCellPayload? = nil
     public var segmentAssetsCell: BreakdownMetricCellPayload? = nil
+    /// segment-v3 の従業員数セル（人）。
+    public var employeesCell: BreakdownMetricCellPayload? = nil
 
     private enum CodingKeys: String, CodingKey {
         case labelRaw, label, amount, profit, rowKind, description
@@ -875,6 +881,7 @@ public struct BreakdownRowPayload: Codable, Sendable, Equatable {
         case capitalExpenditures = "capital_expenditures"
         case noncurrentAssetAdditions = "noncurrent_asset_additions"
         case segmentAssetsCell = "segment_assets_cell"
+        case employeesCell = "employees_cell"
     }
 
     public init(
@@ -965,6 +972,8 @@ public struct BreakdownRowPayload: Codable, Sendable, Equatable {
             BreakdownMetricCellPayload.self, forKey: .noncurrentAssetAdditions)
         segmentAssetsCell = try container.decodeIfPresent(
             BreakdownMetricCellPayload.self, forKey: .segmentAssetsCell)
+        employeesCell = try container.decodeIfPresent(
+            BreakdownMetricCellPayload.self, forKey: .employeesCell)
         if let categoryGroup {
             label = try container.decodeIfPresent(String.self, forKey: .label)
                 ?? Self.displayLabel(categoryGroup: categoryGroup, category: category)
@@ -1011,6 +1020,7 @@ public struct BreakdownRowPayload: Codable, Sendable, Equatable {
         try container.encodeIfPresent(capitalExpenditures, forKey: .capitalExpenditures)
         try container.encodeIfPresent(noncurrentAssetAdditions, forKey: .noncurrentAssetAdditions)
         try container.encodeIfPresent(segmentAssetsCell, forKey: .segmentAssetsCell)
+        try container.encodeIfPresent(employeesCell, forKey: .employeesCell)
     }
 
     public static func displayLabel(categoryGroup: String, category: String?) -> String {
@@ -1060,6 +1070,9 @@ public struct BreakdownSnapshotPayload: Codable, Sendable, Equatable {
     public var salesBasis: String? = nil
     /// `segmentStructureSingle` / `segmentStructureMultiple`。判定できないときは nil。
     public var segmentStructure: String? = nil
+    /// 従業員の状況のセグメント別人数。`total` は会社全体、`categories` は表の行
+    /// （報告セグメントに紐付かない事業部門などは `unassigned`）。
+    public var employeesBlock: SegmentOverviewPayload? = nil
     /// 丸め幅に収まった差額（指標キー → 生の差額円）。差額行には出さない。
     public var roundingGaps: [String: Double]? = nil
 
@@ -1398,6 +1411,7 @@ public extension BreakdownSnapshotPayload {
             object[segmentCellEquityMethodInvestments] = equityMethodInvestments.jsonObject()
         }
         if let overview { object["overview"] = overview.jsonObject() }
+        if let employeesBlock { object[segmentCellEmployees] = employeesBlock.jsonObject() }
         guard var rowObjects = jsonObjectRows(object["rows"]), rowObjects.count == rows.count
         else { return }
         for index in rows.indices {
@@ -1421,6 +1435,7 @@ public extension BreakdownSnapshotPayload {
             if let equity = source.equityMethodInvestments {
                 row[segmentCellEquityMethodInvestments] = breakdownJSONAmount(equity)
             }
+            if let cell = source.employeesCell { row[segmentCellEmployees] = cell.jsonObject() }
             rowObjects[index] = row
         }
         object["rows"] = rowObjects

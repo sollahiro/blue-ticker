@@ -43,7 +43,7 @@ geography は変えない。本邦90％の `not_found` は既存の Jev ゲー�
 | `segments` | 報告セグメント（事業とも地域とも限らない）。filing-content の本文キー |
 | `segment` | 報告セグメント別売上（breakdown 軸）。行のセル `external_sales` / `profit` / `segment_assets` / `capital_expenditures` / `noncurrent_asset_additions` / `equity_method_investments` |
 | `geography` | 地域別注記 |
-| `employees` | 従業員数のセグメント別内訳 |
+| `employees` | 廃止（REST は 404）。従業員数は `segment` の `employees` セルと `employees` ブロック |
 | `goodwill` | 報告セグメント別ののれん（セル `opening` / `closing` / `amortization` / `impairment`） |
 | `capex` | 廃止（REST は 404）。設備投資は `segment` の CE/NAA セルと `overview` ブロック |
 | `interest_bearing_debt` | 有利子負債（社債・借入金＋リース負債）。行=負債の行、セル= `opening` / `closing`、行ごとに `source`・`maturity_class`・`in_total`・`excluded_reason`・`paired_row_index`。合計は `in_total=true` の行だけ |
@@ -56,7 +56,6 @@ geography は変えない。本邦90％の `not_found` は既存の Jev ゲー�
 | `segment` | 報告セグメント（`segment-v3`。`segment_key`、セル `{value,basis,source,decimals?}`、`overview`、`sales_basis`、`rounding_gaps`） |
 | `product_service` | 製品・サービス別売上（関連情報・収益分解。報告セグメント facts は載せない） |
 | `geography` | 地域別売上（関連情報。報告セグメントのコピーはしない。省略は `same_as`）。セル `assets`（地域ごとの有形固定資産／非流動資産） |
-| `employees` | 従業員内訳 |
 | `goodwill` | 報告セグメント別ののれん（`opening` / `closing` / `amortization` / `impairment`） |
 | `interest_bearing_debt` | 有利子負債内訳 |
 | `fixed_assets` | 固定資産の種類別（有形 / 無形。IFRS 注記・日本基準 BS） |
@@ -180,6 +179,8 @@ v2（`breakdown-interest-bearing-debt-v2`）: 行と合計が変わる変更（�
 
 - 2026-11: `segment` の単一セグメントを 404 にしない（公開面の変更。`cache_version` / `apiSkillsSchemaVersion` は据え置き）。payload に `segment_structure`（`single` / `multiple`。判定できないときは出さない。90%省略の 1 行は `disclosure_basis` が言うので付けない）。単一セグメントで事業名が取れる書類は従来どおり事業名の 1 行。取れない書類（「当社グループは単一セグメントであるため…」）は、セグメント行を作らず「連結合計又は会社合計」（`row_kind=EntityTotal`）の行だけを返し、設備投資の総額は `overview.total` に載る。単体のみの会社は個別の値。専用タグが無くても、報告セグメントの member が 1 つも無く注記の地の文が単一セグメントと言っていれば単一と決める（2764 `S100YL5S`）。最新有報で 404 だった 200 社のうち 192 社が返るようになる。残りは複数セグメントの抽出失敗などで、引き続き 404。
 - 2026-11: 設備投資等の概要のカテゴリで報告セグメントの行を増やさない。概要だけの member（3538 / 5283）や「新設によるもの」のような区分は `overview.categories` に残し、`rows` には出さない。「消去又は全社」は調整行（`reconciling`）。
+
+- 2026-11: 軸 `employees` を `segment` に統合（breaking。REST は常に 404、`apiSkillsSchemaVersion` 17。`cache_version` は v3 のまま＝未取り込み）。segment の行にセル `employees`（人。`{value,basis,source,decimals}`）、payload に `employees` ブロック（`total` と `categories`。従業員の状況の表の行を全部残し、報告セグメントに紐付かない行は `unassigned`）。行の突き合わせは member 名、合わなければ同じ種類の行の表示名（7203 の「その他」）。報告セグメントが 1 行で従業員の状況が複数の区分（事業部門）のときは、区分をその 1 行に載せない（2303 / 7953）。セグメント注記から行を作れず、従業員の状況にセグメント別の人数がある書類（324A / 4887 / 2345）は、会社全体の行に従業員の状況の行を足して返す（`segment_structure` は行数で決める）。`/waterfall/segment` の `metric` に `employees`。ingest の `breakdowns-employees` ステージは削除。DB の既存 employees 行は読まないだけで残る。
 
 ## 非目標
 

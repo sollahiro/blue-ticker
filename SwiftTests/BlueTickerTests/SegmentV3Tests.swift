@@ -316,6 +316,98 @@ import Testing
     }
 }
 
+@Suite struct SegmentEmployeesMergeTests {
+    private func employees(_ rows: [(String, String, Double)], total: Double) -> BreakdownSnapshot {
+        BreakdownSnapshot(
+            axis: breakdownAxisSegment, denominator: total, denominatorTag: "NumberOfEmployees",
+            rows: rows.map {
+                BreakdownRow(
+                    labelRaw: $0.0, label: $0.1, amount: $0.2, share: nil, profit: nil,
+                    rowKind: "segment")
+            },
+            sourceKind: breakdownSourceXbrlFacts, needsReview: false, warnings: [])
+    }
+
+    private func segmentPayload(_ rows: [(String, String, String)]) -> BreakdownSnapshotPayload {
+        // 売上はセグメント行の和 = 連結にして、差額行が出ないようにする。
+        let total = Double(rows.filter { $0.2 == "segment" }.count)
+        return BreakdownSnapshotPayload(
+            axis: breakdownAxisSegment, denominator: total, denominatorTag: "income_statement.sales",
+            rows: rows.map {
+                BreakdownRowPayload(
+                    labelRaw: $0.0, label: $0.1, amount: $0.2 == "segment" ? 1 : total, profit: nil,
+                    rowKind: $0.2)
+            },
+            sourceKind: breakdownSourceXbrlFacts, needsReview: false, warnings: [])
+    }
+
+    private func assemble(
+        _ segment: BreakdownSnapshotPayload, _ employees: BreakdownSnapshot, allowRows: Bool = false
+    ) -> BreakdownSnapshotPayload {
+        SegmentV3.assemble(
+            segment: segment, assets: nil, capitalExpenditures: nil,
+            noncurrentAssetAdditions: nil, overview: nil, overviewTotal: nil, equityMethod: nil,
+            external: nil, employees: employees, allowEmployeeOnlyRows: allowRows,
+            edinetCode: "E1", memberPrefixes: [:], labelsByTag: [:])
+    }
+
+    /// member 名が違っても表示名が同じなら同じ行（7203 の「その他」）。合わない行は未割当のカテゴリ。
+    @Test func employeesJoinByMemberThenLabel() {
+        let assembled = assemble(
+            segmentPayload([
+                ("AutoMember", "自動車", "segment"), ("OtherReportableSegmentsMember", "その他", "segment"),
+                (Xbrl.entityTotalMemberName, "連結", breakdownRowKindEntityTotal),
+            ]),
+            employees(
+                [
+                    ("AutoMember", "自動車", 300), ("AllOtherReportableSegmentMember", "その他", 20),
+                    ("CorporateSharedMember", "全社（共通）", 5),
+                ], total: 325))
+        #expect(assembled.rows.map { $0.employeesCell?.value } == [300, 20, 325])
+        #expect(assembled.rows.count == 3)
+        let categories = assembled.employeesBlock?.categories ?? []
+        #expect(categories.map(\.unassigned) == [false, false, true])
+        #expect(assembled.employeesBlock?.total?.value == 325)
+        let json = assembled.jsonObject()
+        let block = json[segmentCellEmployees] as? [String: Any]
+        #expect(((block?["total"] as? [String: Any])?["value"] as? NSNumber)?.intValue == 325)
+        let rows = json["rows"] as? [[String: Any]]
+        #expect(((rows?[0][segmentCellEmployees] as? [String: Any])?["value"] as? NSNumber)?.intValue == 300)
+    }
+
+    /// 報告セグメントが 1 行で従業員の状況が事業部門に分かれているときは、部門をその行に載せない（7953 / 2303）。
+    @Test func departmentsAreNotPutOnTheSingleSegmentRow() {
+        let assembled = assemble(
+            segmentPayload([("製品販売・工事", "製品販売・工事", "segment")]),
+            employees([("製品販売・工事", "製品販売・工事", 279), ("住宅事業本部", "住宅事業本部", 106)], total: 426))
+        #expect(assembled.rows.count == 1)
+        #expect(assembled.rows[0].employeesCell == nil)
+        #expect(assembled.employeesBlock?.categories.allSatisfy(\.unassigned) == true)
+    }
+
+    /// セグメント注記から行を作れないときは、従業員の状況の行で報告セグメントの行を作る（324A）。
+    @Test func employeeRowsBecomeSegmentRowsWhenAllowed() {
+        let assembled = assemble(
+            segmentPayload([(Xbrl.entityTotalMemberName, "連結", breakdownRowKindEntityTotal)]),
+            employees(
+                [("集客支援事業", "集客支援事業", 26), ("直営宿泊事業", "直営宿泊事業", 16),
+                 ("CorporateSharedMember", "全社（共通）", 6)], total: 48),
+            allowRows: true)
+        #expect(assembled.rows.filter { $0.rowKind == "segment" }.map(\.label) == ["集客支援事業", "直営宿泊事業"])
+        #expect(assembled.rows.filter { $0.rowKind == "reconciling" }.map { $0.employeesCell?.value } == [6])
+        #expect(assembled.employeesBlock?.categories.contains { $0.unassigned } == false)
+    }
+
+    @Test func employeesAxisIsRetiredAndWaterfallHasTheMetric() {
+        #expect(retiredBreakdownAxes.contains(breakdownAxisEmployees))
+        #expect(segmentWaterfallMetrics.contains(segmentWaterfallMetricEmployees))
+        #expect(
+            BreakdownExtractor.singleSegmentStatement(in: [
+                "当社は、従来、集客事業の単一セグメントとして事業を営んでおりましたが、当事業年度より施設再生・リセール事業を開始しております。"
+            ]) == nil)
+    }
+}
+
 @Suite struct SegmentExternalSalesResolveTests {
     private func fact(_ tag: String, _ member: String?, _ value: Double) -> BreakdownFact {
         BreakdownFact(

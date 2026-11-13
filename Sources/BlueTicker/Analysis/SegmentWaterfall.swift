@@ -274,6 +274,7 @@ public enum SegmentWaterfall {
         case segmentWaterfallMetricSegmentAssets: return row.segmentAssetsCell
         case segmentWaterfallMetricCapitalExpenditures: return row.capitalExpenditures
         case segmentWaterfallMetricNoncurrentAssetAdditions: return row.noncurrentAssetAdditions
+        case segmentWaterfallMetricEmployees: return row.employeesCell
         default: return nil
         }
     }

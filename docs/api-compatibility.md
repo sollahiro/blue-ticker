@@ -88,6 +88,7 @@ breaking 再編時は可能な範囲で:
 - 報告セグメント年次は `GET /waterfall/segment` 1 本にした（breaking。`apiSkillsSchemaVersion` 16）。`years`（既定 5、新しい順）と `fiscal_year`（単年）。各年は `segments` / `adjustment` / `consolidated` / `difference`。つなぎは行の `prior`（`connect` / `rename` / `reorg` / `break` と `basis`）と年の `line_cut`。`/waterfall/segment/transitions` は置かない。応答に無い年はサーバ側で補完しない。`cache_version` / ingest 範囲は変えない。
 - breakdown `axis=segment` の `sales_basis` に値 `external_including_other_revenue` を足した（互換追加。`apiSkillsSchemaVersion` は 16 のまま）。外部顧客への売上高にその他の収益を足した計が連結売上高に一致する書類で、`external_sales` がその計になる。
 - breakdown `axis=segment` は、単一セグメントの会社を 404 にせず返す。payload に `segment_structure`（`single` / `multiple`）を足した。事業名が取れない単一セグメントは `row_kind=EntityTotal` の行だけで、セグメント行は無い（`apiSkillsSchemaVersion` は 16 のまま。v3 は未取り込みのため版は上げない）。
+- breakdown の軸 `employees` を廃止して常に 404 にし、`segment` へ統合した（breaking。`apiSkillsSchemaVersion` 17）。segment の行にセル `employees`、payload に `employees` ブロック（`total` / `categories`）。`/waterfall/segment` の `metric` に `employees` を足した。公開コネクタの `get-breakdown` の `axis` から `employees` を外した（HAPIS カタログの同期が要る）。
 
 ## Codable 応答への段階移行
 

@@ -97,7 +97,7 @@ import Testing
         #expect(!skill.description.contains("axis=business"))
         #expect(skill.description.contains("needs_review"))
         #expect(skill.description.contains("interest_bearing_debt_lease_denominator_from_notes"))
-        #expect(apiSkillsSchemaVersion == 16)
+        #expect(apiSkillsSchemaVersion == 17)
         let waterfall = try #require(apiSkill(id: "get-segment-waterfall"))
         #expect(waterfall.path == "/v1/companies/{code}/waterfall/segment")
         #expect(waterfall.parameters.contains { $0.name == "years" })

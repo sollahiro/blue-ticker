@@ -785,6 +785,27 @@ public extension BltServerContext {
                         audit: result.audit.map(llmBreakdownAuditPayload(from:))),
                     xbrlDir: xbrlDir))
         }
+        // セグメント注記からは行を作れないが、従業員の状況にセグメント別の人数がある書類
+        // （324A / 4887 / 2345）。会社全体の行に従業員の状況の行を足して返す。
+        if pattern.classification != .singleSegment {
+            var payload = await segmentPayloadWithMetricCells(
+                breakdownSnapshotPayload(
+                    from: SegmentBreakdownResolver.consolidatedOnlySnapshot(
+                        sales: consolidatedSales ?? 0)),
+                docID: docID, xbrlDir: xbrlDir, allowEmployeeOnlyRows: true)
+            let segments = payload.rows.filter { $0.rowKind == "segment" }.count
+            if segments >= 1 {
+                payload.segmentStructure =
+                    segments >= 2 ? segmentStructureMultiple : segmentStructureSingle
+                return attachingPattern(
+                    pattern,
+                    to: breakdownByRecordingOverlayRegressions(
+                        .resolved(
+                            payload: payload, source: breakdownSourceXbrlFacts, contentHash: hash,
+                            audit: nil),
+                        xbrlDir: xbrlDir))
+            }
+        }
         if pattern.classification == .notDisclosed || reportable.method == "not_found" {
             return attachingPattern(
                 pattern, to: .notApplicable(reason: breakdownNotApplicableNotFound))
@@ -796,8 +817,10 @@ public extension BltServerContext {
 
     /// segment-v3: 売上・利益・資産・CE・NAA を member 和集合の1行に載せ、Overview は別ブロック。
     fileprivate func segmentPayloadWithMetricCells(
-        _ payload: BreakdownSnapshotPayload, docID: String, xbrlDir: URL
+        _ payload: BreakdownSnapshotPayload, docID: String, xbrlDir: URL,
+        allowEmployeeOnlyRows: Bool = false
     ) async -> BreakdownSnapshotPayload {
+        let employees = await employeesSnapshot(docID: docID, xbrlDir: xbrlDir)
         let cached = await businessSegmentDimensionCache.load(docID: docID, xbrlDir: xbrlDir)
         let memberParents = XBRLUtils.operatingSegmentMemberParents(in: xbrlDir)
         let ceTags = SegmentMetricDiscovery.capitalExpenditureTags(in: cached.facts)
@@ -888,6 +911,7 @@ public extension BltServerContext {
             noncurrentAssetAdditions: noncurrent, overview: overview,
             overviewTotal: overviewTotal, equityMethod: equityMethod, external: external,
             externalSalesBasis: externalResolution?.salesBasis,
+            employees: employees, allowEmployeeOnlyRows: allowEmployeeOnlyRows,
             edinetCode: edinetCode, memberPrefixes: memberPrefixes,
             labelsByTag: cached.labelsByTag)
         if assembled.overview?.total == nil {
@@ -1190,6 +1214,21 @@ public extension BltServerContext {
         guard let xbrlDir = await downloadAnnualFilingXbrl(
             docID: docID, correctionDocIDs: correctionDocIDs
         ) else { return .failed }
+        guard let filled = await employeesSnapshot(docID: docID, xbrlDir: xbrlDir) else {
+            return .notApplicable(reason: breakdownNotApplicableNotFound)
+        }
+        let cached = await businessSegmentDimensionCache.load(docID: docID, xbrlDir: xbrlDir)
+        let extracted = ExtractedBreakdown(method: "xbrl_facts", tables: [], facts: cached.facts)
+        let hash = breakdownContentHash(extracted: extracted, consolidatedSales: nil)
+        return breakdownByRecordingOverlayRegressions(
+            .resolved(
+                payload: breakdownSnapshotPayload(from: filled), source: breakdownSourceXbrlFacts,
+                contentHash: hash, audit: nil),
+            xbrlDir: xbrlDir)
+    }
+
+    /// 従業員の状況のセグメント別人数。segment 軸の `employees` セルとブロックに使う。
+    internal func employeesSnapshot(docID: String, xbrlDir: URL) async -> BreakdownSnapshot? {
         let total = BreakdownFinancialsResolver.financialsCanonicalEmployees(xbrlDir: xbrlDir)
         let cached = await businessSegmentDimensionCache.load(docID: docID, xbrlDir: xbrlDir)
         let memberParents = XBRLUtils.operatingSegmentMemberParents(in: xbrlDir)
@@ -1204,21 +1243,12 @@ public extension BltServerContext {
                 total: total, xbrlDir: xbrlDir, segmentLabels: segmentLabels,
                 decider: employeesTableDecider, docID: docID)
         }
-        guard let snapshot = normalized else {
-            return .notApplicable(reason: breakdownNotApplicableNotFound)
-        }
+        guard let snapshot = normalized else { return nil }
         // 表の一部の行に fact が付かない会社（純粋持株会社等）は、差額と整数一致する未タグ行だけ補う。
         // 単一セグメントの事業部門表（タグは全社だけ）はアンカーが無いので部門表を別に読む。
-        var filled = EmployeesUntaggedRowFill.fill(
+        let filled = EmployeesUntaggedRowFill.fill(
             snapshot: snapshot, facts: cached.facts, xbrlDir: xbrlDir)
-        filled = EmployeesUntaggedRowFill.fillDepartmentTable(snapshot: filled, xbrlDir: xbrlDir)
-        let extracted = ExtractedBreakdown(method: "xbrl_facts", tables: [], facts: cached.facts)
-        let hash = breakdownContentHash(extracted: extracted, consolidatedSales: nil)
-        return breakdownByRecordingOverlayRegressions(
-            .resolved(
-                payload: breakdownSnapshotPayload(from: filled), source: breakdownSourceXbrlFacts,
-                contentHash: hash, audit: nil),
-            xbrlDir: xbrlDir)
+        return EmployeesUntaggedRowFill.fillDepartmentTable(snapshot: filled, xbrlDir: xbrlDir)
     }
 
     /// 内訳取り込み: 書類1件分の goodwill 軸内訳を解決する（2026-08-12追加）。決定論のみ、LLMなし。

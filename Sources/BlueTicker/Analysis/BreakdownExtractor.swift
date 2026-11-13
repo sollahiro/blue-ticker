@@ -766,6 +766,8 @@ enum BreakdownExtractor {
                 || s.contains("単一の事業セグメント") || s.contains("報告セグメントは単一")
                 || s.contains("事業セグメントは単一")
             guard states else { return false }
+            // 「従来、〜の単一セグメントとして事業を営んでおりましたが、当事業年度より…」は当期の話ではない（324A）。
+            if s.contains("従来") { return false }
             return !s.contains("単一セグメントではな") && !s.contains("単一ではな")
                 && !s.contains("単一セグメントから") && !s.contains("単一セグメントでした")
         }

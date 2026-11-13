@@ -18,7 +18,9 @@ import Foundation
 /// `GET /waterfall/segment` を追加。
 /// v16（2026-11-12）: 報告セグメント年次は `GET /waterfall/segment` 1 本。つなぎは years[] に載せ、
 /// `/waterfall/segment/transitions` は置かない。years（既定 5）と fiscal_year（単年）。
-public let apiSkillsSchemaVersion = 16
+/// v17（2026-11-13）: breakdown の axis `employees` を廃止し `segment` へ統合。行に employees セル、
+/// payload に employees ブロック。`/waterfall/segment` の metric に employees。
+public let apiSkillsSchemaVersion = 17
 
 /// パラメータの置き場所（REST パス変数 / クエリ）。
 public enum ApiSkillParameterLocation: String, Sendable {
@@ -368,7 +370,7 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                 有利子負債（interest_bearing_debt）、
                 固定資産の種類別（fixed_assets。有形固定資産と無形固定資産・のれん）を取得します（格納済みデータのみ）。
                 対象は取り込み済みの上場企業です。doc_id を省略すると最新の有価証券報告書を使用します。
-                axis は segment（既定）/ product_service / geography / employees / goodwill /
+                axis は segment（既定）/ product_service / geography / goodwill /
                 interest_bearing_debt / fixed_assets に対応。
                 segment はセグメント情報の報告セグメント表（segment-v3）。行に segment_key・prefix・
                 segment_basis（business / geographic）が付きます。
@@ -388,7 +390,9 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                 開示があるセルだけ、payload にそのセルの分母（denominator / denominator_tag）が付き、行の値が無いところはキーごと省略。
                 旧 axis=equity_method_investments は廃止（404）。
                 90%省略の1行は disclosure_basis=dominant_90pct。関連情報の省略は same_as=segment（値は複製しません）。
-                従業員表の区分が合わないときは employees_join=unavailable です。
+                従業員数は segment の行の employees セル（人）と、payload の employees ブロック
+                （total と categories。従業員の状況の表の行。報告セグメントに紐付かない行は unassigned）です。
+                旧 axis=employees は廃止（404）。従業員表の区分が合わないときは employees_join=unavailable です。
                 product_service は関連情報の製品表または収益分解だけで、報告セグメント facts は含めません。
                 数値タグとセグメント fact から解決します。合計のみの開示は分母だけの行になります。
                 axis=goodwill は報告セグメント別ののれんです。行は名前付きセル opening（期首未償却残高）/
@@ -423,8 +427,8 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                 interest_bearing_debt_lease_denominator_from_notes が付きます（404 にはしません）。
                 要確認（needs_review）の行は出しません。行があるのに needs_review で出さないときは
                 404 reason unknown（メッセージは「公開していません」。未算出の reason 無し 404 とは別）です。
-                金額（amount / denominator / 各セル）は基本単位で、応答の unit（currency_amount、employees 軸は persons）と
-                currency（ISO 4217。employees 軸は null）が単位です。
+                金額（amount / denominator / 各セル）は基本単位で、応答の unit（currency_amount）と
+                currency（ISO 4217）が単位です。employees セルだけは人数です。
                 fixed_assets は報告セグメントではなく固定資産の種類別の正味帳簿価額（amount、円）です。
                 IFRS は連結の注記（有形固定資産、のれん及び無形資産）、日本基準は連結 BS の区分科目（建物及び構築物（純額）・土地・
                 ソフトウェア・のれん等）です。米国基準は not_found です。
@@ -478,7 +482,7 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                     name: "axis",
                     location: .query,
                     type: .string,
-                    description: "内訳の軸（segment / product_service / geography / employees / goodwill / interest_bearing_debt / fixed_assets。省略時 segment）",
+                    description: "内訳の軸（segment / product_service / geography / goodwill / interest_bearing_debt / fixed_assets。省略時 segment）",
                     required: false,
                     defaultValue: .string(breakdownAxisSegment)
                 ),
@@ -491,7 +495,6 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                 例: GET /v1/companies/6758/breakdown?axis=segment
                 例: GET /v1/companies/6758/breakdown?axis=product_service
                 例: GET /v1/companies/6758/breakdown?axis=geography
-                例: GET /v1/companies/6758/breakdown?axis=employees
                 例: GET /v1/companies/6758/breakdown?axis=fixed_assets
                 """
         ),
@@ -506,7 +509,7 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                 行の prior は前年の segment_key と decision（connect / rename / reorg / break）と basis
                 （same_key / deterministic / jev）。年の line_cut が true なら折れ線を切ってください。
                 metric は external_sales / profit / segment_assets / capital_expenditures /
-                noncurrent_asset_additions（省略時 external_sales）。
+                noncurrent_asset_additions / employees（省略時 external_sales）。
                 key または segment_key を付けるとそのキーの系列（rename でキーが変わった年も含む）。
                 値は tagged 円そのもので丸めません。
                 """,
@@ -525,7 +528,7 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                     name: "metric",
                     location: .query,
                     type: .string,
-                    description: "指標（external_sales / profit / segment_assets / capital_expenditures / noncurrent_asset_additions。省略時 external_sales）",
+                    description: "指標（external_sales / profit / segment_assets / capital_expenditures / noncurrent_asset_additions / employees。省略時 external_sales）",
                     required: false,
                     defaultValue: .string(segmentWaterfallMetricExternalSales)
                 ),

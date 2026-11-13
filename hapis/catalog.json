@@ -212,7 +212,7 @@
       "path": "/v1/companies/{code}/breakdown",
       "operation_id": "get-breakdown",
       "summary": "Segment breakdown",
-      "description": "Structured breakdown from an annual report, by axis: segment (reportable segments: external sales, profit, assets, capital expenditures), geography (sales by region) or employees (headcount by segment). Amounts in JPY (raw tagged values, not rounded); employees in persons. Rounding-level gaps are omitted from the difference row.",
+      "description": "Structured breakdown from an annual report, by axis: segment (reportable segments: external sales, profit, assets, capital expenditures and headcount per segment) or geography (sales by region). Amounts in JPY (raw tagged values, not rounded); headcount in persons. segment_structure says single or multiple. The former employees axis is folded into segment: each row has an employees cell and the employees block lists the headcount table. Rounding-level gaps are omitted from the difference row.",
       "parameters": [
         {
           "name": "code",
@@ -232,8 +232,8 @@
           "name": "axis",
           "in": "query",
           "required": true,
-          "description": "Breakdown axis: segment, geography or employees.",
-          "schema": { "type": "string", "enum": ["segment", "geography", "employees"] }
+          "description": "Breakdown axis: segment or geography.",
+          "schema": { "type": "string", "enum": ["segment", "geography"] }
         }
       ]
     },
@@ -256,7 +256,7 @@
           "in": "query",
           "required": false,
           "description": "Metric key. Default external_sales.",
-          "schema": { "type": "string", "enum": ["external_sales", "profit", "segment_assets", "capital_expenditures", "noncurrent_asset_additions"] }
+          "schema": { "type": "string", "enum": ["external_sales", "profit", "segment_assets", "capital_expenditures", "noncurrent_asset_additions", "employees"] }
         },
         {
           "name": "key",
