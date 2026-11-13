@@ -245,7 +245,9 @@ private struct PerformanceSection: View {
         return ChartMath.niceTicks(lower: values.min() ?? 0, upper: values.max() ?? 0)
     }
 
-    /// 純利益を左軸（売上高）の目盛りに重ねる倍率。0 は共通で、上端・下端のどちらも売上高の範囲に収める。
+    /// 純利益を左軸（売上高）の目盛りに重ねる倍率。0 は共通。
+    /// どの年も純利益の棒が売上高の棒より高く見えないよう、年ごとの 売上高 ÷ 純利益 の最小値で頭打ちにする
+    /// （左右の軸が違うことで、売上高より大きな純利益と誤読されるのを防ぐ）。
     private var netFactor: Double {
         let leftUpper = salesTicks.max() ?? 0
         let leftLower = salesTicks.min() ?? 0
@@ -254,6 +256,11 @@ private struct PerformanceSection: View {
         var ratios: [Double] = []
         if leftUpper > 0, rightUpper > 0 { ratios.append(leftUpper / rightUpper) }
         if leftLower < 0, rightLower < 0 { ratios.append(leftLower / rightLower) }
+        for year in years {
+            if let sales = year.sales, let net = year.netProfit, sales > 0, net > 0 {
+                ratios.append(sales / net)
+            }
+        }
         return ratios.min() ?? 1
     }
 
@@ -337,39 +344,71 @@ private struct BusinessProfitSection: View {
     var currency: String?
     @State private var selectedYearID: String?
     @State private var selectedFactor: FactorKind?
-    /// ダブルタップで拡大表示している前年差の年。
-    @State private var expandedYear: ExpandedYear?
+    /// ダブルタップで拡大している前年差の年。事業利益の棒が両端に寄り、間が要因のウォーターフォールになる。
+    @State private var expandedYearID: String?
+    /// 拡大中に選んだ要因。選ぶとその下に要因の推移を出す。
     @State private var expandedFactor: FactorKind?
-
-    private struct ExpandedYear: Identifiable {
-        var id: String
-    }
 
     var body: some View {
         AnalysisCard(title: "収益構造") {
-            AnalysisSubheading(text: "事業利益の推移")
+            AnalysisSubheading(text: expandedDelta == nil ? "事業利益の推移" : "事業利益の前年差の要因")
+            if let expandedDelta {
+                Button {
+                    collapse()
+                } label: {
+                    Label("推移に戻る", systemImage: "chevron.left")
+                        .font(.caption.weight(.semibold))
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(Theme.accent)
+                Text("\(Format.fyJapanese(expandedDelta.year.fyEnd))の事業利益は、前年より\(expandedDelta.end >= expandedDelta.start ? "増えました" : "減りました")")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(Theme.text)
+            }
             if years.contains(where: { $0.businessProfit != nil }) {
                 profitChart
-                ChartLegend(items: [
-                    LegendItem(title: "事業利益", color: ChartStyle.primaryBar, shape: .bar),
-                    LegendItem(title: "増益", color: Theme.positive, shape: .bar),
-                    LegendItem(title: "減益", color: Theme.negative, shape: .bar),
-                ])
+                if expandedDelta == nil {
+                    ChartLegend(items: [
+                        LegendItem(title: "事業利益", color: ChartStyle.primaryBar, shape: .bar),
+                        LegendItem(title: "増益", color: Theme.positive, shape: .bar),
+                        LegendItem(title: "減益", color: Theme.negative, shape: .bar),
+                    ])
+                } else {
+                    ChartLegend(items: [
+                        LegendItem(title: "事業利益", color: ChartStyle.primaryBar, shape: .bar),
+                        LegendItem(title: "プラス要因", color: Theme.positive, shape: .bar),
+                        LegendItem(title: "マイナス要因", color: Theme.negative, shape: .bar),
+                    ])
+                }
             } else {
                 AnalysisNote(text: "事業利益は未算出です。")
             }
-            if let selectedYear = years.first(where: { $0.id == currentYearID && isYearSelectable($0) }) {
+            if let expandedDelta {
+                if let kind = expandedFactor {
+                    factorDetail(kind, year: expandedDelta.year)
+                    factorTrend(kind, highlighting: expandedDelta.year)
+                } else {
+                    AnalysisNote(text: "要因をタップすると、その要因の推移を表示します。ダブルタップで元に戻ります。")
+                }
+            } else if let selectedYear = years.first(where: { $0.id == currentYearID && isYearSelectable($0) }) {
                 factorChart(selectedYear, years: years)
             } else {
                 AnalysisNote(text: "前年差をタップすると売上要因・利益率要因・販管費要因を表示します。ダブルタップで拡大します。")
             }
             AnalysisNote(text: "事業利益は売上総利益 − 販管費です。開示されている営業利益と一致しない場合がございます。")
         }
-        .sheet(item: $expandedYear) { expanded in
-            if let year = years.first(where: { $0.id == expanded.id }) {
-                expandedView(year)
-            }
+    }
+
+    private func collapse() {
+        withAnimation(.snappy(duration: 0.45)) {
+            expandedYearID = nil
+            expandedFactor = nil
         }
+    }
+
+    private var expandedDelta: ProfitDelta? {
+        guard let expandedYearID else { return nil }
+        return deltas.first { $0.id == expandedYearID }
     }
 
     /// 未選択なら、前年差がある最新の年。
@@ -400,20 +439,33 @@ private struct BusinessProfitSection: View {
         }
     }
 
+    /// 拡大中に並べる 3 つの要因の x カテゴリ（棒の名前）。
+    private static let factorSlots: [(kind: FactorKind, slot: String)] = FactorKind.allCases.map { ($0, $0.title) }
+
     /// 業績カードと同じ形の縦棒。事業利益の棒の間に前年差の浮き棒を置き、点線で段をつなぐ。
     /// 前年差をタップすると下の要因分解がその年に切り替わる。選んでいない前年差は薄くする。
+    /// ダブルタップすると同じグラフの中で、前年度・今年度の事業利益の 2 本が両端に寄り、
+    /// 間が売上要因・利益率要因・販管費要因のウォーターフォールに変わる。
     private var profitChart: some View {
         let deltas = deltas
+        let expanded = expandedDelta
         let yearLabels = years.map { Format.fy($0.fyEnd) }
         let slots: [String] = years.flatMap { year -> [String] in
             let label = Format.fy(year.fyEnd)
             guard let delta = deltas.first(where: { $0.id == year.id }) else { return [label] }
             return [delta.slot, label]
         }
+        let expandedSlots: [String] = expanded.map { delta in
+            [delta.priorLabel] + Self.factorSlots.map(\.slot) + [delta.label]
+        } ?? []
+        let visibleYears: [FinancialsYear] = {
+            guard let expanded, let prior = priorYear(of: expanded.year, in: years) else { return years }
+            return [prior, expanded.year]
+        }()
         let scale = Format.commonScale(for: years.map(\.businessProfit), currency: currency)
         let selectedID = currentYearID
         return Chart {
-            ForEach(years) { year in
+            ForEach(visibleYears) { year in
                 if let profit = year.businessProfit {
                     let label = Format.fy(year.fyEnd)
                     BarMark(x: .value("年度", label), y: .value("金額", profit), width: .fixed(16))
@@ -423,35 +475,39 @@ private struct BusinessProfitSection: View {
                         .accessibilityValue(Format.autoYen(profit, currency: currency))
                 }
             }
-            ForEach(deltas) { delta in
-                let selected = delta.id == selectedID
-                BarMark(
-                    x: .value("年度", delta.slot), yStart: .value("金額", delta.start), yEnd: .value("金額", delta.end),
-                    width: .fixed(12)
-                )
-                .foregroundStyle((delta.end >= delta.start ? Theme.positive : Theme.negative).opacity(selected ? 1 : 0.4))
-                .cornerRadius(3)
-                .accessibilityLabel("\(delta.label) 前年差")
-                .accessibilityValue(Format.autoYen(delta.end - delta.start, currency: currency))
-                // 前年の棒の上端 → 前年差 → 当年の棒の上端を点線でつなぐ。
-                ForEach([(delta.priorLabel, delta.start, "a"), (delta.label, delta.end, "b")], id: \.2) { label, value, side in
-                    LineMark(x: .value("年度", label), y: .value("金額", value), series: .value("線", "\(delta.id)-\(side)"))
-                        .foregroundStyle(ChartStyle.gridColor)
-                        .lineStyle(ChartStyle.grid)
-                    LineMark(x: .value("年度", delta.slot), y: .value("金額", value), series: .value("線", "\(delta.id)-\(side)"))
-                        .foregroundStyle(ChartStyle.gridColor)
-                        .lineStyle(ChartStyle.grid)
+            if let expanded {
+                expandedMarks(expanded)
+            } else {
+                ForEach(deltas) { delta in
+                    let selected = delta.id == selectedID
+                    BarMark(
+                        x: .value("年度", delta.slot), yStart: .value("金額", delta.start), yEnd: .value("金額", delta.end),
+                        width: .fixed(12)
+                    )
+                    .foregroundStyle((delta.end >= delta.start ? Theme.positive : Theme.negative).opacity(selected ? 1 : 0.4))
+                    .cornerRadius(3)
+                    .accessibilityLabel("\(delta.label) 前年差")
+                    .accessibilityValue(Format.autoYen(delta.end - delta.start, currency: currency))
+                    // 前年の棒の上端 → 前年差 → 当年の棒の上端を点線でつなぐ。
+                    ForEach([(delta.priorLabel, delta.start, "a"), (delta.label, delta.end, "b")], id: \.2) { label, value, side in
+                        LineMark(x: .value("年度", label), y: .value("金額", value), series: .value("線", "\(delta.id)-\(side)"))
+                            .foregroundStyle(ChartStyle.gridColor)
+                            .lineStyle(ChartStyle.grid)
+                        LineMark(x: .value("年度", delta.slot), y: .value("金額", value), series: .value("線", "\(delta.id)-\(side)"))
+                            .foregroundStyle(ChartStyle.gridColor)
+                            .lineStyle(ChartStyle.grid)
+                    }
                 }
             }
             RuleMark(y: .value("zero", 0))
                 .foregroundStyle(ChartStyle.zeroLine)
                 .lineStyle(StrokeStyle(lineWidth: 0.5))
         }
-        .chartXScale(domain: slots)
+        .chartXScale(domain: expanded == nil ? slots : expandedSlots)
         .chartXAxis {
             AxisMarks { value in
-                // 前年差の枠にはラベルを出さない。
-                if let slot = value.as(String.self), yearLabels.contains(slot) {
+                // 通常は前年差の枠にラベルを出さない。拡大中は要因名も出す。
+                if let slot = value.as(String.self), expanded != nil || yearLabels.contains(slot) {
                     AxisValueLabel()
                         .font(.caption2)
                         .foregroundStyle(Theme.textMuted)
@@ -461,18 +517,33 @@ private struct BusinessProfitSection: View {
         // 前年の棒の中心から当年の棒の中心までを、その前年差のタップ範囲にする。
         // 細い浮き棒の枠だけだと狙いにくいため。スクロールを奪わないようタップだけ拾う。
         .chartGesture { proxy in
-            // ダブルタップは拡大表示、シングルタップは下の要因分解の年切り替え。
+            // ダブルタップは拡大・元に戻す、シングルタップは年切り替え（拡大中は要因の選択）。
             SpatialTapGesture(count: 2)
                 .onEnded { value in
+                    if expandedYearID != nil {
+                        collapse()
+                        return
+                    }
                     guard let hit = hitDelta(at: value.location.x, proxy: proxy, deltas: deltas) else { return }
                     selectedYearID = hit.id
                     selectedFactor = nil
-                    expandedFactor = nil
-                    expandedYear = ExpandedYear(id: hit.id)
+                    withAnimation(.snappy(duration: 0.45)) {
+                        expandedFactor = nil
+                        expandedYearID = hit.id
+                    }
                 }
                 .exclusively(
                     before: SpatialTapGesture()
                         .onEnded { value in
+                            if expandedYearID != nil {
+                                guard let slot = proxy.value(atX: value.location.x, as: String.self),
+                                      let kind = Self.factorSlots.first(where: { $0.slot == slot })?.kind
+                                else { return }
+                                withAnimation(.snappy) {
+                                    expandedFactor = (expandedFactor == kind ? nil : kind)
+                                }
+                                return
+                            }
                             guard let hit = hitDelta(at: value.location.x, proxy: proxy, deltas: deltas) else { return }
                             selectedYearID = hit.id
                             selectedFactor = nil
@@ -495,6 +566,70 @@ private struct BusinessProfitSection: View {
         .frame(height: ChartStyle.height)
     }
 
+    /// 拡大中の中間の棒。前年度事業利益から要因を順に積み、各段を点線で次へつなぐ。
+    @ChartContentBuilder
+    private func expandedMarks(_ delta: ProfitDelta) -> some ChartContent {
+        let factors: [(slot: String, kind: FactorKind, value: Double)] = Self.factorSlots.map {
+            ($0.slot, $0.kind, $0.kind.value(delta.year) ?? 0)
+        }
+        // 各要因の始点・終点。
+        let levels: [(start: Double, end: Double)] = {
+            var running = delta.start
+            return factors.map { factor in
+                defer { running += factor.value }
+                return (running, running + factor.value)
+            }
+        }()
+        ForEach(Array(factors.enumerated()), id: \.element.slot) { index, factor in
+            let level = levels[index]
+            BarMark(
+                x: .value("年度", factor.slot), yStart: .value("金額", level.start), yEnd: .value("金額", level.end),
+                width: .fixed(16)
+            )
+            .foregroundStyle(
+                (factor.value >= 0 ? Theme.positive : Theme.negative)
+                    .opacity(expandedFactor == nil || expandedFactor == factor.kind ? 1 : 0.4)
+            )
+            .cornerRadius(3)
+            .accessibilityLabel(factor.kind.title)
+            .accessibilityValue(Format.autoYen(factor.value, currency: currency))
+        }
+        // 前年度の棒の上端 → 各要因の終点 → 今年度の棒の上端。
+        ForEach(0..<4, id: \.self) { index in
+            let level = index == 0 ? delta.start : levels[index - 1].end
+            let from = index == 0 ? delta.priorLabel : factors[index - 1].slot
+            let to = index < 3 ? factors[index].slot : delta.label
+            LineMark(x: .value("年度", from), y: .value("金額", level), series: .value("線", "step-\(index)"))
+                .foregroundStyle(ChartStyle.gridColor)
+                .lineStyle(ChartStyle.grid)
+            LineMark(x: .value("年度", to), y: .value("金額", level), series: .value("線", "step-\(index)"))
+                .foregroundStyle(ChartStyle.gridColor)
+                .lineStyle(ChartStyle.grid)
+        }
+    }
+
+    /// 拡大中に選んだ要因の説明（結果・計算式）。
+    private func factorDetail(_ kind: FactorKind, year: FinancialsYear) -> some View {
+        let detail = kind.detail(year: year, prior: priorYear(of: year, in: years), contribution: kind.value(year))
+        return VStack(alignment: .leading, spacing: 4) {
+            Text(kind.title)
+                .font(.caption.weight(.bold))
+                .foregroundStyle(Theme.accent)
+            Text(detail.outcome)
+                .font(.caption)
+                .foregroundStyle(outcomeColor(kind.value(year)))
+            Text(detail.formula)
+                .font(.caption)
+                .foregroundStyle(Theme.text)
+            if let substitution = detail.substitution {
+                Text("= \(substitution)")
+                    .font(.caption)
+                    .foregroundStyle(Theme.text)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+    }
+
     private func hitDelta(at x: CGFloat, proxy: ChartProxy, deltas: [ProfitDelta]) -> ProfitDelta? {
         deltas.first { delta in
             guard let from = proxy.position(forX: delta.priorLabel),
@@ -502,85 +637,6 @@ private struct BusinessProfitSection: View {
             else { return false }
             return x >= min(from, to) && x <= max(from, to)
         }
-    }
-
-    /// 拡大表示。前年度事業利益 → 売上要因 → 利益率要因 → 販管費要因 → 今年度事業利益。
-    /// 要因をタップすると、その下に要因の推移（年ごとの寄与額）を出す。
-    private func expandedView(_ year: FinancialsYear) -> some View {
-        let spec = factorSpec(year)
-        let prior = priorYear(of: year, in: years)
-        let period = Format.fyJapanese(year.fyEnd)
-        return NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("\(period)の事業利益の前年差")
-                        .font(.headline)
-                        .foregroundStyle(Theme.text)
-                    WaterfallChart(
-                        steps: expandedSteps(year: year, prior: prior, spec: spec),
-                        selectedID: expandedFactor?.rawValue
-                    ) { id in
-                        guard let kind = FactorKind(rawValue: id) else { return }
-                        expandedFactor = (expandedFactor == kind ? nil : kind)
-                    }
-                    if let kind = expandedFactor {
-                        factorTrend(kind, highlighting: year)
-                    } else {
-                        AnalysisNote(text: "要因をタップすると、その要因の推移を表示します。")
-                    }
-                }
-                .padding(16)
-            }
-            .navigationTitle("事業利益の前年差")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("閉じる") { expandedYear = nil }
-                }
-            }
-        }
-        .presentationDetents([.large])
-    }
-
-    private func expandedSteps(year: FinancialsYear, prior: FinancialsYear?, spec: FactorSpec) -> [WaterfallStep] {
-        let priorProfit = prior?.businessProfit ?? 0
-        var running = priorProfit
-        var steps: [WaterfallStep] = [
-            WaterfallStep(
-                id: "prior",
-                title: "前年度事業利益",
-                start: 0,
-                end: priorProfit,
-                valueText: spec.format(prior?.businessProfit),
-                valueColor: factorColor(prior?.businessProfit),
-                isTotal: false
-            )
-        ]
-        for factor in spec.factors {
-            let value = factor.value ?? 0
-            steps.append(
-                WaterfallStep(
-                    id: factor.kind.rawValue,
-                    title: factor.kind.title,
-                    start: running,
-                    end: running + value,
-                    valueText: spec.format(factor.value),
-                    valueColor: factorColor(factor.value),
-                    isTotal: false
-                ))
-            running += value
-        }
-        steps.append(
-            WaterfallStep(
-                id: "current",
-                title: "今年度事業利益",
-                start: 0,
-                end: year.businessProfit ?? running,
-                valueText: spec.format(year.businessProfit),
-                valueColor: factorColor(year.businessProfit),
-                isTotal: true
-            ))
-        return steps
     }
 
     /// 選んだ要因の寄与額を年度ごとに並べる。拡大中の年は濃く、ほかは薄くする。
