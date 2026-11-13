@@ -772,8 +772,10 @@ public extension BltServerContext {
             fiscalYearEnd: BreakdownExtractor.currentFiscalYearEnd(fromXbrlDir: xbrlDir),
             docID: docID, xbrlDir: xbrlDir, pattern: pattern, employeeLabels: employeeLabels)
         if let snapshot = result.snapshot {
-            let payload = await segmentPayloadWithMetricCells(
+            var payload = await segmentPayloadWithMetricCells(
                 breakdownSnapshotPayload(from: snapshot), docID: docID, xbrlDir: xbrlDir)
+            payload.segmentStructure = SegmentV3.segmentStructure(
+                classification: pattern.classification, rows: payload.rows)
             return attachingPattern(
                 pattern,
                 to: breakdownByRecordingOverlayRegressions(
@@ -1575,6 +1577,13 @@ extension BltServerContext {
                 from: BreakdownExtractor.segmentNotePatternProse(xbrlDir: xbrlDir))
         } else {
             prose = BreakdownExtractor.segmentNotePatternProse(xbrlDir: xbrlDir)
+        }
+        // 報告セグメントの member が無く、注記の地の文が単一セグメントと言っていれば Jev を待たない。
+        if axis == .segment, members.isEmpty, !hasDedicated,
+            let statement = BreakdownExtractor.singleSegmentStatement(
+                in: BreakdownExtractor.segmentNoteSentences(xbrlDir: xbrlDir))
+        {
+            return .deterministic(.singleSegment, evidence: statement)
         }
         return await SegmentNotePatternClassifier.classify(
             axis: axis,

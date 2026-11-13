@@ -381,6 +381,8 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                 sales_basis は external / external_including_other_revenue / intersegment_inclusive / bank / insurance。
                 external_including_other_revenue は、外部顧客への売上高にその他の収益（顧客との契約以外の源泉）を
                 足した計を external_sales に載せた書類です（計の連結値が連結売上高に一致するときだけ）。
+                segment_structure は single / multiple（判定できないときは出しません）。単一セグメントの会社は
+                事業名の 1 行、事業名が取れないときは連結合計又は会社合計（row_kind=EntityTotal）の行だけを返します。
                 設備投資等の概要は overview ブロック（セグメント行とは別）。
                 年次推移とつなぎは get-segment-waterfall（years[] に prior / line_cut）。
                 開示があるセルだけ、payload にそのセルの分母（denominator / denominator_tag）が付き、行の値が無いところはキーごと省略。

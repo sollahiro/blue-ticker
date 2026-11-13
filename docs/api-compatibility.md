@@ -87,6 +87,7 @@ breaking 再編時は可能な範囲で:
 - breakdown の軸 `capex` を廃止して常に 404 にし、報告セグメント軸 `segment` へ統合した（breaking。`apiSkillsSchemaVersion` 15、`breakdown-segment-v3`、read 床 3）。行は `segment_key` とセル `{value, basis, source, decimals?}`（`external_sales` / `profit` / `segment_assets` / `capital_expenditures` / `noncurrent_asset_additions`）。`flow` / `flow_metric` は出さない。値は XBRL の tagged 円そのもので丸めない。セグメント+調整と連結のずれが丸め幅（`0.5 × 10^(-decimals) × 加算行数`）以内なら差額行は出さず `rounding_gaps` に生値だけ残す。幅を超えたずれだけ `row_kind=difference`。`GET /v1/companies/{code}/waterfall/segment` を追加。`fin-vN` / `screen-vN` は据え置き。
 - 報告セグメント年次は `GET /waterfall/segment` 1 本にした（breaking。`apiSkillsSchemaVersion` 16）。`years`（既定 5、新しい順）と `fiscal_year`（単年）。各年は `segments` / `adjustment` / `consolidated` / `difference`。つなぎは行の `prior`（`connect` / `rename` / `reorg` / `break` と `basis`）と年の `line_cut`。`/waterfall/segment/transitions` は置かない。応答に無い年はサーバ側で補完しない。`cache_version` / ingest 範囲は変えない。
 - breakdown `axis=segment` の `sales_basis` に値 `external_including_other_revenue` を足した（互換追加。`apiSkillsSchemaVersion` は 16 のまま）。外部顧客への売上高にその他の収益を足した計が連結売上高に一致する書類で、`external_sales` がその計になる。
+- breakdown `axis=segment` は、単一セグメントの会社を 404 にせず返す。payload に `segment_structure`（`single` / `multiple`）を足した。事業名が取れない単一セグメントは `row_kind=EntityTotal` の行だけで、セグメント行は無い（`apiSkillsSchemaVersion` は 16 のまま。v3 は未取り込みのため版は上げない）。
 
 ## Codable 応答への段階移行
 

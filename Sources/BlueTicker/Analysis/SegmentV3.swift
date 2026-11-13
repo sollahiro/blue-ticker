@@ -121,7 +121,7 @@ enum SegmentV3 {
                 mergeMetric(
                     overview, into: &rows, index: &index, edinetCode: edinetCode,
                     memberPrefixes: memberPrefixes, labelsByTag: labelsByTag,
-                    skipCorporateShared: true
+                    skipCorporateShared: true, createMissingRows: false
                 ) { row, amount, basis, source, decimals in
                     if row.capitalExpenditures == nil {
                         row.capitalExpenditures = cell(
@@ -186,6 +186,20 @@ enum SegmentV3 {
         return out
     }
 
+    /// 応答で単一か複数かが分かるようにする。90%省略の 1 行は `disclosure_basis` が既に言うので付けない。
+    static func segmentStructure(
+        classification: SegmentNotePatternClass?, rows: [BreakdownRowPayload]
+    ) -> String? {
+        switch classification {
+        case .singleSegment: return segmentStructureSingle
+        case .multipleSegments: return segmentStructureMultiple
+        case .omittedDominant90pct: return nil
+        default:
+            let segments = rows.filter { $0.rowKind == "segment" }.count
+            return segments >= 2 ? segmentStructureMultiple : nil
+        }
+    }
+
     /// 設備投資等の概要の出どころ。HTML 表にカテゴリ行があるときだけ HTML、無ければタグ付き fact。
     /// HTML が総額 1 行だけのとき（5283 / 4680 / 3199）に fact のカテゴリ行を捨てない。
     static func pickOverview(html: BreakdownSnapshot?, facts: BreakdownSnapshot?) -> BreakdownSnapshot? {
@@ -245,6 +259,7 @@ enum SegmentV3 {
         memberPrefixes: [String: String],
         labelsByTag: [String: String],
         skipCorporateShared: Bool = false,
+        createMissingRows: Bool = true,
         write: (inout BreakdownRowPayload, Double, String, String, Int?) -> Void
     ) {
         guard let snapshot else { return }
@@ -274,6 +289,10 @@ enum SegmentV3 {
                         edinetCode: edinetCode, localName: source.labelRaw, prefix: prefix
                     ).description
                 }
+            } else if !createMissingRows {
+                // 概要のカテゴリは報告セグメントとは限らない（「新設によるもの」、概要だけの member）。
+                // 既にある行にだけセルを載せ、行は増やさない。載らなかった分は overview.categories に残る。
+                continue
             } else {
                 let prefix = memberPrefixes[source.labelRaw]
                 var row = BreakdownRowPayload(
