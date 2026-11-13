@@ -200,7 +200,7 @@ private enum ChartMath {
 
 // MARK: - 業績
 
-/// 売上高と純利益の棒、営業利益率の折れ線。営業利益率は右軸。
+/// 売上高と純利益の棒。売上高は左軸、純利益は右軸（0 の位置は共通）。
 private struct PerformanceSection: View {
     var years: [FinancialsYear]
     var currency: String?
@@ -210,12 +210,11 @@ private struct PerformanceSection: View {
             if years.contains(where: { $0.sales != nil || $0.netProfit != nil }) {
                 chart
                 ChartLegend(items: [
-                    LegendItem(title: "売上高", color: ChartStyle.primaryBar, shape: .bar),
-                    LegendItem(title: "純利益", color: ChartStyle.secondaryBar, shape: .bar),
-                    LegendItem(title: "営業利益率", color: ChartStyle.line, shape: .line),
+                    LegendItem(title: "売上高（左軸）", color: ChartStyle.primaryBar, shape: .bar),
+                    LegendItem(title: "純利益（右軸）", color: ChartStyle.secondaryBar, shape: .bar),
                 ])
-                if let scale {
-                    AnalysisNote(text: "左軸は\(scale.unit)、右軸は営業利益率（%）です。")
+                if let salesUnit = salesScale?.unit {
+                    AnalysisNote(text: "左軸は売上高（\(salesUnit)）、右軸は純利益（\(netScale?.unit ?? salesUnit)）です。")
                 }
             } else {
                 AnalysisNote(text: "業績は未集計です。")
@@ -225,44 +224,54 @@ private struct PerformanceSection: View {
 
     private var labels: [String] { years.map { Format.fy($0.fyEnd) } }
 
-    private var scale: Format.YenScale? {
-        Format.commonScale(for: years.flatMap { [$0.sales, $0.netProfit] }, currency: currency)
+    private var salesValues: [Double?] { years.map(\.sales) }
+    private var netValues: [Double?] { years.map(\.netProfit) }
+
+    private var salesScale: Format.YenScale? {
+        Format.commonScale(for: salesValues, currency: currency)
     }
 
-    private var amountRange: (lower: Double, upper: Double) {
-        let values = years.flatMap { [$0.sales, $0.netProfit] }.compactMap { $0 }
-        return (min(values.min() ?? 0, 0), max(values.max() ?? 0, 0))
+    private var netScale: Format.YenScale? {
+        Format.commonScale(for: netValues, currency: currency)
     }
 
-    private var marginTicks: [Double] {
-        let margins = years.compactMap(\.operatingMargin)
-        return ChartMath.niceTicks(lower: margins.min() ?? 0, upper: margins.max() ?? 0)
+    private var salesTicks: [Double] {
+        let values = salesValues.compactMap { $0 }
+        return ChartMath.niceTicks(lower: values.min() ?? 0, upper: values.max() ?? 0)
     }
 
-    /// 営業利益率の目盛りの上端を、金額の上端に重ねる倍率。
-    private var marginFactor: Double {
-        let top = marginTicks.max() ?? 0
-        let upper = amountRange.upper
-        guard top > 0, upper > 0 else { return 1 }
-        return upper / top
+    private var netTicks: [Double] {
+        let values = netValues.compactMap { $0 }
+        return ChartMath.niceTicks(lower: values.min() ?? 0, upper: values.max() ?? 0)
+    }
+
+    /// 純利益を左軸（売上高）の目盛りに重ねる倍率。0 は共通で、上端・下端のどちらも売上高の範囲に収める。
+    private var netFactor: Double {
+        let leftUpper = salesTicks.max() ?? 0
+        let leftLower = salesTicks.min() ?? 0
+        let rightUpper = netTicks.max() ?? 0
+        let rightLower = netTicks.min() ?? 0
+        var ratios: [Double] = []
+        if leftUpper > 0, rightUpper > 0 { ratios.append(leftUpper / rightUpper) }
+        if leftLower < 0, rightLower < 0 { ratios.append(leftLower / rightLower) }
+        return ratios.min() ?? 1
     }
 
     private var domain: ClosedRange<Double> {
-        let factor = marginFactor
-        let lower = min(amountRange.lower, (marginTicks.min() ?? 0) * factor)
-        let upper = max(amountRange.upper, (marginTicks.max() ?? 0) * factor)
+        let factor = netFactor
+        let lower = min(salesTicks.min() ?? 0, (netTicks.min() ?? 0) * factor)
+        let upper = max(salesTicks.max() ?? 0, (netTicks.max() ?? 0) * factor)
         let pad = (upper - lower) * 0.05
         return (lower - (lower < 0 ? pad : 0))...(upper + pad)
     }
 
     private var chart: some View {
-        let factor = marginFactor
-        let margins = ChartMath.linePoints(years) { $0.operatingMargin }
+        let factor = netFactor
         return Chart {
             ForEach(years) { year in
                 let label = Format.fy(year.fyEnd)
                 if let sales = year.sales {
-                    BarMark(x: .value("年度", label), y: .value("金額", sales), width: .fixed(12))
+                    BarMark(x: .value("年度", label), y: .value("売上高", sales), width: .fixed(12))
                         .position(by: .value("系列", "売上高"))
                         .foregroundStyle(ChartStyle.primaryBar)
                         .cornerRadius(3)
@@ -270,27 +279,13 @@ private struct PerformanceSection: View {
                         .accessibilityValue(Format.autoYen(sales, currency: currency))
                 }
                 if let net = year.netProfit {
-                    BarMark(x: .value("年度", label), y: .value("金額", net), width: .fixed(12))
+                    BarMark(x: .value("年度", label), y: .value("純利益", net * factor), width: .fixed(12))
                         .position(by: .value("系列", "純利益"))
                         .foregroundStyle(net < 0 ? Theme.negative : ChartStyle.secondaryBar)
                         .cornerRadius(3)
                         .accessibilityLabel("\(label) 純利益")
                         .accessibilityValue(Format.autoYen(net, currency: currency))
                 }
-            }
-            ForEach(margins) { point in
-                LineMark(
-                    x: .value("年度", point.label),
-                    y: .value("営業利益率", point.value * factor),
-                    series: .value("線", "margin-\(point.run)")
-                )
-                .foregroundStyle(ChartStyle.line)
-                .lineStyle(StrokeStyle(lineWidth: 2.5))
-                PointMark(x: .value("年度", point.label), y: .value("営業利益率", point.value * factor))
-                    .foregroundStyle(ChartStyle.line)
-                    .symbolSize(40)
-                    .accessibilityLabel("\(point.label) 営業利益率")
-                    .accessibilityValue(Format.percent(point.value))
             }
             RuleMark(y: .value("zero", 0))
                 .foregroundStyle(Theme.textMuted.opacity(0.6))
@@ -306,21 +301,22 @@ private struct PerformanceSection: View {
             }
         }
         .chartYAxis {
-            AxisMarks(position: .leading, values: .automatic(desiredCount: 4)) { value in
+            AxisMarks(position: .leading, values: salesTicks) { value in
                 AxisGridLine(stroke: ChartStyle.grid)
                     .foregroundStyle(ChartStyle.gridColor)
                 AxisValueLabel {
                     if let number = value.as(Double.self) {
-                        Text(scale.map { Format.scaledYen(number, scale: $0) } ?? Format.autoYen(number))
+                        Text(salesScale.map { Format.scaledYen(number, scale: $0) } ?? Format.autoYen(number))
                             .font(.caption2)
                             .foregroundStyle(Theme.textMuted)
                     }
                 }
             }
-            AxisMarks(position: .trailing, values: marginTicks.map { $0 * factor }) { value in
+            AxisMarks(position: .trailing, values: netTicks.map { $0 * factor }) { value in
                 AxisValueLabel {
                     if let number = value.as(Double.self) {
-                        Text(Format.percent(number / factor, digits: 0))
+                        let net = factor == 0 ? 0 : number / factor
+                        Text(netScale.map { Format.scaledYen(net, scale: $0) } ?? Format.autoYen(net))
                             .font(.caption2)
                             .foregroundStyle(Theme.textMuted)
                     }
@@ -341,6 +337,13 @@ private struct BusinessProfitSection: View {
     var currency: String?
     @State private var selectedYearID: String?
     @State private var selectedFactor: FactorKind?
+    /// ダブルタップで拡大表示している前年差の年。
+    @State private var expandedYear: ExpandedYear?
+    @State private var expandedFactor: FactorKind?
+
+    private struct ExpandedYear: Identifiable {
+        var id: String
+    }
 
     var body: some View {
         AnalysisCard(title: "収益構造") {
@@ -358,9 +361,14 @@ private struct BusinessProfitSection: View {
             if let selectedYear = years.first(where: { $0.id == currentYearID && isYearSelectable($0) }) {
                 factorChart(selectedYear, years: years)
             } else {
-                AnalysisNote(text: "前年差をタップすると売上要因・利益率要因・販管費要因を表示します。")
+                AnalysisNote(text: "前年差をタップすると売上要因・利益率要因・販管費要因を表示します。ダブルタップで拡大します。")
             }
             AnalysisNote(text: "事業利益は売上総利益 − 販管費です。開示されている営業利益と一致しない場合がございます。")
+        }
+        .sheet(item: $expandedYear) { expanded in
+            if let year = years.first(where: { $0.id == expanded.id }) {
+                expandedView(year)
+            }
         }
     }
 
@@ -453,18 +461,22 @@ private struct BusinessProfitSection: View {
         // 前年の棒の中心から当年の棒の中心までを、その前年差のタップ範囲にする。
         // 細い浮き棒の枠だけだと狙いにくいため。スクロールを奪わないようタップだけ拾う。
         .chartGesture { proxy in
-            SpatialTapGesture().onEnded { value in
-                let x = value.location.x
-                let hit = deltas.first { delta in
-                    guard let from = proxy.position(forX: delta.priorLabel),
-                          let to = proxy.position(forX: delta.label)
-                    else { return false }
-                    return x >= min(from, to) && x <= max(from, to)
+            // ダブルタップは拡大表示、シングルタップは下の要因分解の年切り替え。
+            SpatialTapGesture(count: 2)
+                .onEnded { value in
+                    guard let hit = hitDelta(at: value.location.x, proxy: proxy, deltas: deltas) else { return }
+                    selectedYearID = hit.id
+                    selectedFactor = nil
+                    expandedFactor = nil
+                    expandedYear = ExpandedYear(id: hit.id)
                 }
-                guard let hit else { return }
-                selectedYearID = hit.id
-                selectedFactor = nil
-            }
+                .exclusively(
+                    before: SpatialTapGesture()
+                        .onEnded { value in
+                            guard let hit = hitDelta(at: value.location.x, proxy: proxy, deltas: deltas) else { return }
+                            selectedYearID = hit.id
+                            selectedFactor = nil
+                        })
         }
         .chartYAxis {
             AxisMarks(position: .leading, values: .automatic(desiredCount: 4)) { value in
@@ -481,6 +493,150 @@ private struct BusinessProfitSection: View {
         }
         .chartLegend(.hidden)
         .frame(height: ChartStyle.height)
+    }
+
+    private func hitDelta(at x: CGFloat, proxy: ChartProxy, deltas: [ProfitDelta]) -> ProfitDelta? {
+        deltas.first { delta in
+            guard let from = proxy.position(forX: delta.priorLabel),
+                  let to = proxy.position(forX: delta.label)
+            else { return false }
+            return x >= min(from, to) && x <= max(from, to)
+        }
+    }
+
+    /// 拡大表示。前年度事業利益 → 売上要因 → 利益率要因 → 販管費要因 → 今年度事業利益。
+    /// 要因をタップすると、その下に要因の推移（年ごとの寄与額）を出す。
+    private func expandedView(_ year: FinancialsYear) -> some View {
+        let spec = factorSpec(year)
+        let prior = priorYear(of: year, in: years)
+        let period = Format.fyJapanese(year.fyEnd)
+        return NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("\(period)の事業利益の前年差")
+                        .font(.headline)
+                        .foregroundStyle(Theme.text)
+                    WaterfallChart(
+                        steps: expandedSteps(year: year, prior: prior, spec: spec),
+                        selectedID: expandedFactor?.rawValue
+                    ) { id in
+                        guard let kind = FactorKind(rawValue: id) else { return }
+                        expandedFactor = (expandedFactor == kind ? nil : kind)
+                    }
+                    if let kind = expandedFactor {
+                        factorTrend(kind, highlighting: year)
+                    } else {
+                        AnalysisNote(text: "要因をタップすると、その要因の推移を表示します。")
+                    }
+                }
+                .padding(16)
+            }
+            .navigationTitle("事業利益の前年差")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("閉じる") { expandedYear = nil }
+                }
+            }
+        }
+        .presentationDetents([.large])
+    }
+
+    private func expandedSteps(year: FinancialsYear, prior: FinancialsYear?, spec: FactorSpec) -> [WaterfallStep] {
+        let priorProfit = prior?.businessProfit ?? 0
+        var running = priorProfit
+        var steps: [WaterfallStep] = [
+            WaterfallStep(
+                id: "prior",
+                title: "前年度事業利益",
+                start: 0,
+                end: priorProfit,
+                valueText: spec.format(prior?.businessProfit),
+                valueColor: factorColor(prior?.businessProfit),
+                isTotal: false
+            )
+        ]
+        for factor in spec.factors {
+            let value = factor.value ?? 0
+            steps.append(
+                WaterfallStep(
+                    id: factor.kind.rawValue,
+                    title: factor.kind.title,
+                    start: running,
+                    end: running + value,
+                    valueText: spec.format(factor.value),
+                    valueColor: factorColor(factor.value),
+                    isTotal: false
+                ))
+            running += value
+        }
+        steps.append(
+            WaterfallStep(
+                id: "current",
+                title: "今年度事業利益",
+                start: 0,
+                end: year.businessProfit ?? running,
+                valueText: spec.format(year.businessProfit),
+                valueColor: factorColor(year.businessProfit),
+                isTotal: true
+            ))
+        return steps
+    }
+
+    /// 選んだ要因の寄与額を年度ごとに並べる。拡大中の年は濃く、ほかは薄くする。
+    private func factorTrend(_ kind: FactorKind, highlighting year: FinancialsYear) -> some View {
+        let scale = Format.commonScale(for: years.map { kind.value($0) }, currency: currency)
+        let labels = years.map { Format.fy($0.fyEnd) }
+        return VStack(alignment: .leading, spacing: 8) {
+            Text("\(kind.title)の推移")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(Theme.text)
+            if years.contains(where: { kind.value($0) != nil }) {
+                Chart {
+                    ForEach(years) { item in
+                        if let value = kind.value(item) {
+                            let label = Format.fy(item.fyEnd)
+                            BarMark(x: .value("年度", label), y: .value(kind.title, value), width: .fixed(16))
+                                .foregroundStyle((value < 0 ? Theme.negative : Theme.positive).opacity(item.id == year.id ? 1 : 0.45))
+                                .cornerRadius(3)
+                                .accessibilityLabel("\(label) \(kind.title)")
+                                .accessibilityValue(Format.autoYen(value, currency: currency))
+                        }
+                    }
+                    RuleMark(y: .value("zero", 0))
+                        .foregroundStyle(ChartStyle.zeroLine)
+                        .lineStyle(StrokeStyle(lineWidth: 0.5))
+                }
+                .chartXScale(domain: labels)
+                .chartXAxis {
+                    AxisMarks { _ in
+                        AxisValueLabel()
+                            .font(.caption2)
+                            .foregroundStyle(Theme.textMuted)
+                    }
+                }
+                .chartYAxis {
+                    AxisMarks(position: .leading, values: .automatic(desiredCount: 4)) { value in
+                        AxisGridLine(stroke: ChartStyle.grid)
+                            .foregroundStyle(ChartStyle.gridColor)
+                        AxisValueLabel {
+                            if let number = value.as(Double.self) {
+                                Text(scale.map { Format.scaledYen(number, scale: $0) } ?? Format.autoYen(number))
+                                    .font(.caption2)
+                                    .foregroundStyle(Theme.textMuted)
+                            }
+                        }
+                    }
+                }
+                .chartLegend(.hidden)
+                .frame(height: ChartStyle.height)
+                if let unit = scale?.unit {
+                    AnalysisNote(text: "単位は\(unit)です。濃い棒が拡大中の年です。")
+                }
+            } else {
+                AnalysisNote(text: "\(kind.title)は未算出です。")
+            }
+        }
     }
 
     private func factorChart(_ year: FinancialsYear, years: [FinancialsYear]) -> some View {
@@ -578,6 +734,14 @@ private struct BusinessProfitSection: View {
             case .salesChange: "売上要因"
             case .grossMarginChange: "利益率要因"
             case .sgaChange: "販管費要因"
+            }
+        }
+
+        func value(_ year: FinancialsYear) -> Double? {
+            switch self {
+            case .salesChange: year.salesChangeImpact
+            case .grossMarginChange: year.grossMarginChangeImpact
+            case .sgaChange: year.sgaChangeImpact
             }
         }
 
@@ -945,27 +1109,32 @@ private struct Sparkline: View {
 
 // MARK: - 労働生産性
 
-/// 従業員数の推移（棒）と、従業員 1 人あたり売上高の推移（折れ線）。
+/// 従業員数の推移（棒・左軸）と、従業員 1 人あたり売上高の推移（折れ線・右軸）を 1 枚に重ねる。
 private struct ProductivitySection: View {
     var years: [FinancialsYear]
     var currency: String?
 
+    private var hasEmployees: Bool { years.contains { $0.employees != nil } }
+    private var hasSalesPerEmployee: Bool { years.contains { Self.salesPerEmployee($0) != nil } }
+
     var body: some View {
         AnalysisCard(title: "労働生産性") {
-            AnalysisSubheading(text: "従業員数")
-            if years.contains(where: { $0.employees != nil }) {
-                employeesChart
-            } else {
-                AnalysisNote(text: "従業員数は未集計です。")
-            }
-            AnalysisSubheading(text: "従業員あたりの売上高")
-            if years.contains(where: { Self.salesPerEmployee($0) != nil }) {
-                salesPerEmployeeChart
+            if hasEmployees || hasSalesPerEmployee {
+                chart
+                ChartLegend(items: [
+                    LegendItem(title: "従業員数（左軸）", color: ChartStyle.primaryBar, shape: .bar),
+                    LegendItem(title: "1人あたり売上高（右軸）", color: ChartStyle.line, shape: .line),
+                ])
                 if let scale {
-                    AnalysisNote(text: "単位は\(scale.unit)です。")
+                    AnalysisNote(text: "右軸の単位は\(scale.unit)です。")
+                }
+                if !hasEmployees {
+                    AnalysisNote(text: "従業員数は未集計です。")
+                } else if !hasSalesPerEmployee {
+                    AnalysisNote(text: "従業員あたりの売上高は未算出です。")
                 }
             } else {
-                AnalysisNote(text: "従業員あたりの売上高は未算出です。")
+                AnalysisNote(text: "従業員数は未集計です。")
             }
         }
     }
@@ -981,8 +1150,36 @@ private struct ProductivitySection: View {
         return sales / Double(employees)
     }
 
-    private var employeesChart: some View {
-        Chart {
+    private var employeeTicks: [Double] {
+        let values = years.compactMap { $0.employees.map(Double.init) }
+        return ChartMath.niceTicks(lower: values.min() ?? 0, upper: values.max() ?? 0)
+    }
+
+    private var salesTicks: [Double] {
+        let values = years.compactMap(Self.salesPerEmployee)
+        return ChartMath.niceTicks(lower: values.min() ?? 0, upper: values.max() ?? 0)
+    }
+
+    /// 1 人あたり売上高を左軸（従業員数）の目盛りに重ねる倍率。0 は共通。
+    private var lineFactor: Double {
+        let leftTop = employeeTicks.max() ?? 0
+        let rightTop = salesTicks.max() ?? 0
+        guard leftTop > 0, rightTop > 0 else { return 1 }
+        return leftTop / rightTop
+    }
+
+    private var domain: ClosedRange<Double> {
+        let factor = lineFactor
+        let lower = min(employeeTicks.min() ?? 0, (salesTicks.min() ?? 0) * factor)
+        let upper = max(employeeTicks.max() ?? 0, (salesTicks.max() ?? 0) * factor)
+        let pad = (upper - lower) * 0.05
+        return (lower - (lower < 0 ? pad : 0))...(upper + pad)
+    }
+
+    private var chart: some View {
+        let factor = lineFactor
+        let points = ChartMath.linePoints(years, value: Self.salesPerEmployee)
+        return Chart {
             ForEach(years) { year in
                 if let employees = year.employees {
                     let label = Format.fy(year.fyEnd)
@@ -993,8 +1190,26 @@ private struct ProductivitySection: View {
                         .accessibilityValue("\(Format.groupedNumber(Double(employees)))人")
                 }
             }
+            ForEach(points) { point in
+                LineMark(
+                    x: .value("年度", point.label),
+                    y: .value("1人あたり売上高", point.value * factor),
+                    series: .value("線", "sales-\(point.run)")
+                )
+                .foregroundStyle(ChartStyle.line)
+                .lineStyle(StrokeStyle(lineWidth: 2.5))
+                PointMark(x: .value("年度", point.label), y: .value("1人あたり売上高", point.value * factor))
+                    .foregroundStyle(ChartStyle.line)
+                    .symbolSize(40)
+                    .accessibilityLabel("\(point.label) 従業員あたりの売上高")
+                    .accessibilityValue(Format.autoYen(point.value, currency: currency))
+            }
+            RuleMark(y: .value("zero", 0))
+                .foregroundStyle(ChartStyle.zeroLine)
+                .lineStyle(StrokeStyle(lineWidth: 0.5))
         }
         .chartXScale(domain: labels)
+        .chartYScale(domain: domain)
         .chartXAxis {
             AxisMarks { _ in
                 AxisValueLabel()
@@ -1003,7 +1218,7 @@ private struct ProductivitySection: View {
             }
         }
         .chartYAxis {
-            AxisMarks(position: .leading, values: .automatic(desiredCount: 4)) { value in
+            AxisMarks(position: .leading, values: employeeTicks) { value in
                 AxisGridLine(stroke: ChartStyle.grid)
                     .foregroundStyle(ChartStyle.gridColor)
                 AxisValueLabel {
@@ -1014,51 +1229,19 @@ private struct ProductivitySection: View {
                     }
                 }
             }
-        }
-        .frame(height: 180)
-    }
-
-    private var salesPerEmployeeChart: some View {
-        let points = ChartMath.linePoints(years, value: Self.salesPerEmployee)
-        return Chart {
-            ForEach(points) { point in
-                LineMark(
-                    x: .value("年度", point.label),
-                    y: .value("1人あたり売上高", point.value),
-                    series: .value("線", "sales-\(point.run)")
-                )
-                .foregroundStyle(ChartStyle.line)
-                .lineStyle(StrokeStyle(lineWidth: 2.5))
-                PointMark(x: .value("年度", point.label), y: .value("1人あたり売上高", point.value))
-                    .foregroundStyle(ChartStyle.line)
-                    .symbolSize(40)
-                    .accessibilityLabel("\(point.label) 従業員あたりの売上高")
-                    .accessibilityValue(Format.autoYen(point.value, currency: currency))
-            }
-        }
-        .chartXScale(domain: labels)
-        .chartYScale(domain: .automatic(includesZero: false))
-        .chartXAxis {
-            AxisMarks { _ in
-                AxisValueLabel()
-                    .font(.caption2)
-                    .foregroundStyle(Theme.textMuted)
-            }
-        }
-        .chartYAxis {
-            AxisMarks(position: .leading, values: .automatic(desiredCount: 4)) { value in
-                AxisGridLine(stroke: ChartStyle.grid)
-                    .foregroundStyle(ChartStyle.gridColor)
+            AxisMarks(position: .trailing, values: salesTicks.map { $0 * factor }) { value in
                 AxisValueLabel {
                     if let number = value.as(Double.self) {
-                        Text(scale.map { Format.scaledYen(number, scale: $0) } ?? Format.autoYen(number))
+                        let amount = number / factor
+                        Text(scale.map { Format.scaledYen(amount, scale: $0) } ?? Format.autoYen(amount))
                             .font(.caption2)
                             .foregroundStyle(Theme.textMuted)
                     }
                 }
             }
         }
-        .frame(height: 180)
+        .chartLegend(.hidden)
+        .frame(height: ChartStyle.height)
     }
 }
 

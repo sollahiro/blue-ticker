@@ -7,14 +7,13 @@ struct RootView: View {
     @State private var searchPath = NavigationPath()
     @State private var listPath = NavigationPath()
     @State private var searchQuery = ""
-    @State private var screenSession = ScreenSession()
     @State private var feedSession = FeedSession()
     @Query(sort: \WatchedCompany.sortOrder) private var watched: [WatchedCompany]
 
     var body: some View {
         TabView(selection: $tab) {
             NavigationStack(path: $searchPath) {
-                TopView(query: $searchQuery, feed: feedSession, screen: screenSession)
+                TopView(query: $searchQuery, feed: feedSession)
                     .navigationDestination(for: CompanyRef.self, destination: ticker)
             }
             .toolbarTitleDisplayMode(.inline)
