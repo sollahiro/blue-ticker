@@ -1385,6 +1385,141 @@ private struct CashAllocationSection: View {
     }
 }
 
+/// 事業利益の要因分解の説明。i ボタンから開くポップアップ。例の数字で図解する。
+private struct ProfitBridgeExplainer: View {
+    @Environment(\.dismiss) private var dismiss
+
+    private struct Bar: Identifiable {
+        var title: String
+        var start: Double
+        var end: Double
+        var label: String
+        var isTotal: Bool
+        var id: String { title }
+    }
+
+    /// 例: 前年度 100 → 売上 +30 → 利益率 −10 → 販管費 −15 → 今年度 105。
+    private static let bars: [Bar] = [
+        Bar(title: "前年度\n事業利益", start: 0, end: 100, label: "100", isTotal: true),
+        Bar(title: "売上\n要因", start: 100, end: 130, label: "+30", isTotal: false),
+        Bar(title: "利益率\n要因", start: 130, end: 120, label: "−10", isTotal: false),
+        Bar(title: "販管費\n要因", start: 120, end: 105, label: "−15", isTotal: false),
+        Bar(title: "今年度\n事業利益", start: 0, end: 105, label: "105", isTotal: true),
+    ]
+
+    private struct Explanation: Identifiable {
+        var title: String
+        var formula: String
+        var meaning: String
+        var id: String { title }
+    }
+
+    private static let explanations: [Explanation] = [
+        Explanation(
+            title: "売上要因",
+            formula: "(当期売上 − 前期売上) × 前期粗利率",
+            meaning: "売上が増えた（減った）ことで、利益がどれだけ増えた（減った）か。"),
+        Explanation(
+            title: "利益率要因",
+            formula: "当期売上 × (当期粗利率 − 前期粗利率)",
+            meaning: "同じ売上から残る利益の割合が変わったことで、利益がどれだけ増えた（減った）か。"),
+        Explanation(
+            title: "販管費要因",
+            formula: "−(当期販管費 − 前期販管費)",
+            meaning: "販売費・一般管理費が増えれば利益は減り、減れば増える。"),
+    ]
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
+                    Text("前年度から今年度への事業利益の増減を、3 つの要因に分けて見ます。")
+                        .font(.subheadline)
+                        .foregroundStyle(Theme.text)
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("例")
+                            .font(.caption.weight(.bold))
+                            .foregroundStyle(Theme.textMuted)
+                        exampleChart
+                    }
+                    VStack(alignment: .leading, spacing: 14) {
+                        ForEach(Self.explanations) { item in
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(item.title)
+                                    .font(.subheadline.weight(.bold))
+                                    .foregroundStyle(Theme.accent)
+                                Text(item.formula)
+                                    .font(.footnote)
+                                    .foregroundStyle(Theme.text)
+                                Text(item.meaning)
+                                    .font(.footnote)
+                                    .foregroundStyle(Theme.textMuted)
+                            }
+                        }
+                    }
+                    Text("事業利益は売上総利益 − 販管費です。3 つの要因を足すと、前年度から今年度への増減になります。")
+                        .font(.footnote)
+                        .foregroundStyle(Theme.textMuted)
+                }
+                .padding(20)
+            }
+            .navigationTitle("事業利益の要因分解")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("閉じる") { dismiss() }
+                }
+            }
+        }
+    }
+
+    private var exampleChart: some View {
+        Chart {
+            ForEach(Self.bars) { bar in
+                BarMark(
+                    x: .value("項目", bar.title), yStart: .value("金額", bar.start), yEnd: .value("金額", bar.end),
+                    width: .fixed(32)
+                )
+                .foregroundStyle(bar.isTotal ? ChartStyle.primaryBar : (bar.end >= bar.start ? Theme.positive : Theme.negative))
+                .cornerRadius(3)
+                .annotation(position: .top, spacing: 2) {
+                    Text(bar.label)
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(Theme.text)
+                }
+            }
+            // 各段の終点から次の段へ点線でつなぐ。
+            ForEach(Array(Self.bars.dropLast().enumerated()), id: \.element.id) { index, bar in
+                let next = Self.bars[index + 1]
+                LineMark(x: .value("項目", bar.title), y: .value("金額", bar.end), series: .value("線", "e-\(index)"))
+                    .foregroundStyle(ChartStyle.gridColor)
+                    .lineStyle(ChartStyle.grid)
+                LineMark(x: .value("項目", next.title), y: .value("金額", bar.end), series: .value("線", "e-\(index)"))
+                    .foregroundStyle(ChartStyle.gridColor)
+                    .lineStyle(ChartStyle.grid)
+            }
+        }
+        .chartXScale(domain: Self.bars.map(\.title))
+        .chartYScale(domain: 0...150)
+        .chartXAxis {
+            AxisMarks { value in
+                AxisValueLabel {
+                    if let title = value.as(String.self) {
+                        Text(title)
+                            .font(.system(size: 11))
+                            .foregroundStyle(Theme.textMuted)
+                            .multilineTextAlignment(.center)
+                            .lineLimit(2)
+                    }
+                }
+            }
+        }
+        .chartYAxis(.hidden)
+        .chartLegend(.hidden)
+        .frame(height: 200)
+    }
+}
+
 /// ウォーターフォールの 1 段。合計の段は `start` を 0 にして 0 から伸ばす。
 private struct WaterfallStep: Identifiable {
     var id: String
