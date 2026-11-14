@@ -137,7 +137,7 @@ flowchart LR
 
 ### iOS
 
-iOS は公開 REST のクライアント（トークン / Service Token を埋め込まない。開発は loopback / http 無認証。`https://api.sollahiro.com` プレビューは Access JWT。段階 B は HAPIS 短命 + Attest。`api-auth.md` / `ios-client.md`）。
+iOS は公開 REST のクライアント（トークン / Service Token を埋め込まない。開発は loopback / http 無認証。`https://api.yuholab.com` は Access 配下でアプリ経路ではない。段階 B は HAPIS 短命 + Attest。`api-auth.md` / `ios-client.md`）。
 
 ## 環境変数（薄い表）
 

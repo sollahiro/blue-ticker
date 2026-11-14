@@ -6,7 +6,7 @@ enum APIConfiguration {
     static let defaultHAPISIssuerURL = URL(string: "https://hapis.sollahiro.workers.dev")!
     /// クライアント向け本番ゲートウェイ。blt-server origin ではない。
     static let productionHAPISGatewayBaseURL = URL(
-        string: "https://hapis-blue-ticker-production.sollahiro.workers.dev")!
+        string: "https://hapis-yuholab-production.sollahiro.workers.dev")!
     /// Debug の「HAPIS 本番」は App Attest。`stub` 上書きは Simulator / ローカル用。Release は常に App Attest。
     private static let attestModeStorageKey = "blt.hapis.attestMode"
     /// REST が `icon_url: null` のときの公開ホスト（秘密ではない。拡張子は会社ごとに違う）。
