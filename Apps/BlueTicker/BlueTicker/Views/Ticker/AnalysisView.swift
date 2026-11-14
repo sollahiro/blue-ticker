@@ -383,6 +383,15 @@ private struct BusinessProfitSection: View {
             }
         }
 
+        /// 下軸の表示用。2 行に分けて、隣の棒の名前と干渉しないようにする。
+        var axisTitle: String {
+            switch self {
+            case .salesChange: "売上\n要因"
+            case .grossMarginChange: "利益率\n要因"
+            case .sgaChange: "販管費\n要因"
+            }
+        }
+
         func value(_ year: FinancialsYear) -> Double? {
             switch self {
             case .salesChange: year.salesChangeImpact
@@ -407,22 +416,12 @@ private struct BusinessProfitSection: View {
                         LegendItem(title: "増益", color: Theme.positive, shape: .bar),
                         LegendItem(title: "減益", color: Theme.negative, shape: .bar),
                     ])
-                    AnalysisNote(text: "前年差をダブルタップすると、売上要因・利益率要因・販管費要因に分解します。")
                 } else {
                     ChartLegend(items: [
                         LegendItem(title: "事業利益", color: ChartStyle.primaryBar, shape: .bar),
                         LegendItem(title: "プラス要因", color: Theme.positive, shape: .bar),
                         LegendItem(title: "マイナス要因", color: Theme.negative, shape: .bar),
                     ])
-                    Button {
-                        collapse()
-                    } label: {
-                        Label("推移に戻る", systemImage: "chevron.left")
-                            .font(.caption.weight(.semibold))
-                    }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(Theme.accent)
-                    AnalysisNote(text: "左右にスライドすると、ほかの年度の前年差を見られます。ダブルタップでも元に戻ります。")
                 }
             } else {
                 AnalysisNote(text: "事業利益は未算出です。")
@@ -565,7 +564,7 @@ private struct BusinessProfitSection: View {
 
     /// x カテゴリが要因の棒なら、その要因の名前。
     private static func factorTitle(of slot: String) -> String? {
-        FactorKind.allCases.first { slot.hasSuffix("|\($0.rawValue)") }?.title
+        FactorKind.allCases.first { slot.hasSuffix("|\($0.rawValue)") }?.axisTitle
     }
 
     /// 業績カードと同じ形の縦棒。事業利益の棒の間に前年差の浮き棒を置き、点線で段をつなぐ。
@@ -639,14 +638,16 @@ private struct BusinessProfitSection: View {
         .chartYScale(domain: yDomain)
         .chartXAxis {
             AxisMarks { value in
-                // 通常は前年差の枠にラベルを出さない。拡大中は要因名も出す（重ならないよう小さくする）。
+                // 通常は前年差の枠にラベルを出さない。拡大中は要因名も出す（2 行にして隣と干渉しないようにする）。
                 if let slot = value.as(String.self), yearLabels.contains(slot) || (showsExpanded && Self.factorTitle(of: slot) != nil) {
                     AxisValueLabel {
                         Text(Self.factorTitle(of: slot) ?? slot)
                             .font(.system(size: Self.xLabelSize))
                             .foregroundStyle(Theme.textMuted)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.8)
+                            .multilineTextAlignment(.center)
+                            .lineLimit(2)
+                            // 1 行の年ラベルも 2 行の要因名も同じ高さにして、固定の縦軸の列と下端をそろえる。
+                            .frame(height: Self.xLabelHeight, alignment: .top)
                     }
                 }
             }
@@ -676,7 +677,9 @@ private struct BusinessProfitSection: View {
             .frame(height: ChartStyle.height)
     }
 
-    private static let xLabelSize: CGFloat = 9
+    private static let xLabelSize: CGFloat = 11
+    /// 下軸の文字の高さ（11pt の 2 行ぶん）。
+    private static let xLabelHeight: CGFloat = 30
     private static let axisWidth: CGFloat = 52
 
     private var profitScale: Format.YenScale? {
@@ -704,6 +707,7 @@ private struct BusinessProfitSection: View {
                     Text("年")
                         .font(.system(size: Self.xLabelSize))
                         .lineLimit(1)
+                        .frame(height: Self.xLabelHeight, alignment: .top)
                         .opacity(0)
                 }
             }
