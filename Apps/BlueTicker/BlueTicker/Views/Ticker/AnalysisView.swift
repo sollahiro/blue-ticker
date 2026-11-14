@@ -337,17 +337,35 @@ private struct PerformanceSection: View {
 
 // MARK: - 収益構造
 
-/// 事業利益の推移。年ごとの事業利益の棒の間に前年差の浮き棒を置き、前年差をタップすると
-/// 売上・利益率・販管費の要因を出す。
+/// 事業利益の推移。年ごとの事業利益の棒の間に前年差の浮き棒を置く。前年差をダブルタップすると
+/// 同じグラフの中で、前年度・今年度の事業利益が両端に寄り、間が要因のウォーターフォールに変わる。
 private struct BusinessProfitSection: View {
     var years: [FinancialsYear]
     var currency: String?
-    @State private var selectedYearID: String?
-    @State private var selectedFactor: FactorKind?
-    /// ダブルタップで拡大している前年差の年。事業利益の棒が両端に寄り、間が要因のウォーターフォールになる。
+    /// ダブルタップで拡大している前年差の年。
     @State private var expandedYearID: String?
-    /// 拡大中に選んだ要因。選ぶとその下に要因の推移を出す。
-    @State private var expandedFactor: FactorKind?
+
+    private enum FactorKind: String, CaseIterable {
+        case salesChange
+        case grossMarginChange
+        case sgaChange
+
+        var title: String {
+            switch self {
+            case .salesChange: "売上要因"
+            case .grossMarginChange: "利益率要因"
+            case .sgaChange: "販管費要因"
+            }
+        }
+
+        func value(_ year: FinancialsYear) -> Double? {
+            switch self {
+            case .salesChange: year.salesChangeImpact
+            case .grossMarginChange: year.grossMarginChangeImpact
+            case .sgaChange: year.sgaChangeImpact
+            }
+        }
+    }
 
     var body: some View {
         AnalysisCard(title: "収益構造") {
@@ -360,6 +378,7 @@ private struct BusinessProfitSection: View {
                         LegendItem(title: "増益", color: Theme.positive, shape: .bar),
                         LegendItem(title: "減益", color: Theme.negative, shape: .bar),
                     ])
+                    AnalysisNote(text: "前年差をダブルタップすると、売上要因・利益率要因・販管費要因に分解します。")
                 } else {
                     ChartLegend(items: [
                         LegendItem(title: "事業利益", color: ChartStyle.primaryBar, shape: .bar),
@@ -374,21 +393,10 @@ private struct BusinessProfitSection: View {
                     }
                     .buttonStyle(.plain)
                     .foregroundStyle(Theme.accent)
+                    AnalysisNote(text: "左右にスワイプすると、ほかの年度の前年差を見られます。ダブルタップでも元に戻ります。")
                 }
             } else {
                 AnalysisNote(text: "事業利益は未算出です。")
-            }
-            if let expandedDelta {
-                if let kind = expandedFactor {
-                    factorDetail(kind, year: expandedDelta.year)
-                    factorTrend(kind, highlighting: expandedDelta.year)
-                } else {
-                    AnalysisNote(text: "要因をタップすると、その要因の推移を表示します。ダブルタップで元に戻ります。")
-                }
-            } else if let selectedYear = years.first(where: { $0.id == currentYearID && isYearSelectable($0) }) {
-                factorChart(selectedYear, years: years)
-            } else {
-                AnalysisNote(text: "前年差をタップすると売上要因・利益率要因・販管費要因を表示します。ダブルタップで拡大します。")
             }
             AnalysisNote(text: "事業利益は売上総利益 − 販管費です。開示されている営業利益と一致しない場合がございます。")
         }
@@ -397,18 +405,23 @@ private struct BusinessProfitSection: View {
     private func collapse() {
         withAnimation(.snappy(duration: 0.45)) {
             expandedYearID = nil
-            expandedFactor = nil
+        }
+    }
+
+    /// 拡大中に左右へ送る。端を越えたら何もしない。
+    private func shiftExpanded(by step: Int) {
+        let deltas = deltas
+        guard let id = expandedYearID, let index = deltas.firstIndex(where: { $0.id == id }) else { return }
+        let next = index + step
+        guard deltas.indices.contains(next) else { return }
+        withAnimation(.snappy(duration: 0.4)) {
+            expandedYearID = deltas[next].id
         }
     }
 
     private var expandedDelta: ProfitDelta? {
         guard let expandedYearID else { return nil }
         return deltas.first { $0.id == expandedYearID }
-    }
-
-    /// 未選択なら、前年差がある最新の年。
-    private var currentYearID: String? {
-        selectedYearID ?? years.last { isYearSelectable($0) }?.id
     }
 
     /// 年をまたぐ前年差の段。`start` は前年、`end` は当年の事業利益。
@@ -438,9 +451,8 @@ private struct BusinessProfitSection: View {
     private static let factorSlots: [(kind: FactorKind, slot: String)] = FactorKind.allCases.map { ($0, $0.title) }
 
     /// 業績カードと同じ形の縦棒。事業利益の棒の間に前年差の浮き棒を置き、点線で段をつなぐ。
-    /// 前年差をタップすると下の要因分解がその年に切り替わる。選んでいない前年差は薄くする。
     /// ダブルタップすると同じグラフの中で、前年度・今年度の事業利益の 2 本が両端に寄り、
-    /// 間が売上要因・利益率要因・販管費要因のウォーターフォールに変わる。
+    /// 間が売上要因・利益率要因・販管費要因のウォーターフォールに変わる（データラベル付き）。
     private var profitChart: some View {
         let deltas = deltas
         let expanded = expandedDelta
@@ -458,7 +470,6 @@ private struct BusinessProfitSection: View {
             return [prior, expanded.year]
         }()
         let scale = Format.commonScale(for: years.map(\.businessProfit), currency: currency)
-        let selectedID = currentYearID
         return Chart {
             ForEach(visibleYears) { year in
                 if let profit = year.businessProfit {
@@ -466,6 +477,11 @@ private struct BusinessProfitSection: View {
                     BarMark(x: .value("年度", label), y: .value("金額", profit), width: .fixed(16))
                         .foregroundStyle(profit < 0 ? Theme.negative : ChartStyle.primaryBar)
                         .cornerRadius(3)
+                        .annotation(position: profit < 0 ? .bottom : .top, spacing: 2) {
+                            if expanded != nil {
+                                dataLabel(Format.autoYen(profit, currency: currency))
+                            }
+                        }
                         .accessibilityLabel("\(label) 事業利益")
                         .accessibilityValue(Format.autoYen(profit, currency: currency))
                 }
@@ -474,12 +490,11 @@ private struct BusinessProfitSection: View {
                 expandedMarks(expanded)
             } else {
                 ForEach(deltas) { delta in
-                    let selected = delta.id == selectedID
                     BarMark(
                         x: .value("年度", delta.slot), yStart: .value("金額", delta.start), yEnd: .value("金額", delta.end),
                         width: .fixed(12)
                     )
-                    .foregroundStyle((delta.end >= delta.start ? Theme.positive : Theme.negative).opacity(selected ? 1 : 0.4))
+                    .foregroundStyle(delta.end >= delta.start ? Theme.positive : Theme.negative)
                     .cornerRadius(3)
                     .accessibilityLabel("\(delta.label) 前年差")
                     .accessibilityValue(Format.autoYen(delta.end - delta.start, currency: currency))
@@ -503,18 +518,21 @@ private struct BusinessProfitSection: View {
         .chartYScale(domain: yDomain)
         .chartXAxis {
             AxisMarks { value in
-                // 通常は前年差の枠にラベルを出さない。拡大中は要因名も出す。
+                // 通常は前年差の枠にラベルを出さない。拡大中は要因名も出す（重ならないよう小さくする）。
                 if let slot = value.as(String.self), expanded != nil || yearLabels.contains(slot) {
-                    AxisValueLabel()
-                        .font(.caption2)
-                        .foregroundStyle(Theme.textMuted)
+                    AxisValueLabel {
+                        Text(slot)
+                            .font(.system(size: expanded == nil ? 11 : 9))
+                            .foregroundStyle(Theme.textMuted)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
+                    }
                 }
             }
         }
-        // 前年の棒の中心から当年の棒の中心までを、その前年差のタップ範囲にする。
+        // 前年の棒の中心から当年の棒の中心までを、その前年差のダブルタップ範囲にする。
         // 細い浮き棒の枠だけだと狙いにくいため。スクロールを奪わないようタップだけ拾う。
         .chartGesture { proxy in
-            // ダブルタップは拡大・元に戻す、シングルタップは年切り替え（拡大中は要因の選択）。
             SpatialTapGesture(count: 2)
                 .onEnded { value in
                     if expandedYearID != nil {
@@ -522,30 +540,21 @@ private struct BusinessProfitSection: View {
                         return
                     }
                     guard let hit = hitDelta(at: value.location.x, proxy: proxy, deltas: deltas) else { return }
-                    selectedYearID = hit.id
-                    selectedFactor = nil
                     withAnimation(.snappy(duration: 0.45)) {
-                        expandedFactor = nil
                         expandedYearID = hit.id
                     }
                 }
-                .exclusively(
-                    before: SpatialTapGesture()
-                        .onEnded { value in
-                            if expandedYearID != nil {
-                                guard let slot = proxy.value(atX: value.location.x, as: String.self),
-                                      let kind = Self.factorSlots.first(where: { $0.slot == slot })?.kind
-                                else { return }
-                                withAnimation(.snappy) {
-                                    expandedFactor = (expandedFactor == kind ? nil : kind)
-                                }
-                                return
-                            }
-                            guard let hit = hitDelta(at: value.location.x, proxy: proxy, deltas: deltas) else { return }
-                            selectedYearID = hit.id
-                            selectedFactor = nil
-                        })
         }
+        // 拡大中は左右のスワイプで前後の年度へ送る。
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 30)
+                .onEnded { value in
+                    guard expandedYearID != nil,
+                          abs(value.translation.width) > abs(value.translation.height) * 1.5
+                    else { return }
+                    shiftExpanded(by: value.translation.width < 0 ? 1 : -1)
+                }
+        )
         .chartYAxis {
             AxisMarks(position: .leading, values: .automatic(desiredCount: 4)) { value in
                 AxisGridLine(stroke: ChartStyle.grid)
@@ -563,6 +572,14 @@ private struct BusinessProfitSection: View {
         .frame(height: ChartStyle.height)
     }
 
+    private func dataLabel(_ text: String) -> some View {
+        Text(text)
+            .font(.system(size: 9).monospacedDigit())
+            .foregroundStyle(Theme.text)
+            .lineLimit(1)
+            .fixedSize()
+    }
+
     private var yDomain: ClosedRange<Double> {
         var values: [Double] = [0]
         values += years.compactMap(\.businessProfit)
@@ -576,8 +593,9 @@ private struct BusinessProfitSection: View {
         }
         let lower = values.min() ?? 0
         let upper = values.max() ?? 0
-        let pad = (upper - lower) * 0.05
-        return (lower - (lower < 0 ? pad : 0))...(upper + pad)
+        // データラベルの分の余白を上下に取る。
+        let pad = (upper - lower) * 0.1
+        return (lower - pad)...(upper + pad)
     }
 
     /// 拡大中の中間の棒。前年度事業利益から要因を順に積み、各段を点線で次へつなぐ。
@@ -600,11 +618,11 @@ private struct BusinessProfitSection: View {
                 x: .value("年度", factor.slot), yStart: .value("金額", level.start), yEnd: .value("金額", level.end),
                 width: .fixed(16)
             )
-            .foregroundStyle(
-                (factor.value >= 0 ? Theme.positive : Theme.negative)
-                    .opacity(expandedFactor == nil || expandedFactor == factor.kind ? 1 : 0.4)
-            )
+            .foregroundStyle(factor.value >= 0 ? Theme.positive : Theme.negative)
             .cornerRadius(3)
+            .annotation(position: factor.value >= 0 ? .top : .bottom, spacing: 2) {
+                dataLabel((factor.value > 0 ? "+" : "") + Format.autoYen(factor.value, currency: currency))
+            }
             .accessibilityLabel(factor.kind.title)
             .accessibilityValue(Format.autoYen(factor.value, currency: currency))
         }
@@ -622,28 +640,6 @@ private struct BusinessProfitSection: View {
         }
     }
 
-    /// 拡大中に選んだ要因の説明（結果・計算式）。
-    private func factorDetail(_ kind: FactorKind, year: FinancialsYear) -> some View {
-        let detail = kind.detail(year: year, prior: priorYear(of: year, in: years), contribution: kind.value(year))
-        return VStack(alignment: .leading, spacing: 4) {
-            Text(kind.title)
-                .font(.caption.weight(.bold))
-                .foregroundStyle(Theme.accent)
-            Text(detail.outcome)
-                .font(.caption)
-                .foregroundStyle(outcomeColor(kind.value(year)))
-            Text(detail.formula)
-                .font(.caption)
-                .foregroundStyle(Theme.text)
-            if let substitution = detail.substitution {
-                Text("= \(substitution)")
-                    .font(.caption)
-                    .foregroundStyle(Theme.text)
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .topLeading)
-    }
-
     private func hitDelta(at x: CGFloat, proxy: ChartProxy, deltas: [ProfitDelta]) -> ProfitDelta? {
         deltas.first { delta in
             guard let from = proxy.position(forX: delta.priorLabel),
@@ -653,319 +649,7 @@ private struct BusinessProfitSection: View {
         }
     }
 
-    /// 選んだ要因の寄与額を年度ごとに並べる。拡大中の年は濃く、ほかは薄くする。
-    private func factorTrend(_ kind: FactorKind, highlighting year: FinancialsYear) -> some View {
-        let scale = Format.commonScale(for: years.map { kind.value($0) }, currency: currency)
-        let labels = years.map { Format.fy($0.fyEnd) }
-        return VStack(alignment: .leading, spacing: 8) {
-            Text("\(kind.title)の推移")
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(Theme.text)
-            if years.contains(where: { kind.value($0) != nil }) {
-                Chart {
-                    ForEach(years) { item in
-                        if let value = kind.value(item) {
-                            let label = Format.fy(item.fyEnd)
-                            BarMark(x: .value("年度", label), y: .value(kind.title, value), width: .fixed(16))
-                                .foregroundStyle((value < 0 ? Theme.negative : Theme.positive).opacity(item.id == year.id ? 1 : 0.45))
-                                .cornerRadius(3)
-                                .accessibilityLabel("\(label) \(kind.title)")
-                                .accessibilityValue(Format.autoYen(value, currency: currency))
-                        }
-                    }
-                    RuleMark(y: .value("zero", 0))
-                        .foregroundStyle(ChartStyle.zeroLine)
-                        .lineStyle(StrokeStyle(lineWidth: 0.5))
-                }
-                .chartXScale(domain: labels)
-                .chartXAxis {
-                    AxisMarks { _ in
-                        AxisValueLabel()
-                            .font(.caption2)
-                            .foregroundStyle(Theme.textMuted)
-                    }
-                }
-                .chartYAxis {
-                    AxisMarks(position: .leading, values: .automatic(desiredCount: 4)) { value in
-                        AxisGridLine(stroke: ChartStyle.grid)
-                            .foregroundStyle(ChartStyle.gridColor)
-                        AxisValueLabel {
-                            if let number = value.as(Double.self) {
-                                Text(scale.map { Format.scaledYen(number, scale: $0) } ?? Format.autoYen(number))
-                                    .font(.caption2)
-                                    .foregroundStyle(Theme.textMuted)
-                            }
-                        }
-                    }
-                }
-                .chartLegend(.hidden)
-                .frame(height: ChartStyle.height)
-                if let unit = scale?.unit {
-                    AnalysisNote(text: "単位は\(unit)です。濃い棒が拡大中の年です。")
-                }
-            } else {
-                AnalysisNote(text: "\(kind.title)は未算出です。")
-            }
-        }
-    }
-
-    private func factorChart(_ year: FinancialsYear, years: [FinancialsYear]) -> some View {
-        let spec = factorSpec(year)
-        let prior = priorYear(of: year, in: years)
-        return VStack(alignment: .leading, spacing: 8) {
-            Text(yearOutcomeTitle(year, total: spec.totalValue))
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(Theme.text)
-            WaterfallChart(steps: factorSteps(spec), selectedID: selectedFactor?.rawValue) { id in
-                guard let kind = FactorKind(rawValue: id) else { return }
-                selectedFactor = (selectedFactor == kind ? nil : kind)
-            }
-            if let selectedFactor, let factor = spec.factors.first(where: { $0.kind == selectedFactor }) {
-                let detail = selectedFactor.detail(year: year, prior: prior, contribution: factor.value)
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(selectedFactor.title)
-                        .font(.caption.weight(.bold))
-                        .foregroundStyle(Theme.accent)
-                    Text(detail.outcome)
-                        .font(.caption)
-                        .foregroundStyle(outcomeColor(factor.value))
-                    if let note = detail.inversionNote {
-                        Text(note)
-                            .font(.caption)
-                            .foregroundStyle(Theme.textMuted)
-                    }
-                    Text(detail.formula)
-                        .font(.caption)
-                        .foregroundStyle(Theme.text)
-                    if let substitution = detail.substitution {
-                        Text("= \(substitution)")
-                            .font(.caption)
-                            .foregroundStyle(Theme.text)
-                    }
-                }
-                .padding(.top, 4)
-                .frame(maxWidth: .infinity, alignment: .topLeading)
-            }
-        }
-        .padding(.top, 8)
-    }
-
-    /// 売上・利益率・販管費の要因を順に積み、前年差は 0 から伸ばす。
-    private func factorSteps(_ spec: FactorSpec) -> [WaterfallStep] {
-        var running = 0.0
-        var steps: [WaterfallStep] = spec.factors.map { factor in
-            let value = factor.value ?? 0
-            defer { running += value }
-            return WaterfallStep(
-                id: factor.kind.rawValue,
-                title: factor.kind.title,
-                start: running,
-                end: running + value,
-                valueText: spec.format(factor.value),
-                valueColor: factorColor(factor.value),
-                isTotal: false
-            )
-        }
-        steps.append(
-            WaterfallStep(
-                id: "total",
-                title: spec.totalTitle,
-                start: 0,
-                end: spec.totalValue ?? running,
-                valueText: spec.format(spec.totalValue),
-                valueColor: factorColor(spec.totalValue),
-                isTotal: true
-            ))
-        return steps
-    }
-
-    /// 「26年2月期の事業利益は、前年より増えました」のように前年差の結論だけを見出しにする。
-    private func yearOutcomeTitle(_ year: FinancialsYear, total: Double?) -> String {
-        let period = Format.fyJapanese(year.fyEnd)
-        guard let total else { return "\(period)の事業利益" }
-        if total == 0 { return "\(period)の事業利益は、前年とほぼ変わりませんでした" }
-        return "\(period)の事業利益は、前年より\(total > 0 ? "増えました" : "減りました")"
-    }
-
-    private struct FactorDetail {
-        var outcome: String
-        var inversionNote: String?
-        var formula: String
-        var substitution: String?
-    }
-
-    private enum FactorKind: String, CaseIterable {
-        case salesChange
-        case grossMarginChange
-        case sgaChange
-
-        var title: String {
-            switch self {
-            case .salesChange: "売上要因"
-            case .grossMarginChange: "利益率要因"
-            case .sgaChange: "販管費要因"
-            }
-        }
-
-        func value(_ year: FinancialsYear) -> Double? {
-            switch self {
-            case .salesChange: year.salesChangeImpact
-            case .grossMarginChange: year.grossMarginChangeImpact
-            case .sgaChange: year.sgaChangeImpact
-            }
-        }
-
-        func detail(year: FinancialsYear, prior: FinancialsYear?, contribution: Double?) -> FactorDetail {
-            let inverted = isDriverInverted(year: year, prior: prior)
-            return FactorDetail(
-                outcome: outcome(contribution: contribution, inverted: inverted),
-                inversionNote: inverted ? inversionNote : nil,
-                formula: formula,
-                substitution: substitution(year: year, prior: prior)
-            )
-        }
-
-        private func outcome(contribution: Double?, inverted: Bool) -> String {
-            guard let contribution, contribution != 0 else {
-                return "前年に比べて、この要因の押し上げ・押し下げはほとんどありませんでした。"
-            }
-            return contribution > 0 ? plusMeaning(inverted: inverted) : minusMeaning(inverted: inverted)
-        }
-
-        /// 計算の掛け算側がマイナスだと、売上・回転・レバレッジの増減と寄与の符号が逆になる。
-        /// 開示の粗利率が無くても、サーバーは事業利益+販管費からマージンを出すので、
-        /// 判定は報告値ではなくドライバー増減と寄与の符号を比べる。
-        private func isDriverInverted(year: FinancialsYear, prior: FinancialsYear?) -> Bool {
-            switch self {
-            case .salesChange:
-                return signsDisagree(year.sales, prior?.sales, contribution: year.salesChangeImpact)
-            case .grossMarginChange, .sgaChange:
-                return false
-            }
-        }
-
-        private func signsDisagree(_ current: Double?, _ prior: Double?, contribution: Double?) -> Bool {
-            guard let current, let prior, let contribution, current != prior, contribution != 0 else {
-                return false
-            }
-            return (current > prior) != (contribution > 0)
-        }
-
-        private var inversionNote: String? {
-            switch self {
-            case .salesChange:
-                return "粗利率がマイナスのときは、売上が増えると赤字も増えます。"
-            default:
-                return nil
-            }
-        }
-
-        private func plusMeaning(inverted: Bool) -> String {
-            if inverted {
-                switch self {
-                case .salesChange:
-                    return "前年に比べて、売上の変化が利益を押し上げました。"
-                default:
-                    break
-                }
-            }
-            switch self {
-            case .salesChange:
-                return "前年に比べて、売上が増えて利益を押し上げました。"
-            case .grossMarginChange:
-                return "前年に比べて、仕入れや製造の効率が良くなり、同じ売上から残る利益が増えました。"
-            case .sgaChange:
-                return "前年に比べて、経費が減り、利益が増えました。"
-            }
-        }
-
-        private func minusMeaning(inverted: Bool) -> String {
-            if inverted {
-                switch self {
-                case .salesChange:
-                    return "前年に比べて、売上の変化が利益を押し下げました。"
-                default:
-                    break
-                }
-            }
-            switch self {
-            case .salesChange:
-                return "前年に比べて、売上が減って利益を押し下げました。"
-            case .grossMarginChange:
-                return "前年に比べて、原価がかさみ、同じ売上から残る利益が減りました。"
-            case .sgaChange:
-                return "前年に比べて、経費が増え、利益が減りました。"
-            }
-        }
-
-        private var formula: String {
-            switch self {
-            case .salesChange:
-                return "(当期売上 − 前期売上) × 前期粗利率"
-            case .grossMarginChange:
-                return "当期売上 × (当期粗利率 − 前期粗利率)"
-            case .sgaChange:
-                return "−(当期販管費 − 前期販管費)"
-            }
-        }
-
-        private func substitution(year: FinancialsYear, prior: FinancialsYear?) -> String? {
-            guard let prior else { return nil }
-            switch self {
-            case .salesChange:
-                guard year.sales != nil, prior.sales != nil, prior.grossProfitMargin != nil else { return nil }
-                return "(\(Format.autoYen(year.sales, currency: year.currency)) − \(Format.autoYen(prior.sales, currency: year.currency))) × \(Format.percent(prior.grossProfitMargin))"
-            case .grossMarginChange:
-                guard year.sales != nil, year.grossProfitMargin != nil, prior.grossProfitMargin != nil else { return nil }
-                return "\(Format.autoYen(year.sales, currency: year.currency)) × (\(Format.percent(year.grossProfitMargin)) − \(Format.percent(prior.grossProfitMargin)))"
-            case .sgaChange:
-                guard year.sga != nil, prior.sga != nil else { return nil }
-                return "−(\(Format.autoYen(year.sga, currency: year.currency)) − \(Format.autoYen(prior.sga, currency: year.currency)))"
-            }
-        }
-    }
-
-    private struct FactorRow: Identifiable {
-        var kind: FactorKind
-        var value: Double?
-        var id: String { kind.rawValue }
-    }
-
-    private struct FactorSpec {
-        var factors: [FactorRow]
-        var format: (Double?) -> String
-        var totalTitle: String
-        var totalValue: Double?
-    }
-
-    private func factorSpec(_ year: FinancialsYear) -> FactorSpec {
-        FactorSpec(
-            factors: [
-                FactorRow(kind: .salesChange, value: year.salesChangeImpact),
-                FactorRow(kind: .grossMarginChange, value: year.grossMarginChangeImpact),
-                FactorRow(kind: .sgaChange, value: year.sgaChangeImpact),
-            ],
-            format: { Format.autoYen($0, currency: year.currency) },
-            totalTitle: "前年差",
-            totalValue: year.businessProfitChange
-        )
-    }
-
-    private func outcomeColor(_ value: Double?) -> Color {
-        guard let value else { return Theme.text }
-        if value < 0 { return Theme.negative }
-        if value > 0 { return Theme.positive }
-        return Theme.text
-    }
-
-    private func factorColor(_ value: Double?) -> Color {
-        guard let value else { return Theme.text }
-        if value < 0 { return Theme.negative }
-        if value > 0 { return Theme.positive }
-        return Theme.text
-    }
-
-    /// 事業利益は前年差（要因分解の合計）がある年度だけ選べる。資本効率は年度を選ばない。
+    /// 事業利益は前年差（要因分解の合計）がある年度だけ選べる。
     private func isYearSelectable(_ year: FinancialsYear) -> Bool {
         year.businessProfitChange != nil
     }
@@ -974,7 +658,6 @@ private struct BusinessProfitSection: View {
         guard let index = years.firstIndex(where: { $0.id == year.id }), index > 0 else { return nil }
         return years[index - 1]
     }
-
 }
 
 // MARK: - 資本効率
