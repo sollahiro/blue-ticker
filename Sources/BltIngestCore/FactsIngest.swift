@@ -336,12 +336,9 @@ public func runFactsIngestCommand(
                 summaries.append((stage, summary))
             }
             if selectedStages.contains(where: { $0.axis == breakdownAxisSegment }) {
-                try await withDbRetry(
-                    logger: app.logger, context: "company_segment_transitions"
-                ) {
-                    try await runSegmentTransitionIngest(
-                        db: app.db, listedCodes: publicBreakdownListed, logger: app.logger)
-                }
+                // 再試行とタイムアウトは会社ごと（runSegmentTransitionIngest の中）。全社を 1 回で包まない。
+                try await runSegmentTransitionIngest(
+                    db: app.db, listedCodes: publicBreakdownListed, logger: app.logger)
             }
             let coverage = try? await withDbRetry(
                 logger: app.logger, context: "company_breakdowns 集計"
