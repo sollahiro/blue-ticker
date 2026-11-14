@@ -393,7 +393,11 @@ private struct BusinessProfitSection: View {
         AnalysisCard(title: "収益構造") {
             AnalysisSubheading(text: "事業利益の推移")
             if years.contains(where: { $0.businessProfit != nil }) {
-                chartArea
+                // 縦軸は左端に固定し、右のグラフだけを横にスライドさせる。
+                HStack(spacing: 0) {
+                    yAxisColumn
+                    chartArea
+                }
                 if expandedDelta == nil {
                     ChartLegend(items: [
                         LegendItem(title: "事業利益", color: ChartStyle.primaryBar, shape: .bar),
@@ -567,7 +571,6 @@ private struct BusinessProfitSection: View {
             guard let expanded, let prior = priorYear(of: expanded.year, in: years) else { return years }
             return [prior, expanded.year]
         }()
-        let scale = Format.commonScale(for: years.map(\.businessProfit), currency: currency)
         let chart = Chart {
             ForEach(visibleYears) { year in
                 if let profit = year.businessProfit {
@@ -622,7 +625,7 @@ private struct BusinessProfitSection: View {
                 if let slot = value.as(String.self), yearLabels.contains(slot) || (showsExpanded && Self.factorTitle(of: slot) != nil) {
                     AxisValueLabel {
                         Text(Self.factorTitle(of: slot) ?? slot)
-                            .font(.system(size: showsExpanded ? 9 : 11))
+                            .font(.system(size: Self.xLabelSize))
                             .foregroundStyle(Theme.textMuted)
                             .lineLimit(1)
                             .minimumScaleFactor(0.8)
@@ -643,28 +646,63 @@ private struct BusinessProfitSection: View {
                     expand(hit)
                 }
         }
-        // 拡大中は各棒にデータラベルがあり、横に流れて縦軸が見切れるので、縦軸は出さない。
-        return Group {
-            if showsExpanded {
-                chart.chartYAxis(.hidden)
-            } else {
-                chart.chartYAxis {
-                    AxisMarks(position: .leading, values: .automatic(desiredCount: 4)) { value in
-                        AxisGridLine(stroke: ChartStyle.grid)
-                            .foregroundStyle(ChartStyle.gridColor)
-                        AxisValueLabel {
-                            if let number = value.as(Double.self) {
-                                Text(scale.map { Format.scaledYen(number, scale: $0) } ?? Format.autoYen(number))
-                                    .font(.caption2)
-                                    .foregroundStyle(Theme.textMuted)
-                            }
-                        }
+        // 縦軸の文字は左端の固定列（yAxisColumn）に出す。ここでは目盛りの線だけを引く。
+        return chart
+            .chartYAxis {
+                AxisMarks(position: .leading, values: yTicks) { _ in
+                    AxisGridLine(stroke: ChartStyle.grid)
+                        .foregroundStyle(ChartStyle.gridColor)
+                }
+            }
+            .chartLegend(.hidden)
+            .frame(height: ChartStyle.height)
+    }
+
+    private static let xLabelSize: CGFloat = 9
+    private static let axisWidth: CGFloat = 52
+
+    private var profitScale: Format.YenScale? {
+        Format.commonScale(for: years.map(\.businessProfit), currency: currency)
+    }
+
+    private var yTicks: [Double] {
+        let domain = yDomain
+        return ChartMath.niceTicks(lower: domain.lowerBound, upper: domain.upperBound)
+            .filter { domain.contains($0) }
+    }
+
+    /// 左端に固定する縦軸。右のグラフと同じ縦軸の範囲・目盛り・下軸の高さにして、スクロールしても動かさない。
+    private var yAxisColumn: some View {
+        Chart {
+            RuleMark(y: .value("zero", 0))
+                .foregroundStyle(.clear)
+        }
+        .chartXScale(domain: ["-"])
+        .chartYScale(domain: yDomain)
+        .chartXAxis {
+            AxisMarks { _ in
+                // 右のグラフの下軸と同じ高さにするための、見えない文字。
+                AxisValueLabel {
+                    Text("年")
+                        .font(.system(size: Self.xLabelSize))
+                        .lineLimit(1)
+                        .opacity(0)
+                }
+            }
+        }
+        .chartYAxis {
+            AxisMarks(position: .leading, values: yTicks) { value in
+                AxisValueLabel {
+                    if let number = value.as(Double.self) {
+                        Text(profitScale.map { Format.scaledYen(number, scale: $0) } ?? Format.autoYen(number))
+                            .font(.caption2)
+                            .foregroundStyle(Theme.textMuted)
                     }
                 }
             }
         }
         .chartLegend(.hidden)
-        .frame(height: ChartStyle.height)
+        .frame(width: Self.axisWidth, height: ChartStyle.height)
     }
 
     private func dataLabel(_ text: String) -> some View {
