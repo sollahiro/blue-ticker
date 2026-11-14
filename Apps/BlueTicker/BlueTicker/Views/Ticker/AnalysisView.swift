@@ -1189,7 +1189,7 @@ private struct CashAllocationSection: View {
             if years.contains(where: { $0.netCash != nil || $0.cfc != nil }) {
                 balanceChart
                 ChartLegend(items: [
-                    LegendItem(title: "フリーCF", color: Theme.positive.opacity(0.5), shape: .bar),
+                    LegendItem(title: "フリーCF", color: ChartStyle.primaryBar, shape: .bar),
                     LegendItem(title: "ネットキャッシュ", color: Theme.positive, shape: .bar),
                 ])
             } else {
@@ -1270,7 +1270,7 @@ private struct CashAllocationSection: View {
         .padding(.top, 4)
     }
 
-    /// ネットキャッシュとフリーCFの棒を年度ごとに並べる。プラスは緑、マイナスは赤（フリーCFは薄い色）。
+    /// フリーCF（灰色）とネットキャッシュ（プラスは緑、マイナスは赤）の棒を年度ごとに並べる。
     /// マイナスになり得るので 0 の線を引く。
     private var balanceChart: some View {
         let labels = years.map { Format.fy($0.fyEnd) }
@@ -1286,7 +1286,7 @@ private struct CashAllocationSection: View {
                 if let freeCF = year.cfc {
                     BarMark(x: .value("年度", label), y: .value("金額", freeCF), width: .fixed(12))
                         .position(by: .value("系列", "1フリーCF"))
-                        .foregroundStyle((freeCF < 0 ? Theme.negative : Theme.positive).opacity(0.5))
+                        .foregroundStyle(ChartStyle.primaryBar)
                         .cornerRadius(3)
                         .accessibilityLabel("\(label) フリーCF")
                         .accessibilityValue(Format.autoYen(freeCF, currency: currency))
