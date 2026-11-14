@@ -337,6 +337,24 @@ private struct PerformanceSection: View {
 
 // MARK: - 収益構造
 
+/// 連続的にスライドでき、途中で止めることもできる。ただし止まる位置が 1 ページ（前年度・当年度の事業利益が
+/// 両端に来る位置）に近いときだけ、その位置にぴたりと吸着する。
+private struct NearPageSnapBehavior: ScrollTargetBehavior {
+    /// ページ幅に対する吸着の範囲。
+    var snapRatio: CGFloat = 0.18
+
+    func updateTarget(_ target: inout ScrollTarget, context: TargetContext) {
+        let width = context.containerSize.width
+        guard width > 0 else { return }
+        let maxX = max(context.contentSize.width - width, 0)
+        let x = min(max(target.rect.minX, 0), maxX)
+        let nearest = min(max((x / width).rounded() * width, 0), maxX)
+        if abs(x - nearest) <= width * snapRatio {
+            target.rect.origin.x = nearest
+        }
+    }
+}
+
 /// 事業利益の推移。年ごとの事業利益の棒の間に前年差の浮き棒を置く。前年差をダブルタップすると
 /// 同じグラフの中で、前年度・今年度の事業利益が両端に寄り、間が要因のウォーターフォールに変わる。
 private struct BusinessProfitSection: View {
@@ -442,7 +460,7 @@ private struct BusinessProfitSection: View {
         }
     }
 
-    /// 年度ごとに 1 ページ。左から前年度の棒・3 要因・今年度の棒が並び、1 ページずつ止まるので両端は常に事業利益になる。
+    /// 年度ごとに 1 ページ。左から前年度の棒・3 要因・今年度の棒が並ぶ。連続的に流れ、ページの位置に近いところで離すと吸着して、両端が事業利益になる。
     private var pager: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             LazyHStack(spacing: 0) {
@@ -454,7 +472,7 @@ private struct BusinessProfitSection: View {
             }
             .scrollTargetLayout()
         }
-        .scrollTargetBehavior(.paging)
+        .scrollTargetBehavior(NearPageSnapBehavior())
         .scrollPosition(id: $pageID)
         .onChange(of: pageID) { _, newValue in
             if let newValue { expandedYearID = newValue }
