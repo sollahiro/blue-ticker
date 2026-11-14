@@ -2,6 +2,8 @@ import AppIntents
 import Foundation
 import NaturalLanguage
 import SwiftData
+import UniformTypeIdentifiers
+import Vision
 #if canImport(VisualIntelligence)
 import VisualIntelligence
 #endif
@@ -180,6 +182,47 @@ struct OpenCompanyEntityIntent: OpenIntent {
     func perform() async throws -> some IntentResult {
         IntentRouter.shared.pending = CompanyRef(code: target.id, name: target.name, sector: target.sector)
         return .result()
+    }
+}
+
+/// スクリーンショットや写真を受け取り、写っている文字を読み取って会社を探す。
+/// 文字入力を求めずに、共有メニューやショートカットの画像をそのまま渡せる。
+struct FindCompaniesInImageIntent: AppIntent {
+    static let title: LocalizedStringResource = "画像から会社を探す"
+    static let description = IntentDescription("スクリーンショットや写真に写った文字から会社名や証券コードを読み取り、有報LABに載っている会社を返します。")
+
+    @Parameter(title: "画像", supportedContentTypes: [.image], requestValueDialog: "どの画像から会社を探しますか？")
+    var image: IntentFile
+
+    static var parameterSummary: some ParameterSummary {
+        Summary("\(\.$image)から会社を探す")
+    }
+
+    func perform() async throws -> some IntentResult & ReturnsValue<String> & ProvidesDialog {
+        let data = image.data
+        let recognized = try await Task.detached(priority: .userInitiated) { () -> String in
+            let request = VNRecognizeTextRequest()
+            request.recognitionLevel = .accurate
+            request.recognitionLanguages = ["ja-JP", "en-US"]
+            request.usesLanguageCorrection = true
+            try VNImageRequestHandler(data: data, options: [:]).perform([request])
+            return (request.results ?? [])
+                .compactMap { $0.topCandidates(1).first?.string }
+                .joined(separator: "\n")
+        }.value
+        guard !recognized.isEmpty else {
+            throw CompanyIntentError(message: "画像から文字を読み取れませんでした。")
+        }
+        let hits = await CompanyTextExtractor.resolve(CompanyTextExtractor.candidates(in: recognized))
+        guard !hits.isEmpty else {
+            throw CompanyIntentError(message: "有報LABに載っている会社を画像から見つけられませんでした。")
+        }
+        let text = hits.map { hit -> String in
+            let name = Format.displayName(hit.name, fallback: hit.code)
+            let sector = hit.sector.map { "（\($0)）" } ?? ""
+            return "\(name) \(hit.code)\(sector)"
+        }.joined(separator: "\n")
+        return .result(value: text, dialog: IntentDialog(stringLiteral: text))
     }
 }
 
@@ -492,6 +535,15 @@ struct BlueTickerShortcuts: AppShortcutsProvider {
             ],
             shortTitle: "文章から会社を探す",
             systemImageName: "text.magnifyingglass"
+        )
+        AppShortcut(
+            intent: FindCompaniesInImageIntent(),
+            phrases: [
+                "\(.applicationName)でスクリーンショットから会社を探す",
+                "\(.applicationName)で画像から会社を探す",
+            ],
+            shortTitle: "画像から会社を探す",
+            systemImageName: "photo"
         )
         AppShortcut(
             intent: OpenCompanyIntent(),
