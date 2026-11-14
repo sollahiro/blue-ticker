@@ -366,6 +366,9 @@ private struct BusinessProfitSection: View {
     @State private var pagerReady = false
     /// 連続スライドの位置。
     @State private var scrollPosition = ScrollPosition(x: 0)
+    /// 選んだ年の位置までスクロールし終えたか。終えるまでは、スクロール位置から年を読み取らない
+    /// （最初の位置 0 を読んで、いちばん左の年を選んだことにしてしまうため）。
+    @State private var pagerSettled = false
 
     private enum FactorKind: String, CaseIterable {
         case salesChange
@@ -432,7 +435,10 @@ private struct BusinessProfitSection: View {
         // ページ送りから、同じ見た目の単独グラフに戻してから、元の推移へ動かす。
         var transaction = Transaction()
         transaction.disablesAnimations = true
-        withTransaction(transaction) { pagerReady = false }
+        withTransaction(transaction) {
+            pagerReady = false
+            pagerSettled = false
+        }
         withAnimation(.snappy(duration: 0.45)) {
             expandedYearID = nil
         }
@@ -449,6 +455,7 @@ private struct BusinessProfitSection: View {
             var transaction = Transaction()
             transaction.disablesAnimations = true
             withTransaction(transaction) {
+                pagerSettled = false
                 pagerReady = true
             }
         }
@@ -499,12 +506,23 @@ private struct BusinessProfitSection: View {
             .scrollTargetBehavior(YearSnapBehavior(yearWidth: yearWidth, maxIndex: max(layout.starts.count - 1, 0)))
             .onScrollGeometryChange(for: CGFloat.self) { $0.contentOffset.x } action: { _, offset in
                 // 今いちばん近い年を覚えておく（元の推移へ戻るときの基準）。
+                guard pagerSettled else { return }
                 let nearest = layout.starts.min { abs(CGFloat($0.index) * band - offset) < abs(CGFloat($1.index) * band - offset) }
                 if let nearest, nearest.id != expandedYearID { expandedYearID = nearest.id }
             }
             .onAppear {
-                if let id = expandedYearID, let start = layout.starts.first(where: { $0.id == id }) {
-                    scrollPosition.scrollTo(x: CGFloat(start.index) * band)
+                // 選んだ年の位置へ移し、移し終えてからスクロール位置を読み始める。
+                guard let id = expandedYearID, let start = layout.starts.first(where: { $0.id == id }) else {
+                    pagerSettled = true
+                    return
+                }
+                let target = CGFloat(start.index) * band
+                scrollPosition.scrollTo(x: target)
+                Task { @MainActor in
+                    try? await Task.sleep(for: .milliseconds(80))
+                    scrollPosition.scrollTo(x: target)
+                    try? await Task.sleep(for: .milliseconds(200))
+                    pagerSettled = true
                 }
             }
         }
