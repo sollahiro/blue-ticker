@@ -265,6 +265,48 @@ import Testing
         #expect(snapshot.rows[0].rowKind == "segment")
     }
 
+    /// 報告セグメント以外の事業を「重要性が乏しい」として省略している書類は、開示された 1 つだけを
+    /// 返し、省略の印を付ける（4694）。単一セグメントと言っている文は対象外（2764 / 1914）。
+    @Test func otherSegmentsOmittedStatementAndName() throws {
+        let bml = "当企業集団の報告セグメントである「検査事業」以外の事業に関しては、重要性が乏しいと考えられるため、記載を省略しております。"
+        #expect(BreakdownExtractor.otherSegmentsOmittedStatement(in: [bml]) == bml)
+        #expect(BreakdownExtractor.reportableSegmentName(inOmittedStatement: bml) == "検査事業")
+        #expect(
+            BreakdownExtractor.reportableSegmentName(
+                inOmittedStatement: "銀行業務以外の事業については重要性が乏しいことから、セグメント情報の記載を省略しております。")
+                == "銀行業務")
+        #expect(
+            BreakdownExtractor.otherSegmentsOmittedStatement(in: [
+                "当社グループは、報告セグメントが管工機材卸売業のみであり、その他の事業は重要性が乏しいためセグメント情報の記載を省略しております。"
+            ]) != nil)
+        for single in [
+            "当社グループの報告セグメントは、レストラン事業のみの単一セグメントであり重要性が乏しいため、セグメント情報の記載を省略しております。",
+            "当社グループにおける報告セグメントは「建設工事」のみであり、開示情報としての重要性が乏しいため、セグメント情報の記載を省略している。",
+            "のれんの償却額に関しては、重要性が乏しいため、その他の事業を含め記載を省略しております。",
+        ] {
+            #expect(BreakdownExtractor.otherSegmentsOmittedStatement(in: [single]) == nil)
+        }
+
+        let snapshot = try #require(
+            SegmentBreakdownResolver.oneRowSnapshot(
+                reportable: ExtractedBreakdown(method: "not_found", tables: [], facts: []),
+                consolidatedSales: 150_262_000_000, labelsByTag: [:],
+                pattern: .deterministic(.singleSegment, evidence: bml)))
+        #expect(snapshot.rows.map(\.label) == ["検査事業"])
+        #expect(snapshot.disclosureBasis == breakdownDisclosureBasisOtherSegmentsOmitted)
+        #expect(snapshot.rows[0].disclosureBasis == breakdownDisclosureBasisOtherSegmentsOmitted)
+
+        let unnamed = try #require(
+            SegmentBreakdownResolver.oneRowSnapshot(
+                reportable: ExtractedBreakdown(method: "not_found", tables: [], facts: []),
+                consolidatedSales: 100, labelsByTag: [:],
+                pattern: .deterministic(
+                    .singleSegment,
+                    evidence: "当社グループは、報告セグメントが管工機材卸売業のみであり、その他の事業は重要性が乏しいためセグメント情報の記載を省略しております。")))
+        #expect(unnamed.rows.map(\.rowKind) == [breakdownRowKindEntityTotal])
+        #expect(unnamed.disclosureBasis == breakdownDisclosureBasisOtherSegmentsOmitted)
+    }
+
     @Test func structureMarker() {
         #expect(SegmentV3.segmentStructure(classification: .singleSegment, rows: []) == "single")
         #expect(SegmentV3.segmentStructure(classification: .multipleSegments, rows: []) == "multiple")

@@ -1578,6 +1578,13 @@ extension BltServerContext {
         } else {
             prose = BreakdownExtractor.segmentNotePatternProse(xbrlDir: xbrlDir)
         }
+        // 報告セグメント以外の事業を「重要性が乏しい」として省略している書類は、開示された 1 つだけを返す。
+        if axis == .segment, members.isEmpty,
+            let statement = BreakdownExtractor.otherSegmentsOmittedStatement(
+                in: BreakdownExtractor.segmentNoteSentences(xbrlDir: xbrlDir))
+        {
+            return .deterministic(.singleSegment, evidence: statement)
+        }
         // 報告セグメントの member が無く、注記の地の文が単一セグメントと言っていれば Jev を待たない。
         if axis == .segment, members.isEmpty, !hasDedicated,
             let statement = BreakdownExtractor.singleSegmentStatement(

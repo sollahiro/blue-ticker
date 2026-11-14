@@ -23,6 +23,9 @@ public let breakdownSegmentBasisGeographic = "geographic"
 public let breakdownRowSegmentBasisKey = "segment_basis"
 /// 90%省略で立てた1行。正確なセグメント合計ではない。
 public let breakdownDisclosureBasisDominant90pct = "dominant_90pct"
+/// 報告セグメント以外の事業を「重要性が乏しい」として記載を省略している書類の印。
+/// 行は開示された報告セグメント（または会社全体）だけで、省略された事業の金額は分からない。
+public let breakdownDisclosureBasisOtherSegmentsOmitted = "other_segments_omitted"
 public let breakdownDisclosureBasisKey = "disclosure_basis"
 /// 関連情報が「セグメント情報に同様の情報を開示しているため省略」のときの参照。
 /// 値は複製しない。公開 JSON のキー。

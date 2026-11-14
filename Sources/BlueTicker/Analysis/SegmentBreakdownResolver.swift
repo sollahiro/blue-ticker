@@ -161,11 +161,24 @@ enum SegmentBreakdownResolver {
         }
 
         let members = currentSegmentMembers(in: reportable.facts)
+        // 報告セグメント以外の事業を「重要性が乏しい」として省略している書類（4694）。
+        let othersOmitted =
+            classification == .singleSegment
+            && pattern?.evidenceSentence.flatMap {
+                BreakdownExtractor.otherSegmentsOmittedStatement(in: [$0])
+            } != nil
         let member: String?
         let label: String
         if members.count == 1, let only = members.first {
             member = only
             label = labelsByTag[only] ?? only
+        } else if othersOmitted,
+                  let named = pattern?.evidenceSentence.flatMap({
+                      BreakdownExtractor.reportableSegmentName(inOmittedStatement: $0)
+                  })
+        {
+            member = nil
+            label = named
         } else if classification == .omittedDominant90pct,
                   let named = pattern?.evidenceSentence.flatMap({
                       SegmentNotePatternClassifier.dominantBusinessName(fromEvidence: $0)
@@ -180,7 +193,7 @@ enum SegmentBreakdownResolver {
         {
             member = tagged.member
             label = tagged.label
-        } else if classification == .singleSegment,
+        } else if classification == .singleSegment, !othersOmitted,
                   let named = pattern?.evidenceSentence.flatMap({
                       SegmentNotePatternClassifier.lastBusinessName(in: $0)
                   })
@@ -190,13 +203,19 @@ enum SegmentBreakdownResolver {
         } else if classification == .singleSegment {
             // 単一セグメントと分かるが事業名が取れない（「当社グループは単一セグメントであるため…」）。
             // セグメント行は作らず、会社全体の行だけを返す。名前は作らない。
-            return consolidatedOnlySnapshot(sales: amount)
+            var snapshot = consolidatedOnlySnapshot(sales: amount)
+            if othersOmitted {
+                snapshot.disclosureBasis = breakdownDisclosureBasisOtherSegmentsOmitted
+            }
+            return snapshot
         } else {
             return nil
         }
 
-        let disclosure = classification == .omittedDominant90pct
-            ? breakdownDisclosureBasisDominant90pct : nil
+        let disclosure: String? =
+            classification == .omittedDominant90pct
+            ? breakdownDisclosureBasisDominant90pct
+            : (othersOmitted ? breakdownDisclosureBasisOtherSegmentsOmitted : nil)
         let basis = BreakdownNormalizer.segmentBasis(
             forMembers: members.isEmpty ? [label] : members)
         let row = BreakdownRow(

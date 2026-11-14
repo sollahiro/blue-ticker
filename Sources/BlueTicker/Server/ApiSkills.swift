@@ -387,7 +387,8 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                 年次推移とつなぎは get-segment-waterfall（years[] に prior / line_cut）。
                 開示があるセルだけ、payload にそのセルの分母（denominator / denominator_tag）が付き、行の値が無いところはキーごと省略。
                 旧 axis=equity_method_investments は廃止（404）。
-                90%省略の1行は disclosure_basis=dominant_90pct。関連情報の省略は same_as=segment（値は複製しません）。
+                90%省略の1行は disclosure_basis=dominant_90pct。報告セグメント以外の事業を重要性が乏しいとして
+                省略している書類は disclosure_basis=other_segments_omitted（開示された 1 つだけを返します）。関連情報の省略は same_as=segment（値は複製しません）。
                 従業員表の区分が合わないときは employees_join=unavailable です。
                 product_service は関連情報の製品表または収益分解だけで、報告セグメント facts は含めません。
                 数値タグとセグメント fact から解決します。合計のみの開示は分母だけの行になります。
