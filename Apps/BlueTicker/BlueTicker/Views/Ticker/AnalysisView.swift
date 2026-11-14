@@ -344,8 +344,10 @@ private struct BusinessProfitSection: View {
     var currency: String?
     /// ダブルタップで拡大している前年差の年。
     @State private var expandedYearID: String?
-    /// 拡大中の横スクロール位置（先頭に見せる x カテゴリ）。1 年分ずつ区切りに吸着する。
-    @State private var scrollX: String = ""
+    /// 拡大の遷移（棒の動き）が終わったら、1 年ごとに止まる横スライドのページ送りへ切り替える。
+    @State private var pagerReady = false
+    /// ページ送りで今見えている年。
+    @State private var pageID: String?
 
     private enum FactorKind: String, CaseIterable {
         case salesChange
@@ -373,7 +375,7 @@ private struct BusinessProfitSection: View {
         AnalysisCard(title: "収益構造") {
             AnalysisSubheading(text: "事業利益の推移")
             if years.contains(where: { $0.businessProfit != nil }) {
-                profitChart
+                chartArea
                 if expandedDelta == nil {
                     ChartLegend(items: [
                         LegendItem(title: "事業利益", color: ChartStyle.primaryBar, shape: .bar),
@@ -405,9 +407,59 @@ private struct BusinessProfitSection: View {
     }
 
     private func collapse() {
+        // ページ送りから、同じ見た目の単独グラフに戻してから、元の推移へ動かす。
+        var transaction = Transaction()
+        transaction.disablesAnimations = true
+        withTransaction(transaction) { pagerReady = false }
         withAnimation(.snappy(duration: 0.45)) {
             expandedYearID = nil
         }
+    }
+
+    private func expand(_ delta: ProfitDelta) {
+        withAnimation(.snappy(duration: 0.45)) {
+            expandedYearID = delta.id
+        }
+        // 遷移が終わったら、見た目を変えずにページ送りへ切り替える。
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(550))
+            guard let current = expandedYearID else { return }
+            var transaction = Transaction()
+            transaction.disablesAnimations = true
+            withTransaction(transaction) {
+                pageID = current
+                pagerReady = true
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var chartArea: some View {
+        if pagerReady {
+            pager
+        } else {
+            profitChart(expanded: expandedDelta)
+        }
+    }
+
+    /// 年度ごとに 1 ページ。左から前年度の棒・3 要因・今年度の棒が並び、1 ページずつ止まるので両端は常に事業利益になる。
+    private var pager: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            LazyHStack(spacing: 0) {
+                ForEach(deltas) { delta in
+                    profitChart(expanded: delta)
+                        .containerRelativeFrame(.horizontal)
+                        .id(delta.id)
+                }
+            }
+            .scrollTargetLayout()
+        }
+        .scrollTargetBehavior(.paging)
+        .scrollPosition(id: $pageID)
+        .onChange(of: pageID) { _, newValue in
+            if let newValue { expandedYearID = newValue }
+        }
+        .frame(height: ChartStyle.height)
     }
 
     private var expandedDelta: ProfitDelta? {
@@ -446,39 +498,24 @@ private struct BusinessProfitSection: View {
         FactorKind.allCases.first { slot.hasSuffix("|\($0.rawValue)") }?.title
     }
 
-    /// 拡大中の x カテゴリ。1 年分（前年度・要因 3 つ・当年度）を 4 カテゴリずつ連ねる。
-    /// 前年度の棒は前の年の当年度と共有する。年が飛ぶときは空きを入れ、どの年も区切りの位置に揃える。
-    private var expandedSlots: [String] {
-        var slots: [String] = []
-        for delta in deltas {
-            if slots.last != delta.priorLabel {
-                while slots.count % Self.slotsPerYear != 0 { slots.append("空\(slots.count)") }
-                slots.append(delta.priorLabel)
-            }
-            slots += FactorKind.allCases.map { Self.factorSlot(delta, $0) }
-            slots.append(delta.label)
-        }
-        return slots
-    }
-
-    /// 1 年分の幅（前年度・要因 3 つ・当年度で 5 本、次の年へは 4 つ進む）。
-    private static let slotsPerYear = 4
-
     /// 業績カードと同じ形の縦棒。事業利益の棒の間に前年差の浮き棒を置き、点線で段をつなぐ。
-    /// ダブルタップすると同じグラフの中で、前年度・今年度の事業利益の 2 本が両端に寄り、
-    /// 間が売上要因・利益率要因・販管費要因のウォーターフォールに変わる（データラベル付き）。
-    private var profitChart: some View {
+    /// `expanded` を渡すと、その年の 前年度事業利益 → 3 要因 → 今年度事業利益 のウォーターフォール（データラベル付き）になる。
+    /// 推移 ⇄ 拡大は、同じグラフの棒が動くアニメーションで遷移する。
+    private func profitChart(expanded: ProfitDelta?) -> some View {
         let deltas = deltas
-        let expanded = expandedDelta
         let yearLabels = years.map { Format.fy($0.fyEnd) }
         let slots: [String] = years.flatMap { year -> [String] in
             let label = Format.fy(year.fyEnd)
             guard let delta = deltas.first(where: { $0.id == year.id }) else { return [label] }
             return [delta.slot, label]
         }
-        let expandedSlots = expandedSlots
-        let visibleYears: [FinancialsYear] = expanded == nil
-            ? years : years.filter { expandedSlots.contains(Format.fy($0.fyEnd)) }
+        let expandedSlots: [String] = expanded.map { delta in
+            [delta.priorLabel] + FactorKind.allCases.map { Self.factorSlot(delta, $0) } + [delta.label]
+        } ?? []
+        let visibleYears: [FinancialsYear] = {
+            guard let expanded, let prior = priorYear(of: expanded.year, in: years) else { return years }
+            return [prior, expanded.year]
+        }()
         let scale = Format.commonScale(for: years.map(\.businessProfit), currency: currency)
         return Chart {
             ForEach(visibleYears) { year in
@@ -496,8 +533,8 @@ private struct BusinessProfitSection: View {
                         .accessibilityValue(Format.autoYen(profit, currency: currency))
                 }
             }
-            if expanded != nil {
-                ForEach(deltas) { delta in expandedMarks(delta) }
+            if let expanded {
+                expandedMarks(expanded)
             } else {
                 ForEach(deltas) { delta in
                     BarMark(
@@ -524,12 +561,6 @@ private struct BusinessProfitSection: View {
                 .lineStyle(StrokeStyle(lineWidth: 0.5))
         }
         .chartXScale(domain: expanded == nil ? slots : expandedSlots)
-        // 拡大中は 1 年分（前年度の棒から当年度の棒まで）を画面に収め、横にスライドして年度を送る。
-        // 離したときは年の区切りに吸着し、前年度・当年度の棒が必ず両端に来る。
-        .chartScrollableAxes(expanded == nil ? [] : .horizontal)
-        .chartXVisibleDomain(length: expanded == nil ? max(slots.count, 1) : Self.slotsPerYear + 1)
-        .chartScrollPosition(x: $scrollX)
-        .chartScrollTargetBehavior(.valueAligned(unit: Double(Self.slotsPerYear)))
         // 遷移の前後で縦軸（棒の高さ）が変わらないよう、全年の事業利益・前年差・要因の積み上げを含む範囲に固定する。
         .chartYScale(domain: yDomain)
         .chartXAxis {
@@ -556,10 +587,7 @@ private struct BusinessProfitSection: View {
                         return
                     }
                     guard let hit = hitDelta(at: value.location.x, proxy: proxy, deltas: deltas) else { return }
-                    scrollX = hit.priorLabel
-                    withAnimation(.snappy(duration: 0.45)) {
-                        expandedYearID = hit.id
-                    }
+                    expand(hit)
                 }
         }
         .chartYAxis {
