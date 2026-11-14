@@ -8,6 +8,7 @@ struct RootView: View {
     @State private var listPath = NavigationPath()
     @State private var searchQuery = ""
     @State private var feedSession = FeedSession()
+    private let router = IntentRouter.shared
     @Query(sort: \WatchedCompany.sortOrder) private var watched: [WatchedCompany]
 
     var body: some View {
@@ -46,6 +47,13 @@ struct RootView: View {
             // 保存が新しければ通信しない。
             guard await ScreenSnapshotStore.shared.needsRevalidation() else { return }
             _ = await ScreenSnapshotStore.shared.revalidate()
+        }
+        .onChange(of: router.pending, initial: true) { _, company in
+            // Siri / ショートカットの「結果画面を開く」。ホームタブに銘柄面を積む。
+            guard let company else { return }
+            router.pending = nil
+            tab = 0
+            searchPath = NavigationPath([company])
         }
         .onChange(of: scenePhase) { _, phase in
             // フォアグラウンド復帰でも、前回の取得から 1 時間を過ぎていれば RSS を再検証する。

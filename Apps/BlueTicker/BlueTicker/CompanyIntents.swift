@@ -1,78 +1,103 @@
 import AppIntents
 import Foundation
+import SwiftData
 
-/// Siri / ショートカット / Spotlight から選べる銘柄。コードで解決し、名前は表示用。
-struct CompanyEntity: AppEntity {
-    static let typeDisplayRepresentation = TypeDisplayRepresentation(name: "銘柄")
-    static let defaultQuery = CompanyEntityQuery()
-
-    let id: String
-    let name: String
-
-    var displayRepresentation: DisplayRepresentation {
-        DisplayRepresentation(title: "\(name)", subtitle: "\(id)")
-    }
-
-    init(code: String, name: String) {
-        id = code
-        self.name = name
-    }
-
-    init(hit: CompanyHit) {
-        self.init(code: hit.code, name: Format.displayName(hit.name, fallback: hit.code))
-    }
-}
-
-struct CompanyEntityQuery: EntityStringQuery {
-    func entities(for identifiers: [String]) async throws -> [CompanyEntity] {
-        var result: [CompanyEntity] = []
-        for code in identifiers {
-            let hits = (try? await APIClient.shared.searchCompanies(query: code)) ?? []
-            if let hit = hits.first(where: { $0.code == code }) {
-                result.append(CompanyEntity(hit: hit))
-            }
-        }
-        return result
-    }
-
-    func entities(matching string: String) async throws -> [CompanyEntity] {
-        let query = string.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !query.isEmpty else { return [] }
-        let hits = try await APIClient.shared.searchCompanies(query: query)
-        return hits.prefix(10).map(CompanyEntity.init(hit:))
-    }
-
-    /// 銘柄を含むフレーズを Siri が認識するには候補が要る。端末に保存済みの開示フィード（RSS）で
-    /// 最近有報を出した会社を、重複を除いて新しい順に出す（保存が無ければ候補なし）。
-    func suggestedEntities() async throws -> [CompanyEntity] {
-        let items = await FeedRSSStore.shared.cachedItems() ?? []
-        var seen = Set<String>()
-        return items.filter { seen.insert($0.code).inserted }.prefix(10).map {
-            CompanyEntity(code: $0.code, name: Format.displayName($0.name, fallback: $0.code))
-        }
-    }
-}
-
+/// Siri / ショートカットから呼ぶ操作。銘柄の候補は出さず、入力した文字（社名または証券コード）を
+/// そのまま `GET /v1/companies?q=` で検索して使う。
+/// App Shortcuts のフレーズには文字列パラメータを入れられないので、フレーズは「有報LABで会社を調べる」のように
+/// 固定にし、会社名は Siri の聞き返し（またはショートカットの入力欄・変数）で受け取る。
 private struct CompanyIntentError: LocalizedError {
     let message: String
     var errorDescription: String? { message }
 }
 
-struct CompanyOverviewIntent: AppIntent {
-    static let title: LocalizedStringResource = "会社の概要を見る"
-    static let description = IntentDescription("有報から作った会社の概要を返します。")
+private enum CompanyLookup {
+    /// 全角数字を半角にそろえ、前後の空白を除く（「７２０３」→「7203」）。
+    static func normalized(_ raw: String) -> String {
+        let scalars = raw.unicodeScalars.map { scalar -> Character in
+            if (0xFF10...0xFF19).contains(scalar.value), let ascii = Unicode.Scalar(scalar.value - 0xFF10 + 0x30) {
+                return Character(ascii)
+            }
+            return Character(scalar)
+        }
+        return String(scalars).trimmingCharacters(in: .whitespacesAndNewlines)
+    }
 
-    @Parameter(title: "銘柄")
-    var company: CompanyEntity
+    static func search(_ raw: String) async throws -> [CompanyHit] {
+        let query = normalized(raw)
+        guard !query.isEmpty else {
+            throw CompanyIntentError(message: "会社名か証券コードを入力してください。")
+        }
+        let hits: [CompanyHit]
+        do {
+            hits = try await APIClient.shared.searchCompanies(query: query)
+        } catch {
+            throw CompanyIntentError(message: "「\(query)」を検索できませんでした。")
+        }
+        guard !hits.isEmpty else {
+            throw CompanyIntentError(message: "「\(query)」に一致する会社が見つかりませんでした。")
+        }
+        return hits
+    }
+
+    /// 証券コードが完全一致する会社を優先し、なければ検索の先頭を使う。
+    static func resolveHit(_ raw: String) async throws -> CompanyHit {
+        let hits = try await search(raw)
+        let code = normalized(raw).uppercased()
+        return hits.first(where: { $0.code.uppercased() == code }) ?? hits[0]
+    }
+
+    static func resolve(_ raw: String) async throws -> (code: String, name: String) {
+        let hit = try await resolveHit(raw)
+        return (hit.code, Format.displayName(hit.name, fallback: hit.code))
+    }
+}
+
+/// Intent からアプリの画面へ行き先を渡す。`RootView` が見て、ホームタブに銘柄面を積む。
+@MainActor @Observable
+final class IntentRouter {
+    static let shared = IntentRouter()
+    var pending: CompanyRef?
+}
+
+struct SearchCompanyIntent: AppIntent {
+    static let title: LocalizedStringResource = "会社名で検索する"
+    static let description = IntentDescription("入力した会社名や証券コードに合う会社を、証券コードつきで返します。")
+
+    @Parameter(title: "会社名または証券コード", requestValueDialog: "どの会社を探しますか？")
+    var query: String
 
     static var parameterSummary: some ParameterSummary {
-        Summary("\(\.$company)の概要")
+        Summary("\(\.$query)を検索")
     }
 
     func perform() async throws -> some IntentResult & ReturnsValue<String> & ProvidesDialog {
+        let hits = try await CompanyLookup.search(query)
+        let text = hits.prefix(5).map { hit -> String in
+            let name = Format.displayName(hit.name, fallback: hit.code)
+            let sector = hit.sector.map { "（\($0)）" } ?? ""
+            return "\(name) \(hit.code)\(sector)"
+        }.joined(separator: "\n")
+        return .result(value: text, dialog: IntentDialog(stringLiteral: text))
+    }
+}
+
+struct CompanyOverviewIntent: AppIntent {
+    static let title: LocalizedStringResource = "会社の概要を見る"
+    static let description = IntentDescription("会社名や証券コードから、有報から作った会社の概要を返します。")
+
+    @Parameter(title: "会社名または証券コード", requestValueDialog: "どの会社の概要を見ますか？")
+    var query: String
+
+    static var parameterSummary: some ParameterSummary {
+        Summary("\(\.$query)の概要")
+    }
+
+    func perform() async throws -> some IntentResult & ReturnsValue<String> & ProvidesDialog {
+        let company = try await CompanyLookup.resolve(query)
         let response: CompanyOverviewResponse
         do {
-            response = try await APIClient.shared.overview(code: company.id)
+            response = try await APIClient.shared.overview(code: company.code)
         } catch {
             throw CompanyIntentError(message: "\(company.name)の概要を取得できませんでした。")
         }
@@ -83,19 +108,20 @@ struct CompanyOverviewIntent: AppIntent {
 
 struct CompanyFinancialsIntent: AppIntent {
     static let title: LocalizedStringResource = "会社の最新の業績を見る"
-    static let description = IntentDescription("最新の決算期の売上高・営業利益・純利益・ROE を返します。")
+    static let description = IntentDescription("会社名や証券コードから、最新の決算期の売上高・営業利益・純利益・ROE を返します。")
 
-    @Parameter(title: "銘柄")
-    var company: CompanyEntity
+    @Parameter(title: "会社名または証券コード", requestValueDialog: "どの会社の業績を見ますか？")
+    var query: String
 
     static var parameterSummary: some ParameterSummary {
-        Summary("\(\.$company)の最新の業績")
+        Summary("\(\.$query)の最新の業績")
     }
 
     func perform() async throws -> some IntentResult & ReturnsValue<String> & ProvidesDialog {
+        let company = try await CompanyLookup.resolve(query)
         let response: FinancialsResponse
         do {
-            response = try await APIClient.shared.financials(code: company.id)
+            response = try await APIClient.shared.financials(code: company.code)
         } catch {
             throw CompanyIntentError(message: "\(company.name)の業績を取得できませんでした。")
         }
@@ -110,6 +136,130 @@ struct CompanyFinancialsIntent: AppIntent {
             純利益 \(Format.autoYen(year.netProfit, currency: currency))
             ROE \(Format.percent(year.roe))
             """
+        return .result(value: text, dialog: IntentDialog(stringLiteral: text))
+    }
+}
+
+struct OpenCompanyIntent: AppIntent {
+    static let title: LocalizedStringResource = "会社の結果画面を開く"
+    static let description = IntentDescription("会社名や証券コードから会社を探し、有報LABの分析結果の画面を開きます。")
+    static let openAppWhenRun = true
+
+    @Parameter(title: "会社名または証券コード", requestValueDialog: "どの会社の結果を開きますか？")
+    var query: String
+
+    static var parameterSummary: some ParameterSummary {
+        Summary("\(\.$query)の結果を開く")
+    }
+
+    @MainActor
+    func perform() async throws -> some IntentResult & ProvidesDialog {
+        let hit = try await CompanyLookup.resolveHit(query)
+        IntentRouter.shared.pending = CompanyRef(hit)
+        let name = Format.displayName(hit.name, fallback: hit.code)
+        return .result(dialog: IntentDialog(stringLiteral: "\(name)の結果を開きます。"))
+    }
+}
+
+struct AddCompanyToWatchlistIntent: AppIntent {
+    static let title: LocalizedStringResource = "会社をリストに追加する"
+    static let description = IntentDescription("会社名や証券コードから会社を探し、有報LABのリストに追加します。")
+
+    @Parameter(title: "会社名または証券コード", requestValueDialog: "どの会社をリストに追加しますか？")
+    var query: String
+
+    static var parameterSummary: some ParameterSummary {
+        Summary("\(\.$query)をリストに追加")
+    }
+
+    @MainActor
+    func perform() async throws -> some IntentResult & ReturnsValue<String> & ProvidesDialog {
+        let hit = try await CompanyLookup.resolveHit(query)
+        let name = Format.displayName(hit.name, fallback: hit.code)
+        let context = BlueTickerApp.sharedContainer.mainContext
+        let existing = (try? context.fetch(FetchDescriptor<WatchedCompany>())) ?? []
+        let text: String
+        if existing.contains(where: { $0.code == hit.code }) {
+            text = "\(name)はすでにリストにあります。"
+        } else {
+            context.insert(
+                WatchedCompany(
+                    code: hit.code,
+                    name: hit.name,
+                    sector: hit.sector ?? "",
+                    iconURL: hit.iconURL,
+                    sortOrder: WatchedCompany.nextSortOrder(among: existing)
+                )
+            )
+            do {
+                try context.save()
+            } catch {
+                throw CompanyIntentError(message: "\(name)をリストに追加できませんでした。")
+            }
+            text = "\(name)をリストに追加しました。"
+        }
+        return .result(value: text, dialog: IntentDialog(stringLiteral: text))
+    }
+}
+
+/// 要約はアプリでは作らない。直近の年度ごとの主要指標を文字列で返し、
+/// ショートカットの「モデルを使用」や Siri の AI が要約・比較できるようにする。
+struct CompanyAnalysisIntent: AppIntent {
+    static let title: LocalizedStringResource = "会社の分析データを見る"
+    static let description = IntentDescription("直近 5 期の売上高・利益率・ROIC・ROE・キャッシュフローなどを年度ごとに返します。ショートカットの AI で要約できます。")
+
+    @Parameter(title: "会社名または証券コード", requestValueDialog: "どの会社の分析データを見ますか？")
+    var query: String
+
+    static var parameterSummary: some ParameterSummary {
+        Summary("\(\.$query)の分析データ")
+    }
+
+    func perform() async throws -> some IntentResult & ReturnsValue<String> & ProvidesDialog {
+        let company = try await CompanyLookup.resolve(query)
+        let response: FinancialsResponse
+        do {
+            response = try await APIClient.shared.financials(code: company.code)
+        } catch {
+            throw CompanyIntentError(message: "\(company.name)の分析データを取得できませんでした。")
+        }
+        let years = Array(Format.chronological(response.years).filter { !($0.fyEnd ?? "").isEmpty }.suffix(5))
+        guard !years.isEmpty else {
+            throw CompanyIntentError(message: "\(company.name)の分析データはまだ集計されていません。")
+        }
+        let blocks = years.map { year -> String in
+            let currency = year.currency ?? response.currency
+            return """
+                \(Format.fyJapanese(year.fyEnd))
+                売上高 \(Format.autoYen(year.sales, currency: currency))
+                営業利益 \(Format.autoYen(year.operatingProfit, currency: currency))（営業利益率 \(Format.percent(year.operatingMargin))）
+                純利益 \(Format.autoYen(year.netProfit, currency: currency))
+                ROIC \(Format.percent(year.roic)) / ROE \(Format.percent(year.roe))
+                営業CF \(Format.autoYen(year.cfo, currency: currency)) / 設備投資 \(Format.autoYen(year.capex, currency: currency)) / FCF \(Format.autoYen(Format.freeCashFlow(year), currency: currency))
+                ネットD/E \(Format.times(year.netDe))
+                """
+        }
+        let text = "\(company.name) 直近\(years.count)期の分析データ\n\n" + blocks.joined(separator: "\n\n")
+        // 全文を読み上げさせない。数値は戻り値で次のアクション（AI など）へ渡す。
+        return .result(value: text, dialog: IntentDialog(stringLiteral: "\(company.name)の直近\(years.count)期の分析データを返しました。"))
+    }
+}
+
+/// 入力なし。端末に保存済みの開示フィード（RSS）から、最近有報を出した会社を新しい順に返す。
+struct RecentFilingsIntent: AppIntent {
+    static let title: LocalizedStringResource = "最近の有報を見る"
+    static let description = IntentDescription("最近有価証券報告書を出した会社を、新しい順に返します。")
+
+    func perform() async throws -> some IntentResult & ReturnsValue<String> & ProvidesDialog {
+        let items = await FeedRSSStore.shared.cachedItems() ?? []
+        guard !items.isEmpty else {
+            throw CompanyIntentError(message: "開示情報がまだ保存されていません。有報LABを一度開いてからもう一度お試しください。")
+        }
+        let text = items.prefix(5).map { item -> String in
+            let name = Format.displayName(item.name, fallback: item.code)
+            let date = item.submittedAt.isEmpty ? "" : " \(item.submittedAt)"
+            return "\(name) \(item.code)\(date)"
+        }.joined(separator: "\n")
         return .result(value: text, dialog: IntentDialog(stringLiteral: text))
     }
 }
@@ -137,10 +287,19 @@ struct BlueTickerShortcuts: AppShortcutsProvider {
             systemImageName: "chart.line.uptrend.xyaxis"
         )
         AppShortcut(
+            intent: SearchCompanyIntent(),
+            phrases: [
+                "\(.applicationName)で会社を検索",
+                "\(.applicationName)で社名を検索",
+            ],
+            shortTitle: "会社名で検索",
+            systemImageName: "magnifyingglass"
+        )
+        AppShortcut(
             intent: CompanyOverviewIntent(),
             phrases: [
-                "\(.applicationName)で\(\.$company)の概要を教えて",
-                "\(.applicationName)で\(\.$company)を調べる",
+                "\(.applicationName)で会社の概要を教えて",
+                "\(.applicationName)で会社を調べる",
             ],
             shortTitle: "会社の概要",
             systemImageName: "building.2"
@@ -148,11 +307,47 @@ struct BlueTickerShortcuts: AppShortcutsProvider {
         AppShortcut(
             intent: CompanyFinancialsIntent(),
             phrases: [
-                "\(.applicationName)で\(\.$company)の業績を教えて",
-                "\(.applicationName)で\(\.$company)の決算を見る",
+                "\(.applicationName)で会社の業績を教えて",
+                "\(.applicationName)で会社の決算を見る",
             ],
             shortTitle: "最新の業績",
             systemImageName: "chart.bar"
+        )
+        AppShortcut(
+            intent: CompanyAnalysisIntent(),
+            phrases: [
+                "\(.applicationName)で会社の分析データを見る",
+                "\(.applicationName)で会社を分析",
+            ],
+            shortTitle: "分析データ",
+            systemImageName: "chart.xyaxis.line"
+        )
+        AppShortcut(
+            intent: OpenCompanyIntent(),
+            phrases: [
+                "\(.applicationName)で会社の結果を開く",
+                "\(.applicationName)で会社の結果画面を見る",
+            ],
+            shortTitle: "結果画面を開く",
+            systemImageName: "rectangle.portrait.and.arrow.right"
+        )
+        AppShortcut(
+            intent: AddCompanyToWatchlistIntent(),
+            phrases: [
+                "\(.applicationName)のリストに会社を追加",
+                "\(.applicationName)で会社をリストに追加",
+            ],
+            shortTitle: "リストに追加",
+            systemImageName: "bookmark"
+        )
+        AppShortcut(
+            intent: RecentFilingsIntent(),
+            phrases: [
+                "\(.applicationName)で最近の有報を見る",
+                "\(.applicationName)で新着の有報を教えて",
+            ],
+            shortTitle: "最近の有報",
+            systemImageName: "doc.text"
         )
     }
 }
