@@ -218,7 +218,7 @@ def cmd_verify_checksums(ns) -> int:
 
 # ---------------------------------------------------------------- flags
 CODE_EXT = (".swift", ".py", ".js", ".mjs", ".cjs", ".ts")
-# Assembled so this file does not itself contain the strings it forbids.
+# Assembled so this file does not itself contain the leftover ticket-id strings it forbids.
 TRACKER_RE = re.compile(r"\b" + "B" + "LT" + r"-\d+\b|" + "linear" + r"\.app\b", re.I)
 
 NAME_RECV = r"(?:\w*(?:co|company|corp|corporation|filer|issuer|entity)_?name\w*|issuer\w*)"

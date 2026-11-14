@@ -49,7 +49,7 @@ geography は変えない。本邦90％の `not_found` は既存の Jev ゲー�
 | `interest_bearing_debt` | 有利子負債（社債・借入金＋リース負債）。行=負債の行、セル= `opening` / `closing`、行ごとに `source`・`maturity_class`・`in_total`・`excluded_reason`・`paired_row_index`。合計は `in_total=true` の行だけ |
 | `fixed_assets` | 固定資産の種類別（土地・建物・ソフトウェア・のれん等の正味帳簿価額）。行ごとに `asset_class`・`source_tag`。報告セグメント別の `goodwill` とは別 |
 
-公開軸（意味。公開判断の現在地は Linear [JP 現在地](https://linear.app/sollahiro/document/jp-現在地-af2abd076034)）:
+公開軸（意味。公開判断の現在地はオーナー管理のトラッカー Sheet。`docs/process/tracker-placement.md`）:
 
 | axis | 内容 |
 |---|---|

@@ -17,8 +17,9 @@ Actual upstream ingest requires the real `BLT_EDINET_API_KEY` and its own test s
 ## Setup
 
 1. Build with `swift build -Xswiftc -disable-upcoming-feature -Xswiftc MemberImportVisibility`.
-2. If psql/PostgreSQL is absent, run disposable `postgres:16` with Apple `container`
-   (`docs/architecture.md` / `.agents/rules/architecture.md`。手元のテスト Postgres は Docker にしない)。
+2. If psql/PostgreSQL is absent, run disposable `postgres:16` with the local container
+   runtime (current standard on Mac: Apple `container`; `docker run` is equivalent.
+   `docs/architecture.md` / `.agents/rules/architecture.md`).
    `container system start` if needed. Set `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`
    to local-only values and publish an unused port on **127.0.0.1**, not all interfaces.
    Example: `container run -d --name blt-pg-test -p 127.0.0.1:<pg-port>:5432 -e POSTGRES_USER=...

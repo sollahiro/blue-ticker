@@ -53,7 +53,7 @@
 
 iOS のアカウント不要パス（短命匿名トークン + App Attest）はゲートウェイ責務であり、blt-server の責務ではない。
 
-土台（バックフィル・ストレージ）が未成熟なうちに不特定多数へ開放しない。着手順・公開判断は Linear Team `blue-ticker`。定義の索引は `blt-server-roadmap.md`。
+土台（バックフィル・ストレージ）が未成熟なうちに不特定多数へ開放しない。着手順・公開判断はオーナー管理のトラッカー Sheet（`docs/process/tracker-placement.md`）。定義の索引は `blt-server-roadmap.md`。
 
 ## 公開 REST の認証（階層ではなく併存）
 
