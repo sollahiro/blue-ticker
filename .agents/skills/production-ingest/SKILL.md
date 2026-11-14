@@ -39,34 +39,16 @@ description: 本番 Neon への定期・手動取り込み、ジョブ編成、�
 
 ## 標準動作（1 サイクル）
 
-ジョブは 1 プロセスに `--stages` を詰め込まない。最新年度を先に回し、過去年度バックフィルは別サイクル。探索的試し書きはしない。
+ジョブは stage 系統ごとに分け、1 プロセスに `--stages` を詰め込まない（失敗時の再実行範囲・所要時間・`needs_review` 多発軸の隔離のため）。最新年度を先に回し、過去年度バックフィルは別サイクル。探索的試し書きはしない。件数（`--limit`）・周期・どの stage を回すかは実行側が決める（Git に表で固定しない）。
 
-| # | 内容 | CLI | 母集団 | 既定 `--limit` | 周期の目安 |
-|---|---|---|---|---|---|
-| 0 | `sync` のあと `filing-sections`（R2/L1 温め） | `sync` → `ingest --stages filing-sections` | 上場 | 80 | 日次（軽） |
-| 1 | `statements` | `ingest --stages statements` | 上場（225 は処理順） | 80 | 6h |
-| 2 | `statement-notes`（`per_share_information,issued_shares_and_capital`） | `ingest --stages statement-notes --note-types …` | 上場（225 は処理順） | 80 | 6h |
-| 3 | 廃止。旧 PPE / goodwill 注記は breakdowns の `fixed_assets` 軸（job-4） | — | — | — | — |
-| 4 | `breakdowns`（全軸） | `ingest --stages breakdowns` | 上場（225 は処理順） | 50 | 6h |
-| 5 | `financials`（組立の最後。BPS 等を埋めるなら notes を先） | `ingest --stages financials` | 上場 | 80 | 6h（2 の後） |
-| 6 | `overviews`（最新有報 1 件。他 stage 非依存） | `ingest --stages overviews` | 上場（225 は処理順） | 80 | 日次 |
-| 7 | `relations`（顧客・関係会社・親会社等・政策保有株式・大株主） | `ingest --stages relations` | 上場（225 は処理順） | 100 | 日次 |
+守る順序と依存:
 
-```text
-sync + filing-sections
-  → statements
-  → notes-core
-  → breakdowns
-  → financials
-  → overviews
-  → relations
-```
-
-- `financials` だけは notes-core 以降に置く。`breakdowns` は依存が無ければ別スロットでもよい。
-- `overviews` / `relations` は他 stage に依存しない。`--stages` 省略時の `ingest` には `relations` と `industry-kpis` は入らない（明示指定だけ）。
-- `industry-kpis` は標準サイクルに載せない。
-- ジョブ間は短い sleep（既定 5 秒）。番号 03 は欠番のまま残し、手元の skip 変数と衝突させない。
-- 現行の Mac 定例（git 管理外ラッパー）は、スリープ抑制（`caffeinate`）、0 時以外の overviews skip、ingest 依存パスが変わったときだけ `swift build -c release --product blt-ingest`、ログを `.build/blt-launchd-cycle.log` へ追記する。毎回 `blt-server` をビルドしない。
+- `sync` と `filing-sections`（R2/L1 温め）を最初に回す。
+- `financials` は組立の最後。BPS / EPS を埋めるなら `statements` と `statement-notes`（`per_share_information,issued_shares_and_capital`）を先に回す。
+- `breakdowns` は時間がかかり、LLM（Jev）にも依存するので、他の stage と分けて回す。依存が無ければ別スロットでもよい。
+- `overviews` と `relations` は他 stage に依存しない。`--stages` 省略時の `ingest` には `relations` と `industry-kpis` は入らない（明示指定だけ）。`industry-kpis` は標準サイクルに載せない。
+- 旧 PPE / のれん注記の stage は廃止済み。`breakdowns` の `fixed_assets` 軸が引き継いだ。
+- 1 つでも失敗したらサイクルを止め、後ろの stage を続けない。
 
 ## 変えてよい項目 / 変えてはいけない安全条件
 
@@ -99,14 +81,18 @@ sync + filing-sections
 | 変数 | 意味 |
 |---|---|
 | `BLT_INGEST_WRITE` | `1` のときだけ `DATABASE_URL="$BLT_NEON_WRITE_DATABASE_URL"` を束縛。WRITE URL 未設定なら停止 |
-| `BLT_INGEST_SKIP_00` … `07` | サイクルで該当 job を飛ばす（03 は廃止済み） |
-| `BLT_INGEST_CYCLE_PAUSE_SEC` | job 間 sleep（既定 5） |
-| `BLT_INGEST_FILING_LIMIT` 等 | 各 job の `--limit`（上表の既定） |
 | `BLT_EDINET_API_KEY` | 必須。未設定なら停止 |
 | `OPENROUTER_OVERVIEW_API_KEY` | overviews を回すなら必須（未設定ならその job を失敗させる。CLI 単体は skip するが、定例の overviews job は閉じる） |
-| `OPENROUTER_DECISION_API_KEY` | relations の区分不定表。未設定なら `needs_review` で残す（job は止めない） |
-| `BLT_R2_XBRL_BUCKET` | 設定時に L2 PUT |
+| `OPENROUTER_DECISION_API_KEY` | Jev（内訳の分類、relations の区分不定表）。未設定なら `needs_review` で残す（job は止めない）。`OpenRouter decisions HTTP 403` がログに続くときは、鍵の失効・残高・上限を確認する |
+| `BLT_R2_XBRL_BUCKET` / `BLT_R2_ACCOUNT_ID` / `BLT_R2_ACCESS_KEY_ID` / `BLT_R2_SECRET_ACCESS_KEY` | 生 XBRL の R2（正本）。4 つそろわないと R2 は無効（ローカル → EDINET の経路になる） |
+| `BLT_INGEST_LOCK_FILE` / `BLT_INGEST_LOCK_WAIT_SEC` | 排他ロックのファイル（既定 `/tmp/blt-ingest-<uid>.lock`）と待ち秒数（既定 0 = すぐ失敗） |
 | `BLUE_TICKER_ASSETS_PATH` | 未設定なら `$REPO/assets` |
+
+生 XBRL の取得（R2 が正本）:
+
+- 取得順は「ローカル展開 → R2（`jp/edinet/xbrl/{docID}.zip`）→ EDINET」。R2 から取れた書類は展開して使う。R2 に無く EDINET から取った書類は、展開に成功した直後に R2 へ PUT する。書類（docID）ごとの ZIP は変わらない（訂正有報は別の docID）。
+- ローカル展開（`tmp_cache/edinet/`）は使い捨てのキャッシュ。消えても動く。別の Mac でも `.env` の R2 と EDINET の設定だけで動かせるよう、R2 の設定は必須とする。
+- R2 の GET / PUT が失敗しても ingest は止まらない（stderr に `R2 XBRL GET/PUT 失敗` が出るだけ）。ログで失敗が続いていないかを見る。PUT が失敗した書類は、ローカルに展開が残っていると R2 へ再 PUT されない。補うときは、その docID のローカル展開を消して再取得する。
 
 書き込み先の決め方:
 
@@ -121,7 +107,7 @@ sync + filing-sections
 
 - repo 根で `.env` と Git 外チューニングを load する
 - 上記の write ガードを通す
-- 必要なら release ビルドしてから、上表の順で `blt-ingest` を呼ぶ
+- 必要なら release ビルドしてから、上の順序・依存に従って `blt-ingest` を呼ぶ
 - 失敗したら残ジョブを続けない（途中再開は DB 側の skip）
 - ログは Git 外
 
@@ -131,7 +117,7 @@ sync + filing-sections
 - `--codes` は limit を無視して指定銘柄を全件。`--doc-ids` は原本 120 の会社-FY 単位で cache_version / needs_review でも skip しない。他 FY は purge しない。定期サイクルでは使わない。
 - `--axes` は `breakdowns` を指定軸だけに絞る（未指定は全軸）。`--doc-ids` は書類の全軸を書き直すので、軸を絞りたいときは行を削除して `--codes` と併用する。定期サイクルでは使わない。
 - ジョブ失敗はそのサイクルを止める。次のスケジュールで、skip されなかった残件から再開する。
-- プロセス同士の排他ロックは現行運用にも無い。定例と手動 `--codes` の同時書き込みは既知リスクとして残す。無いロックを追加して「守っている」としない。Mac 定例は `caffeinate` でスリープ抑制するだけ。
+- 書き込みを伴う `blt-ingest` のコマンド（migrate / sync / ingest / master-data-upload / screen-rebuild / overrides add|revoke）は、`flock` の排他ロックで同時に 1 つだけ。別のプロセスが保持中は、既定ですぐ失敗する（`BLT_INGEST_LOCK_WAIT_SEC` で待てる）。ロックはプロセス終了時に OS が解放するので、古いロックは残らない。定例のジョブ間（sleep 中）には手動実行が入り得る。
 
 ## 成功判定
 
@@ -146,6 +132,7 @@ sync + filing-sections
 - overviews で Overview キー欠落 → その job を失敗させる（黙って skip してサイクル成功にしない）。
 - DB 不安定で sync が中断 → 残りは次回。無理に全件リトライで書き込まない。
 - `needs_review`・異常欠測・訂正 130 → 自動で消さない。`.agents/rules/amendments.md` に従い手動。
+- DB 操作は 1 回 60 秒でタイムアウトし、`withDbRetry` が最大 5 回再試行する。全社・全件のループを 1 つの `withDbRetry` で包まない（会社数が多いと毎回タイムアウトし、再試行も先頭からやり直しになる）。会社 1 社・書類 1 件の単位で包む。`DB retry exhausted` が出たら、どの `label` かを見る。
 - ローカル Postgres の 42P07（テーブルはあるが `_fluent_migrations` が空）だけ、接続先がローカルでデータが空であることを確認して schema を再作成してよい。本番には適用しない。
 
 ## 手動・単発
@@ -168,6 +155,14 @@ DATABASE_URL="$BLT_NEON_WRITE_DATABASE_URL" ./.build/release/blt-ingest screen-r
 ```
 
 `cache_version` バンプ可否は versioning ルール。LLM 出力だけの訂正は上げない。現行版の clean な LLM 行は `--codes` でも skip されるため、対象行を消すか `needs_review=true` にしてから個別 ingest する。
+
+## 運用ホストの要件（実装はホスト側。Git に置かない）
+
+取り込みを実行するホストのラッパーは、次を満たす。具体的なコマンド・通知先・追従先（main かタグか）は、ホストごとに決める。
+
+- **更新確認**: サイクルの冒頭で、追従先との差を確認する。古い場合は通知する（自動で切り替えるかは運用で決める。既定は通知のみ）。再ビルドは、上の「再ビルド判定」で依存パスに差分があるときだけ。ビルドに失敗したらサイクルを止める（古いバイナリで続けない）。
+- **失敗通知**: サイクルが異常終了したときに通知する（ログを見に行かないと気づけない状態にしない）。skip している stage があるときは、サイクルのログ冒頭に `SKIP: …` と出す（戻し忘れを防ぐ）。
+- **ログ**: 日次または一定サイズでローテーションし、stdout と stderr を分ける。
 
 ## 出荷順（マイグレーション）
 

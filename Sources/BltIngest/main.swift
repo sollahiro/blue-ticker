@@ -41,6 +41,7 @@
 //   blt-ingest overrides list [--edinet-code E03614] [--item capex]
 //                             [--include-revoked]
 //                                                            上書きの一覧（read。DATABASE_URL）。
+//   （書き込みを伴うコマンドは排他ロックで同時に 1 つだけ。BLT_INGEST_LOCK_FILE / BLT_INGEST_LOCK_WAIT_SEC。IngestProcessLock.swift）
 //   blt-ingest overrides revoke --id UUID
 //   blt-ingest overrides revoke --edinet-code E --period-end YYYY-MM-DD --item capex
 //                                                            有効行を revoke。WRITE URL 必須。
@@ -64,6 +65,10 @@ let argv = CommandLine.arguments
 bootstrapBltLogging(level: bltLogLevelFromEnvironment())
 
 do {
+    // 書き込みを伴うコマンドは同時に 1 つだけ（定例と手動の `--codes` の同時書き込みを防ぐ）。
+    // ロックはプロセス終了時に OS が解放する。
+    let ingestLock = ingestCommandNeedsLock(argv) ? try acquireIngestLock() : nil
+    defer { ingestLock?.release() }
     // 第1引数がサブコマンドなら分岐する（無ければサーバー起動）。
     if argv.count > 1, argv[1] == "migrate" {
         try await runMigrateCommand()
