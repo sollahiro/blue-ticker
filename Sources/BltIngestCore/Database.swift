@@ -1,6 +1,6 @@
 // マイグレーション（DDL）の正本と適用。DDL を出すのは blt-ingest（Mac の書き込み側）だけ。
 // `migrate` と sync / ingest などの取り込み系コマンドが冒頭で適用する。配信サーバー（blt-server）は
-// 起動時に適用せず、読み取りロール（blt_reader）で動く（docs/ingest-policy.md「出荷順」）。
+// 起動時に適用せず、読み取りロール（blt_reader）で動く（.agents/skills/production-ingest/SKILL.md「出荷順」）。
 //
 // 適用は withDbRetry で包む。ingest 本体の DB 操作は既にリトライ済みだが、
 // プロセス起動直後の初回接続（Neon cold start）はここが唯一の接点で、失敗すると
@@ -108,7 +108,7 @@ package func registerBltMigrations(_ migrations: Migrations) {
 
 /// `blt-ingest migrate` エントリ。DATABASE_URL のスキーマへ未適用のマイグレーションだけを適用する。
 /// 配信サーバーは起動時に migrate しないため、マイグレーションを含む変更は
-/// Fly へデプロイする前に Mac からこれを実行する（docs/ingest-policy.md「出荷順」）。
+/// Fly へデプロイする前に Mac からこれを実行する（.agents/skills/production-ingest/SKILL.md「出荷順」）。
 public func runMigrateCommand() async throws {
     try await withIngestDatabase { _ in }
 }

@@ -34,8 +34,9 @@ mebuki_startup.log
 .env.local
 .env.*.local
 
-# Machine-local ingest schedule and wrappers (launchd/cron が呼ぶ実体).
-# 正本ジョブは scripts/jp/edinet/ingest-job-*.sh（Git 管理）。雛形は *.local.example.sh。
+# Machine-local ingest leftovers (launchd/cron が呼ぶ実体)。運用正本は
+# .agents/skills/production-ingest/SKILL.md。Git 管理の起動スクリプトは置かない。
+# 取り込み Mac 上のこれらのファイルは、ラッパー切替後に手元で消す（この ignore だけでは消えない）。
 /scripts/blt-scheduled-sync.sh
 /scripts/install-launchd.sh
 /scripts/launchd/

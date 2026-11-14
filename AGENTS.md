@@ -8,7 +8,7 @@
 - 本番 write は `BLT_NEON_WRITE_DATABASE_URL` の明示指定時だけ行う。RO への書き込みと本番 schema の削除は禁止。
 - Linux / 新しい Swift では、CI・Dockerfile と同じ `-Xswiftc -disable-upcoming-feature -Xswiftc MemberImportVisibility` を build / test に付ける。
 - iOS（`Apps/BlueTicker`）の型検査・ビルドは GitHub Actions の `ios` ジョブ（`macos-26` / `xcodebuild`）で行う。`Apps/BlueTicker/` または `.github/workflows/ci.yml` に差分があるときだけ走る。非 macOS 環境ではシミュレータも Xcode も無い。TestFlight / Archive は App Store Connect の Archive ワークフロー（現在の実装は Xcode Cloud。配布専用）。GHA に Archive を足さず、Xcode Cloud をマージ品質ゲートにもしない。詳細は `docs/ios-client.md`。
-- 新機能・XBRL・本番 ingest・release・tracker・デプロイは対応する `.agents/skills/` に従う。会社アイコンの品質基準は `.agents/skills/company-icon-quality/SKILL.md`（R2 手置き。fetch / ingest パイプラインは無い）。
+- 新機能・XBRL・本番 ingest・release・tracker・デプロイは対応する `.agents/skills/` に従う。取り込み運用の Git 正本は `.agents/skills/production-ingest/SKILL.md` のみ（固定の起動スクリプトは置かない）。会社アイコンの品質基準は `.agents/skills/company-icon-quality/SKILL.md`（R2 手置き。fetch / ingest パイプラインは無い）。
 - 外部 API・CLI・DB schema・設定・公開契約の変更と、本番 write / 公開範囲の拡張はユーザー確認なしに行わない。
 - 製品面は REST・iOS・公開 MCP コネクタ。公開 MCP は HAPIS の `mcp/`（公開コネクタ。Claude の Connectors Directory を先に、次に ChatGPT）で、HAPIS ゲートウェイ経由で REST を呼ぶ。コネクタに出すツールと引数の範囲は `hapis/catalog.json` が正本で、`scripts/hapis-sync-catalog.sh` で HAPIS へ同期する（依存は blue-ticker → HAPIS の一方向。`hapis/README.md`）。
 - クラウドセッションから REST を叩くときは `https://api.yuholab.com/v1/` を使う。まず `GET /v1/skills` で能力カタログ、`GET /v1/skills/{id}` で各エンドポイントの詳細を見る。銘柄コード不明なら `GET /v1/companies?q=` で検索し、`code` を `/v1/companies/{code}/overview|filings|financials` 等に渡す。未集計は 404、DB 非接続は 503。
