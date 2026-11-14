@@ -490,6 +490,9 @@ private struct BusinessProfitSection: View {
         }
     }
 
+    /// 拡大中は 5 本だけなので、棒の間が空きすぎないよう太くする。
+    private static let expandedBarWidth: CGFloat = 32
+
     /// 拡大中に並べる 3 つの要因の x カテゴリ（棒の名前）。
     private static func factorSlot(_ delta: ProfitDelta, _ kind: FactorKind) -> String { "\(delta.label)|\(kind.rawValue)" }
 
@@ -521,7 +524,7 @@ private struct BusinessProfitSection: View {
             ForEach(visibleYears) { year in
                 if let profit = year.businessProfit {
                     let label = Format.fy(year.fyEnd)
-                    BarMark(x: .value("年度", label), y: .value("金額", profit), width: .fixed(16))
+                    BarMark(x: .value("年度", label), y: .value("金額", profit), width: .fixed(expanded == nil ? 16 : Self.expandedBarWidth))
                         .foregroundStyle(profit < 0 ? Theme.negative : ChartStyle.primaryBar)
                         .cornerRadius(3)
                         .annotation(position: profit < 0 ? .bottom : .top, spacing: 2) {
@@ -651,7 +654,7 @@ private struct BusinessProfitSection: View {
             let level = levels[index]
             BarMark(
                 x: .value("年度", factor.slot), yStart: .value("金額", level.start), yEnd: .value("金額", level.end),
-                width: .fixed(16)
+                width: .fixed(Self.expandedBarWidth)
             )
             .foregroundStyle(factor.value >= 0 ? Theme.positive : Theme.negative)
             .cornerRadius(3)
