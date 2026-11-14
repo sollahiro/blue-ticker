@@ -2,7 +2,9 @@ import AppIntents
 import Foundation
 import NaturalLanguage
 import SwiftData
+#if canImport(VisualIntelligence)
 import VisualIntelligence
+#endif
 
 /// Siri / ショートカットから呼ぶ操作。銘柄の候補は出さず、入力した文字（社名または証券コード）を
 /// そのまま `GET /v1/companies?q=` で検索して使う。
@@ -154,6 +156,8 @@ struct CompanyEntityQuery: EntityQuery {
     }
 }
 
+// 実機向けの SDK にだけ VisualIntelligence がある（CI のシミュレータ x86_64 には無い）。
+#if canImport(VisualIntelligence)
 /// カメラ（Visual Intelligence）や画面の画像に写った文字・ラベルから会社を探す。
 struct CompanyVisualQuery: IntentValueQuery {
     func values(for input: SemanticContentDescriptor) async throws -> [CompanyEntity] {
@@ -162,6 +166,7 @@ struct CompanyVisualQuery: IntentValueQuery {
         return hits.map(CompanyEntity.init(hit:))
     }
 }
+#endif
 
 /// Visual Intelligence の結果から、有報LABの結果画面を開く。
 struct OpenCompanyEntityIntent: OpenIntent {
