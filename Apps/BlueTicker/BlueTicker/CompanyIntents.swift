@@ -193,8 +193,8 @@ struct FindCompaniesInImageIntent: AppIntent {
 
     @Parameter(
         title: "画像", supportedContentTypes: [.image],
-        inputConnectionBehavior: .connectToPreviousIntentResult,
-        requestValueDialog: "どの画像から会社を探しますか？"
+        requestValueDialog: "どの画像から会社を探しますか？",
+        inputConnectionBehavior: .connectToPreviousIntentResult
     )
     var image: IntentFile
 
@@ -236,8 +236,8 @@ struct FindCompaniesInTextIntent: AppIntent {
 
     @Parameter(
         title: "文章",
-        inputConnectionBehavior: .connectToPreviousIntentResult,
-        requestValueDialog: "どの文章から会社を探しますか？"
+        requestValueDialog: "どの文章から会社を探しますか？",
+        inputConnectionBehavior: .connectToPreviousIntentResult
     )
     var text: String
 
