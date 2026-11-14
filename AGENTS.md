@@ -1,15 +1,21 @@
 # AGENTS.md
 - 詳細設計は `docs/`、禁止事項は `.agents/rules/`、定型作業は `.agents/skills/` を正本とし、該当作業の文書だけ読む。テストの Spec 層（L0 期待値 / L1 実行器 / L2 実装密着）は `.agents/skills/xbrl-development/SKILL.md`。メガファイルや `swift test` のフル出力・成功時ログを文脈に流し込まず、該当節と `--filter`・失敗箇所だけ読む。
 - XBRL は実データで検証し、注記抽出は原本 HTML と照合する。statement・notes・breakdown には可能な限り由来 XBRL タグを載せる。 抽出の分担（共通部品へ抽象化・文脈が要る構造化は Jev・機能固有の傾向はハードコード）は `.agents/rules/xbrl.md`。
-- 外向きの製品名（API・MCP・ドキュメント・フィード）は「有報LAB」。英字は `YuhoLAB`、slug・ホスト名など小文字の識別子は `yuholab`（`yuho-lab` にしない）。`blt` / `BLT`（`blt-server`・`blt-ingest`・`BLT_*`・`blt_reader`・Linear キー `BLT`）は **Business Line Terminal**＝内部の抽出・解析ロジックの略なので、旧ブランドの残りとして消さない・改名しない。「Blue Ticker」「ブルーティッカー」は旧名で新たに書かない。`blue-ticker` と綴った識別子（リポジトリ・Swift モジュール・R2 等）の扱いは Linear の有報LAB リブランディング計画で決める。
+- 外向きの製品名（API・MCP・ドキュメント・フィード）は「有報LAB」。英字は `YuhoLAB`、slug・ホスト名など小文字の識別子は `yuholab`（`yuho-lab` にしない）。`blt` / `BLT`（`blt-server`・`blt-ingest`・`BLT_*`・`blt_reader`）は **Business Line Terminal**＝内部の抽出・解析ロジックの略なので、旧ブランドの残りとして消さない・改名しない。「Blue Ticker」「ブルーティッカー」は旧名で新たに書かない。`blue-ticker` と綴った識別子（リポジトリ・Swift モジュール・R2 等）の扱いは `docs/decisions/yuholab-rebrand.md` に従う。
 - 依存方向は `BltServer` → `BltServerCore` → `BlueTickerCore`。Core は Vapor / Fluent 非依存。
 - `BlueTickerCore` の `Analysis/`・`API/`・`Infrastructure/`・`Utils/` から `Services/`・`Server/` を参照しない。`Services/` から `Server/` も参照しない。
 - 市場は `JP`、開示 Source は `EDINET`。Region と Source を混同しない。
 - 本番 write は `BLT_NEON_WRITE_DATABASE_URL` の明示指定時だけ行う。RO への書き込みと本番 schema の削除は禁止。
-- Cursor Cloud の build / test は `-Xswiftc -disable-upcoming-feature -Xswiftc MemberImportVisibility` を付ける。
-- iOS（`Apps/BlueTicker`）の型検査・ビルドは GitHub Actions の `ios` ジョブ（`macos-26` / `xcodebuild`）で行う。`Apps/BlueTicker/` または `.github/workflows/ci.yml` に差分があるときだけ走る。Cloud Agent の Linux VM ではシミュレータも Xcode も無い。TestFlight / Archive は Xcode Cloud（配布専用）。GHA に Archive を足さず、Xcode Cloud をマージ品質ゲートにもしない。詳細は `docs/ios-client.md`。
+- Linux / 新しい Swift では、CI・Dockerfile と同じ `-Xswiftc -disable-upcoming-feature -Xswiftc MemberImportVisibility` を build / test に付ける。
+- iOS（`Apps/BlueTicker`）の型検査・ビルドは GitHub Actions の `ios` ジョブ（`macos-26` / `xcodebuild`）で行う。`Apps/BlueTicker/` または `.github/workflows/ci.yml` に差分があるときだけ走る。非 macOS 環境ではシミュレータも Xcode も無い。TestFlight / Archive は App Store Connect の Archive ワークフロー（現在の実装は Xcode Cloud。配布専用）。GHA に Archive を足さず、Xcode Cloud をマージ品質ゲートにもしない。詳細は `docs/ios-client.md`。
 - 新機能・XBRL・本番 ingest・release・tracker・デプロイは対応する `.agents/skills/` に従う。取り込み運用の Git 正本は `.agents/skills/production-ingest/SKILL.md` のみ（固定の起動スクリプトは置かない）。会社アイコンの品質基準は `.agents/skills/company-icon-quality/SKILL.md`（R2 手置き。fetch / ingest パイプラインは無い）。
 - 外部 API・CLI・DB schema・設定・公開契約の変更と、本番 write / 公開範囲の拡張はユーザー確認なしに行わない。
 - 製品面は REST・iOS・公開 MCP コネクタ。公開 MCP は HAPIS の `mcp/`（公開コネクタ。Claude の Connectors Directory を先に、次に ChatGPT）で、HAPIS ゲートウェイ経由で REST を呼ぶ。コネクタに出すツールと引数の範囲は `hapis/catalog.json` が正本で、`scripts/hapis-sync-catalog.sh` で HAPIS へ同期する（依存は blue-ticker → HAPIS の一方向。`hapis/README.md`）。
-- クラウドセッションから REST を叩くときは `https://api.yuholab.com/v1/` を使う（認証はプロキシが注入。API キー不要）。まず `GET /v1/skills` で能力カタログ、`GET /v1/skills/{id}` で各エンドポイントの詳細を見る。銘柄コード不明なら `GET /v1/companies?q=` で検索し、`code` を `/v1/companies/{code}/overview|filings|financials` 等に渡す。未集計は 404、DB 非接続は 503。
+- クラウドセッションから REST を叩くときは `https://api.yuholab.com/v1/` を使う。まず `GET /v1/skills` で能力カタログ、`GET /v1/skills/{id}` で各エンドポイントの詳細を見る。銘柄コード不明なら `GET /v1/companies?q=` で検索し、`code` を `/v1/companies/{code}/overview|filings|financials` 等に渡す。未集計は 404、DB 非接続は 503。
 - Contract `cache_version` / `fin-vN` / `screen-vN` は**破壊的変更**のときだけバンプする。細粒度・非破壊の修正はバンプせず、対象行・コードの削除または再指定と `--codes` で直す。正本は `.agents/rules/versioning.md`。
+- 承認（GO とマージを分ける、PR は Ready、短縮モード禁止）は `docs/process/approvals.md`。
+- CI が赤いときは、差分より先に失敗ジョブ名を書く（`docs/process/ci-triage.md`）。
+- カバレッジは financials と statements を分けて書く（`docs/process/coverage-reporting.md`）。
+- 有報と公開面の突合手順は `docs/process/yuho-harm-check.md`。実害の記録先はオーナー管理のトラッカー Sheet（`docs/process/tracker-placement.md`）。
+- Neon の子ブランチは使わない（`docs/process/neon-branches.md`、`.env.example`）。検証はローカル Postgres。
+- 生きている進捗・件数は Git に書かず、オーナー管理のトラッカー Sheet の「現在地」を見る（`docs/status/README.md`）。課題の置き場所は `docs/process/tracker-placement.md`。

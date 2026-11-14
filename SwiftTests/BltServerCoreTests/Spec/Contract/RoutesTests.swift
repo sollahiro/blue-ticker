@@ -48,6 +48,7 @@ private func withApp(
             app.migrations.add(CreateCompanySegmentBreakdowns())
             app.migrations.add(RenameCompanySegmentBreakdownsToCompanyBreakdowns())
             app.migrations.add(AddNotApplicableReasonToCompanyBreakdowns())
+            app.migrations.add(CreateCompanySegmentTransitions())
             app.migrations.add(CreateCompanyIcons())
             app.migrations.add(CreateCompanyOverviews())
             try await app.autoMigrate()
@@ -140,6 +141,7 @@ private func send(
             for path in [
                 "/v1/companies/7203/financials",
                 "/v1/companies/7203/waterfall",
+                "/v1/companies/7203/waterfall/segment",
                 "/v1/companies/7203/filing-content",
             ] {
                 let (status, json) = try await send(app, path)
@@ -296,6 +298,23 @@ private func send(
             let (status, json) = try await send(app, "/v1/companies/7203/waterfall")
             #expect(status == .notFound)
             #expect(json?["error"] as? String == "財務データは未集計です")
+        }
+    }
+
+    @Test func segmentWaterfallReturns404WhenNotStored() async throws {
+        try await withApp(databases: true) { app in
+            let (status, json) = try await send(app, "/v1/companies/7203/waterfall/segment")
+            #expect(status == .notFound)
+            #expect(json?["error"] as? String == "報告セグメントの年次推移は未算出です")
+        }
+    }
+
+    @Test func segmentWaterfallRejectsUnknownMetric() async throws {
+        try await withApp(databases: true) { app in
+            let (status, json) = try await send(
+                app, "/v1/companies/7203/waterfall/segment?metric=nope")
+            #expect(status == .badRequest)
+            #expect(json?["status"] as? Int == 400)
         }
     }
 

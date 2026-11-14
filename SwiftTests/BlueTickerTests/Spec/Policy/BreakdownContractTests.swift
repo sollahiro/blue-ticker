@@ -11,7 +11,7 @@ import Testing
         #expect(geographyN == 14)
         #expect(try #require(breakdownCacheVersionNumber("breakdown-geography-v12")) < geographyN)
         #expect(productServiceBreakdownCacheVersion == "breakdown-product_service-v2")
-        #expect(segmentBreakdownCacheVersion == "breakdown-segment-v2")
+        #expect(segmentBreakdownCacheVersion == "breakdown-segment-v3")
         #expect(isSupportedBreakdownAxis(breakdownAxisSegment))
         #expect(breakdownCacheVersion(forAxis: breakdownAxisSegment) == segmentBreakdownCacheVersion)
         #expect(breakdownCacheVersionNumber("breakdown-business-v15") == 15)
@@ -117,8 +117,9 @@ import Testing
                 warnings: [breakdownWarningCapexProseRemainder]) == true)
     }
 
-    @Test func retiredCapexAxesAreUnsupportedAndCapexIsSupported() {
-        #expect(isSupportedBreakdownAxis(breakdownAxisCapex))
+    @Test func retiredCapexAxesAreUnsupported() {
+        #expect(retiredBreakdownAxes.contains(breakdownAxisCapex))
+        #expect(isSupportedBreakdownAxis(breakdownAxisCapex) == false)
         #expect(breakdownCacheVersion(forAxis: breakdownAxisCapex) == capexBreakdownCacheVersion)
         for axis in retiredBreakdownAxes {
             #expect(isSupportedBreakdownAxis(axis) == false)
@@ -130,7 +131,25 @@ import Testing
         #expect(breakdownAxisProductService == "product_service")
         #expect(!breakdownSegmentMetricAxes.contains(breakdownAxisSegmentAssets)
             || breakdownAxisSegmentAssets == capexCellSegmentAssets)
-        #expect(breakdownSegmentMetricAxes.contains(breakdownAxisCapex))
+        #expect(!breakdownSegmentMetricAxes.contains(breakdownAxisCapex))
+        #expect(segmentBreakdownMinServableVersion == 3)
+        #expect(
+            isServableBreakdown(
+                source: breakdownSourceXbrlFacts, cacheVersion: "breakdown-segment-v2",
+                axis: breakdownAxisSegment) == false)
+        #expect(
+            isServableBreakdown(
+                source: breakdownSourceXbrlFacts, cacheVersion: segmentBreakdownCacheVersion,
+                axis: breakdownAxisSegment))
+    }
+
+    @Test func roundingGapUsesDecimalsTimesRowCountAndDoesNotRoundValues() {
+        #expect(segmentRoundingTolerance(decimals: -6, summedRowCount: 4) == 2_000_000)
+        #expect(isSegmentRoundingGap(gap: 2_000_000, decimals: -6, summedRowCount: 4))
+        #expect(isSegmentRoundingGap(gap: 2_000_001, decimals: -6, summedRowCount: 4) == false)
+        #expect(isSegmentRoundingGap(gap: 1, decimals: nil, summedRowCount: 4) == false)
+        let json = breakdownJSONAmount(1_583_719_000_000)
+        #expect((json as? NSNumber)?.int64Value == 1_583_719_000_000)
     }
 
     @Test func publicServingFailsClosedForUnknownSources() {

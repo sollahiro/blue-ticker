@@ -58,6 +58,8 @@ struct BreakdownFact: Equatable {
     var label: String?
     var unitRef: String?
     var decimals: String?
+    /// 主 member の XBRL 接頭辞（jpcrp_cor / 提出者拡張）。名前空間 URI は持たない。
+    var memberPrefix: String? = nil
 }
 
 struct ExtractedBreakdown: Equatable {
@@ -87,6 +89,7 @@ struct ExtractedBreakdown: Equatable {
             if let l = f.label { d["label"] = l }
             if let u = f.unitRef { d["unitRef"] = u }
             if let dec = f.decimals { d["decimals"] = dec }
+            if let prefix = f.memberPrefix { d["member_prefix"] = prefix }
             return d
         }
         return ["method": method, "tables": tablesArr, "facts": factsArr]
@@ -752,6 +755,59 @@ enum BreakdownExtractor {
             ?? breakdownNotApplicableNotFound
     }
 
+    /// 報告セグメント以外の事業を「重要性が乏しい」として省略している文
+    /// （4694「報告セグメントである「検査事業」以外の事業に関しては、重要性が乏しいと考えられるため、
+    /// 記載を省略しております。」）。のれん・減損の注記の省略文は含めない。
+    static func otherSegmentsOmittedStatement(in sentences: [String]) -> String? {
+        sentences.first { sentence in
+            let s = sentence.replacingOccurrences(of: " ", with: "")
+                .replacingOccurrences(of: "　", with: "")
+            guard s.contains("重要性が乏しい"), s.contains("省略") else { return false }
+            // 他の事業があると言っている文だけ。「〜のみの単一セグメントであり重要性が乏しいため省略」
+            // （2764 / 343A）や「報告セグメントは「建設工事」のみ」（1914）は他の事業の省略ではない。
+            guard s.contains("以外の事業") || s.contains("その他の事業")
+                || s.contains("他の事業セグメント")
+            else { return false }
+            return !s.contains("単一セグメント") && !s.contains("のれん") && !s.contains("減損")
+        }
+    }
+
+    /// 省略文から、開示されている報告セグメントの名前を取る。取れなければ nil（名前は作らない）。
+    static func reportableSegmentName(inOmittedStatement sentence: String) -> String? {
+        let s = sentence.replacingOccurrences(of: " ", with: "")
+            .replacingOccurrences(of: "　", with: "")
+        for pattern in [
+            "「([^」]{1,40})」以外の事業",
+            "([^。、「」のはがをにとで]{2,30})以外の事業",
+        ] {
+            guard let regex = try? NSRegularExpression(pattern: pattern) else { continue }
+            let ns = s as NSString
+            if let match = regex.firstMatch(in: s, range: NSRange(location: 0, length: ns.length)),
+                match.numberOfRanges > 1
+            {
+                let name = ns.substring(with: match.range(at: 1))
+                if !name.isEmpty { return name }
+            }
+        }
+        return nil
+    }
+
+    /// セグメント注記の地の文が「単一セグメント」と言っている文。否定（単一セグメントではない）は除く。
+    /// 専用タグが無くても、報告セグメントの member が 1 つも無い書類ではこの文で単一と決める
+    /// （2764 S100YL5S「レストラン事業のみの単一セグメントであり…記載を省略」）。
+    static func singleSegmentStatement(in sentences: [String]) -> String? {
+        sentences.first { sentence in
+            let s = sentence.replacingOccurrences(of: " ", with: "")
+                .replacingOccurrences(of: "　", with: "")
+            let states = s.contains("単一セグメント") || s.contains("単一の報告セグメント")
+                || s.contains("単一の事業セグメント") || s.contains("報告セグメントは単一")
+                || s.contains("事業セグメントは単一")
+            guard states else { return false }
+            return !s.contains("単一セグメントではな") && !s.contains("単一ではな")
+                && !s.contains("単一セグメントから") && !s.contains("単一セグメントでした")
+        }
+    }
+
     /// セグメント注記・関連情報の TextBlock の地の文を「。」で切った全文（表のセルは混ぜない）。
     /// `segmentNoteOmissionSentences` と違い「記載を省略」を含まない文（「該当事項はありません」）も残す。
     static func segmentNoteSentences(xbrlDir: URL) -> [String] {
@@ -804,6 +860,29 @@ enum BreakdownExtractor {
         "(本邦|日本|国内)(?!以外)[^。]{0,30}顧客[^。]{0,30}(売上|営業収益|収益)[^。]{0,20}(のみ|しかない|100\\s*(％|%))",
         "(売上|営業収益|収益)[^。]{0,20}(全て|すべて|全額)[^。]{0,10}(本邦|日本|国内)(?!以外)",
     ].map { try! NSRegularExpression(pattern: $0) }
+
+    /// geography の same_as 判定に使う文。のれん・減損注記の「セグメント情報に同様」は
+    /// 地域ごとの情報ではないので落とす。本邦90%・海外なし・地域別の省略文だけ残す。
+    static func geographyDisclosureSentences(from sentences: [String]) -> [String] {
+        sentences.filter(isGeographyDisclosureSentence)
+    }
+
+    /// 地域ごとの情報の省略・非開示の文か。のれん償却の「同様の情報」は含めない。
+    static func isGeographyDisclosureSentence(_ sentence: String) -> Bool {
+        let s = sentence.replacingOccurrences(of: " ", with: "").replacingOccurrences(of: "　", with: "")
+        if s.contains("のれん") || s.contains("減損") {
+            return s.contains("地域")
+        }
+        let markers = ["地域ごとの", "地域別", "所在地別", "本邦", "日本以外", "海外売上", "国外"]
+        return markers.contains(where: s.contains)
+    }
+
+    /// 本邦90%超・海外売上なしの決定論省略は、Jev の same_as より先に採用する
+    /// （6577: のれん注記の「セグメント情報に同様」を地域省略と誤認しない）。
+    static func geographyOmissionTakesPriority(overSameAs reason: String) -> Bool {
+        reason == breakdownNotApplicableDomesticDominant90pct
+            || reason == breakdownNotApplicableNoOverseasSales
+    }
 
     /// 省略理由を文だけから分類する（テスト可能な純関数）。海外売上なしを 90% 超より優先する。
     /// 当てはまらなければ nil。
@@ -1925,7 +2004,7 @@ enum BreakdownExtractor {
         return parsePeriodCue(trimmed) == nil
     }
 
-    private static func detectPeriod(
+    static func detectPeriod(
         table: Element, grid: [[String]], fiscalYearEnd: String?
     ) -> (String, BreakdownPeriodBasis)? {
         if let period = detectPeriodFromPreceding(table, fiscalYearEnd: fiscalYearEnd) {
@@ -2708,7 +2787,7 @@ enum BreakdownExtractor {
     /// 資産表のあとに売上表が続く開示では、全先行キャプションに非流動資産が残るため
     /// 単純な any-match だと売上表まで落とす（S100W4MT）。
     /// `precedingShortCaptions` は文書順（末尾＝直近）なので末尾から探索する。
-    private static func nearestGeographyMetricCaption(before table: Element) -> String? {
+    static func nearestGeographyMetricCaption(before table: Element) -> String? {
         let captions = precedingShortCaptions(before: table)
         for text in captions.reversed() {
             if isGeographyAssetMetricCaption(text) { return text }
@@ -2719,7 +2798,7 @@ enum BreakdownExtractor {
         return captions.last
     }
 
-    private static func isGeographyAssetMetricCaption(_ text: String) -> Bool {
+    static func isGeographyAssetMetricCaption(_ text: String) -> Bool {
         let isAsset = Xbrl.geographyAssetMetricCaptionKeywords.contains(where: text.contains)
         guard isAsset else { return false }
         // 「売上高と非流動資産」のような併記は売上側として残す
@@ -3069,7 +3148,14 @@ enum BreakdownExtractor {
 
     /// contextRef → {dimension局所名: member局所名} のマップを作る。
     static func loadDimensionContextMap(xbrlDir: URL) -> [String: [String: String]] {
+        loadDimensionContextMaps(xbrlDir: xbrlDir).dims
+    }
+
+    static func loadDimensionContextMaps(xbrlDir: URL) -> (
+        dims: [String: [String: String]], prefixes: [String: [String: String]]
+    ) {
         var contextMap: [String: [String: String]] = [:]
+        var prefixes: [String: [String: String]] = [:]
         for root in XBRLUtils.xbrlSearchRoots(in: xbrlDir) {
             for file in XBRLUtils.findXbrlFiles(in: root) {
             guard let data = try? Data(contentsOf: file) else { continue }
@@ -3079,9 +3165,10 @@ enum BreakdownExtractor {
             parser.delegate = collector
             parser.parse()
             contextMap.merge(collector.contextMap) { _, new in new }
+            prefixes.merge(collector.memberPrefixByContext) { _, new in new }
             }
         }
-        return contextMap
+        return (contextMap, prefixes)
     }
 
     /// dimension 付き fact を抽出する（売上等への意味づけはしない汎用処理）。
@@ -3098,11 +3185,13 @@ enum BreakdownExtractor {
         contextMap: [String: [String: String]]
     ) -> [BreakdownFact] {
         let allFacts = XBRLUtils.collectAllNumericFacts(in: xbrlDir)
+        let prefixes = loadDimensionContextMaps(xbrlDir: xbrlDir).prefixes
         var results: [BreakdownFact] = []
         for (tag, ctxMap) in allFacts {
             for (ctxID, fact) in ctxMap {
                 guard let dims = contextMap[ctxID], !dims.isEmpty else { continue }
                 guard dims.keys.contains(where: { dim in dimensionKeywords.contains(where: dim.contains) }) else { continue }
+                let member = XBRLUtils.primaryBreakdownMember(dims)
                 results.append(BreakdownFact(
                     tag: tag,
                     contextRef: ctxID,
@@ -3110,7 +3199,8 @@ enum BreakdownExtractor {
                     value: fact.value,
                     label: fact.label,
                     unitRef: fact.unitRef,
-                    decimals: fact.decimals
+                    decimals: fact.decimals,
+                    memberPrefix: member.flatMap { prefixes[ctxID]?[$0] }
                 ))
             }
         }
@@ -3134,7 +3224,8 @@ enum BreakdownExtractor {
                         value: fact.value,
                         label: fact.label,
                         unitRef: fact.unitRef,
-                        decimals: fact.decimals
+                        decimals: fact.decimals,
+                        memberPrefix: nil
                     ))
                 }
             }
@@ -3306,8 +3397,10 @@ private final class ContextDimensionSAXCollector: NSObject, XMLParserDelegate {
     private static let xbrldiNS = "http://xbrl.org/2006/xbrldi"
 
     private(set) var contextMap: [String: [String: String]] = [:]
+    private(set) var memberPrefixByContext: [String: [String: String]] = [:]
     private var currentContextID: String?
     private var currentDims: [String: String] = [:]
+    private var currentPrefixes: [String: String] = [:]
     private var contextDepth = 0
     private var memberDimension: String?
     private var memberText = ""
@@ -3328,6 +3421,7 @@ private final class ContextDimensionSAXCollector: NSObject, XMLParserDelegate {
         } else if elementName == "context", let id = attributeDict["id"] {
             currentContextID = id
             currentDims = [:]
+            currentPrefixes = [:]
             contextDepth = 0
         }
     }
@@ -3343,10 +3437,14 @@ private final class ContextDimensionSAXCollector: NSObject, XMLParserDelegate {
         qualifiedName qName: String?
     ) {
         if let dim = memberDimension, elementName == "explicitMember", namespaceURI == Self.xbrldiNS {
+            let qname = memberText.trimmingCharacters(in: .whitespacesAndNewlines)
             let dimLocal = localPart(dim)
-            let valLocal = localPart(memberText.trimmingCharacters(in: .whitespacesAndNewlines))
+            let valLocal = localPart(qname)
             if !dimLocal.isEmpty && !valLocal.isEmpty {
                 currentDims[dimLocal] = valLocal
+                if let colon = qname.lastIndex(of: ":") {
+                    currentPrefixes[valLocal] = String(qname[..<colon])
+                }
             }
             memberDimension = nil
             memberText = ""
@@ -3355,6 +3453,9 @@ private final class ContextDimensionSAXCollector: NSObject, XMLParserDelegate {
         if contextDepth == 0 {
             if !currentDims.isEmpty {
                 contextMap[currentContextID!] = currentDims
+                if !currentPrefixes.isEmpty {
+                    memberPrefixByContext[currentContextID!] = currentPrefixes
+                }
             }
             currentContextID = nil
         } else {
@@ -3365,5 +3466,31 @@ private final class ContextDimensionSAXCollector: NSObject, XMLParserDelegate {
     private func localPart(_ qname: String) -> String {
         guard let idx = qname.lastIndex(of: ":") else { return qname }
         return String(qname[qname.index(after: idx)...])
+    }
+}
+
+extension BreakdownExtractor {
+    /// 指定タグの TextBlock を（訂正の展開ディレクトリを後勝ちで）集める。`GeographyAssetCells` 用。
+    static func textBlocks(
+        xbrlDir: URL, tags: Set<String>
+    ) -> [(tag: String, content: String, contextRef: String?)] {
+        var blocksByTag: [String: [(tag: String, content: String, contextRef: String?)]] = [:]
+        var tagOrder: [String] = []
+        for root in XBRLUtils.xbrlSearchRoots(in: xbrlDir) {
+            var layer: [String: [(tag: String, content: String, contextRef: String?)]] = [:]
+            for file in XBRLUtils.findXbrlFiles(in: root) {
+                guard let data = try? Data(contentsOf: file) else { continue }
+                let collector = TextBlockSAXCollector(targetTags: tags)
+                let parser = XMLParser(data: data)
+                parser.delegate = collector
+                parser.parse()
+                for block in collector.blocks { layer[block.tag, default: []].append(block) }
+            }
+            for (tag, blocks) in layer {
+                if blocksByTag[tag] == nil { tagOrder.append(tag) }
+                blocksByTag[tag] = blocks
+            }
+        }
+        return tagOrder.flatMap { blocksByTag[$0] ?? [] }
     }
 }

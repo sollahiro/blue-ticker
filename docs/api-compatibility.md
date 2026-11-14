@@ -82,7 +82,12 @@ breaking 再編時は可能な範囲で:
 - breakdown `axis=geography` の 404 reason に `domestic_dominant_90pct`（本邦の外部顧客への売上高が 90% 超のため省略）と `no_overseas_sales`（海外売上なし）を足した（値の追加なので互換。`apiSkillsSchemaVersion` は 11 のまま）。どちらでもない欠測は従来どおり `not_found`。
 - breakdown `axis=segment` の行に、報告セグメント表のセル `segment_assets` / `flow`（`flow_metric`）/ `equity_method_investments` と、payload のセルごとの分母を足した（互換追加。`breakdown-segment-v2`）。`axis=equity_method_investments` は廃止し常に 404（breaking。`apiSkillsSchemaVersion` 12）。HAPIS では非公開の軸だったので公開コネクタに影響しない。
 - breakdown の `axis` 省略時の既定を `product_service` から `segment` に変えた（意味の変更なので breaking。`apiSkillsSchemaVersion` 13）。`axis` を明示しているクライアントには影響しない。
+- breakdown `axis=geography` の行にセル `assets`（地域ごとの有形固定資産／非流動資産）と、payload の `assets`（分母）・`assets_metric`（`property_plant_equipment` / `noncurrent_assets`）を足した（互換追加。開示の無い書類はキーを出さない。`apiSkillsSchemaVersion` は 14 のまま）。
 - breakdown `axis=property_plant_equipment` / `goodwill_and_intangibles` を廃止して常に 404 にし、`axis=fixed_assets` に統合した（breaking。`apiSkillsSchemaVersion` 14、`breakdown-fixed-assets-v1`）。行に `asset_class`（`property_plant_equipment` / `intangible_assets`）、payload に同名キーで区分ごとの合計を持つ。日本基準は連結 BS の内訳科目から返す（旧2軸は IFRS だけで日本基準は `not_found` だった）。HAPIS では非公開の軸だったので公開コネクタに影響しない。
+- breakdown の軸 `capex` を廃止して常に 404 にし、報告セグメント軸 `segment` へ統合した（breaking。`apiSkillsSchemaVersion` 15、`breakdown-segment-v3`、read 床 3）。行は `segment_key` とセル `{value, basis, source, decimals?}`（`external_sales` / `profit` / `segment_assets` / `capital_expenditures` / `noncurrent_asset_additions`）。`flow` / `flow_metric` は出さない。値は XBRL の tagged 円そのもので丸めない。セグメント+調整と連結のずれが丸め幅（`0.5 × 10^(-decimals) × 加算行数`）以内なら差額行は出さず `rounding_gaps` に生値だけ残す。幅を超えたずれだけ `row_kind=difference`。`GET /v1/companies/{code}/waterfall/segment` を追加。`fin-vN` / `screen-vN` は据え置き。
+- 報告セグメント年次は `GET /waterfall/segment` 1 本にした（breaking。`apiSkillsSchemaVersion` 16）。`years`（既定 5、新しい順）と `fiscal_year`（単年）。各年は `segments` / `adjustment` / `consolidated` / `difference`。つなぎは行の `prior`（`connect` / `rename` / `reorg` / `break` と `basis`）と年の `line_cut`。`/waterfall/segment/transitions` は置かない。応答に無い年はサーバ側で補完しない。`cache_version` / ingest 範囲は変えない。
+- breakdown `axis=segment` の `sales_basis` に値 `external_including_other_revenue` を足した（互換追加。`apiSkillsSchemaVersion` は 16 のまま）。外部顧客への売上高にその他の収益を足した計が連結売上高に一致する書類で、`external_sales` がその計になる。
+- breakdown `axis=segment` は、単一セグメントの会社を 404 にせず返す。payload に `segment_structure`（`single` / `multiple`）を足した。事業名が取れない単一セグメントは `row_kind=EntityTotal` の行だけで、セグメント行は無い（`apiSkillsSchemaVersion` は 16 のまま。v3 は未取り込みのため版は上げない）。
 
 ## Codable 応答への段階移行
 

@@ -47,6 +47,35 @@ import Testing
                 in: "総額は△5,256万円であります。", preferredPhrases: []).isEmpty)
     }
 
+    /// キングジム: 総額の文と工場の一部が並ぶとき、総額だけを会社全体とする。
+    /// 穴吹興産: 取得いたしましたの1文だけなら Jev なし。事業においての1文は採らない。
+    @Test func deterministicCompanyTotalPicksSoleAcquisitionOrUniqueSogaku() {
+        let kingjim = BreakdownProseToolkit.candidates(
+            in: """
+                当連結会計年度において、総額６億8,006万円の設備投資を実施いたしました。\
+                その主なものは、工場生産設備の３億5,256万円であります。
+                """,
+            preferredPhrases: [])
+        #expect(Set(kingjim.map(\.yen)) == [680_060_000, 352_560_000])
+        #expect(BreakdownProseToolkit.deterministicCompanyTotal(in: kingjim)?.yen == 680_060_000)
+
+        let anabuki = BreakdownProseToolkit.candidates(
+            in: "太陽光発電設備、倉庫及び高圧受電設備等、2,180,870千円を取得いたしました。",
+            preferredPhrases: [])
+        #expect(anabuki.map(\.yen) == [2_180_870_000])
+        #expect(
+            BreakdownProseToolkit.deterministicCompanyTotal(in: anabuki)?.yen == 2_180_870_000)
+
+        let limited = BreakdownProseToolkit.candidates(
+            in: "不動産関連事業において1,059,739千円を取得いたしました。",
+            preferredPhrases: [])
+        #expect(BreakdownProseToolkit.deterministicCompanyTotal(in: limited) == nil)
+
+        let noCue = BreakdownProseToolkit.candidates(
+            in: "ヘルスケアの設備投資は10百万円であります。", preferredPhrases: [])
+        #expect(BreakdownProseToolkit.deterministicCompanyTotal(in: noCue) == nil)
+    }
+
     @Test func remainderMatchUsesSentenceYenAndDoesNotInventTheGap() {
         let pool = [
             BreakdownProseCandidate(sentence: "全社は20百万円であります", yen: 20_000_000),

@@ -95,9 +95,27 @@ enum CapexProseTotalDecision {
         plainText: String, code: String = "", docID: String = "",
         decider: any CapexProseDeciding
     ) async -> CapexProseDecision {
-        await BreakdownProseToolkit.decideCompanyTotal(
+        let found = BreakdownProseToolkit.candidates(
+            in: plainText, preferredPhrases: preferredPhrases)
+        if found.isEmpty {
+            // 7050「設備投資はありません」を含め、金額が無い本文から 0 円は作らない。
+            // 0 と null のどちらを Summary に載せるかは未確定。
+            return .notApplied
+        }
+        return await BreakdownProseToolkit.decideCompanyTotal(
             plainText: plainText, code: code, docID: docID, axis: breakdownAxisCapex,
             preferredPhrases: preferredPhrases, policy: classifyPolicy, decider: decider)
+    }
+
+    /// 「当連結会計年度における設備投資はありません」のように金額が無い明示。
+    /// 0 か null かは未確定なので、総額候補にも 0 円の行にもしない。
+    static func mentionsNoCurrentCapitalExpenditures(_ text: String) -> Bool {
+        let compact = text.filter { !$0.isWhitespace && $0 != "　" }
+        let needles = [
+            "設備投資はありません", "設備投資はございません", "設備投資はない",
+            "設備投資を行っておりません", "設備投資を実施しておりません",
+        ]
+        return needles.contains { compact.contains($0) }
     }
 
     /// タグも表も無い Overview セルへ、当期総額 1 文を載せる。他セルは触らない。

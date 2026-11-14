@@ -32,7 +32,7 @@ public let statementNoteTypeLeaseLiabilities = "lease_liabilities"
 /// US-GAAP は `us_gaap_unsupported`。銀行など連結に費目タグが無い場合は `not_found`
 /// （個別注記のみの開示は拾わない）。
 /// **未公開・未配線**: `allStatementNoteTypes` / ingest / job-03 / ApiSkills に載せない。
-/// resolver・cache_version・smoke/golden は実装済み。公開時に一覧へ戻す（進捗は Linear Team `blue-ticker`）。
+/// resolver・cache_version・smoke/golden は実装済み。公開時に一覧へ戻す（進捗はオーナー管理のトラッカー Sheet。`docs/process/tracker-placement.md`）。
 public let statementNoteTypeSgaExpenseBreakdown = "sga_expense_breakdown"
 
 /// ingest / `--note-types` バリデーション用の公開 note_type 一覧（ingest の走査順）。

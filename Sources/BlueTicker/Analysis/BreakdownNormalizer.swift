@@ -27,6 +27,8 @@ struct BreakdownRow: Equatable {
     var segmentBasis: String? = nil
     /// 90%省略の1行など。
     var disclosureBasis: String? = nil
+    /// XBRL `decimals` 属性。HTML 行は nil。
+    var decimals: Int? = nil
 }
 
 struct BreakdownSnapshot: Equatable {
@@ -233,7 +235,8 @@ enum BreakdownNormalizer {
                 amount: fact.value,
                 share: fact.value / denominator,
                 profit: profitByMember[member]?.value,
-                rowKind: kinds[member]!
+                rowKind: kinds[member]!,
+                decimals: parseXBRLDecimals(fact.decimals)
             )
         }
 
@@ -332,7 +335,8 @@ enum BreakdownNormalizer {
                 amount: fact.value,
                 share: fact.value / denominator,
                 profit: profitByMember[member]?.value,
-                rowKind: kinds[member]!
+                rowKind: kinds[member]!,
+                decimals: parseXBRLDecimals(fact.decimals)
             )
         }
 
@@ -730,13 +734,41 @@ enum BreakdownNormalizer {
             allowDerivedSumAsDenominator: allowDerivedSumAsDenominator)
     }
 
+    /// 外部顧客売上（SalesToExternalCustomers* 等）。セグメント間含む計は使わない。
+    static func normalizeTrueExternalSales(
+        facts: [BreakdownFact], labelsByTag: [String: String] = [:],
+        memberParents: [String: String] = [:]
+    ) -> BreakdownSnapshot? {
+        normalizeSegmentMetric(
+            facts: facts, amountTags: Xbrl.segmentTrueExternalRevenueTags,
+            axis: breakdownAxisSegment, warningPrefix: "external_sales",
+            labelsByTag: labelsByTag, memberParents: memberParents,
+            allowNonConsolidatedEntityTotal: false,
+            useConsolidatedEntityTotalAsDenominatorWhenPresent: true,
+            allowDerivedSumAsDenominator: false)
+    }
+
+    /// セグメント member に付いた売上の計（その他の収益を含む）。採否は `SegmentExternalSales.resolve`。
+    static func normalizeSegmentSalesTotal(
+        facts: [BreakdownFact], tag: String, labelsByTag: [String: String] = [:],
+        memberParents: [String: String] = [:]
+    ) -> BreakdownSnapshot? {
+        normalizeSegmentMetric(
+            facts: facts, amountTags: [tag],
+            axis: breakdownAxisSegment, warningPrefix: "external_sales",
+            labelsByTag: labelsByTag, memberParents: memberParents,
+            allowNonConsolidatedEntityTotal: false,
+            useConsolidatedEntityTotalAsDenominatorWhenPresent: true,
+            allowDerivedSumAsDenominator: false)
+    }
+
     /// セグメント資産。
     static func normalizeSegmentAssets(
         facts: [BreakdownFact], axis: String = breakdownAxisSegmentAssets,
         labelsByTag: [String: String] = [:], memberParents: [String: String] = [:]
     ) -> BreakdownSnapshot? {
         guard let snapshot = normalizeSegmentMetric(
-            facts: facts, amountTags: Xbrl.segmentAssetsTags, axis: axis,
+            facts: facts, amountTags: SegmentMetricDiscovery.segmentAssetTags(in: facts), axis: axis,
             warningPrefix: "segment_assets", labelsByTag: labelsByTag, memberParents: memberParents,
             allowNonConsolidatedEntityTotal: false,
             useConsolidatedEntityTotalAsDenominatorWhenPresent: true)
@@ -794,7 +826,9 @@ enum BreakdownNormalizer {
         labelsByTag: [String: String] = [:], memberParents: [String: String] = [:]
     ) -> BreakdownSnapshot? {
         normalizeSegmentMetric(
-            facts: facts, amountTags: Xbrl.segmentCapitalExpenditureTags, axis: axis,
+            facts: facts,
+            amountTags: SegmentMetricDiscovery.capitalExpenditureTags(in: facts),
+            axis: axis,
             warningPrefix: "capital_expenditures", labelsByTag: labelsByTag,
             memberParents: memberParents,
             allowNonConsolidatedEntityTotal: false,
@@ -1022,7 +1056,8 @@ enum BreakdownNormalizer {
                 labelRaw: member, label: labelsByTag[member], amount: amount,
                 share: denominator > 0 ? amount / denominator : nil, profit: nil,
                 rowKind: kinds[member]!,
-                categoryGroup: categoryGroup, category: category)
+                categoryGroup: categoryGroup, category: category,
+                decimals: parseXBRLDecimals(perMember[member]?.decimals))
         }
 
         return BreakdownSnapshot(

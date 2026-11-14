@@ -772,8 +772,10 @@ public extension BltServerContext {
             fiscalYearEnd: BreakdownExtractor.currentFiscalYearEnd(fromXbrlDir: xbrlDir),
             docID: docID, xbrlDir: xbrlDir, pattern: pattern, employeeLabels: employeeLabels)
         if let snapshot = result.snapshot {
-            let payload = await segmentPayloadWithMetricCells(
+            var payload = await segmentPayloadWithMetricCells(
                 breakdownSnapshotPayload(from: snapshot), docID: docID, xbrlDir: xbrlDir)
+            payload.segmentStructure = SegmentV3.segmentStructure(
+                classification: pattern.classification, rows: payload.rows)
             return attachingPattern(
                 pattern,
                 to: breakdownByRecordingOverlayRegressions(
@@ -792,39 +794,118 @@ public extension BltServerContext {
                                         audit: result.audit.map(llmBreakdownAuditPayload(from:))))
     }
 
-    /// segment 行へ報告セグメント表のセル（segment_assets / flow / equity_method_investments）を載せる。
-    /// capex 軸と同じ決定論の正規化を使い、本文からの不足分補完（Jev）はしない。
+    /// segment-v3: 売上・利益・資産・CE・NAA を member 和集合の1行に載せ、Overview は別ブロック。
     fileprivate func segmentPayloadWithMetricCells(
         _ payload: BreakdownSnapshotPayload, docID: String, xbrlDir: URL
     ) async -> BreakdownSnapshotPayload {
         let cached = await businessSegmentDimensionCache.load(docID: docID, xbrlDir: xbrlDir)
         let memberParents = XBRLUtils.operatingSegmentMemberParents(in: xbrlDir)
-        let cePresent = CapexNormalizer.filingHasCurrentTags(
-            in: xbrlDir, tags: Xbrl.segmentCapitalExpenditureTags)
-        let naaPresent = CapexNormalizer.filingHasCurrentTags(
-            in: xbrlDir, tags: Xbrl.segmentNoncurrentAssetAdditionTags)
+        let ceTags = SegmentMetricDiscovery.capitalExpenditureTags(in: cached.facts)
+        let naaTags = Xbrl.segmentNoncurrentAssetAdditionTags
+        let cePresent = CapexNormalizer.filingHasCurrentTags(in: xbrlDir, tags: ceTags)
+        let naaPresent = CapexNormalizer.filingHasCurrentTags(in: xbrlDir, tags: naaTags)
         let allTags = XBRLUtils.collectAllNumericElements(in: xbrlDir, nilAsZero: false)
-        let flowTags = cePresent
-            ? Xbrl.segmentCapitalExpenditureTags : Xbrl.segmentNoncurrentAssetAdditionTags
-        let flowItem = resolveItem(fieldSetFromDuration(allTags), tags: flowTags)
-        let flowTotal: (value: Double, tag: String)? =
-            flowItem.current.flatMap { value in
-                guard let tag = flowItem.tag, value > 0 else { return nil }
+        let durationFS = fieldSetFromDuration(allTags)
+        let ceItem = resolveItem(durationFS, tags: ceTags)
+        let naaItem = resolveItem(durationFS, tags: naaTags)
+        let ceTotal: (value: Double, tag: String)? =
+            ceItem.current.flatMap { value in
+                guard let tag = ceItem.tag, value != 0 else { return nil }
+                return (value, tag)
+            }
+        let naaTotal: (value: Double, tag: String)? =
+            naaItem.current.flatMap { value in
+                guard let tag = naaItem.tag, value != 0 else { return nil }
                 return (value, tag)
             }
         var assets = BreakdownNormalizer.normalizeSegmentAssets(
             facts: cached.facts, labelsByTag: cached.labelsByTag, memberParents: memberParents)
         assets = BreakdownNormalizer.enrichSegmentAssetsWithDifferenceTable(
             snapshot: assets, xbrlDir: xbrlDir)
-        let capex = CapexNormalizer.normalize(
-            facts: cached.facts, labelsByTag: cached.labelsByTag, memberParents: memberParents,
-            capitalExpendituresPresent: cePresent, noncurrentAssetAdditionsPresent: naaPresent,
-            flowCompanyTotal: flowTotal, prebuiltAssets: assets)
+        var capitalExpenditures = BreakdownNormalizer.normalizeCapitalExpenditures(
+            facts: cached.facts, labelsByTag: cached.labelsByTag, memberParents: memberParents)
+        capitalExpenditures = CapexNormalizer.withCompanyTotalDenominator(
+            capitalExpenditures, companyTotal: ceTotal, warningPrefix: "capital_expenditures")
+            ?? (cePresent
+                ? CapexNormalizer.companyTotalSnapshot(
+                    axis: breakdownAxisCapitalExpenditures, total: ceTotal,
+                    warningPrefix: "capital_expenditures")
+                : nil)
+        var noncurrent = BreakdownNormalizer.normalizeNoncurrentAssetAdditions(
+            facts: cached.facts, labelsByTag: cached.labelsByTag, memberParents: memberParents)
+        noncurrent = CapexNormalizer.withCompanyTotalDenominator(
+            noncurrent, companyTotal: naaTotal, warningPrefix: "noncurrent_asset_additions")
+            ?? (!cePresent && naaPresent
+                ? CapexNormalizer.companyTotalSnapshot(
+                    axis: breakdownAxisNoncurrentAssetAdditions, total: naaTotal,
+                    warningPrefix: "noncurrent_asset_additions")
+                : nil)
+        var overviewFacts = BreakdownNormalizer.normalizeCapitalExpendituresOverview(
+            facts: cached.facts, labelsByTag: cached.labelsByTag, memberParents: memberParents)
+        if let snapshot = overviewFacts {
+            let filled = await CapexOverviewUntaggedRowFill.fill(
+                snapshot: snapshot, facts: cached.facts, xbrlDir: xbrlDir,
+                decider: capexOverviewRowDecider, docID: docID)
+            overviewFacts = filled.snapshot
+        }
+        var overviewHTML: BreakdownSnapshot?
+        if case .resolved(let note, _, _) =
+            StatementNotesResolver.resolveCapitalExpendituresOverview(xbrlDir: xbrlDir),
+            let segments = note.capexSegments
+        {
+            overviewHTML = BreakdownNormalizer.normalizeCapitalExpendituresOverview(
+                segments: segments)
+        }
+        let overviewItem = BreakdownFinancialsResolver.breakdownCanonicalCapexOverviewItem(
+            xbrlDir: xbrlDir)
+        let overviewTotal: BreakdownMetricCellPayload? =
+            overviewItem.value.flatMap { value in
+                guard let tag = overviewItem.tag, value != 0 else { return nil }
+                return BreakdownMetricCellPayload(
+                    value: value, basis: breakdownSourceXbrlFacts, source: tag)
+            }
+        let overview = SegmentV3.pickOverview(html: overviewHTML, facts: overviewFacts)
         let equityMethod = BreakdownNormalizer.normalizeEquityMethodInvestments(
             facts: cached.facts, labelsByTag: cached.labelsByTag)
-        return SegmentMetricCells.merge(
-            segment: payload, capex: capex,
-            equityMethod: equityMethod.map(breakdownSnapshotPayload(from:)))
+        // 「外部顧客への売上高」と「その他の収益を含む計」が両方あるときは、連結売上高に一致する計を採る。
+        let externalResolution = SegmentExternalSales.resolve(
+            facts: cached.facts,
+            consolidatedSales: BreakdownFinancialsResolver.financialsCanonicalSales(xbrlDir: xbrlDir),
+            labelsByTag: cached.labelsByTag, memberParents: memberParents)
+        let external = externalResolution?.snapshot
+        let edinetCode = XBRLUtils.extractTextblockHtml(
+            in: xbrlDir, textblockTag: Xbrl.edinetCodeDEITag)?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        var memberPrefixes: [String: String] = [:]
+        for fact in cached.facts {
+            guard let member = XBRLUtils.primaryBreakdownMember(fact.dimensions),
+                let prefix = fact.memberPrefix
+            else { continue }
+            if memberPrefixes[member] == nil { memberPrefixes[member] = prefix }
+        }
+        var assembled = SegmentV3.assemble(
+            segment: payload, assets: assets, capitalExpenditures: capitalExpenditures,
+            noncurrentAssetAdditions: noncurrent, overview: overview,
+            overviewTotal: overviewTotal, equityMethod: equityMethod, external: external,
+            externalSalesBasis: externalResolution?.salesBasis,
+            edinetCode: edinetCode, memberPrefixes: memberPrefixes,
+            labelsByTag: cached.labelsByTag)
+        if assembled.overview?.total == nil {
+            let filled = await fillCapexProse(
+                payload: BreakdownSnapshotPayload(
+                    axis: breakdownAxisCapex, denominator: 0, denominatorTag: "",
+                    rows: [], sourceKind: assembled.sourceKind, needsReview: false, warnings: []),
+                xbrlDir: xbrlDir, docID: docID)
+            if case .resolved(let result) = filled,
+                let yen = result.payload.capitalExpendituresOverview, yen.denominator > 0
+            {
+                var block = assembled.overview ?? SegmentOverviewPayload(total: nil, categories: [])
+                block.total = BreakdownMetricCellPayload(
+                    value: yen.denominator, basis: result.source, source: yen.denominatorTag)
+                assembled.overview = block
+            }
+        }
+        return assembled
     }
 
     /// 内訳取り込み: 書類1件分の product_service 軸内訳を解決する。
@@ -1014,12 +1095,18 @@ public extension BltServerContext {
         }
         let geography = BreakdownExtractor.extractGeographyInfo(xbrlDir: xbrlDir)
         if geography.method == "not_found" {
+            // 本邦90%超・海外売上なしは related-info の地域ごとの情報の省略。のれん注記の
+            // 「セグメント情報に同様」より先に採用する（6577 S100Z940）。
+            let omission = BreakdownExtractor.geographyNotFoundReason(xbrlDir: xbrlDir)
+            if BreakdownExtractor.geographyOmissionTakesPriority(overSameAs: omission) {
+                return .notApplicable(reason: omission)
+            }
             if let sameAs = await relatedInfoSameAsResult(
                 axis: .geography, docID: docID, xbrlDir: xbrlDir)
             {
                 return sameAs
             }
-            return .notApplicable(reason: BreakdownExtractor.geographyNotFoundReason(xbrlDir: xbrlDir))
+            return .notApplicable(reason: omission)
         }
         let labelsByTag = XBRLUtils.loadLabelsByTag(in: xbrlDir)
         // カバー判定と share の分母は PL トップライン（売上高の上の合計行など）。無ければ Summary 売上。
@@ -1066,11 +1153,16 @@ public extension BltServerContext {
             return applyingSegmentNoteDecision(
                 gate.outcome, to: .notApplicable(reason: reason, audit: audit))
         }
+        // 地域ごとの有形固定資産／非流動資産のセル（決定論。表が確定できなければ付けない）。
+        var payload = breakdownSnapshotPayload(from: snapshot)
+        if let assets = GeographyAssetCells.extract(xbrlDir: xbrlDir) {
+            payload = GeographyAssetCells.attach(assets, to: payload)
+        }
         return applyingSegmentNoteDecision(
             gate.outcome,
             to: breakdownByRecordingOverlayRegressions(
                 .resolved(
-                    payload: breakdownSnapshotPayload(from: snapshot), source: result.source.rawValue,
+                    payload: payload, source: result.source.rawValue,
                     contentHash: hash, audit: result.audit.map(llmBreakdownAuditPayload(from:))),
                 xbrlDir: xbrlDir))
     }
@@ -1116,8 +1208,10 @@ public extension BltServerContext {
             return .notApplicable(reason: breakdownNotApplicableNotFound)
         }
         // 表の一部の行に fact が付かない会社（純粋持株会社等）は、差額と整数一致する未タグ行だけ補う。
-        let filled = EmployeesUntaggedRowFill.fill(
+        // 単一セグメントの事業部門表（タグは全社だけ）はアンカーが無いので部門表を別に読む。
+        var filled = EmployeesUntaggedRowFill.fill(
             snapshot: snapshot, facts: cached.facts, xbrlDir: xbrlDir)
+        filled = EmployeesUntaggedRowFill.fillDepartmentTable(snapshot: filled, xbrlDir: xbrlDir)
         let extracted = ExtractedBreakdown(method: "xbrl_facts", tables: [], facts: cached.facts)
         let hash = breakdownContentHash(extracted: extracted, consolidatedSales: nil)
         return breakdownByRecordingOverlayRegressions(
@@ -1438,11 +1532,16 @@ private func breakdownSnapshotPayload(from s: BreakdownSnapshot) -> BreakdownSna
     BreakdownSnapshotPayload(
         axis: s.axis, denominator: s.denominator, denominatorTag: s.denominatorTag,
         rows: s.rows.map {
-            BreakdownRowPayload(
+            var row = BreakdownRowPayload(
                 labelRaw: $0.labelRaw, label: $0.label ?? $0.labelRaw, amount: $0.amount,
                 profit: $0.profit, rowKind: $0.rowKind, description: $0.description,
                 categoryGroup: $0.categoryGroup, category: $0.category,
                 segmentBasis: $0.segmentBasis, disclosureBasis: $0.disclosureBasis)
+            if let profit = $0.profit {
+                row.profitCell = BreakdownMetricCellPayload(
+                    value: profit, basis: s.sourceKind, source: "profit", decimals: $0.decimals)
+            }
+            return row
         },
         sourceKind: s.sourceKind, needsReview: s.needsReview, warnings: s.warnings,
         sameAs: s.sameAs, disclosureBasis: s.disclosureBasis, employeesJoin: s.employeesJoin)
@@ -1472,6 +1571,27 @@ extension BltServerContext {
         let dedicated = BreakdownExtractor.dedicatedSingleSegmentDisclosureTexts(xbrlDir: xbrlDir)
         let hasDedicated = dedicated.currentYear != nil
             || (members.count <= 1 && dedicated.any != nil)
+        let prose: [String]
+        if axis == .geography {
+            prose = BreakdownExtractor.geographyDisclosureSentences(
+                from: BreakdownExtractor.segmentNotePatternProse(xbrlDir: xbrlDir))
+        } else {
+            prose = BreakdownExtractor.segmentNotePatternProse(xbrlDir: xbrlDir)
+        }
+        // 報告セグメント以外の事業を「重要性が乏しい」として省略している書類は、開示された 1 つだけを返す。
+        if axis == .segment, members.isEmpty,
+            let statement = BreakdownExtractor.otherSegmentsOmittedStatement(
+                in: BreakdownExtractor.segmentNoteSentences(xbrlDir: xbrlDir))
+        {
+            return .deterministic(.singleSegment, evidence: statement)
+        }
+        // 報告セグメントの member が無く、注記の地の文が単一セグメントと言っていれば Jev を待たない。
+        if axis == .segment, members.isEmpty, !hasDedicated,
+            let statement = BreakdownExtractor.singleSegmentStatement(
+                in: BreakdownExtractor.segmentNoteSentences(xbrlDir: xbrlDir))
+        {
+            return .deterministic(.singleSegment, evidence: statement)
+        }
         return await SegmentNotePatternClassifier.classify(
             axis: axis,
             signals: SegmentNotePatternSignals(
@@ -1481,7 +1601,7 @@ extension BltServerContext {
                     && reportable.tables.contains { !BreakdownExtractor.isProductServiceTable($0) },
                 hasRelatedInfoTable: false,
                 reportableMembersAreGeographic: BreakdownNormalizer.allMembersAreGeography(members),
-                prose: BreakdownExtractor.segmentNotePatternProse(xbrlDir: xbrlDir)
+                prose: prose
             ),
             docID: docID,
             decider: segmentNoteDecider as? any SegmentNotePatternDeciding

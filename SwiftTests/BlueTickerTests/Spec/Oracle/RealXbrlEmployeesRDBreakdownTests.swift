@@ -763,6 +763,58 @@ import Foundation
         #expect(after.rows.map(\.amount).reduce(0, +) == 8_670)
         #expect(after.rows.allSatisfy { $0.rowKind == "segment" })
     }
+
+    /// 単一セグメントの事業部門別従業員表。タグは全社（共通）だけ。
+    private func departmentEmployees(
+        docID: String, total: Double
+    ) async throws -> BreakdownSnapshot? {
+        guard await Self.ensureAvailable(docID) else { return nil }
+        let dir = Self.xbrlDir(docID)
+        let contextMap = BreakdownExtractor.loadDimensionContextMap(xbrlDir: dir)
+        let facts = BreakdownExtractor.extractFactsByDimension(
+            xbrlDir: dir, dimensionKeywords: Xbrl.businessSegmentDimensionKeywords,
+            contextMap: contextMap)
+        let labels = XBRLUtils.breakdownMemberLabels(in: dir)
+        let snapshot = try #require(
+            BreakdownNormalizer.normalizeEmployees(
+                facts: facts, total: total, axis: breakdownAxisEmployees, labelsByTag: labels))
+        let anchored = EmployeesUntaggedRowFill.fill(snapshot: snapshot, facts: facts, xbrlDir: dir)
+        return EmployeesUntaggedRowFill.fillDepartmentTable(snapshot: anchored, xbrlDir: dir)
+    }
+
+    /// source: code=2303 fy_end=2026-05-31 doc_id=S100YXLE page=43 field=employees.営業部門
+    @Test func dawnSingleSegmentDepartmentEmployees() async throws {
+        guard let filled = try await departmentEmployees(docID: "S100YXLE", total: 66) else { return }
+        #expect(filled.denominator == 66)
+        #expect(filled.rows.contains { ($0.label ?? "").contains("営業") && $0.amount == 12 })
+        #expect(filled.rows.contains { ($0.label ?? "").contains("サービス推進") && $0.amount == 13 })
+        #expect(filled.rows.contains { ($0.label ?? "").contains("開発") && $0.amount == 34 })
+        #expect(filled.rows.contains { $0.rowKind == "reconciling" && $0.amount == 7 })
+        #expect(filled.rows.map(\.amount).reduce(0, +) == 66)
+        #expect(filled.needsReview == false)
+    }
+
+    /// source: code=324A fy_end=2026-04-30 doc_id=S100YSTV page=45 field=employees.集客支援事業
+    @Test func bookingResortSingleSegmentDepartmentEmployees() async throws {
+        guard let filled = try await departmentEmployees(docID: "S100YSTV", total: 48) else { return }
+        #expect(filled.denominator == 48)
+        #expect(filled.rows.contains { ($0.label ?? "").contains("集客支援") && $0.amount == 26 })
+        #expect(filled.rows.contains { ($0.label ?? "").contains("直営宿泊") && $0.amount == 16 })
+        #expect(filled.rows.contains { $0.rowKind == "reconciling" && $0.amount == 6 })
+        #expect(filled.rows.map(\.amount).reduce(0, +) == 48)
+        #expect(filled.needsReview == false)
+    }
+
+    /// source: code=500A fy_end=2026-04-30 doc_id=S100YSBO page=55 field=employees.IPクリエーション
+    @Test func toBooksSingleSegmentDepartmentEmployees() async throws {
+        guard let filled = try await departmentEmployees(docID: "S100YSBO", total: 149) else { return }
+        #expect(filled.denominator == 149)
+        #expect(filled.rows.contains { ($0.label ?? "").contains("IPクリエーション") && $0.amount == 119 })
+        #expect(filled.rows.contains { ($0.label ?? "").contains("IPソリューション") && $0.amount == 14 })
+        #expect(filled.rows.contains { $0.rowKind == "reconciling" && $0.amount == 16 })
+        #expect(filled.rows.map(\.amount).reduce(0, +) == 149)
+        #expect(filled.needsReview == false)
+    }
 }
 
 /// 固定の答えを返すスタブ（3 サンプルとも同じ）。

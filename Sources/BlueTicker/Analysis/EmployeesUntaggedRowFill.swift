@@ -212,6 +212,91 @@ enum EmployeesUntaggedRowFill {
         return filled
     }
 
+    /// 単一セグメントで事業部門別の従業員表だけが HTML にあり、タグは全社（共通）だけ、という会社
+    /// （2303 / 324A / 500A）。表に ix:nonFraction が無いので `fill` のアンカー経路は動かない。
+    /// 行の和が分母に一致し、既存の全社人数と同じ行があるときだけ部門行を足す（値は作らない）。
+    static func fillDepartmentTable(snapshot: BreakdownSnapshot, xbrlDir: URL) -> BreakdownSnapshot {
+        let gap = residual(of: snapshot)
+        guard Xbrl.employeeTags.contains(snapshot.denominatorTag),
+              snapshot.denominator > 0, gap > equalityEpsilon
+        else { return snapshot }
+        let reconcilingAmounts = snapshot.rows.filter { $0.rowKind == "reconciling" }.map(\.amount)
+        var seenHTML: Set<String> = []
+        var htmls: [String] = []
+        for needle in [snapshot.denominatorTag, "従業員の状況", "従業員数"] {
+            for html in IxbrlTableHTML.htmlFiles(in: xbrlDir, containing: needle)
+            where seenHTML.insert(html).inserted {
+                htmls.append(html)
+            }
+        }
+        for html in htmls {
+            for tableHTML in HTMLTables.leafTables(in: html) {
+                let rows = departmentRows(in: tableHTML)
+                guard rows.count >= 2 else { continue }
+                let sum = rows.reduce(0.0) { $0 + $1.amount }
+                guard abs(sum - snapshot.denominator) < equalityEpsilon else { continue }
+                if !reconcilingAmounts.isEmpty {
+                    let matchesCorporate = rows.contains { row in
+                        rowKind(forLabel: row.label) == "reconciling"
+                            && reconcilingAmounts.contains { abs($0 - row.amount) < equalityEpsilon }
+                    }
+                    guard matchesCorporate else { continue }
+                }
+                return applyDepartmentRows(snapshot: snapshot, rows: rows)
+            }
+        }
+        return snapshot
+    }
+
+    /// 純関数。表の部門行のうち、既存ラベルに無いものを足す。
+    static func applyDepartmentRows(snapshot: BreakdownSnapshot, rows: [TableRow]) -> BreakdownSnapshot {
+        let existing = Set(snapshot.rows.flatMap { [compact($0.labelRaw), compact($0.label ?? "")] })
+        let existingAmounts = snapshot.rows.map(\.amount)
+        var filled = snapshot
+        var added = 0
+        var seen: Set<String> = []
+        for row in rows {
+            let key = compact(row.label)
+            guard !key.isEmpty, !existing.contains(key), seen.insert(key).inserted else { continue }
+            // 全社（共通）が CorporateSharedMember として既にあるときは人数で同一行とみなす。
+            if existingAmounts.contains(where: { abs($0 - row.amount) < equalityEpsilon }) { continue }
+            filled.rows.append(
+                BreakdownRow(
+                    labelRaw: row.label, label: row.label, amount: row.amount,
+                    share: row.amount / snapshot.denominator, profit: nil,
+                    rowKind: rowKind(forLabel: row.label)))
+            added += 1
+        }
+        guard added > 0, abs(residual(of: filled)) < equalityEpsilon else { return snapshot }
+        filled.warnings.removeAll { $0.hasSuffix("_segment_sum_far_from_total") }
+        filled.needsReview = !filled.warnings.isEmpty
+        return filled
+    }
+
+    static func departmentRows(in tableHTML: String) -> [TableRow] {
+        var rows: [TableRow] = []
+        var seen: Set<String> = []
+        let tableNS = NSRange(tableHTML.startIndex..., in: tableHTML)
+        for rowMatch in IxbrlTableHTML.rowPattern.matches(in: tableHTML, range: tableNS) {
+            guard let rowRange = Range(rowMatch.range, in: tableHTML) else { continue }
+            let rowHTML = String(tableHTML[rowRange])
+            let cells = IxbrlTableHTML.cellBodies(in: rowHTML)
+            guard cells.count >= 2 else { continue }
+            let label = IxbrlTableHTML.plainText(cells[0])
+            let key = compact(label)
+            guard containsJapanese(label), !key.isEmpty, !isTotalOrMeasureLabel(key) else { continue }
+            for cell in cells.dropFirst() {
+                guard let amount = leadingNumber(IxbrlTableHTML.plainText(cell)), amount > 0 else {
+                    continue
+                }
+                guard seen.insert("\(key)|\(amount)").inserted else { break }
+                rows.append(TableRow(label: label, amount: amount, tagged: false))
+                break
+            }
+        }
+        return rows
+    }
+
     /// 本社・全社共通・持株会社など事業に属さない人員のバケツは reconciling、それ以外は segment。
     /// member 付きの `CorporateSharedMember`（reconciling）と同じ扱いに揃える。
     private static let corporateBucketWords = [

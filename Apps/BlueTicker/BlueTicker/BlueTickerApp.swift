@@ -1,16 +1,15 @@
-import AppIntents
 import SwiftData
 import SwiftUI
 
 @main
 struct BlueTickerApp: App {
     private let modelContainer: ModelContainer
+    /// Intent（アプリと同じプロセスで動く）も同じ保存領域を使う。
+    static let sharedContainer: ModelContainer = makeWatchlistContainer()
 
     init() {
         Theme.applyChrome()
-        modelContainer = Self.makeWatchlistContainer()
-        // 銘柄を含む Siri フレーズの候補を、起動のたびに登録し直す。
-        BlueTickerShortcuts.updateAppShortcutParameters()
+        modelContainer = Self.sharedContainer
     }
 
     var body: some Scene {

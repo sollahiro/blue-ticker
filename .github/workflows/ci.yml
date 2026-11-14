@@ -54,7 +54,7 @@ jobs:
         run: python3 scripts/ci/cichecks.py changes --github-output
 
   build-macos:
-    # 本番 ingest（blt-ingest）は Mac の launchd で走るので、macOS で blt-ingest がビルドできることを確認する。
+    # blt-ingest は macOS でビルドできること（現行の本番 ingest ホスト）。
     # サーバーとテストのコンパイルは Linux の unit-tests が見るので、ここでは blt-ingest だけをビルドする。
     # SwiftPM の .build キャッシュは使わない。キーが Package.resolved ハッシュだけだと
     # エントリが凍り、復元成功後に `_NumericsShims` 欠落で落ちることがある
@@ -90,7 +90,7 @@ jobs:
           echo "OK: blt-ingest は Vapor をリンクしていません"
 
   ios:
-    # Apps/BlueTicker は SwiftPM 外。Cloud Agent の Linux VM では xcodebuild が無い。
+    # Apps/BlueTicker は SwiftPM 外。このジョブは macos runner。Linux 環境では走らない。
     # サーバーの swift test とはジョブを分けて並列に回し、サーバー CI を遅らせない。
     # iOS 26 SDK は macos-26 イメージの既定 Xcode 26.6 に入っている。
     # テストターゲットはまだ無いのでシミュレータは起動せず、SDK 向けコンパイルだけ確認する。

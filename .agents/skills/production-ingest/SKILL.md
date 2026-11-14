@@ -18,13 +18,14 @@ description: 本番 Neon への定期・手動取り込み、ジョブ編成、�
 | 対象 | 正本 |
 |---|---|
 | 接続変数 | `.env.example` |
+| Neon ブランチ（子ブランチは使わない） | `docs/process/neon-branches.md` |
 | 訂正有報 130 | `.agents/rules/amendments.md` |
 | R2 生 XBRL | `.agents/rules/caching.md` |
 | `cache_version` / `fin-vN` / `screen-vN` | `.agents/rules/versioning.md` |
 | 抽出ロジックの変更 | `.agents/skills/xbrl-development/SKILL.md` |
 | ローカル Postgres 検証 | `.agents/skills/local-rest-testing/SKILL.md` |
 | Fly / Tunnel | `.agents/skills/deploy/SKILL.md` |
-| 件数・公開ゲートの記録 | `.agents/skills/tracker/SKILL.md` |
+| 件数・公開ゲートの記録（オーナー管理のトラッカー Sheet） | `.agents/skills/tracker/SKILL.md` |
 | 会社アイコン | ingest しない（`.agents/skills/company-icon-quality/SKILL.md`） |
 
 ## 実行環境
@@ -112,7 +113,7 @@ sync + filing-sections
 1. `BLT_INGEST_WRITE=1` → WRITE URL を `DATABASE_URL` にする。無ければ停止。
 2. それ以外で `DATABASE_URL` が空 → 停止。
 3. `DATABASE_URL` が `BLT_NEON_READ_DATABASE_URL` と同じ → 停止（読み取りロールでは migrate も書き込みも拒否される）。
-4. 検証はローカル Postgres の `DATABASE_URL`。Neon 本番ブランチを使い捨て検証に使わない。
+4. 検証はローカル Postgres の `DATABASE_URL`。Neon 本番ブランチを使い捨て検証に使わない。Neon の子ブランチは作らない。
 
 再ビルド判定（定例ラッパー用）: スタンプ `$REPO/.build/blt-ingest.built-commit`。見るパスは `Sources/BlueTicker`、`Sources/BltStoreCore`、`Sources/BltIngestCore`、`Sources/BltIngest`、`Package.swift`、`Package.resolved`。HEAD コミット単位（作業ツリーの未コミット変更は見ない）。`blt-ingest` は Vapor / MCP をリンクしない。
 

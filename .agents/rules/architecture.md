@@ -6,4 +6,4 @@
 - 外部パッケージの正本は `Package.swift` 先頭コメント。追加はパッケージ名・必要理由・使用 target を示してユーザーに確認する。
 - Linux では `URLSession` に `FoundationNetworking`、`XMLParser` に `FoundationXML` を使い、macOS 専用 API は `#if canImport` で分離する。
 - 新しい Swift 名の頭字語は全大文字にする。ただし EDINET は既存契約に合わせて `Edinet` とする。
-- ローカルで Linux コンテナが必要な場合は Apple `container` を使う。Dockerfile は Fly 向け OCI 契約として維持する。
+- ローカルで Linux コンテナが必要な場合、手元 Mac の現行標準は Apple `container`。同等の Docker / OCI でも可。Dockerfile は Fly 向け OCI 契約として維持する。

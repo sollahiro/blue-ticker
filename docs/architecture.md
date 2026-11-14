@@ -1,17 +1,17 @@
 # システムアーキテクチャ
 
-**現構成の正本**（箱・依存・エンドポイント）。方針は `blt-server-roadmap.md`、進捗は Linear（[JP 現在地](https://linear.app/sollahiro/document/jp-現在地-af2abd076034) / [公開と基盤 現在地](https://linear.app/sollahiro/document/公開と基盤-現在地-3bd56370454b)）、cache 床は各 Contract 定数（バンプ規則は `.agents/rules/versioning.md`）、経緯は Git。
+**現構成の正本**（箱・依存・エンドポイント）。方針は `blt-server-roadmap.md`、進捗はオーナー管理のトラッカー Sheet（`docs/process/tracker-placement.md` / `docs/status/README.md`）、cache 床は各 Contract 定数（バンプ規則は `.agents/rules/versioning.md`）、経緯は Git。
 
 ## 提供面
 
 | 面 | 位置づけ |
 |---|---|
 | REST `/v1` | **製品の契約の正**。段階 A は Access Service Token。段階 B の公開入口は HAPIS（併存は `public-api.md` / `api-auth.md`） |
-| iOS | 近傍の製品面（`Apps/BlueTicker`。REST `/v1` の HTTP クライアント。IA は `ios-client.md`、進捗は Linear Team `blue-ticker`） |
+| iOS | 近傍の製品面（`Apps/BlueTicker`。REST `/v1` の HTTP クライアント。IA は `ios-client.md`、進捗はオーナー管理のトラッカー Sheet） |
 | MCP（公開コネクタ） | HAPIS の `mcp/`（Claude の Connectors Directory を先に、次に ChatGPT）。HAPIS ゲートウェイ経由で REST を呼ぶ |
 | Web / RSS | Web は将来候補（優先度低）。RSS は `workers/feed-rss` の静的フィード（日次 Cron → R2。REST が正。`public-api.md` の例外） |
 
-機能単位の有料マスクは採らない。公開ゲート（どの Feature をいつ外に出すか）は Linear。実装サイクルは `.agents/skills/xbrl-development/SKILL.md`。
+機能単位の有料マスクは採らない。公開ゲート（どの Feature をいつ外に出すか）はオーナー管理のトラッカー Sheet。実装サイクルは `.agents/skills/xbrl-development/SKILL.md`。
 
 ## Class 依存
 
@@ -125,6 +125,7 @@ flowchart LR
 | `GET /v1/companies/{code}/relations?type=` | 取引先・関係会社（有報の記載のみ。顧客・関係会社・出資先・大株主と、他社の有報からの逆引き＝仕入先・親会社・大株主になっている会社。格納済み。公開コネクタには出さない。`docs/public-api.md`） |
 | `GET /v1/companies/{code}/financials` | Summary（床未満・未格納 404）。`?fields=` で `years[]` の公開キーを射影（不明キー 400） |
 | `GET /v1/companies/{code}/waterfall` | Waterfall |
+| `GET /v1/companies/{code}/waterfall/segment` | 報告セグメント年次（`years` / `fiscal_year`。つなぎは years[] に載せる） |
 | `GET /v1/companies/{code}/filing-content` | セクション本文 |
 | `GET /v1/companies/{code}/breakdown?axis=` | breakdowns（上場・格納済み。LLM の `needs_review` / `llm_unit_unresolved` は出さない。`docs/breakdown.md`） |
 | `GET /v1/companies/{code}/statement` · `/shares` | Statement / Shares（上場。日経225は処理順の優先のみ） |
@@ -157,7 +158,7 @@ Neon 接続・R2 秘密・LLM キーの正本は `.env.example`。プロセス�
 
 ## データパイプライン（構成）
 
-取り込み対象と保存先の**構成**のみ。進捗は Linear。床定数は `.agents/rules/versioning.md`。
+取り込み対象と保存先の**構成**のみ。進捗はオーナー管理のトラッカー Sheet。床定数は `.agents/rules/versioning.md`。
 
 | 対象 | 保存先 |
 |---|---|
@@ -174,6 +175,6 @@ Neon 接続・R2 秘密・LLM キーの正本は `.env.example`。プロセス�
 
 ## コンテナ責務
 
-Linux 検証・テスト Postgres・手元の OCI ビルドは Apple `container`。本番実行は Fly（Dockerfile をリモートビルド）。選択機構の常設はしない。
+Linux 検証・テスト Postgres・手元の OCI ビルドの現行標準は Apple `container`（同等の Docker / OCI ランタイムでも可）。本番実行は Fly（Dockerfile をリモートビルド）。選択機構の常設はしない。
 
-詳細: `.agents/skills/deploy/SKILL.md` · `xbrl-parsing.md` · `blt-server-roadmap.md` · `ios-client.md`
+詳細: `.agents/skills/deploy/SKILL.md` · `xbrl-parsing.md` · `blt-server-roadmap.md` · `ios-client.md` · `process/tracker-placement.md`
