@@ -337,20 +337,20 @@ private struct PerformanceSection: View {
 
 // MARK: - 収益構造
 
-/// 連続的にスライドでき、途中で止めることもできる。ただし止まる位置が 1 ページ（前年度・当年度の事業利益が
-/// 両端に来る位置）に近いときだけ、その位置にぴたりと吸着する。
-private struct NearPageSnapBehavior: ScrollTargetBehavior {
-    /// ページ幅に対する吸着の範囲。
-    var snapRatio: CGFloat = 0.18
+/// 横スクロールの止まる位置が年の区切り（前年度・今年度の棒が両端に来る位置）に近いときだけ、その位置へ吸着する。
+/// それ以外は指を離した位置の流れのまま止まる。
+private struct YearSnapBehavior: ScrollTargetBehavior {
+    var yearWidth: CGFloat
+    var maxIndex: Int
 
     func updateTarget(_ target: inout ScrollTarget, context: TargetContext) {
-        let width = context.containerSize.width
-        guard width > 0 else { return }
-        let maxX = max(context.contentSize.width - width, 0)
-        let x = min(max(target.rect.minX, 0), maxX)
-        let nearest = min(max((x / width).rounded() * width, 0), maxX)
-        if abs(x - nearest) <= width * snapRatio {
-            target.rect.origin.x = nearest
+        guard yearWidth > 0 else { return }
+        let x = target.rect.origin.x
+        let index = min(max((x / yearWidth).rounded(), 0), CGFloat(maxIndex))
+        let snapped = index * yearWidth
+        // 1 年分の 2 割以内なら吸着する。
+        if abs(x - snapped) <= yearWidth * 0.2 {
+            target.rect.origin.x = snapped
         }
     }
 }
@@ -364,8 +364,8 @@ private struct BusinessProfitSection: View {
     @State private var expandedYearID: String?
     /// 拡大の遷移（棒の動き）が終わったら、1 年ごとに止まる横スライドのページ送りへ切り替える。
     @State private var pagerReady = false
-    /// ページ送りで今見えている年。
-    @State private var pageID: String?
+    /// 連続スライドの位置。
+    @State private var scrollPosition = ScrollPosition(x: 0)
 
     private enum FactorKind: String, CaseIterable {
         case salesChange
@@ -441,11 +441,10 @@ private struct BusinessProfitSection: View {
         // 遷移が終わったら、見た目を変えずにページ送りへ切り替える。
         Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(550))
-            guard let current = expandedYearID else { return }
+            guard expandedYearID != nil else { return }
             var transaction = Transaction()
             transaction.disablesAnimations = true
             withTransaction(transaction) {
-                pageID = current
                 pagerReady = true
             }
         }
@@ -460,22 +459,50 @@ private struct BusinessProfitSection: View {
         }
     }
 
-    /// 年度ごとに 1 ページ。左から前年度の棒・3 要因・今年度の棒が並ぶ。連続的に流れ、ページの位置に近いところで離すと吸着して、両端が事業利益になる。
+    /// 拡大中の x カテゴリ。1 年分（前年度・要因 3 つ・当年度）を 4 カテゴリずつ連ねる。
+    /// 前年度の棒は前の年の当年度と共有する。年が飛ぶときは空きを入れ、どの年の前年度も 4 の倍数の位置に揃える。
+    private var continuousSlots: (slots: [String], starts: [(id: String, index: Int)]) {
+        var slots: [String] = []
+        var starts: [(id: String, index: Int)] = []
+        for delta in deltas {
+            if slots.last != delta.priorLabel {
+                while slots.count % Self.slotsPerYear != 0 { slots.append("空\(slots.count)") }
+                slots.append(delta.priorLabel)
+            }
+            starts.append((delta.id, slots.count - 1))
+            slots += FactorKind.allCases.map { Self.factorSlot(delta, $0) }
+            slots.append(delta.label)
+        }
+        return (slots, starts)
+    }
+
+    /// 1 年分で進むカテゴリ数。1 画面にはこれに 1 を足した 5 カテゴリ（前年度〜今年度）を収める。
+    private static let slotsPerYear = 4
+    private static let slotsPerScreen = 5
+
+    /// 全年度の要因分解を横に連ねたグラフ。指に追従して連続的に流れ、途中で止めることもできる。
+    /// 止まる位置が前年度・今年度の棒を両端にする位置（年の区切り）に近いときだけ、その位置へ吸着する。
     private var pager: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            LazyHStack(spacing: 0) {
-                ForEach(deltas) { delta in
-                    profitChart(expanded: delta)
-                        .containerRelativeFrame(.horizontal)
-                        .id(delta.id)
+        let layout = continuousSlots
+        return GeometryReader { geo in
+            let band = geo.size.width / CGFloat(Self.slotsPerScreen)
+            let yearWidth = band * CGFloat(Self.slotsPerYear)
+            ScrollView(.horizontal, showsIndicators: false) {
+                profitChart(expanded: nil, continuous: true)
+                    .frame(width: band * CGFloat(layout.slots.count))
+            }
+            .scrollPosition($scrollPosition)
+            .scrollTargetBehavior(YearSnapBehavior(yearWidth: yearWidth, maxIndex: max(layout.starts.count - 1, 0)))
+            .onScrollGeometryChange(for: CGFloat.self) { $0.contentOffset.x } action: { _, offset in
+                // 今いちばん近い年を覚えておく（元の推移へ戻るときの基準）。
+                let nearest = layout.starts.min { abs(CGFloat($0.index) * band - offset) < abs(CGFloat($1.index) * band - offset) }
+                if let nearest, nearest.id != expandedYearID { expandedYearID = nearest.id }
+            }
+            .onAppear {
+                if let id = expandedYearID, let start = layout.starts.first(where: { $0.id == id }) {
+                    scrollPosition.scrollTo(x: CGFloat(start.index) * band)
                 }
             }
-            .scrollTargetLayout()
-        }
-        .scrollTargetBehavior(NearPageSnapBehavior())
-        .scrollPosition(id: $pageID)
-        .onChange(of: pageID) { _, newValue in
-            if let newValue { expandedYearID = newValue }
         }
         .frame(height: ChartStyle.height)
     }
@@ -522,7 +549,7 @@ private struct BusinessProfitSection: View {
     /// 業績カードと同じ形の縦棒。事業利益の棒の間に前年差の浮き棒を置き、点線で段をつなぐ。
     /// `expanded` を渡すと、その年の 前年度事業利益 → 3 要因 → 今年度事業利益 のウォーターフォール（データラベル付き）になる。
     /// 推移 ⇄ 拡大は、同じグラフの棒が動くアニメーションで遷移する。
-    private func profitChart(expanded: ProfitDelta?) -> some View {
+    private func profitChart(expanded: ProfitDelta?, continuous: Bool = false) -> some View {
         let deltas = deltas
         let yearLabels = years.map { Format.fy($0.fyEnd) }
         let slots: [String] = years.flatMap { year -> [String] in
@@ -530,23 +557,26 @@ private struct BusinessProfitSection: View {
             guard let delta = deltas.first(where: { $0.id == year.id }) else { return [label] }
             return [delta.slot, label]
         }
-        let expandedSlots: [String] = expanded.map { delta in
+        let showsExpanded = expanded != nil || continuous
+        let continuousLayout = continuousSlots.slots
+        let expandedSlots: [String] = continuous ? continuousLayout : expanded.map { delta in
             [delta.priorLabel] + FactorKind.allCases.map { Self.factorSlot(delta, $0) } + [delta.label]
         } ?? []
         let visibleYears: [FinancialsYear] = {
+            if continuous { return years.filter { continuousLayout.contains(Format.fy($0.fyEnd)) } }
             guard let expanded, let prior = priorYear(of: expanded.year, in: years) else { return years }
             return [prior, expanded.year]
         }()
         let scale = Format.commonScale(for: years.map(\.businessProfit), currency: currency)
-        return Chart {
+        let chart = Chart {
             ForEach(visibleYears) { year in
                 if let profit = year.businessProfit {
                     let label = Format.fy(year.fyEnd)
-                    BarMark(x: .value("年度", label), y: .value("金額", profit), width: .fixed(expanded == nil ? 16 : Self.expandedBarWidth))
+                    BarMark(x: .value("年度", label), y: .value("金額", profit), width: .fixed(showsExpanded ? Self.expandedBarWidth : 16))
                         .foregroundStyle(profit < 0 ? Theme.negative : ChartStyle.primaryBar)
                         .cornerRadius(3)
                         .annotation(position: profit < 0 ? .bottom : .top, spacing: 2) {
-                            if expanded != nil {
+                            if showsExpanded {
                                 dataLabel(Format.autoYen(profit, currency: currency))
                             }
                         }
@@ -554,7 +584,9 @@ private struct BusinessProfitSection: View {
                         .accessibilityValue(Format.autoYen(profit, currency: currency))
                 }
             }
-            if let expanded {
+            if continuous {
+                ForEach(deltas) { delta in expandedMarks(delta) }
+            } else if let expanded {
                 expandedMarks(expanded)
             } else {
                 ForEach(deltas) { delta in
@@ -581,16 +613,16 @@ private struct BusinessProfitSection: View {
                 .foregroundStyle(ChartStyle.zeroLine)
                 .lineStyle(StrokeStyle(lineWidth: 0.5))
         }
-        .chartXScale(domain: expanded == nil ? slots : expandedSlots)
+        .chartXScale(domain: showsExpanded ? expandedSlots : slots)
         // 遷移の前後で縦軸（棒の高さ）が変わらないよう、全年の事業利益・前年差・要因の積み上げを含む範囲に固定する。
         .chartYScale(domain: yDomain)
         .chartXAxis {
             AxisMarks { value in
                 // 通常は前年差の枠にラベルを出さない。拡大中は要因名も出す（重ならないよう小さくする）。
-                if let slot = value.as(String.self), yearLabels.contains(slot) || (expanded != nil && Self.factorTitle(of: slot) != nil) {
+                if let slot = value.as(String.self), yearLabels.contains(slot) || (showsExpanded && Self.factorTitle(of: slot) != nil) {
                     AxisValueLabel {
                         Text(Self.factorTitle(of: slot) ?? slot)
-                            .font(.system(size: expanded == nil ? 11 : 9))
+                            .font(.system(size: showsExpanded ? 9 : 11))
                             .foregroundStyle(Theme.textMuted)
                             .lineLimit(1)
                             .minimumScaleFactor(0.8)
@@ -611,15 +643,22 @@ private struct BusinessProfitSection: View {
                     expand(hit)
                 }
         }
-        .chartYAxis {
-            AxisMarks(position: .leading, values: .automatic(desiredCount: 4)) { value in
-                AxisGridLine(stroke: ChartStyle.grid)
-                    .foregroundStyle(ChartStyle.gridColor)
-                AxisValueLabel {
-                    if let number = value.as(Double.self) {
-                        Text(scale.map { Format.scaledYen(number, scale: $0) } ?? Format.autoYen(number))
-                            .font(.caption2)
-                            .foregroundStyle(Theme.textMuted)
+        // 拡大中は各棒にデータラベルがあり、横に流れて縦軸が見切れるので、縦軸は出さない。
+        return Group {
+            if showsExpanded {
+                chart.chartYAxis(.hidden)
+            } else {
+                chart.chartYAxis {
+                    AxisMarks(position: .leading, values: .automatic(desiredCount: 4)) { value in
+                        AxisGridLine(stroke: ChartStyle.grid)
+                            .foregroundStyle(ChartStyle.gridColor)
+                        AxisValueLabel {
+                            if let number = value.as(Double.self) {
+                                Text(scale.map { Format.scaledYen(number, scale: $0) } ?? Format.autoYen(number))
+                                    .font(.caption2)
+                                    .foregroundStyle(Theme.textMuted)
+                            }
+                        }
                     }
                 }
             }
