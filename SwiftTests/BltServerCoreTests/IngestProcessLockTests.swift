@@ -30,13 +30,12 @@ import Testing
         second.release()
     }
 
-    @Test func waitsUntilReleased() async throws {
-        let env = environment(wait: "5")
+    @Test func waitsUntilReleased() throws {
+        let env = environment(wait: "30")
         let first = try acquireIngestLock(environment: env)
-        Task.detached {
-            try? await Task.sleep(nanoseconds: 1_500_000_000)
-            first.release()
-        }
+        // 協調スレッドプールを使わない。テストを並列で回すと、待つ側がスレッドを塞いで
+        // 解放側のタスクが動けなくなる。
+        DispatchQueue.global().asyncAfter(deadline: .now() + 1.5) { first.release() }
         let second = try acquireIngestLock(environment: env)
         second.release()
     }
