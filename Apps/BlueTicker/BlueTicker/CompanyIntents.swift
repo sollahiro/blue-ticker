@@ -202,6 +202,49 @@ struct AddCompanyToWatchlistIntent: AppIntent {
     }
 }
 
+/// 要約はアプリでは作らない。直近の年度ごとの主要指標を文字列で返し、
+/// ショートカットの「モデルを使用」や Siri の AI が要約・比較できるようにする。
+struct CompanyAnalysisIntent: AppIntent {
+    static let title: LocalizedStringResource = "会社の分析データを見る"
+    static let description = IntentDescription("直近 5 期の売上高・利益率・ROIC・ROE・キャッシュフローなどを年度ごとに返します。ショートカットの AI で要約できます。")
+
+    @Parameter(title: "会社名または証券コード", requestValueDialog: "どの会社の分析データを見ますか？")
+    var query: String
+
+    static var parameterSummary: some ParameterSummary {
+        Summary("\(\.$query)の分析データ")
+    }
+
+    func perform() async throws -> some IntentResult & ReturnsValue<String> & ProvidesDialog {
+        let company = try await CompanyLookup.resolve(query)
+        let response: FinancialsResponse
+        do {
+            response = try await APIClient.shared.financials(code: company.code)
+        } catch {
+            throw CompanyIntentError(message: "\(company.name)の分析データを取得できませんでした。")
+        }
+        let years = Array(Format.chronological(response.years).filter { !($0.fyEnd ?? "").isEmpty }.suffix(5))
+        guard !years.isEmpty else {
+            throw CompanyIntentError(message: "\(company.name)の分析データはまだ集計されていません。")
+        }
+        let blocks = years.map { year -> String in
+            let currency = year.currency ?? response.currency
+            return """
+                \(Format.fyJapanese(year.fyEnd))
+                売上高 \(Format.autoYen(year.sales, currency: currency))
+                営業利益 \(Format.autoYen(year.operatingProfit, currency: currency))（営業利益率 \(Format.percent(year.operatingMargin))）
+                純利益 \(Format.autoYen(year.netProfit, currency: currency))
+                ROIC \(Format.percent(year.roic)) / ROE \(Format.percent(year.roe))
+                営業CF \(Format.autoYen(year.cfo, currency: currency)) / 設備投資 \(Format.autoYen(year.capex, currency: currency)) / FCF \(Format.autoYen(Format.freeCashFlow(year), currency: currency))
+                ネットD/E \(Format.times(year.netDe))
+                """
+        }
+        let text = "\(company.name) 直近\(years.count)期の分析データ\n\n" + blocks.joined(separator: "\n\n")
+        // 全文を読み上げさせない。数値は戻り値で次のアクション（AI など）へ渡す。
+        return .result(value: text, dialog: IntentDialog(stringLiteral: "\(company.name)の直近\(years.count)期の分析データを返しました。"))
+    }
+}
+
 /// 入力なし。端末に保存済みの開示フィード（RSS）から、最近有報を出した会社を新しい順に返す。
 struct RecentFilingsIntent: AppIntent {
     static let title: LocalizedStringResource = "最近の有報を見る"
@@ -269,6 +312,15 @@ struct BlueTickerShortcuts: AppShortcutsProvider {
             ],
             shortTitle: "最新の業績",
             systemImageName: "chart.bar"
+        )
+        AppShortcut(
+            intent: CompanyAnalysisIntent(),
+            phrases: [
+                "\(.applicationName)で会社の分析データを見る",
+                "\(.applicationName)で会社を分析",
+            ],
+            shortTitle: "分析データ",
+            systemImageName: "chart.xyaxis.line"
         )
         AppShortcut(
             intent: OpenCompanyIntent(),
