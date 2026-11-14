@@ -1186,6 +1186,7 @@ private struct CashAllocationSection: View {
 
     var body: some View {
         AnalysisCard(title: "資金配分") {
+            AnalysisSubheading(text: "フリーCF・ネットキャッシュの推移")
             if years.contains(where: { $0.netCash != nil || $0.cfc != nil }) {
                 balanceChart
                 ChartLegend(items: [
