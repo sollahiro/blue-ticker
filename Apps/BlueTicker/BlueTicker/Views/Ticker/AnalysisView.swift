@@ -1195,15 +1195,16 @@ private struct CashAllocationSection: View {
                     waterfall(year)
                 }
             }
-            AnalysisSubheading(text: "ネットキャッシュ")
-            if years.contains(where: { $0.netCash != nil }) {
+            AnalysisSubheading(text: "財務余力の推移")
+            if years.contains(where: { $0.netCash != nil || $0.cfc != nil }) {
                 balanceChart
                 ChartLegend(items: [
-                    LegendItem(title: "ネットキャッシュ（左軸）", color: ChartStyle.primaryBar, shape: .bar),
-                    LegendItem(title: "総資産あたりネットキャッシュ率（右軸）", color: ChartStyle.line, shape: .line),
+                    LegendItem(title: "ネットキャッシュ", color: Theme.positive, shape: .bar),
+                    LegendItem(title: "フリーCF", color: Theme.positive.opacity(0.5), shape: .bar),
+                    LegendItem(title: "マイナス", color: Theme.negative, shape: .bar),
                 ])
             } else {
-                AnalysisNote(text: "ネットキャッシュは未集計です。")
+                AnalysisNote(text: "ネットキャッシュ・フリーCFは未集計です。")
             }
         }
     }
@@ -1278,79 +1279,36 @@ private struct CashAllocationSection: View {
         .padding(.top, 4)
     }
 
-    /// 総資産あたりのネットキャッシュ率（%）。総資産が無い・0 以下の年は出さない。
-    private static func netCashRatio(_ year: FinancialsYear) -> Double? {
-        guard let netCash = year.netCash, let assets = year.totalAssets, assets > 0 else { return nil }
-        return netCash / assets * 100
-    }
-
-    private var cashTicks: [Double] {
-        let values = years.compactMap(\.netCash)
-        return ChartMath.niceTicks(lower: values.min() ?? 0, upper: values.max() ?? 0)
-    }
-
-    private var ratioTicks: [Double] {
-        let values = years.compactMap(Self.netCashRatio)
-        return ChartMath.niceTicks(lower: values.min() ?? 0, upper: values.max() ?? 0)
-    }
-
-    /// ネットキャッシュ率を左軸（ネットキャッシュ）の目盛りに重ねる倍率。0 は共通。
-    private var ratioFactor: Double {
-        let leftUpper = cashTicks.max() ?? 0
-        let leftLower = cashTicks.min() ?? 0
-        let rightUpper = ratioTicks.max() ?? 0
-        let rightLower = ratioTicks.min() ?? 0
-        var ratios: [Double] = []
-        if leftUpper > 0, rightUpper > 0 { ratios.append(leftUpper / rightUpper) }
-        if leftLower < 0, rightLower < 0 { ratios.append(leftLower / rightLower) }
-        return ratios.min() ?? 1
-    }
-
-    private var balanceDomain: ClosedRange<Double> {
-        let factor = ratioFactor
-        let lower = min(cashTicks.min() ?? 0, (ratioTicks.min() ?? 0) * factor)
-        let upper = max(cashTicks.max() ?? 0, (ratioTicks.max() ?? 0) * factor)
-        let pad = (upper - lower) * 0.05
-        return (lower - (lower < 0 ? pad : 0))...(upper + pad)
-    }
-
-    /// ネットキャッシュの棒（左軸）と、総資産あたりネットキャッシュ率の折れ線（右軸）。マイナスになり得るので 0 の線を引く。
+    /// ネットキャッシュとフリーCFの棒を年度ごとに並べる。プラスは緑、マイナスは赤（フリーCFは薄い色）。
+    /// マイナスになり得るので 0 の線を引く。
     private var balanceChart: some View {
         let labels = years.map { Format.fy($0.fyEnd) }
-        let scale = Format.commonScale(for: years.map(\.netCash), currency: currency)
-        let factor = ratioFactor
-        let ratioPoints = ChartMath.linePoints(years, value: Self.netCashRatio)
+        let scale = Format.commonScale(for: years.map(\.netCash) + years.map(\.cfc), currency: currency)
         return Chart {
             ForEach(years) { year in
+                let label = Format.fy(year.fyEnd)
                 if let netCash = year.netCash {
-                    let label = Format.fy(year.fyEnd)
-                    BarMark(x: .value("年度", label), y: .value("ネットキャッシュ", netCash), width: .fixed(16))
-                        .foregroundStyle(netCash < 0 ? Theme.negative : ChartStyle.primaryBar)
+                    BarMark(x: .value("年度", label), y: .value("金額", netCash), width: .fixed(12))
+                        .position(by: .value("系列", "ネットキャッシュ"))
+                        .foregroundStyle(netCash < 0 ? Theme.negative : Theme.positive)
                         .cornerRadius(3)
                         .accessibilityLabel("\(label) ネットキャッシュ")
                         .accessibilityValue(Format.autoYen(netCash, currency: currency))
                 }
-            }
-            ForEach(ratioPoints) { point in
-                LineMark(
-                    x: .value("年度", point.label),
-                    y: .value("ネットキャッシュ率", point.value * factor),
-                    series: .value("線", "net-cash-ratio-\(point.run)")
-                )
-                .foregroundStyle(ChartStyle.line)
-                .lineStyle(StrokeStyle(lineWidth: 2.5))
-                PointMark(x: .value("年度", point.label), y: .value("ネットキャッシュ率", point.value * factor))
-                    .foregroundStyle(ChartStyle.line)
-                    .symbolSize(40)
-                    .accessibilityLabel("\(point.label) 総資産あたりネットキャッシュ率")
-                    .accessibilityValue(Format.percent(point.value))
+                if let freeCF = year.cfc {
+                    BarMark(x: .value("年度", label), y: .value("金額", freeCF), width: .fixed(12))
+                        .position(by: .value("系列", "フリーCF"))
+                        .foregroundStyle((freeCF < 0 ? Theme.negative : Theme.positive).opacity(0.5))
+                        .cornerRadius(3)
+                        .accessibilityLabel("\(label) フリーCF")
+                        .accessibilityValue(Format.autoYen(freeCF, currency: currency))
+                }
             }
             RuleMark(y: .value("zero", 0))
                 .foregroundStyle(Theme.textMuted.opacity(0.6))
                 .lineStyle(StrokeStyle(lineWidth: 0.5))
         }
         .chartXScale(domain: labels)
-        .chartYScale(domain: balanceDomain)
         .chartXAxis {
             AxisMarks { _ in
                 AxisValueLabel()
@@ -1359,21 +1317,12 @@ private struct CashAllocationSection: View {
             }
         }
         .chartYAxis {
-            AxisMarks(position: .leading, values: cashTicks) { value in
+            AxisMarks(position: .leading, values: .automatic(desiredCount: 4)) { value in
                 AxisGridLine(stroke: ChartStyle.grid)
                     .foregroundStyle(ChartStyle.gridColor)
                 AxisValueLabel {
                     if let number = value.as(Double.self) {
                         Text(scale.map { Format.scaledYen(number, scale: $0) } ?? Format.autoYen(number))
-                            .font(.caption2)
-                            .foregroundStyle(Theme.textMuted)
-                    }
-                }
-            }
-            AxisMarks(position: .trailing, values: ratioTicks.map { $0 * factor }) { value in
-                AxisValueLabel {
-                    if let number = value.as(Double.self) {
-                        Text(Format.percent(factor == 0 ? 0 : number / factor, digits: 0))
                             .font(.caption2)
                             .foregroundStyle(Theme.textMuted)
                     }
