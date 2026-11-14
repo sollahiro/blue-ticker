@@ -191,7 +191,11 @@ struct FindCompaniesInImageIntent: AppIntent {
     static let title: LocalizedStringResource = "画像から会社を探す"
     static let description = IntentDescription("スクリーンショットや写真に写った文字から会社名や証券コードを読み取り、有報LABに載っている会社を返します。")
 
-    @Parameter(title: "画像", supportedContentTypes: [.image], requestValueDialog: "どの画像から会社を探しますか？")
+    @Parameter(
+        title: "画像", supportedContentTypes: [.image],
+        inputConnectionBehavior: .connectToPreviousIntentResult,
+        requestValueDialog: "どの画像から会社を探しますか？"
+    )
     var image: IntentFile
 
     static var parameterSummary: some ParameterSummary {
@@ -230,7 +234,11 @@ struct FindCompaniesInTextIntent: AppIntent {
     static let title: LocalizedStringResource = "文章から会社を探す"
     static let description = IntentDescription("ニュース記事などの文章から会社名や証券コードを拾い、有報LABに載っている会社を返します。")
 
-    @Parameter(title: "文章", requestValueDialog: "どの文章から会社を探しますか？")
+    @Parameter(
+        title: "文章",
+        inputConnectionBehavior: .connectToPreviousIntentResult,
+        requestValueDialog: "どの文章から会社を探しますか？"
+    )
     var text: String
 
     static var parameterSummary: some ParameterSummary {
