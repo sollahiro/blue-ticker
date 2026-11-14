@@ -1,6 +1,8 @@
 import AppIntents
 import Foundation
+import NaturalLanguage
 import SwiftData
+import VisualIntelligence
 
 /// Siri / ショートカットから呼ぶ操作。銘柄の候補は出さず、入力した文字（社名または証券コード）を
 /// そのまま `GET /v1/companies?q=` で検索して使う。
@@ -50,6 +52,161 @@ private enum CompanyLookup {
     static func resolve(_ raw: String) async throws -> (code: String, name: String) {
         let hit = try await resolveHit(raw)
         return (hit.code, Format.displayName(hit.name, fallback: hit.code))
+    }
+}
+
+/// ニュース記事などの長い文章から、会社名の候補を拾う。
+/// 証券コード（`(7203)` や `証券コード 7203`）、「株式会社〇〇」「〇〇ホールディングス」などの形、
+/// 言語解析の組織名、漢字・カタカナの連なりの順に出し、あとで有報LABの検索に照らして絞る。
+enum CompanyTextExtractor {
+    static let maxCandidates = 8
+
+    static func candidates(in text: String) -> [String] {
+        var result: [String] = []
+        func add(_ raw: String) {
+            let value = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard value.count >= 2, value.count <= 30, !result.contains(value) else { return }
+            result.append(value)
+        }
+        let body = CompanyLookup.normalized(text)
+        let word = "[\\p{Han}\\p{Katakana}ーA-Za-z0-9&＆]"
+        let patterns = [
+            "[（(]\\s*([0-9]{3}[0-9A-Z])\\s*[)）]",
+            "(?:証券コード|コード)[:：\\s]*([0-9]{3}[0-9A-Z])",
+            "株式会社(\(word){1,15})",
+            "(\(word){1,15}(?:ホールディングス|グループ))",
+            "(\(word){1,15})株式会社",
+        ]
+        for pattern in patterns {
+            guard let regex = try? NSRegularExpression(pattern: pattern) else { continue }
+            let range = NSRange(body.startIndex..., in: body)
+            for match in regex.matches(in: body, range: range) {
+                // 取り出す範囲は、あれば括弧のグループ、なければ全体。
+                let group = match.numberOfRanges > 1 ? match.range(at: 1) : match.range
+                if let r = Range(group, in: body) { add(String(body[r])) }
+            }
+        }
+        let tagger = NLTagger(tagSchemes: [.nameType])
+        tagger.string = body
+        tagger.enumerateTags(
+            in: body.startIndex..<body.endIndex, unit: .word, scheme: .nameType,
+            options: [.omitWhitespace, .omitPunctuation, .joinNames]
+        ) { tag, range in
+            if tag == .organizationName { add(String(body[range])) }
+            return true
+        }
+        if let runs = try? NSRegularExpression(pattern: "[\\p{Han}\\p{Katakana}ー]{3,}") {
+            let range = NSRange(body.startIndex..., in: body)
+            let found = runs.matches(in: body, range: range).compactMap { Range($0.range, in: body).map { String(body[$0]) } }
+            for run in found.sorted(by: { $0.count > $1.count }) { add(run) }
+        }
+        return Array(result.prefix(maxCandidates))
+    }
+
+    /// 候補を 1 つずつ検索し、会社名か証券コードが合うものだけ採る。最大 `limit` 社。
+    static func resolve(_ candidates: [String], limit: Int = 5) async -> [CompanyHit] {
+        var found: [CompanyHit] = []
+        for candidate in candidates {
+            guard found.count < limit else { break }
+            guard let hits = try? await APIClient.shared.searchCompanies(query: candidate) else { continue }
+            let key = candidate.uppercased()
+            let hit = hits.first { hit in
+                let name = Format.displayName(hit.name, fallback: hit.code)
+                return hit.code.uppercased() == key || name.contains(candidate) || candidate.contains(name)
+            }
+            if let hit, !found.contains(where: { $0.code == hit.code }) { found.append(hit) }
+        }
+        return found
+    }
+}
+
+/// 画面や画像から拾った会社。Visual Intelligence の結果と、結果画面を開く操作に使う。
+struct CompanyEntity: AppEntity {
+    static let typeDisplayRepresentation = TypeDisplayRepresentation(name: "会社")
+    static let defaultQuery = CompanyEntityQuery()
+
+    let id: String
+    let name: String
+    let sector: String
+
+    var displayRepresentation: DisplayRepresentation {
+        DisplayRepresentation(title: "\(name)", subtitle: "\(id) \(sector)")
+    }
+
+    init(hit: CompanyHit) {
+        id = hit.code
+        name = Format.displayName(hit.name, fallback: hit.code)
+        sector = hit.sector ?? ""
+    }
+}
+
+/// 銘柄の候補一覧は出さない（`suggestedEntities` は実装しない）。識別子（証券コード）から引くだけ。
+struct CompanyEntityQuery: EntityQuery {
+    func entities(for identifiers: [String]) async throws -> [CompanyEntity] {
+        var result: [CompanyEntity] = []
+        for code in identifiers {
+            let hits = (try? await APIClient.shared.searchCompanies(query: code)) ?? []
+            if let hit = hits.first(where: { $0.code == code }) {
+                result.append(CompanyEntity(hit: hit))
+            }
+        }
+        return result
+    }
+}
+
+/// カメラ（Visual Intelligence）や画面の画像に写った文字・ラベルから会社を探す。
+struct CompanyVisualQuery: IntentValueQuery {
+    func values(for input: SemanticContentDescriptor) async throws -> [CompanyEntity] {
+        let text = input.labels.joined(separator: "\n")
+        let hits = await CompanyTextExtractor.resolve(CompanyTextExtractor.candidates(in: text))
+        return hits.map(CompanyEntity.init(hit:))
+    }
+}
+
+/// Visual Intelligence の結果から、有報LABの結果画面を開く。
+struct OpenCompanyEntityIntent: OpenIntent {
+    static let title: LocalizedStringResource = "有報LABで会社を開く"
+    static let openAppWhenRun = true
+
+    @Parameter(title: "会社")
+    var target: CompanyEntity
+
+    @MainActor
+    func perform() async throws -> some IntentResult {
+        IntentRouter.shared.pending = CompanyRef(code: target.id, name: target.name, sector: target.sector)
+        return .result()
+    }
+}
+
+struct FindCompaniesInTextIntent: AppIntent {
+    static let title: LocalizedStringResource = "文章から会社を探す"
+    static let description = IntentDescription("ニュース記事などの文章から会社名や証券コードを拾い、有報LABに載っている会社を返します。")
+
+    @Parameter(title: "文章", requestValueDialog: "どの文章から会社を探しますか？")
+    var text: String
+
+    static var parameterSummary: some ParameterSummary {
+        Summary("\(\.$text)から会社を探す")
+    }
+
+    func perform() async throws -> some IntentResult & ReturnsValue<String> & ProvidesDialog {
+        let candidates = CompanyTextExtractor.candidates(in: text)
+        var hits = await CompanyTextExtractor.resolve(candidates)
+        // 短い入力で何も拾えなかったときは、全体を会社名として検索する。
+        let whole = CompanyLookup.normalized(text)
+        if hits.isEmpty, whole.count <= 30, let found = try? await CompanyLookup.search(whole) {
+            hits = Array(found.prefix(5))
+        }
+        guard !hits.isEmpty else {
+            throw CompanyIntentError(message: "有報LABに載っている会社を文章から見つけられませんでした。")
+        }
+        let lines = hits.map { hit -> String in
+            let name = Format.displayName(hit.name, fallback: hit.code)
+            let sector = hit.sector.map { "（\($0)）" } ?? ""
+            return "\(name) \(hit.code)\(sector)"
+        }
+        let text = lines.joined(separator: "\n")
+        return .result(value: text, dialog: IntentDialog(stringLiteral: text))
     }
 }
 
@@ -321,6 +478,15 @@ struct BlueTickerShortcuts: AppShortcutsProvider {
             ],
             shortTitle: "分析データ",
             systemImageName: "chart.xyaxis.line"
+        )
+        AppShortcut(
+            intent: FindCompaniesInTextIntent(),
+            phrases: [
+                "\(.applicationName)で文章から会社を探す",
+                "\(.applicationName)でニュースの会社を調べる",
+            ],
+            shortTitle: "文章から会社を探す",
+            systemImageName: "text.magnifyingglass"
         )
         AppShortcut(
             intent: OpenCompanyIntent(),
