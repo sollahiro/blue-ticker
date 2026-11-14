@@ -57,3 +57,29 @@ struct HistoryListView: View {
         .onAppear { history = CompanyHistory.load() }
     }
 }
+
+/// 検索バーが空のときに `List` の中へ置く、最近調べた企業（旧: 条件プリセット一覧の置き換え）。
+struct SearchHistorySection: View {
+    @State private var history: [CompanyRef] = []
+
+    var body: some View {
+        Section {
+            if history.isEmpty {
+                Text("調べた企業がここに並びます")
+                    .font(.footnote)
+                    .foregroundStyle(Theme.textMuted)
+            } else {
+                ForEach(history) { company in
+                    NavigationLink(value: company) {
+                        CompanyRowView(company: company)
+                    }
+                }
+            }
+        } header: {
+            Text("最近あなたが調べた企業")
+                .foregroundStyle(Theme.textMuted)
+                .textCase(nil)
+        }
+        .onAppear { history = CompanyHistory.load() }
+    }
+}

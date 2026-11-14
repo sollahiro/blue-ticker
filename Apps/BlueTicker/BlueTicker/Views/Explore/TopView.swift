@@ -41,17 +41,16 @@ final class FeedSession {
     }
 }
 
-/// トップから push する画面。銘柄は `CompanyRef`、条件検索結果は `ScreenPreset` で積む。
+/// トップから push する画面。銘柄は `CompanyRef`、履歴画面は `TopRoute` で積む。
 enum TopRoute: Hashable {
     case history
 }
 
 /// トップ。左上にロゴ、右上に検索と履歴。本文は最近有報が更新された企業のキュレーション。
-/// 検索を押すと上部が検索バーに変わり、未入力なら条件一覧、入力中は会社名の候補を出す。
+/// 検索を押すと上部が検索バーに変わり、未入力なら履歴、入力中は会社名の候補を出す。
 struct TopView: View {
     @Binding var query: String
     @Bindable var feed: FeedSession
-    @Bindable var screen: ScreenSession
     @State private var searching = false
     @State private var searchResults: [CompanyHit] = []
     @State private var searchError: String?
@@ -101,15 +100,10 @@ struct TopView: View {
             case .history: HistoryListView()
             }
         }
-        .navigationDestination(for: ScreenPreset.self) { preset in
-            ScreenResultsView(preset: preset, session: screen)
-        }
         .onChange(of: query) { _, newValue in
             scheduleSearch(newValue, debounce: .milliseconds(280))
         }
         .task { await feed.refresh() }
-        .task(id: screen.screenSectors) { await screen.refreshCounts() }
-        .task { await screen.revalidateSnapshot() }
     }
 
     @ViewBuilder
@@ -148,7 +142,7 @@ struct TopView: View {
     private var searchContent: some View {
         List {
             if query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                ScreenPresetSection(session: screen)
+                SearchHistorySection()
             } else {
                 Section {
                     if isSearching && searchResults.isEmpty && searchError == nil {
