@@ -1,5 +1,6 @@
 import AppIntents
 import Foundation
+import SwiftData
 
 /// Siri / ショートカットから呼ぶ操作。銘柄の候補は出さず、入力した文字（社名または証券コード）を
 /// そのまま `GET /v1/companies?q=` で検索して使う。
@@ -40,12 +41,23 @@ private enum CompanyLookup {
     }
 
     /// 証券コードが完全一致する会社を優先し、なければ検索の先頭を使う。
-    static func resolve(_ raw: String) async throws -> (code: String, name: String) {
+    static func resolveHit(_ raw: String) async throws -> CompanyHit {
         let hits = try await search(raw)
         let code = normalized(raw).uppercased()
-        let hit = hits.first(where: { $0.code.uppercased() == code }) ?? hits[0]
+        return hits.first(where: { $0.code.uppercased() == code }) ?? hits[0]
+    }
+
+    static func resolve(_ raw: String) async throws -> (code: String, name: String) {
+        let hit = try await resolveHit(raw)
         return (hit.code, Format.displayName(hit.name, fallback: hit.code))
     }
+}
+
+/// Intent からアプリの画面へ行き先を渡す。`RootView` が見て、ホームタブに銘柄面を積む。
+@MainActor @Observable
+final class IntentRouter {
+    static let shared = IntentRouter()
+    var pending: CompanyRef?
 }
 
 struct SearchCompanyIntent: AppIntent {
@@ -128,6 +140,68 @@ struct CompanyFinancialsIntent: AppIntent {
     }
 }
 
+struct OpenCompanyIntent: AppIntent {
+    static let title: LocalizedStringResource = "会社の結果画面を開く"
+    static let description = IntentDescription("会社名や証券コードから会社を探し、有報LABの分析結果の画面を開きます。")
+    static let openAppWhenRun = true
+
+    @Parameter(title: "会社名または証券コード", requestValueDialog: "どの会社の結果を開きますか？")
+    var query: String
+
+    static var parameterSummary: some ParameterSummary {
+        Summary("\(\.$query)の結果を開く")
+    }
+
+    @MainActor
+    func perform() async throws -> some IntentResult & ProvidesDialog {
+        let hit = try await CompanyLookup.resolveHit(query)
+        IntentRouter.shared.pending = CompanyRef(hit)
+        let name = Format.displayName(hit.name, fallback: hit.code)
+        return .result(dialog: IntentDialog(stringLiteral: "\(name)の結果を開きます。"))
+    }
+}
+
+struct AddCompanyToWatchlistIntent: AppIntent {
+    static let title: LocalizedStringResource = "会社をリストに追加する"
+    static let description = IntentDescription("会社名や証券コードから会社を探し、有報LABのリストに追加します。")
+
+    @Parameter(title: "会社名または証券コード", requestValueDialog: "どの会社をリストに追加しますか？")
+    var query: String
+
+    static var parameterSummary: some ParameterSummary {
+        Summary("\(\.$query)をリストに追加")
+    }
+
+    @MainActor
+    func perform() async throws -> some IntentResult & ReturnsValue<String> & ProvidesDialog {
+        let hit = try await CompanyLookup.resolveHit(query)
+        let name = Format.displayName(hit.name, fallback: hit.code)
+        let context = BlueTickerApp.sharedContainer.mainContext
+        let existing = (try? context.fetch(FetchDescriptor<WatchedCompany>())) ?? []
+        let text: String
+        if existing.contains(where: { $0.code == hit.code }) {
+            text = "\(name)はすでにリストにあります。"
+        } else {
+            context.insert(
+                WatchedCompany(
+                    code: hit.code,
+                    name: hit.name,
+                    sector: hit.sector ?? "",
+                    iconURL: hit.iconURL,
+                    sortOrder: WatchedCompany.nextSortOrder(among: existing)
+                )
+            )
+            do {
+                try context.save()
+            } catch {
+                throw CompanyIntentError(message: "\(name)をリストに追加できませんでした。")
+            }
+            text = "\(name)をリストに追加しました。"
+        }
+        return .result(value: text, dialog: IntentDialog(stringLiteral: text))
+    }
+}
+
 /// 入力なし。端末に保存済みの開示フィード（RSS）から、最近有報を出した会社を新しい順に返す。
 struct RecentFilingsIntent: AppIntent {
     static let title: LocalizedStringResource = "最近の有報を見る"
@@ -195,6 +269,24 @@ struct BlueTickerShortcuts: AppShortcutsProvider {
             ],
             shortTitle: "最新の業績",
             systemImageName: "chart.bar"
+        )
+        AppShortcut(
+            intent: OpenCompanyIntent(),
+            phrases: [
+                "\(.applicationName)で会社の結果を開く",
+                "\(.applicationName)で会社の結果画面を見る",
+            ],
+            shortTitle: "結果画面を開く",
+            systemImageName: "rectangle.portrait.and.arrow.right"
+        )
+        AppShortcut(
+            intent: AddCompanyToWatchlistIntent(),
+            phrases: [
+                "\(.applicationName)のリストに会社を追加",
+                "\(.applicationName)で会社をリストに追加",
+            ],
+            shortTitle: "リストに追加",
+            systemImageName: "bookmark"
         )
         AppShortcut(
             intent: RecentFilingsIntent(),
