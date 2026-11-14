@@ -351,20 +351,7 @@ private struct BusinessProfitSection: View {
 
     var body: some View {
         AnalysisCard(title: "収益構造") {
-            AnalysisSubheading(text: expandedDelta == nil ? "事業利益の推移" : "事業利益の前年差の要因")
-            if let expandedDelta {
-                Button {
-                    collapse()
-                } label: {
-                    Label("推移に戻る", systemImage: "chevron.left")
-                        .font(.caption.weight(.semibold))
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(Theme.accent)
-                Text("\(Format.fyJapanese(expandedDelta.year.fyEnd))の事業利益は、前年より\(expandedDelta.end >= expandedDelta.start ? "増えました" : "減りました")")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(Theme.text)
-            }
+            AnalysisSubheading(text: "事業利益の推移")
             if years.contains(where: { $0.businessProfit != nil }) {
                 profitChart
                 if expandedDelta == nil {
@@ -379,6 +366,14 @@ private struct BusinessProfitSection: View {
                         LegendItem(title: "プラス要因", color: Theme.positive, shape: .bar),
                         LegendItem(title: "マイナス要因", color: Theme.negative, shape: .bar),
                     ])
+                    Button {
+                        collapse()
+                    } label: {
+                        Label("推移に戻る", systemImage: "chevron.left")
+                            .font(.caption.weight(.semibold))
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(Theme.accent)
                 }
             } else {
                 AnalysisNote(text: "事業利益は未算出です。")
@@ -504,6 +499,8 @@ private struct BusinessProfitSection: View {
                 .lineStyle(StrokeStyle(lineWidth: 0.5))
         }
         .chartXScale(domain: expanded == nil ? slots : expandedSlots)
+        // 遷移の前後で縦軸（棒の高さ）が変わらないよう、全年の事業利益・前年差・要因の積み上げを含む範囲に固定する。
+        .chartYScale(domain: yDomain)
         .chartXAxis {
             AxisMarks { value in
                 // 通常は前年差の枠にラベルを出さない。拡大中は要因名も出す。
@@ -564,6 +561,23 @@ private struct BusinessProfitSection: View {
         }
         .chartLegend(.hidden)
         .frame(height: ChartStyle.height)
+    }
+
+    private var yDomain: ClosedRange<Double> {
+        var values: [Double] = [0]
+        values += years.compactMap(\.businessProfit)
+        for delta in deltas {
+            var running = delta.start
+            values += [delta.start, delta.end]
+            for factor in FactorKind.allCases {
+                running += factor.value(delta.year) ?? 0
+                values.append(running)
+            }
+        }
+        let lower = values.min() ?? 0
+        let upper = values.max() ?? 0
+        let pad = (upper - lower) * 0.05
+        return (lower - (lower < 0 ? pad : 0))...(upper + pad)
     }
 
     /// 拡大中の中間の棒。前年度事業利益から要因を順に積み、各段を点線で次へつなぐ。
