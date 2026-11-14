@@ -1186,25 +1186,20 @@ private struct CashAllocationSection: View {
 
     var body: some View {
         AnalysisCard(title: "資金配分") {
-            AnalysisSubheading(text: "フリーCFの使い道")
-            if selectableYears.isEmpty {
-                AnalysisNote(text: "キャッシュ・フロー計算書の内訳は未集計です。")
-            } else {
-                yearPicker
-                if let year = selectableYears.first(where: { $0.id == currentYearID }) {
-                    waterfall(year)
-                }
-            }
-            AnalysisSubheading(text: "財務余力の推移")
             if years.contains(where: { $0.netCash != nil || $0.cfc != nil }) {
                 balanceChart
                 ChartLegend(items: [
-                    LegendItem(title: "ネットキャッシュ", color: Theme.positive, shape: .bar),
                     LegendItem(title: "フリーCF", color: Theme.positive.opacity(0.5), shape: .bar),
-                    LegendItem(title: "マイナス", color: Theme.negative, shape: .bar),
+                    LegendItem(title: "ネットキャッシュ", color: Theme.positive, shape: .bar),
                 ])
             } else {
                 AnalysisNote(text: "ネットキャッシュ・フリーCFは未集計です。")
+            }
+            AnalysisSubheading(text: "フリーCFの使い道")
+            if selectableYears.isEmpty {
+                AnalysisNote(text: "キャッシュ・フロー計算書の内訳は未集計です。")
+            } else if let year = selectableYears.first(where: { $0.id == currentYearID }) {
+                waterfall(year)
             }
         }
     }
@@ -1215,10 +1210,6 @@ private struct CashAllocationSection: View {
 
     private var currentYearID: String? {
         selectedYearID ?? selectableYears.last?.id
-    }
-
-    private var yearPicker: some View {
-        YearPicker(years: selectableYears, selectedID: currentYearID) { selectedYearID = $0 }
     }
 
     private struct Step: Identifiable {
@@ -1287,21 +1278,26 @@ private struct CashAllocationSection: View {
         return Chart {
             ForEach(years) { year in
                 let label = Format.fy(year.fyEnd)
-                if let netCash = year.netCash {
-                    BarMark(x: .value("年度", label), y: .value("金額", netCash), width: .fixed(12))
-                        .position(by: .value("系列", "ネットキャッシュ"))
-                        .foregroundStyle(netCash < 0 ? Theme.negative : Theme.positive)
-                        .cornerRadius(3)
-                        .accessibilityLabel("\(label) ネットキャッシュ")
-                        .accessibilityValue(Format.autoYen(netCash, currency: currency))
+                // 選んでいる年（下のフリーCFの使い道の年）の背景を薄く塗る。
+                if year.id == currentYearID {
+                    RectangleMark(x: .value("年度", label), width: .ratio(1))
+                        .foregroundStyle(Theme.accent.opacity(0.14))
                 }
                 if let freeCF = year.cfc {
                     BarMark(x: .value("年度", label), y: .value("金額", freeCF), width: .fixed(12))
-                        .position(by: .value("系列", "フリーCF"))
+                        .position(by: .value("系列", "1フリーCF"))
                         .foregroundStyle((freeCF < 0 ? Theme.negative : Theme.positive).opacity(0.5))
                         .cornerRadius(3)
                         .accessibilityLabel("\(label) フリーCF")
                         .accessibilityValue(Format.autoYen(freeCF, currency: currency))
+                }
+                if let netCash = year.netCash {
+                    BarMark(x: .value("年度", label), y: .value("金額", netCash), width: .fixed(12))
+                        .position(by: .value("系列", "2ネットキャッシュ"))
+                        .foregroundStyle(netCash < 0 ? Theme.negative : Theme.positive)
+                        .cornerRadius(3)
+                        .accessibilityLabel("\(label) ネットキャッシュ")
+                        .accessibilityValue(Format.autoYen(netCash, currency: currency))
                 }
             }
             RuleMark(y: .value("zero", 0))
@@ -1309,6 +1305,15 @@ private struct CashAllocationSection: View {
                 .lineStyle(StrokeStyle(lineWidth: 0.5))
         }
         .chartXScale(domain: labels)
+        // 年の棒をタップすると、下のフリーCFの使い道がその年になる。
+        .chartGesture { proxy in
+            SpatialTapGesture().onEnded { value in
+                guard let label = proxy.value(atX: value.location.x, as: String.self),
+                      let year = selectableYears.first(where: { Format.fy($0.fyEnd) == label })
+                else { return }
+                selectedYearID = year.id
+            }
+        }
         .chartXAxis {
             AxisMarks { _ in
                 AxisValueLabel()
@@ -1607,36 +1612,5 @@ private extension UnevenRoundedRectangle {
             : UnevenRoundedRectangle(
                 topLeadingRadius: radius, bottomLeadingRadius: radius,
                 bottomTrailingRadius: start, topTrailingRadius: start)
-    }
-}
-
-/// 年を選ぶボタンの行（収益構造の要因分解・資金配分のウォーターフォールで共通）。
-private struct YearPicker: View {
-    var years: [FinancialsYear]
-    var selectedID: String?
-    var onSelect: (String) -> Void
-
-    var body: some View {
-        ScrollView(.horizontal) {
-            HStack(spacing: 6) {
-                ForEach(years) { year in
-                    let selected = year.id == selectedID
-                    Button {
-                        onSelect(year.id)
-                    } label: {
-                        Text(Format.fy(year.fyEnd))
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(selected ? Theme.text : Theme.textMuted)
-                            .padding(.vertical, 6)
-                            .padding(.horizontal, 10)
-                            .background(selected ? Theme.accent.opacity(0.18) : Theme.idleTab.opacity(0.25))
-                            .clipShape(RoundedRectangle(cornerRadius: 6))
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityAddTraits(selected ? .isSelected : [])
-                }
-            }
-        }
-        .scrollIndicators(.hidden)
     }
 }
