@@ -294,10 +294,10 @@ struct HAPISConsumerClientTests {
     }
 
     @Test func loopbackAndNonGatewayHostsDoNotUseConsumerAuth() {
-        let gateway = URL(string: "https://hapis-blue-ticker-production.sollahiro.workers.dev")!
+        let gateway = URL(string: "https://hapis-yuholab-production.sollahiro.workers.dev")!
         #expect(
             HAPISConsumerAuth.applies(
-                to: URL(string: "https://hapis-blue-ticker-production.sollahiro.workers.dev/v1/companies")!,
+                to: URL(string: "https://hapis-yuholab-production.sollahiro.workers.dev/v1/companies")!,
                 gatewayBases: [gateway]
             ))
         #expect(
@@ -340,18 +340,18 @@ struct HAPISConsumerClientTests {
                 == URL(string: "https://hapis.example.test"))
         #expect(
             HAPISConsumerAuth.applies(
-                to: URL(string: "https://hapis-blue-ticker-production.sollahiro.workers.dev:443/v1/companies")!,
+                to: URL(string: "https://hapis-yuholab-production.sollahiro.workers.dev:443/v1/companies")!,
                 gatewayBases: [gateway]
             ))
         #expect(
             !HAPISConsumerAuth.applies(
-                to: URL(string: "https://hapis-blue-ticker-production.sollahiro.workers.dev:8443/v1/companies")!,
+                to: URL(string: "https://hapis-yuholab-production.sollahiro.workers.dev:8443/v1/companies")!,
                 gatewayBases: [gateway]
             ))
-        let gatewayAltPort = URL(string: "https://hapis-blue-ticker-production.sollahiro.workers.dev:8443")!
+        let gatewayAltPort = URL(string: "https://hapis-yuholab-production.sollahiro.workers.dev:8443")!
         #expect(
             HAPISConsumerAuth.applies(
-                to: URL(string: "https://hapis-blue-ticker-production.sollahiro.workers.dev:8443/v1/companies")!,
+                to: URL(string: "https://hapis-yuholab-production.sollahiro.workers.dev:8443/v1/companies")!,
                 gatewayBases: [gatewayAltPort]
             ))
     }

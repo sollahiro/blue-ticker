@@ -194,7 +194,7 @@ iOS は第三者と同じ公開 REST のクライアント。privileged にし�
 | 役割 | URL |
 |---|---|
 | 発行者（制御面） | `https://hapis.sollahiro.workers.dev` |
-| 本番ゲートウェイ（API base） | `https://hapis-blue-ticker-production.sollahiro.workers.dev` |
+| 本番ゲートウェイ（API base） | `https://hapis-yuholab-production.sollahiro.workers.dev` |
 
 - `GET /v1/consumer/challenge` — App Attest の mint / attest / assertion のたびに取る（単回使い切り。stub mint では呼ばない）。応答 `challenge` は 32 バイトの unpadded base64url
 - `POST /v1/consumer/sessions` — 201 で `token` / `refresh_at` / `expires_at`
