@@ -171,6 +171,40 @@ struct JevDecisionTransportTests {
         #expect(data == Data("{\"ok\":2}".utf8))
         #expect(await client.attempts() == 2)
     }
+
+    @Test("401 / 402 / 403 are not retried")
+    func authErrorsAreNotRetried() async {
+        for status in [401, 402, 403] {
+            let client = HTTPStatusClient(status: status)
+            let data = await JevDecisionTransport.decide(
+                client: client, requestJSON: Data("{}".utf8), retries: 3, onFailure: "JevDecisionTests")
+            #expect(data == nil)
+            #expect(await client.attempts() == 1)
+        }
+    }
+
+    @Test("5xx is still retried")
+    func serverErrorsAreRetried() async {
+        let client = HTTPStatusClient(status: 503)
+        let data = await JevDecisionTransport.decide(
+            client: client, requestJSON: Data("{}".utf8), retries: 2, onFailure: "JevDecisionTests")
+        #expect(data == nil)
+        #expect(await client.attempts() == 3)
+    }
+}
+
+private actor HTTPStatusClient: DecisionsCompleting {
+    private let status: Int
+    private var hits = 0
+
+    init(status: Int) { self.status = status }
+
+    func decide(requestJSON: Data) async throws -> Data {
+        hits += 1
+        throw ChatCompletionError.httpError(status, "")
+    }
+
+    func attempts() -> Int { hits }
 }
 
 private actor CountingThrowingClient: DecisionsCompleting {
