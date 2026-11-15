@@ -104,7 +104,7 @@ actor ChatCompletionClient: ChatCompleting {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("Bearer \(endpoint.apiKey)", forHTTPHeaderField: "Authorization")
         if endpoint.provider == .openrouter {
-            request.setValue("https://github.com/sollahiro/blue-ticker", forHTTPHeaderField: "HTTP-Referer")
+            request.setValue("https://github.com/sollahiro/yuholab", forHTTPHeaderField: "HTTP-Referer")
             request.setValue("BLUE TICKER Overview", forHTTPHeaderField: "X-OpenRouter-Title")
         }
         request.timeoutInterval =
