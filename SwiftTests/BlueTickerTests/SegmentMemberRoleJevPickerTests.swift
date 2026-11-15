@@ -37,4 +37,26 @@ import Testing
         ]
         #expect(!SegmentMemberRoleJevPicker.externalRevenueIsNegligible(noRevenue[1], among: noRevenue))
     }
+
+    private struct UnavailableDecider: SegmentMemberRoleDeciding {
+        func chooseReconcilingMember(
+            candidates: [SegmentMemberRoleCandidate], docID: String
+        ) async -> JevChoiceAggregate.Sample {
+            JevChoiceAggregate.Sample(
+                selected: nil, probability: nil,
+                options: candidates.map(\.key) + [JevDecision.noneOfThese], model: "m")
+        }
+    }
+
+    @Test func allSamplesFailedIsUnavailableNotFailClosed() async {
+        let candidates = [
+            SegmentMemberRoleCandidate(key: "m0", member: "A", label: "A", externalRevenueMillionYen: 100),
+            SegmentMemberRoleCandidate(key: "m1", member: "E", label: "消去", externalRevenueMillionYen: 0),
+        ]
+        let result = await SegmentMemberRoleJevPicker.pick(
+            candidates: candidates, decider: UnavailableDecider(), docID: "S1")
+        #expect(result.unavailable)
+        #expect(result.members.isEmpty)
+        #expect(result.sentences == ["member_role_jev=unavailable"])
+    }
 }

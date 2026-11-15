@@ -82,6 +82,9 @@ enum SegmentMemberRoleJevPicker {
     struct PickResult: Equatable, Sendable {
         var members: Set<String>
         var sentences: [String]
+        /// Jev に全サンプルが届かなかった（通信失敗など）。fail_closed（判断はできたが決まらない）とは別。
+        /// このときの結果は「調整 member なし」ではなく未判定なので、呼び出し側は行を確定させない。
+        var unavailable: Bool = false
     }
 
     static func pick(
@@ -93,6 +96,10 @@ enum SegmentMemberRoleJevPicker {
         let options = candidates.map(\.key) + [JevDecision.noneOfThese]
         let result = await JevDecisionSampler.decide(policy: jevPolicy, options: options) {
             await decider.chooseReconcilingMember(candidates: candidates, docID: docID)
+        }
+        if result.isEmpty {
+            return PickResult(
+                members: [], sentences: ["member_role_jev=unavailable"], unavailable: true)
         }
         guard let key = result.selectedKey,
               let chosen = candidates.first(where: { $0.key == key })

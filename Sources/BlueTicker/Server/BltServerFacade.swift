@@ -125,9 +125,10 @@ actor BusinessSegmentDimensionCache {
     private var reconcilingMembers: [String: Set<String>] = [:]
 
     /// 書類ごとに1回だけ Jev に聞く（`SegmentMemberRoleJevPicker`）。キーが無ければ空。
+    /// Jev に全サンプルが届かなかったとき（通信失敗など）は nil。キャッシュせず、次の呼び出しで聞き直す。
     func reconcilingMembers(
         docID: String, xbrlDir: URL, decider: (any SegmentMemberRoleDeciding)?
-    ) async -> Set<String> {
+    ) async -> Set<String>? {
         if let hit = reconcilingMembers[docID] { return hit }
         guard let decider else { return [] }
         let entry = load(docID: docID, xbrlDir: xbrlDir)
@@ -138,6 +139,7 @@ actor BusinessSegmentDimensionCache {
         if !picked.members.isEmpty || candidates.count >= 2 {
             printError("segment member roles \(docID): \(picked.sentences.joined(separator: " "))\n")
         }
+        if picked.unavailable { return nil }
         reconcilingMembers[docID] = picked.members
         return picked.members
     }
@@ -1177,8 +1179,12 @@ public extension BltServerContext {
         guard segmentMemberRoleDecider != nil,
               let xbrlDir = await downloadAnnualFilingXbrl(docID: docID, correctionDocIDs: correctionDocIDs)
         else { return await body() }
-        let roles = await businessSegmentDimensionCache.reconcilingMembers(
+        guard let roles = await businessSegmentDimensionCache.reconcilingMembers(
             docID: docID, xbrlDir: xbrlDir, decider: segmentMemberRoleDecider)
+        else {
+            // Jev に届かなかった。調整 member なしの行として確定させず、次回に再試行する。
+            return .failed
+        }
         return await BreakdownMemberRoles.$extraReconciling.withValue(roles) { await body() }
     }
 
