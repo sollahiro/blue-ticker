@@ -12,7 +12,7 @@ App Store 用の公開ページは Cloudflare Worker `workers/legal/`（静的 H
 
 App Store Connect のプライバシーポリシー URL は `https://yuholab.com/privacy`、サポート URL は `https://yuholab.com`。
 
-旧 URL は `sollahiro.com` に残し、次の 6 パスだけを対応する `yuholab.com` のページへ **301 で直接**（1 回で）リダイレクトする。公開済み 1.1.x の App Store ページとアプリが旧 URL を参照しているため。
+旧 URL は `sollahiro.com` に残し（配信は個人ページの別 Worker `sollahiro-home`。リポジトリ外。`workers/legal/README.md`）、次の 6 パスだけを対応する `yuholab.com` のページへ **301 で直接**（1 回で）リダイレクトする。公開済み 1.1.x の App Store ページとアプリが旧 URL を参照しているため。
 
 | 旧 URL（`sollahiro.com`） | 転送先 |
 |---|---|
@@ -20,9 +20,7 @@ App Store Connect のプライバシーポリシー URL は `https://yuholab.com
 | `/blue-ticker/privacy`・`/yuholab/privacy` | `https://yuholab.com/privacy` |
 | `/blue-ticker/terms`・`/yuholab/terms` | `https://yuholab.com/terms` |
 
-リダイレクトするのは上の 6 パスの完全一致だけで、`/blue-ticker/` 配下を前方一致でまとめて飛ばさない。有報LAB API 自体の規約などが要るときは、アプリのページとは別に `sollahiro.com/blue-ticker/` 配下の上記以外のパス（例 `/blue-ticker/api/terms`）に置く。`/yuholab/...` は置き場所には使わず、リダイレクト元としてだけ残す。
-
-yuholab.com への移行をデプロイするまでは、従来どおり `sollahiro.com/blue-ticker/privacy`・`/blue-ticker/terms`（`/` · `/blue-ticker` · workers.dev も同じ本文）で配信している。
+リダイレクトするのは上の 6 パスの完全一致だけで、`/blue-ticker/` 配下を前方一致でまとめて飛ばさない。有報LAB API 自体の規約などが要るときは `yuholab.com` に置く。`sollahiro.com` の `/blue-ticker/...`・`/yuholab/...` はリダイレクト元としてだけ残す。
 
 App Store / PrivacyInfo は公開ページと揃える（`PrivacyInfo.xcprivacy` も同じ種類）。
 

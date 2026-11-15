@@ -9,14 +9,10 @@
     "binding": "ASSETS",
     "run_worker_first": true
   },
-  // yuholab.com が配信先。sollahiro.com は旧 URL 6 パスの 301 用に残す（src/index.js）。
+  // yuholab.com が配信先。sollahiro.com は別 Worker（sollahiro-home、リポジトリ外）が持つので載せない。
   "routes": [
     {
       "pattern": "yuholab.com",
-      "custom_domain": true
-    },
-    {
-      "pattern": "sollahiro.com",
       "custom_domain": true
     }
   ]

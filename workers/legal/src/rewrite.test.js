@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import worker, { assetPathFor, redirectLocationFor } from "./index.js";
+import worker, { assetPathFor } from "./index.js";
 
 const publicDir = join(dirname(fileURLToPath(import.meta.url)), "../public");
 
@@ -15,36 +15,6 @@ test("privacy aliases rewrite to /privacy", () => {
 test("terms aliases rewrite to /terms", () => {
   assert.equal(assetPathFor("/terms"), "/terms");
   assert.equal(assetPathFor("/terms/"), "/terms");
-});
-
-const OLD_URLS = [
-  ["/blue-ticker", "https://yuholab.com/"],
-  ["/blue-ticker/privacy", "https://yuholab.com/privacy"],
-  ["/blue-ticker/terms", "https://yuholab.com/terms"],
-  ["/yuholab", "https://yuholab.com/"],
-  ["/yuholab/privacy", "https://yuholab.com/privacy"],
-  ["/yuholab/terms", "https://yuholab.com/terms"],
-];
-
-test("old sollahiro.com paths redirect to yuholab.com, trailing slash ignored", () => {
-  for (const [path, location] of OLD_URLS) {
-    assert.equal(redirectLocationFor(path), location, path);
-    assert.equal(redirectLocationFor(`${path}/`), location, `${path}/`);
-  }
-});
-
-test("only the six old paths redirect (no prefix match)", () => {
-  for (const path of [
-    "/",
-    "/privacy",
-    "/terms",
-    "/blue-ticker/api",
-    "/blue-ticker/privacy/extra",
-    "/yuholab/other",
-    "/blue-tickerx",
-  ]) {
-    assert.equal(redirectLocationFor(path), null, path);
-  }
 });
 
 // ASSETS はリクエストされたパスを返すだけのフェイク。
@@ -60,18 +30,6 @@ function fakeEnv() {
     },
   };
 }
-
-test("sollahiro.com old URLs answer one 301 straight to yuholab.com", async () => {
-  for (const [path, location] of OLD_URLS) {
-    const env = fakeEnv();
-    const response = await worker.fetch(new Request(`https://sollahiro.com${path}`), env);
-    assert.equal(response.status, 301, path);
-    assert.equal(response.headers.get("Location"), location, path);
-    assert.equal(env.fetched.length, 0, path);
-    // 転送先は配信対象で、さらに転送されない（1 回で届く）。
-    assert.equal(redirectLocationFor(new URL(location).pathname), null, location);
-  }
-});
 
 test("yuholab.com serves /, /privacy and /terms from assets", async () => {
   const cases = [
