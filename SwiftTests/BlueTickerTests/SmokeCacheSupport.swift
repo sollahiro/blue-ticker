@@ -8,6 +8,8 @@
 //
 // docID ごとに `XBRL_SOURCE <docID> <local|r2|edinet|failed>` を出力する。
 // scripts/ci/golden-suite.sh がこの行を集計して run ごとの内訳を表示する。
+// 実際に取得した docID は `XBRL_TIMING <docID> <source> wait=<秒> fetch=<秒>` も出す
+// （wait = 同時実行枠の待ち、fetch = 取得と展開）。同じく golden-suite.sh が合計と最大を表示する。
 
 import Foundation
 import Testing
@@ -55,6 +57,40 @@ actor XbrlFetchSingleFlight {
     }
 }
 
+/// 取得済みの docID が展開されているディレクトリを覚える。スイートごとに cacheDir が違っても
+/// （`tmp_cache/edinet` と `~/.config/...` など）同じ書類を R2 から二重に取らず、手元でコピーする。
+actor XbrlFetchedDirs {
+    static let shared = XbrlFetchedDirs()
+    private var dirs: [String: URL] = [:]
+
+    func record(docID: String, dir: URL) {
+        if dirs[docID] == nil { dirs[docID] = dir }
+    }
+
+    /// `excluding` 以外の cacheDir に展開済みの書類があればその cacheDir。
+    func other(docID: String, excluding: URL) -> URL? {
+        guard let dir = dirs[docID], dir.standardizedFileURL != excluding.standardizedFileURL else { return nil }
+        return dir
+    }
+}
+
+/// 同じ docID の取得を cacheDir をまたいで 1 本ずつにする。cacheDir が違う 2 つの呼び出しが
+/// 同時に来ても、後の方は先の取得が終わってから `XbrlFetchedDirs` 経由でコピーできる。
+actor XbrlDocGate {
+    static let shared = XbrlDocGate()
+    private var tails: [String: Task<Void, Never>] = [:]
+
+    func run<T: Sendable>(docID: String, _ work: @escaping @Sendable () async -> T) async -> T {
+        let previous = tails[docID]
+        let task = Task { () -> T in
+            await previous?.value
+            return await work()
+        }
+        tails[docID] = Task { _ = await task.value }
+        return await task.value
+    }
+}
+
 enum SmokeCacheSupport {
     static let cacheDir = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
         .appendingPathComponent("tmp_cache/edinet")
@@ -66,7 +102,8 @@ enum SmokeCacheSupport {
     }
 
     /// 取得の同時実行数。全スイートが一斉に要求しても各取得が短時間で終わるよう絞る。
-    private static let fetchSemaphore = AsyncSemaphore(value: 6)
+    /// 1 書類 2.5 秒ほどの R2 GET が主なので、6 本では全スイートの待ちが 6 分を超えていた。
+    private static let fetchSemaphore = AsyncSemaphore(value: 16)
 
     /// `cacheDir` 省略時は `tmp_cache/edinet`（従来通り）。`RealXbrlBreakdown*Tests` のような
     /// 別ディレクトリ（`~/.config/blue-ticker/analysis_cache/...`）を使う呼び出し元は明示指定する。
@@ -87,7 +124,9 @@ enum SmokeCacheSupport {
         for docID in docIDs {
             let key = dir.standardizedFileURL.path + "|" + docID
             let (source, joined) = await XbrlFetchSingleFlight.shared.run(key: key) {
-                await fetch(docID: docID, dir: dir, apiKey: apiKey, r2Config: r2Config)
+                await XbrlDocGate.shared.run(docID: docID) {
+                    await fetch(docID: docID, dir: dir, apiKey: apiKey, r2Config: r2Config)
+                }
             }
             // 合流した呼び出しは取得していないので local と数える（失敗はそのまま失敗）。
             let reported = joined && source != "failed" ? "local" : source
@@ -105,16 +144,66 @@ enum SmokeCacheSupport {
         docID: String, dir: URL, apiKey: String?, r2Config: R2StorageConfig?
     ) async -> String {
         let store = EdinetCacheStore(cacheDir: dir)
-        if store.hasXbrlDir(docID, saveDir: dir) { return "local" }
+        if store.hasXbrlDir(docID, saveDir: dir) {
+            await XbrlFetchedDirs.shared.record(docID: docID, dir: dir)
+            return "local"
+        }
+        if let other = await XbrlFetchedDirs.shared.other(docID: docID, excluding: dir),
+           copyExtracted(docID: docID, from: other, to: dir)
+        {
+            await XbrlFetchedDirs.shared.record(docID: docID, dir: dir)
+            return "local"
+        }
+        let queuedAt = ContinuousClock.now
         await fetchSemaphore.wait()
         defer { fetchSemaphore.signal() }
+        let startedAt = ContinuousClock.now
         let objectStore = r2Config.map { ReadOnlyXbrlObjectStore(base: R2XbrlObjectStore(config: $0)) }
         let client = EdinetAPIClient(apiKey: apiKey, cacheStore: store, xbrlObjectStore: objectStore)
-        guard await client.downloadDocument(docID, saveDir: dir) != nil else { return "failed" }
-        guard let objectStore else { return "edinet" }
-        if await objectStore.servedFromR2 { return "r2" }
-        if await objectStore.missedR2 { return "edinet" }
-        // R2 に問い合わせずに返った = 別プロセスが展開済み（ファイルロック内でローカル判定）。
-        return "local"
+        let downloaded = await client.downloadDocument(docID, saveDir: dir) != nil
+        let source: String
+        if !downloaded {
+            source = "failed"
+        } else if let objectStore {
+            if await objectStore.servedFromR2 {
+                source = "r2"
+            } else if await objectStore.missedR2 {
+                source = "edinet"
+            } else {
+                // R2 に問い合わせずに返った = 別プロセスが展開済み（ファイルロック内でローカル判定）。
+                source = "local"
+            }
+        } else {
+            source = "edinet"
+        }
+        if source != "failed" { await XbrlFetchedDirs.shared.record(docID: docID, dir: dir) }
+        let wait = seconds(startedAt - queuedAt)
+        let fetch = seconds(ContinuousClock.now - startedAt)
+        print("XBRL_TIMING \(docID) \(source) wait=\(wait) fetch=\(fetch)")
+        return source
+    }
+
+    /// 別 cacheDir に展開済みの書類を一時ディレクトリへコピーしてから移す（途中で止まっても
+    /// 完了マーカー付きの不完全なディレクトリを残さない）。失敗したら false で通常の取得に進む。
+    private static func copyExtracted(docID: String, from src: URL, to dir: URL) -> Bool {
+        let fm = FileManager.default
+        let from = EdinetCacheStore(cacheDir: src).xbrlDir(docID, saveDir: src)
+        let dest = EdinetCacheStore(cacheDir: dir).xbrlDir(docID, saveDir: dir)
+        let tmp = dest.deletingLastPathComponent()
+            .appendingPathComponent(".copy-\(docID)-\(UUID().uuidString)")
+        do {
+            try fm.copyItem(at: from, to: tmp)
+            try? fm.removeItem(at: dest)
+            try fm.moveItem(at: tmp, to: dest)
+            return true
+        } catch {
+            try? fm.removeItem(at: tmp)
+            return false
+        }
+    }
+
+    private static func seconds(_ d: Duration) -> String {
+        let c = d.components
+        return String(format: "%.2f", Double(c.seconds) + Double(c.attoseconds) / 1e18)
     }
 }
