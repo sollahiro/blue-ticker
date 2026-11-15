@@ -54,7 +54,25 @@ public func isServableFilingSectionsCacheVersion(_ version: String) -> Bool {
 /// セクションを追加すると本文字列が変わり、既存行が stale 判定され当該行のみ再抽出される
 /// （cache_version バンプ不要）。BltServerCore はこの値を受け取るだけで内部定数を知らない。
 public func currentFilingSectionKeys() -> String {
-    (Array(xbrlSections.keys) + BreakdownExtractor.specialSectionKeys).sorted().joined(separator: ",")
+    publishedFilingSectionKeyList.joined(separator: ",")
+}
+
+/// 2026-11 に DB 保存と filing-content 公開をやめたセクション。segments / geography / revenue_recognition は
+/// breakdown が XBRL から直接解決する表の生データ（保存の約7割）で、major_facilities と
+/// research_and_development は利用が薄いため。既存行にはまだ残るが、read 時に返さない。
+public let retiredFilingSectionKeys: Set<String> = [
+    "segments", "geography", "revenue_recognition", "major_facilities", "research_and_development",
+]
+
+/// 保存・公開するセクション（xbrlSections から退役キーを除いた並び）。
+public let publishedFilingSectionKeyList: [String] =
+    xbrlSections.keys.filter { !retiredFilingSectionKeys.contains($0) }.sorted()
+
+/// 格納行の `section_keys` が現行の保存キーをすべて含むか。退役キーが残る旧行は、
+/// キー集合の不一致だけでは stale にしない（全件再抽出を避ける）。
+public func filingSectionKeysCoverCurrent(stored: String, current: String) -> Bool {
+    let have = Set(stored.split(separator: ",").map(String.init))
+    return current.split(separator: ",").allSatisfy { have.contains(String($0)) }
 }
 
 /// 書類1件分の抽出済みセクション。texts（本文）と specials（セグメント・地域別表）を型分離して持つ。
@@ -76,7 +94,7 @@ public struct FilingSectionsPayload: Codable, Sendable, Equatable {
     public func sectionsObject(sections: [String]?) -> [String: Any] {
         let keys = sections ?? (Array(texts.keys) + Array(specials.keys))
         var out: [String: Any] = [:]
-        for key in keys {
+        for key in keys where !retiredFilingSectionKeys.contains(key) {
             if let text = texts[key] {
                 out[key] = text
             } else if let seg = specials[key] {

@@ -332,25 +332,21 @@ public extension BltServerContext {
     /// 有報セクション取り込み: 書類1件分の XBRL を取得（XBRL 取得キャッシュ経由）し、全セクションを抽出して
     /// 格納用 payload を返す。重い SwiftSoup 抽出を含むため **ingest 専用**（大企業の有報で 1GB OOM を
     /// 実測。serving のライブ抽出は撤去し、read は Neon 格納済みを返す）。ダウンロード失敗は nil（戻り値パターン）。
-    /// texts は xbrlSections 全 key を格納（未検出は ""）、specials は segments/geography。
+    /// texts は退役キーを除く xbrlSections の全 key を格納（未検出は ""）。specials は保存しない。
     func extractFilingSections(docID: String, correctionDocIDs: [String] = []) async -> FilingSectionsPayload? {
         guard let xbrlDir = await downloadAnnualFilingXbrl(
             docID: docID, correctionDocIDs: correctionDocIDs
         ) else { return nil }
 
         // 節ごとの XBRL TextBlock を正本にし、無い節だけ honbun HTML を1回パースして見出しで探す。
+        let stored = xbrlSections.filter { !retiredFilingSectionKeys.contains($0.key) }
         let found = XBRLParser().extractSectionsPreferringTextBlocks(
-            in: xbrlDir, sections: xbrlSections)
+            in: xbrlDir, sections: stored)
         var texts: [String: String] = [:]
-        for key in xbrlSections.keys { texts[key] = found[key] ?? "" }  // 全 key 存在を維持
+        for key in stored.keys { texts[key] = found[key] ?? "" }  // 全 key 存在を維持
 
-        var specials: [String: ExtractedBreakdownPayload] = [:]
-        for key in BreakdownExtractor.specialSectionKeys {
-            if let seg = BreakdownExtractor.extractSpecialSection(key, xbrlDir: xbrlDir) {
-                specials[key] = extractedBreakdownPayload(from: seg)
-            }
-        }
-        return FilingSectionsPayload(texts: texts, specials: specials)
+        // segments / geography / revenue_recognition は保存しない（退役。breakdown は XBRL から直接解決する）。
+        return FilingSectionsPayload(texts: texts, specials: [:])
     }
 
     /// 上場ユニバース（東証上場）の 4 桁コード集合。有報セクション取り込みの対象選定に使う
