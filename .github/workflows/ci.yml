@@ -238,8 +238,14 @@ jobs:
         # `~` を含むパスは actions/cache がコンテナ内で正しく展開できず、前者の約 60 書類しか保存されなかった
         # ため、後者はワークスペース内に実体を置き、HOME 側からシンボリックリンクで見せる。
         run: |
-          mkdir -p tmp_cache/edinet xbrl-cache/analysis "$HOME/.config/blue-ticker/analysis_cache/external/edinet"
-          ln -sfn "$PWD/xbrl-cache/analysis" "$HOME/.config/blue-ticker/analysis_cache/external/edinet/xbrl"
+          mkdir -p tmp_cache/edinet xbrl-cache/analysis
+          echo "HOME=$HOME user=$(id -un) passwd_home=$(getent passwd "$(id -un)" | cut -d: -f6)"
+          # swift の homeDirectoryForCurrentUser が HOME か passwd のどちらを見ても同じ実体に届くよう、両方に張る。
+          for h in "$HOME" "$(getent passwd "$(id -un)" | cut -d: -f6)"; do
+            [ -n "$h" ] || continue
+            mkdir -p "$h/.config/blue-ticker/analysis_cache/external/edinet"
+            ln -sfn "$PWD/xbrl-cache/analysis" "$h/.config/blue-ticker/analysis_cache/external/edinet/xbrl"
+          done
 
       - name: Cache golden XBRL (R2 download)
         # 展開済み XBRL（docID ごとに不変）。ヒットした書類は SmokeCacheSupport が local と数え、取得しない。
@@ -275,6 +281,8 @@ jobs:
           for d in tmp_cache/edinet xbrl-cache/analysis; do
             echo "$d: $(find "$d" -maxdepth 1 -name '*_xbrl' | wc -l) docs, $(du -sh "$d" | cut -f1)"
           done
+          echo "--- 展開済み XBRL の実際の置き場所（親ディレクトリごとの書類数）"
+          find / -xdev -type d -name 'S100*_xbrl' -prune 2>/dev/null | sed 's#/[^/]*$##' | sort | uniq -c
 
   static-checks:
     # 数秒で終わるスクリプト検査とリポジトリ不変条件をまとめる（runner を 1 つだけ起こす）。
