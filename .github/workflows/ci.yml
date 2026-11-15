@@ -233,6 +233,19 @@ jobs:
           ids="$(grep -rohE 'S100[0-9A-Z]{4}' SwiftTests smoke | sort -u)"
           echo "hash=$(printf '%s' "$ids" | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
 
+      - name: Prepare golden XBRL cache dirs
+        # テストの展開先は 2 つ: tmp_cache/edinet と、HOME 配下の analysis_cache（30 か所超が参照）。
+        # `~` を含むパスは actions/cache がコンテナ内で正しく展開できず、前者の約 60 書類しか保存されなかった
+        # ため、後者はワークスペース内に実体を置き、HOME 側からシンボリックリンクで見せる。
+        run: |
+          mkdir -p tmp_cache/edinet xbrl-cache/analysis
+          # swift の homeDirectoryForCurrentUser が HOME か passwd のどちらを見ても同じ実体に届くよう、両方に張る。
+          for h in "$HOME" "$(getent passwd "$(id -un)" | cut -d: -f6)"; do
+            [ -n "$h" ] || continue
+            mkdir -p "$h/.config/blue-ticker/analysis_cache/external/edinet"
+            ln -sfn "$PWD/xbrl-cache/analysis" "$h/.config/blue-ticker/analysis_cache/external/edinet/xbrl"
+          done
+
       - name: Cache golden XBRL (R2 download)
         # 展開済み XBRL（docID ごとに不変）。ヒットした書類は SmokeCacheSupport が local と数え、取得しない。
         # 足りない書類だけ R2 → EDINET から取る。docID の集合が変わるとキーが変わり、直前のキャッシュを
@@ -241,9 +254,9 @@ jobs:
         with:
           path: |
             tmp_cache/edinet
-            ~/.config/blue-ticker/analysis_cache/external/edinet/xbrl
-          key: golden-xbrl-v1-${{ steps.xbrl-key.outputs.hash }}
-          restore-keys: golden-xbrl-v1-
+            xbrl-cache/analysis
+          key: golden-xbrl-v3-${{ steps.xbrl-key.outputs.hash }}
+          restore-keys: golden-xbrl-v3-
 
       - name: Golden suite
         env:
@@ -260,6 +273,13 @@ jobs:
           command -v python3 >/dev/null || (apt-get update -qq && apt-get install -y -qq python3 >/dev/null)
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
           scripts/ci/golden-suite.sh
+
+      - name: Golden XBRL cache contents
+        if: always()
+        run: |
+          for d in tmp_cache/edinet xbrl-cache/analysis; do
+            echo "$d: $(find "$d" -maxdepth 1 -name '*_xbrl' | wc -l) docs, $(du -sh "$d" | cut -f1)"
+          done
 
   static-checks:
     # 数秒で終わるスクリプト検査とリポジトリ不変条件をまとめる（runner を 1 つだけ起こす）。
