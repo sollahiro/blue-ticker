@@ -61,3 +61,31 @@ import Testing
         #expect(segmentBreakdownCacheVersion == "breakdown-segment-v3")
     }
 }
+
+@Suite struct FilingSectionsR2ConfigTests {
+    private let creds = [
+        "BLT_R2_ACCOUNT_ID": "acct", "BLT_R2_ACCESS_KEY_ID": "id", "BLT_R2_SECRET_ACCESS_KEY": "secret",
+    ]
+
+    @Test func dedicatedBucketWinsOverXbrlBucket() {
+        var env = creds
+        env["BLT_R2_XBRL_BUCKET"] = "xbrl"
+        env["BLT_R2_FILING_SECTIONS_BUCKET"] = "blt-filing-sections"
+        #expect(R2StorageConfig.resolveFilingSectionsFromEnvironment(env)?.bucket == "blt-filing-sections")
+        #expect(R2StorageConfig.resolveXbrlFromEnvironment(env)?.bucket == "xbrl")
+    }
+
+    @Test func fallsBackToXbrlBucketAndNeedsCredentials() {
+        var env = creds
+        env["BLT_R2_XBRL_BUCKET"] = "xbrl"
+        #expect(R2StorageConfig.resolveFilingSectionsFromEnvironment(env)?.bucket == "xbrl")
+        #expect(R2StorageConfig.resolveFilingSectionsFromEnvironment(["BLT_R2_FILING_SECTIONS_BUCKET": "b"]) == nil)
+        #expect(R2StorageConfig.resolveFilingSectionsFromEnvironment([:]) == nil)
+    }
+
+    @Test func objectKeyRejectsPathSeparators() {
+        #expect(filingSectionsObjectKey(docID: "S100ABCD") == "jp/edinet/filing-sections/S100ABCD.json")
+        #expect(filingSectionsObjectKey(docID: "../x") == nil)
+        #expect(filingSectionsObjectKey(docID: "") == nil)
+    }
+}

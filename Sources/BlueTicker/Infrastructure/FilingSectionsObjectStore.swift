@@ -1,6 +1,7 @@
 // 有報セクション本文（FilingSectionsPayload）を R2 に置く最小面。
 // company_filing_sections の行は索引（doc_id / code / 版 / r2_key）として DB に残し、本文だけを R2 へ移す。
-// バケットは生 XBRL ZIP と同じ私有バケット（`BLT_R2_XBRL_BUCKET`）で、キー接頭辞だけ分ける。
+// バケットは専用の私有バケット（`BLT_R2_FILING_SECTIONS_BUCKET`）。未設定なら生 XBRL ZIP と同じ
+// `BLT_R2_XBRL_BUCKET` を使い、キー接頭辞だけ分ける。
 // 資格情報は `BLT_R2_ACCOUNT_ID` / `BLT_R2_ACCESS_KEY_ID` / `BLT_R2_SECRET_ACCESS_KEY`。
 // 未設定なら nil（呼び出し側は DB 格納へフォールバックする）。
 
@@ -26,11 +27,12 @@ public func filingSectionsObjectKey(docID: String) -> String? {
 public struct R2FilingSectionsStore: FilingSectionsObjectStoring {
     let config: R2StorageConfig
 
-    /// `BLT_R2_*`（XBRL と同じ資格情報とバケット）から解決する。未設定時は nil。
+    /// `BLT_R2_*` の資格情報から解決する。バケットは `BLT_R2_FILING_SECTIONS_BUCKET`（専用）があればそれ、
+    /// 無ければ `BLT_R2_XBRL_BUCKET`。未設定時は nil。
     public static func resolveFromEnvironment(
         _ environment: [String: String] = ProcessInfo.processInfo.environment
     ) -> R2FilingSectionsStore? {
-        R2StorageConfig.resolveXbrlFromEnvironment(environment).map { R2FilingSectionsStore(config: $0) }
+        R2StorageConfig.resolveFilingSectionsFromEnvironment(environment).map { R2FilingSectionsStore(config: $0) }
     }
 
     public func get(key: String) async throws -> FilingSectionsPayload? {

@@ -192,6 +192,6 @@ DATABASE_URL="$BLT_NEON_WRITE_DATABASE_URL" ./.build/release/blt-ingest filing-s
 DATABASE_URL="$BLT_NEON_WRITE_DATABASE_URL" ./.build/release/blt-ingest filing-sections-to-r2
 ```
 
-- blt-server にも `BLT_R2_ACCOUNT_ID` / `BLT_R2_ACCESS_KEY_ID` / `BLT_R2_SECRET_ACCESS_KEY` / `BLT_R2_XBRL_BUCKET` が必要（読み取り用。移行した行は R2 設定が無いと 503）。移行の前に配信側へ設定する。
+- blt-server にも `BLT_R2_ACCOUNT_ID` / `BLT_R2_ACCESS_KEY_ID` / `BLT_R2_SECRET_ACCESS_KEY` / `BLT_R2_XBRL_BUCKET`（または専用の `BLT_R2_FILING_SECTIONS_BUCKET`）が必要（読み取り用。移行した行は R2 設定が無いと 503）。移行の前に配信側へ設定する。
 - 1 行ごとに PUT → 読み戻し一致 → payload を空にして `r2_key` を設定する。失敗した行は触らない。
 - 終わったら `VACUUM FULL company_filing_sections` で DB の領域を回収する（読み取りが一時的に止まる）。

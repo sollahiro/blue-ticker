@@ -26,6 +26,17 @@ struct R2StorageConfig: Sendable {
         return resolve(environment, bucket: bucket)
     }
 
+    /// 有報セクション本文用。専用バケット `BLT_R2_FILING_SECTIONS_BUCKET` があればそれを使い、
+    /// 無ければ生 XBRL と同じ `BLT_R2_XBRL_BUCKET`（キー接頭辞で分ける）。どちらも無ければ nil。
+    static func resolveFilingSectionsFromEnvironment(
+        _ environment: [String: String] = ProcessInfo.processInfo.environment
+    ) -> R2StorageConfig? {
+        if let dedicated = nonEmpty(environment["BLT_R2_FILING_SECTIONS_BUCKET"]) {
+            return resolve(environment, bucket: dedicated)
+        }
+        return resolveXbrlFromEnvironment(environment)
+    }
+
     private static func resolve(
         _ environment: [String: String], bucket: String
     ) -> R2StorageConfig? {
