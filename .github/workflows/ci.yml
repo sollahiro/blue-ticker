@@ -239,7 +239,6 @@ jobs:
         # ため、後者はワークスペース内に実体を置き、HOME 側からシンボリックリンクで見せる。
         run: |
           mkdir -p tmp_cache/edinet xbrl-cache/analysis
-          echo "HOME=$HOME user=$(id -un) passwd_home=$(getent passwd "$(id -un)" | cut -d: -f6)"
           # swift の homeDirectoryForCurrentUser が HOME か passwd のどちらを見ても同じ実体に届くよう、両方に張る。
           for h in "$HOME" "$(getent passwd "$(id -un)" | cut -d: -f6)"; do
             [ -n "$h" ] || continue
@@ -256,8 +255,8 @@ jobs:
           path: |
             tmp_cache/edinet
             xbrl-cache/analysis
-          key: golden-xbrl-v2-${{ steps.xbrl-key.outputs.hash }}
-          restore-keys: golden-xbrl-v2-
+          key: golden-xbrl-v3-${{ steps.xbrl-key.outputs.hash }}
+          restore-keys: golden-xbrl-v3-
 
       - name: Golden suite
         env:
@@ -281,8 +280,6 @@ jobs:
           for d in tmp_cache/edinet xbrl-cache/analysis; do
             echo "$d: $(find "$d" -maxdepth 1 -name '*_xbrl' | wc -l) docs, $(du -sh "$d" | cut -f1)"
           done
-          echo "--- 展開済み XBRL の実際の置き場所（親ディレクトリごとの書類数）"
-          find / -xdev -type d -name 'S100*_xbrl' -prune 2>/dev/null | sed 's#/[^/]*$##' | sort | uniq -c
 
   static-checks:
     # 数秒で終わるスクリプト検査とリポジトリ不変条件をまとめる（runner を 1 つだけ起こす）。
