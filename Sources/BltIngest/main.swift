@@ -26,6 +26,7 @@
 //                                                            statements/statement-notes では --codes を対象母集団にも使う
 //                                                            （nikkei225.csv 未配置でも手動再ingest可能）。
 //                                                            --axes は breakdowns ステージを指定した軸だけに絞る（未指定は全軸）。
+//                                                            segment を含む場合の segment transitions の再計算は、--doc-ids 指定時はその書類の会社だけ。
 //                                                            --note-types は statement-notes ステージで ingest する
 //                                                            note_type を絞る（未指定時は公開全4種）。
 //                                                            バグ修正確認後の手動・単発再計算向け。定期実行では使わない）

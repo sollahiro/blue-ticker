@@ -337,8 +337,12 @@ public func runFactsIngestCommand(
             }
             if selectedStages.contains(where: { $0.axis == breakdownAxisSegment }) {
                 // 再試行とタイムアウトは会社ごと（runSegmentTransitionIngest の中）。全社を 1 回で包まない。
+                // `--doc-ids` 指定時は、その書類の会社だけつなぎ直す（全上場の走査を避ける）。
+                let transitionCodes =
+                    docIDs == nil
+                    ? publicBreakdownListed : Set(publicBreakdownSets.keep.map(\.code))
                 try await runSegmentTransitionIngest(
-                    db: app.db, listedCodes: publicBreakdownListed, logger: app.logger)
+                    db: app.db, listedCodes: transitionCodes, logger: app.logger)
             }
             let coverage = try? await withDbRetry(
                 logger: app.logger, context: "company_breakdowns 集計"
