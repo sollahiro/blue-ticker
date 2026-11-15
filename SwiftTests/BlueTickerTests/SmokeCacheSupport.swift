@@ -8,6 +8,8 @@
 //
 // docID ごとに `XBRL_SOURCE <docID> <local|r2|edinet|failed>` を出力する。
 // scripts/ci/golden-suite.sh がこの行を集計して run ごとの内訳を表示する。
+// 実際に取得した docID は `XBRL_TIMING <docID> <source> wait=<秒> fetch=<秒>` も出す
+// （wait = 同時実行枠の待ち、fetch = 取得と展開）。同じく golden-suite.sh が合計と最大を表示する。
 
 import Foundation
 import Testing
@@ -106,15 +108,36 @@ enum SmokeCacheSupport {
     ) async -> String {
         let store = EdinetCacheStore(cacheDir: dir)
         if store.hasXbrlDir(docID, saveDir: dir) { return "local" }
+        let queuedAt = ContinuousClock.now
         await fetchSemaphore.wait()
         defer { fetchSemaphore.signal() }
+        let startedAt = ContinuousClock.now
         let objectStore = r2Config.map { ReadOnlyXbrlObjectStore(base: R2XbrlObjectStore(config: $0)) }
         let client = EdinetAPIClient(apiKey: apiKey, cacheStore: store, xbrlObjectStore: objectStore)
-        guard await client.downloadDocument(docID, saveDir: dir) != nil else { return "failed" }
-        guard let objectStore else { return "edinet" }
-        if await objectStore.servedFromR2 { return "r2" }
-        if await objectStore.missedR2 { return "edinet" }
-        // R2 に問い合わせずに返った = 別プロセスが展開済み（ファイルロック内でローカル判定）。
-        return "local"
+        let downloaded = await client.downloadDocument(docID, saveDir: dir) != nil
+        let source: String
+        if !downloaded {
+            source = "failed"
+        } else if let objectStore {
+            if await objectStore.servedFromR2 {
+                source = "r2"
+            } else if await objectStore.missedR2 {
+                source = "edinet"
+            } else {
+                // R2 に問い合わせずに返った = 別プロセスが展開済み（ファイルロック内でローカル判定）。
+                source = "local"
+            }
+        } else {
+            source = "edinet"
+        }
+        let wait = seconds(startedAt - queuedAt)
+        let fetch = seconds(ContinuousClock.now - startedAt)
+        print("XBRL_TIMING \(docID) \(source) wait=\(wait) fetch=\(fetch)")
+        return source
+    }
+
+    private static func seconds(_ d: Duration) -> String {
+        let c = d.components
+        return String(format: "%.2f", Double(c.seconds) + Double(c.attoseconds) / 1e18)
     }
 }

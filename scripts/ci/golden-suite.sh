@@ -25,6 +25,12 @@ awk 'BEGIN { r["local"]=1; r["r2"]=2; r["edinet"]=3; r["failed"]=4 }
            printf "XBRL sources: docs=%d local=%d r2=%d edinet=%d failed=%d\n", t, n["local"], n["r2"], n["edinet"], n["failed"]
            for (d in best) if (best[d] == "edinet") printf "  edinet fallback: %s\n", d }' "$log" \
   | tee -a "${GITHUB_STEP_SUMMARY:-/dev/null}"
+# XBRL_TIMING <docID> <source> wait=<秒> fetch=<秒>: 実際に取得した書類の合計と最大（時間の内訳の計測用）。
+awk '$1 == "XBRL_TIMING" {
+       sub(/wait=/, "", $4); sub(/fetch=/, "", $5)
+       n++; w += $4; f += $5; if ($5 > fm) { fm = $5; fd = $2 }; if ($4 > wm) wm = $4 }
+     END { if (n) printf "XBRL fetch timing: docs=%d fetch_sum=%.0fs fetch_max=%.1fs (%s) wait_sum=%.0fs wait_max=%.1fs\n", n, f, fm, fd, w, wm }' "$log" \
+  | tee -a "${GITHUB_STEP_SUMMARY:-/dev/null}"
 failed_docs="$(awk '$1 == "XBRL_SOURCE" && $3 == "failed" { print $2 }' "$log" | sort -u)"
 rm -f "$log"
 if [[ -n "$failed_docs" ]]; then
