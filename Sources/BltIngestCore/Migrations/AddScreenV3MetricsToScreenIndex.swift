@@ -25,7 +25,7 @@ struct AddScreenV3MetricsToScreenIndex: AsyncMigration {
             {
                 continue
             }
-            try await database.schema(ScreenIndex.schema)
+            try await database.schema("screen_index")
                 .field(.init(stringLiteral: column), .double)
                 .update()
         }
@@ -36,7 +36,7 @@ struct AddScreenV3MetricsToScreenIndex: AsyncMigration {
             if let sql = database as? SQLDatabase {
                 guard try await screenIndexHasColumn(sql, column) else { continue }
             }
-            try await database.schema(ScreenIndex.schema)
+            try await database.schema("screen_index")
                 .deleteField(.init(stringLiteral: column))
                 .update()
         }

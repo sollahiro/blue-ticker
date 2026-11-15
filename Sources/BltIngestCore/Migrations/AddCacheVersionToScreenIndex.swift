@@ -18,7 +18,7 @@ struct AddCacheVersionToScreenIndex: AsyncMigration {
         {
             return
         }
-        try await database.schema(ScreenIndex.schema)
+        try await database.schema("screen_index")
             .field("cache_version", .string)
             .update()
     }
@@ -27,7 +27,7 @@ struct AddCacheVersionToScreenIndex: AsyncMigration {
         if let sql = database as? SQLDatabase {
             guard try await screenIndexHasColumn(sql, "cache_version") else { return }
         }
-        try await database.schema(ScreenIndex.schema)
+        try await database.schema("screen_index")
             .deleteField("cache_version")
             .update()
     }

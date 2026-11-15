@@ -6,7 +6,7 @@
 // 既定のロックファイルは `/tmp/blt-ingest-<uid>.lock`（`BLT_INGEST_LOCK_FILE` で変更）。
 // 別のプロセスが保持中は、既定ですぐに失敗する。`BLT_INGEST_LOCK_WAIT_SEC` に秒数を指定すると、
 // その時間まで待つ（1 秒間隔で再試行）。
-// 対象は書き込みを伴うコマンド（migrate / sync / ingest / master-data-upload / screen-rebuild /
+// 対象は書き込みを伴うコマンド（migrate / sync / ingest / master-data-upload /
 // overrides add|revoke）。read 専用のコマンドは対象外。
 
 import Foundation
@@ -52,7 +52,7 @@ public final class IngestProcessLock: @unchecked Sendable {
 public func ingestCommandNeedsLock(_ argv: [String]) -> Bool {
     guard argv.count > 1 else { return false }
     switch argv[1] {
-    case "migrate", "sync", "ingest", "master-data-upload", "screen-rebuild":
+    case "migrate", "sync", "ingest", "master-data-upload":
         return true
     case "overrides":
         return argv.count > 2 && (argv[2] == "add" || argv[2] == "revoke")

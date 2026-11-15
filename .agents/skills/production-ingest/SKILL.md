@@ -117,7 +117,7 @@ description: 本番 Neon への定期・手動取り込み、ジョブ編成、�
 - `--codes` は limit を無視して指定銘柄を全件。`--doc-ids` は原本 120 の会社-FY 単位で cache_version / needs_review でも skip しない。他 FY は purge しない。定期サイクルでは使わない。
 - `--axes` は `breakdowns` を指定軸だけに絞る（未指定は全軸）。`--doc-ids` は書類の全軸を書き直すので、軸を絞りたいときは行を削除して `--codes` と併用する。定期サイクルでは使わない。
 - ジョブ失敗はそのサイクルを止める。次のスケジュールで、skip されなかった残件から再開する。
-- 書き込みを伴う `blt-ingest` のコマンド（migrate / sync / ingest / master-data-upload / screen-rebuild / overrides add|revoke）は、`flock` の排他ロックで同時に 1 つだけ。別のプロセスが保持中は、既定ですぐ失敗する（`BLT_INGEST_LOCK_WAIT_SEC` で待てる）。ロックはプロセス終了時に OS が解放するので、古いロックは残らない。定例のジョブ間（sleep 中）には手動実行が入り得る。
+- 書き込みを伴う `blt-ingest` のコマンド（migrate / sync / ingest / master-data-upload / overrides add|revoke）は、`flock` の排他ロックで同時に 1 つだけ。別のプロセスが保持中は、既定ですぐ失敗する（`BLT_INGEST_LOCK_WAIT_SEC` で待てる）。ロックはプロセス終了時に OS が解放するので、古いロックは残らない。定例のジョブ間（sleep 中）には手動実行が入り得る。
 
 ## 成功判定
 
@@ -148,12 +148,6 @@ DATABASE_URL="$BLT_NEON_WRITE_DATABASE_URL" ./.build/release/blt-ingest ingest \
 
 内訳の 1 軸だけ再取り込みする例: `--stages breakdowns --axes capex`（行を消したあと `--codes` と併用）。
 
-Screen 列定義のあとで急ぐときだけ:
-
-```bash
-DATABASE_URL="$BLT_NEON_WRITE_DATABASE_URL" ./.build/release/blt-ingest screen-rebuild
-```
-
 `cache_version` バンプ可否は versioning ルール。LLM 出力だけの訂正は上げない。現行版の clean な LLM 行は `--codes` でも skip されるため、対象行を消すか `needs_review=true` にしてから個別 ingest する。
 
 ## 運用ホストの要件（実装はホスト側。Git に置かない）
@@ -168,7 +162,7 @@ DATABASE_URL="$BLT_NEON_WRITE_DATABASE_URL" ./.build/release/blt-ingest screen-r
 
 スキーマを変えるのは Mac の書き込み側だけ。`blt-server` は起動時に migrate しない。
 
-- `blt-ingest migrate` は未適用分だけを `DATABASE_URL` へ適用する。`sync` / `ingest` / `master-data-upload` / `screen-rebuild` / `overrides add|revoke` も冒頭で同じ適用を行う。`overrides list` とサーバー起動は適用しない。
+- `blt-ingest migrate` は未適用分だけを `DATABASE_URL` へ適用する。`sync` / `ingest` / `master-data-upload` / `overrides add|revoke` も冒頭で同じ適用を行う。`overrides list` とサーバー起動は適用しない。
 - マイグレーションを含む PR を main に入れたら、(1) Mac で `DATABASE_URL="$BLT_NEON_WRITE_DATABASE_URL" ./.build/release/blt-ingest migrate`、(2) GitHub Actions の Deploy を `workflow_dispatch`。差分に `Sources/*/Migrations/` を含む自動デプロイは失敗で止まる。
 
 ## 手元 Mac の Git 管理外ファイル（この skill では削除しない）

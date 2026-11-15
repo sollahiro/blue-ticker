@@ -19,7 +19,7 @@ struct ReplaceScreenIndexGrowthWithCagr: AsyncMigration {
         {
             return
         }
-        try await database.schema(ScreenIndex.schema)
+        try await database.schema("screen_index")
             .field("sales_cagr_3y", .double)
             .update()
     }
@@ -28,7 +28,7 @@ struct ReplaceScreenIndexGrowthWithCagr: AsyncMigration {
         if let sql = database as? SQLDatabase {
             guard try await screenIndexHasColumn(sql, "sales_cagr_3y") else { return }
         }
-        try await database.schema(ScreenIndex.schema)
+        try await database.schema("screen_index")
             .deleteField("sales_cagr_3y")
             .update()
     }

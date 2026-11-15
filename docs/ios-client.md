@@ -26,7 +26,7 @@
 - ターゲット／スキーム `BlueTicker`、`PRODUCT_NAME`、型名 `BlueTickerApp`、置き場 `Apps/BlueTicker`
 - Xcode Cloud ワークフロー（下の「配布」）
 
-文書やコードの文言でアプリを指すときは有報LAB、外向きの API を指すときは有報LAB API、内部の抽出・解析ロジックを指すときは BLT と書き分ける。リポジトリ名 `sollahiro/blue-ticker`・Swift モジュール `BlueTicker` / `BlueTickerCore`・R2 バケットなど「blue-ticker」と綴った識別子は、移行を決めるまで旧名のまま残る（`docs/decisions/yuholab-rebrand.md`）。
+文書やコードの文言でアプリを指すときは有報LAB、外向きの API を指すときは有報LAB API、内部の抽出・解析ロジックを指すときは BLT と書き分ける。Swift モジュール `BlueTicker` / `BlueTickerCore`・R2 バケットなど「blue-ticker」と綴った識別子は、移行を決めるまで旧名のまま残る（`docs/decisions/yuholab-rebrand.md`）。
 
 ## 置き場
 
@@ -131,6 +131,8 @@ Release Archive は HAPIS 本番 + App Attest production。Internal TestFlight �
 | インタビュー | Report（構想） | ロードマップ。本来クライアント責務 |
 
 ## 条件（Screen）
+
+> **廃止（2026-11-15）**: サーバーの `GET /v1/screen` / `/v1/screen/snapshot` と、アプリの条件検索（`ScreenView`・`ScreenSnapshotStore`・`ScreenSnapshot` パッケージ）は撤去した。以下は経緯の記録で、現行の仕様ではない。
 
 ポンチ絵の業種チップは Screen の一部だけ。完成形のレイアウト再現は求めない。
 

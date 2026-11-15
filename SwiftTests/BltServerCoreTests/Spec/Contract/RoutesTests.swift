@@ -101,7 +101,6 @@ private func send(
             #expect(versions?["company_overviews_min_servable"] as? Int == companyOverviewMinServableVersion)
             #expect(versions?["breakdown_geography"] as? String == geographyBreakdownCacheVersion)
             #expect(versions?["breakdown_geography_min_servable"] as? Int == geographyBreakdownMinServableVersion)
-            #expect(versions?["screen_index"] as? String == screenIndexVersion)
         }
     }
 

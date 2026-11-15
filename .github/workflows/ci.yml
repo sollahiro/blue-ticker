@@ -156,7 +156,8 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .build
-          key: swiftpm-linux-${{ hashFiles('Package.resolved') }}
+          # リポジトリ名変更で絶対パスが変わり、旧キーの .build（PCH にパスが埋まる）は復元しても壊れるため接頭辞で作り直す
+          key: swiftpm-linux-yuholab-${{ hashFiles('Package.resolved') }}
 
       - name: Build
         # Linux（Fly のイメージと同じ swift:6.1）で全ターゲットとテストターゲットがコンパイルできること。
@@ -206,10 +207,6 @@ jobs:
         working-directory: Apps/BlueTicker/FeedRSS
         run: swift test -Xswiftc -disable-upcoming-feature -Xswiftc MemberImportVisibility
 
-      - name: Test iOS screen snapshot search
-        working-directory: Apps/BlueTicker/ScreenSnapshot
-        run: swift test -Xswiftc -disable-upcoming-feature -Xswiftc MemberImportVisibility
-
   # ---- 必須チェック（scripts/ci/*.sh。ローカルでも同じコマンドで実行できる。docs/ci-checks.md）
   golden-suite:
     # ゴールデン（smoke/smoke_expected + .checksums.json、smoke/*_expected.json、
@@ -227,7 +224,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .build
-          key: swiftpm-linux-${{ hashFiles('Package.resolved') }}
+          key: swiftpm-linux-yuholab-${{ hashFiles('Package.resolved') }}
 
       - name: Golden suite
         env:

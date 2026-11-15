@@ -9,7 +9,7 @@
 | 種類 | 正本 |
 |---|---|
 | 決定・契約・プロセス | このリポジトリの `docs/`（および `.agents/`） |
-| 実装不具合・コード作業 | GitHub Issues（`sollahiro/blue-ticker`） |
+| 実装不具合・コード作業 | GitHub Issues（`sollahiro/yuholab`） |
 | 実害（有報と公開面の不一致） | オーナー管理のトラッカー Sheet（タブ「実害トラッカー」） |
 | 生きている進捗・運用・手動作業・非コードのバックログ | 同 Sheet の「現在地」「BLT バックログ」 |
 

@@ -11,7 +11,7 @@ struct CreateScreenIndex: AsyncMigration {
     var name: String { "BltServerCore.CreateScreenIndex" }
 
     func prepare(on database: Database) async throws {
-        try await database.schema(ScreenIndex.schema)
+        try await database.schema("screen_index")
             .field("code", .string, .identifier(auto: false))
             .field("name", .string, .required)
             .field("market", .string, .required)
@@ -27,8 +27,8 @@ struct CreateScreenIndex: AsyncMigration {
             .field("updated_at", .datetime)
             .create()
         guard let sql = database as? SQLDatabase else { return }
-        try await sql.create(index: "idx_screen_index_roic").on(ScreenIndex.schema).column("roic").run()
-        try await sql.create(index: "idx_screen_index_sector").on(ScreenIndex.schema).column("sector").run()
+        try await sql.create(index: "idx_screen_index_roic").on("screen_index").column("roic").run()
+        try await sql.create(index: "idx_screen_index_sector").on("screen_index").column("sector").run()
     }
 
     func revert(on database: Database) async throws {
@@ -36,6 +36,6 @@ struct CreateScreenIndex: AsyncMigration {
             try await sql.drop(index: "idx_screen_index_roic").ifExists().run()
             try await sql.drop(index: "idx_screen_index_sector").ifExists().run()
         }
-        try await database.schema(ScreenIndex.schema).delete()
+        try await database.schema("screen_index").delete()
     }
 }

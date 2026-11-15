@@ -26,12 +26,6 @@ private func withMigratedApp(_ body: (Application) async throws -> Void) async t
         app.migrations.add(AddHighWaterToCompanyFinancials())
         app.migrations.add(AddAssemblyFingerprintToCompanyFinancials())
         app.migrations.add(AddLlmAuditToCompanyFinancials())
-        app.migrations.add(CreateScreenIndex())
-        app.migrations.add(ReplaceScreenIndexGrowthWithCagr())
-        app.migrations.add(AddCacheVersionToScreenIndex())
-        app.migrations.add(AddScreenV3MetricsToScreenIndex())
-        app.migrations.add(AddScreenCagrMetricsToScreenIndex())
-        app.migrations.add(AddScreenPayoutRatio3yToScreenIndex())
         try await app.autoMigrate()
         try await body(app)
     } catch {

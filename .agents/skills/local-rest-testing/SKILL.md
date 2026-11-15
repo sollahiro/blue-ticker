@@ -34,32 +34,6 @@ Actual upstream ingest requires the real `BLT_EDINET_API_KEY` and its own test s
 5. To test storage absence, start a second process on another port using
    `env -u DATABASE_URL BLT_EDINET_API_KEY=local-test-not-real ...`.
 
-## Screen fixture/rebuild checks
-
-`blt-ingest screen-rebuild` and `GET /v1/screen` exist on current `main`.
-
-- `company_financials` requires code, response JSONB, cache_version, requested_years.
-- Minimal response: schema_version=2, code/name/market/sector/currency/unit, years.
-  Annual objects accept fy_end and metric fields (e.g. sales/roic). Empty `market` is
-  excluded from `screen_index`.
-- Read current `companyFinancialsCacheVersion` from FinancialsContract.swift; do not
-  hardcode a version into a reusable test. Below-floor rows should be excluded.
-- Execute `blt-ingest screen-rebuild` with the same explicit local DATABASE_URL
-  (this is a subcommand; unknown argv falls through to the HTTP server).
-  Assert both CLI summary and subsequent real HTTP response.
-- Empty `screen_index` (0 rows) is HTTP 404. Filter 0 matches with a generated index
-  is HTTP 200 and `items: []`.
-- Seed more than 200 rows to exercise pagination and default/max query limits.
-- Seed prior-first year arrays to distinguish latest-FY selection from array order.
-- `sales_cagr_3y` is derived at index time from the latest Summary years: most recent
-  3 fiscal periods with sales > 0, CAGR% over 2 years
-  `((latest/oldest)^(1/2) - 1) * 100`. Fewer than 3 such periods → null. Do not add
-  CAGR/YoY onto Summary `years[]`. `sales_growth` is not on the allow-list.
-- Screen empty/valueless/whitespace-only range bounds intentionally mean omitted filters.
-- SQL seeding plus rebuild does **not** prove the live financial ingest hook, skip-path
-  backfill of servable `company_financials` into `screen_index`, or their best-effort
-  error handling. State that limitation explicitly.
-
 Capture curl status, headers, JSON, and expected-vs-actual assertions. No recording
 is needed for shell-only API checks. Stop local server processes and the Postgres
 container afterward (`container stop blt-pg-test`).
