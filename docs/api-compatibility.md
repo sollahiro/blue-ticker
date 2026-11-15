@@ -104,3 +104,4 @@ breaking 再編時は可能な範囲で:
 - 第三者向けの deprecation 期間（日数またはリリース数）
 - 外部向け changelog / OpenAPI との突合
 - クエリ・ステータス・エラー形を厳格対象に上げるかの再検討
+- `GET /v1/screen` と `GET /v1/screen/snapshot` を廃止した（breaking。どちらも private だったので skills・公開コネクタは影響なし）。`blt-ingest screen-rebuild` と `screen_index` の更新（financials ingest 後のフック）も廃止。`screen_index` テーブル自体はこの変更では削除していない（DROP は別途判断）。iOS アプリの条件検索（`Apps/BlueTicker` の ScreenSnapshot）は未対応で、別途撤去が必要。

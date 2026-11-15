@@ -87,13 +87,6 @@ package func registerBltMigrations(_ migrations: Migrations) {
     // Feed Update: 提出日時の読み取り索引。
     migrations.add(AddFeedQueryIndexesToEdinetDocuments())
     migrations.add(AddCodeSubmitDateTimeIndexes())
-    // Screen: company_financials 最新 FY の 1 社 1 行 Read Model（screen_index、BLT-49）。
-    migrations.add(CreateScreenIndex())
-    migrations.add(ReplaceScreenIndexGrowthWithCagr())
-    migrations.add(AddCacheVersionToScreenIndex())
-    migrations.add(AddScreenV3MetricsToScreenIndex())
-    migrations.add(AddScreenCagrMetricsToScreenIndex())
-    migrations.add(AddScreenPayoutRatio3yToScreenIndex())
     migrations.add(CreateManualXbrlOverrides())
     migrations.add(RestrictManualXbrlOverridesToCapex())
     // 関係取り込み: 顧客・関係会社・出資先・大株主（company_relations、書類×相手単位）。stage は `relations`。

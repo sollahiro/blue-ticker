@@ -171,7 +171,6 @@ func runFinancialsIngest(
                     highWater: highWater, db: db)
             }
             stored += 1
-            await refreshScreenIndexAfterFinancials(code: code, response: response, db: db, logger: logger)
         case .notApplicable:
             // 有価証券報告書未提出等、設計通りの対象外。プレースホルダ行（years 空）を保存し、
             // 次回 ingest で highWater 一致のまま無駄な再試行を繰り返さないようにする
@@ -186,15 +185,11 @@ func runFinancialsIngest(
                     response: .notApplicablePlaceholder(code: code), highWater: highWater, db: db)
             }
             notApplicable += 1
-            await refreshScreenIndexAfterFinancials(
-                code: code, response: .notApplicablePlaceholder(code: code), db: db, logger: logger)
         case .failed:
             failed += 1
             logger?.warning("財務取り込み失敗: code=\(code)")
         }
     }
-
-    await backfillScreenIndexForServableFinancials(db: db, logger: logger)
 
     return FinancialsIngestSummary(
         attempted: attempted, stored: stored, failed: failed, refused: refused,

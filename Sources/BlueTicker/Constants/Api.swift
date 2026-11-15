@@ -45,15 +45,6 @@ public enum Api {
     /// filings の `max_years` 上限。ライブ探索の年次並列取得を無制限にしない。
     public static let filingsMaxYearsMax = 10
     public static let financialsYearsDefault = 5
-    /// Screen（`GET /v1/screen`）の返却件数省略時。
-    public static let screenLimitDefault = 50
-    /// Screen の返却件数上限。フィルタ無し全件は返さない。
-    public static let screenLimitMax = 200
-    /// `GET /v1/screen/snapshot` の作り置きを作り直す間隔（秒、1 時間）。screen_index は ingest でしか変わらないが、500 社ずつの定期取り込みの反映を数日待たせないため短くする。
-    /// BltServerCore（起動中サーバーの作り直しループ）から参照するため public。
-    public static let screenSnapshotRebuildIntervalSeconds: UInt64 = 60 * 60
-    /// 作り置きが作れなかった（未生成・DB 失敗）ときの再試行間隔（秒）。
-    public static let screenSnapshotRetryIntervalSeconds: UInt64 = 600
     /// Feed Update の返却件数省略時。
     public static let feedLimitDefault = 10
     /// Feed Update の返却件数上限。
