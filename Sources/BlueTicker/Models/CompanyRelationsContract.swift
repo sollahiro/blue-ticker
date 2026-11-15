@@ -2,7 +2,7 @@
 // 材料は最新の有報（120）1 件の「主要な顧客ごとの情報」「関係会社の状況」「提出会社の親会社等の情報」
 // 「株式の保有状況（特定投資株式・みなし保有株式）」「大株主の状況」。
 // 格納は `company_relations`（1 行 = 書類 1 件の相手 1 件）。ingest stage は `relations`。
-// 公開 REST は `GET /v1/companies/{code}/relations`（MCP には出さない）。
+// 公開 REST は `GET /v1/companies/{code}/relations`（公開コネクタにも出す。`hapis/catalog.json` の `get-relations`）。
 
 import Foundation
 
