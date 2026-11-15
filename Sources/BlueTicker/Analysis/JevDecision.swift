@@ -235,6 +235,14 @@ enum JevDecisionSampler {
 /// POST Decisions with a bounded retry on thrown transport errors. Parse
 /// failures are not retried here — the caller treats a missing Choice as a
 /// failed sample.
+/// HTTP 401（キー不正）/ 402（残高・上限）/ 403（権限・月額上限）。再試行しても結果は変わらない。
+func isNonRetryableDecisionsError(_ error: any Error) -> Bool {
+    if case ChatCompletionError.httpError(let status, _) = error {
+        return status == 401 || status == 402 || status == 403
+    }
+    return false
+}
+
 enum JevDecisionTransport {
     static func decide(
         client: any DecisionsCompleting,
@@ -248,6 +256,8 @@ enum JevDecisionTransport {
                 return try await client.decide(requestJSON: requestJSON)
             } catch {
                 lastError = error
+                // 認証・課金・権限の拒否は、再送しても通らない。無駄な呼び出しを増やさない。
+                if isNonRetryableDecisionsError(error) { break }
             }
         }
         if let lastError {
