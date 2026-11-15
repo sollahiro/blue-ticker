@@ -37,10 +37,4 @@ struct CompanyRef: Hashable, Identifiable, Codable {
         iconURL = watched.iconURL
     }
 
-    init(_ item: ScreenItem) {
-        code = item.code
-        name = item.name
-        sector = item.sector ?? ""
-        iconURL = nil
-    }
 }

@@ -132,6 +132,8 @@ Release Archive は HAPIS 本番 + App Attest production。Internal TestFlight �
 
 ## 条件（Screen）
 
+> **廃止（2026-11-15）**: サーバーの `GET /v1/screen` / `/v1/screen/snapshot` と、アプリの条件検索（`ScreenView`・`ScreenSnapshotStore`・`ScreenSnapshot` パッケージ）は撤去した。以下は経緯の記録で、現行の仕様ではない。
+
 ポンチ絵の業種チップは Screen の一部だけ。完成形のレイアウト再現は求めない。
 
 アプリ側の制約（サーバー許可リストは `ScreenMetric`。BLT-49）:
