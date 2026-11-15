@@ -122,7 +122,7 @@ flowchart LR
 | `GET /v1/companies?q=` | 企業検索（JP / EDINET） |
 | `GET /v1/companies/{code}/filings` | 提出書類一覧 |
 | `GET /v1/companies/{code}/overview` | 短い会社説明（格納済み。公開コネクタに出す） |
-| `GET /v1/companies/{code}/relations?type=` | 取引先・関係会社（有報の記載のみ。顧客・関係会社・出資先・大株主と、他社の有報からの逆引き＝仕入先・親会社・大株主になっている会社。格納済み。公開コネクタには出さない。`docs/public-api.md`） |
+| `GET /v1/companies/{code}/relations?type=` | 取引先・関係会社（有報の記載のみ。顧客・関係会社・出資先・大株主と、他社の有報からの逆引き＝仕入先・親会社・大株主になっている会社。格納済み。公開コネクタにも出す（`get-relations`）。`docs/public-api.md`） |
 | `GET /v1/companies/{code}/financials` | Summary（床未満・未格納 404）。`?fields=` で `years[]` の公開キーを射影（不明キー 400） |
 | `GET /v1/companies/{code}/waterfall` | Waterfall |
 | `GET /v1/companies/{code}/waterfall/segment` | 報告セグメント年次（`years` / `fiscal_year`。つなぎは years[] に載せる） |
