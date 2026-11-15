@@ -226,6 +226,25 @@ jobs:
           path: .build
           key: swiftpm-linux-yuholab-${{ hashFiles('Package.resolved') }}
 
+      - name: XBRL cache key
+        id: xbrl-key
+        # テストが参照する docID の集合が変わったときだけキーを変える（毎回 R2 から 259 書類を取り直さない）。
+        run: |
+          ids="$(grep -rohE 'S100[0-9A-Z]{4}' SwiftTests smoke | sort -u)"
+          echo "hash=$(printf '%s' "$ids" | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache golden XBRL (R2 download)
+        # 展開済み XBRL（docID ごとに不変）。ヒットした書類は SmokeCacheSupport が local と数え、取得しない。
+        # 足りない書類だけ R2 → EDINET から取る。docID の集合が変わるとキーが変わり、直前のキャッシュを
+        # 土台に作り直す。strict（BLT_GOLDEN_STRICT）の判定は変えない。
+        uses: actions/cache@v4
+        with:
+          path: |
+            tmp_cache/edinet
+            ~/.config/blue-ticker/analysis_cache/external/edinet/xbrl
+          key: golden-xbrl-v1-${{ steps.xbrl-key.outputs.hash }}
+          restore-keys: golden-xbrl-v1-
+
       - name: Golden suite
         env:
           BLT_EDINET_API_KEY: ${{ secrets.BLT_EDINET_API_KEY }}
