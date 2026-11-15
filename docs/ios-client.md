@@ -26,7 +26,7 @@
 - ターゲット／スキーム `BlueTicker`、`PRODUCT_NAME`、型名 `BlueTickerApp`、置き場 `Apps/BlueTicker`
 - Xcode Cloud ワークフロー（下の「配布」）
 
-文書やコードの文言でアプリを指すときは有報LAB、外向きの API を指すときは有報LAB API、内部の抽出・解析ロジックを指すときは BLT と書き分ける。リポジトリ名 `sollahiro/blue-ticker`・Swift モジュール `BlueTicker` / `BlueTickerCore`・R2 バケットなど「blue-ticker」と綴った識別子は、移行を決めるまで旧名のまま残る（`docs/decisions/yuholab-rebrand.md`）。
+文書やコードの文言でアプリを指すときは有報LAB、外向きの API を指すときは有報LAB API、内部の抽出・解析ロジックを指すときは BLT と書き分ける。Swift モジュール `BlueTicker` / `BlueTickerCore`・R2 バケットなど「blue-ticker」と綴った識別子は、移行を決めるまで旧名のまま残る（`docs/decisions/yuholab-rebrand.md`）。
 
 ## 置き場
 

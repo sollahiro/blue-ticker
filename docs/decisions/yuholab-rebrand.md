@@ -20,7 +20,7 @@
 
 - [ ] README、docs、`AGENTS.md`、`.agents/**` に残る「Blue Ticker」「ブルーティッカーAPI」表記を「有報LAB」に変更（新たに旧名を書かない）
 - [x] `blt` の意味（Business Line Terminal）をルールに一行追加
-- [ ] GitHub リポジトリ名 `sollahiro/blue-ticker` を変えるか判断（変える場合は CI などの URL も追随）
+- [x] GitHub リポジトリ名を `sollahiro/yuholab` に変更（2026-11-15）。旧URLは GitHub が転送する。コード内のリファラURLとドキュメントは追随済み
 - [ ] 公開フィード `feed.sollahiro.com/blue-ticker/...` のパスを移行（購読者側が壊れるので 301 で並行させる）
 
 ## API・MCP の名称（外部の利用者に影響あり）

@@ -156,7 +156,8 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .build
-          key: swiftpm-linux-${{ hashFiles('Package.resolved') }}
+          # リポジトリ名変更で絶対パスが変わり、旧キーの .build（PCH にパスが埋まる）は復元しても壊れるため接頭辞で作り直す
+          key: swiftpm-linux-yuholab-${{ hashFiles('Package.resolved') }}
 
       - name: Build
         # Linux（Fly のイメージと同じ swift:6.1）で全ターゲットとテストターゲットがコンパイルできること。
@@ -223,7 +224,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .build
-          key: swiftpm-linux-${{ hashFiles('Package.resolved') }}
+          key: swiftpm-linux-yuholab-${{ hashFiles('Package.resolved') }}
 
       - name: Golden suite
         env:
