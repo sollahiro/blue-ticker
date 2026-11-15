@@ -183,6 +183,8 @@ DATABASE_URL="$BLT_NEON_WRITE_DATABASE_URL" ./.build/release/blt-ingest ingest \
 
 ## filing-sections の本文を R2 へ移す（一度だけ）
 
+本文の置き場は専用の私有バケット `blt-filing-sections`（`BLT_R2_FILING_SECTIONS_BUCKET`）。先にバケットを作り、ingest と blt-server の両方に環境変数を設定する。
+
 `blt-ingest ingest` は `BLT_R2_*` が設定されていれば、新規・再抽出の本文を R2 に置き、DB には索引行だけを書く。
 既存行（`r2_key` が NULL）は次で移す。冪等で、途中で止めても再開できる。
 

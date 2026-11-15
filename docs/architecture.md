@@ -163,7 +163,7 @@ Neon 接続・R2 秘密・LLM キーの正本は `.env.example`。プロセス�
 | sync | `edinet_documents` / `edinet_sync_state` |
 | 生 XBRL | ローカル展開（L1）＋ R2 ZIP（L2、`BLT_R2_XBRL_BUCKET` 未設定時はローカルのみ。キー `jp/edinet/xbrl/{docID}.zip`） |
 | financials | `company_financials` |
-| filing-sections | 索引は `company_filing_sections`（書類単位。`r2_key` 非 NULL の行は本文が R2）。本文は R2（`BLT_R2_*`。バケットは専用の `BLT_R2_FILING_SECTIONS_BUCKET`、未設定なら `BLT_R2_XBRL_BUCKET` の私有バケット。キー `jp/edinet/filing-sections/{docID}.json`）。R2 未設定の環境は従来どおり DB の `payload` に持つ。読み取りで R2 が使えない行は 503（空の本文は返さない） |
+| filing-sections | 索引は `company_filing_sections`（書類単位。`r2_key` 非 NULL の行は本文が R2）。本文は R2（`BLT_R2_*`。バケットは専用の `BLT_R2_FILING_SECTIONS_BUCKET`（本番は `blt-filing-sections`）、未設定なら `BLT_R2_XBRL_BUCKET` の私有バケット。キー `jp/edinet/filing-sections/{docID}.json`）。R2 未設定の環境は従来どおり DB の `payload` に持つ。読み取りで R2 が使えない行は 503（空の本文は返さない） |
 | breakdowns / statements / notes | 各テーブル（書類単位） |
 | overview | `company_overviews`（会社1社=1行。由来 doc_id は列。ingest stage は `overviews`。公開 REST は `GET /v1/companies/{code}/overview`。read 床は `overview-v1`。Filing `texts` には載せない） |
 | relations | `company_relations`（書類 1 件の相手 1 件 = 1 行。会社ごとに最新有報 1 件の行だけを持ち、逆引き用の行は作らない。ingest stage は `relations`。区分は決定論（表内の見出し行 → 名前の接頭辞 → 表外の見出し）で、決まらない表だけ Jev（閾値 0.9。未満は `needs_review`）。名前解決は決定論（EDINET コードリストの提出者名・英字名 → 上場会社の子会社索引。索引は顧客・関連会社の行だけに使う）。記載の省略は `kind = none` の状態行で未抽出と区別する。大株主の住所は保存のみ） |
