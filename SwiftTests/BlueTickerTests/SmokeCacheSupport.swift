@@ -74,6 +74,23 @@ actor XbrlFetchedDirs {
     }
 }
 
+/// 同じ docID の取得を cacheDir をまたいで 1 本ずつにする。cacheDir が違う 2 つの呼び出しが
+/// 同時に来ても、後の方は先の取得が終わってから `XbrlFetchedDirs` 経由でコピーできる。
+actor XbrlDocGate {
+    static let shared = XbrlDocGate()
+    private var tails: [String: Task<Void, Never>] = [:]
+
+    func run<T: Sendable>(docID: String, _ work: @escaping @Sendable () async -> T) async -> T {
+        let previous = tails[docID]
+        let task = Task { () -> T in
+            await previous?.value
+            return await work()
+        }
+        tails[docID] = Task { _ = await task.value }
+        return await task.value
+    }
+}
+
 enum SmokeCacheSupport {
     static let cacheDir = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
         .appendingPathComponent("tmp_cache/edinet")
@@ -107,7 +124,9 @@ enum SmokeCacheSupport {
         for docID in docIDs {
             let key = dir.standardizedFileURL.path + "|" + docID
             let (source, joined) = await XbrlFetchSingleFlight.shared.run(key: key) {
-                await fetch(docID: docID, dir: dir, apiKey: apiKey, r2Config: r2Config)
+                await XbrlDocGate.shared.run(docID: docID) {
+                    await fetch(docID: docID, dir: dir, apiKey: apiKey, r2Config: r2Config)
+                }
             }
             // 合流した呼び出しは取得していないので local と数える（失敗はそのまま失敗）。
             let reported = joined && source != "failed" ? "local" : source
