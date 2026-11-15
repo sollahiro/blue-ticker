@@ -62,62 +62,6 @@ actor APIClient {
         return try await get(url)
     }
 
-    /// `GET /v1/screen`。検索はキャッシュしない。業種 0 件は全業種。複数業種は `sector=A,B`
-    /// の 1 リクエスト（サーバーが IN 検索で OR・ソート・件数をまとめる）。
-    /// プリセットは `filters` の min/max に写す。スライダー UI は出さない。
-    /// 件数だけ欲しいときは `limit: 1`（`matched` は LIMIT 前の件数）。
-    /// ソート指標が null の行はサーバーが落とすため、`sort` はフィルタで必ず非 null になる
-    /// 指標を選ぶ（既定 `roic`）。
-    func screen(sectors: [String], filters: [ScreenMetricFilter], limit: Int = 50, sort: String = "roic") async throws
-        -> ScreenResponse
-    {
-        let capped = min(max(limit, 1), 200)
-        var items = [
-            URLQueryItem(name: "sort", value: sort),
-            URLQueryItem(name: "order", value: "desc"),
-            URLQueryItem(name: "limit", value: String(capped)),
-        ]
-        let sectorValues = sectors.map { $0.trimmingCharacters(in: .whitespaces) }.filter {
-            !$0.isEmpty
-        }
-        if !sectorValues.isEmpty {
-            items.append(URLQueryItem(name: "sector", value: sectorValues.joined(separator: ",")))
-        }
-        for filter in filters {
-            if let min = filter.min {
-                items.append(URLQueryItem(name: "\(filter.key)_min", value: Self.queryNumber(min)))
-            }
-            if let max = filter.max {
-                items.append(URLQueryItem(name: "\(filter.key)_max", value: Self.queryNumber(max)))
-            }
-        }
-        var components = URLComponents(url: path("v1/screen"), resolvingAgainstBaseURL: false)
-        components?.queryItems = items
-        guard let url = components?.url else { throw APIClientError.badURL }
-        return try await get(url)
-    }
-
-    /// `GET /v1/screen/snapshot` の条件付き GET（`ScreenSnapshotStore` 専用）。
-    /// 304 は `status` 304 と空の本文で返す。`ResponseCache` には載せない（検証子ごと Store が持つ）。
-    func screenSnapshot(headers: [String: String]) async throws
-        -> (status: Int, etag: String?, body: Data)
-    {
-        let (data, response) = try await fetchWithGate(
-            path("v1/screen/snapshot"), hapisClass: .interactive, headers: headers)
-        return (
-            response?.statusCode ?? 0,
-            response?.value(forHTTPHeaderField: "ETag"),
-            data
-        )
-    }
-
-    private static func queryNumber(_ value: Double) -> String {
-        if value.rounded() == value, value >= Double(Int.min), value <= Double(Int.max) {
-            return String(Int(value))
-        }
-        return String(value)
-    }
-
     func cachedFinancials(code: String) async -> FinancialsResponse? {
         await peek(path("v1/companies/\(code)/financials"))
     }

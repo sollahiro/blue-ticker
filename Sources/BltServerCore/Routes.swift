@@ -48,7 +48,6 @@ func registerRoutes(
                 "statement_min_servable": statementMinServableVersion,
                 "company_overviews": companyOverviewCacheVersion,
                 "company_overviews_min_servable": companyOverviewMinServableVersion,
-                "screen_index": screenIndexVersion,
             ],
         ], status: .ok)
     }
@@ -261,48 +260,6 @@ func registerRoutes(
             notFoundMessage: sharesNotFoundMessage)
     }
 
-    // GET /v1/screen?sector=電気機器&roic_min=15&sales_cagr_3y_min=10&sort=roic&order=desc&limit=50
-    // Summary 横断検索（BLT-49）。DB（screen_index、company_financials の最新 FY 派生）を AND フィルタ +
-    // 1 キーソート + LIMIT で読む。数値は `{metric}_min` / `{metric}_max`（許可リストは `ScreenMetric`）。
-    // `sales_cagr_3y` は ingest 時の派生列。不明キー・不正値は 400。REST のみ（skills カタログには載せない）。
-    v1.get("screen") { req async -> Response in
-        let query: ScreenQuery
-        switch parseScreenQuery(rawQueryItems(req)) {
-        case .success(let parsed):
-            query = parsed
-        case .failure(let error):
-            return errorResponse(.badRequest, message: error.message)
-        }
-        return makeStoredDataResponse(
-            await serveScreen(query: query, db: dbAvailable ? req.db : nil, logger: req.logger),
-            notFoundMessage: "Screen 索引は未生成です")
-    }
-
-    // GET /v1/screen/snapshot
-    // screen_index 全行の列形式スナップショット（iOS 条件検索が端末内で件数・絞り込み・並べ替えをする）。
-    // 本文の SHA-256 を強い ETag にし、`If-None-Match` 一致は 304（本文なし）。本文は起動時と 3 日ごとに
-    // 裏で作り置きし（`ScreenSnapshotCache.swift`）、リクエストはそれを返すだけ。作り置きが無いときだけ
-    // そのリクエストで作る。REST のみ（skills カタログには載せない）。
-    let snapshotCache = ScreenSnapshotCache()
-    app.storage[ScreenSnapshotCacheKey.self] = snapshotCache
-    v1.get("screen", "snapshot") { req async -> Response in
-        let prepared: PreparedScreenSnapshot
-        if let cached = await snapshotCache.current() {
-            prepared = cached
-        } else {
-            switch await buildScreenSnapshot(db: dbAvailable ? req.db : nil, logger: req.logger) {
-            case .ready(let built):
-                await snapshotCache.store(built)
-                prepared = built
-            case .notFound:
-                return errorResponse(.notFound, message: "Screen 索引は未生成です")
-            case .unavailable:
-                return errorResponse(.serviceUnavailable, message: "財務データベースに接続できません")
-            }
-        }
-        return screenSnapshotResponse(prepared, ifNoneMatch: req.headers.first(name: .ifNoneMatch))
-    }
-
     // GET /v1/feed/updates?limit=10&doc_type=120
     // 銘柄横断の直近提出書類。sync 済み edinet_documents のみ（ライブ EDINET なし）。
     v1.get("feed", "updates") { req async -> Response in
@@ -315,25 +272,6 @@ func registerRoutes(
                 logger: req.logger),
             db: dbAvailable ? req.db : nil)
     }
-}
-
-/// クエリ文字列をキー→値の辞書へ落とす（同一キー重複はカンマ連結。`sector=A&sector=B` は
-/// `sector=A,B` と同義。単一値キーの重複は不正値として 400 になる）。Screen の `{metric}_min` 等、
-/// キー集合が動的なクエリを許可リスト検証へ渡すために使う。
-private func rawQueryItems(_ req: Request) -> [String: String] {
-    guard let query = req.url.query,
-        let items = URLComponents(string: "?\(query)")?.queryItems
-    else { return [:] }
-    var result: [String: String] = [:]
-    for item in items {
-        let value = item.value ?? ""
-        if let existing = result[item.name] {
-            result[item.name] = "\(existing),\(value)"
-        } else {
-            result[item.name] = value
-        }
-    }
-    return result
 }
 
 /// Feed 応答に REST 専用の `icon_url` を載せる（companies 検索と同じ合成）。
@@ -740,22 +678,6 @@ private func jsonResponse(_ value: Any, status: HTTPResponseStatus) -> Response 
     let response = Response(status: status)
     response.headers.contentType = .json
     response.body = .init(data: data)
-    return response
-}
-
-/// スナップショットの 200 / 304。`If-None-Match` は一覧・`*`・弱い比較（`W/`）も受ける。
-/// `Cache-Control: no-cache` で途中のキャッシュには毎回再検証させる（端末側が取得間隔を持つ）。
-private func screenSnapshotResponse(_ prepared: PreparedScreenSnapshot, ifNoneMatch: String?) -> Response {
-    let response: Response
-    if let ifNoneMatch, entityTagMatches(ifNoneMatch, etag: prepared.etag) {
-        response = Response(status: .notModified)
-    } else {
-        response = Response(status: .ok)
-        response.headers.contentType = .json
-        response.body = .init(data: prepared.body)
-    }
-    response.headers.replaceOrAdd(name: .eTag, value: prepared.etag)
-    response.headers.replaceOrAdd(name: .cacheControl, value: "private, no-cache")
     return response
 }
 

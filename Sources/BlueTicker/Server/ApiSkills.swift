@@ -7,6 +7,8 @@ import Foundation
 
 /// REST skills 応答の `schema_version`。形を破壊的に変えたときのみ +1。
 /// v9（2026-10-26）: 金額を基本単位（円・ドル）へ統一し、financials / waterfall に `units` / `currency` を載せた。
+/// v17（2026-11-15）: filing-content のセクション segments / geography / revenue_recognition / major_facilities /
+/// research_and_development を廃止した（breaking。指定しても返らない）。
 /// v10（2026-11-08）: 内蔵 MCP の廃止に合わせ、各 skill の `mcp_tool` と `get-feed-trend` を外した。
 /// v11（2026-11-09）: breakdown の axis `research_and_development` を廃止した（breaking。常に 404）。
 /// v12（2026-11-09）: breakdown の axis `equity_method_investments` を廃止し、segment 行のセルへ統合した。
@@ -18,7 +20,7 @@ import Foundation
 /// `GET /waterfall/segment` を追加。
 /// v16（2026-11-12）: 報告セグメント年次は `GET /waterfall/segment` 1 本。つなぎは years[] に載せ、
 /// `/waterfall/segment/transitions` は置かない。years（既定 5）と fiscal_year（単年）。
-public let apiSkillsSchemaVersion = 16
+public let apiSkillsSchemaVersion = 17
 
 /// パラメータの置き場所（REST パス変数 / クエリ）。
 public enum ApiSkillParameterLocation: String, Sendable {
@@ -325,7 +327,7 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                 EDINET 書類からセクションテキストを抽出します（格納済みデータのみ）。
                 doc_id を省略すると最新の有価証券報告書を使用します。
                 sections を省略すると全セクションを返します。
-                利用可能なセクション: business_risks, mda, capex_overview, major_facilities, facility_plans, research_and_development, segments, geography
+                利用可能なセクション: business_risks, mda, capex_overview, facility_plans, management_policy
                 """,
             method: "GET",
             path: "/v1/companies/{code}/filing-content",

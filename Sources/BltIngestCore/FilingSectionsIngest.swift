@@ -93,7 +93,7 @@ func runFilingSectionsIngest(
         }
         if existing.cacheVersion != filingSectionsCacheVersion {
             staleVersion.append(cand)
-        } else if existing.sectionKeys != sectionKeys {
+        } else if !filingSectionKeysCoverCurrent(stored: existing.sectionKeys, current: sectionKeys) {
             staleSectionKeys.append(cand)
         } else {
             skipped += 1
@@ -122,7 +122,8 @@ func runFilingSectionsIngest(
             try await CompanyFilingSectionsCacheVersionOnly.find(cand.docID, on: db)
         }
         if !forceDocIDs.contains(cand.docID), let row = existing,
-            row.cacheVersion == filingSectionsCacheVersion, row.sectionKeys == sectionKeys
+            row.cacheVersion == filingSectionsCacheVersion,
+            filingSectionKeysCoverCurrent(stored: row.sectionKeys, current: sectionKeys)
         {
             skipped += 1
             continue

@@ -18,7 +18,7 @@
 - `financials:` done | empty | N/total | 注記
 - `statements:` done | empty | N/total | 注記
 
-filings / overview / screen_index を足すときも、それぞれ独自の行にする。financials に含めない。
+filings / overview を足すときも、それぞれ独自の行にする。financials に含めない。
 
 ## やってはいけないこと
 

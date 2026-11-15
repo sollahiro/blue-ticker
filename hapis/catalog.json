@@ -363,31 +363,6 @@
           "schema": { "type": "string" }
         }
       ]
-    },
-    {
-      "method": "GET",
-      "path": "/v1/screen",
-      "operation_id": "get-screen",
-      "visibility": "private",
-      "summary": "Screen issuers",
-      "description": "Screen listed issuers by financial conditions. Private for now: allowlisted at the gateway for the first-party app, not published in OpenAPI, skills or MCP tools.",
-      "parameters": [
-        {
-          "name": "q",
-          "in": "query",
-          "required": false,
-          "description": "Screen query.",
-          "schema": { "type": "string" }
-        }
-      ]
-    },
-    {
-      "method": "GET",
-      "path": "/v1/screen/snapshot",
-      "operation_id": "get-screen-snapshot",
-      "visibility": "private",
-      "summary": "Screen snapshot (first-party)",
-      "description": "Every screen_index row in columnar form, for on-device screening in the iOS app. Supports conditional GET. Private: allowlisted at the gateway but not published in OpenAPI, skills or MCP tools."
     }
   ]
 }

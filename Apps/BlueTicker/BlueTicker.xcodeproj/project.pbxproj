@@ -21,7 +21,6 @@
 		AA0000000000000000000010 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000010 /* SettingsView.swift */; };
 		AA0000000000000000000012 /* CompanyRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000012 /* CompanyRowView.swift */; };
 		AA0000000000000000000013 /* TopView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000013 /* TopView.swift */; };
-		AA0000000000000000000014 /* ScreenView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000014 /* ScreenView.swift */; };
 		AA0000000000000000000015 /* WatchlistView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000015 /* WatchlistView.swift */; };
 		AA0000000000000000000016 /* TickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000016 /* TickerView.swift */; };
 		AA0000000000000000000017 /* OverviewText.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000017 /* OverviewText.swift */; };
@@ -39,8 +38,6 @@
 		AA0000000000000000000040 /* FeedRSS.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000040 /* FeedRSS.swift */; };
 		AA0000000000000000000041 /* FeedRSSStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000041 /* FeedRSSStore.swift */; };
 		AA0000000000000000000042 /* InfoPlist.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000042 /* InfoPlist.xcstrings */; };
-		AA0000000000000000000043 /* ScreenSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000043 /* ScreenSnapshot.swift */; };
-		AA0000000000000000000044 /* ScreenSnapshotStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000044 /* ScreenSnapshotStore.swift */; };
 		AA0000000000000000000050 /* AppIcon.icon in Resources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000050 /* AppIcon.icon */; };
 /* End PBXBuildFile section */
 
@@ -60,7 +57,6 @@
 		BB0000000000000000000010 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		BB0000000000000000000012 /* CompanyRowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompanyRowView.swift; sourceTree = "<group>"; };
 		BB0000000000000000000013 /* TopView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TopView.swift; sourceTree = "<group>"; };
-		BB0000000000000000000014 /* ScreenView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenView.swift; sourceTree = "<group>"; };
 		BB0000000000000000000015 /* WatchlistView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchlistView.swift; sourceTree = "<group>"; };
 		BB0000000000000000000016 /* TickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TickerView.swift; sourceTree = "<group>"; };
 		BB0000000000000000000017 /* OverviewText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverviewText.swift; sourceTree = "<group>"; };
@@ -82,8 +78,6 @@
 		BB0000000000000000000040 /* FeedRSS.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeedRSS.swift; sourceTree = "<group>"; };
 		BB0000000000000000000041 /* FeedRSSStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeedRSSStore.swift; sourceTree = "<group>"; };
 		BB0000000000000000000042 /* InfoPlist.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = InfoPlist.xcstrings; sourceTree = "<group>"; };
-		BB0000000000000000000043 /* ScreenSnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenSnapshot.swift; sourceTree = "<group>"; };
-		BB0000000000000000000044 /* ScreenSnapshotStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenSnapshotStore.swift; sourceTree = "<group>"; };
 		BB0000000000000000000050 /* AppIcon.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = AppIcon.icon; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -105,7 +99,6 @@
 				DD0000000000000000000009 /* HAPISConsumer */,
 				DD0000000000000000000010 /* ZeroAxisFill */,
 				DD0000000000000000000012 /* FeedRSS */,
-				DD0000000000000000000013 /* ScreenSnapshot */,
 				DD0000000000000000000003 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -148,7 +141,6 @@
 				BB0000000000000000000006 /* APIClient.swift */,
 				BB0000000000000000000024 /* ResponseCache.swift */,
 				BB0000000000000000000041 /* FeedRSSStore.swift */,
-				BB0000000000000000000044 /* ScreenSnapshotStore.swift */,
 			);
 			path = API;
 			sourceTree = "<group>";
@@ -179,7 +171,6 @@
 			children = (
 				BB0000000000000000000012 /* CompanyRowView.swift */,
 				BB0000000000000000000013 /* TopView.swift */,
-				BB0000000000000000000014 /* ScreenView.swift */,
 				BB0000000000000000000015 /* WatchlistView.swift */,
 				4CCED69A305EDAFE003CAB8E /* HistoryView.swift */,
 			);
@@ -225,15 +216,6 @@
 			);
 			name = FeedRSS;
 			path = FeedRSS/Sources/FeedRSS;
-			sourceTree = "<group>";
-		};
-		DD0000000000000000000013 /* ScreenSnapshot */ = {
-			isa = PBXGroup;
-			children = (
-				BB0000000000000000000043 /* ScreenSnapshot.swift */,
-			);
-			name = ScreenSnapshot;
-			path = ScreenSnapshot/Sources/ScreenSnapshot;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -330,7 +312,6 @@
 				AA0000000000000000000010 /* SettingsView.swift in Sources */,
 				AA0000000000000000000012 /* CompanyRowView.swift in Sources */,
 				AA0000000000000000000013 /* TopView.swift in Sources */,
-				AA0000000000000000000014 /* ScreenView.swift in Sources */,
 				AA0000000000000000000015 /* WatchlistView.swift in Sources */,
 				AA0000000000000000000016 /* TickerView.swift in Sources */,
 				AA0000000000000000000017 /* OverviewText.swift in Sources */,
@@ -338,8 +319,6 @@
 				AA0000000000000000000032 /* ZeroAxisFill.swift in Sources */,
 				AA0000000000000000000040 /* FeedRSS.swift in Sources */,
 				AA0000000000000000000041 /* FeedRSSStore.swift in Sources */,
-				AA0000000000000000000043 /* ScreenSnapshot.swift in Sources */,
-				AA0000000000000000000044 /* ScreenSnapshotStore.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

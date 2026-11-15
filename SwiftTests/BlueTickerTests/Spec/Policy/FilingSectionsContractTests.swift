@@ -23,6 +23,26 @@ import Testing
         #expect(current >= filingSectionsMinServableVersion)
     }
 
+    @Test func retiredKeysAreNotStoredAndNotServed() {
+        let keys = Set(currentFilingSectionKeys().split(separator: ",").map(String.init))
+        #expect(keys == ["business_risks", "mda", "capex_overview", "facility_plans", "management_policy"])
+        #expect(keys.isDisjoint(with: retiredFilingSectionKeys))
+        // 旧行に退役キーが残っていても read では返さない。
+        let payload = FilingSectionsPayload(
+            texts: ["mda": "m", "major_facilities": "f"],
+            specials: ["segments": ExtractedBreakdownPayload(method: "x", tables: [], facts: [])])
+        #expect(Set(payload.sectionsObject(sections: nil).keys) == ["mda"])
+        #expect(payload.sectionsObject(sections: ["segments", "major_facilities"]).isEmpty)
+    }
+
+    @Test func oldRowsWithRetiredKeysStayFreshButMissingCurrentKeysAreStale() {
+        let current = currentFilingSectionKeys()
+        let old = (current.split(separator: ",").map(String.init) + ["segments", "geography"]).sorted()
+            .joined(separator: ",")
+        #expect(filingSectionKeysCoverCurrent(stored: old, current: current))
+        #expect(filingSectionKeysCoverCurrent(stored: "mda", current: current) == false)
+    }
+
     @Test func descriptionOfBusinessIsNotAPublishedFilingTextKey() {
         #expect(xbrlSections["description_of_business"] == nil)
         #expect(xbrlSections.values.contains { $0.xbrlElements.contains(Xbrl.descriptionOfBusinessTextblockTag) } == false)
