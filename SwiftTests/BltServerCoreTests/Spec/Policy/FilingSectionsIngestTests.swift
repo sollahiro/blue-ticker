@@ -20,6 +20,7 @@ private func withMigratedApp(_ body: (Application) async throws -> Void) async t
         app.migrations.add(CreateEdinetDocument())
         app.migrations.add(AddParentDocIDToEdinetDocuments())
         app.migrations.add(CreateCompanyFilingSections())
+        app.migrations.add(AddR2KeyToFilingSections())
         try await app.autoMigrate()
         try await body(app)
     } catch {
@@ -603,6 +604,155 @@ private let keys = "business_risks,mda,segments"
                     code: "7203", docId: nil, sections: ["mda"], db: app.db))
             let sections = try #require(json["sections"] as? [String: Any])
             #expect(sections.keys.sorted() == ["mda"])
+        }
+    }
+}
+
+private func seedStoredRow(
+    _ docID: String, code: String, submit: String, db: Database,
+    payload: FilingSectionsPayload = fakePayload()
+) async throws {
+    let row = CompanyFilingSections()
+    row.id = docID
+    row.code = code
+    row.submitDateTime = submit
+    row.payload = payload
+    row.cacheVersion = filingSectionsCacheVersion
+    row.sectionKeys = keys
+    try await row.create(on: db)
+}
+
+// MARK: - R2 格納（本文を R2、索引を DB）
+
+/// テスト用のメモリ実装。`failPut` / `failGet` で障害を再現する。
+private actor MemorySectionsStore: FilingSectionsObjectStoring {
+    private var objects: [String: FilingSectionsPayload] = [:]
+    private var failPut = false
+    private var failGet = false
+
+    func setFailPut(_ value: Bool) { failPut = value }
+    func setFailGet(_ value: Bool) { failGet = value }
+    func has(_ key: String) -> Bool { objects[key] != nil }
+    func remove(_ key: String) { objects[key] = nil }
+
+    func get(key: String) async throws -> FilingSectionsPayload? {
+        if failGet { throw FilingSectionsObjectStoreError.unavailable("down") }
+        return objects[key]
+    }
+
+    func put(_ payload: FilingSectionsPayload, key: String) async throws {
+        if failPut { throw FilingSectionsObjectStoreError.unavailable("down") }
+        objects[key] = payload
+    }
+}
+
+@Suite struct FilingSectionsR2Tests {
+    @Test func ingestPutsBodyInR2AndKeepsOnlyAnIndexRowInDb() async throws {
+        try await withMigratedApp { app in
+            try await seedDoc("S1", secCode: "72030", db: app.db)
+            let store = MemorySectionsStore()
+            let summary = try await runFilingSectionsIngest(
+                db: app.db, listedCodes: ["7203"], years: 3, sectionKeys: keys, limit: nil, store: store
+            ) { _ in fakePayload("r2") }
+            #expect(summary.stored == 1)
+            let row = try #require(try await CompanyFilingSections.find("S1", on: app.db))
+            #expect(row.r2Key == "jp/edinet/filing-sections/S1.json")
+            #expect(row.payload == FilingSectionsPayload(texts: [:], specials: [:]))
+            #expect(await store.has("jp/edinet/filing-sections/S1.json"))
+
+            // 読み取りは R2 から本文を復元する。
+            let json = try #require(
+                try await loadStoredFilingSections(
+                    code: "7203", docId: nil, sections: nil, db: app.db, store: store))
+            let sections = try #require(json["sections"] as? [String: Any])
+            #expect(sections["business_risks"] as? String == "r2")
+        }
+    }
+
+    @Test func r2PutFailureLeavesDbUntouchedAndCountsAsFailed() async throws {
+        try await withMigratedApp { app in
+            try await seedDoc("S1", secCode: "72030", db: app.db)
+            let store = MemorySectionsStore()
+            await store.setFailPut(true)
+            let summary = try await runFilingSectionsIngest(
+                db: app.db, listedCodes: ["7203"], years: 3, sectionKeys: keys, limit: nil, store: store
+            ) { _ in fakePayload() }
+            #expect(summary.failed == 1)
+            #expect(summary.stored == 0)
+            #expect(try await CompanyFilingSections.find("S1", on: app.db) == nil)
+        }
+    }
+
+    @Test func readFailsInsteadOfReturningEmptySectionsWhenR2IsUnavailable() async throws {
+        try await withMigratedApp { app in
+            try await seedStoredRow("S1", code: "7203", submit: "2025-06-20 09:00", db: app.db)
+            let row = try #require(try await CompanyFilingSections.find("S1", on: app.db))
+            row.r2Key = "jp/edinet/filing-sections/S1.json"
+            row.payload = FilingSectionsPayload(texts: [:], specials: [:])
+            try await row.update(on: app.db)
+
+            // R2 未設定
+            await #expect(throws: FilingSectionsObjectStoreError.self) {
+                _ = try await loadStoredFilingSections(
+                    code: "7203", docId: nil, sections: nil, db: app.db, store: nil)
+            }
+            // オブジェクト欠落
+            let store = MemorySectionsStore()
+            await #expect(throws: FilingSectionsObjectStoreError.self) {
+                _ = try await loadStoredFilingSections(
+                    code: "7203", docId: nil, sections: nil, db: app.db, store: store)
+            }
+        }
+    }
+
+    @Test func backfillMovesRowsVerifiesAndIsIdempotent() async throws {
+        try await withMigratedApp { app in
+            try await seedStoredRow(
+                "S1", code: "7203", submit: "2025-06-20 09:00", db: app.db, payload: fakePayload("one"))
+            try await seedStoredRow(
+                "S2", code: "6758", submit: "2025-06-20 09:00", db: app.db, payload: fakePayload("two"))
+            let store = MemorySectionsStore()
+
+            let dry = try await backfillFilingSectionsToR2(
+                db: app.db, store: store, limit: nil, dryRun: true)
+            #expect(dry.moved == 0)
+            #expect(dry.remaining == 2)
+            #expect(await store.has("jp/edinet/filing-sections/S1.json") == false)
+
+            let first = try await backfillFilingSectionsToR2(
+                db: app.db, store: store, limit: 1, dryRun: false)
+            #expect(first.moved == 1)
+            #expect(first.remaining == 1)
+
+            let rest = try await backfillFilingSectionsToR2(
+                db: app.db, store: store, limit: nil, dryRun: false)
+            #expect(rest.moved == 1)
+            #expect(rest.remaining == 0)
+
+            let again = try await backfillFilingSectionsToR2(
+                db: app.db, store: store, limit: nil, dryRun: false)
+            #expect(again.moved == 0)
+
+            let json = try #require(
+                try await loadStoredFilingSections(
+                    code: "6758", docId: nil, sections: nil, db: app.db, store: store))
+            let sections = try #require(json["sections"] as? [String: Any])
+            #expect(sections["business_risks"] as? String == "two")
+        }
+    }
+
+    @Test func backfillSkipsRowsWhenR2PutFails() async throws {
+        try await withMigratedApp { app in
+            try await seedStoredRow("S1", code: "7203", submit: "2025-06-20 09:00", db: app.db)
+            let store = MemorySectionsStore()
+            await store.setFailPut(true)
+            let summary = try await backfillFilingSectionsToR2(
+                db: app.db, store: store, limit: nil, dryRun: false)
+            #expect(summary.moved == 0)
+            #expect(summary.failed == 1)
+            let row = try #require(try await CompanyFilingSections.find("S1", on: app.db))
+            #expect(row.r2Key == nil)
+            #expect(row.payload == fakePayload())
         }
     }
 }

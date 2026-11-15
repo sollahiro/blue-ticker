@@ -125,6 +125,9 @@ public enum Api {
     /// 完成キーは `{prefix}/{docID}.zip`。公開 URL は付けない（私有 L2）。
     static let xbrlR2KeyPrefix = "jp/edinet/xbrl"
 
+    /// 有報セクション本文（JSON）の R2 オブジェクトキー接頭辞。生 XBRL と同じ私有バケット内で分ける。
+    public static let filingSectionsR2KeyPrefix = "jp/edinet/filing-sections"
+
     /// R2 へ置く XBRL パッケージの Content-Type。
     static let xbrlZipContentType = "application/zip"
 

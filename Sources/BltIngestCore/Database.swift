@@ -87,6 +87,7 @@ package func registerBltMigrations(_ migrations: Migrations) {
     // Feed Update: 提出日時の読み取り索引。
     migrations.add(AddFeedQueryIndexesToEdinetDocuments())
     migrations.add(AddCodeSubmitDateTimeIndexes())
+    migrations.add(AddR2KeyToFilingSections())
     // Screen（廃止済み。screen_index は適用済み環境の履歴を保つため登録だけ残す。MigrationNameStabilityTests）。
     migrations.add(CreateScreenIndex())
     migrations.add(ReplaceScreenIndexGrowthWithCagr())

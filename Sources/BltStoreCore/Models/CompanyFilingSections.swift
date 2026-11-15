@@ -39,6 +39,10 @@ package final class CompanyFilingSections: Model, @unchecked Sendable {
     @Field(key: "section_keys")
     package var sectionKeys: String
 
+    /// 本文を R2 に置いたときのオブジェクトキー。非 NULL なら `payload` は空で、本文は R2 から読む。
+    @OptionalField(key: "r2_key")
+    package var r2Key: String?
+
     /// 最終更新時刻（抽出・upsert したタイミング）。
     @Timestamp(key: "updated_at", on: .update)
     package var updatedAt: Date?

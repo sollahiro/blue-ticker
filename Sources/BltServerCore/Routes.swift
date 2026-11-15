@@ -200,6 +200,9 @@ func registerRoutes(
         }
     }
 
+    // 本文を R2 に置いた行の読み取り用（`BLT_R2_*` 未設定なら nil。その行は 503）。
+    let filingSectionsStore = R2FilingSectionsStore.resolveFromEnvironment()
+
     // GET /v1/companies/{code}/filing-content?doc_id=...&sections=a,b
     // DB（有報セクション取り込み company_filing_sections）の格納済みセクション本文のみを返す。
     // 有報のライブ抽出（9MB DL＋SwiftSoup）は大企業で 1GB OOM を実測したため撤去し、重い抽出は
@@ -212,7 +215,7 @@ func registerRoutes(
         return makeStoredDataResponse(
             await serveStoredFilingSections(
                 code: code, docId: docId, sections: sections, db: dbAvailable ? req.db : nil,
-                logger: req.logger),
+                store: filingSectionsStore, logger: req.logger),
             notFoundMessage: "書類本文は未抽出です")
     }
 
@@ -388,11 +391,11 @@ func serveStoredOverview(
 /// `filing-content` の DB 読み取り共通ロジック。`db` の扱いは `serveStoredFinancials` 参照。
 func serveStoredFilingSections(
     code: String, docId: String?, sections: [String]?, db: Database?,
-    logger: Logger
+    store: (any FilingSectionsObjectStoring)? = nil, logger: Logger
 ) async -> StoredDataServeResult {
     await serveStored(db: db, logger: logger) { db in
         try await loadStoredFilingSections(
-            code: code, docId: docId, sections: sections, db: db)
+            code: code, docId: docId, sections: sections, db: db, store: store)
     }
 }
 

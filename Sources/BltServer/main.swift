@@ -43,7 +43,7 @@ let argv = CommandLine.arguments
 
 /// blt-ingest へ移したサブコマンド。誤って blt-server で呼んだときはサーバーを起動せずに止める。
 private let ingestSubcommands: Set<String> = [
-    "migrate", "sync", "ingest", "master-data-upload", "overrides",
+    "migrate", "sync", "ingest", "master-data-upload", "filing-sections-to-r2", "overrides",
 ]
 
 do {

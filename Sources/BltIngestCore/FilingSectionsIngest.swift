@@ -54,6 +54,7 @@ func runFilingSectionsIngest(
     cachedDocIDs: Set<String> = [],
     candidateSets: FilingSectionCandidateSets? = nil,
     forceDocIDs: Set<String> = [],
+    store: (any FilingSectionsObjectStoring)? = nil,
     logger: Logger? = nil, extract: FilingSectionsExtractor
 ) async throws -> FilingSectionsIngestSummary {
     let sets: FilingSectionCandidateSets
@@ -135,14 +136,35 @@ func runFilingSectionsIngest(
             logger?.warning("有報セクション取り込み失敗: docID=\(cand.docID) code=\(cand.code)")
             continue
         }
+        // 本文は R2 へ先に置く（R2 設定時）。失敗した書類は DB を更新せず、次回へ回す。
+        var r2Key: String?
+        var dbPayload = payload
+        if let store {
+            guard let key = filingSectionsObjectKey(docID: cand.docID) else {
+                failed += 1
+                logger?.warning("有報セクション R2 キー不正: docID=\(cand.docID)")
+                continue
+            }
+            do {
+                try await store.put(payload, key: key)
+            } catch {
+                failed += 1
+                logger?.warning("有報セクション R2 格納失敗: docID=\(cand.docID) \(error)")
+                continue
+            }
+            r2Key = key
+            dbPayload = FilingSectionsPayload(texts: [:], specials: [:])
+        }
+        let finalPayload = dbPayload
+        let finalR2Key = r2Key
         try await withDbRetry(
             logger: logger, context: "docID=\(cand.docID)", onRetry: { unhealthyRetries += 1 }
         ) {
             try await storeCompanyFilingSections(
                 exists: try await CompanyFilingSectionsCacheVersionOnly.find(cand.docID, on: db) != nil,
                 docID: cand.docID, code: cand.code,
-                submitDateTime: cand.submitDateTime, payload: payload,
-                sectionKeys: sectionKeys, db: db)
+                submitDateTime: cand.submitDateTime, payload: finalPayload,
+                sectionKeys: sectionKeys, r2Key: finalR2Key, db: db)
         }
         stored += 1
     }
@@ -291,12 +313,12 @@ func filingSectionCandidates(
 /// （進めないと毎回 stale と判定されて再抽出が続く）。updated_at は「最後に確認した時刻」になる。
 func storeCompanyFilingSections(
     exists: Bool, docID: String, code: String, submitDateTime: String,
-    payload: FilingSectionsPayload, sectionKeys: String, db: Database
+    payload: FilingSectionsPayload, sectionKeys: String, r2Key: String? = nil, db: Database
 ) async throws {
     if exists {
         try await updateCompanyFilingSectionsInPlace(
             docID: docID, code: code, submitDateTime: submitDateTime,
-            payload: payload, sectionKeys: sectionKeys, db: db)
+            payload: payload, sectionKeys: sectionKeys, r2Key: r2Key, db: db)
         return
     }
     let model = CompanyFilingSections()
@@ -306,6 +328,7 @@ func storeCompanyFilingSections(
     model.payload = payload
     model.cacheVersion = filingSectionsCacheVersion
     model.sectionKeys = sectionKeys
+    model.r2Key = r2Key
     try await createIdempotently(
         create: { try await model.create(on: db) },
         recover: {
@@ -314,7 +337,7 @@ func storeCompanyFilingSections(
             }
             try await updateCompanyFilingSectionsInPlace(
                 docID: docID, code: code, submitDateTime: submitDateTime,
-                payload: payload, sectionKeys: sectionKeys, db: db)
+                payload: payload, sectionKeys: sectionKeys, r2Key: r2Key, db: db)
             return true
         }
     )
@@ -325,12 +348,13 @@ func storeCompanyFilingSections(
 /// どちらの文も冪等なので withDbRetry での再実行に耐える。
 func updateCompanyFilingSectionsInPlace(
     docID: String, code: String, submitDateTime: String,
-    payload: FilingSectionsPayload, sectionKeys: String, db: Database
+    payload: FilingSectionsPayload, sectionKeys: String, r2Key: String? = nil, db: Database
 ) async throws {
     let sql = try requireSQLDatabase(db)
     let payloadChanged: SQLQueryString = "\(ident: "payload") IS DISTINCT FROM \(bind: payload)"
     try await sql.update(CompanyFilingSections.schema)
         .set("payload", to: payload)
+        .set("r2_key", to: r2Key)  // 本文の置き場所は payload と同じ文で切り替える（空 payload + r2_key NULL を作らない）
         .where("doc_id", .equal, docID)
         .where(payloadChanged)
         .run()
@@ -340,6 +364,7 @@ func updateCompanyFilingSectionsInPlace(
         .set(\.$submitDateTime, to: submitDateTime)
         .set(\.$cacheVersion, to: filingSectionsCacheVersion)
         .set(\.$sectionKeys, to: sectionKeys)
+        .set(\.$r2Key, to: r2Key)
         .update()  // updated_at は Fluent が付ける
 }
 

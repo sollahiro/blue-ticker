@@ -45,6 +45,7 @@ private func withApp(
             app.migrations.add(AddAssemblyFingerprintToCompanyFinancials())
             app.migrations.add(AddLlmAuditToCompanyFinancials())
             app.migrations.add(CreateCompanyFilingSections())
+            app.migrations.add(AddR2KeyToFilingSections())
             app.migrations.add(CreateCompanySegmentBreakdowns())
             app.migrations.add(RenameCompanySegmentBreakdownsToCompanyBreakdowns())
             app.migrations.add(AddNotApplicableReasonToCompanyBreakdowns())

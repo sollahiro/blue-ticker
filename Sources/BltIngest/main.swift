@@ -32,6 +32,9 @@
 //                                                            バグ修正確認後の手動・単発再計算向け。定期実行では使わない）
 //   blt-ingest master-data-upload <path>                    EDINET コードリスト CSV を Neon へ反映
 //                                                            （正本を丸ごと差し替え。稼働中サーバーは定期ポーリングで自動反映）
+//   blt-ingest filing-sections-to-r2 [--limit N] [--dry-run]
+//                                                            company_filing_sections の本文（payload 列）を R2 へ移す
+//                                                            （BLT_R2_* 必須。冪等。移した行は payload を空にして r2_key を設定）。
 //   blt-ingest overrides add --file <path.json> [--created-by NAME] [--dry-run]
 //                                                            手動 XBRL 上書きを追加する。書き込みは
 //                                                            BLT_NEON_WRITE_DATABASE_URL 必須。
@@ -123,6 +126,14 @@ do {
             exit(1)
         }
         try await runMasterDataUploadCommand(path: argv[2])
+    } else if argv.count > 1, argv[1] == "filing-sections-to-r2" {
+        let limitPresent = argv.contains("--limit")
+        let limit = optionValue("--limit", in: argv).flatMap(Int.init)
+        if limitPresent, limit == nil || (limit ?? 0) < 1 {
+            printError("blt-ingest error: --limit は 1 以上の整数で指定してください\n")
+            exit(1)
+        }
+        try await runFilingSectionsR2BackfillCommand(limit: limit, dryRun: argv.contains("--dry-run"))
     } else if argv.count > 1, argv[1] == "overrides" {
         guard argv.count > 2 else {
             printError("blt-ingest error: overrides のサブコマンドは add / list / revoke です\n")
@@ -142,7 +153,7 @@ do {
             )
         )
     } else {
-        printError("blt-ingest error: サブコマンドを指定してください（migrate / sync / ingest / master-data-upload / overrides）。配信サーバーは blt-server です\n")
+        printError("blt-ingest error: サブコマンドを指定してください（migrate / sync / ingest / master-data-upload / filing-sections-to-r2 / overrides）。配信サーバーは blt-server です\n")
         exit(1)
     }
 } catch {

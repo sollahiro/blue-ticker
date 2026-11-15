@@ -180,3 +180,18 @@ DATABASE_URL="$BLT_NEON_WRITE_DATABASE_URL" ./.build/release/blt-ingest ingest \
 2. launchd の Program がその新しいラッパーを指す（または旧ラッパーを同じ契約に書き換える）。
 3. 旧パスを呼ぶ plist が残っていないことを確認してから、旧 `.local.sh` を消す。
 4. 取り込み Mac へこの変更を pull する前に 1–2 を終える。先に pull すると、旧ラッパーが無い Git 管理スクリプトを呼んで定例が止まる。
+
+## filing-sections の本文を R2 へ移す（一度だけ）
+
+`blt-ingest ingest` は `BLT_R2_*` が設定されていれば、新規・再抽出の本文を R2 に置き、DB には索引行だけを書く。
+既存行（`r2_key` が NULL）は次で移す。冪等で、途中で止めても再開できる。
+
+```bash
+DATABASE_URL="$BLT_NEON_WRITE_DATABASE_URL" ./.build/release/blt-ingest filing-sections-to-r2 --dry-run
+DATABASE_URL="$BLT_NEON_WRITE_DATABASE_URL" ./.build/release/blt-ingest filing-sections-to-r2 --limit 500   # 試し
+DATABASE_URL="$BLT_NEON_WRITE_DATABASE_URL" ./.build/release/blt-ingest filing-sections-to-r2
+```
+
+- blt-server にも `BLT_R2_ACCOUNT_ID` / `BLT_R2_ACCESS_KEY_ID` / `BLT_R2_SECRET_ACCESS_KEY` / `BLT_R2_XBRL_BUCKET` が必要（読み取り用。移行した行は R2 設定が無いと 503）。移行の前に配信側へ設定する。
+- 1 行ごとに PUT → 読み戻し一致 → payload を空にして `r2_key` を設定する。失敗した行は触らない。
+- 終わったら `VACUUM FULL company_filing_sections` で DB の領域を回収する（読み取りが一時的に止まる）。

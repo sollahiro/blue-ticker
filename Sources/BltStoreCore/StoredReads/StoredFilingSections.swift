@@ -10,7 +10,8 @@ import SQLKit
 /// 床は `filingSectionsMinServableVersion`（明示定数。現行版との完全一致ではない）。
 /// 無い・床未満・府令対象外なら nil（呼び出し側は 404。ライブ抽出へはフォールバックしない）。
 package func loadStoredFilingSections(
-    code: String, docId: String?, sections: [String]?, db: Database
+    code: String, docId: String?, sections: [String]?, db: Database,
+    store: (any FilingSectionsObjectStoring)? = nil
 ) async throws -> [String: Any]? {
     let code4 = String(code.prefix(4))
     guard !code4.isEmpty, code4.allSatisfy({ $0.isLetter || $0.isNumber }) else { return nil }
@@ -58,9 +59,23 @@ package func loadStoredFilingSections(
     guard let row, isServableFilingSectionsCacheVersion(row.cacheVersion), let docID = row.id else {
         return nil
     }
+    // 本文が R2 にある行（r2_key 非 NULL）は R2 から読む。未設定・取得失敗・オブジェクト欠落は throw
+    // （呼び出し側は 503。DB の空 payload を返して「本文なし」に見せない）。
+    let payload: FilingSectionsPayload
+    if let key = row.r2Key {
+        guard let store else {
+            throw FilingSectionsObjectStoreError.unavailable("R2 未設定 key=\(key)")
+        }
+        guard let fetched = try await store.get(key: key) else {
+            throw FilingSectionsObjectStoreError.unavailable("R2 オブジェクトなし key=\(key)")
+        }
+        payload = fetched
+    } else {
+        payload = row.payload
+    }
     return [
         "code": code4,
         "doc_id": docID,
-        "sections": row.payload.sectionsObject(sections: sections),
+        "sections": payload.sectionsObject(sections: sections),
     ]
 }

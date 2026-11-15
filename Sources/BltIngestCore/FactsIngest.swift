@@ -214,6 +214,7 @@ public func runFactsIngestCommand(
                 priorityCodes: priority, cachedDocIDs: cachedDocIDs,
                 candidateSets: listedFilingSets,
                 forceDocIDs: forceDocIDs,
+                store: R2FilingSectionsStore.resolveFromEnvironment(),
                 logger: app.logger
             ) { docID in
                 await context.extractFilingSections(

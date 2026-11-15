@@ -20,6 +20,7 @@ private func withMigratedApp(
         app.databases.use(.sqlite(.memory), as: .sqlite)
         app.migrations.add(CreateCompanyStatements())
         app.migrations.add(CreateCompanyFilingSections())
+        app.migrations.add(AddR2KeyToFilingSections())
         app.migrations.add(CreateCompanyStatementNotes())
         app.migrations.add(CreateCompanySegmentBreakdowns())
         app.migrations.add(RenameCompanySegmentBreakdownsToCompanyBreakdowns())

@@ -36,6 +36,7 @@ import Vapor
             app.migrations.add(CreateEdinetXbrlFacts())
             app.migrations.add(DropEdinetXbrlFacts())
             app.migrations.add(CreateCompanyFilingSections())
+            app.migrations.add(AddR2KeyToFilingSections())
             app.migrations.add(AddFeedQueryIndexesToEdinetDocuments())
             try? await app.autoRevert()  // 前回の残骸を掃除（初回は no-op）
             try await app.autoMigrate()
