@@ -25,6 +25,12 @@ checks share one runner in `static-checks` (each step still runs when an earlier
 tests compile on Linux in `unit-tests`. It has no SwiftPM `.build` cache, because a frozen
 cache entry has failed with a missing `_NumericsShims`.
 
+`golden-suite` caches the extracted golden XBRL (`tmp_cache/edinet` and the analysis cache under
+`~/.config/blue-ticker`) with `actions/cache`. The key hashes the set of docIDs the tests mention, so
+it only changes when a golden document is added or removed; a changed set restores the previous
+cache and fetches only the missing documents (R2, then EDINET). Documents are immutable per docID.
+The run summary line `XBRL fetch timing` shows how much was still fetched.
+
 ## Change-based job plan (`changes`)
 
 `cichecks.py changes` diffs a range and decides which of `unit_tests`, `golden`, `macos`
