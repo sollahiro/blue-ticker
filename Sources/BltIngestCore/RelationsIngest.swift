@@ -141,12 +141,12 @@ func runRelationsIngest(
         attempted: attempted, stored: stored, failed: failed, skipped: skipped, reresolved: reresolved)
 }
 
-/// 抽出結果を格納行にする（名前解決はまだ。`kind = none` の行は解決しない）。
+/// 抽出結果を格納行にする（名前解決はまだ。`kind = none` の行は解決しない）。`retiredRelationKinds` の行は格納しない。
 func relationModels(
     code: String, docID: String, submitDateTime: String, extraction: CompanyRelationsExtraction
 ) -> [CompanyRelation] {
     let warning = extraction.warnings.isEmpty ? nil : extraction.warnings.joined(separator: " ")
-    return extraction.rows.map {
+    return extraction.rows.filter { !retiredRelationKinds.contains($0.kind) }.map {
         CompanyRelation(
             code: code, docID: docID, submitDateTime: submitDateTime, fyEnd: extraction.fyEnd,
             draft: $0, warning: warning)

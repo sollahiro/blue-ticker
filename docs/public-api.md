@@ -23,7 +23,7 @@
 
 有報の記載だけを返す（`basis` は常に `disclosed`）。推定・競合（`competitor`）は持たない。公開コネクタ（HAPIS）にも出す（`hapis/catalog.json` の `get-relations`）。
 
-- `type`（カンマ区切り。省略時は全種類）: `customer`（主要な顧客）· `supplier`（他社の主要な顧客欄に自社が載っている＝逆引き）· `group`（関係会社。`parent` / `subsidiary` / `affiliate` で絞れる。`other_related` は `group` のみ）· `investee`（政策保有株式。逆引きはしない）· `major_shareholder`（大株主）· `major_shareholder_of`（他社の大株主欄に自社が載っている＝逆引き）
+- `type`（カンマ区切り。省略時は全種類）: `customer`（主要な顧客）· `supplier`（他社の主要な顧客欄に自社が載っている＝逆引き）· `group`（親会社と子会社。`parent` / `subsidiary` で絞れる。関連会社・その他の関係会社は格納しないので返さない。`type=affiliate` は空）· `investee`（政策保有株式。逆引きはしない）· `major_shareholder`（大株主）· `major_shareholder_of`（他社の大株主欄に自社が載っている＝逆引き）
 - 逆引きは上場企業どうしだけ。相手側の有報の行で、`reasons` に `disclosed_by_counterparty`、`evidence.from_code` は相手のコード（`code` と違う。記載の主語は相手の会社）
 - 応答: `{code, relations[], omitted[], next_cursor}`。要素は `type, kind, basis, company{code,name}|null, name_raw, reasons[], amount_yen, segment_label, voting_ratio, voting_ratio_basis, voting_ratio_indirect, voting_ratio_close_parties, investee{shares,book_value_yen,purpose,is_deemed,holder}|null, major_shareholder{rank,shares,ratio}|null, evidence{doc_id,section,fy_end,from_code}`。nullable のキーも必ず出す
 - `company` は上場企業に名寄せできたときだけ（決定論。候補が複数なら null で `name_raw` のみ）。Jev が区分を決めた行は `reasons` に `jev_classified`

@@ -175,7 +175,7 @@
       "path": "/v1/companies/{code}/relations",
       "operation_id": "get-relations",
       "summary": "Customers, group companies and shareholders",
-      "description": "Business relations disclosed in annual reports (stored data only): major customers, group companies (parent / subsidiary / affiliate), strategic shareholdings (investee) and major shareholders, plus reverse lookups from other listed companies' reports (supplier, major_shareholder_of). Each row cites its source filing. Amounts in JPY; voting_ratio in percent.",
+      "description": "Business relations disclosed in annual reports (stored data only): major customers, parent and subsidiary companies, strategic shareholdings (investee) and major shareholders, plus reverse lookups from other listed companies' reports (supplier, major_shareholder_of). Each row cites its source filing. Amounts in JPY; voting_ratio in percent.",
       "parameters": [
         {
           "name": "code",
@@ -188,7 +188,7 @@
           "name": "type",
           "in": "query",
           "required": false,
-          "description": "Comma-separated: customer, supplier, group, parent, subsidiary, affiliate, investee, major_shareholder, major_shareholder_of. Omit for all types.",
+          "description": "Comma-separated: customer, supplier, group, parent, subsidiary, investee, major_shareholder, major_shareholder_of. Omit for all types. group = parent + subsidiary.",
           "schema": { "type": "string" }
         },
         {

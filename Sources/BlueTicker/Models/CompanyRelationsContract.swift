@@ -34,6 +34,13 @@ public let relationKindUnclassified = "unclassified"
 /// 節の状態だけを持つ行（`section_status`。相手は無い）。「省略」と「未抽出」を区別する。
 public let relationKindNone = "none"
 
+/// 格納も公開もしない区分。関連会社・その他の関係会社は他社と結べず価値が低く（上場会社に紐づくのは一部だけ）、
+/// `unclassified` は公開しない行だった。抽出と区分判定（Jev）は従来どおり行い、格納の直前に外す
+/// （子会社行は顧客名の親会社解決の索引に使うので残す）。
+public let retiredRelationKinds: Set<String> = [
+    relationKindAffiliate, relationKindOtherRelated, relationKindUnclassified,
+]
+
 /// 関係会社表の区分（Jev の選択肢と同じ並び）。
 public let relationGroupKinds = [
     relationKindParent, relationKindSubsidiary, relationKindAffiliate, relationKindOtherRelated,
@@ -180,12 +187,12 @@ public enum CompanyRelationsResolveResult: Sendable {
 ///   名前解決の `ambiguous` だけによるとき（Jev が区分を採用した行）は出す。
 /// - 決定論の `needs_review`（名前解決の `ambiguous`）は出す（呼び出し側が `company: null`）。
 /// - 訂正 overlay 回帰の warning が付いた書類の行は出さない。
-/// - 区分の決まらない行（`unclassified`）は出さない。
+/// - 格納しない区分（`retiredRelationKinds`。関連会社・その他の関係会社・`unclassified`）の行は出さない（取込を回し直す前の残りも隠す）。
 public func isPubliclyServableRelation(
     kind: String, decidedBy: String, needsReview: Bool, resolution: String?, warning: String?
 ) -> Bool {
     if let warning, hasOverlayRegressionWarning([warning]) { return false }
-    if kind == relationKindUnclassified { return false }
+    if retiredRelationKinds.contains(kind) { return false }
     if decidedBy == relationDecidedByJev, needsReview, resolution != relationResolutionAmbiguous {
         return false
     }

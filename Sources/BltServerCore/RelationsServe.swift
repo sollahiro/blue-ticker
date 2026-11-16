@@ -308,15 +308,14 @@ func parseRelationsCursor(_ cursor: String, types: Set<CompanyRelationQueryType>
     return offset
 }
 
-/// 絞り込みに対応する関係会社の `kind`。`group` は全区分。
+/// 絞り込みに対応する関係会社の `kind`。`group` は親会社と子会社（関連会社は格納しない。`affiliate` 指定は空になる）。
 func requestedGroupKinds(_ types: Set<CompanyRelationQueryType>) -> Set<String> {
     if types.contains(.group) {
-        return [relationKindParent, relationKindSubsidiary, relationKindAffiliate, relationKindOtherRelated]
+        return [relationKindParent, relationKindSubsidiary]
     }
     var kinds = Set<String>()
     if types.contains(.parent) { kinds.insert(relationKindParent) }
     if types.contains(.subsidiary) { kinds.insert(relationKindSubsidiary) }
-    if types.contains(.affiliate) { kinds.insert(relationKindAffiliate) }
     return kinds
 }
 
