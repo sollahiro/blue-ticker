@@ -935,7 +935,7 @@ enum BreakdownExtractor {
         sentences.append(trimmed)
     }
 
-    /// `BusinessBreakdownResolver.resolve` が product_service 軸を解決できなかった（snapshot == nil）ときの
+    /// segment 軸の解決で snapshot が得られなかった（snapshot == nil）ときの
     /// 理由を推定する（診断用、issue #130）。単一セグメント開示（F）は表が無いときだけ確定する
     /// （製品別 html_table がある東京エレクトロン型を F にすると再試行されない）。表が無い資生堂型は
     /// 地域軸 facts（E）より F を優先する。専用タグ本文がある business の省略は

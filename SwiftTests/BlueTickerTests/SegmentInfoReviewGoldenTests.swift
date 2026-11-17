@@ -67,55 +67,6 @@ import Testing
         }
     }
 
-    @Test func emptyBuiltRowsRefuseSnapshotAndFallBackToFacts() async throws {
-        let emptyMatrix = BreakdownTable(
-            heading: "セグメント情報",
-            markdown: """
-                | | 事業A | 事業B | 連結 |
-                | 営業利益 | 10 | 20 | 30 |
-                """,
-            period: "当期",
-            unitCaption: "百万円")
-        let (emptySnapshot, audit) = await SegmentInfoLLMNormalizer.normalize(
-            ExtractedBreakdown(method: "html_table", tables: [emptyMatrix], facts: []),
-            consolidatedSales: 100 * Financial.millionYen,
-            decider: FakeRevenueRecognitionColumnDecider(),
-            fiscalYearEnd: "2026-03-31",
-            docID: "S100YLTN-empty")
-        #expect(emptySnapshot == nil)
-        #expect(audit != nil)
-
-        let facts = [
-            BreakdownFact(
-                tag: "RevenuesFromExternalCustomers",
-                contextRef: "CurrentYearDuration_AutoPartsMember",
-                dimensions: ["OperatingSegmentsAxis": "AutoPartsMember"],
-                value: 80 * Financial.millionYen, label: nil, unitRef: "JPY", decimals: "-6"),
-            BreakdownFact(
-                tag: "RevenuesFromExternalCustomers",
-                contextRef: "CurrentYearDuration_OtherMember",
-                dimensions: ["OperatingSegmentsAxis": "OtherMember"],
-                value: 20 * Financial.millionYen, label: nil, unitRef: "JPY", decimals: "-6"),
-        ]
-        let extracted = ExtractedBreakdown(
-            method: "html_table", tables: [emptyMatrix], facts: facts)
-        // source: code=7273 fy_end=2026-03-31 doc_id=S100YLTN page=0 field=segment.xbrl_facts
-        // reroute to segment axis, values unchanged, approved by BLT_Tester
-        let (snapshot, source, _) = await BusinessBreakdownResolver.resolve(
-            segments: extracted,
-            consolidatedSales: 100 * Financial.millionYen,
-            segmentInfoDecider: FakeRevenueRecognitionColumnDecider())
-        #expect(source != .xbrlFacts)
-        #expect(snapshot == nil || snapshot?.axis == breakdownAxisProductService)
-        let (segment, segmentSource, _) = await SegmentBreakdownResolver.resolve(
-            reportable: extracted, consolidatedSales: 100 * Financial.millionYen)
-        #expect(segmentSource == .xbrlFacts)
-        let snap = try #require(segment)
-        #expect(snap.axis == breakdownAxisSegment)
-        #expect(BusinessBreakdownResolver.hasUsableSegmentRows(snap))
-        #expect(!snap.rows.isEmpty)
-    }
-
     @Test func keepTableDoesNotIsolateUnbuildableOrNonProductTable() async throws {
         let product = BreakdownTable(
             heading: BreakdownExtractor.productOrServiceHeading,

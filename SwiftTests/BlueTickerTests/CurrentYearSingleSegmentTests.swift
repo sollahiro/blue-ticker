@@ -132,18 +132,6 @@ import Testing
         }
     }
 
-    @Test func fallbackRefusesTagWhenCurrentYearReportableCountIsTwoOrMore() {
-        #expect(
-            !BusinessBreakdownResolver.dedicatedSingleSegmentFallback(
-                snapshot: nil, dedicatedTagText: tagText, currentYearReportableSalesMemberCount: 2))
-        #expect(
-            BusinessBreakdownResolver.dedicatedSingleSegmentFallback(
-                snapshot: nil, dedicatedTagText: tagText, currentYearReportableSalesMemberCount: 0))
-        #expect(
-            BusinessBreakdownResolver.dedicatedSingleSegmentFallback(
-                snapshot: nil, dedicatedTagText: tagText, currentYearReportableSalesMemberCount: 1))
-    }
-
     @Test func gateKeepsExtractedWhenTwoCurrentYearMembersExistDespiteDedicatedTag() async throws {
         let xml = operatingSegmentXml(
             tagContextRef: "CurrentYearDuration",

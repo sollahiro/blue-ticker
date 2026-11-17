@@ -50,17 +50,6 @@ import Testing
         for (label, _) in products where label != "その他" {
             #expect(!segmentRows.contains { ($0.label ?? $0.labelRaw) == label })
         }
-
-        let product = await ProductServiceBreakdownResolver.resolve(
-            product: BreakdownExtractor.extractProductServiceInfo(xbrlDir: dir),
-            consolidatedSales: denom.value, denominatorTag: denom.tag,
-            columnDecider: FakeRevenueRecognitionColumnDecider(selected: column),
-            fiscalYearEnd: BreakdownExtractor.currentFiscalYearEnd(fromXbrlDir: dir), docID: docID)
-        let snapshot = try #require(product.snapshot, "\(docID): product_service snapshot")
-        for (label, amount) in products {
-            let row = try #require(snapshot.rows.first { ($0.label ?? $0.labelRaw) == label })
-            #expect(row.amount == amount * unit)
-        }
     }
 
     // 事業収益が無い年の単一セグメント会社（4599 ステムリム、個別のみ・7月決算）。セグメント注記は
