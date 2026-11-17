@@ -1,6 +1,6 @@
 // 内訳取り込み: 上場企業の有報について軸別（product_service / geography 等）の内訳を解決し
 // company_breakdowns へ upsert する。解決は BlueTickerCore のファサード
-// （resolveBusinessBreakdown / resolveGeographyBreakdown）に委譲し、ここでは対象選定・
+// （resolveSegmentBreakdown / resolveGeographyBreakdown）に委譲し、ここでは対象選定・
 // staleness 判定・DB upsert のみを担う（ネットワーク非依存でテスト可能）。
 // 呼び出し元（FactsIngest）が product_service → geography の順で本関数を呼ぶ。
 // REST/MCP の read（loadStoredBreakdown）は product_service / geography の両軸を公開する
@@ -52,7 +52,7 @@ public struct BreakdownIngestSummary: Sendable, Equatable {
 }
 
 /// docID を受けて軸別内訳の解決結果を返す関数。
-/// 本番は `context.resolveBusinessBreakdown` 等、テストはフェイクを注入する。
+/// 本番は `context.resolveSegmentBreakdown` 等、テストはフェイクを注入する。
 /// 分母（売上・employees・rd）は resolve 側が同一 XBRL パスで直接解決する（#9 / #10b）。
 public typealias BreakdownResolveFn = @Sendable (String) async -> BreakdownResolveResult
 
