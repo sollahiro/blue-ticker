@@ -228,6 +228,6 @@ func feedFilingItem(from record: EdinetDocumentRecord) -> [String: Any]? {
         submitAt: record.submitDateTime,
         docDescription: record.docDescription ?? "")
     item["code"] = code
-    item["name"] = record.filerName
+    item["name"] = displayFilerName(record.filerName)
     return item
 }

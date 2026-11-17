@@ -107,6 +107,11 @@ SSO は `Cookie: CF_Authorization=<jwt>`（`Cf-Access-Jwt-Assertion` だけで�
 
 `assets/EdinetcodeDlInfo.csv` と Neon（`master-data-upload`）を**同時更新**。Neon に行があると Neon 優先（git だけ更新するとポーリングで巻き戻る）。
 
+**提出者名の括弧書き**: 提出者名に末尾の括弧書き（例: 「パーク二四株式会社（定款上の商号　パーク２４株式会社）」）が入る会社がある。表示は `displayFilerName`（`Sources/BlueTicker/Utils/FilerDisplayName.swift` / `workers/feed-rss/src/query.js`、fixture は `feed-parity.json` の `filerDisplayNames`）が読む側で整える。保存データは書き換えない。銘柄ごとの上書き表は持たない。
+- 差し替え前後で、上場会社（証券コードあり）の括弧付きの提出者名を比べる。括弧が「定款上の商号」「商号」「称号」で始まる、または英数字だけなら自動で整う。それ以外の括弧書きは元のまま表示されるので、新しく増えた分は規則と fixture に足すか、そのままでよいか判断する。
+- 規則を変えるときは Swift と JS を同時に直す（`FeedRssParityFixtureTests` と `parity.test.js` が同じ fixture で検証する）。
+- 関係の名前解決（`edinetFilerNames`）は元の提出者名のまま使う。整えた名前を渡さない。
+
 ## Neon E2E
 
 1. ローカル Postgres: `BLT_TEST_POSTGRES_URL` + `PostgresIntegrationTests`（CI linux でも実行）

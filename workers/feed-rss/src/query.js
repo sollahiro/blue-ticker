@@ -93,6 +93,40 @@ export function docTypeLabel(code, docDescription) {
   return DOC_TYPE_LABELS[code] ?? docDescription;
 }
 
+// EDINET 提出者名の表示用整形。Swift の `displayFilerName`（Sources/BlueTicker/Utils/FilerDisplayName.swift）と
+// 同じ結果を返す（fixture の `filerDisplayNames`）。末尾の括弧が「定款上の商号」「商号」「称号」で始まる、
+// または英数字だけのときだけ括弧内の名前を使う。それ以外は触らない。保存データは書き換えず、読む側で適用する。
+const FILER_NAME_BRACKET_LABELS = ["定款上の商号", "商号", "称号"];
+const LATIN_NAME = /^[0-9A-Za-z &',.-]+$/;
+const CORPORATE_FORMS = ["株式会社", "有限会社", "合同会社"];
+
+export function displayFilerName(raw) {
+  const name = String(raw ?? "").trim();
+  if (!name.endsWith("）")) return name;
+  const open = name.lastIndexOf("（");
+  if (open <= 0) return name;
+  const inner = name.slice(open + 1, name.length - 1);
+
+  let candidate = null;
+  for (const label of FILER_NAME_BRACKET_LABELS) {
+    if (inner.startsWith(label)) {
+      candidate = inner.slice(label.length).normalize("NFKC").trim();
+      break;
+    }
+  }
+  if (candidate === null) {
+    const folded = inner.normalize("NFKC").trim();
+    if (folded !== "" && LATIN_NAME.test(folded)) {
+      candidate = folded.replace(/,(?=[^ ])/g, ", ");
+    }
+  }
+  if (candidate === null || candidate === "") return name;
+  for (const form of CORPORATE_FORMS) {
+    candidate = candidate.split(`${form} `).join(form).split(` ${form}`).join(form);
+  }
+  return candidate === "" ? name : candidate;
+}
+
 // 1 書類の公開フィード行。Swift の feedFilingItem / filingDict と同じ形。
 // 会社開示府令以外・上場コードが取れない行は null（呼び出し側で落とす）。
 // fy_end は期末日（YYYY-MM-DD）の先頭 7 文字（YYYY-MM）。
@@ -110,7 +144,7 @@ export function toFeedItem(row) {
   const docType = row.doc_type_code ?? "";
   return {
     code,
-    name: row.filer_name,
+    name: displayFilerName(row.filer_name),
     doc_id: row.doc_id,
     doc_type: docType,
     doc_type_label: docTypeLabel(docType, row.doc_description ?? ""),
