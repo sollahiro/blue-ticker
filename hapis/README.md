@@ -3,7 +3,7 @@
 `catalog.json` は、有報LAB の REST を HAPIS ゲートウェイと公開 MCP コネクタでどこまで出すかの正本。HAPIS（sollahiro/hapis）は有報LAB のカタログを持たず、ここから同期する。依存は blue-ticker → HAPIS の一方向。
 
 - `endpoints[]`: ゲートウェイが通すルート。`visibility: "private"` はゲートウェイで通すが、公開 OpenAPI・skills・MCP ツールには出さず、API キー（開発者キー・コネクタ）からは 404 になる（iOS の App Attest は通る）
-- クエリ引数の `schema.enum`: API キーからの呼び出しで許す値。`required: true` なら省略も不可。例: `get_breakdown` の `axis` は `segment` / `geography` / `employees` だけ
+- クエリ引数の `schema.enum`: API キーからの呼び出しで許す値。`required: true` なら省略も不可。例: `get_breakdown` の `axis` は `segment` / `geography` / `employees` / `goodwill` / `interest_bearing_debt` / `fixed_assets`
 - `rate_per_minute` / `rate_per_day`: そのルートだけの上限（共通の上限に上乗せ）
 - `description` は公開コネクタの利用者（Claude 等）に見える文。実装メモを書かない
 

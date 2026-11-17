@@ -1,6 +1,6 @@
 // 内訳取り込みの DB ロジック（対象選定・staleness 判定・upsert・limit・purge）と
 // read 経路（loadStoredBreakdown）、および servable/unservable 集計を検証する。
-// 解決（resolveBusinessBreakdown）は EDINET/LLM 依存のため、フェイク解決器を注入して
+// 解決（resolveSegmentBreakdown）は EDINET/LLM 依存のため、フェイク解決器を注入して
 // ネットワーク非依存で見る。
 //
 // staleness: 決定論（xbrl_facts / stacked_segment_pnl / not_applicable）も LLM 経由

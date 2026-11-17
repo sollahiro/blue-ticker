@@ -38,7 +38,6 @@ VERSION_GATED_BREAKDOWN_SOURCES = {
     "geography_llm",
 }
 BREAKDOWN_VERSION_PREFIXES = (
-    "breakdown-product_service-v",
     "breakdown-business-v",
     "breakdown-geography-v",
     "breakdown-employees-v",
