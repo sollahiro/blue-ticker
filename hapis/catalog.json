@@ -212,7 +212,7 @@
       "path": "/v1/companies/{code}/breakdown",
       "operation_id": "get-breakdown",
       "summary": "Segment breakdown",
-      "description": "Structured breakdown from an annual report, by axis: segment (reportable segments: external sales, profit, assets, capital expenditures), geography (sales by region) or employees (headcount by segment). Amounts in JPY (raw tagged values, not rounded); employees in persons. Rounding-level gaps are omitted from the difference row.",
+      "description": "Structured breakdown from an annual report, by axis: segment (reportable segments: external sales, profit, assets, capital expenditures), geography (sales by region) employees (headcount by segment), goodwill (goodwill by reportable segment: opening / closing / amortization / impairment), interest_bearing_debt (bonds, borrowings and lease liabilities by category) or fixed_assets (consolidated fixed-asset categories, IFRS notes only). Amounts in JPY (raw tagged values, not rounded); employees in persons. Rounding-level gaps are omitted from the difference row. A company without the disclosure returns 404 (not_found).",
       "parameters": [
         {
           "name": "code",
@@ -232,8 +232,8 @@
           "name": "axis",
           "in": "query",
           "required": true,
-          "description": "Breakdown axis: segment, geography or employees.",
-          "schema": { "type": "string", "enum": ["segment", "geography", "employees"] }
+          "description": "Breakdown axis: segment, geography, employees, goodwill, interest_bearing_debt or fixed_assets.",
+          "schema": { "type": "string", "enum": ["segment", "geography", "employees", "goodwill", "interest_bearing_debt", "fixed_assets"] }
         }
       ]
     },
