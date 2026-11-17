@@ -48,7 +48,7 @@ struct TickerView: View {
                     company: displayCompany,
                     onExpanded: { showsCompanyCard = $0 },
                     onFittedPill: { pillRect = $0 },
-                    trailingButtonCount: 1
+                    trailingButtonCount: 2
                 )
             }
             .navigationTitle("")
@@ -90,6 +90,7 @@ struct TickerView: View {
                     }
                 }
                 ToolbarItemGroup(placement: .topBarTrailing) {
+                    Button("株価チャートを開く", systemImage: "chart.xyaxis.line", action: openStockChart)
                     Button(
                         isWatched ? "リストから削除" : "リストに追加",
                         systemImage: isWatched ? "bookmark.fill" : "bookmark",
@@ -146,6 +147,14 @@ struct TickerView: View {
             return loaded.sector
         }
         return ""
+    }
+
+    /// iOS 標準の株価アプリを該当銘柄で開く。stocks:// は非公開スキームなので、
+    /// canOpenURL は使わず open の結果だけ見る（未対応・アプリ削除済みなら何も起きない）。
+    private func openStockChart() {
+        let symbol = String(company.code.prefix(4))
+        guard let url = URL(string: "stocks://?symbol=\(symbol).T") else { return }
+        UIApplication.shared.open(url)
     }
 
     private func toggleWatch() {
