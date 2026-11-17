@@ -179,8 +179,9 @@ private func relations(_ json: [String: Any]?) -> [[String: Any]] {
             #expect(items[0]["voting_ratio_indirect"] is NSNull)
             #expect(items.allSatisfy { $0["type"] as? String == "group" })
 
-            let (_, affiliate) = try await send(app, "/v1/companies/4324/relations?type=affiliate")
-            #expect(relations(affiliate).map { $0["kind"] as? String } == ["affiliate"])
+            // 関連会社は格納しない区分なので、残っていても group には出ない。
+            let (_, group) = try await send(app, "/v1/companies/4324/relations?type=group")
+            #expect(!relations(group).contains { $0["name_raw"] as? String == "㈱関連" })
 
             let (_, parent) = try await send(app, "/v1/companies/4812/relations?type=parent")
             #expect(relations(parent).count == 1)
@@ -227,7 +228,7 @@ private func relations(_ json: [String: Any]?) -> [[String: Any]] {
     @Test func jevClassifiedRowWithAmbiguousNameIsServed() async throws {
         try await withRelationsApp { app in
             try await seed(
-                app, code: "1111", section: relationSectionAffiliatedEntities, kind: relationKindAffiliate,
+                app, code: "1111", section: relationSectionAffiliatedEntities, kind: relationKindSubsidiary,
                 name: "株式会社あいまい", resolution: relationResolutionAmbiguous,
                 decidedBy: relationDecidedByJev, needsReview: true)
             let (status, json) = try await send(app, "/v1/companies/1111/relations?type=group")
@@ -362,7 +363,10 @@ private func relations(_ json: [String: Any]?) -> [[String: Any]] {
     @Test func servabilityIsPureFunction() {
         #expect(isPubliclyServableRelation(kind: relationKindCustomer, decidedBy: relationDecidedByRule, needsReview: true, resolution: relationResolutionAmbiguous, warning: nil))
         #expect(!isPubliclyServableRelation(kind: relationKindAffiliate, decidedBy: relationDecidedByJev, needsReview: true, resolution: relationResolutionUnresolved, warning: nil))
-        #expect(isPubliclyServableRelation(kind: relationKindAffiliate, decidedBy: relationDecidedByJev, needsReview: true, resolution: relationResolutionAmbiguous, warning: nil))
+        #expect(isPubliclyServableRelation(kind: relationKindSubsidiary, decidedBy: relationDecidedByJev, needsReview: true, resolution: relationResolutionAmbiguous, warning: nil))
+        // 関連会社・その他の関係会社は格納しない区分（残っていても出さない）。
+        #expect(!isPubliclyServableRelation(kind: relationKindAffiliate, decidedBy: relationDecidedByRule, needsReview: false, resolution: nil, warning: nil))
+        #expect(!isPubliclyServableRelation(kind: relationKindOtherRelated, decidedBy: relationDecidedByRule, needsReview: false, resolution: nil, warning: nil))
         #expect(!isPubliclyServableRelation(kind: relationKindUnclassified, decidedBy: relationDecidedByJev, needsReview: true, resolution: relationResolutionAmbiguous, warning: nil))
         #expect(!isPubliclyServableRelation(kind: relationKindUnclassified, decidedBy: relationDecidedByRule, needsReview: false, resolution: nil, warning: nil))
         #expect(!isPubliclyServableRelation(kind: relationKindCustomer, decidedBy: relationDecidedByRule, needsReview: false, resolution: nil, warning: "overlay_regression"))

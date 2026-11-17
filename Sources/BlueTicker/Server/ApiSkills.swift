@@ -7,6 +7,8 @@ import Foundation
 
 /// REST skills 応答の `schema_version`。形を破壊的に変えたときのみ +1。
 /// v9（2026-10-26）: 金額を基本単位（円・ドル）へ統一し、financials / waterfall に `units` / `currency` を載せた。
+/// v18（2026-11-16）: relations は関連会社・その他の関係会社を返さない（親会社・子会社・顧客・出資先・大株主だけ。
+/// `type=group` は parent / subsidiary、`type=affiliate` は空）。
 /// v17（2026-11-15）: filing-content のセクション segments / geography / revenue_recognition / major_facilities /
 /// research_and_development を廃止した（breaking。指定しても返らない）。
 /// v10（2026-11-08）: 内蔵 MCP の廃止に合わせ、各 skill の `mcp_tool` と `get-feed-trend` を外した。
@@ -20,7 +22,7 @@ import Foundation
 /// `GET /waterfall/segment` を追加。
 /// v16（2026-11-12）: 報告セグメント年次は `GET /waterfall/segment` 1 本。つなぎは years[] に載せ、
 /// `/waterfall/segment/transitions` は置かない。years（既定 5）と fiscal_year（単年）。
-public let apiSkillsSchemaVersion = 17
+public let apiSkillsSchemaVersion = 18
 
 /// パラメータの置き場所（REST パス変数 / クエリ）。
 public enum ApiSkillParameterLocation: String, Sendable {
@@ -144,7 +146,7 @@ public func apiSkillsCatalog() -> [ApiSkill] {
         ApiSkill(
             id: "get-relations",
             name: "取引先・関係会社",
-            description: "有報に記載された主要な顧客・関係会社・出資先・大株主と、他社の有報からの逆引き（仕入先・親会社・大株主になっている会社）を返します（格納済みのみ）。",
+            description: "有報に記載された主要な顧客・親会社・子会社・出資先・大株主と、他社の有報からの逆引き（仕入先・親会社・大株主になっている会社）を返します（格納済みのみ）。",
             method: "GET",
             path: "/v1/companies/{code}/relations",
             feature: "relations",
@@ -161,7 +163,7 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                     location: .query,
                     type: .string,
                     description:
-                        "カンマ区切り: customer,supplier,group,parent,subsidiary,affiliate,investee,major_shareholder,major_shareholder_of（省略時は全種類）",
+                        "カンマ区切り: customer,supplier,group,parent,subsidiary,investee,major_shareholder,major_shareholder_of（省略時は全種類。group は親会社と子会社。関連会社は返さない）",
                     required: false
                 ),
                 ApiSkillParameter(

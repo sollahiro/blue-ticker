@@ -202,20 +202,28 @@ private func rows(_ code: String, _ db: Database) async throws -> [CompanyRelati
         }
     }
 
-    @Test func jevPendingIsNotRetriedWithoutDecider() async throws {
+    @Test func retiredKindsAreNotStored() async throws {
         try await withMigratedApp { app in
             try await seedDoc("S1", secCode: "11110", db: app.db)
             let pending = CompanyRelationDraft(
                 section: relationSectionAffiliatedEntities, kind: relationKindUnclassified, position: 0,
                 nameRaw: "株式会社保留", decidedBy: relationDecidedByJev, needsReview: true)
+            let affiliate = CompanyRelationDraft(
+                section: relationSectionAffiliatedEntities, kind: relationKindAffiliate, position: 1,
+                nameRaw: "株式会社関連")
+            let other = CompanyRelationDraft(
+                section: relationSectionAffiliatedEntities, kind: relationKindOtherRelated, position: 2,
+                nameRaw: "株式会社その他")
             _ = try await runRelationsIngest(
                 db: app.db, listedCodes: ["1111"], limit: nil, directory: directory
-            ) { _, _ in extraction([pending]) }
-            let summary = try await runRelationsIngest(
-                db: app.db, listedCodes: ["1111"], limit: nil, retryJevPending: false, directory: directory
-            ) { _, _ in extraction([subsidiary("株式会社保留")]) }
-            #expect(summary.attempted == 0)
-            #expect(summary.skipped == 1)
+            ) { _, _ in
+                extraction([
+                    subsidiary("株式会社子"), pending, affiliate, other,
+                    .status(section: relationSectionMainCustomers, relationSectionStatusOmitted),
+                ])
+            }
+            let stored = try await rows("1111", app.db)
+            #expect(stored.map(\.kind).sorted() == [relationKindNone, relationKindSubsidiary])
         }
     }
 
@@ -231,24 +239,6 @@ private func rows(_ code: String, _ db: Database) async throws -> [CompanyRelati
             #expect(row.kind == relationKindNone)
             #expect(row.sectionStatus == relationSectionStatusOmitted)
             #expect(row.resolution == nil)
-        }
-    }
-
-    @Test func jevPendingRowsAreRetriedOnSameDoc() async throws {
-        try await withMigratedApp { app in
-            try await seedDoc("S1", secCode: "11110", db: app.db)
-            let pending = CompanyRelationDraft(
-                section: relationSectionAffiliatedEntities, kind: relationKindUnclassified, position: 0,
-                nameRaw: "株式会社保留", decidedBy: relationDecidedByJev, needsReview: true)
-            _ = try await runRelationsIngest(
-                db: app.db, listedCodes: ["1111"], limit: nil, directory: directory
-            ) { _, _ in extraction([pending]) }
-            #expect(try await rows("1111", app.db).first?.needsReview == true)
-            let retry = try await runRelationsIngest(
-                db: app.db, listedCodes: ["1111"], limit: nil, directory: directory
-            ) { _, _ in extraction([subsidiary("株式会社保留")]) }
-            #expect(retry.attempted == 1)
-            #expect(try await rows("1111", app.db).first?.kind == relationKindSubsidiary)
         }
     }
 
