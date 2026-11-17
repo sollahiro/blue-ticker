@@ -335,31 +335,32 @@ private func send(
         }
     }
 
-    /// issue #132: product_service 軸が解決できなかった場合、404 のステータスは維持したまま
-    /// ボディへ E/F/unknown の reason を追加する（エッジ課金はステータス単位でメーターするため）。
+    /// issue #132: 軸が解決できなかった場合、404 のステータスは維持したまま
+    /// ボディへ省略理由の reason を追加する（エッジ課金はステータス単位でメーターするため）。
     @Test func breakdownReturns404WithReasonWhenNotApplicable() async throws {
         try await withApp(databases: true) { app in
-            let row = CompanyBreakdown(docID: "S1", axis: breakdownAxisProductService)
+            let row = CompanyBreakdown(docID: "S1", axis: breakdownAxisGeography)
             row.code = "7203"
             row.submitDateTime = "2025-06-20 09:00"
             row.payload = BreakdownSnapshotPayload(
-                axis: breakdownAxisProductService, denominator: 0, denominatorTag: "", rows: [],
+                axis: breakdownAxisGeography, denominator: 0, denominatorTag: "", rows: [],
                 sourceKind: breakdownSourceNotApplicable, needsReview: false, warnings: [])
             row.needsReview = false
             row.source = breakdownSourceNotApplicable
             row.contentHash = ""
-            row.cacheVersion = productServiceBreakdownCacheVersion
-            row.notApplicableReason = breakdownNotApplicableGeographyOnly
+            row.cacheVersion = geographyBreakdownCacheVersion
+            row.notApplicableReason = breakdownNotApplicableDomesticDominant90pct
             try await row.create(on: app.db)
 
-            let (status, json) = try await send(app, "/v1/companies/7203/breakdown?axis=product_service")
+            let (status, json) = try await send(app, "/v1/companies/7203/breakdown?axis=geography")
             #expect(status == .notFound)
-            #expect(json?["error"] as? String == "製品・サービス別内訳は未算出です")
-            #expect(json?["reason"] as? String == "geography_only")
+            #expect(json?["error"] as? String == "地域別内訳は未算出です")
+            #expect(json?["reason"] as? String == "domestic_dominant_90pct")
         }
     }
 
-    @Test func breakdownDoesNotAliasRetiredBusinessAxis() async throws {
+    /// product_service は廃止した軸。DB に行が残っていても 404（`business` と同じ扱い）。
+    @Test func breakdownReturns404ForRetiredProductServiceAxis() async throws {
         try await withApp(databases: true) { app in
             let row = CompanyBreakdown(docID: "S1", axis: breakdownAxisProductService)
             row.code = "7203"
@@ -379,9 +380,10 @@ private func send(
             row.cacheVersion = productServiceBreakdownCacheVersion
             try await row.create(on: app.db)
 
-            let (ok, json) = try await send(app, "/v1/companies/7203/breakdown?axis=product_service")
-            #expect(ok == .ok)
-            #expect(json?["axis"] as? String == breakdownAxisProductService)
+            let (retired, json) = try await send(app, "/v1/companies/7203/breakdown?axis=product_service")
+            #expect(retired == .notFound)
+            #expect(json?["error"] as? String == "製品・サービス別内訳は廃止しました")
+            #expect(json?["axis"] == nil)
 
             let (legacy, legacyJSON) = try await send(app, "/v1/companies/7203/breakdown?axis=business")
             #expect(legacy == .notFound)
@@ -468,7 +470,7 @@ private func send(
             let (hiddenReviewStatus, hiddenReview) = try await send(
                 app, "/v1/companies/7203/breakdown?axis=product_service")
             #expect(hiddenReviewStatus == .notFound)
-            #expect(hiddenReview?["error"] as? String == "製品・サービス別内訳は未算出です")
+            #expect(hiddenReview?["error"] as? String == "製品・サービス別内訳は廃止しました")
             #expect(hiddenReview?["reason"] == nil)
 
             let (hiddenUnitStatus, hiddenUnit) = try await send(
@@ -477,13 +479,11 @@ private func send(
             #expect(hiddenUnit?["error"] as? String == "地域別内訳は未算出です")
             #expect(hiddenUnit?["reason"] == nil)
 
-            let (okStatus, okJSON) = try await send(app, "/v1/companies/9984/breakdown?axis=product_service")
-            #expect(okStatus == .ok)
-            #expect(okJSON?["doc_id"] as? String == "S_OK")
-            let breakdown = try #require(okJSON?["breakdown"] as? [String: Any])
-            #expect(breakdown["needs_review"] as? Bool == false)
-            let rows = try #require(breakdown["rows"] as? [[String: Any]])
-            #expect(rows.count == 1)
+            // 廃止した軸は、needs_review でない行が残っていても返さない。
+            let (retiredStatus, retiredJSON) = try await send(
+                app, "/v1/companies/9984/breakdown?axis=product_service")
+            #expect(retiredStatus == .notFound)
+            #expect(retiredJSON?["doc_id"] == nil)
         }
     }
 

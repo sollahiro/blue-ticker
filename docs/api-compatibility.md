@@ -106,3 +106,4 @@ breaking 再編時は可能な範囲で:
 - クエリ・ステータス・エラー形を厳格対象に上げるかの再検討
 - `GET /v1/screen` と `GET /v1/screen/snapshot` を廃止した（breaking。どちらも private だったので skills・公開コネクタは影響なし）。`blt-ingest screen-rebuild` と `screen_index` の更新（financials ingest 後のフック）も廃止。`screen_index` テーブル自体はこの変更では削除していない（DROP は別途判断）。iOS アプリの条件検索（`Apps/BlueTicker` の ScreenSnapshot）は未対応で、別途撤去が必要。
 - filing-content のセクション `segments` / `geography` / `revenue_recognition` / `major_facilities` / `research_and_development` を廃止した（breaking。`apiSkillsSchemaVersion` 17）。指定しても返らない。breakdown は XBRL から直接解決するので影響しない。DB の既存行からの削除は別途。
+- `GET /v1/companies/{code}/breakdown?axis=product_service` を廃止した（breaking。`apiSkillsSchemaVersion` 19）。常に 404（ボディ `error` は「製品・サービス別内訳は廃止しました」）。`/v1/skills` の axis 一覧から外し、ingest の `breakdowns-product_service` の段と `--axes product_service` を外した。DB の既存行は読まないだけで残る。構成は `segment`（事業別・地域別セグメント）と `geography` を使う。

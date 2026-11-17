@@ -264,14 +264,7 @@ public func runFactsIngestCommand(
                     await context.resolveSegmentBreakdown(
                         docID: docID, correctionDocIDs: correctionIDsByOriginal[docID] ?? [])
                 },
-                BreakdownStage(
-                    axis: breakdownAxisProductService, target: "breakdowns",
-                    listedCodes: publicBreakdownListed, limit: stageLimit,
-                    candidateSets: publicBreakdownSets
-                ) { docID in
-                    await context.resolveBusinessBreakdown(
-                        docID: docID, correctionDocIDs: correctionIDsByOriginal[docID] ?? [])
-                },
+                // product_service は 2026-11 に廃止した（`retiredBreakdownAxes`）。取り込みの段は置かない。
                 BreakdownStage(
                     axis: breakdownAxisGeography, target: "breakdowns-geography",
                     listedCodes: publicBreakdownListed, limit: stageLimit,

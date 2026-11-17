@@ -6,7 +6,7 @@
 
 - 内訳の軸は出典の有報表で決める（中身の地名／製品名では決めない）。
   - `segment`: セグメント情報の報告セグメント表 / XBRL ReportableSegment。行に `segment_basis`（`business` / `geographic`）。全社・調整は reconciling。下流の従業員・設備投資・セグメント利益の結合キー。
-  - `product_service`: 関連情報「製品及びサービスごとの情報」、または収益の分解の製品表。報告セグメント facts からは作らない。表が無ければ空。
+  - `product_service`: **廃止（2026-11-17。REST / MCP は常に 404）**。関連情報「製品及びサービスごとの情報」、または収益の分解の製品表から作っていた。以下の `product_service` の記述は、廃止前の抽出仕様（内部コードはまだ残る）の記録で、現行の公開仕様ではない。
   - `geography`: 関連情報「地域ごとの情報」。報告セグメントが地域軸でもコピーしない。
 - 関連情報が「セグメント情報に同様の情報を開示しているため省略」なら `same_as: segment`（値は複製しない）。報告セグメントが地域軸で、関連情報に売上の地域表が無いときも同じ（IFRS「地域に関する情報」が米国の重要性開示と非流動資産表だけの電通型）。両方開示されていれば（同一でも別でも）独立に残す。
 - 開示パターン（XBRL 信号が先。曖昧なときだけ注記散文を Jev。数値は返させない）: `multiple_segments` / `single_segment` / `omitted_dominant_90pct` / `omitted_same_as_segment`（関連情報軸） / `not_disclosed`。根拠文は監査に残す。
@@ -54,7 +54,7 @@ geography は変えない。本邦90％の `not_found` は既存の Jev ゲー�
 | axis | 内容 |
 |---|---|
 | `segment` | 報告セグメント（`segment-v3`。`segment_key`、セル `{value,basis,source,decimals?}`、`overview`、`sales_basis`、`rounding_gaps`） |
-| `product_service` | 製品・サービス別売上（関連情報・収益分解。報告セグメント facts は載せない） |
+| ~~`product_service`~~ | 廃止（2026-11-17）。REST / MCP は常に 404 |
 | `geography` | 地域別売上（関連情報。報告セグメントのコピーはしない。省略は `same_as`）。セル `assets`（地域ごとの有形固定資産／非流動資産） |
 | `employees` | 従業員内訳 |
 | `goodwill` | 報告セグメント別ののれん（`opening` / `closing` / `amortization` / `impairment`） |
@@ -182,6 +182,8 @@ v2（`breakdown-interest-bearing-debt-v2`）: 行と合計が変わる変更（�
 - 2026-11: 設備投資等の概要のカテゴリで報告セグメントの行を増やさない。概要だけの member（3538 / 5283）や「新設によるもの」のような区分は `overview.categories` に残し、`rows` には出さない。「消去又は全社」は調整行（`reconciling`）。
 
 - 2026-11: `segment` の `disclosure_basis` に `other_segments_omitted` を足した（互換追加）。報告セグメント以外の事業を「重要性が乏しい」として記載を省略している書類（4694「報告セグメントである「検査事業」以外の事業に関しては…記載を省略」、8354、9986 など）は、開示された報告セグメントの 1 行（名前が取れないときは会社全体の行だけ）を返し、payload と行にこの印を付ける。省略された事業の金額は分からないので、行の金額は連結売上高（正確なセグメント合計ではない。`dominant_90pct` と同じ扱い）。「〜のみの単一セグメントであり重要性が乏しいため省略」は他の事業の省略ではないので付けない。
+
+- 2026-11-17: 軸 `product_service` を廃止（breaking。REST / MCP は常に 404、`apiSkillsSchemaVersion` 19）。`blt-ingest` の `breakdowns-product_service` の段と `--axes product_service` を外した。DB の既存行は読まないだけで残る（`research_and_development` と同じ扱い）。廃止の理由は、収益分解表を Jev で読む経路で要レビューが多く（収益分解 約46%）、費用に見合わないため。`segment`（事業別・地域別セグメント）と `geography` で構成は足りる。抽出の内部コード（`BusinessBreakdownResolver` 等）は後の整理で削除する。
 
 ## 非目標
 

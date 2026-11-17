@@ -124,10 +124,18 @@ struct IngestAxesTests {
         #expect(parseIngestAxes(",") == nil)
     }
 
+    @Test("廃止した軸は受理しない")
+    func rejectsRetiredAxes() {
+        for axis in retiredBreakdownAxes {
+            #expect(parseIngestAxes(axis) == nil, "\(axis)")
+        }
+        #expect(parseIngestAxes(breakdownAxisProductService) == nil)
+    }
+
     @Test("実装済みの軸はすべて受理する")
     func acceptsEverySupportedAxis() {
         for axis in [
-            breakdownAxisSegment, breakdownAxisProductService, breakdownAxisGeography,
+            breakdownAxisSegment, breakdownAxisGeography,
             breakdownAxisInterestBearingDebt,
         ] + breakdownAssetCategoryAxes + breakdownSegmentMetricAxes {
             #expect(parseIngestAxes(axis) == [axis], "\(axis)")
