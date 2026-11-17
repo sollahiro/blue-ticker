@@ -249,6 +249,7 @@ public let retiredBreakdownAxes = [
     breakdownAxisPropertyPlantEquipment,
     breakdownAxisGoodwillAndIntangibles,
     breakdownAxisCapex,
+    breakdownAxisProductService,
 ]
 
 /// product_service / geography を除く、報告セグメント別の決定論指標軸。
@@ -261,7 +262,7 @@ public let breakdownSegmentMetricAxes = [
 /// `company_breakdowns.axis` として実装済みの軸か。
 public func isSupportedBreakdownAxis(_ axis: String) -> Bool {
     axis == breakdownAxisSegment
-        || axis == breakdownAxisProductService || axis == breakdownAxisGeography
+        || axis == breakdownAxisGeography
         || axis == breakdownAxisInterestBearingDebt
         || breakdownAssetCategoryAxes.contains(axis)
         || breakdownSegmentMetricAxes.contains(axis)

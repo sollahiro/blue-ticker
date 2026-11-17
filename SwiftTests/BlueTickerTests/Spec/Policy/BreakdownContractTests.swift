@@ -125,7 +125,8 @@ import Testing
             #expect(isSupportedBreakdownAxis(axis) == false)
             #expect(!breakdownSegmentMetricAxes.contains(axis))
         }
-        #expect(isSupportedBreakdownAxis(breakdownAxisProductService))
+        #expect(retiredBreakdownAxes.contains(breakdownAxisProductService))
+        #expect(isSupportedBreakdownAxis(breakdownAxisProductService) == false)
         #expect(isSupportedBreakdownAxis("business") == false)
         #expect(retiredBreakdownAxes.contains("business"))
         #expect(breakdownAxisProductService == "product_service")

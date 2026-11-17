@@ -99,6 +99,22 @@ private func seedRow(
     try await row.create(on: db)
 }
 
+/// read 経路のテスト用。product_service は廃止した軸（`retiredBreakdownAxes`）なので、
+/// 読み出し側は geography で検証する。
+private func seedReadRow(
+    _ docID: String, code: String, submit: String, db: Database,
+    axis: String = breakdownAxisGeography,
+    source: String = breakdownSourceXbrlFacts, cacheVersion: String = geographyBreakdownCacheVersion,
+    needsReview: Bool = false, contentHash: String = "h0", llmAudit: LLMBreakdownAuditPayload? = nil,
+    notApplicableReason: String? = nil, warnings: [String]? = nil, segments: Int = 1
+) async throws {
+    try await seedRow(
+        docID, code: code, submit: submit, db: db, axis: axis, source: source,
+        cacheVersion: cacheVersion, needsReview: needsReview, contentHash: contentHash,
+        llmAudit: llmAudit, notApplicableReason: notApplicableReason, warnings: warnings,
+        segments: segments)
+}
+
 /// テスト用の `BreakdownLoadResult` 抽出ヘルパー（issue #132 で戻り値を3値化したため）。
 extension BreakdownLoadResult {
     fileprivate var foundJSON: [String: Any]? {
@@ -784,17 +800,17 @@ extension BreakdownLoadResult {
 
     @Test func loadByCodeReturnsLatestDocument() async throws {
         try await withMigratedApp { app in
-            try await seedRow("S24", code: "7203", submit: "2024-06-20 09:00", db: app.db)
-            try await seedRow("S25", code: "7203", submit: "2025-06-20 09:00", db: app.db)
+            try await seedReadRow("S24", code: "7203", submit: "2024-06-20 09:00", db: app.db)
+            try await seedReadRow("S25", code: "7203", submit: "2025-06-20 09:00", db: app.db)
 
             let result = try await loadStoredBreakdown(
-                code: "7203", docId: nil, axis: breakdownAxisProductService, db: app.db)
+                code: "7203", docId: nil, axis: breakdownAxisGeography, db: app.db)
             let json = try #require(result.foundJSON)
             #expect(json["doc_id"] as? String == "S25")
             #expect(json["code"] as? String == "7203")
-            #expect(json["axis"] as? String == breakdownAxisProductService)
+            #expect(json["axis"] as? String == breakdownAxisGeography)
             let breakdown = try #require(json["breakdown"] as? [String: Any])
-            #expect(breakdown["axis"] as? String == breakdownAxisProductService)
+            #expect(breakdown["axis"] as? String == breakdownAxisGeography)
         }
     }
 
@@ -805,29 +821,29 @@ extension BreakdownLoadResult {
             try await seedDoc(
                 "S100YZ8K", secCode: "82530", submit: "2026-08-28 16:00",
                 ordinance: "030", form: "09A000", db: app.db)
-            try await seedRow(
+            try await seedReadRow(
                 "S100YCDE", code: "8253", submit: "2026-06-16 11:38", db: app.db)
-            try await seedRow(
+            try await seedReadRow(
                 "S100YZ8K", code: "8253", submit: "2026-08-28 16:00", db: app.db)
 
             let result = try await loadStoredBreakdown(
-                code: "8253", docId: nil, axis: breakdownAxisProductService, db: app.db)
+                code: "8253", docId: nil, axis: breakdownAxisGeography, db: app.db)
             let json = try #require(result.foundJSON)
             #expect(json["doc_id"] as? String == "S100YCDE")
 
             let explicit = try await loadStoredBreakdown(
-                code: "8253", docId: "S100YZ8K", axis: breakdownAxisProductService, db: app.db)
+                code: "8253", docId: "S100YZ8K", axis: breakdownAxisGeography, db: app.db)
             #expect(explicit.isAbsent)
         }
     }
 
     @Test func loadByDocIdReturnsThatDocument() async throws {
         try await withMigratedApp { app in
-            try await seedRow("S24", code: "7203", submit: "2024-06-20 09:00", db: app.db)
-            try await seedRow("S25", code: "7203", submit: "2025-06-20 09:00", db: app.db)
+            try await seedReadRow("S24", code: "7203", submit: "2024-06-20 09:00", db: app.db)
+            try await seedReadRow("S25", code: "7203", submit: "2025-06-20 09:00", db: app.db)
 
             let result = try await loadStoredBreakdown(
-                code: "7203", docId: "S24", axis: breakdownAxisProductService, db: app.db)
+                code: "7203", docId: "S24", axis: breakdownAxisGeography, db: app.db)
             let json = try #require(result.foundJSON)
             #expect(json["doc_id"] as? String == "S24")
         }
@@ -835,9 +851,9 @@ extension BreakdownLoadResult {
 
     @Test func loadByDocIdRejectsMismatchedCode() async throws {
         try await withMigratedApp { app in
-            try await seedRow("S1", code: "7203", submit: "2025-06-20 09:00", db: app.db)
+            try await seedReadRow("S1", code: "7203", submit: "2025-06-20 09:00", db: app.db)
             let result = try await loadStoredBreakdown(
-                code: "6758", docId: "S1", axis: breakdownAxisProductService, db: app.db)
+                code: "6758", docId: "S1", axis: breakdownAxisGeography, db: app.db)
             #expect(result.isAbsent)
         }
     }
@@ -845,7 +861,7 @@ extension BreakdownLoadResult {
     /// business / geography 以外の軸は行の有無に関わらず absent（将来 axis 追加時の安全側デフォルト）。
     @Test func loadRejectsUnknownAxis() async throws {
         try await withMigratedApp { app in
-            try await seedRow("S1", code: "7203", submit: "2025-06-20 09:00", db: app.db)
+            try await seedReadRow("S1", code: "7203", submit: "2025-06-20 09:00", db: app.db)
             let result = try await loadStoredBreakdown(
                 code: "7203", docId: nil, axis: "product", db: app.db)
             #expect(result.isAbsent)
@@ -855,7 +871,7 @@ extension BreakdownLoadResult {
     /// geography も business と同じく格納済み行を読める（2026-07-27 品質ゲート通過後に解禁）。
     @Test func loadReturnsGeographyRowWhenPresent() async throws {
         try await withMigratedApp { app in
-            try await seedRow(
+            try await seedReadRow(
                 "S1", code: "7203", submit: "2025-06-20 09:00", db: app.db,
                 axis: breakdownAxisGeography, source: breakdownSourceGeographyLLM,
                 cacheVersion: geographyBreakdownCacheVersion)
@@ -874,23 +890,23 @@ extension BreakdownLoadResult {
     /// 残行 0 は未算出と同じ absent。XBRL の needs_review は触らない。
     @Test func loadHidesNeedsReviewAndUnresolvedUnitLLMRows() async throws {
         try await withMigratedApp { app in
-            try await seedRow(
+            try await seedReadRow(
                 "S_REVIEW", code: "332A", submit: "2026-06-20 09:00", db: app.db,
                 source: breakdownSourceRevenueRecognitionLLM, needsReview: true)
-            try await seedRow(
+            try await seedReadRow(
                 "S_UNIT", code: "7096", submit: "2026-06-20 09:00", db: app.db,
                 axis: breakdownAxisGeography, source: breakdownSourceGeographyLLM,
                 cacheVersion: geographyBreakdownCacheVersion, needsReview: false,
                 warnings: [breakdownWarningLLMUnitUnresolved])
-            try await seedRow(
+            try await seedReadRow(
                 "S_OK", code: "7203", submit: "2026-06-20 09:00", db: app.db,
                 source: breakdownSourceSegmentInfoLLM, needsReview: false)
-            try await seedRow(
+            try await seedReadRow(
                 "S_XBRL", code: "6758", submit: "2026-06-20 09:00", db: app.db,
                 source: breakdownSourceXbrlFacts, needsReview: true)
 
             let hiddenReview = try await loadStoredBreakdown(
-                code: "332A", docId: nil, axis: breakdownAxisProductService, db: app.db)
+                code: "332A", docId: nil, axis: breakdownAxisGeography, db: app.db)
             #expect(hiddenReview.isAbsent)
 
             let hiddenUnit = try await loadStoredBreakdown(
@@ -898,7 +914,7 @@ extension BreakdownLoadResult {
             #expect(hiddenUnit.isAbsent)
 
             let served = try await loadStoredBreakdown(
-                code: "7203", docId: nil, axis: breakdownAxisProductService, db: app.db)
+                code: "7203", docId: nil, axis: breakdownAxisGeography, db: app.db)
             let json = try #require(served.foundJSON)
             #expect(json["doc_id"] as? String == "S_OK")
             let breakdown = try #require(json["breakdown"] as? [String: Any])
@@ -907,7 +923,7 @@ extension BreakdownLoadResult {
             #expect(rows.count == 1)
 
             let xbrl = try await loadStoredBreakdown(
-                code: "6758", docId: nil, axis: breakdownAxisProductService, db: app.db)
+                code: "6758", docId: nil, axis: breakdownAxisGeography, db: app.db)
             let xbrlJSON = try #require(xbrl.foundJSON)
             #expect(xbrlJSON["doc_id"] as? String == "S_XBRL")
         }
@@ -917,13 +933,13 @@ extension BreakdownLoadResult {
     /// geography の公開除外は従来どおり absent。
     @Test func loadWithholdsInterestBearingDebtNeedsReview() async throws {
         try await withMigratedApp { app in
-            try await seedRow(
+            try await seedReadRow(
                 "S_IBD", code: "6758", submit: "2026-06-20 09:00", db: app.db,
                 axis: breakdownAxisInterestBearingDebt,
                 source: breakdownSourceXbrlFacts,
                 cacheVersion: interestBearingDebtBreakdownCacheVersion,
                 needsReview: true, warnings: [breakdownWarningIBDCoverageOutOfBand])
-            try await seedRow(
+            try await seedReadRow(
                 "S_GEO", code: "7203", submit: "2026-06-20 09:00", db: app.db,
                 axis: breakdownAxisGeography, source: breakdownSourceGeographyLLM,
                 cacheVersion: geographyBreakdownCacheVersion, needsReview: true)
@@ -949,7 +965,7 @@ extension BreakdownLoadResult {
 
     @Test func loadHidesOverlayRegressionEvenOnXbrlFactsRows() async throws {
         try await withMigratedApp { app in
-            try await seedRow(
+            try await seedReadRow(
                 "S100W0S7", code: "8316", submit: "2025-06-20 09:00", db: app.db,
                 source: breakdownSourceXbrlFacts, needsReview: true,
                 warnings: [
@@ -957,10 +973,10 @@ extension BreakdownLoadResult {
                 ])
 
             let hidden = try await loadStoredBreakdown(
-                code: "8316", docId: nil, axis: breakdownAxisProductService, db: app.db)
+                code: "8316", docId: nil, axis: breakdownAxisGeography, db: app.db)
             #expect(hidden.isAbsent)
             let byDoc = try await loadStoredBreakdown(
-                code: "8316", docId: "S100W0S7", axis: breakdownAxisProductService, db: app.db)
+                code: "8316", docId: "S100W0S7", axis: breakdownAxisGeography, db: app.db)
             #expect(byDoc.isAbsent)
         }
     }
@@ -968,19 +984,19 @@ extension BreakdownLoadResult {
     /// 公開除外の最新 LLM 行があっても前年の clean 行へは落とさない（未算出と同じ absent）。
     @Test func loadDoesNotFallBackToOlderCleanWhenLatestLLMRowIsHidden() async throws {
         try await withMigratedApp { app in
-            try await seedRow(
+            try await seedReadRow(
                 "S24", code: "332A", submit: "2025-06-20 09:00", db: app.db,
                 source: breakdownSourceRevenueRecognitionLLM, needsReview: false, segments: 2)
-            try await seedRow(
+            try await seedReadRow(
                 "S25", code: "332A", submit: "2026-06-20 09:00", db: app.db,
                 source: breakdownSourceRevenueRecognitionLLM, needsReview: true)
 
             let result = try await loadStoredBreakdown(
-                code: "332A", docId: nil, axis: breakdownAxisProductService, db: app.db)
+                code: "332A", docId: nil, axis: breakdownAxisGeography, db: app.db)
             #expect(result.isAbsent)
 
             let older = try await loadStoredBreakdown(
-                code: "332A", docId: "S24", axis: breakdownAxisProductService, db: app.db)
+                code: "332A", docId: "S24", axis: breakdownAxisGeography, db: app.db)
             #expect(older.foundJSON?["doc_id"] as? String == "S24")
         }
     }
@@ -989,12 +1005,12 @@ extension BreakdownLoadResult {
     @Test func loadHidesSingleRowRevenueRecognitionEvenWhenClean() async throws {
         try await withMigratedApp { app in
             try await seedDoc("S100YJZT", secCode: "66200", db: app.db)
-            try await seedRow(
+            try await seedReadRow(
                 "S100YJZT", code: "6620", submit: "2026-06-25 13:27", db: app.db,
                 source: breakdownSourceRevenueRecognitionLLM, needsReview: false, segments: 1)
 
             let result = try await loadStoredBreakdown(
-                code: "6620", docId: "S100YJZT", axis: breakdownAxisProductService, db: app.db)
+                code: "6620", docId: "S100YJZT", axis: breakdownAxisGeography, db: app.db)
             #expect(result.isAbsent)
         }
     }
@@ -1002,7 +1018,7 @@ extension BreakdownLoadResult {
     /// geography の notApplicable（例: not_found）行も business と同型で reason を返す。
     @Test func loadReturnsGeographyNotApplicableReason() async throws {
         try await withMigratedApp { app in
-            try await seedRow(
+            try await seedReadRow(
                 "S1", code: "7203", submit: "2025-06-20 09:00", db: app.db,
                 axis: breakdownAxisGeography, source: breakdownSourceNotApplicable,
                 cacheVersion: geographyBreakdownCacheVersion,
@@ -1017,11 +1033,11 @@ extension BreakdownLoadResult {
 
     @Test func loadReturnsNilWhenXbrlFactsRowBelowFloor() async throws {
         try await withMigratedApp { app in
-            try await seedRow(
+            try await seedReadRow(
                 "S1", code: "7203", submit: "2025-06-20 09:00", db: app.db,
                 source: breakdownSourceXbrlFacts, cacheVersion: "breakdown-v0")
             let result = try await loadStoredBreakdown(
-                code: "7203", docId: nil, axis: breakdownAxisProductService, db: app.db)
+                code: "7203", docId: nil, axis: breakdownAxisGeography, db: app.db)
             #expect(result.isAbsent)
         }
     }
@@ -1029,11 +1045,11 @@ extension BreakdownLoadResult {
     /// パース不能な cache_version の LLM 行は read しない。
     @Test func loadOmitsLLMRowWithUnparseableCacheVersion() async throws {
         try await withMigratedApp { app in
-            try await seedRow(
+            try await seedReadRow(
                 "S1", code: "7203", submit: "2025-06-20 09:00", db: app.db,
                 source: breakdownSourceSegmentInfoLLM, cacheVersion: "very-old-version")
             let result = try await loadStoredBreakdown(
-                code: "7203", docId: nil, axis: breakdownAxisProductService, db: app.db)
+                code: "7203", docId: nil, axis: breakdownAxisGeography, db: app.db)
             #expect(result.isAbsent)
         }
     }
@@ -1041,7 +1057,7 @@ extension BreakdownLoadResult {
     @Test func loadReturnsNilForUnknownCompany() async throws {
         try await withMigratedApp { app in
             let result = try await loadStoredBreakdown(
-                code: "0000", docId: nil, axis: breakdownAxisProductService, db: app.db)
+                code: "0000", docId: nil, axis: breakdownAxisGeography, db: app.db)
             #expect(result.isAbsent)
         }
     }
@@ -1050,11 +1066,11 @@ extension BreakdownLoadResult {
     /// （REST/MCP応答にnullを混ぜない。既存フィールドとの一貫性）。
     @Test func loadOmitsLlmAuditKeyForXbrlFactsRow() async throws {
         try await withMigratedApp { app in
-            try await seedRow(
+            try await seedReadRow(
                 "S1", code: "7203", submit: "2025-06-20 09:00", db: app.db,
                 source: breakdownSourceXbrlFacts)
             let result = try await loadStoredBreakdown(
-                code: "7203", docId: nil, axis: breakdownAxisProductService, db: app.db)
+                code: "7203", docId: nil, axis: breakdownAxisGeography, db: app.db)
             let json = try #require(result.foundJSON)
             #expect(json["llm_audit"] == nil)
         }
@@ -1068,11 +1084,11 @@ extension BreakdownLoadResult {
                 sourceTableIndex: 0, periodColumn: "2026年３月期", unit: "million_yen",
                 profitDisclosed: true,
                 notes: "収益合計（金融費用控除後）と税引前当期純利益の行を転置。")
-            try await seedRow(
+            try await seedReadRow(
                 "S1", code: "8604", submit: "2026-06-22 15:36", db: app.db,
                 source: breakdownSourceSegmentInfoLLM, llmAudit: audit)
             let result = try await loadStoredBreakdown(
-                code: "8604", docId: nil, axis: breakdownAxisProductService, db: app.db)
+                code: "8604", docId: nil, axis: breakdownAxisGeography, db: app.db)
             let json = try #require(result.foundJSON)
             let llmAuditJson = try #require(json["llm_audit"] as? [String: Any])
             #expect(llmAuditJson["notes"] as? String == "収益合計（金融費用控除後）と税引前当期純利益の行を転置。")
@@ -1086,13 +1102,13 @@ extension BreakdownLoadResult {
     /// notApplicable プレースホルダ行は breakdown データではなく reason を返す。
     @Test func loadReturnsNotApplicableReasonForPlaceholderRow() async throws {
         try await withMigratedApp { app in
-            try await seedRow(
+            try await seedReadRow(
                 "S1", code: "7203", submit: "2025-06-20 09:00", db: app.db,
-                source: breakdownSourceNotApplicable, cacheVersion: productServiceBreakdownCacheVersion,
+                source: breakdownSourceNotApplicable, cacheVersion: geographyBreakdownCacheVersion,
                 notApplicableReason: breakdownNotApplicableGeographyOnly)
 
             let result = try await loadStoredBreakdown(
-                code: "7203", docId: nil, axis: breakdownAxisProductService, db: app.db)
+                code: "7203", docId: nil, axis: breakdownAxisGeography, db: app.db)
             #expect(result.notApplicableReason == breakdownNotApplicableGeographyOnly)
             #expect(result.foundJSON == nil)
         }
@@ -1102,13 +1118,13 @@ extension BreakdownLoadResult {
     /// （分類ロジックが変わった後の古い reason を誤って返さないため）。
     @Test func loadTreatsStaleNotApplicableRowAsAbsent() async throws {
         try await withMigratedApp { app in
-            try await seedRow(
+            try await seedReadRow(
                 "S1", code: "7203", submit: "2025-06-20 09:00", db: app.db,
                 source: breakdownSourceNotApplicable, cacheVersion: "breakdown-v0",
                 notApplicableReason: breakdownNotApplicableUnknown)
 
             let result = try await loadStoredBreakdown(
-                code: "7203", docId: nil, axis: breakdownAxisProductService, db: app.db)
+                code: "7203", docId: nil, axis: breakdownAxisGeography, db: app.db)
             #expect(result.isAbsent)
         }
     }
@@ -1117,14 +1133,14 @@ extension BreakdownLoadResult {
     /// （最新の状態を正しく反映する。Financials の notApplicablePlaceholder と同じ設計判断）。
     @Test func loadPrefersLatestNotApplicableOverOlderRealData() async throws {
         try await withMigratedApp { app in
-            try await seedRow("S24", code: "7203", submit: "2024-06-20 09:00", db: app.db)
-            try await seedRow(
+            try await seedReadRow("S24", code: "7203", submit: "2024-06-20 09:00", db: app.db)
+            try await seedReadRow(
                 "S25", code: "7203", submit: "2025-06-20 09:00", db: app.db,
-                source: breakdownSourceNotApplicable, cacheVersion: productServiceBreakdownCacheVersion,
+                source: breakdownSourceNotApplicable, cacheVersion: geographyBreakdownCacheVersion,
                 notApplicableReason: breakdownNotApplicableSingleSegmentDisclosed)
 
             let result = try await loadStoredBreakdown(
-                code: "7203", docId: nil, axis: breakdownAxisProductService, db: app.db)
+                code: "7203", docId: nil, axis: breakdownAxisGeography, db: app.db)
             #expect(result.notApplicableReason == breakdownNotApplicableSingleSegmentDisclosed)
         }
     }

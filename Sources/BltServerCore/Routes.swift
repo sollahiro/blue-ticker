@@ -216,9 +216,9 @@ func registerRoutes(
             notFoundMessage: "書類本文は未抽出です")
     }
 
-    // GET /v1/companies/{code}/breakdown?axis=product_service&doc_id=...
+    // GET /v1/companies/{code}/breakdown?axis=geography&doc_id=...
     // DB（内訳取り込み company_breakdowns）の格納済み内訳のみを返す。
-    // axis は segment / product_service / geography / 決定論指標軸（省略時 segment）。
+    // axis は segment / geography / 決定論指標軸（省略時 segment）。product_service は廃止（404）。
     // 内訳取り込み: 全軸とも上場全体（日経225は処理順の先頭寄せのみ。docs/breakdown.md）。
     // 公開面は needs_review / llm_unit_unresolved の LLM 行を出さない（同 docs）。
     v1.get("companies", ":code", "breakdown") { req async -> Response in
@@ -492,7 +492,8 @@ func breakdownNotFoundMessage(axis: String) -> String {
     case breakdownAxisCapex: return "設備投資の内訳は未算出です"
     case breakdownAxisInterestBearingDebt: return "有利子負債の内訳は未算出です"
     case breakdownAxisFixedAssets: return "固定資産の種類別内訳は未算出です"
-    default: return "製品・サービス別内訳は未算出です"
+    case breakdownAxisProductService: return "製品・サービス別内訳は廃止しました"
+    default: return "指定の軸の内訳はありません"
     }
 }
 

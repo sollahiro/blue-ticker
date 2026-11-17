@@ -7,6 +7,7 @@ import Foundation
 
 /// REST skills 応答の `schema_version`。形を破壊的に変えたときのみ +1。
 /// v9（2026-10-26）: 金額を基本単位（円・ドル）へ統一し、financials / waterfall に `units` / `currency` を載せた。
+/// v19（2026-11-17）: breakdown の axis `product_service` を廃止した（breaking。常に 404）。
 /// v18（2026-11-16）: relations は関連会社・その他の関係会社を返さない（親会社・子会社・顧客・出資先・大株主だけ。
 /// `type=group` は parent / subsidiary、`type=affiliate` は空）。
 /// v17（2026-11-15）: filing-content のセクション segments / geography / revenue_recognition / major_facilities /
@@ -22,7 +23,7 @@ import Foundation
 /// `GET /waterfall/segment` を追加。
 /// v16（2026-11-12）: 報告セグメント年次は `GET /waterfall/segment` 1 本。つなぎは years[] に載せ、
 /// `/waterfall/segment/transitions` は置かない。years（既定 5）と fiscal_year（単年）。
-public let apiSkillsSchemaVersion = 18
+public let apiSkillsSchemaVersion = 19
 
 /// パラメータの置き場所（REST パス変数 / クエリ）。
 public enum ApiSkillParameterLocation: String, Sendable {
@@ -366,14 +367,14 @@ public func apiSkillsCatalog() -> [ApiSkill] {
         ),
         ApiSkill(
             id: "get-breakdown",
-            name: "報告セグメント・製品・サービス別・地域別売上内訳",
+            name: "報告セグメント・地域別売上内訳",
             description: """
-                有価証券報告書から報告セグメント別（segment）、製品・サービス別/地域別売上高、従業員数、のれん、
+                有価証券報告書から報告セグメント別（segment）、地域別売上高、従業員数、のれん、
                 有利子負債（interest_bearing_debt）、
                 固定資産の種類別（fixed_assets。有形固定資産と無形固定資産・のれん）を取得します（格納済みデータのみ）。
                 対象は取り込み済みの上場企業です。doc_id を省略すると最新の有価証券報告書を使用します。
-                axis は segment（既定）/ product_service / geography / employees / goodwill /
-                interest_bearing_debt / fixed_assets に対応。
+                axis は segment（既定）/ geography / employees / goodwill /
+                interest_bearing_debt / fixed_assets に対応。旧 axis=product_service は廃止（404）。
                 segment はセグメント情報の報告セグメント表（segment-v3）。行に segment_key・prefix・
                 segment_basis（business / geographic）が付きます。
                 行のセルは開示があるキーだけ出します: external_sales / profit / segment_assets /
@@ -394,7 +395,6 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                 90%省略の1行は disclosure_basis=dominant_90pct。報告セグメント以外の事業を重要性が乏しいとして
                 省略している書類は disclosure_basis=other_segments_omitted（開示された 1 つだけを返します）。関連情報の省略は same_as=segment（値は複製しません）。
                 従業員表の区分が合わないときは employees_join=unavailable です。
-                product_service は関連情報の製品表または収益分解だけで、報告セグメント facts は含めません。
                 数値タグとセグメント fact から解決します。合計のみの開示は分母だけの行になります。
                 axis=goodwill は報告セグメント別ののれんです。行は名前付きセル opening（期首未償却残高）/
                 closing（期末未償却残高）/ amortization（当期償却額）/ impairment（のれんの減損損失）で、
@@ -450,10 +450,7 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                 （denominator / denominator_tag。table_total は表の合計、row_sum は地域の和）、assets_metric は
                 property_plant_equipment（有形固定資産）/ noncurrent_assets（IFRS の非流動資産）です。開示が無ければキーを出しません。
                 内訳が取得できない場合は 404 とともに reason が返ることがあります（reason 無しの 404 は単に未取り込み）。
-                公開 reason は geography_only / single_segment_disclosed / domestic_dominant_90pct / no_overseas_sales / not_found / unknown のみ。
-                axis=product_service: geography_only（報告セグメントが地域別のみ。地域は geography 軸。日本/アジアを product_service に載せない）、
-                single_segment_disclosed（単一セグメントのため報告セグメント開示自体を省略）、
-                unknown（原因未特定・要再調査）。
+                公開 reason は domestic_dominant_90pct / no_overseas_sales / not_found / unknown のみ。
                 axis=geography: domestic_dominant_90pct（本邦の外部顧客への売上高が連結売上高の90%超のため省略。国内中心）、
                 no_overseas_sales（本邦以外の外部顧客への売上高が無い。国内のみ）、
                 not_found（地域別情報の開示が無く、上の省略文も無い）、unknown（抽出失敗・要再調査）。
@@ -483,18 +480,17 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                     name: "axis",
                     location: .query,
                     type: .string,
-                    description: "内訳の軸（segment / product_service / geography / employees / goodwill / interest_bearing_debt / fixed_assets。省略時 segment）",
+                    description: "内訳の軸（segment / geography / employees / goodwill / interest_bearing_debt / fixed_assets。省略時 segment）",
                     required: false,
                     defaultValue: .string(breakdownAxisSegment)
                 ),
             ],
             instructions: """
-                Breakdown（報告セグメント/製品・サービス別/地域別売上、従業員数、のれん、報告セグメント別指標、設備投資マトリクス、
+                Breakdown（報告セグメント/地域別売上、従業員数、のれん、報告セグメント別指標、設備投資マトリクス、
                 有利子負債、資産の種類別の構造化）。
                 自由テキストのセグメント記述は get-filing-content の segments。
                 格納済みデータのみ。未算出は 404、DB 非接続は 503。
                 例: GET /v1/companies/6758/breakdown?axis=segment
-                例: GET /v1/companies/6758/breakdown?axis=product_service
                 例: GET /v1/companies/6758/breakdown?axis=geography
                 例: GET /v1/companies/6758/breakdown?axis=employees
                 例: GET /v1/companies/6758/breakdown?axis=fixed_assets
