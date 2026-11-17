@@ -33,7 +33,12 @@ private struct FeedParityFixture: Decodable {
     let docTypeLabels: [String: String]
     let feedDocTypes: [String]
     let ordinanceCompanyDisclosure: String
+    struct DisplayNameCase: Decodable {
+        let raw: String
+        let display: String
+    }
     let listedTickerCode: [TickerCase]
+    let filerDisplayNames: [DisplayNameCase]
     let feedItems: [ItemCase]
 }
 
@@ -49,6 +54,14 @@ private func loadFeedParityFixture() throws -> FeedParityFixture {
 }
 
 @Suite struct FeedRssParityFixtureTests {
+    @Test func filerDisplayNamesMatchFixture() throws {
+        let fixture = try loadFeedParityFixture()
+        #expect(!fixture.filerDisplayNames.isEmpty)
+        for c in fixture.filerDisplayNames {
+            #expect(displayFilerName(c.raw) == c.display, "\(c.raw)")
+        }
+    }
+
     @Test func docTypeLabelsMatchFixture() throws {
         let fixture = try loadFeedParityFixture()
         #expect(!fixture.docTypeLabels.isEmpty)

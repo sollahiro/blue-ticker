@@ -207,8 +207,10 @@ actor MasterDataManager {
             // 00000 は未割当なので listedTickerCode が落とす。
             let secCode = normalizeSecurityCode(fields[codeIdx])
             guard let code = listedTickerCode(fromSecCode: secCode) else { continue }
-            let name = fields[nameIdx].trimmingCharacters(in: CharacterSet.whitespaces)
-            guard !name.isEmpty else { continue }
+            let rawName = fields[nameIdx].trimmingCharacters(in: CharacterSet.whitespaces)
+            guard !rawName.isEmpty else { continue }
+            // 表示は括弧書きを整えた名前。検索用の列は元の提出者名から作り、旧表記（「二四」等）でも引ける。
+            let name = displayFilerName(rawName)
             let industry: String
             if let idx = industryIdx, idx < fields.count {
                 industry = fields[idx].trimmingCharacters(in: CharacterSet.whitespaces)
@@ -245,8 +247,8 @@ actor MasterDataManager {
             let stock = MasterStock(
                 code: code,
                 coName: name,
-                coNameUpper: name.uppercased(),
-                coNameNormalized: normalizeForSearch(name),
+                coNameUpper: rawName.uppercased(),
+                coNameNormalized: normalizeForSearch(rawName),
                 s33nm: industry,
                 mktNm: market,
                 location: location,

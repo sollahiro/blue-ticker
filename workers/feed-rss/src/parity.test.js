@@ -14,6 +14,7 @@ import {
   FEED_SQL,
   ORDINANCE_COMPANY_DISCLOSURE,
   RSS_DOC_TYPES,
+  displayFilerName,
   listedTickerCode,
   toFeedItem,
 } from "./query.js";
@@ -137,4 +138,27 @@ describe("toFeedItem パリティ", () => {
       assert.deepEqual(toFeedItem(toRow(record)), item);
     });
   }
+});
+
+describe("displayFilerName パリティ", () => {
+  test("JS displayFilerName は fixture の期待値と一致する", () => {
+    assert.ok(fixture.filerDisplayNames.length > 0);
+    for (const { raw, display } of fixture.filerDisplayNames) {
+      assert.equal(displayFilerName(raw), display, raw);
+    }
+  });
+
+  test("toFeedItem は括弧付きの提出者名を表示用に整える", () => {
+    const item = toFeedItem({
+      doc_id: "S100TEST",
+      sec_code: "46660",
+      filer_name: "パーク二四株式会社（定款上の商号　パーク２４株式会社）",
+      doc_type_code: "120",
+      ordinance_code: "010",
+      period_end: "2026-10-31",
+      submit_date_time: "2027-01-30 15:00",
+      doc_description: "有価証券報告書",
+    });
+    assert.equal(item.name, "パーク24株式会社");
+  });
 });
