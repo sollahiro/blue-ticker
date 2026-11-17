@@ -133,7 +133,7 @@ Neon / Fly Volume の内容は EDINET から `sync`→`ingest` で再導出可�
 
 ### 内訳（Jev / OpenRouter Decisions）
 
-結合点は `OPENROUTER_DECISION_API_KEY`（`typesafe/jev-1.13`）。product_service / geography の html_table は決定論の表構造 + 列選択。Chat Completions は内訳経路では使わない。Overview は別キー `OPENROUTER_OVERVIEW_API_KEY`。切替後の再計算は `docs/breakdown.md`（行削除または `needs_review`）。
+結合点は `OPENROUTER_DECISION_API_KEY`（`typesafe/jev-1.13`）。geography（と segment の LLM 経路）の html_table は決定論の表構造 + 列選択。product_service 軸は 2026-11 に廃止した。Chat Completions は内訳経路では使わない。Overview は別キー `OPENROUTER_OVERVIEW_API_KEY`。切替後の再計算は `docs/breakdown.md`（行削除または `needs_review`）。
 
 ### Fly.io（代替容易）
 

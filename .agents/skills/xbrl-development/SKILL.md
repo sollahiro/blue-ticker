@@ -23,7 +23,7 @@ description: XBRL 抽出ロジック、Stage、statement・notes・breakdown 契
 
 ## 母集団
 
-- statements、financials、filing-sections、statement-notes、breakdowns の全軸（product_service / geography、employees / goodwill、報告セグメント別指標軸）は上場全体が最終母集団。`assets/nikkei225.csv` は処理優先度（同一年次内の先頭寄せ）であり対象限定ではない。
+- statements、financials、filing-sections、statement-notes、breakdowns の全軸（geography、employees / goodwill、報告セグメント別指標軸。product_service は 2026-11 に廃止し ingest しない）は上場全体が最終母集団。`assets/nikkei225.csv` は処理優先度（同一年次内の先頭寄せ）であり対象限定ではない。
 - 特定銘柄の再計算では `--codes` 等で対象を明示する（母集団ポリシーの縮小ではない）。
 - 最新有報を取得できた会社を分母とし、欠測が正当か抽出不具合かを実データで判定する。
 - coverage の分母は最新 120 がある対象社・書類とし、120 がない上場社は含めない。
