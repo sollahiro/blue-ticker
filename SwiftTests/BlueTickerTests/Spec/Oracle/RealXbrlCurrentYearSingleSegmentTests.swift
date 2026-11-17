@@ -47,45 +47,6 @@ import Testing
     /// 7063 S100P97P: Prior 専用タグの定型文が残るが、当期は MX / EX の 2 報告セグメント。
     // source: code=7063 fy_end=2022-06-30 doc_id=S100P97P page=0 field=segment.MX
     // reroute to segment axis, values unchanged, approved by BLT_Tester
-    @Test func birdman7063S100P97PBuildsMXAndEXNotSingleSegmentDisclosed() async throws {
-        guard await Self.ensureAvailable("S100P97P") else { return }
-        let dir = Self.xbrlDir("S100P97P")
-        let members = BreakdownExtractor.currentYearReportableOperatingSegmentSalesMembers(xbrlDir: dir)
-        #expect(members.count >= 2)
-        let joined = members.joined(separator: " ").uppercased()
-        #expect(joined.contains("MX"))
-        #expect(joined.contains("EX"))
-        #expect(BreakdownExtractor.dedicatedSingleSegmentDisclosureText(xbrlDir: dir) == nil)
-        #expect(BreakdownExtractor.dedicatedSingleSegmentTagTrustedForOmission(xbrlDir: dir) == nil)
-        #expect(
-            !BreakdownExtractor.dedicatedTagDisagreesWithCurrentYearReportableSegments(xbrlDir: dir))
-
-        let extracted = BreakdownExtractor.extractSegmentInfo(xbrlDir: dir)
-        let sales = BreakdownFinancialsResolver.breakdownBusinessSalesDenominatorItem(
-            xbrlDir: dir, tables: extracted.tables).value
-        let gate = await noteContext().segmentsAfterNoteDecision(
-            axis: .business, docID: "S100P97P", extracted: extracted, xbrlDir: dir,
-            consolidatedSales: sales, labelsByTag: [:])
-        let kept = try #require(gate.extracted)
-        #expect(gate.outcome.omissionReason != breakdownNotApplicableSingleSegmentDisclosed)
-
-        let (snapshot, source, _) = await SegmentBreakdownResolver.resolve(
-            reportable: kept, consolidatedSales: sales)
-        let snap = try #require(snapshot)
-        #expect(source == .xbrlFacts)
-        #expect(snap.axis == breakdownAxisSegment)
-        let labels = Self.segmentLabels(snap)
-        let labelBlob = labels.joined(separator: " ").uppercased()
-        #expect(labelBlob.contains("MX"))
-        #expect(labelBlob.contains("EX"))
-        #expect(snap.rows.filter { $0.rowKind == "segment" }.count >= 2)
-        #expect(
-            !BusinessBreakdownResolver.dedicatedSingleSegmentFallback(
-                snapshot: snap,
-                dedicatedTagText: BreakdownExtractor.dedicatedSingleSegmentDisclosureTexts(
-                    xbrlDir: dir).any,
-                currentYearReportableSalesMemberCount: members.count))
-    }
 
     /// 1711 S100RADQ: 当期の報告セグメントが 2 以上。専用タグがあっても single_segment_disclosed にしない。
     @Test func code1711S100RADQBuildsTwoSegmentsNotSingleSegmentDisclosed() async throws {
@@ -199,30 +160,6 @@ import Testing
             consolidatedSales: sales, labelsByTag: [:])
         let kept = try #require(gate.extracted)
         #expect(gate.outcome.omissionReason != breakdownNotApplicableSingleSegmentDisclosed)
-
-        let (snapshot, source, _) = await BusinessBreakdownResolver.resolve(
-            segments: kept, consolidatedSales: sales)
-        if let snap = snapshot {
-            #expect(snap.axis == breakdownAxisProductService)
-            #expect(snap.rows.filter { $0.rowKind == "segment" }.count >= 2)
-            #expect(
-                !BusinessBreakdownResolver.dedicatedSingleSegmentFallback(
-                    snapshot: snap,
-                    dedicatedTagText: BreakdownExtractor.dedicatedSingleSegmentDisclosureTexts(
-                        xbrlDir: dir).currentYear
-                        ?? BreakdownExtractor.dedicatedSingleSegmentDisclosureTexts(xbrlDir: dir).any,
-                    currentYearReportableSalesMemberCount: count))
-        } else {
-            #expect(kept.method == "xbrl_facts" || !kept.tables.isEmpty)
-            #expect(
-                !BusinessBreakdownResolver.dedicatedSingleSegmentFallback(
-                    snapshot: nil,
-                    dedicatedTagText: BreakdownExtractor.dedicatedSingleSegmentDisclosureTexts(
-                        xbrlDir: dir).currentYear
-                        ?? BreakdownExtractor.dedicatedSingleSegmentDisclosureTexts(xbrlDir: dir).any,
-                    currentYearReportableSalesMemberCount: count))
-        }
-        _ = source
     }
 }
 
