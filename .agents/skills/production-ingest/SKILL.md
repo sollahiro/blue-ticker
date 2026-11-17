@@ -10,7 +10,7 @@ description: 本番 Neon への定期・手動取り込み、ジョブ編成、�
 ## 目的
 
 - 上場企業の EDINET 有報を `blt-ingest` で Neon 本番へ取り込み、配信（Fly の `blt-server`）が読む正本を更新する。
-- ジョブを stage 系統ごとに分け、失敗時の再実行範囲と `needs_review` 多発軸を隔離する。
+- stage 系統ごとにプロセスを分け、失敗時の再実行範囲と `needs_review` 多発軸を隔離する。
 - Git に置く取り込み運用の正本はこの skill のみ。固定の起動スクリプトは置かない。処理本体（抽出・計算・DB 書き込み）は `Sources/BltIngest*` / `Sources/BltIngestCore` / `Sources/BlueTicker` が正であり、再生成しない。
 
 関連する禁止事項・設計は既存ファイルのまま読む。
@@ -39,11 +39,12 @@ description: 本番 Neon への定期・手動取り込み、ジョブ編成、�
 
 ## 標準動作（1 サイクル）
 
-ジョブは stage 系統ごとに分け、1 プロセスに `--stages` を詰め込まない（失敗時の再実行範囲・所要時間・`needs_review` 多発軸の隔離のため）。最新年度を先に回し、過去年度バックフィルは別サイクル。探索的試し書きはしない。件数（`--limit`）・周期・どの stage を回すかは実行側が決める（Git に表で固定しない）。
+stage 系統ごとにプロセスを分け、1 プロセスに `--stages` を詰め込まない（失敗時の再実行範囲・所要時間・`needs_review` 多発軸の隔離のため）。最新年度を先に回し、過去年度バックフィルは別サイクル。探索的試し書きはしない。件数（`--limit`）・周期・どの stage を回すかは実行側が決める（Git に表で固定しない）。
 
 守る順序と依存:
 
-- `sync` と `filing-sections`（R2/L1 温め）を最初に回す。
+- `sync` を最初に回す。新着書類の台帳（`edinet_documents`）が無いと、他の stage の対象が決まらない。
+- `filing-sections` は R2/L1 の温め用で、他の stage の成否に依存しない。回さなくても取り込みは成立するので、実行側の判断で飛ばしてよい。
 - `financials` は組立の最後。BPS / EPS を埋めるなら `statements` と `statement-notes`（`per_share_information,issued_shares_and_capital`）を先に回す。
 - `breakdowns` は時間がかかり、LLM（Jev）にも依存するので、他の stage と分けて回す。依存が無ければ別スロットでもよい。
 - `overviews` と `relations` は他 stage に依存しない。`--stages` 省略時の `ingest` には `relations` と `industry-kpis` は入らない（明示指定だけ）。`industry-kpis` は標準サイクルに載せない。
@@ -56,7 +57,7 @@ description: 本番 Neon への定期・手動取り込み、ジョブ編成、�
 
 変えてよい:
 
-- 各 job の `--limit`、ジョブ間 sleep、どの job を飛ばすか
+- 各 stage の `--limit`、stage 間の sleep、どの stage を飛ばすか（`sync` は飛ばさない）
 - その回だけの `--codes` / `--doc-ids` / `--note-types` / `--axes`
 - ラッパーの置き場、ログパス、launchd の時刻（環境側。この skill は切替しない）
 - 一度生成したラッパーの再利用・定期実行。毎回の再生成は必須ではない
