@@ -18,20 +18,14 @@
 
 | 用途 | ホスト | 認証 |
 |---|---|---|
-| curl / スクリプト / CI | `https://api.yuholab.com` | Access Service Token |
+| ブラウザ | `https://api.yuholab.com` | Access SSO / OTP |
 
 ### REST API
 
-機械アクセスは **Service Token**（ブラウザ不要）。ヘッダーに Client ID / Secret を付けて呼び出します。
+開発ではローカルの `blt-server`（`127.0.0.1`、無認証）を叩きます。本番オリジンの Access Service Token は HAPIS ゲートウェイ専用で、人・agents 用のトークンは発行しません。本番経路の確認はスモークトークンを使います（`.agents/skills/deploy/SKILL.md`「本番 REST の確認」）。
 
 ```bash
-export CF_ACCESS_CLIENT_ID='....access'
-export CF_ACCESS_CLIENT_SECRET='...'
-
-curl -s "https://api.yuholab.com/v1/companies/7203/financials?years=1" \
-  -H "CF-Access-Client-Id: $CF_ACCESS_CLIENT_ID" \
-  -H "CF-Access-Client-Secret: $CF_ACCESS_CLIENT_SECRET" \
-  | jq '.schema_version, .code'
+curl -s "http://127.0.0.1:3000/v1/companies/7203/financials?years=1" | jq '.schema_version, .code'
 ```
 
 よく使うエンドポイントの例:

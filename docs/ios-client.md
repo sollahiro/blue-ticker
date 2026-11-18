@@ -185,7 +185,7 @@ iOS は公開 REST のクライアント。privileged にしない。トーク�
 |---|---|
 | Release | HAPIS ゲートウェイ + App Attest。起動時からゲートウェイ固定。設定操作は不要（トークンはサイレント mint / refresh） |
 | Simulator | ローカル stub。既定 `http://127.0.0.1:3000`。同じ Wi-Fi の `http://<MacのIP>:3000` も無認証・Attest なし |
-| 開発 / agents | REST を Service Token で叩く（アプリには埋め込まない）。手元 Debug の開発ラボはローカル、または実機の HAPIS 本番（App Attest） |
+| 開発 / agents | ローカル、または実機の HAPIS 本番（App Attest）。本番の疎通確認はスモークトークン |
 
 **Release** は起動時から HAPIS ゲートウェイ固定。同じ Bundle ID の Debug UserDefaults は読まない。**Debug** のサーバー切替・発行者 URL はリスト末尾の開発ラボ。本番公開扉は HAPIS。MCP は製品認証に使わない。
 

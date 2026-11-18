@@ -6,7 +6,7 @@
 
 | 面 | 位置づけ |
 |---|---|
-| REST `/v1` | **製品の契約の正**。段階 A は Access Service Token。段階 B の公開入口は HAPIS（併存は `public-api.md` / `api-auth.md`） |
+| REST `/v1` | **製品の契約の正**。段階 A は Access（Service Token はゲートウェイ専用）。段階 B の公開入口は HAPIS（併存は `public-api.md` / `api-auth.md`） |
 | iOS | 近傍の製品面（`Apps/BlueTicker`。REST `/v1` の HTTP クライアント。IA は `ios-client.md`、進捗はオーナー管理のトラッカー Sheet） |
 | MCP（公開コネクタ） | HAPIS の `mcp/`（Claude の Connectors Directory を先に、次に ChatGPT）。HAPIS ゲートウェイ経由で REST を呼ぶ |
 | Web / RSS | Web は将来候補（優先度低）。RSS は `workers/feed-rss` の静的フィード（日次 Cron → R2。REST が正。`public-api.md` の例外） |
@@ -47,7 +47,7 @@ EU / ESEF 製品トラックは中止。
 | remote (self-host) | blt-server | 同一マシン | 基盤あり |
 | remote (cloud) | blt-server | Fly (nrt) + Neon | **本番** |
 
-機械到達は Access Service Token（`api-auth.md`）。
+オリジンへの機械到達は HAPIS ゲートウェイだけ（Access Service Token はゲートウェイ専用。`api-auth.md`）。
 
 公開デプロイの安全性は **Tunnel ＋ 公開ポート閉鎖（serviceless）＋ Access** の 3 点。どれか欠けると無認証素通り。Fly の `[http_service]` を戻さない。手順は `.agents/skills/deploy/SKILL.md`。
 
