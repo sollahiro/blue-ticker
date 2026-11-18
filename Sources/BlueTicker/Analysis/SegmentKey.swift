@@ -98,6 +98,36 @@ enum SegmentLabelMatch {
         return false
     }
 
+    /// 表由来の行ラベルから、親の接頭辞（「親 / 子」の「親 /」）と注記の印（「(注)１」「（注1）」）を除いた末尾のラベル。
+    static func leafLabel(_ string: String) -> String {
+        var leaf = nfkc(string)
+        for separator in ["/", "／"] {
+            if let range = leaf.range(of: separator, options: .backwards) {
+                leaf = String(leaf[range.upperBound...])
+            }
+        }
+        if let range = leaf.range(
+            of: "[（(]注[^）)]*[）)][0-9０-９]*$", options: .regularExpression)
+        {
+            leaf = String(leaf[..<range.lowerBound])
+        }
+        return leaf
+    }
+
+    /// 骨格が表由来の行へ XBRL の member を載せるときの照合。末尾のラベルが一意に一致する行だけを返す
+    /// （同じ末尾ラベルが複数の親にあるとき、例えば親ごとの「日本」は選ばない）。
+    static func uniqueLeafMatch(
+        label: String, rows: [BreakdownRowPayload], rowKind: String
+    ) -> Int? {
+        let target = normalizeForCompare(leafLabel(label))
+        guard !target.isEmpty else { return nil }
+        let candidates = rows.indices.filter { index in
+            rows[index].prefix == nil && rows[index].rowKind == rowKind
+                && normalizeForCompare(leafLabel(rows[index].label)) == target
+        }
+        return candidates.count == 1 ? candidates[0] : nil
+    }
+
     static func matches(_ overviewLabel: String, segmentLabel: String) -> Bool {
         let left = normalizeForCompare(overviewLabel)
         let right = normalizeForCompare(segmentLabel)

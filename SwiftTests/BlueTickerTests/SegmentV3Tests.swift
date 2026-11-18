@@ -217,6 +217,74 @@ import Testing
         #expect(segments[0].segmentKey == "E27894:ext:DXcloudReportableSegmentMember")
         #expect(assembled.rows.contains { $0.rowKind == breakdownRowKindDifference } == false)
     }
+
+    /// 2602 S100YB17: 表由来の行は「親 / 子」ラベルと注記の印（「その他(注)１」）を持つ。XBRL の member ラベルは
+    /// 「油脂・油糧事業」「その他」で完全一致しないため、利益なしの重複行が足されていた。
+    @Test func llmSkeletonRowsAreNotDuplicatedByXbrlMembers() {
+        func llm(_ label: String, _ amount: Double, _ profit: Double) -> BreakdownRowPayload {
+            BreakdownRowPayload(
+                labelRaw: label, label: label, amount: amount, profit: profit, rowKind: "segment")
+        }
+        let segment = BreakdownSnapshotPayload(
+            axis: breakdownAxisSegment, denominator: 554_251, denominatorTag: "llm_table_subtotal",
+            rows: [
+                llm("グローバル油脂・加工油脂事業", 138_848, 4_766),
+                llm("油脂・油糧および加工食品・素材事業 / 油脂・油糧", 311_544, 6_706),
+                llm("油脂・油糧および加工食品・素材事業 / 加工食品・素材", 78_042, 4_418),
+                llm("油脂・油糧および加工食品・素材事業", 389_586, 11_124),
+                llm("その他(注)１", 10_307, 524),
+            ],
+            sourceKind: breakdownSourceSegmentInfoLLM, needsReview: false, warnings: [])
+        func member(_ local: String, _ label: String, _ amount: Double) -> BreakdownRow {
+            BreakdownRow(
+                labelRaw: local, label: label, amount: amount, share: nil, profit: nil,
+                rowKind: "segment")
+        }
+        let external = snapshot(
+            [
+                member("GlobalMember", "グローバル油脂・加工油脂事業", 138_848),
+                member("OilsMember", "油脂・油糧事業", 311_544),
+                member("FoodsMember", "加工食品・素材事業", 78_042),
+                member("OtherMember", "その他", 10_307),
+                BreakdownRow(
+                    labelRaw: Xbrl.entityTotalMemberName, label: "連結", amount: 554_251,
+                    share: nil, profit: nil, rowKind: breakdownRowKindEntityTotal),
+            ], denominator: 554_251, tag: "RevenuesFromExternalCustomers")
+        let assembled = SegmentV3.assemble(
+            segment: segment, assets: nil, capitalExpenditures: nil,
+            noncurrentAssetAdditions: nil, overview: nil, overviewTotal: nil, equityMethod: nil,
+            external: external, edinetCode: "E00001", memberPrefixes: [:], labelsByTag: [:])
+        let segments = assembled.rows.filter { $0.rowKind == "segment" }
+        #expect(segments.count == 5)
+        #expect(segments.allSatisfy { $0.profit != nil })
+        let oils = segments.first { $0.label == "油脂・油糧および加工食品・素材事業 / 油脂・油糧" }
+        #expect(oils?.externalSales?.value == 311_544)
+        let other = segments.first { $0.label == "その他(注)１" }
+        #expect(other?.externalSales?.value == 10_307)
+    }
+
+    /// 同じ末尾ラベルが複数の親にあるとき（親ごとの「日本」）は、どの行にも載せず、行も足さない。
+    @Test func ambiguousLeafLabelIsNotMatchedOrCreated() {
+        func llm(_ label: String, _ amount: Double) -> BreakdownRowPayload {
+            BreakdownRowPayload(
+                labelRaw: label, label: label, amount: amount, profit: 1, rowKind: "segment")
+        }
+        let segment = BreakdownSnapshotPayload(
+            axis: breakdownAxisSegment, denominator: 300, denominatorTag: "llm_table_subtotal",
+            rows: [llm("A事業 / 日本", 100), llm("B事業 / 日本", 200)],
+            sourceKind: breakdownSourceSegmentInfoLLM, needsReview: false, warnings: [])
+        let external = snapshot(
+            [BreakdownRow(
+                labelRaw: "JapanMember", label: "日本", amount: 300, share: nil, profit: nil,
+                rowKind: "segment")], denominator: 300, tag: "RevenuesFromExternalCustomers")
+        let assembled = SegmentV3.assemble(
+            segment: segment, assets: nil, capitalExpenditures: nil,
+            noncurrentAssetAdditions: nil, overview: nil, overviewTotal: nil, equityMethod: nil,
+            external: external, edinetCode: "E00002", memberPrefixes: [:], labelsByTag: [:])
+        let segments = assembled.rows.filter { $0.rowKind == "segment" }
+        #expect(segments.count == 2)
+        #expect(segments.allSatisfy { $0.externalSales == nil })
+    }
 }
 
 @Suite struct SingleSegmentTests {
