@@ -75,7 +75,7 @@ enum SegmentInfoLLMNormalizer {
     ]
 
     static let profitRowPreferred = [
-        "営業利益", "セグメント利益", "実質業務純益",
+        "営業利益", "セグメント利益", "実質業務純益", "セグメント損益", "営業損益",
     ]
 
     static func normalize(
@@ -99,6 +99,8 @@ enum SegmentInfoLLMNormalizer {
         let scopedColumns = columns.filter { column in
             scopedTables.contains { $0.tableIndex == column.tableIndex }
         }
+        // `segment` 軸は報告セグメントの利益を持つ表だけ。無ければ全表へ戻さず、表からは出さない。
+        if publishedAxis == breakdownAxisSegment, scopedTables.isEmpty { return (nil, nil) }
         let tablesForChoice = scopedTables.isEmpty ? parsed : scopedTables
         let columnsForChoice = scopedColumns.isEmpty ? columns : scopedColumns
         let constraint = RevenueRecognitionTableStructure.axisConstraint(tables: tablesForChoice)
@@ -168,7 +170,9 @@ enum SegmentInfoLLMNormalizer {
         var table = selectedTable
         let assembled = assembleRowsRecoveringOtherTables(
             selectedTable: table, selectedColumn: column, choice: choice,
-            parsed: parsed, columns: columns, fiscalYearEnd: fiscalYearEnd)
+            parsed: publishedAxis == breakdownAxisSegment
+                ? parsed.filter { hasSegmentProfitMeasure($0) } : parsed,
+            columns: columns, fiscalYearEnd: fiscalYearEnd)
         table = assembled.table
         column = assembled.column
         let built = assembled.built
@@ -393,6 +397,24 @@ enum SegmentInfoLLMNormalizer {
         return nil
     }
 
+    /// セグメントの利益又は損失の指標（行ラベルまたは列見出し）を持つ表か。
+    /// 研究開発費・減損損失・持分法損益だけの行は利益指標に数えない。
+    static func hasSegmentProfitMeasure(_ table: RevenueRecognitionCandidates.ParsedTable) -> Bool {
+        func isProfitMeasure(_ raw: String) -> Bool {
+            let label = RevenueRecognitionCandidates.compactCell(raw)
+            if label.isEmpty || label.contains("研究開発") || label.contains("持分法")
+                || label.contains("減損")
+            {
+                return false
+            }
+            return label.contains("利益") || label.contains("損益") || label.contains("純益")
+                || label.contains("セグメント損失") || label.contains("営業損失")
+        }
+        let rowLabels = table.grid.dropFirst(table.headerRowCount).compactMap(\.first)
+        if rowLabels.contains(where: isProfitMeasure) { return true }
+        return table.columnHeaders.values.contains(where: isProfitMeasure)
+    }
+
     /// 列が事業・製品、行が売上高・営業利益などの指標マトリクス（キヤノン注23）。
     static func isSegmentColumnMatrix(_ table: RevenueRecognitionCandidates.ParsedTable) -> Bool {
         let named = table.columnHeaders.filter { _, header in
@@ -563,9 +585,13 @@ enum SegmentInfoLLMNormalizer {
         let salesTables = all.filter { !isNonSalesMetricTable($0) && !isWholeCompanyOnlyTable($0) }
         let tables = salesTables.isEmpty ? all : salesTables
         if axis == breakdownAxisSegment {
-            let matrices = tables.filter { isSegmentColumnMatrix($0) && !isDedicatedProductTable($0) }
+            // 報告セグメントごとの売上高・利益又は損失・資産その他の項目の表だけを使う。
+            // 利益（損益）の指標を持たない表（主要な顧客・製品別・減損損失・地域別など関連情報の表）は
+            // 候補に残さない（4180 / 4565 / 4593 は顧客・製品の表をセグメントとして公開していた）。
+            let gated = tables.filter { hasSegmentProfitMeasure($0) }
+            let matrices = gated.filter { isSegmentColumnMatrix($0) && !isDedicatedProductTable($0) }
             if !matrices.isEmpty { return matrices }
-            return tables.filter { !isDedicatedProductTable($0) }
+            return gated.filter { !isDedicatedProductTable($0) }
         }
         // 行が売上と利益の指標で、列がセグメントの表は製品表ではない（8591 S100LU21 の前期表は
         // 「貸倒引当金繰入(戻入)額」などの行で製品表に数えられ、当期表より先に残っていた）。
