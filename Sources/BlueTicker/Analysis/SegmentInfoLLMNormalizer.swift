@@ -1195,6 +1195,7 @@ enum SegmentInfoLLMNormalizer {
             ))
         }
 
+        rows = demotingParentRowsWithChildren(rows)
         if let consolidatedSales, consolidatedSales != 0 {
             rows = demotingTrailingParentSubtotals(
                 rows, consolidatedSales: consolidatedSales, unit: multiplier)
@@ -1236,6 +1237,21 @@ enum SegmentInfoLLMNormalizer {
         return rows.map { row in
             var copy = row
             copy.share = denom == 0 ? nil : copy.amount / denom
+            return copy
+        }
+    }
+
+    /// 「親 / 子」の見出しで出した行のうち、ほかの行の「親 / 」の接頭辞になっている親の行を
+    /// `subtotal` にする（親の売上・利益は子の合計。2602 の「油脂・油糧および加工食品・素材事業」、
+    /// 8230 の「はせがわ」）。`segment` を足すと親と子が二重に数えられるのを防ぐ。
+    static func demotingParentRowsWithChildren(_ rows: [BreakdownRow]) -> [BreakdownRow] {
+        let labels = rows.map(\.labelRaw)
+        return rows.map { row in
+            guard row.rowKind == "segment" else { return row }
+            let prefix = row.labelRaw + " / "
+            guard labels.contains(where: { $0.hasPrefix(prefix) }) else { return row }
+            var copy = row
+            copy.rowKind = "subtotal"
             return copy
         }
     }

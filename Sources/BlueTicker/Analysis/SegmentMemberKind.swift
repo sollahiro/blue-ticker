@@ -12,6 +12,8 @@ enum SegmentMemberKind {
 
     static func classify(localName: String, label: String?) -> SegmentMemberKind {
         if localName == Xbrl.entityTotalMemberName { return .entityTotal }
+        // 資産の調整表の行（全社資産・その他の調整額など）は、報告セグメントではなく調整。
+        if localName.hasPrefix(SegmentAssetsDifferenceTable.labelRawPrefix) { return .reconciling }
         if localName == "EliminationMember" || isEliminationOnly(localName: localName, label: label) {
             return .elimination
         }
