@@ -1,6 +1,6 @@
 # REST / MCP 認証の住み分け
 
-段階の列は origin / 公開扉のロールアウト（段階 A が origin 現行。段階 B の公開入口は HAPIS。`public-api.md`）。iOS クライアントは段階 B：Release は HAPIS + App Attest、Simulator はローカル stub。開発 / agents の REST は Service Token（アプリには埋め込まない）。blt-server origin はどちらの段階でもトークンを検証しない（エッジ / ゲートウェイ信頼）。認証ミドルウェアは origin に載せない。
+段階の列は origin / 公開扉のロールアウト（段階 A が origin 現行。段階 B の公開入口は HAPIS。`public-api.md`）。iOS クライアントは段階 B：Release は HAPIS + App Attest、Simulator はローカル stub。Access の Service Token は HAPIS ゲートウェイ専用（アプリには埋め込まない。人・agents 用は発行しない）。blt-server origin はどちらの段階でもトークンを検証しない（エッジ / ゲートウェイ信頼）。認証ミドルウェアは origin に載せない。
 
 ## 例外: 静的 RSS フィード
 
@@ -22,8 +22,8 @@
 | 項目 | 段階 A（現行） | 段階 B（HAPIS 着地後） |
 |---|---|---|
 | 公開扉 | Cloudflare Access（`api.*`） | HAPIS。上流 BLT は非公開 |
-| programmatic | Access Service Token | 開発 / agents の REST は Service Token（アプリには埋め込まない） |
-| iOS | （アプリ経路ではない。Access JWT は使わない） | HAPIS 短命匿名トークン + 本番 App Attest。Simulator はローカル stub。開発 / agents の REST は Service Token（アプリには埋め込まない）。任意 Bearer は有料 / ウォッチ同期が要るときだけ |
+| programmatic | Access Service Token（HAPIS ゲートウェイ専用） | 同左。人・agents 用は発行しない（本番の確認はスモークトークン） |
+| iOS | （アプリ経路ではない。Access JWT は使わない） | HAPIS 短命匿名トークン + 本番 App Attest。Simulator はローカル stub。開発 / agents の本番確認はスモークトークン（`.agents/skills/deploy/SKILL.md`）。任意 Bearer は有料 / ウォッチ同期が要るときだけ |
 | origin APIキー | 持たない | 持たない |
 | origin | 方式A・エッジのみ検証。blt-server は見ない | ゲートウェイ信頼。blt-server は見ない（API 認証・Attest・短命トークン・レート制限・課金アカウントは持たない） |
 | 旧 `BLT_AUTH_TOKEN` | **復活させない** | **復活させない** |
@@ -34,21 +34,21 @@
 
 | クライアント | ホスト | 認証 |
 |---|---|---|
-| curl / CI | `api.*` | Service Token |
+| curl / CI | `api.*` | 使わない（ローカル検証かスモークトークン） |
 | ブラウザで api | `api.*` | SSO / OTP |
 | MCP（公開コネクタ） | HAPIS `mcp/` | HAPIS OAuth（利用者ごと。当面 Google サインインのみ。`https://mcp.yuholab.com/mcp`）。HAPIS ゲートウェイ経由で REST |
 | ローカル | `127.0.0.1` / LAN `http` | loopback は無認証。LAN 向けに `0.0.0.0` 等へ bind するときは `BLT_ALLOW_UNAUTHENTICATED=1` |
-| iOS | HAPIS ゲートウェイ（Release）/ loopback（Simulator） | Release = HAPIS + App Attest。Simulator = ローカル stub。開発 / agents の REST 直叩きは Service Token（アプリには埋め込まない）。Access SSO / OTP は使わない |
+| iOS | HAPIS ゲートウェイ（Release）/ loopback（Simulator） | Release = HAPIS + App Attest。Simulator = ローカル stub。開発 / agents の本番確認はスモークトークン。Access SSO / OTP は使わない |
 
-面分離: REST 機械入口＝Service Token。公開 MCP コネクタ＝HAPIS OAuth（Claude を先に、次に ChatGPT）。REST で機能単位の有料マスクは採らない。コネクタに出す範囲は `hapis/catalog.json`（HAPIS へ同期）で決める。
+面分離: REST 機械入口＝HAPIS ゲートウェイのみ（Service Token はゲートウェイ専用）。公開 MCP コネクタ＝HAPIS OAuth（Claude を先に、次に ChatGPT）。REST で機能単位の有料マスクは採らない。コネクタに出す範囲は `hapis/catalog.json`（HAPIS へ同期）で決める。
 
-手順: `.agents/skills/deploy/SKILL.md`「REST Service Token」。
+手順: `.agents/skills/deploy/SKILL.md`「本番 REST の確認」。
 
 ## 段階 B（HAPIS 着地後）
 
 公開 REST の認証は階層ではなく併存する（詳細は `public-api.md`）。
 
-- iOS アカウント不要: HAPIS が短命匿名トークンを発行。本番は App Attest 必須。**Release は HAPIS ゲートウェイ + App Attest。Simulator はローカル stub。開発 / agents の REST は Service Token（アプリには埋め込まない）。Debug 実機の「HAPIS 本番」も App Attest。**（Team / Bundle は制御面。blt-server は見ない。App Attest の hash は attest = `SHA256(challenge bytes)`、assertion = `SHA256(client_data JSON)`。詳細は `ios-client.md`）
+- iOS アカウント不要: HAPIS が短命匿名トークンを発行。本番は App Attest 必須。**Release は HAPIS ゲートウェイ + App Attest。Simulator はローカル stub。開発 / agents の本番確認はスモークトークン（`.agents/skills/deploy/SKILL.md`）。Debug 実機の「HAPIS 本番」も App Attest。**（Team / Bundle は制御面。blt-server は見ない。App Attest の hash は attest = `SHA256(challenge bytes)`、assertion = `SHA256(client_data JSON)`。詳細は `ios-client.md`）
 - 任意 Bearer: 顧客アカウントは有料機能・ウォッチリスト同期が要るときだけ
 - 公開 MCP コネクタ: HAPIS OAuth。HAPIS ゲートウェイ経由で REST を呼ぶ
 - iOS にトークン / Service Token を埋め込まない

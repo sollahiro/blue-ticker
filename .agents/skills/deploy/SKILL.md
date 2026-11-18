@@ -85,15 +85,23 @@ npx wrangler@4 deploy
 
 `main` への push は `.github/workflows/legal-worker.yml`。GitHub secrets は `CLOUDFLARE_API_TOKEN` · `CLOUDFLARE_ACCOUNT_ID`。公開 URL は Custom Domain `yuholab.com` の `https://yuholab.com`・`/privacy`・`/terms`。`sollahiro.com` の旧 URL 6 パス（`/blue-ticker`・`/yuholab` とそれぞれの `/privacy`・`/terms`）は 301 で直接 `yuholab.com` へ飛ばす（`workers/legal/README.md`）。workers.dev も残す。
 
-### REST Service Token
+### 本番 REST の確認
+
+`api.*` の Access Service Token は、HAPIS ゲートウェイがオリジンへ入るためだけに使う（Access 上の名前は `Hapis-gateway-origin`）。人・agents 用のトークンは発行しない。agents の環境に `CF_ACCESS_CLIENT_ID` / `CF_ACCESS_CLIENT_SECRET` を入れない。
+
+1. 契約・挙動の確認はローカルで行う（`.agents/skills/local-rest-testing/SKILL.md`）。
+2. デプロイ後の本番経路の確認は、HAPIS のスモークトークンでゲートウェイ経由の GET を叩く（hapis の `docs/ops-smoke-token.md`）。トークンは 1 リクエスト 1 本、TTL は最大 300 秒。発行には HAPIS 管理トークン（`HAPIS_API_TOKEN`）が要るので、オーナーが発行する。
 
 ```bash
-curl -s "https://api.<domain>/v1/companies/7203/financials?years=1" \
-  -H "CF-Access-Client-Id: $CF_ACCESS_CLIENT_ID" \
-  -H "CF-Access-Client-Secret: $CF_ACCESS_CLIENT_SECRET"
+# オーナーの手元。HAPIS_API_TOKEN は管理トークン。値をログに出さない
+RESP=$(curl -sS -X POST "$HAPIS_BASE_URL/v1/admin/smoke-tokens" \
+  -H "Authorization: Bearer $HAPIS_API_TOKEN" -H "Content-Type: application/json" \
+  -d '{"gateway":"hapis-yuholab-production","path":"/v1/companies","ttl_seconds":60}')
+TOKEN=$(printf '%s' "$RESP" | jq -r .token)
+curl -sS -H "X-HAPIS-Smoke-Token: $TOKEN" "$GATEWAY_BASE_URL/v1/companies?q=7203"
 ```
 
-SSO は `Cookie: CF_Authorization=<jwt>`（`Cf-Access-Jwt-Assertion` だけでは通らない）。
+3. ブラウザは Access の SSO（`api.*`）。`Cookie: CF_Authorization=<jwt>`（`Cf-Access-Jwt-Assertion` だけでは通らない）。
 
 レート制限はゾーン Free の短い period のみ。悪用が観測されたらプラン検討。
 
