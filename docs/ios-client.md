@@ -179,7 +179,7 @@ Screen REST は `GET /v1/screen`（`screen_index` 読み取り。`sector` 完全
 
 ## 認証
 
-iOS は第三者と同じ公開 REST のクライアント。privileged にしない。トークン / Service Token は埋め込まない。`HAPIS_API_TOKEN` も consumer JWT として使わない。アプリに Cloudflare Access の JWT / OTP / Service Token は載せない。
+iOS は公開 REST のクライアント。privileged にしない。トークン / Service Token は埋め込まない。`HAPIS_API_TOKEN` も consumer JWT として使わない。アプリに Cloudflare Access の JWT / OTP / Service Token は載せない。
 
 | 経路 | 方針 |
 |---|---|

@@ -1,4 +1,4 @@
-# REST 第三者公開（段階 B）
+# REST 公開面（段階 B）
 
 段階 A（自社向け REST 本線・Service Token）は達成済み。達成済みの契約は次に委譲する（本ファイルに再叙述しない）:
 
@@ -10,7 +10,7 @@
 
 ## 例外: 静的 RSS（EDINET 提出ヘッドライン）
 
-`https://feed.sollahiro.com/blue-ticker/edinet-filings.xml` は認証なしの公開。2026-09-09 ロックに対する**狭い文書化済み例外**で、これ以外はすべて HAPIS + App Attest（段階 B）のまま。BLT origin は閉じたまま（`BLT_ALLOW_UNAUTHENTICATED` は使わない）。
+`https://feed.sollahiro.com/blue-ticker/edinet-filings.xml` は認証なしの公開。2026-09-09 ロックに対する**狭い文書化済み例外**で、これ以外はすべて HAPIS 経由（iOS は App Attest、公開コネクタは OAuth）のまま。BLT origin は閉じたまま（`BLT_ALLOW_UNAUTHENTICATED` は使わない）。
 
 - Cron Worker `workers/feed-rss` が日次（19:15 JST）に Neon を読み取り専用ロールで読み、R2 へ静的オブジェクトとして書く。配信は R2 カスタムドメイン
 - ヘッドラインのみ（社名・書類種別・提出日時・決算期・コード・doc_id）と、会社アイコンの公開 URL（`media:thumbnail`。アイコンのある会社だけ）。アイコン URL を一覧で出すのはこの RSS だけで、アイコン専用のエンドポイントは公開しない（2026-10-19 Sorahiro）
@@ -41,19 +41,19 @@
 
 ## 定義
 
-素性不明の第三者が自分のアプリに組み込める API へ移ること。3軸:
+iOS と公開 MCP コネクタに向けた公開面。3軸:
 
 | 軸 | 内容 |
 |---|---|
 | 公開入口 | **HAPIS** が公開ゲートウェイ。上流 BLT origin は HAPIS の後ろに閉じ、公開しない。blt-server は ingest / serve REST に閉じ、API 認証・Attest・短命トークン・レート制限・課金アカウントは持たない |
-| 契約の安定化 | 後方互換の約束を厳格化（段階 B で deprecation 期間等を足す） |
-| 利用制御 | レート制限は HAPIS。機械の従量は x402 |
+| 契約の安定化 | 後方互換の約束（`api-compatibility.md`） |
+| 利用制御 | レート制限は HAPIS |
 
-機能単位の有料マスクは採らない。**段階 B の機械 REST は x402**。公開 MCP コネクタは HAPIS の OAuth（利用者ごとの `end_user` アカウント）で認証し、x402 の対象外。どのツール・引数を出すかは `hapis/catalog.json` で決め、HAPIS へ同期する（プラン別の出し分けは HAPIS で検討中）。blt-server 内蔵の開発用 MCP は 2026-11-08 に廃止した。
+機能単位の有料マスクは採らない。公開 MCP コネクタは HAPIS の OAuth（利用者ごとの `end_user` アカウント）で認証する。どのツール・引数を出すかは `hapis/catalog.json` で決め、HAPIS へ同期する（プラン別の出し分けは HAPIS で検討中）。blt-server 内蔵の開発用 MCP は 2026-11-08 に廃止した。
 
 iOS のアカウント不要パス（短命匿名トークン + App Attest）はゲートウェイ責務であり、blt-server の責務ではない。
 
-土台（バックフィル・ストレージ）が未成熟なうちに不特定多数へ開放しない。着手順・公開判断はオーナー管理のトラッカー Sheet（`docs/process/tracker-placement.md`）。定義の索引は `blt-server-roadmap.md`。
+着手順・公開判断はオーナー管理のトラッカー Sheet（`docs/process/tracker-placement.md`）。定義の索引は `blt-server-roadmap.md`。
 
 ## 公開 REST の認証（階層ではなく併存）
 
@@ -63,14 +63,12 @@ origin API キーは持たない。iOS にトークン / Service Token を埋め
 |---|---|
 | iOS（アカウント不要） | HAPIS が短命の匿名トークンを発行。本番は App Attest 必須。blt-server は見ない |
 | 任意 Bearer | 有料機能・ウォッチリスト同期が要るときだけ顧客アカウント |
-| 機械 / エンドポイント直叩き | x402 |
-| Web | 当面、アカウント不要の無料枠は出さない |
 | MCP（公開コネクタ） | HAPIS OAuth（Google / Apple サインイン）。HAPIS `mcp/` |
 
 ## 具体ロック
 
 1. **開発例外:** `http://127.0.0.1` と LAN `http` は無認証・Attest なし（現行どおり）
-2. **内部退避:** staging ホストは Access を残す。段階 B 着地後の本番公開扉は HAPIS のみ（本番公開ゲートウェイに Access を置かない）
+2. **内部退避:** staging ホストは Access を残す。本番公開扉は HAPIS のみ（本番公開ゲートウェイに Access を置かない）
 3. **初期レート制限**（後で調整）: 軽い read 約 60/min、重い（filing-content）約 10/min、合算約 10k/day
 4. **トークン:** TTL 約 1 時間。期限の約 5 分前にサイレント refresh
 5. **Attest / トークン失敗:** 2〜3 回自動リトライのあと、キャッシュ表示 + 柔らかい「一時的に更新できない」。ハードブロックしない。Attest なしの緊急トークンは出さない
