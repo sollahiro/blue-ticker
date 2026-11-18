@@ -1,6 +1,6 @@
 # REST API 互換ポリシー（段階 A）
 
-自社向け REST 本線化（段階 A）の契約ルール。第三者公開（段階 B）では deprecation 期間などを足す前提で、いまはゆるく運用する。
+自社向け REST 本線化（段階 A）の契約ルール。いまはゆるく運用する。
 
 構想全体は `docs/public-api.md`（段階 B）。段階 A の契約は本ファイルと `api-auth.md` / `architecture.md`。内部の Neon `cache_version` / read 床は本ポリシーの対象外（`.agents/rules/versioning.md`）。
 
@@ -51,7 +51,7 @@ breaking 再編時は可能な範囲で:
 2. changelog で旧キー廃止予定を書く
 3. 旧キー削除時に `schema_version` を上げる
 
-段階 A では固定の「N 日 / N リリース併存」は定めない。段階 B で期間を足す。
+段階 A では固定の「N 日 / N リリース併存」は定めない。
 
 ## 対象外・混同しないもの
 
@@ -101,8 +101,6 @@ breaking 再編時は可能な範囲で:
 
 ## 段階 B で足す予定
 
-- 第三者向けの deprecation 期間（日数またはリリース数）
-- 外部向け changelog / OpenAPI との突合
 - クエリ・ステータス・エラー形を厳格対象に上げるかの再検討
 - `GET /v1/screen` と `GET /v1/screen/snapshot` を廃止した（breaking。どちらも private だったので skills・公開コネクタは影響なし）。`blt-ingest screen-rebuild` と `screen_index` の更新（financials ingest 後のフック）も廃止。`screen_index` テーブル自体はこの変更では削除していない（DROP は別途判断）。iOS アプリの条件検索（`Apps/BlueTicker` の ScreenSnapshot）は未対応で、別途撤去が必要。
 - filing-content のセクション `segments` / `geography` / `revenue_recognition` / `major_facilities` / `research_and_development` を廃止した（breaking。`apiSkillsSchemaVersion` 17）。指定しても返らない。breakdown は XBRL から直接解決するので影響しない。DB の既存行からの削除は別途。
