@@ -4,6 +4,9 @@ import SwiftSoup
 /// 報告セグメント合計と連結計上額の差額表（`DescriptionOfNatureAndAmountsOfDifferences…` TextBlock）
 /// から、セグメント資産の非分類行（`row_kind=reconciling`）を読む。別軸ではない。
 enum SegmentAssetsDifferenceTable {
+    /// 資産の調整表（全社資産・セグメント間消去など）の行の labelRaw 接頭辞。報告セグメントではない。
+    static let labelRawPrefix = "segmentAssetsDifference:"
+
     static let textBlockTag =
         "DescriptionOfNatureAndAmountsOfDifferencesBetweenReportableSegmentsTotalAndFinancialStatementsTextBlock"
 
@@ -182,7 +185,7 @@ extension BreakdownNormalizer {
         for (label, amountYen) in parsedNoSegmentDupes {
             let key = normalizeDifferenceLabel(label)
             if existingLabels.contains(key) { continue }
-            let labelRaw = "segmentAssetsDifference:\(key)"
+            let labelRaw = "\(SegmentAssetsDifferenceTable.labelRawPrefix)\(key)"
             rows.append(
                 BreakdownRow(
                     labelRaw: labelRaw, label: label, amount: amountYen, share: nil, profit: nil,
