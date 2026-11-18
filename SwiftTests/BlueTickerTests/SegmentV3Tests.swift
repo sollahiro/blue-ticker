@@ -263,6 +263,25 @@ import Testing
         #expect(other?.externalSales?.value == 10_307)
     }
 
+    /// 本番の Normalizer が返す sourceKind は "segment_info"。この値でも XBRL member 行を足さない。
+    @Test func normalizerSourceKindAlsoSkipsXbrlOnlyMembers() {
+        let segment = BreakdownSnapshotPayload(
+            axis: breakdownAxisSegment, denominator: 300, denominatorTag: "llm_table_subtotal",
+            rows: [BreakdownRowPayload(
+                labelRaw: "A事業", label: "A事業", amount: 300, profit: 1, rowKind: "segment")],
+            sourceKind: "segment_info", needsReview: false, warnings: [])
+        let external = snapshot(
+            [BreakdownRow(
+                labelRaw: "AMemberReportableSegmentMember", label: "AMemberReportableSegmentMember",
+                amount: 300, share: nil, profit: nil, rowKind: "segment")],
+            denominator: 300, tag: "RevenuesFromExternalCustomers")
+        let assembled = SegmentV3.assemble(
+            segment: segment, assets: nil, capitalExpenditures: nil,
+            noncurrentAssetAdditions: nil, overview: nil, overviewTotal: nil, equityMethod: nil,
+            external: external, edinetCode: "E00003", memberPrefixes: [:], labelsByTag: [:])
+        #expect(assembled.rows.filter { $0.rowKind == "segment" }.count == 1)
+    }
+
     /// 同じ末尾ラベルが複数の親にあるとき（親ごとの「日本」）は、どの行にも載せず、行も足さない。
     @Test func ambiguousLeafLabelIsNotMatchedOrCreated() {
         func llm(_ label: String, _ amount: Double) -> BreakdownRowPayload {

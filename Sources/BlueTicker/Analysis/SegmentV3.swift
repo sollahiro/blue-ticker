@@ -47,7 +47,9 @@ enum SegmentV3 {
 
         // 骨格が表由来（LLM）のとき、ラベルが XBRL member と揃わず同じセグメントが二重に足される。
         // 照合は末尾のラベルでも行い、照合できない segment 行は新しく作らない。
+        // Normalizer が返す snapshot の sourceKind は "segment_info"（公開 source の segment_info_llm とは別）。
         let llmSkeleton = segment.sourceKind == breakdownSourceSegmentInfoLLM
+            || segment.sourceKind == "segment_info"
 
         let salesBasis: String
         if let externalSalesBasis, let external, !external.rows.isEmpty {
