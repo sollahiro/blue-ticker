@@ -67,4 +67,21 @@ struct SegmentTablesRequireProfitTests {
             #expect(!SegmentInfoLLMNormalizer.hasSegmentProfitMeasure(try parsedTable(label)), "\(label)")
         }
     }
+
+    /// 固定ラベルの語にない行（表記ゆれ）も、Jev に出す候補には残る。
+    @Test func candidateRowsIncludeRowsOutsideTheLabelLists() throws {
+        let html = """
+            <p>（単位：百万円）</p>
+            <table>
+              <tr><td></td><td>流通</td><td>運輸</td><td>合計</td></tr>
+              <tr><td>外部顧客への売上高</td><td>1,988</td><td>186</td><td>2,174</td></tr>
+              <tr><td>報告セグメント損益額</td><td>27</td><td>31</td><td>58</td></tr>
+            </table>
+            """
+        let tables = BreakdownExtractor.allTablesFromHtml(html, defaultHeading: "セグメント情報")
+        let table = try #require(RevenueRecognitionCandidates.parse(tables: tables).first)
+        let candidates = SegmentInfoLLMNormalizer.candidateMetricRows(in: table).map(\.label)
+        #expect(candidates.contains("報告セグメント損益額"))
+        #expect(candidates.contains("外部顧客への売上高"))
+    }
 }

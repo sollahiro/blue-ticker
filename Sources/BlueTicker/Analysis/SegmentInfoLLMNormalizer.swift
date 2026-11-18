@@ -120,7 +120,10 @@ enum SegmentInfoLLMNormalizer {
         let offeredTables = tablesForChoice.filter { table in
             offered.contains { $0.tableIndex == table.tableIndex }
         }
-        let metricRows = offeredTables.flatMap(metricRows(in:))
+        // `segment` 軸は表の全指標行を Jev に見せる（固定ラベルで先に絞らない）。
+        let metricRows = publishedAxis == breakdownAxisSegment
+            ? offeredTables.flatMap(candidateMetricRows(in:))
+            : offeredTables.flatMap(metricRows(in:))
         let choiceSamples = await JevDecisionSampler.collect(
             count: RevenueRecognitionColumnNormalizer.jevPolicy.sampling.sampleCount
         ) {
@@ -317,6 +320,27 @@ enum SegmentInfoLLMNormalizer {
         }
         if !fromStructure.isEmpty { return fromStructure }
         return periodAmountRows(in: table)
+    }
+
+    /// Jev に売上行・利益行を選ばせる候補。固定のラベル語で絞った `metricRows` に加え、
+    /// 金額を持つ全ての行を出す（「セグメント損益」「外部顧客向けの売上高」のような表記ゆれを
+    /// コード側の語リストで増やさず、Jev が表のマークダウンを読んで選ぶ）。
+    static func candidateMetricRows(
+        in table: RevenueRecognitionCandidates.ParsedTable
+    ) -> [SegmentInfoMetricRow] {
+        var rows = metricRows(in: table)
+        var seen = Set(rows.map(\.row))
+        for classified in table.structure.rows where classified.hasAmount {
+            guard !seen.contains(classified.index) else { continue }
+            let label = classified.category ?? classified.categoryGroup ?? ""
+            let compact = RevenueRecognitionCandidates.compactCell(label)
+            guard !compact.isEmpty else { continue }
+            seen.insert(classified.index)
+            rows.append(SegmentInfoMetricRow(
+                key: "t\(table.tableIndex)_r\(classified.index)",
+                tableIndex: table.tableIndex, row: classified.index, label: compact))
+        }
+        return rows.sorted { $0.row < $1.row }
     }
 
     /// 列が製品・事業、行が当連結会計年度／前連結会計年度のマトリクス（エーザイ製品別）。
@@ -875,12 +899,12 @@ enum SegmentInfoLLMNormalizer {
     ) {
         if transposed {
             let sales = resolveMetricRow(
-                choice.salesRow, rows: metricRows(in: table),
+                choice.salesRow, rows: candidateMetricRows(in: table),
                 preferred: { preferredSalesRow(in: $0, fiscalYearEnd: fiscalYearEnd) })
             let profit = resolveMetricRow(
-                choice.profitRow, rows: metricRows(in: table), preferred: preferredProfitRow(in:))
+                choice.profitRow, rows: candidateMetricRows(in: table), preferred: preferredProfitRow(in:))
             let salesRowIndex = sales?.row
-                ?? preferredSalesRow(in: metricRows(in: table), fiscalYearEnd: fiscalYearEnd)?.row
+                ?? preferredSalesRow(in: candidateMetricRows(in: table), fiscalYearEnd: fiscalYearEnd)?.row
             guard let salesRowIndex else {
                 return ([], [:], false, false, nil)
             }
