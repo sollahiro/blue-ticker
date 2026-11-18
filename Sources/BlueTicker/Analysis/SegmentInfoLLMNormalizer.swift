@@ -796,17 +796,30 @@ enum SegmentInfoLLMNormalizer {
     static func mergingSplitSegmentMatrices(_ tables: [BreakdownTable]) -> [BreakdownTable] {
         guard tables.count >= 2 else { return tables }
         var merged = tables
+        func joined(_ a: Int, _ b: Int) -> [[String]]? {
+            guard b < merged.count else { return nil }
+            return joinedSplitMatrix(
+                BreakdownExtractor.markdownToGrid(merged[a].markdown),
+                BreakdownExtractor.markdownToGrid(merged[b].markdown))
+        }
         var index = 0
         while index + 1 < merged.count {
-            let left = BreakdownExtractor.markdownToGrid(merged[index].markdown)
-            let right = BreakdownExtractor.markdownToGrid(merged[index + 1].markdown)
-            if merged[index].period != nil, merged[index].period == merged[index + 1].period,
-               let joined = joinedSplitMatrix(left, right)
-            {
-                merged[index].markdown = BreakdownExtractor.gridToMarkdown(joined)
-                merged[index + 1].markdown = ""
-                index += 2
-                continue
+            if merged[index].period != nil, let grid = joined(index, index + 1) {
+                let samePeriod = merged[index].period == merged[index + 1].period
+                // 前期の表が左右に分かれ、右の表の期間ラベルが当期と誤って付く文書（6272 / 7442）。
+                // 続く当期の 2 表も同じ形で左右に分かれているときだけ、前期同士として連結する。
+                let priorPairMislabeled = merged[index].period == "前期"
+                    && merged[index + 1].period == "当期"
+                    && index + 3 < merged.count
+                    && merged[index + 2].period == "当期"
+                    && merged[index + 3].period == "当期"
+                    && joined(index + 2, index + 3) != nil
+                if samePeriod || priorPairMislabeled {
+                    merged[index].markdown = BreakdownExtractor.gridToMarkdown(grid)
+                    merged[index + 1].markdown = ""
+                    index += 2
+                    continue
+                }
             }
             index += 1
         }
@@ -814,32 +827,51 @@ enum SegmentInfoLLMNormalizer {
     }
 
     static func joinedSplitMatrix(_ left: [[String]], _ right: [[String]]) -> [[String]]? {
-        guard left.count >= 6, left.count == right.count else { return nil }
+        guard left.count >= 6 else { return nil }
         let leftWidth = left.map(\.count).max() ?? 0
         let rightWidth = right.map(\.count).max() ?? 0
         guard leftWidth >= 3, rightWidth >= 3 else { return nil }
         let leftRows = left.map { $0 + Array(repeating: "", count: leftWidth - $0.count) }
         let rightRows = right.map { $0 + Array(repeating: "", count: rightWidth - $0.count) }
-        for (l, r) in zip(leftRows, rightRows) {
+        // 見出しの行数は左右で違ってよい（左は親見出しが 3 段、右は 2 段、など 8230）。
+        // データ行（見出しの下）の行ラベルが同じ並びのときだけ、見出しを下端で揃えて横に連結する。
+        let leftHeaderCount = RevenueRecognitionCandidates.dataStartRow(leftRows)
+        let rightHeaderCount = RevenueRecognitionCandidates.dataStartRow(rightRows)
+        guard leftHeaderCount > 0, leftHeaderCount < leftRows.count,
+              rightHeaderCount > 0, rightHeaderCount < rightRows.count
+        else { return nil }
+        let leftData = Array(leftRows.dropFirst(leftHeaderCount))
+        let rightData = Array(rightRows.dropFirst(rightHeaderCount))
+        guard leftData.count == rightData.count else { return nil }
+        for (l, r) in zip(leftData, rightData) {
             guard RevenueRecognitionCandidates.compactCell(l[0])
                 == RevenueRecognitionCandidates.compactCell(r[0]) else { return nil }
         }
-        let headerCount = RevenueRecognitionCandidates.dataStartRow(leftRows)
-        guard headerCount > 0, headerCount < leftRows.count else { return nil }
+        let headerCount = max(leftHeaderCount, rightHeaderCount)
+        func alignedHeader(_ rows: [[String]], count: Int, width: Int) -> [[String]] {
+            Array(repeating: Array(repeating: "", count: width), count: headerCount - count)
+                + Array(rows.prefix(count))
+        }
+        let leftHeader = alignedHeader(leftRows, count: leftHeaderCount, width: leftWidth)
+        let rightHeader = alignedHeader(rightRows, count: rightHeaderCount, width: rightWidth)
         func lastHeader(_ rows: [[String]], _ column: Int) -> String {
-            rows.prefix(headerCount).map { RevenueRecognitionCandidates.compactCell($0[column]) }
+            rows.map { RevenueRecognitionCandidates.compactCell($0[column]) }
                 .filter { !$0.isEmpty && !$0.hasPrefix("(") && !$0.hasPrefix("（") }
                 .last ?? ""
         }
-        // 前の表は合計列を持たず、後ろの表の最後の列だけが合計。
-        let leftHasTotal = (1..<leftWidth).contains {
-            RevenueRecognitionCandidates.isAggregateColumnHeader(lastHeader(leftRows, $0))
+        // 前の表は全社の合計列（合計・連結）を持たず、後ろの表の最後の列だけが合計。
+        // 事業内の小計「計」は合計列に数えない（8230 の「仏壇仏具・墓石 / 計」）。
+        let leftHasTotal = (1..<leftWidth).contains { column in
+            let header = lastHeader(leftHeader, column)
+            return header == "合計" || header.hasPrefix("連結") || header.contains("連結財務諸表")
         }
         guard !leftHasTotal,
               RevenueRecognitionCandidates.isAggregateColumnHeader(
-                lastHeader(rightRows, rightWidth - 1))
+                lastHeader(rightHeader, rightWidth - 1))
         else { return nil }
-        return zip(leftRows, rightRows).map { l, r in l + Array(r.dropFirst()) }
+        let header = zip(leftHeader, rightHeader).map { l, r in l + Array(r.dropFirst()) }
+        let data = zip(leftData, rightData).map { l, r in l + Array(r.dropFirst()) }
+        return header + data
     }
 
     /// 行が「連結」「消去又は全社」など全社・調整だけの表（6981 S100R773 の連結ブロック）。
