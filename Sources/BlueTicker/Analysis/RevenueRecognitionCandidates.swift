@@ -730,6 +730,9 @@ enum RevenueRecognitionCandidates {
     /// 「その他」だけ親とつなげる（その他の地域その他）。事業名の葉があるときは使わない。
     static func nestedGeographyLeafLabel(_ parts: [String]) -> String? {
         guard parts.count >= 2, parts.allSatisfy(isGeographyRelatedHeader) else { return nil }
+        // 「海外事業／証券投資／その他」のようにスラッシュで事業名を並べた見出しは地域グループではない
+        // （8303 S100YDBB）。「海外」「その他」を含むだけで親子を無区切りで連結しない。
+        if parts.contains(where: { $0.contains("／") || $0.contains("/") }) { return nil }
         let parent = compactCell(parts[parts.count - 2])
         let child = compactCell(parts[parts.count - 1])
         if isPeriodHeadingLabel(parent) {

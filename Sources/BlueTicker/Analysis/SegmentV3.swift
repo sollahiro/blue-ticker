@@ -45,6 +45,10 @@ enum SegmentV3 {
             return rows.count - 1
         }
 
+        // 骨格が表由来（LLM）のとき、ラベルが XBRL member と揃わず同じセグメントが二重に足される。
+        // 照合は末尾のラベルでも行い、照合できない segment 行は新しく作らない。
+        let llmSkeleton = segment.sourceKind == breakdownSourceSegmentInfoLLM
+
         let salesBasis: String
         if let externalSalesBasis, let external, !external.rows.isEmpty {
             salesBasis = externalSalesBasis
@@ -73,7 +77,7 @@ enum SegmentV3 {
         if let externalSource {
             mergeMetric(
                 externalSource, into: &rows, index: &index, edinetCode: edinetCode,
-                memberPrefixes: memberPrefixes, labelsByTag: labelsByTag
+                memberPrefixes: memberPrefixes, labelsByTag: labelsByTag, llmSkeleton: llmSkeleton
             ) { row, amount, basis, source, decimals in
                 row.externalSales = cell(
                     value: amount, basis: basis, source: source, decimals: decimals)
@@ -83,7 +87,7 @@ enum SegmentV3 {
 
         mergeMetric(
             assets, into: &rows, index: &index, edinetCode: edinetCode,
-            memberPrefixes: memberPrefixes, labelsByTag: labelsByTag
+            memberPrefixes: memberPrefixes, labelsByTag: labelsByTag, llmSkeleton: llmSkeleton
         ) { row, amount, basis, source, decimals in
             row.segmentAssets = amount
             row.segmentAssetsCell = cell(
@@ -91,14 +95,14 @@ enum SegmentV3 {
         }
         mergeMetric(
             capitalExpenditures, into: &rows, index: &index, edinetCode: edinetCode,
-            memberPrefixes: memberPrefixes, labelsByTag: labelsByTag
+            memberPrefixes: memberPrefixes, labelsByTag: labelsByTag, llmSkeleton: llmSkeleton
         ) { row, amount, basis, source, decimals in
             row.capitalExpenditures = cell(
                 value: amount, basis: basis, source: source, decimals: decimals)
         }
         mergeMetric(
             noncurrentAssetAdditions, into: &rows, index: &index, edinetCode: edinetCode,
-            memberPrefixes: memberPrefixes, labelsByTag: labelsByTag
+            memberPrefixes: memberPrefixes, labelsByTag: labelsByTag, llmSkeleton: llmSkeleton
         ) { row, amount, basis, source, decimals in
             row.noncurrentAssetAdditions = cell(
                 value: amount, basis: basis, source: source, decimals: decimals)
@@ -106,7 +110,7 @@ enum SegmentV3 {
         if let equityMethod {
             mergeMetric(
                 equityMethod, into: &rows, index: &index, edinetCode: edinetCode,
-                memberPrefixes: memberPrefixes, labelsByTag: labelsByTag
+                memberPrefixes: memberPrefixes, labelsByTag: labelsByTag, llmSkeleton: llmSkeleton
             ) { row, amount, basis, source, decimals in
                 row.equityMethodInvestments = amount
                 _ = basis
@@ -121,7 +125,7 @@ enum SegmentV3 {
                 mergeMetric(
                     overview, into: &rows, index: &index, edinetCode: edinetCode,
                     memberPrefixes: memberPrefixes, labelsByTag: labelsByTag,
-                    skipCorporateShared: true, createMissingRows: false
+                    skipCorporateShared: true, createMissingRows: false, llmSkeleton: llmSkeleton
                 ) { row, amount, basis, source, decimals in
                     if row.capitalExpenditures == nil {
                         row.capitalExpenditures = cell(
@@ -260,6 +264,7 @@ enum SegmentV3 {
         labelsByTag: [String: String],
         skipCorporateShared: Bool = false,
         createMissingRows: Bool = true,
+        llmSkeleton: Bool = false,
         write: (inout BreakdownRowPayload, Double, String, String, Int?) -> Void
     ) {
         guard let snapshot else { return }
@@ -280,7 +285,10 @@ enum SegmentV3 {
                 row.prefix == nil && row.rowKind == SegmentMemberKind.rowKind(kind)
                     && SegmentLabelMatch.compact(row.label) == SegmentLabelMatch.compact(label)
                     && !SegmentLabelMatch.compact(label).isEmpty
-            }) {
+            }) ?? (llmSkeleton && kind == .segment
+                ? SegmentLabelMatch.uniqueLeafMatch(
+                    label: label, rows: rows, rowKind: SegmentMemberKind.rowKind(kind))
+                : nil) {
                 position = matched
                 index[source.labelRaw] = matched
                 if let prefix = memberPrefixes[source.labelRaw] {
@@ -289,7 +297,7 @@ enum SegmentV3 {
                         edinetCode: edinetCode, localName: source.labelRaw, prefix: prefix
                     ).description
                 }
-            } else if !createMissingRows {
+            } else if !createMissingRows || (llmSkeleton && kind == .segment) {
                 // 概要のカテゴリは報告セグメントとは限らない（「新設によるもの」、概要だけの member）。
                 // 既にある行にだけセルを載せ、行は増やさない。載らなかった分は overview.categories に残る。
                 continue
