@@ -61,4 +61,36 @@ struct SegmentSplitMatrixMergeTests {
         let merged = SegmentInfoLLMNormalizer.mergingSplitSegmentMatrices(tables)
         #expect(merged.allSatisfy { !$0.markdown.isEmpty })
     }
+
+    /// 7745 S100YHHI: 事業ごとに 3 つの表に分かれ、最後の表だけが調整・連結の列を持つ。
+    /// 期間の付き方（前期・当期の混在）にかかわらず、左から連結して 3 事業が揃う。
+    @Test func threeWaySplitIsJoinedLeftToRight() {
+        let body: [[String]] = [
+            ["売上高", "", "", ""],
+            ["外部顧客への売上高", "100", "200", "300"],
+            ["セグメント間の内部売上高又は振替高", "1", "2", "3"],
+            ["計", "101", "202", "303"],
+            ["セグメント利益", "10", "20", "30"],
+        ]
+        func block(_ name: String, total: [String]? = nil) -> [[String]] {
+            let head: [[String]] = [
+                ["", name, name, name] + (total != nil ? ["調整額（注１）", "連結財務諸表計上額（注２）"] : []),
+                ["", "日本", "米州", "計"] + (total != nil ? ["調整額（注１）", "連結財務諸表計上額（注２）"] : []),
+            ]
+            let rows = body.map { row in row + (total != nil ? (row[1] == "" ? ["", ""] : total!) : []) }
+            return head + rows
+        }
+        let tables = [
+            table(block("半導体関連事業"), period: "前期"),
+            table(block("計測・計量機器事業"), period: "当期"),
+            table(block("医療・健康機器事業", total: ["－", "500"]), period: "当期"),
+        ]
+        let merged = SegmentInfoLLMNormalizer.mergingSplitSegmentMatrices(tables)
+        let grid = BreakdownExtractor.markdownToGrid(merged[0].markdown)
+        #expect(merged[1].markdown.isEmpty && merged[2].markdown.isEmpty)
+        #expect(grid[0].contains("半導体関連事業"))
+        #expect(grid[0].contains("計測・計量機器事業"))
+        #expect(grid[0].contains("医療・健康機器事業"))
+        #expect(grid[1].last == "連結財務諸表計上額（注２）")
+    }
 }

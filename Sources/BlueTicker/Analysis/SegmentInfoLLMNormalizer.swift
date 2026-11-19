@@ -804,8 +804,28 @@ enum SegmentInfoLLMNormalizer {
                 BreakdownExtractor.markdownToGrid(merged[a].markdown),
                 BreakdownExtractor.markdownToGrid(merged[b].markdown))
         }
+        // 事業ごとに表が 3 つ以上に分かれ、最後の表だけが調整・連結の列を持つ（7745）。
+        // 続く表が左の表と行ラベルがそろい、左に合計がない間は、期間の付き方にかかわらず左から連結する。
+        func joinedChain(from start: Int) -> (grid: [[String]], end: Int)? {
+            var grid = BreakdownExtractor.markdownToGrid(merged[start].markdown)
+            var end = start
+            while end + 1 < merged.count,
+                let step = joinedSplitMatrix(
+                    grid, BreakdownExtractor.markdownToGrid(merged[end + 1].markdown))
+            {
+                grid = step
+                end += 1
+            }
+            return end >= start + 2 ? (grid, end) : nil
+        }
         var index = 0
         while index + 1 < merged.count {
+            if merged[index].period != nil, let chained = joinedChain(from: index) {
+                merged[index].markdown = BreakdownExtractor.gridToMarkdown(chained.grid)
+                for next in (index + 1)...chained.end { merged[next].markdown = "" }
+                index = chained.end + 1
+                continue
+            }
             if merged[index].period != nil, let grid = joined(index, index + 1) {
                 let samePeriod = merged[index].period == merged[index + 1].period
                 // 前期の表が左右に分かれ、右の表の期間ラベルが当期と誤って付く文書（6272 / 7442）。
