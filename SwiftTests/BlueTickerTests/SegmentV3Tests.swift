@@ -282,6 +282,27 @@ import Testing
         #expect(assembled.rows.filter { $0.rowKind == "segment" }.count == 1)
     }
 
+    /// 8303: 名前に Corporate を含む報告セグメント member（法人業務）が調整行として足されない。
+    @Test func corporateNamedSegmentMemberIsNotAddedAsReconcilingRow() {
+        let segment = BreakdownSnapshotPayload(
+            axis: breakdownAxisSegment, denominator: 300, denominatorTag: "llm_table_subtotal",
+            rows: [BreakdownRowPayload(
+                labelRaw: "法人業務 / 法人営業", label: "法人業務 / 法人営業", amount: 300, profit: 1,
+                rowKind: "segment")],
+            sourceKind: "segment_info", needsReview: false, warnings: [])
+        let external = snapshot(
+            [BreakdownRow(
+                labelRaw: "CorporateBusinessReportableSegmentMember",
+                label: "CorporateBusinessReportableSegmentMember",
+                amount: 300, share: nil, profit: nil, rowKind: "segment")],
+            denominator: 300, tag: "RevenuesFromExternalCustomers")
+        let assembled = SegmentV3.assemble(
+            segment: segment, assets: nil, capitalExpenditures: nil,
+            noncurrentAssetAdditions: nil, overview: nil, overviewTotal: nil, equityMethod: nil,
+            external: external, edinetCode: "E00004", memberPrefixes: [:], labelsByTag: [:])
+        #expect(assembled.rows.contains { $0.rowKind == "reconciling" } == false)
+    }
+
     /// 同じ末尾ラベルが複数の親にあるとき（親ごとの「日本」）は、どの行にも載せず、行も足さない。
     @Test func ambiguousLeafLabelIsNotMatchedOrCreated() {
         func llm(_ label: String, _ amount: Double) -> BreakdownRowPayload {

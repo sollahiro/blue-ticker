@@ -299,7 +299,9 @@ enum SegmentV3 {
                         edinetCode: edinetCode, localName: source.labelRaw, prefix: prefix
                     ).description
                 }
-            } else if !createMissingRows || (llmSkeleton && kind == .segment) {
+            } else if !createMissingRows || (llmSkeleton && kind == .segment)
+                || (llmSkeleton && Self.isExtensionSegmentNamedMember(source.labelRaw, kind: kind))
+            {
                 // 概要のカテゴリは報告セグメントとは限らない（「新設によるもの」、概要だけの member）。
                 // 既にある行にだけセルを載せ、行は増やさない。載らなかった分は overview.categories に残る。
                 continue
@@ -318,6 +320,17 @@ enum SegmentV3 {
             write(
                 &rows[position], source.amount, snapshot.sourceKind, snapshot.denominatorTag,
                 source.decimals)
+        }
+    }
+
+    /// 会社拡張の報告セグメント member（`...ReportableSegmentMember`）が、名前に Corporate を含むだけで
+    /// 調整・全社に分類されたもの（8303 の CorporateBusiness＝法人業務）。表由来の骨格には行を足さない。
+    private static func isExtensionSegmentNamedMember(_ localName: String, kind: SegmentMemberKind) -> Bool {
+        switch kind {
+        case .reconciling, .corporate, .elimination:
+            return localName.hasSuffix("ReportableSegmentMember")
+        default:
+            return false
         }
     }
 
