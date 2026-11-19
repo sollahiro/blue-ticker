@@ -617,7 +617,9 @@ enum SegmentInfoLLMNormalizer {
             // 候補に残さない（4180 / 4565 / 4593 は顧客・製品の表をセグメントとして公開していた）。
             // 事業名が列に並ぶ表は「製品表」に見えるが、normalize が報告セグメントの表だけに絞って
             // 渡すので、ここでは製品表としては除かない（7752）。
-            let matrices = tables.filter { isSegmentColumnMatrix($0) }
+            // 売上の行が無い（銀行の「連結粗利益」「業務純益」など）セグメント表も報告セグメントの表なので、
+            // 「売上の行が無い表」の除外（salesTables）は使わず、全表から列がセグメントの表を探す（8304）。
+            let matrices = all.filter { isSegmentColumnMatrix($0) }
             return matrices.isEmpty ? tables : matrices
         }
         // 行が売上と利益の指標で、列がセグメントの表は製品表ではない（8591 S100LU21 の前期表は
