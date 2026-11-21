@@ -35,6 +35,10 @@
 		AA0000000000000000000031 /* HAPISOriginGate.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000031 /* HAPISOriginGate.swift */; };
 		AA0000000000000000000032 /* ZeroAxisFill.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000032 /* ZeroAxisFill.swift */; };
 		AA0000000000000000000037 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000037 /* PrivacyInfo.xcprivacy */; };
+		AA0000000000000000000080 /* BreakdownDTOs.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000080 /* BreakdownDTOs.swift */; };
+		AA0000000000000000000081 /* StackedLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000081 /* StackedLayout.swift */; };
+		AA0000000000000000000082 /* BreakdownBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000082 /* BreakdownBuilder.swift */; };
+		AA0000000000000000000083 /* BreakdownCards.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000083 /* BreakdownCards.swift */; };
 		AA0000000000000000000040 /* FeedRSS.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000040 /* FeedRSS.swift */; };
 		AA0000000000000000000041 /* FeedRSSStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000041 /* FeedRSSStore.swift */; };
 		AA0000000000000000000042 /* InfoPlist.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000042 /* InfoPlist.xcstrings */; };
@@ -75,6 +79,10 @@
 		BB0000000000000000000032 /* ZeroAxisFill.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZeroAxisFill.swift; sourceTree = "<group>"; };
 		BB0000000000000000000037 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		BB0000000000000000000038 /* Info-Release.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "Info-Release.plist"; sourceTree = "<group>"; };
+		BB0000000000000000000080 /* BreakdownDTOs.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BreakdownDTOs.swift; sourceTree = "<group>"; };
+		BB0000000000000000000081 /* StackedLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StackedLayout.swift; sourceTree = "<group>"; };
+		BB0000000000000000000082 /* BreakdownBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BreakdownBuilder.swift; sourceTree = "<group>"; };
+		BB0000000000000000000083 /* BreakdownCards.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BreakdownCards.swift; sourceTree = "<group>"; };
 		BB0000000000000000000040 /* FeedRSS.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeedRSS.swift; sourceTree = "<group>"; };
 		BB0000000000000000000041 /* FeedRSSStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeedRSSStore.swift; sourceTree = "<group>"; };
 		BB0000000000000000000042 /* InfoPlist.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = InfoPlist.xcstrings; sourceTree = "<group>"; };
@@ -98,6 +106,7 @@
 				DD0000000000000000000002 /* BlueTicker */,
 				DD0000000000000000000009 /* HAPISConsumer */,
 				DD0000000000000000000010 /* ZeroAxisFill */,
+				DD0000000000000000000020 /* SegmentBreakdown */,
 				DD0000000000000000000012 /* FeedRSS */,
 				DD0000000000000000000003 /* Products */,
 			);
@@ -183,6 +192,7 @@
 				BB0000000000000000000016 /* TickerView.swift */,
 				BB0000000000000000000017 /* OverviewText.swift */,
 				BB0000000000000000000018 /* AnalysisView.swift */,
+				BB0000000000000000000083 /* BreakdownCards.swift */,
 			);
 			path = Ticker;
 			sourceTree = "<group>";
@@ -207,6 +217,17 @@
 			);
 			name = ZeroAxisFill;
 			path = ZeroAxisFill/Sources/ZeroAxisFill;
+			sourceTree = "<group>";
+		};
+		DD0000000000000000000020 /* SegmentBreakdown */ = {
+			isa = PBXGroup;
+			children = (
+				BB0000000000000000000080 /* BreakdownDTOs.swift */,
+				BB0000000000000000000081 /* StackedLayout.swift */,
+				BB0000000000000000000082 /* BreakdownBuilder.swift */,
+			);
+			name = SegmentBreakdown;
+			path = SegmentBreakdown/Sources/SegmentBreakdown;
 			sourceTree = "<group>";
 		};
 		DD0000000000000000000012 /* FeedRSS */ = {
@@ -317,6 +338,10 @@
 				AA0000000000000000000017 /* OverviewText.swift in Sources */,
 				AA0000000000000000000018 /* AnalysisView.swift in Sources */,
 				AA0000000000000000000032 /* ZeroAxisFill.swift in Sources */,
+				AA0000000000000000000080 /* BreakdownDTOs.swift in Sources */,
+				AA0000000000000000000081 /* StackedLayout.swift in Sources */,
+				AA0000000000000000000082 /* BreakdownBuilder.swift in Sources */,
+				AA0000000000000000000083 /* BreakdownCards.swift in Sources */,
 				AA0000000000000000000040 /* FeedRSS.swift in Sources */,
 				AA0000000000000000000041 /* FeedRSSStore.swift in Sources */,
 			);
