@@ -19,9 +19,18 @@ struct BreakdownItemInput: Equatable {
     var mergedFrom: [String] = []
 }
 
+/// 前年の旧区分と今年の新区分の、ひとまとまりの再編（API の `reorgs[]`）。
+/// 旧区分（`fromKeys`）と新区分（`toKeys`）をそれぞれ隣り合わせに積み、塊から塊へ 1 本の帯でつなぐ。
+struct BreakdownReorgGroup: Equatable {
+    var fromKeys: [String]
+    var toKeys: [String]
+}
+
 struct BreakdownColumnInput: Equatable {
     var label: String
     var items: [BreakdownItemInput]
+    /// 前の列からこの列への再編。
+    var groups: [BreakdownReorgGroup] = []
 }
 
 /// 棒の中に出す文字の元。
@@ -54,6 +63,7 @@ struct BreakdownBar: Equatable, Identifiable {
 struct BreakdownRibbon: Equatable, Identifiable {
     var fromColumn: Int
     var key: String
+    /// 負のときは系列の色を持たない（再編の塊のつなぎ）。中立色で描く。
     var colorIndex: Int
     var leftTop: Double
     var leftBottom: Double
@@ -145,21 +155,31 @@ enum StackedLayout {
         let centers = (0..<n).map { (Double($0) + 0.5) / Double(n) }
 
         // 4. 印（再編・新規・終了）。
+        // 再編の組に入る行は、塊の帯で示すので印を出さない。
+        var groupedFrom: [Set<String>] = Array(repeating: [], count: n)
+        var groupedTo: [Set<String>] = Array(repeating: [], count: n)
+        for k in 1..<n {
+            for group in columns[k].groups {
+                groupedFrom[k - 1].formUnion(group.fromKeys)
+                groupedTo[k].formUnion(group.toKeys)
+            }
+        }
         var marks: [[String: BreakdownMark]] = Array(repeating: [:], count: n)
         for k in 1..<n {
-            let hasReorg = items[k].contains { $0.link == .reorg }
+            let hasReorg = items[k].contains { $0.link == .reorg && !groupedTo[k].contains($0.key) }
             var referenced = Set<String>()
             for item in items[k] {
                 switch item.link {
                 case .connect(let from) where seriesIDs[k - 1][from] != nil:
                     referenced.insert(from)
                 case .reorg:
-                    marks[k][item.key] = .reorg
+                    marks[k][item.key] = groupedTo[k].contains(item.key) ? BreakdownMark.none : .reorg
                 default:
-                    marks[k][item.key] = .new
+                    marks[k][item.key] = groupedTo[k].contains(item.key) ? BreakdownMark.none : .new
                 }
             }
             for previous in items[k - 1] where !referenced.contains(previous.key) {
+                if groupedFrom[k - 1].contains(previous.key) { continue }
                 // 組替が出た年は、消えた行が組替の元かもしれない。「終了」と断定しない。
                 marks[k - 1][previous.key] = hasReorg ? .reorg : .ended
             }
@@ -170,11 +190,15 @@ enum StackedLayout {
         for k in 0..<n {
             var cumulative = 0.0
             var column: [BreakdownBar] = []
-            let sorted = items[k].sorted {
+            var sorted = items[k].sorted {
                 let a = colorIndex[seriesIDs[k][$0.key] ?? $0.key] ?? 0
                 let b = colorIndex[seriesIDs[k][$1.key] ?? $1.key] ?? 0
                 return a < b
             }
+            // 再編の組は、旧区分どうし・新区分どうしを隣り合わせに積む。
+            var clusters = columns[k].groups.map(\.toKeys)
+            if k + 1 < n { clusters += columns[k + 1].groups.map(\.fromKeys) }
+            sorted = clustered(sorted, clusters: clusters)
             for item in sorted {
                 let height = item.value * scale
                 cumulative += height
@@ -207,8 +231,40 @@ enum StackedLayout {
             }
         }
 
+        if n > 1 {
+            for k in 1..<n {
+                for (index, group) in columns[k].groups.enumerated() {
+                    let source = bars[k - 1].filter { group.fromKeys.contains($0.key) }
+                    let target = bars[k].filter { group.toKeys.contains($0.key) }
+                    guard let first = source.first, let second = target.first else { continue }
+                    ribbons.append(
+                        BreakdownRibbon(
+                            fromColumn: k - 1, key: "group|\(k)|\(index)", colorIndex: -1,
+                            leftTop: source.map(\.y).min() ?? first.y,
+                            leftBottom: source.map { $0.y + $0.height }.max() ?? first.y + first.height,
+                            rightTop: target.map(\.y).min() ?? second.y,
+                            rightBottom: target.map { $0.y + $0.height }.max() ?? second.y + second.height,
+                            leftX: first.x + first.width, rightX: second.x))
+                }
+            }
+        }
+
         return BreakdownLayout(
             columnLabels: columns.map(\.label), columnTotals: totals, columnCenters: centers,
             bars: bars, ribbons: ribbons, series: series, headroom: headroom)
+    }
+
+    /// `clusters` の各組を、先頭の行の位置に寄せて連続させる。
+    private static func clustered(_ items: [BreakdownItemInput], clusters: [[String]]) -> [BreakdownItemInput] {
+        var result = items
+        for cluster in clusters {
+            let keys = Set(cluster)
+            guard let first = result.firstIndex(where: { keys.contains($0.key) }) else { continue }
+            let members = result.filter { keys.contains($0.key) }
+            guard members.count > 1 else { continue }
+            result.removeAll { keys.contains($0.key) }
+            result.insert(contentsOf: members, at: min(first, result.count))
+        }
+        return result
     }
 }
