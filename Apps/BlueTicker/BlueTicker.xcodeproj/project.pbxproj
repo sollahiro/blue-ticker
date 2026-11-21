@@ -41,6 +41,7 @@
 		AA0000000000000000000083 /* BreakdownCards.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000083 /* BreakdownCards.swift */; };
 		AA0000000000000000000040 /* FeedRSS.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000040 /* FeedRSS.swift */; };
 		AA0000000000000000000041 /* FeedRSSStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000041 /* FeedRSSStore.swift */; };
+		AA0000000000000000000088 /* BenchmarkStaticStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000088 /* BenchmarkStaticStore.swift */; };
 		AA0000000000000000000042 /* InfoPlist.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000042 /* InfoPlist.xcstrings */; };
 		AA0000000000000000000050 /* AppIcon.icon in Resources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000050 /* AppIcon.icon */; };
 		AA0000000000000000000084 /* BenchmarkDTOs.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000084 /* BenchmarkDTOs.swift */; };
@@ -89,6 +90,7 @@
 		BB0000000000000000000083 /* BreakdownCards.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BreakdownCards.swift; sourceTree = "<group>"; };
 		BB0000000000000000000040 /* FeedRSS.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeedRSS.swift; sourceTree = "<group>"; };
 		BB0000000000000000000041 /* FeedRSSStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeedRSSStore.swift; sourceTree = "<group>"; };
+		BB0000000000000000000088 /* BenchmarkStaticStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BenchmarkStaticStore.swift; sourceTree = "<group>"; };
 		BB0000000000000000000042 /* InfoPlist.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = InfoPlist.xcstrings; sourceTree = "<group>"; };
 		BB0000000000000000000050 /* AppIcon.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = AppIcon.icon; sourceTree = "<group>"; };
 		BB0000000000000000000084 /* BenchmarkDTOs.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BenchmarkDTOs.swift; sourceTree = "<group>"; };
@@ -159,6 +161,7 @@
 				BB0000000000000000000006 /* APIClient.swift */,
 				BB0000000000000000000024 /* ResponseCache.swift */,
 				BB0000000000000000000041 /* FeedRSSStore.swift */,
+				BB0000000000000000000088 /* BenchmarkStaticStore.swift */,
 			);
 			path = API;
 			sourceTree = "<group>";
@@ -360,6 +363,7 @@
 				AA0000000000000000000084 /* BenchmarkDTOs.swift in Sources */,
 				AA0000000000000000000040 /* FeedRSS.swift in Sources */,
 				AA0000000000000000000041 /* FeedRSSStore.swift in Sources */,
+				AA0000000000000000000088 /* BenchmarkStaticStore.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
