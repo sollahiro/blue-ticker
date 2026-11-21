@@ -12,6 +12,8 @@ struct BreakdownSections: View {
         Group {
             if let segment = model?.segment {
                 SegmentCard(model: segment)
+            } else if model?.singleSegment == true {
+                SingleSegmentCard()
             }
             if let region = model?.region {
                 RegionCard(model: region)
@@ -37,6 +39,8 @@ struct RegionCardModel {
 struct BreakdownModel {
     var segment: SegmentCardModel?
     var region: RegionCardModel?
+    /// 単一セグメントの会社（セグメントの内訳が無い）。カードに「単一セグメント」と出す。
+    var singleSegment = false
 
     /// 直近 5 年（取れる分だけ）。
     static let years = 5
@@ -47,13 +51,22 @@ struct BreakdownModel {
         // 利益（最新期）は積み上げの取得を待たずに始める。
         async let detail = try? APIClient.shared.breakdown(code: code, axis: "segment")
         guard let waterfall = try? await APIClient.shared.segmentWaterfall(code: code, years: years) else {
+            // 内訳が「単一セグメントのため省略」と返る会社は、その旨のカードを出す。
+            _ = await detail
+            if await APIClient.shared.segmentNotFoundReason(code: code) == singleSegmentReason {
+                await loadSingleSegment(code: code, update: update)
+            }
             return
         }
         // 再編で統合された旧区分は、過去の年も 1 本にまとめる（流れを追う必要はない）。
         let columns = BreakdownBuilder.collapsingReorgs(
             BreakdownBuilder.segmentColumns(waterfall) { Format.fy($0.fyEnd) })
         // 区分が 1 つだけでは構成も推移も見えない。
-        guard let latest = columns.last, latest.items.count >= 2 else { return }
+        guard let latest = columns.last else { return }
+        guard latest.items.count >= 2 else {
+            await loadSingleSegment(code: code, update: update)
+            return
+        }
         let layout = StackedLayout.make(columns: columns)
         func segmentModel(_ profitByKey: [String: Double]) -> SegmentCardModel {
             SegmentCardModel(
@@ -61,8 +74,8 @@ struct BreakdownModel {
                 rows: BreakdownSummary.segmentRows(columns: columns, layout: layout, profitByKey: profitByKey))
         }
 
-        // 地域（年ごと）は利益を待たずに始める。
-        async let regionResponses = loadRegionResponses(code: code, waterfall: waterfall)
+        // 地域は利益を待たずに始める。年次推移の API（地域名を正規化済み）が取れなければ、年ごとの内訳から組む。
+        async let regionWaterfall = try? APIClient.shared.geographyWaterfall(code: code, years: years)
 
         // 1 段目: 棒と、利益なしの表。
         await update(BreakdownModel(segment: segmentModel([:]), region: nil))
@@ -78,8 +91,32 @@ struct BreakdownModel {
 
         // 3 段目: 地域。
         let geographic = detailRows.contains { $0.segmentBasis == "geographic" }
-        let region = geographic ? nil : regionModel(waterfall: waterfall, responses: await regionResponses)
+        var region: RegionCardModel?
+        if !geographic {
+            if let response = await regionWaterfall,
+                let model = regionModel(
+                    columns: BreakdownBuilder.geographyColumns(response) { Format.fy($0.fyEnd) })
+            {
+                region = model
+            } else {
+                let responses = await loadRegionResponses(code: code, waterfall: waterfall)
+                region = regionModel(waterfall: waterfall, responses: responses)
+            }
+        }
         await update(BreakdownModel(segment: segment, region: region))
+    }
+
+    /// 内訳 API が単一セグメントと返す理由。
+    private static let singleSegmentReason = "single_segment_disclosed"
+
+    /// 単一セグメントの会社: 「単一セグメント」のカードを出し、地域は取れれば続けて出す。
+    private static func loadSingleSegment(code: String, update: @MainActor (BreakdownModel) -> Void) async {
+        await update(BreakdownModel(segment: nil, region: nil, singleSegment: true))
+        if let response = try? await APIClient.shared.geographyWaterfall(code: code, years: years),
+            let region = regionModel(columns: BreakdownBuilder.geographyColumns(response) { Format.fy($0.fyEnd) })
+        {
+            await update(BreakdownModel(segment: nil, region: region, singleSegment: true))
+        }
     }
 
     /// 年ごとの地域別売上を並列に取る。取れなかった年は nil。結果は `waterfall.years` と同じ並び（新しい年が先頭）。
@@ -110,6 +147,10 @@ struct BreakdownModel {
                 label: Format.fy(year.fyEnd), previousLabels: previous, response: response)
             if !column.items.isEmpty { columns.append(column) }
         }
+        return regionModel(columns: columns)
+    }
+
+    private static func regionModel(columns: [BreakdownColumnInput]) -> RegionCardModel? {
         guard let latest = columns.last, latest.items.count >= 2 else { return nil }
         let layout = StackedLayout.make(columns: columns)
         return RegionCardModel(
@@ -118,6 +159,18 @@ struct BreakdownModel {
 }
 
 // MARK: - カード
+
+/// 単一セグメントの会社。報告セグメントが 1 つ（または省略）なので、内訳のグラフは出さない。
+private struct SingleSegmentCard: View {
+    var body: some View {
+        AnalysisCard(title: "セグメント別売上高") {
+            Text("単一セグメント")
+                .font(.headline)
+                .foregroundStyle(Theme.text)
+            AnalysisNote(text: "この会社は報告セグメントが1つ（または省略）のため、セグメント別の内訳はありません。")
+        }
+    }
+}
 
 private struct SegmentCard: View {
     var model: SegmentCardModel
@@ -261,14 +314,18 @@ enum BreakdownPalette {
         Color(red: 0.56, green: 0.56, blue: 0.58),
     ]
 
-    static func color(_ index: Int) -> Color { colors[index % colors.count] }
+    /// 負の番号（単一セグメントの棒）は系列の色を持たず、中立色。
+    static func color(_ index: Int) -> Color {
+        index < 0 ? Theme.textMuted.opacity(0.55) : colors[index % colors.count]
+    }
 
     static func markText(_ mark: BreakdownMark) -> String? {
         switch mark {
         case .none: return nil
         case .reorg: return "再編"
-        case .new: return "新規"
-        case .ended: return "終了"
+        // 「新規」「終了」は断定しない（地域名の表記ゆれや再編で出がち）ので棒の中には出さない。
+        case .new, .ended: return nil
+        case .single: return "単一セグメント"
         }
     }
 }
@@ -299,7 +356,9 @@ private struct StackedBarChart: View {
     var accessibilityText: String
 
     private let chartHeight: CGFloat = 220
-    private let labelBand: CGFloat = 22
+    private let baseLabelBand: CGFloat = 22
+    /// 年ラベルの下に「再編」を出す年があるときだけ、下の余白を広げる。
+    private var labelBand: CGFloat { layout.columnReorged.contains(true) ? baseLabelBand + 12 : baseLabelBand }
     /// 縦軸の文字を置く左の余白。
     private let axisInset: CGFloat = 40
 
@@ -373,7 +432,13 @@ private struct StackedBarChart: View {
                 context.draw(
                     context.resolve(
                         Text(layout.columnLabels[index]).font(.caption2).foregroundStyle(Theme.textMuted)),
-                    at: CGPoint(x: x(center), y: plotHeight + labelBand / 2 + 2), anchor: .center)
+                    at: CGPoint(x: x(center), y: plotHeight + baseLabelBand / 2 + 2), anchor: .center)
+                if index < layout.columnReorged.count, layout.columnReorged[index] {
+                    context.draw(
+                        context.resolve(
+                            Text("再編").font(.system(size: 9, weight: .medium)).foregroundStyle(Theme.textMuted.opacity(0.8))),
+                        at: CGPoint(x: x(center), y: plotHeight + baseLabelBand + 6), anchor: .center)
+                }
                 let top = layout.bars[index].map(\.y).min() ?? 1
                 context.draw(
                     context.resolve(

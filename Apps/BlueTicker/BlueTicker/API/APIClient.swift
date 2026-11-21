@@ -9,6 +9,8 @@ actor APIClient {
     private let hapis: HAPISConsumerClient
     private let originGate: HAPISOriginGate
     private var inFlightGets: [String: InFlightGet] = [:]
+    /// 404 の本文に `reason` があったときの理由（URL ごとの最新）。内訳の「該当なし」の見分けに使う。
+    private var notFoundReasons: [String: String] = [:]
 
     private struct InFlightGet {
         let id: UUID
@@ -92,6 +94,18 @@ actor APIClient {
             "v1/companies/\(code)/waterfall/segment",
             [("metric", "external_sales"), ("years", String(years))])
         return try await get(url, cacheTTL: ttl(for: code))
+    }
+
+    /// 地域別売上の年次推移（新しい年が先頭）。地域名は正規化され、比べられる年の塊に分かれる。未算出は 404。
+    func geographyWaterfall(code: String, years: Int = 3) async throws -> GeographyWaterfallResponse {
+        let url = try queryURL("v1/companies/\(code)/waterfall/geography", [("years", String(years))])
+        return try await get(url, cacheTTL: ttl(for: code))
+    }
+
+    /// 直近の `breakdown?axis=segment` が 404 だったときの理由。`single_segment_disclosed` なら単一セグメント。
+    func segmentNotFoundReason(code: String) -> String? {
+        guard let url = try? queryURL("v1/companies/\(code)/breakdown", [("axis", "segment")]) else { return nil }
+        return notFoundReasons[url.absoluteString]
     }
 
     /// 内訳（`axis` は `segment` / `geography`）。`docId` を省くと最新の有報。
@@ -358,6 +372,11 @@ actor APIClient {
             throw APIClientError.http(status: 429, message: message)
         }
         if status == 404 {
+            if let reason = (try? decoder.decode(APIErrorBody.self, from: data))?.reason {
+                notFoundReasons[url.absoluteString] = reason
+            } else {
+                notFoundReasons[url.absoluteString] = nil
+            }
             let message = httpErrorMessage(data, fallback: "見つかりません")
             throw APIClientError.http(status: 404, message: message)
         }

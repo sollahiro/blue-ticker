@@ -162,6 +162,8 @@ struct CompanyOverviewResponse: Codable {
 struct APIErrorBody: Codable {
     var error: String?
     var status: Int?
+    /// 404 の理由（例: `single_segment_disclosed`）。内訳の「該当なし」応答にだけ付く。
+    var reason: String?
 }
 
 enum APIClientError: LocalizedError {
