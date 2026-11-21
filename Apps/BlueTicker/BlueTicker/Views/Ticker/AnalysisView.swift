@@ -1,7 +1,7 @@
 import Charts
 import SwiftUI
 
-/// 銘柄の分析結果。業績・収益構造・資本効率・資金配分・労働生産性を縦に並べ、スクロールで見る。
+/// 銘柄の分析結果。業績・収益構造・セグメント・地域・資本効率・資金配分・労働生産性を縦に並べ、スクロールで見る。
 /// 入力は Waterfall（`/waterfall`）。Summary の水準値に前年差を足した上位集合なので 1 本で足りる。
 struct AnalysisView: View {
     var code: String
@@ -30,6 +30,7 @@ struct AnalysisView: View {
             VStack(spacing: Theme.cardContentInset) {
                 PerformanceSection(years: years, currency: currency)
                 BusinessProfitSection(years: years, currency: currency)
+                BreakdownSections(code: code)
                 CapitalEfficiencySection(years: years)
                 CashAllocationSection(years: years, currency: currency)
                 ProductivitySection(years: years, currency: currency)
@@ -61,7 +62,7 @@ struct AnalysisView: View {
 // MARK: - 共通
 
 /// 分析の 1 区分。見出しと中身を角丸のカードに載せる。
-private struct AnalysisCard<Content: View>: View {
+struct AnalysisCard<Content: View>: View {
     var title: String
     /// 指定すると、タイトルの右に「i」ボタンを出す。
     var onInfo: (() -> Void)?
@@ -104,7 +105,7 @@ private struct AnalysisSubheading: View {
     }
 }
 
-private struct AnalysisNote: View {
+struct AnalysisNote: View {
     var text: String
 
     var body: some View {

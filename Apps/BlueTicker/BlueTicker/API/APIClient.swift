@@ -86,6 +86,29 @@ actor APIClient {
         try await get(path("v1/companies/\(code)/overview"), cacheTTL: ttl(for: code))
     }
 
+    /// 報告セグメントの外部売上の年次推移（新しい年が先頭）。単一セグメントや未算出は 404。
+    func segmentWaterfall(code: String, years: Int = 3) async throws -> SegmentWaterfallResponse {
+        let url = try queryURL(
+            "v1/companies/\(code)/waterfall/segment",
+            [("metric", "external_sales"), ("years", String(years))])
+        return try await get(url, cacheTTL: ttl(for: code))
+    }
+
+    /// 内訳（`axis` は `segment` / `geography`）。`docId` を省くと最新の有報。
+    func breakdown(code: String, axis: String, docId: String? = nil) async throws -> BreakdownResponse {
+        var items = [("axis", axis)]
+        if let docId { items.append(("doc_id", docId)) }
+        let url = try queryURL("v1/companies/\(code)/breakdown", items)
+        return try await get(url, cacheTTL: ttl(for: code))
+    }
+
+    private func queryURL(_ suffix: String, _ items: [(String, String)]) throws -> URL {
+        var components = URLComponents(url: path(suffix), resolvingAgainstBaseURL: false)
+        components?.queryItems = items.map { URLQueryItem(name: $0.0, value: $0.1) }
+        guard let url = components?.url else { throw APIClientError.badURL }
+        return url
+    }
+
     func prefetchAnalysis(codes: [String]) async {
         for code in codes {
             guard !Task.isCancelled else { return }
