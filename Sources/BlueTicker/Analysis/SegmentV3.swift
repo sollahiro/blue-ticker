@@ -18,6 +18,7 @@ enum SegmentV3 {
         equityMethod: BreakdownSnapshot?,
         external: BreakdownSnapshot?,
         externalSalesBasis: String? = nil,
+        priorYearExternal: BreakdownSnapshot? = nil,
         edinetCode: String,
         memberPrefixes: [String: String],
         labelsByTag: [String: String]
@@ -84,6 +85,17 @@ enum SegmentV3 {
                 row.externalSales = cell(
                     value: amount, basis: basis, source: source, decimals: decimals)
                 if row.amount == 0 { row.amount = amount }
+            }
+        }
+
+        if let priorYearExternal {
+            mergeMetric(
+                priorYearExternal, into: &rows, index: &index, edinetCode: edinetCode,
+                memberPrefixes: memberPrefixes, labelsByTag: labelsByTag,
+                createMissingRows: false, llmSkeleton: llmSkeleton
+            ) { row, amount, basis, source, decimals in
+                row.priorYearExternalSales = cell(
+                    value: amount, basis: basis, source: source, decimals: decimals)
             }
         }
 

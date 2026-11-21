@@ -898,6 +898,11 @@ public extension BltServerContext {
             noncurrentAssetAdditions: noncurrent, overview: overview,
             overviewTotal: overviewTotal, equityMethod: equityMethod, external: external,
             externalSalesBasis: externalResolution?.salesBasis,
+            priorYearExternal: externalResolution?.salesBasis == segmentSalesBasisExternal
+                ? SegmentExternalSales.priorYear(
+                    facts: cached.facts, labelsByTag: cached.labelsByTag,
+                    memberParents: memberParents)
+                : nil,
             edinetCode: edinetCode, memberPrefixes: memberPrefixes,
             labelsByTag: cached.labelsByTag)
         if assembled.overview?.total == nil {

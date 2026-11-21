@@ -19,6 +19,70 @@ import Testing
             labelRaw: local, label: local, amount: amount, profit: profit, rowKind: kind)
     }
 
+    private func restatedPayload(
+        key: String, value: Double, priorYear: Double? = nil
+    ) -> BreakdownSnapshotPayload {
+        var row = payloadRow("AMember", "segment", amount: value)
+        row.segmentKey = key
+        row.externalSales = BreakdownMetricCellPayload(
+            value: value, basis: breakdownSourceXbrlFacts, source: "Sales", decimals: -6)
+        if let priorYear {
+            row.priorYearExternalSales = BreakdownMetricCellPayload(
+                value: priorYear, basis: breakdownSourceXbrlFacts, source: "Sales", decimals: -6)
+        }
+        return BreakdownSnapshotPayload(
+            axis: breakdownAxisSegment, denominator: value, denominatorTag: "Sales",
+            rows: [row], sourceKind: breakdownSourceXbrlFacts, needsReview: false, warnings: [])
+    }
+
+    @Test func sameKeyWithRestatedPriorValueBreaksTheLine() throws {
+        let key = "E1:ext:AMember"
+        let years: [(fyEnd: String, docID: String, payload: BreakdownSnapshotPayload)] = [
+            ("2026-03-31", "D2", restatedPayload(key: key, value: 40_000_000_000, priorYear: 30_000_000_000)),
+            ("2025-03-31", "D1", restatedPayload(key: key, value: 180_000_000_000)),
+        ]
+        let object = SegmentWaterfall.jsonObject(
+            code: "9999", metric: segmentWaterfallMetricExternalSales, years: years)
+        let newest = try #require((object["years"] as? [[String: Any]])?.first)
+        #expect(newest[segmentWaterfallLineCutKey] as? Bool == true)
+        let segment = try #require((newest[segmentWaterfallSegmentsKey] as? [[String: Any]])?.first)
+        let prior = try #require(segment[segmentWaterfallPriorKey] as? [String: Any])
+        #expect(prior["decision"] as? String == segmentTransitionDecisionBreak)
+        #expect(prior["basis"] as? String == segmentTransitionMatchedRestated)
+    }
+
+    @Test func sameKeyWithMatchingPriorValueStaysConnected() throws {
+        let key = "E1:ext:AMember"
+        let years: [(fyEnd: String, docID: String, payload: BreakdownSnapshotPayload)] = [
+            ("2026-03-31", "D2", restatedPayload(key: key, value: 40_000_000_000, priorYear: 180_000_000_000)),
+            ("2025-03-31", "D1", restatedPayload(key: key, value: 180_000_000_000)),
+        ]
+        let object = SegmentWaterfall.jsonObject(
+            code: "9999", metric: segmentWaterfallMetricExternalSales, years: years)
+        let newest = try #require((object["years"] as? [[String: Any]])?.first)
+        #expect(newest[segmentWaterfallLineCutKey] as? Bool == false)
+        let segment = try #require((newest[segmentWaterfallSegmentsKey] as? [[String: Any]])?.first)
+        let prior = try #require(segment[segmentWaterfallPriorKey] as? [String: Any])
+        #expect(prior["decision"] as? String == segmentTransitionDecisionConnect)
+    }
+
+    @Test func priorYearColumnIsReadWithThisFilingsSegments() throws {
+        func fact(_ ctx: String, _ member: String, _ value: Double) -> BreakdownFact {
+            BreakdownFact(
+                tag: "RevenuesFromExternalCustomers", contextRef: ctx,
+                dimensions: ["OperatingSegmentsAxis": member], value: value, decimals: "-6")
+        }
+        let facts = [
+            fact("CurrentYearDuration_AMember", "AMember", 40),
+            fact("Prior1YearDuration_AMember", "AMember", 30),
+            fact("Prior1YearDuration_BMember", "BMember", 70),
+        ]
+        let snapshot = try #require(SegmentExternalSales.priorYear(facts: facts))
+        let values = Dictionary(uniqueKeysWithValues: snapshot.rows.map { ($0.labelRaw, $0.amount) })
+        #expect(values["AMember"] == 30)
+        #expect(values["BMember"] == 70)
+    }
+
     @Test func roundingGapIsOmittedFromDifferenceAndKeptRaw() throws {
         let sales = [
             row("AMember", "segment", amount: 936_926_000_000, decimals: -6),
@@ -850,6 +914,37 @@ import Testing
         #expect(regroupReorgs[0]["kind"] as? String == segmentWaterfallReorgKindRegroup)
         #expect((regroupReorgs[0]["from"] as? [[String: Any]])?.count == 2)
         #expect((regroupReorgs[0]["to"] as? [[String: Any]])?.count == 2)
+    }
+
+    @Test func regroupSplitsIntoSplitAndReplaceByNearbyTotals() throws {
+        // 日本郵船型: 不定期専用船 → 自動車・ドライバルク・エネルギー（split）、その他の事業 → その他（replace）
+        let result = try object(
+            old: [
+                row("Bulk", "Bulk", 1_230_737), row("Others", "Others", 116_050),
+            ],
+            new: [
+                row("Auto", "Auto", 531_867), row("Dry", "Dry", 601_322),
+                row("Energy", "Energy", 178_225), row("Other", "Other", 114_650),
+            ])
+        let reorgs = try #require(result[segmentWaterfallReorgsKey] as? [[String: Any]])
+        let kinds = Set(reorgs.compactMap { $0["kind"] as? String })
+        #expect(reorgs.count == 2)
+        #expect(kinds == [segmentWaterfallReorgKindSplit, segmentWaterfallReorgKindReplace])
+        let segments = try #require(result[segmentWaterfallSegmentsKey] as? [[String: Any]])
+        let other = try #require(segments.first { $0["label"] as? String == "Other" })
+        let prior = try #require(other[segmentWaterfallPriorKey] as? [String: Any])
+        #expect((prior[segmentWaterfallPriorFromKey] as? [String]) == ["E1:ext:Others"])
+    }
+
+    @Test func regroupUsesRestatedPriorValuesWhenNearbyTotalsAreAmbiguous() {
+        // 旧: 不定期 1230、その他 113、不動産 3。新の前期値: 自動車 500・ドライバルク 600・エネルギー 130、その他 116。
+        let parts = SegmentWaterfall.splitRegroup(
+            gone: [("Bulk", 1230), ("Others", 113), ("RealEstate", 3)],
+            added: [("Auto", 500), ("Dry", 600), ("Energy", 130), ("Other", 116)],
+            tolerance: SegmentWaterfall.regroupExactTolerance)
+        #expect(parts?.count == 2)
+        #expect(parts?.contains { $0.from == ["Bulk"] && $0.to == ["Auto", "Dry", "Energy"] } == true)
+        #expect(parts?.contains { $0.from == ["Others", "RealEstate"] && $0.to == ["Other"] } == true)
     }
 
     @Test func endedOrNewSegmentsAloneAreNotReorgs() throws {
