@@ -619,7 +619,7 @@ private struct BusinessProfitSection: View {
                 if let profit = year.businessProfit {
                     let label = Format.fy(year.fyEnd)
                     BarMark(x: .value("年度", label), y: .value("金額", profit), width: .fixed(showsExpanded ? Self.expandedBarWidth : 16))
-                        .foregroundStyle(profit < 0 ? Theme.negative : ChartStyle.primaryBar)
+                        .foregroundStyle(ChartStyle.primaryBar)
                         .cornerRadius(3)
                         .annotation(position: profit < 0 ? .bottom : .top, spacing: 2) {
                             if showsExpanded {
