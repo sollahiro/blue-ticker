@@ -70,6 +70,45 @@ struct SegmentWaterfallResponse: Codable {
     }
 }
 
+/// `GET /v1/companies/{code}/waterfall/geography` の公開 JSON の手書き。画面が読むキーだけ持つ。
+struct GeographyWaterfallResponse: Codable {
+    var years: [Year]
+
+    struct Year: Codable {
+        var fyEnd: String?
+        var fiscalYear: Int?
+        /// 地域の切り方が同じ（または持ち上げて同じにできる）年どうしの塊の番号。同じ値の年どうしは比べられる。
+        var comparableGroup: Int?
+        /// 塊の境目の年で true。
+        var lineCut: Bool?
+        /// 開示のままの地域。`region` は正規化コード（辞書に無いときは null）。
+        var regions: [Region]?
+        /// 塊の全年で同じキーにそろえた地域。
+        var comparableRegions: [Block]?
+
+        enum CodingKeys: String, CodingKey {
+            case fyEnd = "fy_end"
+            case fiscalYear = "fiscal_year"
+            case comparableGroup = "comparable_group"
+            case lineCut = "line_cut"
+            case regions
+            case comparableRegions = "comparable_regions"
+        }
+    }
+
+    struct Region: Codable {
+        var label: String
+        var region: String?
+        var value: Double?
+    }
+
+    struct Block: Codable {
+        var region: String
+        var members: [String]?
+        var value: Double?
+    }
+}
+
 /// `GET /v1/companies/{code}/breakdown?axis=segment|geography` の公開 JSON の手書き。
 struct BreakdownResponse: Codable {
     var docId: String?

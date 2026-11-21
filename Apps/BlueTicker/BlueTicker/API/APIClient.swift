@@ -94,6 +94,12 @@ actor APIClient {
         return try await get(url, cacheTTL: ttl(for: code))
     }
 
+    /// 地域別売上の年次推移（新しい年が先頭）。地域名は正規化され、比べられる年の塊に分かれる。未算出は 404。
+    func geographyWaterfall(code: String, years: Int = 3) async throws -> GeographyWaterfallResponse {
+        let url = try queryURL("v1/companies/\(code)/waterfall/geography", [("years", String(years))])
+        return try await get(url, cacheTTL: ttl(for: code))
+    }
+
     /// 内訳（`axis` は `segment` / `geography`）。`docId` を省くと最新の有報。
     func breakdown(code: String, axis: String, docId: String? = nil) async throws -> BreakdownResponse {
         var items = [("axis", axis)]

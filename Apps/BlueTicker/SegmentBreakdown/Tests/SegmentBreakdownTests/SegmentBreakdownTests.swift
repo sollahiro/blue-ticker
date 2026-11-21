@@ -329,4 +329,31 @@ import Testing
         #expect(layout.series.count == 3)
         #expect(layout.bars.joined().allSatisfy { $0.mark == BreakdownMark.none })
     }
+
+    @Test func geographyWaterfallConnectsWithinComparableGroupAndMarksBoundary() throws {
+        // 8309 型: 25/03「米国」は塊の段2で americas。26/03 と 24/03 は「米州」。
+        let json = """
+            {"years":[
+             {"fy_end":"2026-03-31","comparable_group":0,"line_cut":false,
+              "regions":[{"label":"日本","region":"japan","value":100},{"label":"米州","region":"americas","value":40}],
+              "comparable_regions":[{"region":"japan","value":100},{"region":"americas","value":40}]},
+             {"fy_end":"2025-03-31","comparable_group":0,"line_cut":false,
+              "regions":[{"label":"日本","region":"japan","value":90},{"label":"米国","region":"united_states","value":41}],
+              "comparable_regions":[{"region":"japan","value":90},{"region":"americas","value":41}]},
+             {"fy_end":"2024-03-31","comparable_group":1,"line_cut":true,
+              "regions":[{"label":"日本","region":"japan","value":80},{"label":"米州","region":"americas","value":42}],
+              "comparable_regions":[{"region":"japan","value":80},{"region":"americas","value":42}]}]}
+            """
+        let response = try JSONDecoder().decode(GeographyWaterfallResponse.self, from: Data(json.utf8))
+        let cols = BreakdownBuilder.geographyColumns(response) { $0.fyEnd ?? "" }
+        #expect(cols.map(\.label) == ["2024-03-31", "2025-03-31", "2026-03-31"])
+        // 塊が変わる 25/03 だけ「再編」。つなぎも切れる。
+        #expect(cols.map(\.reorged) == [false, true, false])
+        #expect(cols[1].items.allSatisfy { $0.link == .none })
+        #expect(cols[2].items.first { $0.key == "americas" }?.link == .connect("americas"))
+        // 表示名: 開示のままの名前、無ければコードの表示名（25/03 は米国→米州）。
+        #expect(cols[1].items.first { $0.key == "americas" }?.label == "米州")
+        let layout = StackedLayout.make(columns: cols)
+        #expect(layout.series.count == 2)
+    }
 }

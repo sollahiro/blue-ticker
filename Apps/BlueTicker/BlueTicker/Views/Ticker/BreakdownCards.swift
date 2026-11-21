@@ -61,8 +61,8 @@ struct BreakdownModel {
                 rows: BreakdownSummary.segmentRows(columns: columns, layout: layout, profitByKey: profitByKey))
         }
 
-        // 地域（年ごと）は利益を待たずに始める。
-        async let regionResponses = loadRegionResponses(code: code, waterfall: waterfall)
+        // 地域は利益を待たずに始める。年次推移の API（地域名を正規化済み）が取れなければ、年ごとの内訳から組む。
+        async let regionWaterfall = try? APIClient.shared.geographyWaterfall(code: code, years: years)
 
         // 1 段目: 棒と、利益なしの表。
         await update(BreakdownModel(segment: segmentModel([:]), region: nil))
@@ -78,7 +78,18 @@ struct BreakdownModel {
 
         // 3 段目: 地域。
         let geographic = detailRows.contains { $0.segmentBasis == "geographic" }
-        let region = geographic ? nil : regionModel(waterfall: waterfall, responses: await regionResponses)
+        var region: RegionCardModel?
+        if !geographic {
+            if let response = await regionWaterfall,
+                let model = regionModel(
+                    columns: BreakdownBuilder.geographyColumns(response) { Format.fy($0.fyEnd) })
+            {
+                region = model
+            } else {
+                let responses = await loadRegionResponses(code: code, waterfall: waterfall)
+                region = regionModel(waterfall: waterfall, responses: responses)
+            }
+        }
         await update(BreakdownModel(segment: segment, region: region))
     }
 
@@ -110,6 +121,10 @@ struct BreakdownModel {
                 label: Format.fy(year.fyEnd), previousLabels: previous, response: response)
             if !column.items.isEmpty { columns.append(column) }
         }
+        return regionModel(columns: columns)
+    }
+
+    private static func regionModel(columns: [BreakdownColumnInput]) -> RegionCardModel? {
         guard let latest = columns.last, latest.items.count >= 2 else { return nil }
         let layout = StackedLayout.make(columns: columns)
         return RegionCardModel(
