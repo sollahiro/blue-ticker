@@ -18,7 +18,18 @@ enum BreakdownBuilder {
                     key: key, label: segment.label, value: value, link: link,
                     mergedFrom: index == 0 ? [] : mergedFrom(key: key, link: link, year: year))
             }
-            return BreakdownColumnInput(label: columnLabel(year), items: items)
+            return BreakdownColumnInput(
+                label: columnLabel(year), items: items, groups: index == 0 ? [] : groups(year))
+        }
+    }
+
+    /// API の `reorgs[]`（merge / split / replace / regroup）を、旧区分と新区分のキーの組にする。
+    private static func groups(_ year: SegmentWaterfallResponse.Year) -> [BreakdownReorgGroup] {
+        (year.reorgs ?? []).compactMap { reorg in
+            let from = (reorg.from ?? []).compactMap(\.segmentKey)
+            let to = (reorg.to ?? []).compactMap(\.segmentKey)
+            guard !from.isEmpty, !to.isEmpty else { return nil }
+            return BreakdownReorgGroup(fromKeys: from, toKeys: to)
         }
     }
 
@@ -67,6 +78,8 @@ enum BreakdownBuilder {
                 }
                 guard sources.count >= 2 else { continue }
                 collapse(&cols, sources: sources, into: target, at: k)
+                // 1 つに集約した組は、帯の組としては出さない。
+                cols[k].groups.removeAll { $0.toKeys == [target.key] }
             }
         }
         return cols

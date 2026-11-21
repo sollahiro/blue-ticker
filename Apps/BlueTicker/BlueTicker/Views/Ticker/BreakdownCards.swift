@@ -345,7 +345,9 @@ private struct StackedBarChart: View {
                     control1: CGPoint(x: midX, y: y(ribbon.rightBottom)),
                     control2: CGPoint(x: midX, y: y(ribbon.leftBottom)))
                 path.closeSubpath()
-                context.fill(path, with: .color(BreakdownPalette.color(ribbon.colorIndex).opacity(0.22)))
+                // 再編の塊のつなぎ（色なし）は中立色で、系列のつなぎよりさらに薄く。
+                let base = ribbon.colorIndex < 0 ? Theme.textMuted : BreakdownPalette.color(ribbon.colorIndex)
+                context.fill(path, with: .color(base.opacity(ribbon.colorIndex < 0 ? 0.16 : 0.22)))
             }
 
             for column in layout.bars {

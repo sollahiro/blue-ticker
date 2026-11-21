@@ -214,4 +214,50 @@ import Testing
         let original = try columns(json)
         #expect(BreakdownBuilder.collapsingReorgs(original) == original)
     }
+
+    // 日本郵船 9101: FY2025 に旧 3 区分 → 新 4 区分の regroup。他の区分は connect。
+    private let nykJSON = """
+        {"years":[
+         {"fiscal_year":2025,"fy_end":"2025-03-31","segments":[
+          {"label":"航空運送事業","segment_key":"AIR","value":179,"prior":{"decision":"connect","segment_key":"AIR"}},
+          {"label":"自動車事業","segment_key":"AUTO","value":532,"prior":{"decision":"reorg","from":["BULK","OTH","RE"]}},
+          {"label":"ドライバルク事業","segment_key":"DRY","value":601,"prior":{"decision":"reorg","from":["BULK","OTH","RE"]}},
+          {"label":"エネルギー事業","segment_key":"ENE","value":178,"prior":{"decision":"reorg","from":["BULK","OTH","RE"]}},
+          {"label":"その他","segment_key":"STDOTH","value":115,"prior":{"decision":"reorg","from":["BULK","OTH","RE"]}}],
+          "reorgs":[{"kind":"regroup",
+           "from":[{"segment_key":"BULK","value":1231},{"segment_key":"OTH","value":113},{"segment_key":"RE","value":3}],
+           "to":[{"segment_key":"AUTO","value":532},{"segment_key":"DRY","value":601},{"segment_key":"ENE","value":178},{"segment_key":"STDOTH","value":115}]}]},
+         {"fiscal_year":2024,"fy_end":"2024-03-31","segments":[
+          {"label":"航空運送事業","segment_key":"AIR","value":155},
+          {"label":"不定期専用船事業","segment_key":"BULK","value":1231},
+          {"label":"その他の事業","segment_key":"OTH","value":113},
+          {"label":"不動産業","segment_key":"RE","value":3}]}]}
+        """
+
+    @Test func regroupIsStackedAdjacentAndJoinedByOneNeutralRibbon() throws {
+        let cols = BreakdownBuilder.collapsingReorgs(try columns(nykJSON))
+        // regroup は 1 本に集約しない（旧 3・新 4）。
+        #expect(cols[0].items.count == 4)
+        #expect(cols[1].groups == [BreakdownReorgGroup(
+            fromKeys: ["BULK", "OTH", "RE"], toKeys: ["AUTO", "DRY", "ENE", "STDOTH"])])
+        let layout = StackedLayout.make(columns: cols)
+
+        func positions(_ column: Int, _ keys: Set<String>) -> [Int] {
+            layout.bars[column].enumerated().filter { keys.contains($0.element.key) }.map(\.offset)
+        }
+        for (column, keys) in [(0, Set(["BULK", "OTH", "RE"])), (1, Set(["AUTO", "DRY", "ENE", "STDOTH"]))] {
+            let p = positions(column, keys)
+            #expect(p.count == keys.count)
+            #expect(p == Array((p.first ?? 0)..<((p.first ?? 0) + p.count)))
+        }
+        // 組の行に「再編」「終了」の印は出ない。
+        let marks = layout.bars.joined().filter { ["BULK", "OTH", "RE", "AUTO", "DRY", "ENE", "STDOTH"].contains($0.key) }.map(\.mark)
+        #expect(marks.allSatisfy { $0 == .none })
+        // 帯は、航空運送の系列 1 本 + 組の 1 本。
+        #expect(layout.ribbons.count == 2)
+        let group = try #require(layout.ribbons.first { $0.colorIndex < 0 })
+        let oldBars = layout.bars[0].filter { ["BULK", "OTH", "RE"].contains($0.key) }
+        #expect(abs(group.leftTop - (oldBars.map(\.y).min() ?? -1)) < 1e-9)
+        #expect(abs(group.leftBottom - (oldBars.map { $0.y + $0.height }.max() ?? -1)) < 1e-9)
+    }
 }
