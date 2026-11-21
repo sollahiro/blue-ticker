@@ -134,6 +134,25 @@ struct WatchlistView: View {
             WatchedCompany.repairSortOrderIfNeeded(companies)
             WatchedCompany.removeDuplicateCodes(companies, in: modelContext)
         }
+        .task(id: scenePhase) {
+            guard scenePhase == .active else { return }
+            await refreshWatchedMetadata()
+        }
+    }
+
+    /// 保存済みの行は追加時点のアイコン URL・業種を持つ。最新の検索応答で更新し、
+    /// リストのアイコンが検索結果と食い違わないようにする（取れなかった銘柄は触らない）。
+    private func refreshWatchedMetadata() async {
+        let codes = Array(Set(companies.map(\.code)))
+        for code in codes {
+            if Task.isCancelled { return }
+            guard let hits = try? await APIClient.shared.searchCompanies(query: code),
+                let hit = hits.first(where: { $0.code == code })
+            else { continue }
+            for item in companies where item.code == code {
+                item.refresh(from: hit)
+            }
+        }
     }
 
     private func gestureBegan(_ point: CGPoint) {

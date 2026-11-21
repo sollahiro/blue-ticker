@@ -37,6 +37,29 @@ final class WatchedCompany {
         }
     }
 
+    /// 検索（`/v1/companies`）の最新の応答で、保存済みの業種・アイコン URL・社名を更新する。
+    /// 保存時の値を描き続けると、サーバー側でアイコンや業種が変わっても追従しない。
+    /// 応答に無い項目（`nil` / 空）では既存の値を消さない。変わったときだけ書く（CloudKit 同期の無駄打ち回避）。
+    /// 戻り値は変更があったかどうか。
+    @discardableResult
+    func refresh(from hit: CompanyHit) -> Bool {
+        guard hit.code == code else { return false }
+        var changed = false
+        if let url = hit.iconURL, !url.isEmpty, url != iconURL {
+            iconURL = url
+            changed = true
+        }
+        if let newSector = hit.sector, !newSector.isEmpty, newSector != sector {
+            sector = newSector
+            changed = true
+        }
+        if !hit.name.isEmpty, hit.name != name {
+            name = hit.name
+            changed = true
+        }
+        return changed
+    }
+
     static func nextSortOrder(among items: [WatchedCompany]) -> Int {
         (items.map(\.sortOrder).min() ?? 0) - 1
     }
