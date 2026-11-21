@@ -12,6 +12,8 @@ struct BreakdownSections: View {
         Group {
             if let segment = model?.segment {
                 SegmentCard(model: segment)
+            } else if model?.singleSegment == true {
+                SingleSegmentCard()
             }
             if let region = model?.region {
                 RegionCard(model: region)
@@ -37,6 +39,8 @@ struct RegionCardModel {
 struct BreakdownModel {
     var segment: SegmentCardModel?
     var region: RegionCardModel?
+    /// 単一セグメントの会社（セグメントの内訳が無い）。カードに「単一セグメント」と出す。
+    var singleSegment = false
 
     /// 直近 5 年（取れる分だけ）。
     static let years = 5
@@ -47,13 +51,22 @@ struct BreakdownModel {
         // 利益（最新期）は積み上げの取得を待たずに始める。
         async let detail = try? APIClient.shared.breakdown(code: code, axis: "segment")
         guard let waterfall = try? await APIClient.shared.segmentWaterfall(code: code, years: years) else {
+            // 内訳が「単一セグメントのため省略」と返る会社は、その旨のカードを出す。
+            _ = await detail
+            if await APIClient.shared.segmentNotFoundReason(code: code) == singleSegmentReason {
+                await loadSingleSegment(code: code, update: update)
+            }
             return
         }
         // 再編で統合された旧区分は、過去の年も 1 本にまとめる（流れを追う必要はない）。
         let columns = BreakdownBuilder.collapsingReorgs(
             BreakdownBuilder.segmentColumns(waterfall) { Format.fy($0.fyEnd) })
         // 区分が 1 つだけでは構成も推移も見えない。
-        guard let latest = columns.last, latest.items.count >= 2 else { return }
+        guard let latest = columns.last else { return }
+        guard latest.items.count >= 2 else {
+            await loadSingleSegment(code: code, update: update)
+            return
+        }
         let layout = StackedLayout.make(columns: columns)
         func segmentModel(_ profitByKey: [String: Double]) -> SegmentCardModel {
             SegmentCardModel(
@@ -91,6 +104,19 @@ struct BreakdownModel {
             }
         }
         await update(BreakdownModel(segment: segment, region: region))
+    }
+
+    /// 内訳 API が単一セグメントと返す理由。
+    private static let singleSegmentReason = "single_segment_disclosed"
+
+    /// 単一セグメントの会社: 「単一セグメント」のカードを出し、地域は取れれば続けて出す。
+    private static func loadSingleSegment(code: String, update: @MainActor (BreakdownModel) -> Void) async {
+        await update(BreakdownModel(segment: nil, region: nil, singleSegment: true))
+        if let response = try? await APIClient.shared.geographyWaterfall(code: code, years: years),
+            let region = regionModel(columns: BreakdownBuilder.geographyColumns(response) { Format.fy($0.fyEnd) })
+        {
+            await update(BreakdownModel(segment: nil, region: region, singleSegment: true))
+        }
     }
 
     /// 年ごとの地域別売上を並列に取る。取れなかった年は nil。結果は `waterfall.years` と同じ並び（新しい年が先頭）。
@@ -133,6 +159,18 @@ struct BreakdownModel {
 }
 
 // MARK: - カード
+
+/// 単一セグメントの会社。報告セグメントが 1 つ（または省略）なので、内訳のグラフは出さない。
+private struct SingleSegmentCard: View {
+    var body: some View {
+        AnalysisCard(title: "セグメント別売上高") {
+            Text("単一セグメント")
+                .font(.headline)
+                .foregroundStyle(Theme.text)
+            AnalysisNote(text: "この会社は報告セグメントが1つ（または省略）のため、セグメント別の内訳はありません。")
+        }
+    }
+}
 
 private struct SegmentCard: View {
     var model: SegmentCardModel
