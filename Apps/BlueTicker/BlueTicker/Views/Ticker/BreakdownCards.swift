@@ -299,7 +299,9 @@ private struct StackedBarChart: View {
     var accessibilityText: String
 
     private let chartHeight: CGFloat = 220
-    private let labelBand: CGFloat = 22
+    private let baseLabelBand: CGFloat = 22
+    /// 年ラベルの下に「再編」を出す年があるときだけ、下の余白を広げる。
+    private var labelBand: CGFloat { layout.columnReorged.contains(true) ? baseLabelBand + 12 : baseLabelBand }
     /// 縦軸の文字を置く左の余白。
     private let axisInset: CGFloat = 40
 
@@ -373,7 +375,13 @@ private struct StackedBarChart: View {
                 context.draw(
                     context.resolve(
                         Text(layout.columnLabels[index]).font(.caption2).foregroundStyle(Theme.textMuted)),
-                    at: CGPoint(x: x(center), y: plotHeight + labelBand / 2 + 2), anchor: .center)
+                    at: CGPoint(x: x(center), y: plotHeight + baseLabelBand / 2 + 2), anchor: .center)
+                if index < layout.columnReorged.count, layout.columnReorged[index] {
+                    context.draw(
+                        context.resolve(
+                            Text("再編").font(.system(size: 9, weight: .medium)).foregroundStyle(Theme.textMuted.opacity(0.8))),
+                        at: CGPoint(x: x(center), y: plotHeight + baseLabelBand + 6), anchor: .center)
+                }
                 let top = layout.bars[index].map(\.y).min() ?? 1
                 context.draw(
                     context.resolve(

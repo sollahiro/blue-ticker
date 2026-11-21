@@ -260,4 +260,51 @@ import Testing
         #expect(abs(group.leftTop - (oldBars.map(\.y).min() ?? -1)) < 1e-9)
         #expect(abs(group.leftBottom - (oldBars.map { $0.y + $0.height }.max() ?? -1)) < 1e-9)
     }
+
+    // 日本郵船 9101（本番 API 2026-11）: FY2025 に split（不定期専用船 → 3 区分）と merge（その他の事業＋不動産 → その他）。
+    private let nykSplitJSON = """
+        {"years":[
+         {"fiscal_year":2026,"segments":[
+          {"label":"航空運送事業","segment_key":"AIR","value":40,"prior":{"decision":"connect","segment_key":"AIR"}},
+          {"label":"自動車事業","segment_key":"AUTO","value":526,"prior":{"decision":"connect","segment_key":"AUTO"}},
+          {"label":"ドライバルク事業","segment_key":"DRY","value":543,"prior":{"decision":"connect","segment_key":"DRY"}},
+          {"label":"エネルギー事業","segment_key":"ENE","value":236,"prior":{"decision":"connect","segment_key":"ENE"}},
+          {"label":"定期船事業","segment_key":"LINER","value":175,"prior":{"decision":"connect","segment_key":"LINER"}},
+          {"label":"物流事業","segment_key":"LOG","value":802,"prior":{"decision":"connect","segment_key":"LOG"}},
+          {"label":"その他","segment_key":"STDOTH","value":102,"prior":{"decision":"connect","segment_key":"STDOTH"}}]},
+         {"fiscal_year":2025,"line_cut":true,"segments":[
+          {"label":"航空運送事業","segment_key":"AIR","value":179,"prior":{"decision":"connect","segment_key":"AIR"}},
+          {"label":"自動車事業","segment_key":"AUTO","value":532,"prior":{"decision":"reorg","from":["BULK"]}},
+          {"label":"ドライバルク事業","segment_key":"DRY","value":601,"prior":{"decision":"reorg","from":["BULK"]}},
+          {"label":"エネルギー事業","segment_key":"ENE","value":178,"prior":{"decision":"reorg","from":["BULK"]}},
+          {"label":"定期船事業","segment_key":"LINER","value":174,"prior":{"decision":"connect","segment_key":"LINER"}},
+          {"label":"物流事業","segment_key":"LOG","value":809,"prior":{"decision":"connect","segment_key":"LOG"}},
+          {"label":"その他","segment_key":"STDOTH","value":115,"prior":{"decision":"reorg","from":["OTH","RE"]}}],
+          "reorgs":[
+           {"kind":"split","from":[{"segment_key":"BULK","value":1231}],
+            "to":[{"segment_key":"AUTO","value":532},{"segment_key":"DRY","value":601},{"segment_key":"ENE","value":178}]},
+           {"kind":"merge","from":[{"segment_key":"OTH","value":113},{"segment_key":"RE","value":3}],
+            "to":[{"segment_key":"STDOTH","value":115}]}]},
+         {"fiscal_year":2024,"segments":[
+          {"label":"航空運送事業","segment_key":"AIR","value":155},
+          {"label":"不定期専用船事業","segment_key":"BULK","value":1231},
+          {"label":"定期船事業","segment_key":"LINER","value":187},
+          {"label":"物流事業","segment_key":"LOG","value":699},
+          {"label":"その他の事業","segment_key":"OTH","value":113},
+          {"label":"不動産業","segment_key":"RE","value":3}]}]}
+        """
+
+    @Test func stackOrderKeepsFamiliesInTheSameSlotAcrossYearsAndMarksReorgYear() throws {
+        let cols = BreakdownBuilder.collapsingReorgs(try columns(nykSplitJSON))
+        #expect(cols.map(\.reorged) == [false, true, false])
+        let layout = StackedLayout.make(columns: cols)
+        #expect(layout.columnReorged == [false, true, false])
+        // 下から: 物流 → 不定期専用船の血筋（旧年は 1 本、新年は 3 本隣り合わせ）→ 定期船 → その他 → 航空運送。
+        func order(_ column: Int) -> [String] {
+            layout.bars[column].sorted { $0.y > $1.y }.map(\.key)
+        }
+        #expect(order(0) == ["LOG", "BULK", "LINER", "merged|0|STDOTH", "AIR"])
+        #expect(order(1) == ["LOG", "DRY", "AUTO", "ENE", "LINER", "STDOTH", "AIR"])
+        #expect(order(2) == ["LOG", "DRY", "AUTO", "ENE", "LINER", "STDOTH", "AIR"])
+    }
 }

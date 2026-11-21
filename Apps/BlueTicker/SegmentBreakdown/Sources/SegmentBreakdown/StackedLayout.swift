@@ -31,6 +31,8 @@ struct BreakdownColumnInput: Equatable {
     var items: [BreakdownItemInput]
     /// 前の列からこの列への再編。
     var groups: [BreakdownReorgGroup] = []
+    /// この年に区分の再編があった（年ラベルの下に小さく「再編」を出す）。1 本に集約した再編も含む。
+    var reorged: Bool = false
 }
 
 /// 棒の中に出す文字の元。
@@ -92,6 +94,8 @@ struct BreakdownLayout: Equatable {
     var series: [BreakdownSeries]
     /// 合計の文字を置くための上端の余白（0...1）。棒はこの下に収まる。
     var headroom: Double
+    /// 各列で、前の列からの再編があったか。
+    var columnReorged: [Bool] = []
 }
 
 enum StackedLayout {
@@ -135,11 +139,39 @@ enum StackedLayout {
                 lastSeen[id] = Seen(id: id, label: item.label, column: k, value: item.value)
             }
         }
-        let ordered = lastSeen.values.sorted { a, b in
+        // 再編でつながる系列（旧区分と新区分）は同じ血筋。血筋ごとに積み、年が変わっても位置を保つ。
+        var parent: [String: String] = Dictionary(uniqueKeysWithValues: lastSeen.keys.map { ($0, $0) })
+        func find(_ id: String) -> String {
+            var root = id
+            while let next = parent[root], next != root { root = next }
+            return root
+        }
+        func union(_ a: String, _ b: String) {
+            let (ra, rb) = (find(a), find(b))
+            if ra != rb { parent[max(ra, rb)] = min(ra, rb) }
+        }
+        for k in 1..<max(n, 1) {
+            for group in columns[k].groups {
+                let ids =
+                    group.fromKeys.compactMap { seriesIDs[k - 1][$0] } + group.toKeys.compactMap { seriesIDs[k][$0] }
+                for id in ids.dropFirst() { if let first = ids.first { union(first, id) } }
+            }
+        }
+        var families: [String: [Seen]] = [:]
+        for seen in lastSeen.values { families[find(seen.id), default: []].append(seen) }
+        // 血筋の並び: 新しい年まで続く血筋を先に、同じなら最大の系列が大きい順。
+        // 血筋の中は、新しい年にある系列を大きい順、旧区分は最後。
+        func inOrder(_ a: Seen, _ b: Seen) -> Bool {
             if a.column != b.column { return a.column > b.column }
             if a.value != b.value { return a.value > b.value }
             return a.id < b.id
         }
+        let sortedFamilies = families.map { (root: $0.key, members: $0.value.sorted(by: inOrder)) }
+            .sorted { a, b in
+                guard let x = a.members.first, let y = b.members.first else { return a.root < b.root }
+                return inOrder(x, y)
+            }
+        let ordered = sortedFamilies.flatMap(\.members)
         var colorIndex: [String: Int] = [:]
         var series: [BreakdownSeries] = []
         for (index, seen) in ordered.enumerated() {
@@ -251,7 +283,8 @@ enum StackedLayout {
 
         return BreakdownLayout(
             columnLabels: columns.map(\.label), columnTotals: totals, columnCenters: centers,
-            bars: bars, ribbons: ribbons, series: series, headroom: headroom)
+            bars: bars, ribbons: ribbons, series: series, headroom: headroom,
+            columnReorged: columns.map(\.reorged))
     }
 
     /// `clusters` の各組を、先頭の行の位置に寄せて連続させる。

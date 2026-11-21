@@ -18,8 +18,10 @@ enum BreakdownBuilder {
                     key: key, label: segment.label, value: value, link: link,
                     mergedFrom: index == 0 ? [] : mergedFrom(key: key, link: link, year: year))
             }
+            let reorged = index > 0 && (!(year.reorgs ?? []).isEmpty || items.contains { $0.link == .reorg })
             return BreakdownColumnInput(
-                label: columnLabel(year), items: items, groups: index == 0 ? [] : groups(year))
+                label: columnLabel(year), items: items, groups: index == 0 ? [] : groups(year),
+                reorged: reorged)
         }
     }
 
