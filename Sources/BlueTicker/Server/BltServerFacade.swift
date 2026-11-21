@@ -370,6 +370,18 @@ public extension BltServerContext {
         await masterDataManager.edinetCode(forListedCode: code)
     }
 
+    /// 4 桁コードごとの社名・業種（東証 33 業種名）。マスターに無いコードは含めない。
+    /// 業種別の一覧（`/v1/benchmark/{group}`）が行に社名を付けるために使う。
+    func companyDirectory(codes: [String]) async -> [String: (name: String, sector: String)] {
+        var out: [String: (name: String, sector: String)] = [:]
+        for code in codes {
+            if let stock = await masterDataManager.getByCode(code) {
+                out[code] = (name: stock.coName, sector: stock.s33nm)
+            }
+        }
+        return out
+    }
+
     /// 上場ユニバースのうち提出者業種が銀行業の 4 桁コード。業種 KPI（銀行）の対象選定に使う。
     /// 業種が銀行業でなくても許可リスト・銀行様式 IS・預金マーカーの会社は ingest 側で足す。
     func bankIndustryListedCodes() async -> Set<String> {

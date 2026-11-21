@@ -182,6 +182,34 @@ func registerRoutes(
             notFoundMessage: "会社説明は未算出です")
     }
 
+    // GET /v1/benchmark/{group}
+    // 業種グループ（現状 `bank` のみ公開）の全社の業種 KPI（預貸率・経費率・預金・貸出金など）を
+    // 1 回で返す（業種ベンチマーク一覧）。DB（業種 KPI 取り込み industry_kpi_facts）の格納済み行のみ。
+    // 会社ごとに最新の有報 1 件。未公開の業種・公開できる会社が無いときは 404、DB 非接続は 503。
+    v1.get("benchmark", ":group") { req async -> Response in
+        let group = req.parameters.get("group") ?? ""
+        let result = await serveStoredIndustryBenchmark(
+            group: group, db: dbAvailable ? req.db : nil, logger: req.logger)
+        guard case .ok(var body) = result else {
+            return makeStoredDataResponse(result, notFoundMessage: "この業種の比較データは未公開です")
+        }
+        let companies = body["companies"] as? [[String: Any]] ?? []
+        let directory = await context.companyDirectory(codes: companies.compactMap { $0["code"] as? String })
+        // 社名がマスターに無い会社は出さない（アプリは社名なしの行を描けない）。
+        let named: [[String: Any]] = companies.compactMap { row in
+            guard let code = row["code"] as? String, let entry = directory[code] else { return nil }
+            var next = row
+            next["name"] = entry.name
+            next["sector"] = entry.sector
+            return next
+        }
+        guard !named.isEmpty else {
+            return errorResponse(.notFound, message: "この業種の比較データは未公開です")
+        }
+        body["companies"] = await attachIconURLs(to: named, db: dbAvailable ? req.db : nil)
+        return jsonResponse(body, status: .ok)
+    }
+
     // GET /v1/companies/{code}/relations?type=customer,group&limit=200&cursor=...
     // DB（関係取り込み company_relations）の格納行のみを返す。ライブ抽出へはフォールバックしない。
     // 不正なコード・未知の type は 400、未格納（公開できる行が無い）は 404、DB 非接続は 503。
@@ -373,6 +401,15 @@ func serveStoredAnalysis(
 ) async -> StoredDataServeResult {
     await serveStored(db: db, logger: logger) { db in
         try await loadStoredAnalysis(code: code, years: years, db: db)
+    }
+}
+
+/// `benchmark`（業種別の全社 KPI）の DB 読み取り共通ロジック。`db` の扱いは `serveStoredFinancials` 参照。
+func serveStoredIndustryBenchmark(
+    group: String, db: Database?, logger: Logger
+) async -> StoredDataServeResult {
+    await serveStored(db: db, logger: logger) { db in
+        try await loadStoredIndustryBenchmark(group: group, db: db)
     }
 }
 

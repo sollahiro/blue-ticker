@@ -142,6 +142,7 @@ import Vapor
                 "/v1/companies/7203/breakdown",
                 "/v1/companies/7203/statement",
                 "/v1/companies/7203/shares",
+                "/v1/benchmark/bank",
                 "/v1/feed/updates",
             ]
             for path in paths {

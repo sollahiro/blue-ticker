@@ -379,3 +379,12 @@ actor APIClient {
         return (try? decoder.decode(APIErrorBody.self, from: data))?.error ?? fallback
     }
 }
+
+extension APIClient {
+    /// 業種ベンチマーク（業種グループの全社の KPI）。公開していない業種は 404。
+    func benchmark(group: String) async throws -> BenchmarkResponse {
+        try await get(
+            APIConfiguration.baseURL.appending(path: "v1/benchmark/\(group)"),
+            cacheTTL: ResponseCache.analysisTTL)
+    }
+}

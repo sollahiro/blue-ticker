@@ -1,6 +1,6 @@
 // 業種 KPI 取り込み: 書類 1 件・業種グループ 1 つ分のスナップショット = 1 行。
 // company_breakdowns / company_statement_notes と同じ「合成 String ID + JSONB payload」。
-// 公開 REST は無い。ステップ 1 は銀行の XBRL 数値だけ。
+// 公開 REST は `GET /v1/benchmark/{group}`（業種別の全社一覧）。ステップ 1 は銀行の XBRL 数値だけ。
 
 import BlueTickerCore
 import FluentKit
