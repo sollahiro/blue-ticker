@@ -11,6 +11,7 @@ import {
   ICON_SQL,
   benchmarkKpis,
   buildBenchmark,
+  redact,
   refreshBenchmarks,
   toBenchmarkCompany,
 } from "./benchmark.js";
@@ -109,6 +110,22 @@ describe("buildBenchmark", () => {
     assert.equal(body.schema_version, 1);
     assert.equal(body.industry_group, "bank");
     assert.deepEqual(body.companies.map((c) => c.code), ["8306", "8316"]);
+  });
+});
+
+describe("redact", () => {
+  test("接続文字列を伏せる", () => {
+    const out = redact("bad url (connection string: 'postgresql://user:secret@host/db?sslmode=require')");
+    assert.ok(!out.includes("secret"));
+    assert.ok(out.includes("[redacted]"));
+  });
+  test("クエリ失敗のログに接続文字列が出ない", async () => {
+    const log = silentLog();
+    const runQuery = async () => {
+      throw new Error("invalid 'postgresql://u:topsecret@h/d'");
+    };
+    await refreshBenchmarks({ env: env(fakeBucket()), runQuery, log });
+    assert.ok(!log.lines.join("\n").includes("topsecret"));
   });
 });
 
