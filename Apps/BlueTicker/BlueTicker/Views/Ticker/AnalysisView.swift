@@ -7,6 +7,7 @@ struct AnalysisView: View {
     var code: String
     @State private var response: FinancialsResponse?
     @State private var errorMessage: String?
+    @State private var breakdown: BreakdownModel?
 
     var body: some View {
         Group {
@@ -21,6 +22,8 @@ struct AnalysisView: View {
             }
         }
         .task { await load() }
+        // 内訳カードは財務データとは別に取る。失敗してもカードを出さないだけ。
+        .task(id: code) { breakdown = await BreakdownModel.load(code: code) }
     }
 
     private func content(_ response: FinancialsResponse) -> some View {
@@ -30,7 +33,7 @@ struct AnalysisView: View {
             VStack(spacing: Theme.cardContentInset) {
                 PerformanceSection(years: years, currency: currency)
                 BusinessProfitSection(years: years, currency: currency)
-                BreakdownSections(code: code)
+                BreakdownSections(model: breakdown)
                 CapitalEfficiencySection(years: years)
                 CashAllocationSection(years: years, currency: currency)
                 ProductivitySection(years: years, currency: currency)

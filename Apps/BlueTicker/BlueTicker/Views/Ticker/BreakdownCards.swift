@@ -5,8 +5,8 @@ import SwiftUI
 /// 地域は `/breakdown?axis=geography` を年ごとに取る。取れない会社（単一セグメント・未算出・地域が
 /// セグメントそのもの）ではカードを出さない。
 struct BreakdownSections: View {
-    var code: String
-    @State private var model: BreakdownModel?
+    /// 読み込み前・取得失敗は nil。読み込みは親が持つ（中身が空の View に付けた `.task` は動かないため）。
+    var model: BreakdownModel?
 
     var body: some View {
         Group {
@@ -17,7 +17,6 @@ struct BreakdownSections: View {
                 RegionCard(model: region)
             }
         }
-        .task(id: code) { model = await BreakdownModel.load(code: code) }
     }
 }
 
