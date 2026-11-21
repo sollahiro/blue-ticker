@@ -1025,6 +1025,26 @@ import Testing
         #expect(raw.map { $0["region"] as? String }.contains("united_states"))
     }
 
+    @Test func otherPlusARegionNameIsThatRegion() {
+        #expect(GeographyRegion.normalize(label: "その他の米州").region == "americas")
+        #expect(GeographyRegion.normalize(label: "その他アジア").region == "asia")
+        #expect(GeographyRegion.normalize(label: "その他の欧州").region == "europe")
+        #expect(GeographyRegion.normalize(label: "その他の地域").region == "other")
+        #expect(GeographyRegion.normalize(label: "その他海外").region == "other")
+        #expect(GeographyRegion.normalize(label: "その他").region == "other")
+    }
+
+    @Test func fineAmericasAndACoarseAmericasYearShareAGroup() throws {
+        let fine: [(String, Double)] = [("日本", 10), ("米国", 5), ("その他の米州", 2), ("欧州", 3)]
+        let result = try years([
+            ("2024-03-31", fine.map { region($0.0, $0.1) }),
+            ("2025-03-31", [region("日本", 10), region("米州", 7), region("欧州", 3)]),
+            ("2026-03-31", fine.map { region($0.0, $0.1) }),
+        ])
+        #expect(Set(result.compactMap { $0["comparable_group"] as? Int }).count == 1)
+        #expect(result.allSatisfy { $0["comparable_level"] as? Int == 2 })
+    }
+
     @Test func mergedRegionsUniteIntoOneBlockAcrossYears() throws {
         let result = try years([
             ("2025-03-31", [region("日本", 10), region("アジア", 20), region("その他", 5)]),
