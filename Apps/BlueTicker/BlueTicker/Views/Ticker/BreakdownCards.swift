@@ -293,7 +293,7 @@ private struct StackedBarChart: View {
             if maxTotal > 0 {
                 let scale = (1 - layout.headroom) / maxTotal
                 let unit = Format.commonScale(for: [maxTotal])
-                for tick in ChartMath.niceTicks(lower: 0, upper: maxTotal) {
+                for tick in NiceTicks.make(lower: 0, upper: maxTotal) {
                     let position = 1 - tick * scale
                     guard position >= 0, position <= 1 else { continue }
                     var line = Path()

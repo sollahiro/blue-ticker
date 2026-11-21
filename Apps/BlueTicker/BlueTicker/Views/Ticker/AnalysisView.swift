@@ -190,7 +190,23 @@ private struct LinePoint: Identifiable {
     var run: Int
 }
 
-enum ChartMath {
+/// 0 を含む、切りのよい目盛り。他ファイルの積み上げ棒（セグメント・地域）も使う。
+enum NiceTicks {
+    static func make(lower: Double, upper: Double, count: Int = 4) -> [Double] {
+        let low = min(lower, 0)
+        let high = max(upper, 0)
+        let span = high - low
+        guard span > 0 else { return [0] }
+        let raw = span / Double(max(count, 1))
+        let magnitude = pow(10, floor(log10(raw)))
+        let step = [1.0, 2, 2.5, 5, 10].map { $0 * magnitude }.first { $0 >= raw } ?? raw
+        let start = floor(low / step) * step
+        let end = ceil(high / step) * step
+        return stride(from: start, through: end + step / 2, by: step).map { $0 }
+    }
+}
+
+private enum ChartMath {
     static func linePoints(_ years: [FinancialsYear], value: (FinancialsYear) -> Double?) -> [LinePoint] {
         var run = 0
         var points: [LinePoint] = []
@@ -206,16 +222,7 @@ enum ChartMath {
 
     /// 0 を含む、切りのよい目盛り。
     static func niceTicks(lower: Double, upper: Double, count: Int = 4) -> [Double] {
-        let low = min(lower, 0)
-        let high = max(upper, 0)
-        let span = high - low
-        guard span > 0 else { return [0] }
-        let raw = span / Double(max(count, 1))
-        let magnitude = pow(10, floor(log10(raw)))
-        let step = [1.0, 2, 2.5, 5, 10].map { $0 * magnitude }.first { $0 >= raw } ?? raw
-        let start = floor(low / step) * step
-        let end = ceil(high / step) * step
-        return stride(from: start, through: end + step / 2, by: step).map { $0 }
+        NiceTicks.make(lower: lower, upper: upper, count: count)
     }
 }
 
