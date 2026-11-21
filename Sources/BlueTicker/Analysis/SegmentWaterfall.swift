@@ -67,7 +67,31 @@ public enum SegmentWaterfall {
         ]
         if let fiscalYear = fiscalYear(fyEnd: fyEnd) { object["fiscal_year"] = fiscalYear }
         if let salesBasis = payload.salesBasis { object[segmentSalesBasisKey] = salesBasis }
-        object[segmentWaterfallSegmentsKey] = items.filter { $0.row.rowKind == "segment" }.map(\.item)
+        let reorgGroups =
+            seriesKeys == nil
+            ? reorgGroups(
+                fyEnd: fyEnd, previous: previous, payload: payload, metric: metric,
+                transitions: yearTransitions)
+            : []
+        object[segmentWaterfallSegmentsKey] = items.filter { $0.row.rowKind == "segment" }.map {
+            entry -> [String: Any] in
+            var item = entry.item
+            if let key = entry.row.segmentKey,
+                let group = reorgGroups.first(where: { $0.toKeys.contains(key) })
+            {
+                var prior =
+                    item[segmentWaterfallPriorKey] as? [String: Any] ?? [
+                        "decision": segmentWaterfallDecisionReorg,
+                        "basis": segmentTransitionBasisDeterministic,
+                    ]
+                prior[segmentWaterfallPriorFromKey] = group.fromKeys
+                item[segmentWaterfallPriorKey] = prior
+            }
+            return item
+        }
+        if !reorgGroups.isEmpty {
+            object[segmentWaterfallReorgsKey] = reorgGroups.map(\.json)
+        }
 
         if seriesKeys == nil {
             let adjustments = items.filter { $0.row.rowKind == "reconciling" }.map(\.item)
@@ -181,6 +205,83 @@ public enum SegmentWaterfall {
             }
         }
         return keys
+    }
+
+    /// 年をまたいで消えた旧区分と現れた新区分を、つながなかった分だけ 1 組にまとめる。
+    /// 旧区分の値は前年に開示された値、新区分の値は当年の値（遡及後の前年値は格納しない）。
+    /// 旧 1・新 1 は replace（値も名前も合わず、つなげなかった入れ替え）、旧 k・新 1 は merge、旧 1・新 n は split、それ以外は regroup。
+    /// 旧区分だけ・新区分だけ（終了・新規）は組にしない。regroup は対応を決めず、
+    /// 旧と新の全行を並べる。値の合計は同じ指標の行どうしだけ足す。
+    struct ReorgGroup {
+        var kind: String
+        var fromKeys: [String]
+        var toKeys: [String]
+        var json: [String: Any]
+    }
+
+    static func reorgGroups(
+        fyEnd: String,
+        previous: (fyEnd: String, docID: String, payload: BreakdownSnapshotPayload)?,
+        payload: BreakdownSnapshotPayload, metric: String,
+        transitions: [SegmentTransitionDraft]
+    ) -> [ReorgGroup] {
+        guard let previous, isAdjacentYear(newer: fyEnd, older: previous.fyEnd) else { return [] }
+        var connectedOld: Set<String> = []
+        var connectedNew: Set<String> = []
+        for draft in transitions {
+            let decision = publicDecision(
+                stored: draft.decision, oldKey: draft.oldKey, newKey: draft.newKey)
+            guard decision == segmentTransitionDecisionConnect
+                || decision == segmentWaterfallDecisionRename
+            else { continue }
+            if let oldKey = draft.oldKey { connectedOld.insert(oldKey) }
+            if let newKey = draft.newKey { connectedNew.insert(newKey) }
+        }
+        func rows(_ payload: BreakdownSnapshotPayload) -> [(key: String, row: BreakdownRowPayload)] {
+            var seen: Set<String> = []
+            return payload.rows.compactMap { row in
+                guard row.rowKind == "segment", let key = row.segmentKey,
+                    cell(row, metric: metric) != nil, seen.insert(key).inserted
+                else { return nil }
+                return (key, row)
+            }
+        }
+        let oldRows = rows(previous.payload)
+        let newRows = rows(payload)
+        let oldKeys = Set(oldRows.map(\.key))
+        let newKeys = Set(newRows.map(\.key))
+        let gone = oldRows.filter { !newKeys.contains($0.key) && !connectedOld.contains($0.key) }
+        let added = newRows.filter { !oldKeys.contains($0.key) && !connectedNew.contains($0.key) }
+        guard !gone.isEmpty, !added.isEmpty else { return [] }
+        let kind: String
+        switch (gone.count, added.count) {
+        case (1, 1): kind = segmentWaterfallReorgKindReplace
+        case (_, 1): kind = segmentWaterfallReorgKindMerge
+        case (1, _): kind = segmentWaterfallReorgKindSplit
+        default: kind = segmentWaterfallReorgKindRegroup
+        }
+        func side(_ rows: [(key: String, row: BreakdownRowPayload)]) -> [[String: Any]] {
+            rows.compactMap { entry in
+                guard var item = metricItem(entry.row, metric: metric) else { return nil }
+                item.removeValue(forKey: "decimals")
+                return item
+            }
+        }
+        func total(_ rows: [(key: String, row: BreakdownRowPayload)]) -> Any {
+            breakdownJSONAmount(
+                rows.reduce(0.0) { $0 + (cell($1.row, metric: metric)?.value ?? 0) })
+        }
+        let json: [String: Any] = [
+            "kind": kind,
+            "from": side(gone),
+            "to": side(added),
+            "from_total": total(gone),
+            "to_total": total(added),
+        ]
+        return [
+            ReorgGroup(
+                kind: kind, fromKeys: gone.map(\.key), toKeys: added.map(\.key), json: json)
+        ]
     }
 
     private static func priorLink(

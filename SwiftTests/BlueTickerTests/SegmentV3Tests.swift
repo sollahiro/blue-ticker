@@ -777,3 +777,203 @@ import Testing
         #expect(returned.last?["fy_end"] as? String == "2022-03-31")
     }
 }
+
+@Suite struct SegmentWaterfallReorgTests {
+    private func row(_ local: String, _ label: String, _ value: Double) -> BreakdownRowPayload {
+        var row = BreakdownRowPayload(
+            labelRaw: local, label: label, amount: value, profit: nil, rowKind: "segment")
+        row.segmentKey = "E1:ext:\(local)"
+        row.externalSales = BreakdownMetricCellPayload(
+            value: value, basis: breakdownSourceXbrlFacts, source: local, decimals: -6)
+        return row
+    }
+
+    private func payload(_ rows: [BreakdownRowPayload]) -> BreakdownSnapshotPayload {
+        BreakdownSnapshotPayload(
+            axis: breakdownAxisSegment, denominator: 1, denominatorTag: "Sales",
+            rows: rows, sourceKind: breakdownSourceXbrlFacts, needsReview: false, warnings: [])
+    }
+
+    private func object(old: [BreakdownRowPayload], new: [BreakdownRowPayload]) throws
+        -> [String: Any]
+    {
+        let json = SegmentWaterfall.jsonObject(
+            code: "2871", metric: segmentWaterfallMetricExternalSales,
+            years: [
+                (fyEnd: "2025-03-31", docID: "S1", payload: payload(old)),
+                (fyEnd: "2026-03-31", docID: "S2", payload: payload(new)),
+            ],
+            transitions: SegmentTransitionMatcher.match(
+                oldRows: old, newRows: new, fyEnd: "2026-03-31"))
+        let years = try #require(json["years"] as? [[String: Any]])
+        return years[0]
+    }
+
+    @Test func threeIntoOneIsMergeWithFromKeys() throws {
+        let year = try object(
+            old: [
+                row("Processed", "加工食品", 100), row("Marine", "水産", 30),
+                row("Livestock", "畜産", 20), row("Logistics", "物流", 50),
+            ],
+            new: [row("Food", "食品", 160), row("Logistics", "物流", 55)])
+        let reorgs = try #require(year[segmentWaterfallReorgsKey] as? [[String: Any]])
+        #expect(reorgs.count == 1)
+        #expect(reorgs[0]["kind"] as? String == segmentWaterfallReorgKindMerge)
+        let from = try #require(reorgs[0]["from"] as? [[String: Any]])
+        #expect(from.map { $0["label"] as? String } == ["加工食品", "水産", "畜産"])
+        #expect(reorgs[0]["from_total"] as? Int == 150)
+        #expect(reorgs[0]["to_total"] as? Int == 160)
+        let segments = try #require(year[segmentWaterfallSegmentsKey] as? [[String: Any]])
+        let food = try #require(segments.first { $0["label"] as? String == "食品" })
+        let prior = try #require(food[segmentWaterfallPriorKey] as? [String: Any])
+        #expect(prior["decision"] as? String == segmentWaterfallDecisionReorg)
+        #expect(
+            prior[segmentWaterfallPriorFromKey] as? [String]
+                == ["E1:ext:Processed", "E1:ext:Marine", "E1:ext:Livestock"])
+        // 同じキーで続く行には from を付けない。
+        let logistics = try #require(segments.first { $0["label"] as? String == "物流" })
+        let logisticsPrior = try #require(logistics[segmentWaterfallPriorKey] as? [String: Any])
+        #expect(logisticsPrior[segmentWaterfallPriorFromKey] == nil)
+        #expect(year[segmentWaterfallLineCutKey] as? Bool == true)
+    }
+
+    @Test func oneIntoTwoIsSplitAndTwoByTwoIsRegroup() throws {
+        let split = try object(
+            old: [row("A", "A", 100)], new: [row("B", "B", 60), row("C", "C", 40)])
+        let splitReorgs = try #require(split[segmentWaterfallReorgsKey] as? [[String: Any]])
+        #expect(splitReorgs[0]["kind"] as? String == segmentWaterfallReorgKindSplit)
+
+        let regroup = try object(
+            old: [row("A", "A", 100), row("B", "B", 50)],
+            new: [row("C", "C", 90), row("D", "D", 60)])
+        let regroupReorgs = try #require(regroup[segmentWaterfallReorgsKey] as? [[String: Any]])
+        #expect(regroupReorgs[0]["kind"] as? String == segmentWaterfallReorgKindRegroup)
+        #expect((regroupReorgs[0]["from"] as? [[String: Any]])?.count == 2)
+        #expect((regroupReorgs[0]["to"] as? [[String: Any]])?.count == 2)
+    }
+
+    @Test func endedOrNewSegmentsAloneAreNotReorgs() throws {
+        let ended = try object(
+            old: [row("A", "A", 100), row("B", "B", 50)], new: [row("A", "A", 110)])
+        #expect(ended[segmentWaterfallReorgsKey] == nil)
+        let added = try object(
+            old: [row("A", "A", 100)], new: [row("A", "A", 110), row("N", "N", 5)])
+        #expect(added[segmentWaterfallReorgsKey] == nil)
+    }
+
+    @Test func sameKeysHaveNoReorgs() throws {
+        let year = try object(old: [row("A", "A", 1)], new: [row("A", "A", 2)])
+        #expect(year[segmentWaterfallReorgsKey] == nil)
+    }
+}
+
+@Suite struct GeographyWaterfallTests {
+    private func region(_ label: String, _ value: Double) -> BreakdownRowPayload {
+        BreakdownRowPayload(
+            labelRaw: label, label: label, amount: value, profit: nil, rowKind: "segment")
+    }
+
+    private func payload(_ rows: [BreakdownRowPayload]) -> BreakdownSnapshotPayload {
+        BreakdownSnapshotPayload(
+            axis: breakdownAxisGeography, denominator: 1, denominatorTag: "Sales",
+            rows: rows, sourceKind: breakdownSourceXbrlFacts, needsReview: false, warnings: [])
+    }
+
+    @Test func labelsNormalize() {
+        #expect(GeographyRegion.normalize(label: "日本").region == "japan")
+        #expect(GeographyRegion.normalize(label: "北米（注）2").region == "north_america")
+        #expect(GeographyRegion.normalize(label: "米国").region == "united_states")
+        #expect(GeographyRegion.normalize(label: "中南米").region == "latin_america")
+        #expect(GeographyRegion.normalize(label: "米州").region == "americas")
+        #expect(GeographyRegion.normalize(label: "その他の地域").region == "other")
+        #expect(GeographyRegion.normalize(label: "欧州他").region == "europe+other")
+        #expect(GeographyRegion.normalize(label: "アジア・オセアニア").region == "asia+oceania")
+        #expect(GeographyRegion.normalize(label: "アジア（中国を除く）").region == "asia")
+        #expect(GeographyRegion.normalize(label: "インド").region == nil)
+        #expect(GeographyRegion.normalize(label: "ブラジル・アジア").region == nil)
+    }
+
+    private func years(_ list: [(String, [BreakdownRowPayload])]) throws -> [[String: Any]] {
+        let object = GeographyWaterfall.jsonObject(
+            code: "7203",
+            years: list.enumerated().map { index, entry in
+                (fyEnd: entry.0, docID: "S\(index)", payload: payload(entry.1))
+            })
+        return try #require(object["years"] as? [[String: Any]])
+    }
+
+    @Test func sameShapeIsOneComparableGroupWithoutLineCut() throws {
+        let result = try years([
+            ("2025-03-31", [region("日本", 10), region("北米", 20), region("その他", 5)]),
+            ("2026-03-31", [region("日本", 11), region("北米（注）1", 22), region("その他", 6)]),
+        ])
+        #expect(result.map { $0["fy_end"] as? String } == ["2026-03-31", "2025-03-31"])
+        #expect(result.allSatisfy { $0["comparable_group"] as? Int == 0 })
+        #expect(result.allSatisfy { $0[segmentWaterfallLineCutKey] as? Bool == false })
+        let blocks = try #require(result[0]["comparable_regions"] as? [[String: Any]])
+        #expect(blocks.map { $0["region"] as? String } == ["japan", "north_america", "other"])
+    }
+
+    @Test func finerRegionsAreLiftedWhenTheOtherYearIsCoarser() throws {
+        let result = try years([
+            ("2025-03-31", [region("日本", 10), region("北米", 20), region("欧州", 5)]),
+            ("2026-03-31", [region("日本", 11), region("米国", 12), region("カナダ・北米", 3), region("欧州", 6)]),
+        ])
+        // 米国は北米へ 1 段持ち上げて、旧年の北米と同じ区分にする。
+        #expect(result.allSatisfy { $0["comparable_group"] as? Int == 0 })
+        #expect(result[0]["comparable_level"] as? Int == 1)
+        let blocks = try #require(result[0]["comparable_regions"] as? [[String: Any]])
+        let north = try #require(blocks.first { $0["region"] as? String == "north_america" })
+        #expect(north["value"] as? Int == 15)
+        // 元の地域はそのまま返す。
+        let raw = try #require(result[0]["regions"] as? [[String: Any]])
+        #expect(raw.map { $0["region"] as? String }.contains("united_states"))
+    }
+
+    @Test func mergedRegionsUniteIntoOneBlockAcrossYears() throws {
+        let result = try years([
+            ("2025-03-31", [region("日本", 10), region("アジア", 20), region("その他", 5)]),
+            ("2026-03-31", [region("日本", 11), region("アジア・その他", 27)]),
+        ])
+        #expect(result.allSatisfy { $0["comparable_group"] as? Int == 0 })
+        for year in result {
+            let blocks = try #require(year["comparable_regions"] as? [[String: Any]])
+            #expect(blocks.map { $0["region"] as? String } == ["japan", "asia+other"])
+        }
+        let old = try #require(result[1]["comparable_regions"] as? [[String: Any]])
+        #expect(old[1]["value"] as? Int == 25)
+    }
+
+    @Test func differentUniversesCutTheLine() throws {
+        let result = try years([
+            ("2025-03-31", [region("日本", 10), region("北米", 20), region("欧州", 5)]),
+            ("2026-03-31", [region("日本", 11), region("欧州", 6), region("アジア", 9)]),
+        ])
+        #expect(result[0]["comparable_group"] as? Int == 0)
+        #expect(result[1]["comparable_group"] as? Int == 1)
+        // 線を切るのは、前年と別の塊になる年（新しい方の塊の最古年）。
+        #expect(result[0][segmentWaterfallLineCutKey] as? Bool == true)
+        #expect(result[1][segmentWaterfallLineCutKey] as? Bool == false)
+    }
+
+    @Test func missingYearCutsTheLineAndSubtotalsAreIgnored() throws {
+        var subtotal = region("うち中国", 3)
+        subtotal.rowKind = "subtotal"
+        let result = try years([
+            ("2024-03-31", [region("日本", 10), region("欧州", 5)]),
+            ("2026-03-31", [region("日本", 11), region("欧州", 6), subtotal]),
+        ])
+        #expect(result[0]["comparable_group"] as? Int == 0)
+        #expect(result[1]["comparable_group"] as? Int == 1)
+        #expect((result[0]["regions"] as? [[String: Any]])?.count == 2)
+    }
+
+    @Test func fiscalYearAndLimit() throws {
+        let rows = [region("日本", 1), region("欧州", 1)]
+        let all = (2021...2026).map { (fyEnd: "\($0)-03-31", docID: "S\($0)", payload: payload(rows)) }
+        let limited = GeographyWaterfall.jsonObject(code: "7203", years: all, limit: 3)
+        #expect((limited["years"] as? [[String: Any]])?.count == 3)
+        let one = GeographyWaterfall.jsonObject(code: "7203", years: all, fiscalYear: "2024")
+        #expect((one["years"] as? [[String: Any]])?.count == 1)
+    }
+}

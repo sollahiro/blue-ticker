@@ -13,6 +13,7 @@ import Testing
         #expect(ids.contains("get-overview"))
         #expect(ids.contains("get-breakdown"))
         #expect(ids.contains("get-segment-waterfall"))
+        #expect(ids.contains("get-geography-waterfall"))
         #expect(!ids.contains("get-segment-transitions"))
         #expect(ids.contains("get-statement"))
         #expect(ids.contains("get-feed-updates"))

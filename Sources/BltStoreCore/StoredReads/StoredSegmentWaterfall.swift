@@ -40,21 +40,28 @@ private func loadSegmentTransitionDrafts(
 package func loadServableSegmentYears(
     code: String, db: Database
 ) async throws -> [(fyEnd: String, docID: String, payload: BreakdownSnapshotPayload)] {
+    try await loadServableBreakdownYears(code: code, axis: breakdownAxisSegment, db: db)
+}
+
+/// 決算期ごとに 1 書類の、公開面に出せる内訳スナップショット（新しい順）。axis ごとの read 床を使う。
+package func loadServableBreakdownYears(
+    code: String, axis: String, db: Database
+) async throws -> [(fyEnd: String, docID: String, payload: BreakdownSnapshotPayload)] {
     let candidates = try await CompanyBreakdown.query(on: db)
         .filter(\.$code == code)
-        .filter(\.$axis == breakdownAxisSegment)
+        .filter(\.$axis == axis)
         .sort(\.$submitDateTime, .ascending)
         .all()
     let companyDocIDs = try await companyDisclosureDocIDs(
         among: candidates.map(\.docID), db: db)
     let servable = candidates.filter {
         isServableBreakdown(
-            source: $0.source, cacheVersion: $0.cacheVersion, axis: breakdownAxisSegment)
+            source: $0.source, cacheVersion: $0.cacheVersion, axis: axis)
             && companyDocIDs.contains($0.docID)
             && $0.notApplicableReason == nil
             && isPubliclyServableBreakdown(
                 source: $0.source, needsReview: $0.needsReview || $0.payload.needsReview,
-                warnings: $0.payload.warnings, rows: $0.payload.rows, axis: breakdownAxisSegment)
+                warnings: $0.payload.warnings, rows: $0.payload.rows, axis: axis)
     }
     let documents = try await EdinetDocument.query(on: db)
         .filter(\.$id ~~ servable.map(\.docID))

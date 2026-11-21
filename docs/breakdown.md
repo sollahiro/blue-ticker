@@ -188,3 +188,4 @@ v2（`breakdown-interest-bearing-debt-v2`）: 行と合計が変わる変更（�
 ## 非目標
 
 過去セグメント遡及組替、会社間ラベル統一、全期の事業×地域完全充足、生 XBRL 一発 LLM 抽出。
+- 2026-11: `segment` 年次 `/waterfall/segment` に再編の組 `reorgs[]`（merge / split / replace / regroup）と `prior.from` を足し、地域別売上の年次推移 `/waterfall/geography`（地域ラベルの region 正規化と `comparable_group`）を追加した（いずれも互換追加。`cache_version` / `apiSkillsSchemaVersion` は据え置き。詳細は `docs/api-compatibility.md`）。

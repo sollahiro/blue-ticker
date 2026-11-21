@@ -283,6 +283,37 @@
     },
     {
       "method": "GET",
+      "path": "/v1/companies/{code}/waterfall/geography",
+      "operation_id": "get-geography-waterfall",
+      "visibility": "private",
+      "summary": "Regional sales yearly series",
+      "description": "iOS only. Multi-year regional sales, newest first, default 5 years. Labels are normalized to region codes; years whose regional split differs are grouped into comparable_group with comparable_regions, and line_cut marks group boundaries.",
+      "parameters": [
+        {
+          "name": "code",
+          "in": "path",
+          "required": true,
+          "description": "Issuer ticker code (e.g. 7203).",
+          "schema": { "type": "string" }
+        },
+        {
+          "name": "years",
+          "in": "query",
+          "required": false,
+          "description": "How many years to return. Default 5.",
+          "schema": { "type": "integer" }
+        },
+        {
+          "name": "fiscal_year",
+          "in": "query",
+          "required": false,
+          "description": "Single year (YYYY or fy_end). Overrides years.",
+          "schema": { "type": "string" }
+        }
+      ]
+    },
+    {
+      "method": "GET",
       "path": "/v1/companies/{code}/statement",
       "operation_id": "get-statement",
       "summary": "Financial statements",

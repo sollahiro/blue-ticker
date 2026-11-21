@@ -126,6 +126,7 @@ flowchart LR
 | `GET /v1/companies/{code}/financials` | Summary（床未満・未格納 404）。`?fields=` で `years[]` の公開キーを射影（不明キー 400） |
 | `GET /v1/companies/{code}/waterfall` | Waterfall |
 | `GET /v1/companies/{code}/waterfall/segment` | 報告セグメント年次（`years` / `fiscal_year`。つなぎは years[] に載せる） |
+| `GET /v1/companies/{code}/waterfall/geography` | 地域別売上の年次推移（`years` / `fiscal_year`。地域ラベルを region コードへ正規化し、比べられる年を `comparable_group` に分ける） |
 | `GET /v1/companies/{code}/filing-content` | セクション本文 |
 | `GET /v1/companies/{code}/breakdown?axis=` | breakdowns（上場・格納済み。LLM の `needs_review` / `llm_unit_unresolved` は出さない。`docs/breakdown.md`） |
 | `GET /v1/companies/{code}/statement` · `/shares` | Statement / Shares（上場。日経225は処理順の優先のみ） |
