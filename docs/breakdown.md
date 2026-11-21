@@ -189,3 +189,4 @@ v2（`breakdown-interest-bearing-debt-v2`）: 行と合計が変わる変更（�
 
 過去セグメント遡及組替、会社間ラベル統一、全期の事業×地域完全充足、生 XBRL 一発 LLM 抽出。
 - 2026-11: `segment` 年次 `/waterfall/segment` に再編の組 `reorgs[]`（merge / split / replace / regroup）と `prior.from` を足し、地域別売上の年次推移 `/waterfall/geography`（地域ラベルの region 正規化と `comparable_group`）を追加した（いずれも互換追加。`cache_version` / `apiSkillsSchemaVersion` は据え置き。詳細は `docs/api-compatibility.md`）。
+- 2026-11: `segment` 年次 `/waterfall/segment` で、各年の値はその年の有報のまま返し、年のつなぎは指示として別に返す。(1) 同じキーでも、今期の有報の前期列（今期の区分での前期値、行の `prior_year_external_sales`。取り込み時に R2 の XBRL から読む）が前期の有報の外部売上と丸め幅を超えて違うときは `prior.decision=break` / `prior.basis=restated` と `line_cut=true`。(2) `reorgs[]` の regroup は、旧と新の合計が合う部分集合ごとの split / merge / replace に分ける（前期列が揃えば丸め幅 0.1% の一致、無ければ 10% 以内の近さ。分けきれなければ regroup のまま）。互換追加（`cache_version` / `apiSkillsSchemaVersion` は据え置き）。`prior_year_external_sales` が無い既存行は従来どおりで、反映には該当会社の segment 内訳の再取り込みが要る。

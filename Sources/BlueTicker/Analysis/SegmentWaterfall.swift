@@ -253,13 +253,6 @@ public enum SegmentWaterfall {
         let gone = oldRows.filter { !newKeys.contains($0.key) && !connectedOld.contains($0.key) }
         let added = newRows.filter { !oldKeys.contains($0.key) && !connectedNew.contains($0.key) }
         guard !gone.isEmpty, !added.isEmpty else { return [] }
-        let kind: String
-        switch (gone.count, added.count) {
-        case (1, 1): kind = segmentWaterfallReorgKindReplace
-        case (_, 1): kind = segmentWaterfallReorgKindMerge
-        case (1, _): kind = segmentWaterfallReorgKindSplit
-        default: kind = segmentWaterfallReorgKindRegroup
-        }
         func side(_ rows: [(key: String, row: BreakdownRowPayload)]) -> [[String: Any]] {
             rows.compactMap { entry in
                 guard var item = metricItem(entry.row, metric: metric) else { return nil }
@@ -267,21 +260,128 @@ public enum SegmentWaterfall {
                 return item
             }
         }
-        func total(_ rows: [(key: String, row: BreakdownRowPayload)]) -> Any {
-            breakdownJSONAmount(
-                rows.reduce(0.0) { $0 + (cell($1.row, metric: metric)?.value ?? 0) })
+        func total(_ rows: [(key: String, row: BreakdownRowPayload)]) -> Double {
+            rows.reduce(0.0) { $0 + (cell($1.row, metric: metric)?.value ?? 0) }
         }
-        let json: [String: Any] = [
-            "kind": kind,
-            "from": side(gone),
-            "to": side(added),
-            "from_total": total(gone),
-            "to_total": total(added),
-        ]
-        return [
-            ReorgGroup(
-                kind: kind, fromKeys: gone.map(\.key), toKeys: added.map(\.key), json: json)
-        ]
+        func group(
+            from: [(key: String, row: BreakdownRowPayload)],
+            to: [(key: String, row: BreakdownRowPayload)]
+        ) -> ReorgGroup {
+            let kind: String
+            switch (from.count, to.count) {
+            case (1, 1): kind = segmentWaterfallReorgKindReplace
+            case (_, 1): kind = segmentWaterfallReorgKindMerge
+            case (1, _): kind = segmentWaterfallReorgKindSplit
+            default: kind = segmentWaterfallReorgKindRegroup
+            }
+            let json: [String: Any] = [
+                "kind": kind,
+                "from": side(from),
+                "to": side(to),
+                "from_total": breakdownJSONAmount(total(from)),
+                "to_total": breakdownJSONAmount(total(to)),
+            ]
+            return ReorgGroup(
+                kind: kind, fromKeys: from.map(\.key), toKeys: to.map(\.key), json: json)
+        }
+        let whole = group(from: gone, to: added)
+        guard whole.kind == segmentWaterfallReorgKindRegroup else { return [whole] }
+        // 今期の書類の前期列（今期の区分での前期値）が全部の新区分にあり、旧区分の外部売上もあるときは、
+        // 旧の値と新の前期値が丸め幅で合うかで分ける（同じ年の値どうしなので近さではなく一致）。
+        // 無いときは、旧の値と今期の値の近さで分ける。
+        let restatedNew = added.compactMap { $0.row.priorYearExternalSales?.value }
+        let filedOld = gone.compactMap { $0.row.externalSales?.value }
+        let exact = restatedNew.count == added.count && filedOld.count == gone.count
+        let parts =
+            exact
+            ? splitRegroup(
+                gone: zip(gone, filedOld).map { ($0.0.key, $0.1) },
+                added: zip(added, restatedNew).map { ($0.0.key, $0.1) },
+                tolerance: regroupExactTolerance)
+            : splitRegroup(
+                gone: gone.map { ($0.key, total([$0])) },
+                added: added.map { ($0.key, total([$0])) },
+                tolerance: regroupSplitTolerance)
+        guard let parts else { return [whole] }
+        return parts.map { part in
+            group(
+                from: gone.filter { part.from.contains($0.key) },
+                to: added.filter { part.to.contains($0.key) })
+        }
+    }
+
+    /// regroup を、旧の合計と新の合計が近い部分集合の組に分ける。
+    /// 旧の分け方すべてと、新の各区分をどの旧の組に付けるかを調べ、2 組以上に分かれて
+    /// 全部の組で合計の差が 10% 以内のうち、最も差の小さい分け方を採る。分け切れなければ nil（regroup のまま）。
+    /// 旧・新とも 6 区分までを調べる。
+    static let regroupSplitTolerance = 0.10
+    /// 前期列の値で分けるときの許容（丸め幅の累積に収まる 0.1%）。
+    static let regroupExactTolerance = 0.001
+
+    static func splitRegroup(
+        gone: [(key: String, value: Double)], added: [(key: String, value: Double)],
+        tolerance: Double
+    ) -> [(from: Set<String>, to: Set<String>)]? {
+        guard gone.count >= 2, gone.count <= 6, added.count >= 2, added.count <= 6 else {
+            return nil
+        }
+        var best: (score: Double, blocks: Int, parts: [(from: Set<String>, to: Set<String>)])?
+        // 旧の分け方（制限付き成長列）
+        func partitions(_ n: Int) -> [[Int]] {
+            var out: [[Int]] = []
+            func go(_ i: Int, _ cur: [Int], _ maxUsed: Int) {
+                if i == n { out.append(cur); return }
+                for g in 0...(maxUsed + 1) { go(i + 1, cur + [g], max(maxUsed, g)) }
+            }
+            go(0, [], -1)
+            return out
+        }
+        for assignment in partitions(gone.count) {
+            let blockCount = (assignment.max() ?? 0) + 1
+            guard blockCount >= 2, blockCount <= added.count else { continue }
+            var fromTotals = [Double](repeating: 0, count: blockCount)
+            for (index, block) in assignment.enumerated() { fromTotals[block] += gone[index].value }
+            // 新の各区分を旧の組に付ける（blockCount ^ added.count 通り）
+            var toAssign = [Int](repeating: 0, count: added.count)
+            func tryAssign(_ i: Int) {
+                if i == added.count {
+                    var toTotals = [Double](repeating: 0, count: blockCount)
+                    var used = Set<Int>()
+                    for (index, block) in toAssign.enumerated() {
+                        toTotals[block] += added[index].value
+                        used.insert(block)
+                    }
+                    guard used.count == blockCount else { return }
+                    var worst = 0.0
+                    for block in 0..<blockCount {
+                        let base = max(abs(fromTotals[block]), abs(toTotals[block]))
+                        guard base > 0 else { return }
+                        worst = max(worst, abs(fromTotals[block] - toTotals[block]) / base)
+                    }
+                    guard worst <= tolerance else { return }
+                    if let current = best,
+                        current.score < worst
+                            || (current.score == worst && current.blocks >= blockCount)
+                    { return }
+                    var parts: [(from: Set<String>, to: Set<String>)] = Array(
+                        repeating: ([], []), count: blockCount)
+                    for (index, block) in assignment.enumerated() {
+                        parts[block].from.insert(gone[index].key)
+                    }
+                    for (index, block) in toAssign.enumerated() {
+                        parts[block].to.insert(added[index].key)
+                    }
+                    best = (worst, blockCount, parts)
+                    return
+                }
+                for block in 0..<blockCount {
+                    toAssign[i] = block
+                    tryAssign(i + 1)
+                }
+            }
+            tryAssign(0)
+        }
+        return best?.parts
     }
 
     private static func priorLink(
@@ -302,11 +402,30 @@ public enum SegmentWaterfall {
         guard let previous,
             previous.payload.rows.contains(where: { $0.segmentKey == currentKey })
         else { return nil }
+        if isRestated(row: row, previous: previous.payload) {
+            return [
+                breakdownRowSegmentKeyKey: currentKey,
+                "decision": segmentTransitionDecisionBreak,
+                "basis": segmentTransitionMatchedRestated,
+            ]
+        }
         return [
             breakdownRowSegmentKeyKey: currentKey,
             "decision": segmentTransitionDecisionConnect,
             "basis": segmentTransitionMatchedSameKey,
         ]
+    }
+
+    /// 同じキーの区分で、前期の書類が出した外部売上と、今期の書類の前期列（今期の区分での前期値）が合わない。
+    /// 開示精度の丸め（decimals）を超えて違うときだけ。どちらかの値が無ければ判定しない。
+    static func isRestated(row: BreakdownRowPayload, previous: BreakdownSnapshotPayload) -> Bool {
+        guard row.rowKind == "segment", let key = row.segmentKey,
+            let restated = row.priorYearExternalSales,
+            let filed = previous.rows.first(where: { $0.segmentKey == key })?.externalSales
+        else { return false }
+        let decimals = [restated.decimals, filed.decimals].compactMap { $0 }.min()
+        let tolerance = decimals.map { $0 < 0 ? pow(10.0, Double(-$0)) : 1.0 } ?? 1.0
+        return abs(restated.value - filed.value) > tolerance
     }
 
     private static func lineCut(
@@ -329,6 +448,12 @@ public enum SegmentWaterfall {
         }) {
             return true
         }
+        let restated = payload.rows.contains { row in
+            guard let key = row.segmentKey else { return false }
+            if let seriesKeys, !seriesKeys.contains(key) { return false }
+            return isRestated(row: row, previous: previous.payload)
+        }
+        if restated { return true }
         let renamedFrom = Set(
             relevant.compactMap { draft -> String? in
                 let decision = publicDecision(

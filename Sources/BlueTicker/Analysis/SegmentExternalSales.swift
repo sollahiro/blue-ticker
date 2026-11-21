@@ -49,6 +49,25 @@ enum SegmentExternalSales {
             snapshot: total, salesBasis: segmentSalesBasisExternalIncludingOtherRevenue)
     }
 
+    /// この書類の前期列を、この書類の区分で読んだ外部売上。前期の書類が出した値とは別
+    /// （組替・遡及で変わる）。前期列の文脈を当期に読み替えて、当期と同じ正規化に通す。
+    static func priorYear(
+        facts: [BreakdownFact], labelsByTag: [String: String] = [:],
+        memberParents: [String: String] = [:]
+    ) -> BreakdownSnapshot? {
+        let prior = facts.compactMap { fact -> BreakdownFact? in
+            guard BreakdownNormalizer.isPriorPeriodContext(fact.contextRef) else { return nil }
+            var shifted = fact
+            shifted.contextRef = fact.contextRef
+                .replacingOccurrences(of: "Prior1Year", with: "CurrentYear")
+                .replacingOccurrences(of: "PriorYear", with: "CurrentYear")
+            guard BreakdownNormalizer.isCurrentPeriodContext(shifted.contextRef) else { return nil }
+            return shifted
+        }
+        guard !prior.isEmpty else { return nil }
+        return normalize(facts: prior, labelsByTag: labelsByTag, memberParents: memberParents)
+    }
+
     /// 開示精度の丸めを見込んだ一致（0.1% または 1 円）。±5% のような近さの判定はしない。
     static func matches(_ a: Double, _ b: Double) -> Bool {
         abs(a - b) <= max(1.0, abs(b) * 0.001)

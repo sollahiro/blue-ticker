@@ -203,6 +203,8 @@ public let segmentWaterfallLineCutKey = "line_cut"
 public let segmentWaterfallPriorKey = "prior"
 /// 再編で消えた旧区分のキー（`prior.from`）。統合先の新区分の行に付く。
 public let segmentWaterfallPriorFromKey = "from"
+/// 前期の書類の値と、今期の書類の前期列（今期の区分での前期値）が合わない。同じキーでも値の基準が変わった。
+public let segmentTransitionMatchedRestated = "restated"
 /// 年の再編の組（旧区分 → 新区分）。再編が無い年は出さない。
 public let segmentWaterfallReorgsKey = "reorgs"
 public let segmentWaterfallReorgKindReplace = "replace"
@@ -862,6 +864,9 @@ public struct BreakdownRowPayload: Codable, Sendable, Equatable {
     public var capitalExpenditures: BreakdownMetricCellPayload? = nil
     public var noncurrentAssetAdditions: BreakdownMetricCellPayload? = nil
     public var segmentAssetsCell: BreakdownMetricCellPayload? = nil
+    /// segment 軸の行。この書類の前期列に載る、この書類の区分での前期の外部売上。
+    /// 前期の書類が自分の区分で出した値（`externalSales`）とは別。年のつなぎの判定にだけ使う。
+    public var priorYearExternalSales: BreakdownMetricCellPayload? = nil
 
     private enum CodingKeys: String, CodingKey {
         case labelRaw, label, amount, profit, rowKind, description
@@ -887,6 +892,7 @@ public struct BreakdownRowPayload: Codable, Sendable, Equatable {
         case capitalExpenditures = "capital_expenditures"
         case noncurrentAssetAdditions = "noncurrent_asset_additions"
         case segmentAssetsCell = "segment_assets_cell"
+        case priorYearExternalSales = "prior_year_external_sales"
     }
 
     public init(
@@ -977,6 +983,8 @@ public struct BreakdownRowPayload: Codable, Sendable, Equatable {
             BreakdownMetricCellPayload.self, forKey: .noncurrentAssetAdditions)
         segmentAssetsCell = try container.decodeIfPresent(
             BreakdownMetricCellPayload.self, forKey: .segmentAssetsCell)
+        priorYearExternalSales = try container.decodeIfPresent(
+            BreakdownMetricCellPayload.self, forKey: .priorYearExternalSales)
         if let categoryGroup {
             label = try container.decodeIfPresent(String.self, forKey: .label)
                 ?? Self.displayLabel(categoryGroup: categoryGroup, category: category)
@@ -1023,6 +1031,7 @@ public struct BreakdownRowPayload: Codable, Sendable, Equatable {
         try container.encodeIfPresent(capitalExpenditures, forKey: .capitalExpenditures)
         try container.encodeIfPresent(noncurrentAssetAdditions, forKey: .noncurrentAssetAdditions)
         try container.encodeIfPresent(segmentAssetsCell, forKey: .segmentAssetsCell)
+        try container.encodeIfPresent(priorYearExternalSales, forKey: .priorYearExternalSales)
     }
 
     public static func displayLabel(categoryGroup: String, category: String?) -> String {
