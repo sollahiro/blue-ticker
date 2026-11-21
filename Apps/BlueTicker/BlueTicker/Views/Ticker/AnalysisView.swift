@@ -23,7 +23,10 @@ struct AnalysisView: View {
         }
         .task { await load() }
         // 内訳カードは財務データとは別に取る。失敗してもカードを出さないだけ。
-        .task(id: code) { breakdown = await BreakdownModel.load(code: code) }
+        .task(id: code) {
+            breakdown = nil
+            await BreakdownModel.load(code: code) { breakdown = $0 }
+        }
     }
 
     private func content(_ response: FinancialsResponse) -> some View {
