@@ -172,6 +172,20 @@ func registerRoutes(
             notFoundMessage: "報告セグメントの年次推移は未算出です")
     }
 
+    // GET /v1/companies/{code}/waterfall/geography?years=5&fiscal_year=2026
+    // 地域別売上の年次推移。地域ラベルを region コードへ正規化し、年ごとの切り方が違う会社は
+    // 比べられる年の塊（comparable_group / comparable_regions）に分ける。
+    v1.get("companies", ":code", "waterfall", "geography") { req async -> Response in
+        let code = req.parameters.get("code") ?? ""
+        let years = req.query[Int.self, at: "years"] ?? Api.financialsYearsDefault
+        let fiscalYear = req.query[String.self, at: "fiscal_year"]
+        return makeReasonedResponse(
+            await serveStoredGeographyWaterfall(
+                code: code, years: years, fiscalYear: fiscalYear,
+                db: dbAvailable ? req.db : nil, logger: req.logger),
+            notFoundMessage: "地域別売上の年次推移は未算出です")
+    }
+
     // GET /v1/companies/{code}/overview
     // DB（company_overviews）の格納済み短い会社説明のみを返す。ライブ生成へはフォールバックしない。
     // 未格納・床未満・対象外は 404。
@@ -514,6 +528,15 @@ func serveStoredSegmentWaterfall(
     await serveStoredReasoned(db: db, logger: logger) { db in
         try await loadStoredSegmentWaterfall(
             code: code, metric: metric, key: key, years: years, fiscalYear: fiscalYear, db: db)
+    }
+}
+
+func serveStoredGeographyWaterfall(
+    code: String, years: Int, fiscalYear: String?, db: Database?, logger: Logger
+) async -> ReasonedServeResult {
+    await serveStoredReasoned(db: db, logger: logger) { db in
+        try await loadStoredGeographyWaterfall(
+            code: code, years: years, fiscalYear: fiscalYear, db: db)
     }
 }
 

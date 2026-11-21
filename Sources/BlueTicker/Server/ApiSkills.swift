@@ -506,6 +506,10 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                 各年は segments / adjustment / consolidated / difference（丸め幅なら difference は出さず rounding_gaps）。
                 行の prior は前年の segment_key と decision（connect / rename / reorg / break）と basis
                 （same_key / deterministic / jev）。年の line_cut が true なら折れ線を切ってください。
+                年に再編があれば reorgs[]（kind は merge / split / replace / regroup、from は前年に開示された
+                旧区分、to は当年の新区分、from_total / to_total は各側の合計）が付き、新区分の行の
+                prior.from に旧区分の segment_key が入る。旧→新の対応は旧 k・新 1（merge）と旧 1・新 n（split）だけ
+                決める。複数対複数（regroup）は対応を決めず全行を並べる。終了・新規だけの年は reorgs を出さない。
                 metric は external_sales / profit / segment_assets / capital_expenditures /
                 noncurrent_asset_additions（省略時 external_sales）。
                 key または segment_key を付けるとそのキーの系列（rename でキーが変わった年も含む）。
@@ -559,6 +563,52 @@ public func apiSkillsCatalog() -> [ApiSkill] {
                 例: GET /v1/companies/2802/waterfall/segment?metric=external_sales
                 例: GET /v1/companies/2802/waterfall/segment?fiscal_year=2026
                 例: GET /v1/companies/2802/waterfall/segment?key=E00436:ext:SeasoningsAndFoodsReportableSegmentMember
+                """
+        ),
+        ApiSkill(
+            id: "get-geography-waterfall",
+            name: "地域別売上の年次推移",
+            description: """
+                地域別売上（関連情報「地域ごとの情報」）の複数年を新しい順に返します（既定 5 年）。
+                各年の regions[] は開示のラベル（label）と正規化した region コード（japan / north_america /
+                united_states / americas / latin_america / europe / asia / china / oceania / middle_east / africa /
+                overseas / other。複合ラベルは asia+oceania のように + でつなぐ。辞書に無いラベルは null）と値（円）。
+                地域の切り方が年で変わる会社のために、年ごとに comparable_group（同じ値の年どうしは比べられる）と
+                comparable_regions[]（その塊の共通の区分に寄せた region・members・値）を付けます。
+                塊をまたぐ年は line_cut（その年と前年の間で線を切る）が true。うち内数・調整行は含めません。
+                地域の行が無い年（省略・same_as）は応答に出さず、サーバ側で補完しません。値は円そのもので丸めません。
+                """,
+            method: "GET",
+            path: "/v1/companies/{code}/waterfall/geography",
+            feature: "breakdown",
+            parameters: [
+                ApiSkillParameter(
+                    name: "code",
+                    location: .path,
+                    type: .string,
+                    description: "銘柄コード（例: 7203）",
+                    required: true
+                ),
+                ApiSkillParameter(
+                    name: "years",
+                    location: .query,
+                    type: .integer,
+                    description: "取得年数",
+                    required: false,
+                    defaultValue: .int(Api.financialsYearsDefault)
+                ),
+                ApiSkillParameter(
+                    name: "fiscal_year",
+                    location: .query,
+                    type: .string,
+                    description: "単年（YYYY または fy_end。付けると years より優先。未取り込みなら 404）",
+                    required: false
+                ),
+            ],
+            instructions: """
+                単年の表は get-breakdown?axis=geography。格納済みデータのみ。未算出は 404、DB 非接続は 503。
+                例: GET /v1/companies/7203/waterfall/geography
+                例: GET /v1/companies/7203/waterfall/geography?fiscal_year=2026
                 """
         ),
         ApiSkill(
