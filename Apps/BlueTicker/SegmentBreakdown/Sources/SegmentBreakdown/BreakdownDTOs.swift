@@ -13,13 +13,34 @@ struct SegmentWaterfallResponse: Codable {
         /// true の年は、前年との線を切る合図。
         var lineCut: Bool?
         var segments: [Segment]
+        /// 前年と結べなかった旧区分と新区分の組。古いサーバーには無い。
+        var reorgs: [Reorg]?
 
         enum CodingKeys: String, CodingKey {
             case docId = "doc_id"
             case fiscalYear = "fiscal_year"
             case fyEnd = "fy_end"
             case lineCut = "line_cut"
-            case segments
+            case segments, reorgs
+        }
+    }
+
+    /// `kind` は merge（旧 2 以上・新 1）/ split / replace / regroup。
+    struct Reorg: Codable {
+        var kind: String?
+        var from: [Ref]?
+        var to: [Ref]?
+    }
+
+    struct Ref: Codable {
+        var label: String?
+        var segmentKey: String?
+        var value: Double?
+
+        enum CodingKeys: String, CodingKey {
+            case label
+            case segmentKey = "segment_key"
+            case value
         }
     }
 
