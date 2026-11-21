@@ -43,12 +43,16 @@ struct BreakdownModel {
         guard let waterfall = try? await APIClient.shared.segmentWaterfall(code: code, years: 3) else {
             return BreakdownModel()
         }
-        let columns = BreakdownBuilder.segmentColumns(waterfall) { Format.fy($0.fyEnd) }
+        // 再編で統合された旧区分は、過去の年も 1 本にまとめる（流れを追う必要はない）。
+        let columns = BreakdownBuilder.collapsingReorgs(
+            BreakdownBuilder.segmentColumns(waterfall) { Format.fy($0.fyEnd) })
         // 区分が 1 つだけでは構成も推移も見えない。
         guard let latest = columns.last, latest.items.count >= 2 else { return BreakdownModel() }
 
-        let detail = try? await APIClient.shared.breakdown(code: code, axis: "segment")
-        let detailRows = detail?.breakdown?.rows ?? []
+        // 利益（最新期）と地域（年ごと）は互いに待たず、同時に取る。
+        async let detail = try? APIClient.shared.breakdown(code: code, axis: "segment")
+        async let regionResponses = loadRegionResponses(code: code, waterfall: waterfall)
+        let detailRows = await detail?.breakdown?.rows ?? []
         var profitByKey: [String: Double] = [:]
         for row in detailRows {
             if let profit = row.profit?.value { profitByKey[row.segmentKey ?? row.label] = profit }
@@ -60,16 +64,33 @@ struct BreakdownModel {
 
         // 地域がセグメントそのものの会社は、セグメントカードに出ているので重ねない。
         let geographic = detailRows.contains { $0.segmentBasis == "geographic" }
-        let region = geographic ? nil : await loadRegion(code: code, waterfall: waterfall)
+        let region = geographic ? nil : regionModel(waterfall: waterfall, responses: await regionResponses)
         return BreakdownModel(segment: segment, region: region)
     }
 
-    private static func loadRegion(code: String, waterfall: SegmentWaterfallResponse) async -> RegionCardModel? {
+    /// 年ごとの地域別売上を並列に取る。取れなかった年は nil。結果は `waterfall.years` と同じ並び（新しい年が先頭）。
+    private static func loadRegionResponses(
+        code: String, waterfall: SegmentWaterfallResponse
+    ) async -> [BreakdownResponse?] {
+        await withTaskGroup(of: (Int, BreakdownResponse?).self) { group in
+            for (index, year) in waterfall.years.enumerated() {
+                guard let docId = year.docId else { continue }
+                group.addTask {
+                    (index, try? await APIClient.shared.breakdown(code: code, axis: "geography", docId: docId))
+                }
+            }
+            var results = [BreakdownResponse?](repeating: nil, count: waterfall.years.count)
+            for await (index, response) in group { results[index] = response }
+            return results
+        }
+    }
+
+    private static func regionModel(
+        waterfall: SegmentWaterfallResponse, responses: [BreakdownResponse?]
+    ) -> RegionCardModel? {
         var columns: [BreakdownColumnInput] = []
-        for year in waterfall.years.reversed() {
-            guard let docId = year.docId,
-                let response = try? await APIClient.shared.breakdown(code: code, axis: "geography", docId: docId)
-            else { continue }
+        for (year, response) in zip(waterfall.years, responses).reversed() {
+            guard let response else { continue }
             let previous = columns.last.map { Set($0.items.map(\.label)) }
             let column = BreakdownBuilder.geographyColumn(
                 label: Format.fy(year.fyEnd), previousLabels: previous, response: response)

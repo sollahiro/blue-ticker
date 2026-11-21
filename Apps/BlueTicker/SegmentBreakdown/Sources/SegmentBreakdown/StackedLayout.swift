@@ -15,6 +15,8 @@ struct BreakdownItemInput: Equatable {
     var label: String
     var value: Double
     var link: BreakdownLink
+    /// 組替のうち、前年の複数の旧区分が統合されたと API が示したときの旧区分のキー。
+    var mergedFrom: [String] = []
 }
 
 struct BreakdownColumnInput: Equatable {

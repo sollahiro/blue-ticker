@@ -161,4 +161,57 @@ import Testing
         #expect(single.ribbons.isEmpty)
         #expect(single.bars[0][0].mark == BreakdownMark.none)
     }
+
+    @Test func mergedReorgCollapsesPastSegmentsIntoOneAcrossYears() throws {
+        let cols = BreakdownBuilder.collapsingReorgs(try columns(nichireiJSON))
+        // FY2024・FY2025 の 加工食品・水産・畜産 は 1 本（食品）にまとまり、低温物流・不動産はそのまま。
+        #expect(cols[0].items.count == 3)
+        #expect(cols[1].items.count == 3)
+        let merged25 = try #require(cols[1].items.first { $0.key == "merged|1|F" })
+        #expect(merged25.label == "食品")
+        #expect(merged25.value == 311_342_000_000 + 58_472_000_000 + 63_836_000_000)
+        #expect(merged25.link == .connect("merged|0|F"))
+        #expect(cols[2].items.first { $0.key == "F" }?.link == .connect("merged|1|F"))
+        #expect(cols[1].items.first { $0.key == "L" }?.link == .connect("L"))
+
+        let layout = StackedLayout.make(columns: cols)
+        // 組替・終了の印は残らず、リボンは 3 系列 × 2 区間。
+        #expect(layout.bars.joined().allSatisfy { $0.mark == BreakdownMark.none || $0.mark == .new })
+        #expect(!layout.bars.joined().contains { $0.mark == .reorg || $0.mark == .ended })
+        #expect(layout.ribbons.count == 6)
+        // 最新期の前年比は合算した前年に対して出る。
+        let rows = BreakdownSummary.segmentRows(columns: cols, layout: layout, profitByKey: [:])
+        let food = try #require(rows.first { $0.key == "F" })
+        #expect(abs((food.yoy ?? 0) - (426_409.0 / 433_650.0 - 1)) < 1e-9)
+    }
+
+    @Test func apiMergeGroupDecidesTheSourcesEvenWhenUnrelatedRowsAreUnconnected() throws {
+        // 前年に、統合元ではない「終了」行 Z も残っている。API の merge が示す P・M だけをまとめる。
+        let json = """
+            {"years":[
+             {"fiscal_year":2026,"fy_end":"2026-03-31","segments":[
+              {"label":"食品","segment_key":"F","value":300,"prior":{"decision":"reorg","from":["P","M"]}}],
+              "reorgs":[{"kind":"merge","from":[{"segment_key":"P","value":100},{"segment_key":"M","value":50}],"to":[{"segment_key":"F","value":300}]}]},
+             {"fiscal_year":2025,"fy_end":"2025-03-31","segments":[
+              {"label":"加工","segment_key":"P","value":100},{"label":"水産","segment_key":"M","value":50},
+              {"label":"終了","segment_key":"Z","value":20}]}]}
+            """
+        let cols = BreakdownBuilder.collapsingReorgs(try columns(json))
+        #expect(cols[0].items.count == 2)
+        #expect(cols[0].items.contains { $0.key == "Z" })
+        #expect(cols[0].items.first { $0.key == "merged|0|F" }?.value == 150)
+    }
+
+    @Test func singleSourceReorgAndSplitAreLeftAlone() throws {
+        let json = """
+            {"years":[
+             {"fiscal_year":2026,"fy_end":"2026-03-31","segments":[
+              {"label":"X","segment_key":"X","value":60,"prior":{"decision":"reorg"}},
+              {"label":"Y","segment_key":"Y","value":40,"prior":{"decision":"reorg"}}]},
+             {"fiscal_year":2025,"fy_end":"2025-03-31","segments":[
+              {"label":"旧","segment_key":"O","value":100}]}]}
+            """
+        let original = try columns(json)
+        #expect(BreakdownBuilder.collapsingReorgs(original) == original)
+    }
 }

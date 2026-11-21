@@ -14,10 +14,25 @@ enum BreakdownBuilder {
                 let key = segment.segmentKey ?? segment.label
                 // 積み上げ棒は `line_cut` に関係なく、prior の判定だけでつなぐ（切るのは折れ線の都合）。
                 let link: BreakdownLink = index == 0 ? .none : link(for: segment.prior)
-                return BreakdownItemInput(key: key, label: segment.label, value: value, link: link)
+                return BreakdownItemInput(
+                    key: key, label: segment.label, value: value, link: link,
+                    mergedFrom: index == 0 ? [] : mergedFrom(key: key, link: link, year: year))
             }
             return BreakdownColumnInput(label: columnLabel(year), items: items)
         }
+    }
+
+    /// API が merge（旧 2 以上・新 1）と示した組のうち、この行が新区分側にあるときの旧区分のキー。
+    private static func mergedFrom(
+        key: String, link: BreakdownLink, year: SegmentWaterfallResponse.Year
+    ) -> [String] {
+        guard link == .reorg else { return [] }
+        for reorg in year.reorgs ?? [] where reorg.kind == "merge" {
+            guard reorg.to?.contains(where: { $0.segmentKey == key }) == true else { continue }
+            let keys = (reorg.from ?? []).compactMap(\.segmentKey)
+            if keys.count >= 2 { return keys }
+        }
+        return []
     }
 
     private static func link(for prior: SegmentWaterfallResponse.Prior?) -> BreakdownLink {
@@ -31,6 +46,83 @@ enum BreakdownBuilder {
         default:
             return .none
         }
+    }
+
+    /// 再編で複数の旧区分が 1 つの新区分に統合されたとき、過去の年の旧区分を 1 本に合算する。
+    /// 統合元は、API が merge と示したときはそのキー。示さないとき（古いサーバー）は
+    /// 「その年の組替の行が 1 つ」かつ「前年に、どの行ともつながっていない行が 2 つ以上ある」なら、それらを統合元とみなす。
+    /// さらに前の年も、統合元につながる系列が複数あれば同じ要領でまとめる（他の行が使っている系列は触らない）。
+    /// 1 つの旧区分が分割された場合は、行き先が分からないので何もしない。
+    static func collapsingReorgs(_ columns: [BreakdownColumnInput]) -> [BreakdownColumnInput] {
+        var cols = columns
+        guard cols.count > 1 else { return cols }
+        for k in stride(from: cols.count - 1, through: 1, by: -1) {
+            let reorgItems = cols[k].items.filter { $0.link == .reorg }
+            let previousKeys = Set(cols[k - 1].items.map(\.key))
+            let referenced = Set(cols[k].items.compactMap { connectSource($0.link) })
+            for target in reorgItems {
+                var sources = Set(target.mergedFrom).intersection(previousKeys)
+                if sources.isEmpty, reorgItems.count == 1 {
+                    sources = previousKeys.subtracting(referenced)
+                }
+                guard sources.count >= 2 else { continue }
+                collapse(&cols, sources: sources, into: target, at: k)
+            }
+        }
+        return cols
+    }
+
+    /// `column - 1` の `sources` を 1 行にし、`target`（`column` の行）からつなぐ。前の年も辿る。
+    private static func collapse(
+        _ cols: inout [BreakdownColumnInput], sources: Set<String>, into target: BreakdownItemInput, at column: Int
+    ) {
+        var group = sources
+        var level = column - 1
+        var label = target.label
+        var upperKey = target.key
+        var upperLevel = column
+        while true {
+            let members = cols[level].items.filter { group.contains($0.key) }
+            guard !members.isEmpty else { return }
+            let mergedKey = "merged|\(level)|\(target.key)"
+            var link: BreakdownLink = .none
+            var continues = false
+            if level > 0 {
+                let previousKeys = Set(cols[level - 1].items.map(\.key))
+                let predecessors = Set(members.compactMap { connectSource($0.link) }).intersection(previousKeys)
+                // 同じ前年の行を、統合元以外が使っていなければまとめて辿れる。
+                let usedElsewhere = cols[level].items.contains { item in
+                    guard !group.contains(item.key), let from = connectSource(item.link) else { return false }
+                    return predecessors.contains(from)
+                }
+                if predecessors.count > 1, !usedElsewhere {
+                    link = .connect("merged|\(level - 1)|\(target.key)")
+                    continues = true
+                } else if predecessors.count == 1, let only = predecessors.first {
+                    link = .connect(only)
+                }
+                if continues { group = predecessors }
+            }
+            let merged = BreakdownItemInput(
+                key: mergedKey, label: label, value: members.reduce(0) { $0 + $1.value }, link: link)
+            let memberKeys = Set(members.map(\.key))
+            cols[level].items.removeAll { memberKeys.contains($0.key) }
+            cols[level].items.append(merged)
+            // 1 つ新しい列の行から、できた行へつなぎ直す。
+            for index in cols[upperLevel].items.indices where cols[upperLevel].items[index].key == upperKey {
+                cols[upperLevel].items[index].link = .connect(mergedKey)
+            }
+            guard continues else { return }
+            label = members.max(by: { $0.value < $1.value })?.label ?? label
+            upperKey = mergedKey
+            upperLevel = level
+            level -= 1
+        }
+    }
+
+    private static func connectSource(_ link: BreakdownLink) -> String? {
+        if case .connect(let from) = link { return from }
+        return nil
     }
 
     /// 地域別売上。行ラベルが前年と同じときだけつなぐ（API に地域のつなぎ判定は無い）。
