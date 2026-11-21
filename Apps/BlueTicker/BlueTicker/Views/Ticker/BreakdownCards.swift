@@ -122,14 +122,37 @@ struct BreakdownModel {
 private struct SegmentCard: View {
     var model: SegmentCardModel
 
-    private let profitWidth: CGFloat = 84
+    private let profitWidth: CGFloat = 88
     private let marginWidth: CGFloat = 52
+
+    /// 利益の列は 1 つの単位にそろえる（行ごとに億円・百万円が混ざらない）。
+    private var profitScale: Format.YenScale? {
+        Format.commonScale(for: model.rows.map(\.profit))
+    }
+
+    private func profitText(_ profit: Double?) -> String {
+        guard let profit, let scale = profitScale else { return "—" }
+        let scaled = profit / scale.divisor
+        // 単位に比べて小さい値は小数 1 桁まで出す（0 に丸めて見えなくしない）。
+        let small = model.rows.contains { row in
+            guard let value = row.profit else { return false }
+            return value != 0 && abs(value / scale.divisor) < 10
+        }
+        return Format.groupedNumber(scaled, fractionDigits: small ? max(scale.fractionDigits, 1) : scale.fractionDigits)
+    }
+
+    /// 利益率。小数 1 桁で 0 になる値は符号を付けない（-0.0% を出さない）。
+    private func marginText(_ ratio: Double?) -> String {
+        guard let ratio else { return "—" }
+        let percent = (ratio * 1000).rounded() / 10
+        return Format.percent(percent == 0 ? 0 : ratio * 100)
+    }
 
     var body: some View {
         AnalysisCard(title: "セグメント別売上高") {
             StackedBarChart(layout: model.layout, accessibilityText: "セグメント別の外部売上の年次推移")
             segmentTable
-            AnalysisNote(text: "棒は外部売上（\(model.layout.unitName)）。利益と利益率は最新期のセグメント利益（消去・全社を除く）です。")
+            AnalysisNote(text: "棒は外部売上（\(model.layout.unitName)）。利益は最新期のセグメント利益（消去・全社を除く）です。")
         }
     }
 
@@ -139,7 +162,7 @@ private struct SegmentCard: View {
             HStack(alignment: .firstTextBaseline, spacing: 12) {
                 Text(model.layout.columnLabels.last ?? "")
                     .frame(maxWidth: .infinity, alignment: .leading)
-                Text("利益").frame(width: profitWidth, alignment: .leading)
+                Text(profitScale.map { "利益（\($0.unit)）" } ?? "利益").frame(width: profitWidth, alignment: .leading)
                 Text("利益率").frame(width: marginWidth, alignment: .leading)
             }
             .font(.caption)
@@ -148,10 +171,10 @@ private struct SegmentCard: View {
                 HStack(alignment: .firstTextBaseline, spacing: 12) {
                     SeriesLabel(label: row.label, colorIndex: row.colorIndex, mark: row.mark)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                    Text(row.profit.map { Format.autoYen($0) } ?? "—")
+                    Text(profitText(row.profit))
                         .foregroundStyle(BreakdownFormat.signColor(row.profit, neutralPositive: true))
                         .frame(width: profitWidth, alignment: .leading)
-                    Text(row.margin.map { Format.percent($0 * 100) } ?? "—")
+                    Text(marginText(row.margin))
                         .foregroundStyle(Theme.text)
                         .frame(width: marginWidth, alignment: .leading)
                 }
@@ -190,7 +213,7 @@ private struct RegionCard: View {
                     .font(.footnote.monospacedDigit())
                 }
             }
-            AnalysisNote(text: "棒は地域別売上高（\(model.layout.unitName)）。地域の区分は会社ごとの開示のままで、前年と区分が違う行の前年差は出しません（—）。")
+            AnalysisNote(text: "棒は地域別売上高（\(model.layout.unitName)）。区分が前年と違う行の前年差は出しません。")
         }
     }
 }
@@ -284,6 +307,7 @@ private struct StackedBarChart: View {
         Canvas { context, size in
             let plotHeight = size.height - labelBand
             let plotWidth = size.width - axisInset
+            let totalUnit = Format.commonScale(for: [layout.columnTotals.max()])
             func x(_ value: Double) -> CGFloat { axisInset + CGFloat(value) * plotWidth }
             func w(_ value: Double) -> CGFloat { CGFloat(value) * plotWidth }
             func y(_ value: Double) -> CGFloat { CGFloat(value) * plotHeight }
@@ -351,7 +375,7 @@ private struct StackedBarChart: View {
                 let top = layout.bars[index].map(\.y).min() ?? 1
                 context.draw(
                     context.resolve(
-                        Text(Format.autoYen(layout.columnTotals[index])).font(.caption2.monospacedDigit())
+                        Text(totalUnit.map { Format.scaledYen(layout.columnTotals[index], scale: $0) } ?? Format.autoYen(layout.columnTotals[index])).font(.caption2.monospacedDigit())
                             .foregroundStyle(Theme.text)),
                     at: CGPoint(x: x(center), y: y(top) - 9), anchor: .center)
             }
