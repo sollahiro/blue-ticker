@@ -267,8 +267,8 @@ enum BreakdownPalette {
         switch mark {
         case .none: return nil
         case .reorg: return "再編"
-        case .new: return "新規"
-        case .ended: return "終了"
+        // 「新規」「終了」は断定しない（地域名の表記ゆれや再編で出がち）ので棒の中には出さない。
+        case .new, .ended: return nil
         }
     }
 }

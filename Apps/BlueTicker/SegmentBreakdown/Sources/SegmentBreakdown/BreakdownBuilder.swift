@@ -140,16 +140,34 @@ enum BreakdownBuilder {
         return nil
     }
 
+    /// 開示ごとに表記が揺れる地域名（例: 三井住友トラスト 25/03 は「米国」、前後の年は「米州」）。
+    private static let regionAliasGroups: [Set<String>] = [["米州", "米国", "アメリカ", "米大陸", "南北アメリカ"]]
+
+    /// 前年に同じ名前が無いとき、同じ表記ゆれの組の名前がちょうど 1 つ前年にあり、今年の他の行にその組の名前が無ければ、その名前を返す。
+    private static func regionAlias(of label: String, previous: Set<String>, current: Set<String>) -> String? {
+        guard let group = regionAliasGroups.first(where: { $0.contains(label) }) else { return nil }
+        guard current.intersection(group).count == 1 else { return nil }
+        let candidates = previous.intersection(group)
+        return candidates.count == 1 ? candidates.first : nil
+    }
+
     /// 地域別売上。行ラベルが前年と同じときだけつなぐ（API に地域のつなぎ判定は無い）。
     static func geographyColumn(
         label: String, previousLabels: Set<String>?, response: BreakdownResponse
     ) -> BreakdownColumnInput {
         let rows = (response.breakdown?.rows ?? []).filter { ($0.rowKind ?? "segment") == "segment" }
+        let currentLabels = Set(rows.map(\.label))
         let items = rows.compactMap { row -> BreakdownItemInput? in
             guard let amount = row.amount else { return nil }
             let link: BreakdownLink
             if let previousLabels {
-                link = previousLabels.contains(row.label) ? .connect(row.label) : .none
+                if previousLabels.contains(row.label) {
+                    link = .connect(row.label)
+                } else if let alias = regionAlias(of: row.label, previous: previousLabels, current: currentLabels) {
+                    link = .connect(alias)
+                } else {
+                    link = .none
+                }
             } else {
                 link = .none
             }

@@ -307,4 +307,26 @@ import Testing
         #expect(order(1) == ["LOG", "DRY", "AUTO", "ENE", "LINER", "STDOTH", "AIR"])
         #expect(order(2) == ["LOG", "DRY", "AUTO", "ENE", "LINER", "STDOTH", "AIR"])
     }
+
+    @Test func geographyConnectsAmericasAliasAcrossYears() throws {
+        // 三井住友トラスト 8309: 24/03 米州、25/03 米国、26/03 米州。
+        func column(_ label: String, _ america: String, previous: Set<String>?) throws -> BreakdownColumnInput {
+            let json = """
+                {"breakdown":{"rows":[
+                 {"label":"日本","row_kind":"segment","amount":100},
+                 {"label":"\(america)","row_kind":"segment","amount":40},
+                 {"label":"欧州","row_kind":"segment","amount":30}]}}
+                """
+            let response = try JSONDecoder().decode(BreakdownResponse.self, from: Data(json.utf8))
+            return BreakdownBuilder.geographyColumn(label: label, previousLabels: previous, response: response)
+        }
+        let y24 = try column("FY2024", "米州", previous: nil)
+        let y25 = try column("FY2025", "米国", previous: Set(y24.items.map(\.label)))
+        let y26 = try column("FY2026", "米州", previous: Set(y25.items.map(\.label)))
+        #expect(y25.items.first { $0.label == "米国" }?.link == .connect("米州"))
+        #expect(y26.items.first { $0.label == "米州" }?.link == .connect("米国"))
+        let layout = StackedLayout.make(columns: [y24, y25, y26])
+        #expect(layout.series.count == 3)
+        #expect(layout.bars.joined().allSatisfy { $0.mark == BreakdownMark.none })
+    }
 }
