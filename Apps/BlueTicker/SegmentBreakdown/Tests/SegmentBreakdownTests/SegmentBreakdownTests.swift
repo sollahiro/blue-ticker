@@ -356,4 +356,81 @@ import Testing
         let layout = StackedLayout.make(columns: cols)
         #expect(layout.series.count == 2)
     }
+
+    // 進和 7607: 米国→米州（FY2024）、東南アジア→アジア・パシフィック（FY2025）はどちらも replace。
+    @Test func reorgSourcesTakeTheColorOfTheirLatestDescendants() throws {
+        let json = """
+            {"years":[
+             {"fiscal_year":2025,"line_cut":true,"segments":[
+              {"label":"米州","segment_key":"AM","value":86,"prior":{"decision":"connect","segment_key":"AM"}},
+              {"label":"アジア・パシフィック","segment_key":"AP","value":57,"prior":{"decision":"reorg","from":["SEA"]}},
+              {"label":"日本","segment_key":"JP","value":670,"prior":{"decision":"connect","segment_key":"JP"}}],
+              "reorgs":[{"kind":"replace","from":[{"segment_key":"SEA","value":46}],"to":[{"segment_key":"AP","value":57}]}]},
+             {"fiscal_year":2024,"line_cut":true,"segments":[
+              {"label":"米州","segment_key":"AM","value":110,"prior":{"decision":"reorg","from":["US"]}},
+              {"label":"日本","segment_key":"JP","value":562,"prior":{"decision":"connect","segment_key":"JP"}},
+              {"label":"東南アジア","segment_key":"SEA","value":46,"prior":{"decision":"connect","segment_key":"SEA"}}],
+              "reorgs":[{"kind":"replace","from":[{"segment_key":"US","value":72}],"to":[{"segment_key":"AM","value":110}]}]},
+             {"fiscal_year":2023,"segments":[
+              {"label":"米国","segment_key":"US","value":72},
+              {"label":"日本","segment_key":"JP","value":508},
+              {"label":"東南アジア","segment_key":"SEA","value":54}]}]}
+            """
+        let layout = StackedLayout.make(columns: BreakdownBuilder.collapsingReorgs(try columns(json)))
+        func color(_ column: Int, _ key: String) -> Int? { layout.bars[column].first { $0.key == key }?.colorIndex }
+        #expect(color(0, "US") == color(1, "AM"))
+        #expect(color(0, "US") == color(2, "AM"))
+        #expect(color(1, "SEA") == color(2, "AP"))
+        #expect(color(0, "SEA") == color(2, "AP"))
+        #expect(color(0, "JP") == color(2, "JP"))
+        // 色は日本・米州・アジアの 3 つだけ。
+        #expect(Set(layout.bars.joined().map(\.colorIndex)).count == 3)
+    }
+
+    // メディア工房 3815: 旧 4 区分 → 新 2 区分の regroup。大きい順に対応づけ、余りは最後の新区分の色。
+    @Test func regroupSourcesAreColoredByRankAndExtrasFollowTheLastDescendant() throws {
+        let json = """
+            {"years":[
+             {"fiscal_year":2024,"line_cut":true,"segments":[
+              {"label":"エンタメ","segment_key":"ENT","value":110,"prior":{"decision":"reorg","from":["DC","O2O","SNS"]}},
+              {"label":"占い","segment_key":"FT","value":1900,"prior":{"decision":"reorg","from":["DC","O2O","SNS"]}}],
+              "reorgs":[{"kind":"regroup","from":[{"segment_key":"DC","value":1265},{"segment_key":"O2O","value":802},{"segment_key":"SNS","value":5}],
+               "to":[{"segment_key":"ENT","value":110},{"segment_key":"FT","value":1900}]}]},
+             {"fiscal_year":2023,"segments":[
+              {"label":"デジタル","segment_key":"DC","value":1265},
+              {"label":"One to One","segment_key":"O2O","value":802},
+              {"label":"SNS","segment_key":"SNS","value":5}]}]}
+            """
+        let layout = StackedLayout.make(columns: try columns(json))
+        func color(_ column: Int, _ key: String) -> Int? { layout.bars[column].first { $0.key == key }?.colorIndex }
+        #expect(color(0, "DC") == color(1, "FT"))
+        #expect(color(0, "O2O") == color(1, "ENT"))
+        #expect(color(0, "SNS") == color(1, "ENT"))
+    }
+
+    // さいか屋 8254: 過去 2 年は報告セグメントが無い（連結合計だけ）。単一セグメントの棒にし、前年とはつながない。
+    @Test func yearsWithoutSegmentsBecomeASingleSegmentBar() throws {
+        let json = """
+            {"years":[
+             {"fiscal_year":2026,"segments":[
+              {"label":"百貨店","segment_key":"D","value":4583,"prior":{"decision":"connect","segment_key":"D"}},
+              {"label":"不動産","segment_key":"R","value":9,"prior":{"decision":"connect","segment_key":"R"}}]},
+             {"fiscal_year":2025,"line_cut":true,"segments":[
+              {"label":"百貨店","segment_key":"D","value":4624,"prior":{"decision":"break"}},
+              {"label":"不動産","segment_key":"R","value":9,"prior":{"decision":"break"}}]},
+             {"fiscal_year":2024,"consolidated":{"value":4950},"segments":[]},
+             {"fiscal_year":2023,"consolidated":{"value":5205},"segments":[]}]}
+            """
+        let cols = try columns(json)
+        #expect(cols.map { $0.items.count } == [1, 1, 2, 2])
+        #expect(cols[0].items[0].key == singleSegmentKey)
+        let layout = StackedLayout.make(columns: cols)
+        #expect(layout.bars[0][0].mark == .single)
+        #expect(layout.bars[0][0].colorIndex < 0)
+        #expect(layout.bars[1][0].mark == .single)
+        // 単一→複数の年は、つながない。「再編」を出す。
+        #expect(layout.bars[2].allSatisfy { $0.colorIndex >= 0 })
+        #expect(layout.columnReorged == [false, false, true, false])
+        #expect(layout.ribbons.allSatisfy { $0.fromColumn == 2 })
+    }
 }

@@ -15,14 +15,20 @@ struct SegmentWaterfallResponse: Codable {
         var segments: [Segment]
         /// 前年と結べなかった旧区分と新区分の組。古いサーバーには無い。
         var reorgs: [Reorg]?
+        /// 連結合計。報告セグメントの無い年（単一セグメント）でも、あれば返る。
+        var consolidated: Consolidated?
 
         enum CodingKeys: String, CodingKey {
             case docId = "doc_id"
             case fiscalYear = "fiscal_year"
             case fyEnd = "fy_end"
             case lineCut = "line_cut"
-            case segments, reorgs
+            case segments, reorgs, consolidated
         }
+    }
+
+    struct Consolidated: Codable {
+        var value: Double?
     }
 
     /// `kind` は merge（旧 2 以上・新 1）/ split / replace / regroup。

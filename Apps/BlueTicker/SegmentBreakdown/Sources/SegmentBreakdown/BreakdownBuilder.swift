@@ -18,7 +18,20 @@ enum BreakdownBuilder {
                     key: key, label: segment.label, value: value, link: link,
                     mergedFrom: index == 0 ? [] : mergedFrom(key: key, link: link, year: year))
             }
-            let reorged = index > 0 && (!(year.reorgs ?? []).isEmpty || items.contains { $0.link == .reorg })
+            // 報告セグメントが無い年は、連結合計 1 本の「単一セグメント」の棒にする（前年とはつながない）。
+            if items.isEmpty, let total = year.consolidated?.value, total > 0 {
+                return BreakdownColumnInput(
+                    label: columnLabel(year),
+                    items: [
+                        BreakdownItemInput(
+                            key: singleSegmentKey, label: "単一セグメント", value: total, link: .none)
+                    ])
+            }
+            // 前年と結べない行があり、API が線を切る年も「再編」。
+            let reorged =
+                index > 0
+                && (!(year.reorgs ?? []).isEmpty || items.contains { $0.link == .reorg }
+                    || (year.lineCut == true && items.contains { $0.link == .none }))
             return BreakdownColumnInput(
                 label: columnLabel(year), items: items, groups: index == 0 ? [] : groups(year),
                 reorged: reorged)

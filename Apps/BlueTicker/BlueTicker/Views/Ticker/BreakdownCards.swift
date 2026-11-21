@@ -276,7 +276,10 @@ enum BreakdownPalette {
         Color(red: 0.56, green: 0.56, blue: 0.58),
     ]
 
-    static func color(_ index: Int) -> Color { colors[index % colors.count] }
+    /// 負の番号（単一セグメントの棒）は系列の色を持たず、中立色。
+    static func color(_ index: Int) -> Color {
+        index < 0 ? Theme.textMuted.opacity(0.55) : colors[index % colors.count]
+    }
 
     static func markText(_ mark: BreakdownMark) -> String? {
         switch mark {
@@ -284,6 +287,7 @@ enum BreakdownPalette {
         case .reorg: return "再編"
         // 「新規」「終了」は断定しない（地域名の表記ゆれや再編で出がち）ので棒の中には出さない。
         case .new, .ended: return nil
+        case .single: return "単一セグメント"
         }
     }
 }

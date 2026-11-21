@@ -42,6 +42,8 @@ enum BreakdownMark: Equatable {
     case reorg
     case new
     case ended
+    /// 報告セグメントが無い年（連結合計 1 本）。
+    case single
 }
 
 struct BreakdownBar: Equatable, Identifiable {
@@ -97,6 +99,9 @@ struct BreakdownLayout: Equatable {
     /// 各列で、前の列からの再編があったか。
     var columnReorged: [Bool] = []
 }
+
+/// 報告セグメントが無い年（単一セグメント）の棒のキー。系列の色は付けない。
+let singleSegmentKey = "single|total"
 
 enum StackedLayout {
     static let barWidthRatio = 0.6
@@ -172,11 +177,40 @@ enum StackedLayout {
                 return inOrder(x, y)
             }
         let ordered = sortedFamilies.flatMap(\.members)
-        var colorIndex: [String: Int] = [:]
-        var series: [BreakdownSeries] = []
-        for (index, seen) in ordered.enumerated() {
-            colorIndex[seen.id] = index
-            series.append(BreakdownSeries(id: seen.id, label: seen.label, colorIndex: index))
+        // 積み上げの位置（下から）。色は後で、再編元を行き先の色に寄せる。
+        var position: [String: Int] = [:]
+        var palette = 0
+        for seen in ordered {
+            if seen.id == singleSegmentKey {
+                position[seen.id] = -1
+            } else {
+                position[seen.id] = palette
+                palette += 1
+            }
+        }
+        var colorIndex = position
+        // 再編元（旧区分）は、行き先（新区分）の色にそろえる。新しい年から順に決めて、再編が続いても最新の色になる。
+        // 旧と新の組は大きい順に対応づけ、旧が多いときは最後の新区分に寄せる。
+        for k in stride(from: n - 1, through: 1, by: -1) {
+            for group in columns[k].groups {
+                func ids(_ keys: [String], _ column: Int) -> [String] {
+                    keys.compactMap { key in
+                        items[column].first { $0.key == key }.flatMap { seriesIDs[column][$0.key] }
+                    }
+                }
+                func value(_ id: String, _ column: Int) -> Double {
+                    items[column].first { (seriesIDs[column][$0.key] ?? $0.key) == id }?.value ?? 0
+                }
+                let from = ids(group.fromKeys, k - 1).sorted { value($0, k - 1) > value($1, k - 1) }
+                let to = ids(group.toKeys, k).sorted { value($0, k) > value($1, k) }
+                guard !to.isEmpty else { continue }
+                for (index, id) in from.enumerated() where position[id] != -1 {
+                    colorIndex[id] = colorIndex[to[min(index, to.count - 1)]] ?? colorIndex[id]
+                }
+            }
+        }
+        let series = ordered.map {
+            BreakdownSeries(id: $0.id, label: $0.label, colorIndex: colorIndex[$0.id] ?? 0)
         }
 
         // 3. 列ごとの合計と縮尺。
@@ -223,8 +257,8 @@ enum StackedLayout {
             var cumulative = 0.0
             var column: [BreakdownBar] = []
             var sorted = items[k].sorted {
-                let a = colorIndex[seriesIDs[k][$0.key] ?? $0.key] ?? 0
-                let b = colorIndex[seriesIDs[k][$1.key] ?? $1.key] ?? 0
+                let a = position[seriesIDs[k][$0.key] ?? $0.key] ?? 0
+                let b = position[seriesIDs[k][$1.key] ?? $1.key] ?? 0
                 return a < b
             }
             // 再編の組は、旧区分どうし・新区分どうしを隣り合わせに積む。
@@ -237,7 +271,7 @@ enum StackedLayout {
                 column.append(
                     BreakdownBar(
                         column: k, key: item.key, label: item.label, value: item.value,
-                        mark: marks[k][item.key] ?? .none,
+                        mark: item.key == singleSegmentKey ? .single : (marks[k][item.key] ?? .none),
                         colorIndex: colorIndex[seriesIDs[k][item.key] ?? item.key] ?? 0,
                         x: centers[k] - barWidth / 2, y: 1 - cumulative,
                         width: barWidth, height: height))
