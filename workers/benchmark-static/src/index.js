@@ -7,11 +7,13 @@ import { refreshBenchmarks } from "./benchmark.js";
 
 export default {
   async scheduled(controller, env, ctx) {
-    if (!env.BENCHMARK_DATABASE_URL) {
+    // secret を標準入力から入れると末尾に改行が付くことがある。neon() は改行付きを不正な URL として拒否する。
+    const databaseUrl = String(env.BENCHMARK_DATABASE_URL ?? "").trim();
+    if (!databaseUrl) {
       console.error(JSON.stringify({ event: "benchmark_static_skip", reason: "misconfigured" }));
       return;
     }
-    const sql = neon(env.BENCHMARK_DATABASE_URL);
+    const sql = neon(databaseUrl);
     const runQuery = (text, params) => sql.query(text, params);
     await refreshBenchmarks({ env, runQuery });
   },

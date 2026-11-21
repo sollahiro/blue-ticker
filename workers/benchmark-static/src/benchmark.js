@@ -14,6 +14,11 @@ export const SOURCE_NOT_APPLICABLE = "not_applicable";
 export const SCOPE_CONSOLIDATED = "consolidated";
 export const SCOPE_FILER = "filer";
 
+// neon() の例外メッセージは接続文字列（パスワード入り）をそのまま含むことがある。ログに出す前に伏せる。
+export function redact(message) {
+  return String(message ?? "").replace(/postgres(?:ql)?:\/\/[^\s'"]+/g, "postgresql://[redacted]");
+}
+
 export const CONTENT_TYPE = "application/json; charset=utf-8";
 // iOS の再検証間隔に合わせる。有報が出たときしか変わらないので 1 時間で十分。
 export const CACHE_CONTROL = "public, max-age=3600, s-maxage=3600";
@@ -130,7 +135,7 @@ export async function refreshBenchmarks({ env, runQuery, log = console }) {
           event: "benchmark_static_skip",
           group,
           reason: "query_error",
-          message: String(error?.message ?? error),
+          message: redact(error?.message ?? error),
         })
       );
       continue;
@@ -150,7 +155,7 @@ export async function refreshBenchmarks({ env, runQuery, log = console }) {
         JSON.stringify({
           event: "benchmark_static_put_error",
           group,
-          message: String(error?.message ?? error),
+          message: redact(error?.message ?? error),
         })
       );
       throw error;
@@ -185,7 +190,7 @@ async function attachIcons({ companies, env, runQuery, log }) {
       JSON.stringify({
         event: "benchmark_static_icons_skip",
         reason: "query_error",
-        message: String(error?.message ?? error),
+        message: redact(error?.message ?? error),
       })
     );
     return 0;
