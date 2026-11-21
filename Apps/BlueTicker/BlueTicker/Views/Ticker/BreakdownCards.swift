@@ -38,34 +38,48 @@ struct BreakdownModel {
     var segment: SegmentCardModel?
     var region: RegionCardModel?
 
+    /// 直近 5 年（取れる分だけ）。
+    static let years = 5
+
     /// 失敗や 404 はカードを出さないだけ（分析ページ全体のエラーにしない）。
-    static func load(code: String) async -> BreakdownModel {
-        guard let waterfall = try? await APIClient.shared.segmentWaterfall(code: code, years: 3) else {
-            return BreakdownModel()
+    /// 取れたところから `update` で順に渡す（セグメントの棒 → 利益 → 地域）。全部そろうのを待たない。
+    static func load(code: String, update: @MainActor (BreakdownModel) -> Void) async {
+        // 利益（最新期）は積み上げの取得を待たずに始める。
+        async let detail = try? APIClient.shared.breakdown(code: code, axis: "segment")
+        guard let waterfall = try? await APIClient.shared.segmentWaterfall(code: code, years: years) else {
+            return
         }
         // 再編で統合された旧区分は、過去の年も 1 本にまとめる（流れを追う必要はない）。
         let columns = BreakdownBuilder.collapsingReorgs(
             BreakdownBuilder.segmentColumns(waterfall) { Format.fy($0.fyEnd) })
         // 区分が 1 つだけでは構成も推移も見えない。
-        guard let latest = columns.last, latest.items.count >= 2 else { return BreakdownModel() }
+        guard let latest = columns.last, latest.items.count >= 2 else { return }
+        let layout = StackedLayout.make(columns: columns)
+        func segmentModel(_ profitByKey: [String: Double]) -> SegmentCardModel {
+            SegmentCardModel(
+                columns: columns, layout: layout,
+                rows: BreakdownSummary.segmentRows(columns: columns, layout: layout, profitByKey: profitByKey))
+        }
 
-        // 利益（最新期）と地域（年ごと）は互いに待たず、同時に取る。
-        async let detail = try? APIClient.shared.breakdown(code: code, axis: "segment")
+        // 地域（年ごと）は利益を待たずに始める。
         async let regionResponses = loadRegionResponses(code: code, waterfall: waterfall)
+
+        // 1 段目: 棒と、利益なしの表。
+        await update(BreakdownModel(segment: segmentModel([:]), region: nil))
+
+        // 2 段目: 利益。地域がセグメントそのものの会社は、地域カードを出さない。
         let detailRows = await detail?.breakdown?.rows ?? []
         var profitByKey: [String: Double] = [:]
         for row in detailRows {
             if let profit = row.profit?.value { profitByKey[row.segmentKey ?? row.label] = profit }
         }
-        let layout = StackedLayout.make(columns: columns)
-        let segment = SegmentCardModel(
-            columns: columns, layout: layout,
-            rows: BreakdownSummary.segmentRows(columns: columns, layout: layout, profitByKey: profitByKey))
+        let segment = segmentModel(profitByKey)
+        await update(BreakdownModel(segment: segment, region: nil))
 
-        // 地域がセグメントそのものの会社は、セグメントカードに出ているので重ねない。
+        // 3 段目: 地域。
         let geographic = detailRows.contains { $0.segmentBasis == "geographic" }
         let region = geographic ? nil : regionModel(waterfall: waterfall, responses: await regionResponses)
-        return BreakdownModel(segment: segment, region: region)
+        await update(BreakdownModel(segment: segment, region: region))
     }
 
     /// 年ごとの地域別売上を並列に取る。取れなかった年は nil。結果は `waterfall.years` と同じ並び（新しい年が先頭）。
@@ -108,35 +122,38 @@ struct BreakdownModel {
 private struct SegmentCard: View {
     var model: SegmentCardModel
 
+    private let profitWidth: CGFloat = 84
+    private let marginWidth: CGFloat = 52
+
     var body: some View {
-        AnalysisCard(title: "セグメント") {
+        AnalysisCard(title: "セグメント別売上高") {
             StackedBarChart(layout: model.layout, accessibilityText: "セグメント別の外部売上の年次推移")
             segmentTable
-            AnalysisNote(text: "棒は外部売上。利益と利益率は最新期のセグメント利益（消去・全社を除く）です。前年と結べない区分（組替・新設）の前年比は出しません。")
+            AnalysisNote(text: "棒は外部売上（\(model.layout.unitName)）。利益と利益率は最新期のセグメント利益（消去・全社を除く）です。")
         }
     }
 
+    /// 長いセグメント名は折り返して全部見せる。数字の列は幅を固定して左に揃える。
     private var segmentTable: some View {
-        Grid(alignment: .trailing, horizontalSpacing: 12, verticalSpacing: 10) {
-            GridRow {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline, spacing: 12) {
                 Text(model.layout.columnLabels.last ?? "")
-                    .gridColumnAlignment(.leading)
-                Text("前年比")
-                Text("利益")
-                Text("利益率")
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                Text("利益").frame(width: profitWidth, alignment: .leading)
+                Text("利益率").frame(width: marginWidth, alignment: .leading)
             }
             .font(.caption)
             .foregroundStyle(Theme.textMuted)
             ForEach(model.rows) { row in
-                GridRow {
+                HStack(alignment: .firstTextBaseline, spacing: 12) {
                     SeriesLabel(label: row.label, colorIndex: row.colorIndex, mark: row.mark)
-                        .gridColumnAlignment(.leading)
-                    Text(BreakdownFormat.signedPercent(row.yoy))
-                        .foregroundStyle(BreakdownFormat.signColor(row.yoy))
+                        .frame(maxWidth: .infinity, alignment: .leading)
                     Text(row.profit.map { Format.autoYen($0) } ?? "—")
                         .foregroundStyle(BreakdownFormat.signColor(row.profit, neutralPositive: true))
+                        .frame(width: profitWidth, alignment: .leading)
                     Text(row.margin.map { Format.percent($0 * 100) } ?? "—")
                         .foregroundStyle(Theme.text)
+                        .frame(width: marginWidth, alignment: .leading)
                 }
                 .font(.footnote.monospacedDigit())
             }
@@ -148,30 +165,32 @@ private struct RegionCard: View {
     var model: RegionCardModel
 
     var body: some View {
-        AnalysisCard(title: "地域") {
+        AnalysisCard(title: "地域別売上高") {
             StackedBarChart(layout: model.layout, accessibilityText: "地域別売上の年次推移")
-            Grid(alignment: .trailing, horizontalSpacing: 12, verticalSpacing: 10) {
-                GridRow {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(alignment: .firstTextBaseline, spacing: 12) {
                     Text(model.layout.columnLabels.last ?? "")
-                        .gridColumnAlignment(.leading)
-                    Text("構成比")
-                    Text("前年差")
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    Text("構成比").frame(width: 56, alignment: .trailing)
+                    Text("前年差").frame(width: 64, alignment: .trailing)
                 }
                 .font(.caption)
                 .foregroundStyle(Theme.textMuted)
                 ForEach(model.rows) { row in
-                    GridRow {
+                    HStack(alignment: .firstTextBaseline, spacing: 12) {
                         SeriesLabel(label: row.label, colorIndex: row.colorIndex, mark: .none)
-                            .gridColumnAlignment(.leading)
+                            .frame(maxWidth: .infinity, alignment: .leading)
                         Text(Format.percent(row.share * 100, digits: 0))
                             .foregroundStyle(Theme.text)
+                            .frame(width: 56, alignment: .trailing)
                         Text(BreakdownFormat.signedPoints(row.deltaPoints))
                             .foregroundStyle(BreakdownFormat.signColor(row.deltaPoints))
+                            .frame(width: 64, alignment: .trailing)
                     }
                     .font(.footnote.monospacedDigit())
                 }
             }
-            AnalysisNote(text: "地域別売上高。地域の区分は会社ごとの開示のままで、前年と区分が違う行の前年差は出しません（—）。")
+            AnalysisNote(text: "棒は地域別売上高（\(model.layout.unitName)）。地域の区分は会社ごとの開示のままで、前年と区分が違う行の前年差は出しません（—）。")
         }
     }
 }
@@ -182,13 +201,13 @@ private struct SeriesLabel: View {
     var mark: BreakdownMark
 
     var body: some View {
-        HStack(spacing: 6) {
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
             RoundedRectangle(cornerRadius: 2)
                 .fill(BreakdownPalette.color(colorIndex))
                 .frame(width: 10, height: 10)
             Text(label)
                 .foregroundStyle(Theme.text)
-                .lineLimit(1)
+                .fixedSize(horizontal: false, vertical: true)
             if let text = BreakdownPalette.markText(mark) {
                 Text(text)
                     .font(.caption2)
@@ -199,6 +218,13 @@ private struct SeriesLabel: View {
 }
 
 // MARK: - 表示の部品
+
+extension BreakdownLayout {
+    /// 縦軸の単位名（最大の合計から決める。例: 億円）。
+    var unitName: String {
+        Format.commonScale(for: [columnTotals.max()])?.unit ?? "円"
+    }
+}
 
 enum BreakdownPalette {
     private static let colors: [Color] = [
@@ -249,14 +275,37 @@ private struct StackedBarChart: View {
     var layout: BreakdownLayout
     var accessibilityText: String
 
-    private let chartHeight: CGFloat = 200
+    private let chartHeight: CGFloat = 220
     private let labelBand: CGFloat = 22
+    /// 縦軸の文字を置く左の余白。
+    private let axisInset: CGFloat = 40
 
     var body: some View {
         Canvas { context, size in
             let plotHeight = size.height - labelBand
-            func x(_ value: Double) -> CGFloat { CGFloat(value) * size.width }
+            let plotWidth = size.width - axisInset
+            func x(_ value: Double) -> CGFloat { axisInset + CGFloat(value) * plotWidth }
+            func w(_ value: Double) -> CGFloat { CGFloat(value) * plotWidth }
             func y(_ value: Double) -> CGFloat { CGFloat(value) * plotHeight }
+
+            // 目盛り線（他のグラフと同じ破線・色）と縦軸の文字（共通の単位、単位名は注記）。
+            let maxTotal = layout.columnTotals.max() ?? 0
+            if maxTotal > 0 {
+                let scale = (1 - layout.headroom) / maxTotal
+                let unit = Format.commonScale(for: [maxTotal])
+                for tick in NiceTicks.make(lower: 0, upper: maxTotal) {
+                    let position = 1 - tick * scale
+                    guard position >= 0, position <= 1 else { continue }
+                    var line = Path()
+                    line.move(to: CGPoint(x: axisInset, y: y(position)))
+                    line.addLine(to: CGPoint(x: size.width, y: y(position)))
+                    context.stroke(line, with: .color(ChartStyle.gridColor), style: ChartStyle.grid)
+                    let text = unit.map { Format.scaledYen(tick, scale: $0) } ?? Format.autoYen(tick)
+                    context.draw(
+                        context.resolve(Text(text).font(.caption2).foregroundStyle(Theme.textMuted)),
+                        at: CGPoint(x: axisInset - 6, y: y(position)), anchor: .trailing)
+                }
+            }
 
             for ribbon in layout.ribbons {
                 var path = Path()
@@ -277,7 +326,7 @@ private struct StackedBarChart: View {
 
             for column in layout.bars {
                 for bar in column {
-                    let rect = CGRect(x: x(bar.x), y: y(bar.y), width: x(bar.width), height: y(bar.height))
+                    let rect = CGRect(x: x(bar.x), y: y(bar.y), width: w(bar.width), height: y(bar.height))
                     context.fill(Path(rect), with: .color(BreakdownPalette.color(bar.colorIndex)))
                     context.stroke(Path(rect), with: .color(Theme.card), lineWidth: 1.5)
                     if let text = BreakdownPalette.markText(bar.mark), rect.height >= 14 {
@@ -290,12 +339,9 @@ private struct StackedBarChart: View {
 
             // 0 の線。
             var zero = Path()
-            zero.move(to: CGPoint(x: 14, y: plotHeight))
+            zero.move(to: CGPoint(x: axisInset, y: plotHeight))
             zero.addLine(to: CGPoint(x: size.width, y: plotHeight))
             context.stroke(zero, with: .color(Theme.text.opacity(0.85)), lineWidth: 1.5)
-            context.draw(
-                context.resolve(Text("0").font(.system(size: 10, weight: .semibold)).foregroundStyle(Theme.text)),
-                at: CGPoint(x: 0, y: plotHeight), anchor: .leading)
 
             for (index, center) in layout.columnCenters.enumerated() {
                 context.draw(
