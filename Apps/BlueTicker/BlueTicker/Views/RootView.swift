@@ -6,6 +6,7 @@ struct RootView: View {
     @State private var tab = 0
     @State private var searchPath = NavigationPath()
     @State private var listPath = NavigationPath()
+    @State private var comparePath = NavigationPath()
     @State private var searchQuery = ""
     @State private var feedSession = FeedSession()
     private let router = IntentRouter.shared
@@ -28,6 +29,22 @@ struct RootView: View {
             .toolbarTitleDisplayMode(.inline)
             .tabItem { Label("リスト", systemImage: "list.bullet") }
             .tag(1)
+
+            NavigationStack(path: $comparePath) {
+                CompareView()
+                    .navigationDestination(for: CompareRoute.self) { route in
+                        switch route {
+                        case .group(let id):
+                            if let group = BenchmarkCatalog.group(id: id) {
+                                BenchmarkRankingView(group: group, path: $comparePath)
+                            }
+                        }
+                    }
+                    .navigationDestination(for: CompanyRef.self, destination: ticker)
+            }
+            .toolbarTitleDisplayMode(.inline)
+            .tabItem { Label("比較", systemImage: "chart.bar") }
+            .tag(2)
         }
         .preferredColorScheme(.dark)
         .tint(Theme.accent)

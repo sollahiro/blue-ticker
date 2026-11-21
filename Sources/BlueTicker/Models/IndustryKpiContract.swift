@@ -1,7 +1,7 @@
 // 業種特化 KPI（benchmark）の格納契約。
 // 1 行 = 1 社 × 1 書類 × 1 業種グループ。payload.facts が KPI 値。
 // 1 社に複数グループを付けられる（sony の銀行＋エンタメ等）が、ステップ 1 は銀行だけ。
-// 公開 REST / MCP / iOS には出さない。次ステップ（MD&A 表 + Jev）は同じ payload に
+// 公開 REST は `GET /v1/benchmark/{group}`（iOS の比較タブ用。MCP / HAPIS には出さない）。次ステップ（MD&A 表 + Jev）は同じ payload に
 // source_kind=textblock_table の fact を足す。
 
 import Foundation

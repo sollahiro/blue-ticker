@@ -51,6 +51,7 @@ private func withApp(
             app.migrations.add(CreateCompanySegmentTransitions())
             app.migrations.add(CreateCompanyIcons())
             app.migrations.add(CreateCompanyOverviews())
+            app.migrations.add(CreateIndustryKpiFacts())
             try await app.autoMigrate()
         }
         try await registerRoutes(
@@ -163,6 +164,86 @@ private func send(
             // errorResponse の reason 引数は breakdown 専用の拡張（issue #132）。
             // 他エンドポイントの 404 ボディへ漏れ出さないことを確認する。
             #expect(json?["reason"] == nil)
+        }
+    }
+
+    // MARK: - benchmark
+
+    @Test func benchmarkReturns503WithoutDatabase() async throws {
+        try await withApp { app in
+            let (status, json) = try await send(app, "/v1/benchmark/bank")
+            #expect(status == .serviceUnavailable)
+            #expect(json?["error"] as? String == "財務データベースに接続できません")
+        }
+    }
+
+    @Test func benchmarkReturns404ForUnpublishedGroup() async throws {
+        try await withApp(databases: true) { app in
+            try await seedIndustryKpi(app, code: "8306", docID: "S100K1", group: "insurance")
+            let (status, json) = try await send(app, "/v1/benchmark/insurance")
+            #expect(status == .notFound)
+            #expect(json?["error"] as? String == "この業種の比較データは未公開です")
+        }
+    }
+
+    @Test func benchmarkReturns404WhenNothingStored() async throws {
+        try await withApp(databases: true) { app in
+            let (status, _) = try await send(app, "/v1/benchmark/bank")
+            #expect(status == .notFound)
+        }
+    }
+
+    @Test func benchmarkReturnsLatestFilingPerCompanyWithConsolidatedKpis() async throws {
+        try await withApp(databases: true) { app in
+            // 8306: 古い書類は無視され、新しい書類の連結値が出る（子会社の値は出ない）。
+            try await seedIndustryKpi(
+                app, code: "8306", docID: "S100OLD", submit: "2025-06-20 09:00",
+                facts: [industryKpiTestFact(industryKpiKeyLDR, 50, scope: industryKpiScopeConsolidated)])
+            try await seedIndustryKpi(
+                app, code: "8306", docID: "S100NEW", submit: "2026-06-20 09:00",
+                facts: [
+                    industryKpiTestFact(industryKpiKeyLDR, 57.4, scope: industryKpiScopeFiler),
+                    industryKpiTestFact(industryKpiKeyLDR, 57.9, scope: industryKpiScopeConsolidated),
+                    industryKpiTestFact(industryKpiKeyOHR, 61.2, scope: industryKpiScopeFiler),
+                    industryKpiTestFact(
+                        industryKpiKeyDeposits, 1, scope: industryKpiScopeNamedSubsidiary),
+                ])
+            let (status, json) = try await send(app, "/v1/benchmark/bank")
+            #expect(status == .ok)
+            #expect(json?["schema_version"] as? Int == industryBenchmarkServeSchemaVersion)
+            #expect(json?["industry_group"] as? String == "bank")
+            let companies = json?["companies"] as? [[String: Any]] ?? []
+            #expect(companies.count == 1)
+            let row = companies.first
+            #expect(row?["code"] as? String == "8306")
+            #expect(row?["doc_id"] as? String == "S100NEW")
+            #expect((row?["name"] as? String)?.isEmpty == false)
+            #expect(row?["icon_url"] != nil)
+            let kpis = row?["kpis"] as? [String: Any] ?? [:]
+            let ldr = kpis[industryKpiKeyLDR] as? [String: Any]
+            #expect(ldr?["value"] as? Double == 57.9)
+            #expect(ldr?["scope"] as? String == industryKpiScopeConsolidated)
+            let ohr = kpis[industryKpiKeyOHR] as? [String: Any]
+            #expect(ohr?["scope"] as? String == industryKpiScopeFiler)
+            #expect(kpis[industryKpiKeyDeposits] == nil)
+        }
+    }
+
+    @Test func benchmarkOmitsNeedsReviewAndNotApplicableCompanies() async throws {
+        try await withApp(databases: true) { app in
+            try await seedIndustryKpi(app, code: "8306", docID: "S100A")
+            // 8316: 最新が要レビュー。古い書類へはさかのぼらない。
+            try await seedIndustryKpi(app, code: "8316", docID: "S100B1", submit: "2025-06-20 09:00")
+            try await seedIndustryKpi(
+                app, code: "8316", docID: "S100B2", submit: "2026-06-20 09:00", needsReview: true)
+            // 8411: 対象外のプレースホルダ。
+            try await seedIndustryKpi(
+                app, code: "8411", docID: "S100C", facts: [],
+                source: industryKpiSourceNotApplicable, reason: industryKpiNotApplicableNotBank)
+            let (status, json) = try await send(app, "/v1/benchmark/bank")
+            #expect(status == .ok)
+            let codes = (json?["companies"] as? [[String: Any]] ?? []).compactMap { $0["code"] as? String }
+            #expect(codes == ["8306"])
         }
     }
 
@@ -815,6 +896,34 @@ private func send(
         }
     }
 
+}
+
+private func industryKpiTestFact(
+    _ key: String, _ value: Double, scope: String
+) -> IndustryKpiFactValue {
+    IndustryKpiFactValue(
+        kpiKey: key, value: value, unit: "percent", periodBasis: industryKpiPeriodBasisPeriodEnd,
+        scope: scope, sourceKind: industryKpiSourceKindDerived, sourceRef: key)
+}
+
+private func seedIndustryKpi(
+    _ app: Application, code: String, docID: String, group: String = industryKpiGroupBank,
+    submit: String = "2026-06-20 09:00", facts: [IndustryKpiFactValue]? = nil,
+    needsReview: Bool = false, source: String = industryKpiSourceXbrlFacts, reason: String? = nil
+) async throws {
+    let row = IndustryKpiFact(docID: docID, industryGroup: group)
+    row.code = code
+    row.submitDateTime = submit
+    row.payload = IndustryKpiSnapshotPayload(
+        industryGroup: group,
+        facts: facts ?? [industryKpiTestFact(industryKpiKeyLDR, 60, scope: industryKpiScopeConsolidated)],
+        needsReview: false, warnings: [])
+    row.needsReview = needsReview
+    row.source = source
+    row.contentHash = "h"
+    row.cacheVersion = industryKpiCacheVersion
+    row.notApplicableReason = reason
+    try await row.create(on: app.db)
 }
 
 private func seedOverview(

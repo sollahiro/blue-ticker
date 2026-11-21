@@ -394,6 +394,25 @@
           "schema": { "type": "string" }
         }
       ]
+    },
+    {
+      "method": "GET",
+      "path": "/v1/benchmark/{group}",
+      "operation_id": "get-industry-benchmark",
+      "visibility": "private",
+      "summary": "Industry benchmark (all companies in one industry group)",
+      "description": "Industry-specific KPIs for every company in one industry group, from each company's latest annual report (consolidated preferred). Currently only group 'bank' (deposits, loans, LDR, OHR, net interest income, fees, gross business profit). Used by the iOS compare tab. Unpublished groups and groups with no data return 404.",
+      "parameters": [
+        {
+          "name": "group",
+          "in": "path",
+          "required": true,
+          "description": "Industry group (currently only 'bank').",
+          "schema": {
+            "type": "string"
+          }
+        }
+      ]
     }
   ]
 }

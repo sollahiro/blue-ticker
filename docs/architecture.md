@@ -125,6 +125,7 @@ flowchart LR
 | `GET /v1/companies/{code}/relations?type=` | 取引先・関係会社（有報の記載のみ。顧客・関係会社・出資先・大株主と、他社の有報からの逆引き＝仕入先・親会社・大株主になっている会社。格納済み。公開コネクタにも出す（`get-relations`）。`docs/public-api.md`） |
 | `GET /v1/companies/{code}/financials` | Summary（床未満・未格納 404）。`?fields=` で `years[]` の公開キーを射影（不明キー 400） |
 | `GET /v1/companies/{code}/waterfall` | Waterfall |
+| `GET /v1/benchmark/{group}` | 業種ベンチマーク。業種グループ（現状 `bank` のみ）の全社の業種 KPI（`industry_kpi_facts`）。会社ごとに最新の有報 1 件で、連結を優先。`companies[]` は `{code, name, sector, icon_url, doc_id, fy_end, kpis{key:{value,unit,period_basis,scope}}, warnings}`。未公開の業種・公開できる会社が無いときは 404 |
 | `GET /v1/companies/{code}/waterfall/segment` | 報告セグメント年次（`years` / `fiscal_year`。つなぎは years[] に載せる） |
 | `GET /v1/companies/{code}/waterfall/geography` | 地域別売上の年次推移（`years` / `fiscal_year`。地域ラベルを region コードへ正規化し、比べられる年を `comparable_group` に分ける） |
 | `GET /v1/companies/{code}/filing-content` | セクション本文 |
