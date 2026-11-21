@@ -408,6 +408,10 @@ jobs:
         if: ${{ !cancelled() }}
         run: scripts/ci/worker-tests.sh status-rss
 
+      - name: Benchmark Static Worker の組み立てと fail closed
+        if: ${{ !cancelled() }}
+        run: scripts/ci/worker-tests.sh benchmark-static
+
       - name: Legal Worker の経路
         if: ${{ !cancelled() }}
         run: scripts/ci/worker-tests.sh legal

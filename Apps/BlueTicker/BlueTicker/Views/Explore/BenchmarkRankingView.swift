@@ -141,8 +141,28 @@ struct BenchmarkRankingView: View {
         .accessibilityAddTraits(.isButton)
     }
 
+    /// 静的 JSON（端末保存 → 条件付き GET）を先に使い、取れないときだけ REST に戻す。
+    /// 保存があれば即表示し、再検証で新しい版が届いたら差し替える。
     private func load() async {
+        let store = BenchmarkStaticStore.shared
+        if let cached = await store.cached(group: group.id) {
+            phase = .loaded(cached.companies)
+            guard await store.needsRevalidation(group: group.id) else { return }
+            if let fresh = await store.revalidate(group: group.id) {
+                phase = .loaded(fresh.companies)
+            }
+            return
+        }
         phase = .loading
+        if let fresh = await store.revalidate(group: group.id) {
+            phase = .loaded(fresh.companies)
+            return
+        }
+        if Task.isCancelled { return }
+        await loadFromAPI()
+    }
+
+    private func loadFromAPI() async {
         do {
             let response = try await APIClient.shared.benchmark(group: group.id)
             phase = .loaded(response.companies)

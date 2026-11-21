@@ -1,0 +1,26 @@
+{
+  "name": "blt-benchmark-static",
+  "main": "src/index.js",
+  "compatibility_date": "2026-09-19",
+  // Cron 専用 Worker。公開ルートは持たない（fetch は常に 404）。
+  // 生成物は R2 カスタムドメイン feed.sollahiro.com からだけ配信する（feed-rss と同じバケット）。
+  "workers_dev": false,
+  "triggers": {
+    // 19:30 JST = 10:30 UTC。18:00 JST の blt-sync 完了後、feed-rss（19:15）の後に回す。
+    "crons": ["30 10 * * *"]
+  },
+  "r2_buckets": [
+    {
+      "binding": "BENCHMARK_BUCKET",
+      "bucket_name": "blt-public-feed"
+    }
+  ],
+  "vars": {
+    // `{group}` は業種グループ。公開するのは bank だけ。
+    "BENCHMARK_OBJECT_PREFIX": "blue-ticker/benchmark/",
+    // 会社アイコンの公開ベース URL（feed-rss・blt-server の BLT_R2_PUBLIC_BASE_URL と同じ値）。
+    "BENCHMARK_ICON_BASE_URL": "https://icons.sollahiro.com"
+  }
+  // secret BENCHMARK_DATABASE_URL: Neon の読み取り専用ロールの接続文字列（feed-rss の FEED_DATABASE_URL と同じ値）。
+  // 書き込み URL（BLT_NEON_WRITE_DATABASE_URL 系）は絶対に入れない。
+}
