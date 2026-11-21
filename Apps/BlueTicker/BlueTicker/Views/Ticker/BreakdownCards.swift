@@ -129,7 +129,7 @@ private struct SegmentCard: View {
         AnalysisCard(title: "セグメント別売上高") {
             StackedBarChart(layout: model.layout, accessibilityText: "セグメント別の外部売上の年次推移")
             segmentTable
-            AnalysisNote(text: "棒は外部売上。利益と利益率は最新期のセグメント利益（消去・全社を除く）です。")
+            AnalysisNote(text: "棒は外部売上（\(model.layout.unitName)）。利益と利益率は最新期のセグメント利益（消去・全社を除く）です。")
         }
     }
 
@@ -165,7 +165,7 @@ private struct RegionCard: View {
     var model: RegionCardModel
 
     var body: some View {
-        AnalysisCard(title: "地域") {
+        AnalysisCard(title: "地域別売上高") {
             StackedBarChart(layout: model.layout, accessibilityText: "地域別売上の年次推移")
             VStack(alignment: .leading, spacing: 10) {
                 HStack(alignment: .firstTextBaseline, spacing: 12) {
@@ -190,7 +190,7 @@ private struct RegionCard: View {
                     .font(.footnote.monospacedDigit())
                 }
             }
-            AnalysisNote(text: "地域別売上高。地域の区分は会社ごとの開示のままで、前年と区分が違う行の前年差は出しません（—）。")
+            AnalysisNote(text: "棒は地域別売上高（\(model.layout.unitName)）。地域の区分は会社ごとの開示のままで、前年と区分が違う行の前年差は出しません（—）。")
         }
     }
 }
@@ -218,6 +218,13 @@ private struct SeriesLabel: View {
 }
 
 // MARK: - 表示の部品
+
+extension BreakdownLayout {
+    /// 縦軸の単位名（最大の合計から決める。例: 億円）。
+    var unitName: String {
+        Format.commonScale(for: [columnTotals.max()])?.unit ?? "円"
+    }
+}
 
 enum BreakdownPalette {
     private static let colors: [Color] = [
@@ -268,14 +275,37 @@ private struct StackedBarChart: View {
     var layout: BreakdownLayout
     var accessibilityText: String
 
-    private let chartHeight: CGFloat = 200
+    private let chartHeight: CGFloat = 220
     private let labelBand: CGFloat = 22
+    /// 縦軸の文字を置く左の余白。
+    private let axisInset: CGFloat = 40
 
     var body: some View {
         Canvas { context, size in
             let plotHeight = size.height - labelBand
-            func x(_ value: Double) -> CGFloat { CGFloat(value) * size.width }
+            let plotWidth = size.width - axisInset
+            func x(_ value: Double) -> CGFloat { axisInset + CGFloat(value) * plotWidth }
+            func w(_ value: Double) -> CGFloat { CGFloat(value) * plotWidth }
             func y(_ value: Double) -> CGFloat { CGFloat(value) * plotHeight }
+
+            // 目盛り線（他のグラフと同じ破線・色）と縦軸の文字（共通の単位、単位名は注記）。
+            let maxTotal = layout.columnTotals.max() ?? 0
+            if maxTotal > 0 {
+                let scale = (1 - layout.headroom) / maxTotal
+                let unit = Format.commonScale(for: [maxTotal])
+                for tick in ChartMath.niceTicks(lower: 0, upper: maxTotal) {
+                    let position = 1 - tick * scale
+                    guard position >= 0, position <= 1 else { continue }
+                    var line = Path()
+                    line.move(to: CGPoint(x: axisInset, y: y(position)))
+                    line.addLine(to: CGPoint(x: size.width, y: y(position)))
+                    context.stroke(line, with: .color(ChartStyle.gridColor), style: ChartStyle.grid)
+                    let text = unit.map { Format.scaledYen(tick, scale: $0) } ?? Format.autoYen(tick)
+                    context.draw(
+                        context.resolve(Text(text).font(.caption2).foregroundStyle(Theme.textMuted)),
+                        at: CGPoint(x: axisInset - 6, y: y(position)), anchor: .trailing)
+                }
+            }
 
             for ribbon in layout.ribbons {
                 var path = Path()
@@ -296,7 +326,7 @@ private struct StackedBarChart: View {
 
             for column in layout.bars {
                 for bar in column {
-                    let rect = CGRect(x: x(bar.x), y: y(bar.y), width: x(bar.width), height: y(bar.height))
+                    let rect = CGRect(x: x(bar.x), y: y(bar.y), width: w(bar.width), height: y(bar.height))
                     context.fill(Path(rect), with: .color(BreakdownPalette.color(bar.colorIndex)))
                     context.stroke(Path(rect), with: .color(Theme.card), lineWidth: 1.5)
                     if let text = BreakdownPalette.markText(bar.mark), rect.height >= 14 {
@@ -309,12 +339,9 @@ private struct StackedBarChart: View {
 
             // 0 の線。
             var zero = Path()
-            zero.move(to: CGPoint(x: 14, y: plotHeight))
+            zero.move(to: CGPoint(x: axisInset, y: plotHeight))
             zero.addLine(to: CGPoint(x: size.width, y: plotHeight))
             context.stroke(zero, with: .color(Theme.text.opacity(0.85)), lineWidth: 1.5)
-            context.draw(
-                context.resolve(Text("0").font(.system(size: 10, weight: .semibold)).foregroundStyle(Theme.text)),
-                at: CGPoint(x: 0, y: plotHeight), anchor: .leading)
 
             for (index, center) in layout.columnCenters.enumerated() {
                 context.draw(

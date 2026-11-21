@@ -122,7 +122,7 @@ struct AnalysisNote: View {
     }
 }
 
-private enum ChartStyle {
+enum ChartStyle {
     static let height: CGFloat = 220
     /// 目盛り線と、ウォーターフォールの段をつなぐ点線。0 の線より薄くする。
     static let grid = StrokeStyle(lineWidth: 0.5, dash: [3, 3])
@@ -190,7 +190,7 @@ private struct LinePoint: Identifiable {
     var run: Int
 }
 
-private enum ChartMath {
+enum ChartMath {
     static func linePoints(_ years: [FinancialsYear], value: (FinancialsYear) -> Double?) -> [LinePoint] {
         var run = 0
         var points: [LinePoint] = []
