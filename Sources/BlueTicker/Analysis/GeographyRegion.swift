@@ -82,8 +82,22 @@ public enum GeographyRegion {
     }
 
     private static func code(of token: String) -> String? {
-        // 「その他の地域」「その他海外」は other。「米国」を含む「その他米国」は想定しない。
-        if token.hasPrefix("その他") || token == "他" || token == "そのほか" { return "other" }
+        // 「その他の地域」「その他海外」は other。「その他の米州」「その他アジア」のように、
+        // 「その他」のあとに地域名が続くときは、その地域（米国を除いた米州、など）として扱う。
+        if token.hasPrefix("その他") {
+            var rest = String(token.dropFirst("その他".count))
+            if rest.hasPrefix("の") { rest.removeFirst() }
+            let regional = Set(["japan", "overseas", "other"])
+            if !rest.isEmpty,
+                let entry = dictionary.first(where: { entry in
+                    !regional.contains(entry.code) && entry.words.contains(where: { rest.contains($0) })
+                })
+            {
+                return entry.code
+            }
+            return "other"
+        }
+        if token == "他" || token == "そのほか" { return "other" }
         for entry in dictionary where entry.words.contains(where: { token.contains($0) }) {
             return entry.code
         }
